@@ -38,7 +38,7 @@ export interface OnboardingPlacePreview {
 
 export interface OnboardingDraftPreview {
   draftId: string
-  siteId: string
+  organizationId: string
   previewToken: string
   draftName: string
   subdomainCandidate: string

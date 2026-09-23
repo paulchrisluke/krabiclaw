@@ -92,7 +92,7 @@ export function getR2KeyFromPublicUrl(env: ApiRecord, value: string): string | n
 }
 
 /** Generate a namespaced R2 key for a media asset. */
-export function buildR2Key(siteId: string, assetId: string, filename: string): string {
+export function buildR2Key(organizationId: string, assetId: string, filename: string): string {
   const sanitizeSegment = (value: string, label: string): string => {
     const trimmed = String(value).trim().replace(/^\/+|\/+$/g, '')
     if (!trimmed) throw new Error(`Invalid ${label}`)
@@ -102,10 +102,14 @@ export function buildR2Key(siteId: string, assetId: string, filename: string): s
     return trimmed
   }
 
-  const safeSiteId = sanitizeSegment(siteId, 'siteId')
+  const safeOrganizationId = sanitizeSegment(organizationId, 'organizationId')
   const safeAssetId = sanitizeSegment(assetId, 'assetId')
   const safeFilename = sanitizeSegment(filename, 'filename')
   const dotIndex = safeFilename.lastIndexOf('.')
   const ext = dotIndex > 0 ? safeFilename.slice(dotIndex + 1) : ''
-  return `sites/${safeSiteId}/media/${safeAssetId}${ext ? '.' + ext : ''}`
+  // The `sites/` prefix is the stored object's address, not a name for the
+  // tenant: every object already in the bucket lives under it, and renaming the
+  // prefix would strand them all. The segment under it is the organization id,
+  // which is what it always held.
+  return `sites/${safeOrganizationId}/media/${safeAssetId}${ext ? '.' + ext : ''}`
 }

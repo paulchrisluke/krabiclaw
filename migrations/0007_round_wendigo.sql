@@ -1,1 +1,0 @@
-DROP INDEX `site_locales_secondary_published_unique`;

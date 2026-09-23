@@ -328,7 +328,6 @@ export async function sendWhatsAppNotification(
   env: WhatsAppEnv,
   opts: {
     organizationId: string
-    siteId?: string | null
     locationId?: string | null
     toPhone: string            // raw phone, will be normalized
     template: WhatsAppTemplate
@@ -397,12 +396,11 @@ export async function sendWhatsAppNotification(
 export async function getOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
-  siteId: string
 ): Promise<string | null> {
   const row = await queryFirst<{ value: string }>(db, `
-    SELECT json_extract(settings_json, '$.config.whatsapp_phone') AS value FROM sites WHERE organization_id = ? AND id = ?
+    SELECT json_extract(settings_json, '$.config.whatsapp_phone') AS value FROM organization WHERE id = ?
     LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId])
   return row?.value ?? null
 }
 
@@ -576,19 +574,18 @@ export async function fetchWhatsAppMedia(
 export async function setOrgWhatsAppPhone(
   db: DbClient,
   organizationId: string,
-  siteId: string,
   phone: string | null,
 ): Promise<void> {
   if (!phone) {
     await execute(db, `
-      UPDATE sites SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone') WHERE organization_id = ? AND id = ?
-    `, [organizationId, siteId])
+      UPDATE organization SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone') WHERE id = ?
+    `, [organizationId])
   } else {
     const normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
     const now = new Date().toISOString()
     await execute(db, `
-      UPDATE sites SET settings_json = json_set(settings_json, '$.config.whatsapp_phone', ?), updated_at = ?
-      WHERE organization_id = ? AND id = ?
-    `, [normalized, now, organizationId, siteId])
+      UPDATE organization SET settings_json = json_set(settings_json, '$.config.whatsapp_phone', ?), updated_at = ?
+      WHERE id = ?
+    `, [normalized, now, organizationId])
   }
 }

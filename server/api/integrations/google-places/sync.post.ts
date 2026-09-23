@@ -6,13 +6,13 @@ import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event) as { siteId?: string; locationId?: string } | undefined
+  const body = await readBody(event) as { organizationId?: string; locationId?: string } | undefined
   const locationId = body?.locationId
   if (!locationId) return jsonResponse({ error: 'locationId is required' }, { status: 400 })
 
-  const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body?.siteId)
+  const { env, db, organization } = await requireRequestedLocationAccess(event, locationId, body?.organizationId)
 
-  if (!await hasSiteEntitlement(env, db, site.id, 'google_places')) {
+  if (!await hasSiteEntitlement(env, db, organization.id, 'google_places')) {
     return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
   }
 
@@ -21,9 +21,9 @@ export default defineHandler(async (event) => {
 
   const location = await queryFirst<{ id: string; google_place_id: string | null }>(db, `
     SELECT id, google_place_id FROM business_locations
-    WHERE id = ? AND site_id = ? AND organization_id = ?
+    WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `, [locationId, site.id, site.organization_id])
+  `, [locationId, organization.id])
 
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
   if (!location.google_place_id) {
@@ -32,9 +32,9 @@ export default defineHandler(async (event) => {
 
   try {
     const { place, reviewsUpserted } = await syncPlaceToLocation(
-      db, apiKey, site.organization_id, site.id, locationId, location.google_place_id
+      db, apiKey, organization.id, locationId, location.google_place_id
     )
-    await purgePublicResourceCacheSafe(env, site.id)
+    await purgePublicResourceCacheSafe(env, organization.id)
 
     return jsonResponse({
       success: true, syncedAt: new Date().toISOString(), reviewsUpserted, place: {

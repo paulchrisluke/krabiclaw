@@ -6,12 +6,12 @@ export default defineHandler(async (event) => {
   assertDevRouteAllowed(event)
 
   const body = await readBody(event) as {
-    siteId: string
+    organizationId: string
     toolName: string
     input: Record<string, unknown>
   }
 
-  const rawArguments = { site_id: body.siteId, ...body.input }
+  const rawArguments = { organization_id: body.organizationId, ...body.input }
   const result = await executeMcpToolCall(event, body.toolName, rawArguments)
 
   // Unwrap structured MCP responses — tests care about the payload, not fallback text.

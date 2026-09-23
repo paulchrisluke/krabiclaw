@@ -4,7 +4,6 @@ import type { SocialImageSource } from '~/utils/social-metadata'
 
 interface TenantSiteState {
   tenantType: TenantType
-  siteId: string | null
   previewAuthorized: boolean
   organizationId: string | null
   themeId: string | null
@@ -12,7 +11,7 @@ interface TenantSiteState {
 }
 
 interface TenantSiteInfo {
-  brand_name?: string | null
+  name?: string | null
   brand_description?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; mime_type: string | null }>
   social_image?: SocialImageSource | null
@@ -22,7 +21,10 @@ interface TenantSiteInfo {
   } | null
 }
 
-// Tenant site composable for Saya theme rendering
+// The rendering tenant, resolved from the host by tenant-resolution. There used
+// to be a `siteId` beside `organizationId` here, and every public request
+// carried both: they named the same tenant, and a route that took the id from
+// its path could be asked for one tenant on another's domain.
 export const useTenantSite = () => {
   const event = useRequestEvent()
 
@@ -32,7 +34,6 @@ export const useTenantSite = () => {
     if (event) {
       return {
         tenantType: (event.context.tenantType as TenantType | undefined) || TENANT_TYPES.PLATFORM,
-        siteId: typeof event.context.siteId === 'string' ? event.context.siteId : null,
         previewAuthorized: event.context.previewAuthorized === true,
         organizationId: typeof event.context.organizationId === 'string' ? event.context.organizationId : null,
         themeId: typeof event.context.themeId === 'string' ? event.context.themeId : null,
@@ -41,19 +42,17 @@ export const useTenantSite = () => {
     }
     return {
       tenantType: TENANT_TYPES.PLATFORM,
-      siteId: null,
       previewAuthorized: false,
       organizationId: null,
       themeId: null,
       site: null
     }
   })
-  
+
   return {
     tenantType: tenantContext.value.tenantType,
     isPlatform: tenantContext.value.tenantType === TENANT_TYPES.PLATFORM,
     isTenant: tenantContext.value.tenantType === TENANT_TYPES.TENANT,
-    siteId: tenantContext.value.siteId,
     previewAuthorized: tenantContext.value.previewAuthorized,
     organizationId: tenantContext.value.organizationId,
     themeId: tenantContext.value.themeId,

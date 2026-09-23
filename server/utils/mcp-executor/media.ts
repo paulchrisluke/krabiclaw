@@ -36,8 +36,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const result = await setSingleMediaPlacement(site.db, {
         env: site.env,
         organizationId: site.organizationId,
-        siteId: site.siteId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
+        principal: memberAccessPrincipal(site.membership, { env: site.env }),
         placement,
         assetId: typeof args.asset_id === 'string' ? args.asset_id.trim() : null,
       });
@@ -56,8 +55,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const result = await attachMediaPlacement(site.db, {
         env: site.env,
         organizationId: site.organizationId,
-        siteId: site.siteId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
+        principal: memberAccessPrincipal(site.membership, { env: site.env }),
         placement,
         assetId,
       });
@@ -72,8 +70,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const result = await removeMediaPlacement(site.db, {
         env: site.env,
         organizationId: site.organizationId,
-        siteId: site.siteId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
+        principal: memberAccessPrincipal(site.membership, { env: site.env }),
         placement,
         assetId,
       });
@@ -88,8 +85,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const result = await reorderMediaPlacements(site.db, {
         env: site.env,
         organizationId: site.organizationId,
-        siteId: site.siteId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env, siteId: site.siteId }),
+        principal: memberAccessPrincipal(site.membership, { env: site.env }),
         placement,
         moves,
       });
@@ -98,11 +94,11 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         "Reordered media.",
       );
     }
-    case "get_site_media_assets": {
-      const assets = await listMediaAssets(site.db, site.siteId, {
+    case "get_organization_media_assets": {
+      const assets = await listMediaAssets(site.db, site.organizationId, {
           kind: optionalString(args, "kind") ?? undefined,
         });
-      const page = paginateMcpCollection(assets, args, { resource: `media-assets:${site.siteId}:${optionalString(args, 'kind') ?? ''}` });
+      const page = paginateMcpCollection(assets, args, { resource: `media-assets:${site.organizationId}:${optionalString(args, 'kind') ?? ''}` });
       return {
         assets: page.items.map(({ id, ...asset }) => ({ asset_id: id, ...asset })),
         page_info: page.page_info,
@@ -150,7 +146,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const uploadInput = {
         db: site.db,
         env: site.env as never,
-        siteId: site.siteId,
         organizationId: site.organizationId,
         userId: site.userId,
         buffer: resolved.buffer,
@@ -199,7 +194,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const updated = await updateMediaAssetMetadata(
         site.db,
         requiredString(args, "asset_id"),
-        site.siteId,
+        site.organizationId,
         {
           alt_text: optionalString(args, "alt_text"),
           category: (optionalString(args, "category") as never),
@@ -219,7 +214,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         site.db,
         site.env,
         requiredString(args, "asset_id"),
-        site.siteId,
+        site.organizationId,
         site.userId,
       );
       return { deleted: true, context };

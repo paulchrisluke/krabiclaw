@@ -28,11 +28,10 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const posts = (await listPosts(
           site.db,
           site.organizationId,
-          site.siteId,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
         )).map((post) => attachViewUrlToRecord(post, site, {}));
-        const page = paginateMcpCollection(posts, args, { resource: `posts:${site.siteId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
+        const page = paginateMcpCollection(posts, args, { resource: `posts:${site.organizationId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
         return { posts: page.items, page_info: page.page_info };
       }
     case "get_post":
@@ -40,7 +39,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const post = await getPost(
           site.db,
           site.organizationId,
-          site.siteId,
           requiredString(args, "post_id"),
         );
         return {
@@ -52,8 +50,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const post = await asMcpValidationError(() => createPost(
           site.db,
           site.organizationId,
-          site.siteId,
-          omit(args, ["site_id"]),
+          omit(args, ["organization_id"]),
           site.userId,
           site.env,
         ));
@@ -80,9 +77,8 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         const post = await asMcpValidationError(() => updatePost(
           site.db,
           site.organizationId,
-          site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id", "site_id"]),
+          omit(args, ["post_id", "organization_id"]),
           site.userId,
           site.env,
         ));
@@ -122,15 +118,15 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       if (wantsFacebook || wantsInstagram) {
         if (!socialEnabled) {
           socialSkipReason = "social_publishing_disabled";
-        } else if (!(await hasSiteEntitlement(site.env as CloudflareEnv, site.db, site.siteId, "managed_service"))) {
+        } else if (!(await hasSiteEntitlement(site.env as CloudflareEnv, site.db, site.organizationId, "managed_service"))) {
           socialSkipReason = "not_entitled";
         } else {
           facebookConnection = await getFacebookPagesConnection(
             site.env as never,
             site.organizationId,
-            site.siteId,
+            
           );
-          if (!facebookConnection?.facebook_page_id || !facebookConnection.encrypted_page_token) {
+          if (!facebookConnection?.page_id || !facebookConnection.encrypted_page_token) {
             socialSkipReason = "not_connected";
           }
         }
@@ -138,13 +134,12 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
 
       const socialPublish: PostSocialPublish | null = socialSkipReason
         ? { kind: 'unavailable', reason: socialSkipReason }
-        : facebookConnection?.facebook_page_id && facebookConnection.encrypted_page_token
-          ? { kind: 'connected', pageId: facebookConnection.facebook_page_id, pageToken: facebookConnection.encrypted_page_token }
+        : facebookConnection?.page_id && facebookConnection.encrypted_page_token
+          ? { kind: 'connected', pageId: facebookConnection.page_id, pageToken: facebookConnection.encrypted_page_token }
           : null;
       const post = await publishPost(
         site.db,
         site.organizationId,
-        site.siteId,
         postId,
         channels,
         site.env,
@@ -204,7 +199,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         deleted: await deletePost(
           site.db,
           site.organizationId,
-          site.siteId,
           postId,
         ),
         context: await mutationContextPayload(site),

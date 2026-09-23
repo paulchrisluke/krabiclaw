@@ -1,11 +1,8 @@
 <template>
   <div class="space-y-4">
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-    <UFormField label="Site">
-      <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
-    </UFormField>
+  <div class="grid grid-cols-3 gap-3 mb-4">
     <UFormField label="Location">
-      <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
+      <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
     </UFormField>
     <UFormField label="Type">
       <USelect v-model="filters.eventType" :items="eventTypeOptions" class="w-full" />
@@ -74,7 +71,7 @@ const route = useRoute()
 
 const { eventLabel } = useSiteEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 const loadMoreError = ref<string | null>(null)
 
 type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
@@ -85,16 +82,10 @@ type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
 const FILTER_ALL = '__all__'
 
 const filters = reactive({
-  siteId: FILTER_ALL,
   locationId: FILTER_ALL,
   eventType: FILTER_ALL,
   actorId: FILTER_ALL,
 })
-
-const siteOptions = computed(() => [
-  { label: 'All sites', value: FILTER_ALL },
-  ...dashboard.sites.value.map(s => ({ label: s.brand_name ?? s.subdomain ?? s.id, value: s.id })),
-])
 
 const eventTypeOptions = computed(() => [
   { label: 'All types', value: FILTER_ALL },
@@ -127,20 +118,17 @@ const actorOptions = computed(() => [
 ])
 
 interface Location { id: string; title: string }
-const locationsForSite = ref<Location[]>([])
+// The feed covers one tenant, so there is no site to pick before a location:
+// the organization's locations are the only ones there are.
+const locationsForOrganization = ref<Location[]>([])
 const locationsError = ref<string | null>(null)
-watch(() => filters.siteId, async (siteId) => {
+watch(() => dashboard.organizationId.value, async (organizationId) => {
   locationsError.value = null
   filters.locationId = FILTER_ALL
-  locationsForSite.value = []
-  if (siteId === FILTER_ALL) return
-  const site = dashboard.sites.value.find(s => s.id === siteId)
-  if (!site?.subdomain) return
+  locationsForOrganization.value = []
+  if (!organizationId) return
   try {
-    // Reused for requests that deliberately override the active site while retaining
-    // the organization scope resolved from this dashboard route.
     const res = await dashboardApi<{ locations: Location[] }>('/api/dashboard/locations', {
-      query: { site: site.subdomain },
       validate: (value): value is { locations: Location[] } =>
         isRecord(value)
         && Array.isArray(value.locations)
@@ -150,23 +138,22 @@ watch(() => filters.siteId, async (siteId) => {
           && typeof location.title === 'string',
         ),
     })
-    // A slower earlier request must not land after the filter moved on.
-    if (filters.siteId !== siteId) return
-    locationsForSite.value = res.locations
+    // A slower earlier request must not land after the tenant moved on.
+    if (dashboard.organizationId.value !== organizationId) return
+    locationsForOrganization.value = res.locations
   } catch (err) {
-    if (filters.siteId !== siteId) return
-    locationsError.value = 'Failed to load locations for this site'
+    if (dashboard.organizationId.value !== organizationId) return
+    locationsError.value = 'Failed to load locations'
     if (import.meta.dev) console.error('Failed to load locations:', err)
   }
-})
+}, { immediate: true })
 const locationOptions = computed(() => [
   { label: 'All locations', value: FILTER_ALL },
-  ...locationsForSite.value.map(l => ({ label: l.title, value: l.id })),
+  ...locationsForOrganization.value.map(l => ({ label: l.title, value: l.id })),
 ])
 
 const eventQuery = computed(() => ({
   limit: 20,
-  siteId: filters.siteId !== FILTER_ALL ? filters.siteId : undefined,
   locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
   eventType: filters.eventType !== FILTER_ALL ? filters.eventType : undefined,
   actorId: filters.actorId !== FILTER_ALL ? filters.actorId : undefined,

@@ -14,9 +14,12 @@ export default defineHandler(async (event) => {
   if (!locationId) return jsonResponse({ error: 'Location ID required' }, { status: 400 })
 
   const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
-  const organizationId = organization.id
-  const siteId = locationContext.site_id
-  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, siteId, event }), locationId })
+  // The location's own organization, not the one the session happens to be in:
+  // the context resolved both, and authorizing against the session's while
+  // reading the location's is how a request reaches another tenant's row.
+  const organizationId = locationContext.organization_id
+  if (organizationId !== organization.id) return jsonResponse({ error: 'Location not found' }, { status: 404 })
+  await assertMemberScope(db, { ...memberAccessPrincipal(organization, { env, event }), locationId })
 
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
@@ -71,7 +74,7 @@ export default defineHandler(async (event) => {
   }
 
   const result = await updateLocation(
-    db, organizationId, siteId, locationId, {
+    db, organizationId, locationId, {
       title: typeof body.title === 'string' ? body.title : undefined, slug: typeof body.slug === 'string' ? body.slug : undefined, address, phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined, email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined, website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined, maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined, google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined, opening_hours: body.opening_hours === undefined
         ? undefined
         : body.opening_hours === null
@@ -84,10 +87,10 @@ export default defineHandler(async (event) => {
     return jsonResponse(result.data, { status: result.status })
   }
 
-  await purgePublicResourceCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, organizationId)
 
   const location = (result.data as { location?: { feature_overrides?: string | null } }).location
-  const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, siteId, location.feature_overrides ?? null) : null
+  const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides ?? null) : null
   return jsonResponse({
     success: true, location: location ? parseLocationPayload(location) : null, ...capabilitySummary, }, { status: result.status })
 })

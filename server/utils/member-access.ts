@@ -10,18 +10,17 @@ import type { OrganizationPermissions } from '~/utils/organization-access'
 
 // Tenant-scoped authorization is Better Auth organization role plus Better
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
-// by membership in a site's team and/or one or more location teams.
+// by membership in one or more location teams.
+//
+// There is no team standing for the whole tenant. A site team existed only
+// because a site row did, and an editor in it reached everything the owner
+// reached — a second way to be organization-wide, beside the organization role
+// Better Auth already stores. Organization-wide is now the role, and a team is
+// only ever a location.
 
 export interface ResourceTeamAccess {
   organizationId: string
-  siteId: string
-  locationId: string | null
-}
-
-export interface ResourceScope {
-  organizationId: string
-  siteId: string
-  locationId?: string | null
+  locationId: string
 }
 
 /**
@@ -48,11 +47,15 @@ function resolvedMembershipOf<T extends { userId: string; organizationId: string
 }
 
 /**
- * Who is asking, about which site.
+ * Who is asking, about which tenant.
  *
  * `userId`, `role` and `organizationId` are not writable by the caller: they
  * are read off a ResolvedMembership, so the scope checks can trust that `role`
  * belongs to `organizationId` without reading the member row back.
+ *
+ * The tenant is the organization the membership resolved against. It used to
+ * also carry a `siteId` the caller supplied separately, which is how a request
+ * could authorize against one tenant and then read another.
  */
 export interface MemberAccessPrincipal {
   readonly [resolvedMembership]: true
@@ -61,7 +64,6 @@ export interface MemberAccessPrincipal {
   readonly userId: string
   readonly role: string
   readonly organizationId: string
-  readonly siteId: string
   // The request this principal was minted for, when there is one. Only used to
   // memoize the team read the scope checks share; absent for scheduled work.
   readonly event?: H3Event
@@ -69,19 +71,18 @@ export interface MemberAccessPrincipal {
 
 export function memberAccessPrincipal(
   membership: ResolvedMembership,
-  input: { env: CloudflareEnv; siteId: string; event?: H3Event },
+  input: { env: CloudflareEnv; event?: H3Event },
 ): MemberAccessPrincipal {
   return {
     env: input.env,
     userId: membership.userId,
     role: membership.role,
     organizationId: membership.organizationId,
-    siteId: input.siteId,
     event: input.event,
   } as MemberAccessPrincipal
 }
 
-export type DashboardSiteAccess = 'organization' | 'site' | 'location'
+export type DashboardAccess = 'organization' | 'location'
 
 export async function resolveMemberId(
   input: { organizationId: string; userId: string; env: CloudflareEnv },
@@ -100,15 +101,15 @@ export async function resolveMemberId(
   return member?.id ?? null
 }
 
-export async function findLocationInSite(
+export async function findLocation(
   db: DbClient,
-  input: { organizationId: string; siteId: string; locationId: string },
+  input: { organizationId: string; locationId: string },
 ): Promise<{ id: string } | null> {
   return await queryFirst<{ id: string }>(db, `
     SELECT id FROM business_locations
-    WHERE id = ? AND site_id = ? AND organization_id = ?
+    WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `, [input.locationId, input.siteId, input.organizationId])
+  `, [input.locationId, input.organizationId])
 }
 
 export function isOrganizationWideRole(role: string): boolean {
@@ -143,10 +144,10 @@ export function isOperationalRole(role: string): boolean {
  * database only under `dynamicAccessControl`, which is off here, so this costs
  * no round trip.
  *
- * This answers "may this role do X at all". It does not answer "which sites and
- * locations" — that is team membership against `sites.team_id` /
- * `business_locations.team_id`, which Better Auth does not model, and which
- * assertSiteWideAccess/assertLocationAccess below own.
+ * This answers "may this role do X at all". It does not answer "which
+ * locations" — that is team membership against `business_locations.team_id`,
+ * which Better Auth does not model, and which
+ * assertOrganizationWideAccess/assertLocationAccess below own.
  */
 export type { OrganizationPermissions }
 
@@ -167,10 +168,6 @@ export async function assertRoleAllows(
 ): Promise<void> {
   if (await roleAllows(input)) return
   throw new HTTPError({ statusCode: 403, message: input.message ?? 'Access denied' })
-}
-
-export function siteTeamId(siteId: string): string {
-  return `site:${siteId}`
 }
 
 export function locationTeamId(locationId: string): string {
@@ -195,7 +192,7 @@ export async function organizationAdapter(env: CloudflareEnv): Promise<Organizat
  * for the life of one request.
  *
  * A dashboard render resolves the same membership twice: getDashboardContext
- * looks the organization up by slug, loadMemberSiteRow looks it up by id, and
+ * looks the organization up by slug, loadMemberOrganizationRow looks it up by id, and
  * each then reads the same member row for the same user. Neither can change
  * mid-request. Pass the event and the second resolution is free; without one
  * (scheduled jobs, tenant deletion) they read as before.
@@ -219,7 +216,7 @@ export async function resolveOrganizationMembership(
   env: CloudflareEnv,
   input: { organizationId: string; userId: string },
   event?: H3Event,
-): Promise<(ResolvedMembership & { memberId: string; organizationSlug: string; organizationName: string; organizationLogo: string | null }) | null> {
+): Promise<(ResolvedMembership & { memberId: string; organizationSlug: string; organizationName: string }) | null> {
   const [member, organization] = await Promise.all([
     membershipRow(env, input, event),
     organizationById(env, input.organizationId, event),
@@ -232,7 +229,6 @@ export async function resolveOrganizationMembership(
     memberId: member.id,
     organizationSlug: organization.slug,
     organizationName: organization.name,
-    organizationLogo: organization.logo ?? null,
   })
 }
 
@@ -267,7 +263,6 @@ export async function resolveUserOrganization(
   id: string
   name: string
   slug: string
-  logo: string | null
   memberId: string
   deletionScheduledAt: string | null
 }) | null> {
@@ -285,7 +280,6 @@ export async function resolveUserOrganization(
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
-    logo: organization.logo ?? null,
     role: String(member.role),
     memberId: member.id,
     deletionScheduledAt: organization.deletionScheduledAt ? new Date(organization.deletionScheduledAt).toISOString() : null,
@@ -425,59 +419,22 @@ async function ensureTeam(
   }
 }
 
-export async function ensureSiteTeam(
-  db: DbClient,
-  input: { env: CloudflareEnv; organizationId: string; siteId: string; name?: string | null },
-): Promise<string> {
-  const teamId = siteTeamId(input.siteId)
-  await ensureTeam(input.env, {
-    teamId,
-    organizationId: input.organizationId,
-    name: input.name?.trim() || `Site ${input.siteId}`,
-  })
-  await execute(db, `UPDATE sites SET team_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
-    teamId,
-    new Date().toISOString(),
-    input.siteId,
-    input.organizationId,
-    teamId,
-  ])
-  return teamId
-}
-
-export async function ensureResourceTeams(
-  db: DbClient,
-  input: { env: CloudflareEnv; organizationId: string; siteId?: string | null; locationId?: string | null },
-): Promise<void> {
-  if (input.siteId) await ensureSiteTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId })
-  if (input.siteId && input.locationId) {
-    await ensureLocationTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
-  }
-}
-
 export async function ensureLocationTeam(
   db: DbClient,
-  input: { env: CloudflareEnv; organizationId: string; siteId: string; locationId: string; name?: string | null },
+  input: { env: CloudflareEnv; organizationId: string; locationId: string; name?: string | null },
 ): Promise<string> {
   const teamId = locationTeamId(input.locationId)
-  await ensureSiteTeam(db, {
-    env: input.env,
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-  })
   await ensureTeam(input.env, {
     teamId,
     organizationId: input.organizationId,
     name: input.name?.trim() || `Location ${input.locationId}`,
   })
-  await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
+  await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
     input.locationId,
-    input.siteId,
     input.organizationId,
-    teamId,
-  ])
+    teamId])
   return teamId
 }
 
@@ -504,9 +461,11 @@ export async function addMemberResourceAccess(
   db: DbClient,
   input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
 ): Promise<void> {
-  const teamId = input.locationId
-    ? await ensureLocationTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
-    : await ensureSiteTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId })
+  const teamId = await ensureLocationTeam(db, {
+    env: input.env,
+    organizationId: input.organizationId,
+    locationId: input.locationId,
+  })
   await addUserToResourceTeam(db, { env: input.env, userId: input.userId, teamId })
 }
 
@@ -514,27 +473,20 @@ export async function removeMemberResourceAccess(
   db: DbClient,
   input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
 ): Promise<boolean> {
-  const row = input.locationId
-    ? await queryFirst<{ team_id: string | null }>(db, `
-        SELECT team_id
-        FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
-        LIMIT 1
-      `, [input.locationId, input.siteId, input.organizationId])
-    : await queryFirst<{ team_id: string | null }>(db, `
-        SELECT team_id
-        FROM sites
-        WHERE id = ? AND organization_id = ?
-        LIMIT 1
-      `, [input.siteId, input.organizationId])
+  const row = await queryFirst<{ team_id: string | null }>(db, `
+    SELECT team_id
+    FROM business_locations
+    WHERE id = ? AND organization_id = ?
+    LIMIT 1
+  `, [input.locationId, input.organizationId])
   if (!row?.team_id) return false
   return await removeUserFromResourceTeam(db, { env: input.env, userId: input.userId, teamId: row.team_id })
 }
 
 // Called when a member's role changes away from 'editor' — an editor can
-// accumulate site/location team memberships over time (each accepted or
-// re-scoped invitation adds one via addMemberResourceAccess), so demoting or
-// promoting them to a non-scoped role has to sweep all of them, not just one.
+// accumulate location team memberships over time (each accepted or re-scoped
+// invitation adds one via addMemberResourceAccess), so demoting or promoting
+// them to a non-scoped role has to sweep all of them, not just one.
 export async function removeAllMemberResourceAccess(
   _db: DbClient,
   input: { env: CloudflareEnv; organizationId: string; userId: string },
@@ -556,9 +508,9 @@ export async function memberHasTeamAccess(_db: DbClient, input: { env: Cloudflar
 // Deny-by-default boundary for dashboard handlers that resolve through
 // getDashboardContext. Each permitted route below is classified in the #341
 // authorization audit and applies its authoritative resource guard or filtered
-// query. Site-scoped editor and AI actions use their explicit canonical
-// /api/editor/sites/[siteId]/** and /api/ai/[siteId]/** routes instead of
-// hiding the site through /api/dashboard aliases.
+// query. Editor and AI actions use their explicit canonical
+// /api/editor/organizations/[organizationId]/** and /api/ai/[organizationId]/**
+// routes instead of hiding the tenant through /api/dashboard aliases.
 const NO_TEAMS: ReadonlySet<string> = new Set<string>()
 
 /**
@@ -592,98 +544,83 @@ export async function listResourceTeamAccess(
   const teams = await teamsByUser(input.env, input.userId, input.event)
   const teamIds = new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id))
   if (teamIds.size === 0) return []
-  const [sites, locations] = await Promise.all([
-    queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
-      SELECT organization_id AS organizationId, id AS siteId, NULL AS locationId, team_id
-      FROM sites WHERE organization_id = ?
-    `, [input.organizationId]),
-    queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
-      SELECT organization_id AS organizationId, site_id AS siteId, id AS locationId, team_id
-      FROM business_locations WHERE organization_id = ?
-    `, [input.organizationId]),
-  ])
-  return [...sites, ...locations]
+  const locations = await queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
+    SELECT organization_id AS organizationId, id AS locationId, team_id
+    FROM business_locations WHERE organization_id = ?
+  `, [input.organizationId])
+  return locations
     .filter(row => row.team_id && teamIds.has(row.team_id))
-    .map(({ organizationId, siteId, locationId }) => ({ organizationId, siteId, locationId }))
+    .map(({ organizationId, locationId }) => ({ organizationId, locationId }))
 }
 
-export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardSiteAccess> {
+export async function resolveDashboardAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardAccess> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return 'organization'
   if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const site = await queryFirst<{ team_id: string | null }>(db, `
-    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [input.siteId, input.organizationId])
-  return site?.team_id && access.teamIds.has(site.team_id) ? 'site' : 'location'
+  return 'location'
 }
 
-/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any review/QA row whose own location_id is null. */
-export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
+/**
+ * Organization-wide management access: settings, blog, localized content,
+ * professional-services, analytics, domains, the contact-submissions inbox, and
+ * any review/QA row whose own location_id is null.
+ *
+ * This is the organization role and nothing else. An editor used to reach all
+ * of it by sitting in the site team, which made "organization-wide" answerable
+ * two ways — by role, and by a team row. The team row is gone; an editor is
+ * scoped to locations, and reaching tenant configuration means owner or admin.
+ */
+export async function assertOrganizationWideAccess(_db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return
-  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const site = await queryFirst<{ team_id: string | null }>(db, `
-    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [input.siteId, input.organizationId])
-  if (!site?.team_id || !access.teamIds.has(site.team_id)) {
-    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
-  }
+  throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
 }
 
-/** Location management access: org-wide roles, a site-wide-scoped editor, or an editor scoped to this exact location. */
+/** Location management access: org-wide roles, or an editor scoped to this exact location. */
 export async function assertLocationAccess(db: DbClient, input: MemberAccessPrincipal & { locationId: string }): Promise<void> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return
   if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const scope = await queryFirst<{ site_team_id: string | null; location_team_id: string | null }>(db, `
-    SELECT s.team_id AS site_team_id, bl.team_id AS location_team_id
-    FROM sites s
-    LEFT JOIN business_locations bl
-      ON bl.organization_id = s.organization_id AND bl.site_id = s.id AND bl.id = ?
-    WHERE s.id = ? AND s.organization_id = ?
+  const scope = await queryFirst<{ team_id: string | null }>(db, `
+    SELECT team_id FROM business_locations
+    WHERE id = ? AND organization_id = ?
     LIMIT 1
-  `, [input.locationId, input.siteId, input.organizationId])
-  if (!scope || ![scope.site_team_id, scope.location_team_id].some(teamId => teamId && access.teamIds.has(teamId))) {
+  `, [input.locationId, input.organizationId])
+  if (!scope?.team_id || !access.teamIds.has(scope.team_id)) {
     throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
   }
 }
 
-/** A resource that may or may not belong to one location (e.g. a review row) — dispatches to assertSiteWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
+/** A resource that may or may not belong to one location (e.g. a review row) — dispatches to assertOrganizationWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
 export async function assertResourceAccess(db: DbClient, input: MemberAccessPrincipal & { resourceLocationId: string | null }): Promise<void> {
   if (input.resourceLocationId === null) {
-    return assertSiteWideAccess(db, input)
+    return assertOrganizationWideAccess(db, input)
   }
   return assertLocationAccess(db, { ...input, locationId: input.resourceLocationId })
 }
 
-/** Minimal site-context/discovery access: org-wide roles, or ANY scope row at all for this site — enough to resolve site metadata and navigate to the caller's own location(s). Never grants access to full site settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
-export async function assertSiteContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
+/** Minimal tenant-context/discovery access: org-wide roles, or an editor holding ANY location team in this organization — enough to resolve tenant metadata and navigate to the caller's own location(s). Never grants access to organization settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
+export async function assertOrganizationContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return
   if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
   const rows = await queryAll<{ team_id: string | null }>(db, `
-    SELECT team_id FROM sites WHERE id = ? AND organization_id = ?
-    UNION ALL
-    SELECT team_id FROM business_locations WHERE site_id = ? AND organization_id = ?
-  `, [input.siteId, input.organizationId, input.siteId, input.organizationId])
+    SELECT team_id FROM business_locations WHERE organization_id = ?
+  `, [input.organizationId])
   if (!rows.some(row => row.team_id && access.teamIds.has(row.team_id))) {
-    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
+    throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
   }
 }
 
-/** Returns null for org-wide roles or site-team editors (unrestricted at this site), or the list of location ids a location-team editor may reach. */
+/** Returns null for org-wide roles (unrestricted), or the list of location ids a location-team editor may reach. */
 export async function listAccessibleLocationIds(db: DbClient, input: MemberAccessPrincipal): Promise<string[] | null> {
   const access = await canonicalMemberAccess(input)
   if (isOrganizationWideRole(access.role)) return null
   if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const site = await queryFirst<{ team_id: string | null }>(db, `
-    SELECT team_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [input.siteId, input.organizationId])
-  if (site?.team_id && access.teamIds.has(site.team_id)) return null
   const rows = await queryAll<{ location_id: string; team_id: string | null }>(db, `
     SELECT id AS location_id, team_id FROM business_locations
-    WHERE site_id = ? AND organization_id = ?
-  `, [input.siteId, input.organizationId])
+    WHERE organization_id = ?
+  `, [input.organizationId])
   return rows.filter(row => row.team_id && access.teamIds.has(row.team_id)).map(row => row.location_id)
 }
 
@@ -692,11 +629,7 @@ export async function assertMemberScope(db: DbClient, input: MemberAccessPrincip
     await assertLocationAccess(db, { ...input, locationId: input.locationId })
     return
   }
-  await assertSiteWideAccess(db, input)
-}
-
-export async function assertMemberSiteAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
-  await assertSiteContextAccess(db, input)
+  await assertOrganizationWideAccess(db, input)
 }
 
 /**
@@ -708,9 +641,19 @@ export async function assertMemberSiteAccess(db: DbClient, input: MemberAccessPr
  * twice — once to authorize, once to look up the preference — would be two
  * implementations of the same lookup.
  */
+export interface WhatsAppRecipientScope {
+  organizationId: string
+  locationId?: string | null
+  env: CloudflareEnv
+  phone: string
+  // The message is about the tenant as a whole, not one location. Only an
+  // organization-wide role may receive it.
+  requireOrganizationWide?: boolean
+}
+
 export async function resolveAuthorizedWhatsAppRecipient(
   db: DbClient,
-  input: ResourceScope & { env: CloudflareEnv; phone: string; requireSiteWide?: boolean },
+  input: WhatsAppRecipientScope,
 ): Promise<{ userId: string } | null> {
   const { findVerifiedAuthUserByPhone } = await import('~/server/utils/auth')
   const user = await findVerifiedAuthUserByPhone(
@@ -725,14 +668,16 @@ export async function resolveAuthorizedWhatsAppRecipient(
   if (!membership || !isOperationalRole(membership.role)) return null
   const recipient = { userId: user.id }
   if (isOrganizationWideRole(membership.role)) return recipient
-  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: input.env, siteId: input.siteId }))
-  if (input.requireSiteWide || !input.locationId) return locationIds === null ? recipient : null
+  // A scoped editor from here down: organization-wide messages are not theirs,
+  // and a message about no particular location has no scope to check them against.
+  if (input.requireOrganizationWide || !input.locationId) return null
+  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: input.env }))
   return locationIds === null || locationIds.includes(input.locationId) ? recipient : null
 }
 
 export async function isAuthorizedWhatsAppRecipient(
   db: DbClient,
-  input: ResourceScope & { env: CloudflareEnv; phone: string; requireSiteWide?: boolean },
+  input: WhatsAppRecipientScope,
 ): Promise<boolean> {
   return (await resolveAuthorizedWhatsAppRecipient(db, input)) !== null
 }

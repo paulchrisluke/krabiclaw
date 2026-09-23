@@ -51,7 +51,7 @@ definePageMeta({ layout: 'saya' })
 
 const { locale } = useI18n()
 const justCopied = ref(false)
-const { siteId } = useTenantSite()
+const { organizationId } = useTenantSite()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 const { site } = useTenantSite()
@@ -70,8 +70,8 @@ const browseLabel = computed(() => presentation.value?.locationCollectionSegment
   : 'Browse everything on offer')
 
 onMounted(() => {
-  if (!siteId) return
-  const handoff = getBookingConfirmation(siteId)
+  if (!organizationId) return
+  const handoff = getBookingConfirmation(organizationId)
   confirmation.value = handoff && handoff.type === 'booking' ? handoff : null
 })
 

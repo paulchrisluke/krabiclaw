@@ -49,37 +49,37 @@ const route = useRoute()
 const { localePath } = useI18n()
 const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
 const requestEvent = useRequestEvent()
-const siteId = import.meta.server
-  ? (requestEvent?.context.siteId as string | null | undefined) ?? tenantState.siteId
-  : tenantState.siteId
+const organizationId = import.meta.server
+  ? (requestEvent?.context.organizationId as string | null | undefined) ?? tenantState.organizationId
+  : tenantState.organizationId
 const isTenant = import.meta.server
   ? requestEvent?.context.tenantType === TENANT_TYPES.TENANT || tenantState.isTenant
   : tenantState.isTenant
-if (!isTenant || !siteId) {
+if (!isTenant || !organizationId) {
   throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
 }
 
 const { data, error } = await useAsyncData<PublicLinksPayload | null>(
-  `public-links-page-${siteId}-${locale}`,
+  `public-links-page-${organizationId}-${locale}`,
   async (_nuxtApp, { signal }) => {
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getPublicLinksPage }] = await Promise.all([
         import('~/server/utils/api-response'),
-        import('~/server/utils/site-links'),
+        import('~/server/utils/links-page'),
       ])
       const env = cloudflareEnv(requestEvent)
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const response = await getPublicLinksPage(env, db, siteId, locale)
+      const response = await getPublicLinksPage(env, db, organizationId, locale)
       if (response !== null && !isPublicLinksPayload(response)) {
         throw new ApiClientError('Public links response did not match its contract', 502, 'INVALID_PUBLIC_LINKS_RESPONSE', null)
       }
       return response
     }
-    return await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/links-page?locale=${encodeURIComponent(locale)}`, {
+    return await publicApiRequest(`/api/public/links-page?locale=${encodeURIComponent(locale)}`, {
       signal,
-      coalesceKey: `public-links-page-${siteId}-${locale}`,
+      coalesceKey: `public-links-page-${organizationId}-${locale}`,
       validate: isPublicLinksResponse,
     })
   },
@@ -93,7 +93,7 @@ useState<PublicLinksPayload['localeRepresentations']>('public-locale-representat
 const linksPage = computed(() => data.value)
 const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
-const brandName = computed(() => linksPage.value?.site.brand_name || linksPage.value?.page.title || '')
+const brandName = computed(() => linksPage.value?.site.name || linksPage.value?.page.title || '')
 const profileImageUrl = computed(() => linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null)
 const { trackLinkClick: recordLinkClick } = useSiteConversionTracking()
 

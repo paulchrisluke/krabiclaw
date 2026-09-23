@@ -13,14 +13,14 @@ export default defineHandler(async (event) => {
   const query = getQuery(event)
   const submissionType = query.submission_type as string | undefined
   const submissionId = query.submission_id as string | undefined
-  const siteId = query.site_id as string | undefined
+  const organizationId = query.organization_id as string | undefined
   const direction = query.direction as string | undefined
   const channel = query.channel as string | undefined
   const since = query.since as string | undefined
   const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)
 
   let sql = `
-    SELECT e.id, gt.kind AS submission_type, gt.id AS submission_id, gt.organization_id, gt.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
+    SELECT e.id, gt.kind AS submission_type, gt.id AS submission_id, gt.organization_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.dedupe_key, e.occurred_at, e.created_at
     FROM activity_entries e
     JOIN requests gt ON gt.id = e.request_id
     WHERE e.kind = 'message'
@@ -29,7 +29,7 @@ export default defineHandler(async (event) => {
 
   if (submissionType) { sql += ' AND gt.kind = ?'; binds.push(submissionType) }
   if (submissionId) { sql += ' AND gt.id = ?'; binds.push(submissionId) }
-  if (siteId) { sql += ' AND gt.site_id = ?'; binds.push(siteId) }
+  if (organizationId) { sql += ' AND gt.organization_id = ?'; binds.push(organizationId) }
   if (direction) {
     sql += ' AND e.actor_kind = ?'
     binds.push(direction === 'in' ? 'guest' : 'member')

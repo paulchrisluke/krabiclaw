@@ -19,7 +19,7 @@
         <MediaPicker
           :model-value="item.asset_id"
           :selected-summary="summaryFor(item)"
-          :site-id="siteId"
+          :organization-id="organizationId"
           accept="any"
           title="Select media"
           @change="emit('assetChange', index, $event)"
@@ -73,7 +73,7 @@ export interface GalleryMediaItem {
 
 withDefaults(defineProps<{
   items: GalleryMediaItem[]
-  siteId: string
+  organizationId: string
   /** Marks the first row as the cover, for galleries whose order sets it. */
   coverFirst?: boolean
 }>(), { coverFirst: true })

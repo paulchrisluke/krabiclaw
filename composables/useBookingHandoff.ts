@@ -5,7 +5,7 @@
 
 export interface BookingConfirmation {
   type: 'reservation' | 'booking'
-  siteId: string
+  organizationId: string
   siteName: string
   policySummary?: ApiRecord | null
   guestName: string
@@ -38,13 +38,13 @@ export function setBookingConfirmation(payload: BookingConfirmation) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
 }
 
-export function getBookingConfirmation(currentSiteId: string): BookingConfirmation | null {
+export function getBookingConfirmation(currentOrganizationId: string): BookingConfirmation | null {
   if (!import.meta.client) return null
   const raw = sessionStorage.getItem(STORAGE_KEY)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as BookingConfirmation
-    if (parsed.siteId !== currentSiteId) return null
+    if (parsed.organizationId !== currentOrganizationId) return null
     return parsed
   } catch {
     return null

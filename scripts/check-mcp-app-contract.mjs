@@ -99,7 +99,7 @@ async function main() {
   if (wwwAuth.includes('resource_metadata=')) pass('WWW-Authenticate includes resource_metadata')
   else fail('WWW-Authenticate missing resource_metadata', wwwAuth)
 
-  const unauthTool = await request('tools/call', { name: 'list_sites', arguments: {} })
+  const unauthTool = await request('tools/call', { name: 'list_organizations', arguments: {} })
   expectStatus('unauthenticated tools/call returns JSON-RPC auth result', unauthTool.res.status, 200)
   const toolChallenge = unauthTool.body?.result?._meta?.['mcp/www_authenticate']?.[0] ?? ''
   if (
@@ -199,12 +199,12 @@ async function main() {
     }
   }
 
-  const welcome = await request('tools/call', { name: 'list_sites', arguments: {} }, headers)
-  expectStatus('list_sites tools/call succeeds', welcome.res.status, 200)
-  if (welcome.body?.result?.structuredContent && Array.isArray(welcome.body.result.structuredContent.sites)) {
-    pass('list_sites returns structuredContent.sites')
+  const welcome = await request('tools/call', { name: 'list_organizations', arguments: {} }, headers)
+  expectStatus('list_organizations tools/call succeeds', welcome.res.status, 200)
+  if (welcome.body?.result?.structuredContent && Array.isArray(welcome.body.result.structuredContent.organizations)) {
+    pass('list_organizations returns structuredContent.organizations')
   } else {
-    fail('list_sites missing structuredContent.sites', welcome.body)
+    fail('list_organizations missing structuredContent.organizations', welcome.body)
   }
 
   const malformedCall = await request('tools/call', { name: 'upload_user_media', arguments: null }, headers)

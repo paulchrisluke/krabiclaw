@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { listLocationQa } from '~/server/utils/location-qa'
-import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
+import { requireLocationAccess, requireOrganizationAccess } from '~/server/utils/location-access'
 import {
   assertLocationAccess,
   assertResourceAccess,
@@ -32,48 +32,48 @@ interface EditorLocationRow {
   feature_overrides: string | null
 }
 
-export async function loadDashboardEditorContext(event: H3Event, siteId: string) {
-  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  if (!site.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  if (!organization.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
-  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
-  // requireSiteAccess(event, siteId, 'context') has already run
-  // assertSiteContextAccess with this exact principal (location-access.ts), so
+  const principal = memberAccessPrincipal(organization.membership, { env, event })
+  // requireOrganizationAccess(event, organizationId, 'context') has already run
+  // assertOrganizationContextAccess with this exact principal (location-access.ts), so
   // asserting it again here only bought a second read of the same member row.
   const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
         FROM business_locations
-       WHERE organization_id = ? AND site_id = ? AND status = 'active'
+       WHERE organization_id = ?  AND status = 'active'
        ORDER BY title ASC
-    `, [site.organization_id, siteId]),
-    getOrganizationEntitlements(env, site.organization_id),
+    `, [organization.id]),
+    getOrganizationEntitlements(env, organization.id),
   ])
   const locations = locationRows
     .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
-  const previewToken = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
-  const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-    siteEnabledFeatures: site.feature_overrides,
+  const previewToken = await createPreviewToken(env.PREVIEW_SECRET, organizationId, Date.now() + PREVIEW_TOKEN_TTL_MS)
+  const { vertical, template } = resolveSiteCmsCapabilities(organization.vertical, organization.theme_id, {
+    siteEnabledFeatures: organization.feature_overrides,
   })
   return {
     success: true as const,
     context: {
       site: {
-        id: site.id,
-        brand_name: site.brand_name,
-        subdomain: site.subdomain,
-        status: site.status,
-        onboarding_status: site.onboarding_status,
+        id: organization.id,
+        name: organization.name,
+        subdomain: organization.subdomain,
+        status: organization.status,
+        onboarding_status: organization.onboarding_status,
         vertical,
         template,
-        feature_overrides: site.feature_overrides,
+        feature_overrides: organization.feature_overrides,
         entitlements,
       },
-      organization: { id: site.organization_id, name: site.organization_name },
+      organization: { id: organization.id, name: organization.name },
       locations,
       scopes: [
         ...(accessibleLocationIds === null ? [{ id: null, label: 'Brand-wide', type: 'brand' as const }] : []),
@@ -81,7 +81,7 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
       ],
       previewToken,
       editablePages: getEditablePages(vertical, template, {
-        site: parseCmsFeatureOverrideDelta(site.feature_overrides),
+        site: parseCmsFeatureOverrideDelta(organization.feature_overrides),
       }),
     },
   }
@@ -89,11 +89,11 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
 
 export async function loadDashboardLocationQa(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   locationId: string,
 ) {
-  const { db } = await requireLocationAccess(event, siteId, locationId)
-  return { qa: await listLocationQa(db, siteId, locationId) }
+  const { db } = await requireLocationAccess(event, organizationId, locationId)
+  return { qa: await listLocationQa(db, organizationId, locationId) }
 }
 
 export interface DashboardMediaFilters {
@@ -109,13 +109,13 @@ export interface DashboardMediaFilters {
 
 export async function loadDashboardMedia(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { env, db, site } = await requireSiteAccess(event, siteId, 'context')
-  const principal = memberAccessPrincipal(site.membership, { env, siteId, event })
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (filters.id) {
-    const asset = await getMediaAsset(db, filters.id, siteId)
+    const asset = await getMediaAsset(db, filters.id, organizationId)
     if (asset) {
       await assertResourceAccess(db, {
         ...principal,
@@ -132,7 +132,7 @@ export async function loadDashboardMedia(
   const limit = Math.min(Math.max(filters.limit ?? 50, 1), 100)
   const offset = Math.max(filters.offset ?? 0, 0)
   return {
-    media: await listMediaAssets(db, siteId, {
+    media: await listMediaAssets(db, organizationId, {
       kind: filters.kind,
       ownerType: filters.ownerType,
       ownerId: filters.ownerId,
@@ -162,7 +162,7 @@ export interface LocationContentCounts {
  */
 async function loadLocationContentCounts(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   locationId: string,
 ): Promise<LocationContentCounts> {
   // Positional placeholders repeated per subquery: D1 binds each `?` in order
@@ -175,15 +175,15 @@ async function loadLocationContentCounts(
       -- count has to mean photos a guest could actually see.
       (SELECT COUNT(*) FROM media_placements mp
         JOIN media_assets ma ON ma.id = mp.asset_id
-         AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
+         AND ma.organization_id = mp.organization_id AND ma.organization_id = mp.organization_id
          AND ma.status = 'active'
-        WHERE mp.site_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
+        WHERE mp.organization_id = ? AND mp.owner_type = 'business_location' AND mp.owner_id = ?
           AND mp.slot IN ('hero', 'gallery') AND mp.status = 'active') AS photos,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND site_id = ? AND location_id = ? AND status = 'published') AS posts,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id = ?) AS qa,
-      (SELECT COUNT(*) FROM reviews WHERE site_id = ? AND location_id = ?) AS reviews,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND site_id = ? AND location_id IS NULL) AS site_qa
-  `, [...Array.from({ length: 4 }, () => [siteId, locationId]).flat(), siteId])
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND organization_id = ? AND location_id = ? AND status = 'published') AS posts,
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id = ?) AS qa,
+      (SELECT COUNT(*) FROM reviews WHERE organization_id = ? AND location_id = ?) AS reviews,
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id IS NULL) AS site_qa
+  `, [...Array.from({ length: 4 }, () => [organizationId, locationId]).flat(), organizationId])
   return {
     photos: row?.photos ?? 0,
     posts: row?.posts ?? 0,
@@ -195,28 +195,27 @@ async function loadLocationContentCounts(
 
 export async function loadDashboardLocationOverview(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   locationId: string,
   options: { includeProducts: boolean },
 ) {
   const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
-  if (location.site_id !== siteId) {
+  if (location.organization_id !== organizationId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
   }
-  const principal = memberAccessPrincipal(organization, { env, siteId, event })
+  const principal = memberAccessPrincipal(organization, { env, event })
   await assertLocationAccess(db, { ...principal, locationId })
   const [capabilities, catalog, reservationConfig, counts] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
-      siteId,
       location.feature_overrides as string | null ?? null,
     ),
     options.includeProducts
       ? summarizeLocationProducts(db, { organizationId: organization.id, locationId })
       : Promise.resolve({ total: 0, experiences: 0 }),
     getLocationReservationConfig(db, { organizationId: organization.id, locationId }),
-    loadLocationContentCounts(db, siteId, locationId),
+    loadLocationContentCounts(db, organizationId, locationId),
   ])
   return {
     location: {
@@ -232,32 +231,32 @@ export async function loadDashboardLocationOverview(
 
 export async function loadDashboardBlogPosts(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   status?: string,
 ) {
-  const { env, db } = await requireBlogAccess(event, siteId)
-  return { posts: await listBlogPosts(db, siteId, status, env) }
+  const { env, db } = await requireBlogAccess(event, organizationId)
+  return { posts: await listBlogPosts(db, organizationId, status, env) }
 }
 
 export async function loadDashboardBlogPost(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   postId: string,
 ) {
-  const { env, db } = await requireBlogAccess(event, siteId)
-  const post = await getBlogPost(db, postId, siteId, env)
+  const { env, db } = await requireBlogAccess(event, organizationId)
+  const post = await getBlogPost(db, postId, organizationId, env)
   if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
   return { post }
 }
 
 export async function loadDashboardProduct(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   locationId: string,
   productId: string,
 ) {
-  const { db, site } = await requireLocationAccess(event, siteId, locationId)
-  const product = await getProduct(db, site.organization_id, productId)
+  const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
+  const product = await getProduct(db, organization.id, productId)
   // The catalog is organization-owned, so being offered here is what makes
   // this location's editor the right place to open it.
   if (!product.locations.some(entry => entry.location_id === locationId)) {
@@ -266,7 +265,7 @@ export async function loadDashboardProduct(
   // Media placements are site-scoped, and the editor shows the photograph the
   // public page shows — the same hydration the location list does, so opening
   // one product and listing them cannot disagree about its cover.
-  const [hydrated] = await hydrateProductMedia(db, siteId, [product])
+  const [hydrated] = await hydrateProductMedia(db, organizationId, [product])
   return { success: true as const, product: hydrated! }
 }
 

@@ -108,8 +108,8 @@ watch(isOpen, (open) => {
   if (!open) error.value = null
 })
 
-const dashboard = useDashboardSite()
-const isExperience = computed(() => dashboard.site.value?.vertical === 'experience')
+const dashboard = useDashboardOrganization()
+const isExperience = computed(() => dashboard.organization.value?.vertical === 'experience')
 
 interface UpsellContent {
   headline: string
@@ -151,7 +151,7 @@ async function handleCta() {
   loading.value = true
   try {
     if (type.value !== NEW_SALE_PLAN_ID) return
-    const siteId = dashboard.siteId.value
+    const siteId = dashboard.organizationId.value
     if (!siteId) throw new Error('Choose a site before starting checkout')
     await startOrganizationCheckout(siteId, type.value)
     close()

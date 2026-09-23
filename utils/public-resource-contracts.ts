@@ -4,7 +4,7 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicShellSite {
-  brand_name: string | null
+  name: string | null
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: SocialImageSource | null
@@ -40,7 +40,7 @@ const nullableString = (value: unknown): value is string | null =>
 
 export const isPublicShellPayload = (value: unknown): value is PublicShellPayload => {
   if (!isRecord(value) || !isRecord(value.site)) return false
-  if (!nullableString(value.site.brand_name)) return false
+  if (!nullableString(value.site.name)) return false
   if (!nullableString(value.site.brand_description)) return false
   if (!Array.isArray(value.site.media) || !value.site.media.every(item => isRecord(item)
     && typeof item.asset_id === 'string' && typeof item.slot === 'string'
@@ -142,7 +142,7 @@ export function isPublicProduct(value: unknown): value is Product {
 export function isPublicCollection(value: unknown): value is Collection {
   return isRecord(value)
     && typeof value.id === 'string'
-    && typeof value.site_id === 'string'
+    && typeof value.organization_id === 'string'
     && typeof value.name === 'string'
     && typeof value.slug === 'string'
     && Number.isInteger(value.sort_order)

@@ -111,7 +111,7 @@ export const CONTENT_BLOCK_TYPES = Object.keys(TENANT_PAGE_BLOCK_REGISTRY) as re
 export type ContentBlockType = TenantPageBlockType
 
 export const LOCALIZED_RESOURCE_TYPES = [
-  'site', 'business_location', 'product', 'collection', 'media_asset',
+  'organization', 'business_location', 'product', 'collection', 'media_asset',
 ] as const
 
 export type LocalizedResourceType = typeof LOCALIZED_RESOURCE_TYPES[number]

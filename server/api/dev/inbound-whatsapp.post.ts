@@ -21,7 +21,6 @@ export default defineHandler(async (event) => {
     body?: string
     messageId?: string
     organizationId?: string
-    siteId?: string
   }
 
   const from = body.from?.trim()
@@ -31,7 +30,7 @@ export default defineHandler(async (event) => {
   }
 
   const match = await findSubmissionByPhone(
-    db, parsePhoneOrThrow(from, { defaultCountry: 'TH' }), body.organizationId?.trim() || undefined, body.siteId?.trim() || undefined, )
+    db, parsePhoneOrThrow(from, { defaultCountry: 'TH' }), body.organizationId?.trim() || undefined, )
   if (!match) {
     return jsonResponse({ error: 'Submission not found for phone' }, { status: 404 })
   }
@@ -47,7 +46,7 @@ export default defineHandler(async (event) => {
   if (source) {
     const summary = await requestSummary(db, source)
     await notifyGuestThreadReply(env, db, {
-      organizationId: match.organizationId, siteId: match.siteId, locationId: summary.locationId, threadId: thread.id, sourceEntryId: entry.id, submissionType: match.submissionType, submissionId: match.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'whatsapp', messagePreview: text, })
+      organizationId: match.organizationId, locationId: summary.locationId, threadId: thread.id, sourceEntryId: entry.id, submissionType: match.submissionType, submissionId: match.submissionId, guestName: summary.guestName, guestEmail: summary.guestEmail, guestPhone: summary.guestPhone, inboundChannel: 'whatsapp', messagePreview: text, })
   }
   await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 

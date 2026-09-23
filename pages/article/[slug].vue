@@ -37,7 +37,7 @@
                 <NuxtLink :to="localePath(`/blog?tags[]=${encodeURIComponent(tag)}`)" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.brand_name" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.name" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -123,7 +123,7 @@ const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
   seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
-  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name,
+  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.name,
   robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
 }))
 const { trackConsultationClick } = useSiteConversionTracking(consultation)
@@ -140,7 +140,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   author: post.value.author?.name || null,
   publishedAt: post.value.published_at || null,
   brand: {
-    siteName: identity.value.brand_name,
+    siteName: identity.value.name,
   },
   socialImage: post.value.social_image,
   robots: resolvedSeo.value.robots,

@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, siteListItem, siteTool, withToolAnnotations } from './shared'
+import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, siteTool, withToolAnnotations } from './shared'
 
 const SITE_MEDIA_ITEM_SCHEMA = {
   type: 'object',
@@ -15,8 +15,8 @@ const SITE_MEDIA_ITEM_SCHEMA = {
 
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
-      name: 'list_sites',
-      description: 'List the caller\'s accessible sites and current authenticated account identity. Use this to choose the internal site id for site_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or site name, match it against the returned sites and pass the matching site.id as site_id; never pass the URL/domain/name itself as site_id.',
+      name: 'list_organizations',
+      description: 'List the organizations the caller can reach and the current authenticated account identity. Use this to choose the internal organization id for organization_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or business name, match it against the returned organizations and pass the matching id as organization_id; never pass the URL/domain/name itself as organization_id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -24,19 +24,19 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          sites: {
+          organizations: {
             type: 'array',
-            items: siteListItem,
+            items: organizationSummaryItem,
           },
           currentUser: currentUserObject,
           page_info: pageInfoObject,
         },
-        required: ['sites', 'currentUser', 'page_info'],
+        required: ['organizations', 'currentUser', 'page_info'],
       },
     })),
   siteTool({
-      name: 'get_site',
-      description: 'Get site details for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
+      name: 'get_organization',
+      description: 'Get site details for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -51,11 +51,10 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               subdomain: { type: 'string' },
               theme: { type: 'string' },
               status: { type: 'string' },
-              brand_name: { type: ['string', 'null'] },
+              name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
               media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
               public_url: { type: ['string', 'null'] },
-              last_published_at: { type: ['string', 'null'] },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
             },
@@ -66,8 +65,8 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'get_site_settings',
-      description: 'Get editable site settings for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
+      name: 'get_organization_settings',
+      description: 'Get editable site settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -84,7 +83,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               status: { type: 'string' },
               public_url: { type: ['string', 'null'] },
               custom_domain_status: { type: ['string', 'null'] },
-              brand_name: { type: ['string', 'null'] },
+              name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
               media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
@@ -95,7 +94,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               careers_email: { type: ['string', 'null'] },
               google_analytics_measurement_id: { type: ['string', 'null'] },
               google_site_verification: { type: ['string', 'null'] },
-              last_published_at: { type: ['string', 'null'] },
               seo_title: { type: ['string', 'null'] },
               seo_description: { type: ['string', 'null'] },
               canonical_url: { type: ['string', 'null'] },
@@ -110,13 +108,13 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       },
     }),
   siteTool({
-      name: 'update_site_settings',
+      name: 'update_organization_settings',
       description: 'Update editable site settings such as brand name, description, logo, contact email, currency, analytics IDs, and search defaults. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
       domain: 'sites',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        brand_name: { type: 'string' },
+        name: { type: 'string' },
         brand_description: { type: 'string' },
         media: {
           type: 'array',
@@ -134,7 +132,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         careers_email: { type: 'string' },
         google_analytics_measurement_id: { type: 'string' },
         google_site_verification: { type: 'string' },
-        seo_title: { type: ['string', 'null'], description: 'Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to brand_name if unset.' },
+        seo_title: { type: ['string', 'null'], description: 'Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to name if unset.' },
         seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
         canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
         robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },

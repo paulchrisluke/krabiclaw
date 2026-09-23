@@ -39,22 +39,22 @@ import {
 } from '~/utils/product-presentation'
 
 const route = useRoute()
-const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
+const organizationId = await useDashboardOrganizationId()
+const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
-const vertical = dashboard.site.value?.vertical
+const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 // The path comes from the route this screen is mounted on, not from the
 // location selector: an unresolved selector left it empty, and an empty path is
 // a link to nowhere and, where it roots the editor frame, a frame rooted at ''.
-const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
+const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}`)
 const productsPath = computed(() => `${locationPath.value}/products`)
 const openSurface = computed(() => String(route.params.surface ?? '') || null)
 
-const catalog = useLocationProductCatalog(siteId, locationId)
+const catalog = useLocationProductCatalog(organizationId, locationId)
 // A skeleton means "there is nothing to show yet", not "a refetch is in
 // flight". Keyed on `pending` alone, a server render that had the rows in hand
 // still drew the placeholder, and the client hydrated the real list over it --

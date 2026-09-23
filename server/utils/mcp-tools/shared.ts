@@ -311,7 +311,7 @@ export const blogPostObject = {
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
-    visibility: { type: 'string', enum: ['public', 'unlisted'] },
+    visibility: { type: 'string', enum: ['listed', 'unlisted'] },
     scheduled_for: { ...instantSchema, type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
@@ -326,7 +326,7 @@ export const blogPostObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
@@ -353,7 +353,7 @@ export const blogPostSummaryObject = {
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
-    visibility: { type: 'string', enum: ['public', 'unlisted'] },
+    visibility: { type: 'string', enum: ['listed', 'unlisted'] },
     scheduled_for: { ...instantSchema, type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
@@ -367,7 +367,7 @@ export const blogPostSummaryObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
+    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
@@ -704,20 +704,18 @@ export const reservationSubmissionObject = {
   },
 }
 
-export const siteListItem = {
+export const organizationSummaryItem = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    organizationId: { type: 'string' },
-    organizationName: { type: ['string', 'null'] },
-    name: { type: 'string', description: 'Brand name or subdomain slug.' },
-    subdomain: { type: 'string' },
-    orgSlug: { type: 'string', description: 'Organization slug — combine with this site\'s subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}' },
+    name: { type: 'string', description: 'Business name, or the subdomain slug when it has none.' },
+    subdomain: { type: ['string', 'null'] },
+    orgSlug: { type: ['string', 'null'], description: 'Organization slug — combine with locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/locations/{locationSlug}' },
     publicUrl: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['active', 'inactive', 'suspended'] },
-    active: { type: 'boolean', description: 'True when this is the currently active MCP site context.' },
+    active: { type: 'boolean', description: 'True when this is the currently active MCP organization context.' },
   },
-  required: ['id', 'organizationId', 'name', 'subdomain', 'orgSlug', 'status', 'active'],
+  required: ['id', 'name', 'status', 'active'],
 }
 
 export const locationListItemObject = {
@@ -739,10 +737,9 @@ export const workspaceContextObject = {
     organization_id: { type: ['string', 'null'] },
     organization_name: { type: ['string', 'null'] },
     organization_slug: { type: ['string', 'null'] },
-    site_id: { type: ['string', 'null'] },
-    site_name: { type: ['string', 'null'] },
-    site_subdomain: { type: ['string', 'null'] },
-    site_public_url: { type: ['string', 'null'] },
+    
+    organization_subdomain: { type: ['string', 'null'] },
+    organization_public_url: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     location_slug: { type: ['string', 'null'] },
     location_title: { type: ['string', 'null'] },
@@ -762,8 +759,8 @@ export const organizationListItemObject = {
 
 // ---
 
-export const siteIdSchema = {
-  site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.' },
+export const organizationIdSchema = {
+  organization_id: { type: 'string', description: 'Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.' },
 }
 
 export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
@@ -773,7 +770,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
 }): McpToolDefinition {
   const { oneOf, anyOf, allOf, ...propertyDefs } = definition.inputSchema ?? {}
   const properties = {
-    ...siteIdSchema,
+    ...organizationIdSchema,
     ...propertyDefs,
   }
   const required = [...(definition.required ?? [])]
@@ -867,10 +864,10 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_product: R,
   get_reservation_inquiries: R,
   get_resource_localization: R,
-  get_site: R,
-  get_site_analytics: R,
-  get_site_media_assets: R,
-  get_site_settings: R,
+  get_organization: R,
+  get_organization_analytics: R,
+  get_organization_media_assets: R,
+  get_organization_settings: R,
   get_tenant_page: R,
   get_workspace_context: R,
   list_blog_posts: R,
@@ -879,10 +876,10 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_location_reviews: R,
   list_locations: R,
   list_posts: R,
-  list_site_locales: R,
-  list_site_qa: R,
-  list_site_reviews: R,
-  list_sites: R,
+  list_organization_locales: R,
+  list_organization_qa: R,
+  list_organization_reviews: R,
+  list_organizations: R,
   list_tenant_pages: R,
   publish_blog_post: D,
   publish_post: D,
@@ -902,7 +899,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_media_asset: D,
   update_post: D,
   update_product: D,
-  update_site_settings: D,
+  update_organization_settings: D,
   update_tenant_page: D,
   delete_tenant_page: D,
   upload_user_media: W,

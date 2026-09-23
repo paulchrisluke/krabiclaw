@@ -1,0 +1,146 @@
+import { getRouterParam, readBody } from 'nitro/h3'
+import { queryAll, queryFirst } from '~/server/db'
+import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { recordSiteConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/site-conversions'
+import { SITE_CONVERSION_EVENT_NAMES, type SiteConversionEventName } from '~/utils/site-conversion-events'
+import { normalizeVertical } from '~/utils/vertical-copy'
+import { defineHandler } from 'nitro'
+
+const VALID_EVENTS = new Set<string>(SITE_CONVERSION_EVENT_NAMES)
+
+function destinationHost(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.hostname.toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
+export default defineHandler(async (event) => {
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'organizationId required' }, { status: 400 })
+  const db = cloudflareEnv(event).db
+  if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
+  let body: ApiRecord
+  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+
+  const eventName = cleanString(body.event_name, 80)
+  if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
+  const site = await queryFirst<{ id: string; vertical: string | null }>(db,
+    `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
+  if (!site || !normalizeVertical(site.vertical)) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+
+  const ipHash = await hashClientIp(getClientIp(event))
+  const hour = new Date().toISOString().slice(0, 13)
+  if (!await incrementHourlyRateLimit(db, `rate:conversion:${organizationId}:ip:${ipHash}:${hour}`, import.meta.dev ? 1000 : 120, HOUR_MS)) {
+    return jsonResponse({ error: 'Too many events. Please try again later.' }, { status: 429 })
+  }
+
+  let stage: ConversionStage
+  let entityType: ConversionEntityType | null = null
+  let entityId: string | null = null
+  let locationId: string | null = null
+  let pageType: string | null = null
+  let pagePath: string | null = null
+  let ctaDestination: string | null = null
+  let metadata: ApiRecord | null = null
+
+  if (eventName === 'consultation_cta_click') {
+    if (body.stage !== 'schedule_navigation' && body.stage !== 'external_booking_handoff') return jsonResponse({ error: 'Invalid consultation stage' }, { status: 400 })
+    stage = body.stage
+    pageType = cleanString(body.page_type, 80) || null
+    pagePath = cleanString(body.page_path, 300) || null
+    if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
+    const pageId = cleanString(body.page_id, 120)
+    if (pageId) {
+      const page = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE kind = 'page' AND id = ? AND organization_id = ? LIMIT 1", [pageId, organizationId])
+      if (!page) return jsonResponse({ error: 'Page not found' }, { status: 404 })
+      entityType = 'content_document'; entityId = page.id
+    }
+    if (stage === 'external_booking_handoff') {
+      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM organization WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
+      const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
+      if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
+      ctaDestination = host
+      metadata = { destination_hostname: host }
+    } else {
+      ctaDestination = '/schedule'
+    }
+  } else if (eventName === 'product_order_external_click') {
+    stage = 'external_handoff'
+    locationId = cleanString(body.location_id, 120) || null
+    entityId = cleanString(body.product_id, 120) || null
+    if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
+    // Published to this site, offered at a location OF THIS SITE, on sale, and
+    // carrying the link the guest just followed. Five separate facts, all
+    // required: the location arrives in the request body, and without the site
+    // check one tenant's page could report a click at another tenant's branch.
+    const product = await queryFirst<{ id: string; order_url: string }>(db, `
+      SELECT p.id, p.order_url FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
+      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
+      WHERE p.id = ? AND p.active = 1 AND p.order_url IS NOT NULL LIMIT 1`, [organizationId, locationId, organizationId, entityId])
+    if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
+    const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
+    entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }
+  } else if (eventName === 'link_click') {
+    stage = 'external_handoff'
+    entityId = cleanString(body.link_item_id, 120) || null
+    if (!entityId) return jsonResponse({ error: 'link_item_id is required' }, { status: 400 })
+    const link = await queryFirst<{ id: string; label: string; destination: string; sort_order: number; page_path: string }>(db, `SELECT b.id, (b.data_json ->> '$.label') AS label, (source.data_json ->> '$.url') AS destination, source.position AS sort_order, d.path AS page_path
+      FROM content_blocks b JOIN content_documents d ON d.id = b.document_id
+      JOIN content_documents root ON root.id = COALESCE(d.root_id,d.id)
+      JOIN content_blocks source ON source.id = COALESCE(b.source_block_id,b.id)
+      WHERE b.id = ? AND d.organization_id = ? AND b.type = 'cta' AND root.kind = 'page' AND root.row_role = 'root'
+        AND (root.metadata_json ->> '$.recipe') = 'links' AND (source.data_json ->> '$.status') = 'active' LIMIT 1`, [entityId, organizationId])
+    const host = link ? destinationHost(link.destination) : null
+    if (!link || !host) return jsonResponse({ error: 'Link item not found' }, { status: 404 })
+    entityType = 'content_block'; ctaDestination = host; pageType = 'links'; pagePath = link.page_path
+    metadata = { link_label: link.label, position: Number(link.sort_order) + 1, destination_hostname: host }
+  } else if (eventName === 'donation_click') {
+    stage = 'external_handoff'
+    const documentId = cleanString(body.document_id, 120)
+    const tierLabel = cleanString(body.tier_label, 100)
+    const tierAmount = body.tier_amount == null ? null : Number(body.tier_amount)
+    if (!documentId || !tierLabel || (tierAmount !== null && (!Number.isFinite(tierAmount) || tierAmount <= 0))) return jsonResponse({ error: 'Valid document_id and donation choice are required' }, { status: 400 })
+    const page = await queryFirst<{ id: string; page_id: string; path: string }>(db, `
+      SELECT v.id, root.id AS page_id, v.path
+        FROM content_documents v JOIN content_documents root ON root.id = COALESCE(v.root_id,v.id)
+       WHERE v.id = ? AND v.organization_id = ? AND root.kind = 'page' AND root.row_role = 'root' AND (root.metadata_json ->> '$.recipe') = 'donate'
+       LIMIT 1
+    `, [documentId, organizationId])
+    if (!page) return jsonResponse({ error: 'Donation page not found' }, { status: 404 })
+    const blocks = await queryAll<{ data_json: string }>(db, `SELECT cb.data_json FROM content_documents cd JOIN content_blocks cb ON cb.document_id = cd.id WHERE cd.id = ? AND cb.type = 'donation_choices'`, [documentId])
+    const choices = blocks.flatMap((row) => {
+      try {
+        const data = JSON.parse(row.data_json) as ApiRecord
+        const host = typeof data.destination === 'string' ? destinationHost(data.destination) : null
+        const tiers = Array.isArray(data.tiers) ? data.tiers : []
+        return host ? [{ host, tiers }] : []
+      } catch {
+        return []
+      }
+    })
+    const choice = choices.find(({ tiers }) => tierLabel === 'Custom Amount'
+      ? tierAmount === null
+      : tiers.some((candidate: unknown) => {
+          if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false
+          const tier = candidate as ApiRecord
+          return tier.title === tierLabel && Number(tier.amount) === tierAmount
+        }))
+    if (!choice) return jsonResponse({ error: 'Donation choice is not published' }, { status: 400 })
+    entityType = 'content_document'; entityId = page.id; pageType = 'donate'; pagePath = page.path; ctaDestination = choice.host
+    metadata = { tier_label: tierLabel, ...(tierAmount === null ? {} : { tier_amount: tierAmount }), destination_hostname: choice.host }
+  } else {
+    return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })
+  }
+
+  const result = await recordSiteConversionEvent(db, event, {
+    organizationId: site.id, eventName: eventName as SiteConversionEventName,
+    stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata,
+  })
+  return jsonResponse({ success: true, id: result.id }, { status: 201 })
+})

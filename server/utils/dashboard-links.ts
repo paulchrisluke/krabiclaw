@@ -5,12 +5,12 @@
 export const DASHBOARD_DESTINATIONS = {
   'settings.billing': 'settings/billing',
   'settings.members': 'settings/members',
-  'site.overview': 'sites/:siteSlug',
-  'site.locations.new': 'sites/:siteSlug/locations/new',
-  'site.domains': 'sites/:siteSlug/domains',
-  'site.settings': 'sites/:siteSlug/settings',
-  'location.overview': 'sites/:siteSlug/locations/:locationSlug',
-  'location.settings': 'sites/:siteSlug/locations/:locationSlug/settings',
+  'organization.overview': '',
+  'organization.locations.new': 'locations/new',
+  'organization.domains': 'settings/website/domains',
+  'organization.settings': 'settings',
+  'location.overview': 'locations/:locationSlug',
+  'location.settings': 'locations/:locationSlug/settings',
   support: 'support',
 } as const
 
@@ -20,14 +20,12 @@ export interface DashboardLinkOrgContext {
   env: { NUXT_PUBLIC_PLATFORM_DOMAIN?: string }
   organizationId: string
   organizationSlug?: string
-  siteSlug?: string | null
-  subdomain?: string | null
   locationSlug?: string | null
 }
 
 function requiredDashboardSegment(
   value: string | null | undefined,
-  label: 'organizationSlug' | 'siteSlug' | 'locationSlug',
+  label: 'organizationSlug' | 'locationSlug',
   destination: DashboardDestination,
 ): string {
   const trimmed = typeof value === 'string' ? value.trim() : ''
@@ -37,24 +35,18 @@ function requiredDashboardSegment(
   return encodeURIComponent(trimmed)
 }
 
-export function buildDashboardUrl(site: DashboardLinkOrgContext, destination: DashboardDestination): string {
-  const platformDomain = site.env.NUXT_PUBLIC_PLATFORM_DOMAIN
+export function buildDashboardUrl(organization: DashboardLinkOrgContext, destination: DashboardDestination): string {
+  const platformDomain = organization.env.NUXT_PUBLIC_PLATFORM_DOMAIN
   if (!platformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
-  const orgSlug = requiredDashboardSegment(site.organizationSlug, 'organizationSlug', destination)
-  const siteSlug = site.siteSlug ?? site.subdomain ?? null
-  const locationSlug = site.locationSlug ?? null
+  const orgSlug = requiredDashboardSegment(organization.organizationSlug, 'organizationSlug', destination)
   const path = DASHBOARD_DESTINATIONS[destination]
     .replace(/^\/+/, '')
-    .replaceAll(':siteSlug', pathRequiresSiteSlug(destination) ? requiredDashboardSegment(siteSlug, 'siteSlug', destination) : '')
-    .replaceAll(':locationSlug', pathRequiresLocationSlug(destination) ? requiredDashboardSegment(locationSlug, 'locationSlug', destination) : '')
+    .replaceAll(':locationSlug', pathRequiresLocationSlug(destination) ? requiredDashboardSegment(organization.locationSlug ?? null, 'locationSlug', destination) : '')
   if (path.includes('//') || path.endsWith('/')) {
-    throw new Error(`Dashboard destination ${destination} requires explicit site/location context`)
+    throw new Error(`Dashboard destination ${destination} requires explicit location context`)
   }
-  return `${platformDomain}/dashboard/${orgSlug}/${path}`
-}
-
-function pathRequiresSiteSlug(destination: DashboardDestination): boolean {
-  return DASHBOARD_DESTINATIONS[destination].includes(':siteSlug')
+  // The organization root is the dashboard's own path, with nothing under it.
+  return path ? `${platformDomain}/dashboard/${orgSlug}/${path}` : `${platformDomain}/dashboard/${orgSlug}`
 }
 
 function pathRequiresLocationSlug(destination: DashboardDestination): boolean {

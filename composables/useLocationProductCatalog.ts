@@ -29,8 +29,8 @@ export function useLocationProductCatalog(siteId: string, locationId: Ref<string
         // Collections scoped to this location, and the site-wide ones, are
         // different questions. This screen edits the location's own catalog,
         // so it asks for that scope explicitly.
-        dashboardApi(`/api/editor/sites/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-        dashboardApi(`/api/editor/sites/${siteId}/locations/${id}/products`, { validate: isProductList }),
+        dashboardApi(`/api/editor/organizations/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
+        dashboardApi(`/api/editor/organizations/${siteId}/locations/${id}/products`, { validate: isProductList }),
       ])
       return { collections: collectionResponse.collections, products: productResponse.products }
     },

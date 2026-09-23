@@ -21,8 +21,8 @@
 import { useTenantPageBlock } from '~/composables/useTenantPageDraft'
 
 /** The income table a pricing calculator reads, which is a grid and not a field. */
-const props = defineProps<{ siteId: string; pageId: string; blockId: string }>()
-const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
+const props = defineProps<{ organizationId: string; pageId: string; blockId: string }>()
+const block = useTenantPageBlock(props.organizationId, props.pageId, () => props.blockId)
 
 function calculatorConfig(): Record<string, unknown> {
   const value = block.value.data.calculator

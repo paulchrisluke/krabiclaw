@@ -1,6 +1,6 @@
 <template>
   <MediaPicker
-    :site-id="siteId"
+    :organization-id="organizationId"
     :location-id="locationId"
     :model-value="modelValue"
     :selected-summary="selectedSummary"
@@ -62,7 +62,7 @@ export interface CoverPhotoAsset {
 }
 
 const props = withDefaults(defineProps<{
-  siteId: string
+  organizationId: string
   modelValue: string | null
   /** Rendered large, so this is the full asset URL rather than a thumbnail. */
   previewUrl?: string | null

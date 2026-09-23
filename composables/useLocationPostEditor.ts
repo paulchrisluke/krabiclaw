@@ -137,7 +137,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
     const originalCover = originalMedia.find(item => item.slot === 'cover')?.asset_id ?? null
     const currentCover = form.media.find(item => item.slot === 'cover')?.asset_id ?? null
     if (currentCover !== originalCover) {
-      await dashboardApi(`/api/editor/sites/${siteId}/media/placements`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/media/placements`, {
         method: 'PUT',
         body: { placement: { owner_type: 'post', owner_id: postId, slot: 'cover' }, asset_id: currentCover },
         validate: isPlacementResponse,
@@ -151,13 +151,13 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
     const placement = { owner_type: 'post', owner_id: postId, slot: 'gallery' }
     for (const assetId of originalGalleryIds) {
       if (currentGalleryIds.has(assetId)) continue
-      await dashboardApi(`/api/editor/sites/${siteId}/media/placements/remove`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/media/placements/remove`, {
         method: 'POST', body: { placement, asset_id: assetId }, validate: isPlacementResponse,
       })
     }
     for (const assetId of currentGalleryIds) {
       if (originalGalleryIds.has(assetId)) continue
-      await dashboardApi(`/api/editor/sites/${siteId}/media/placements/attach`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/media/placements/attach`, {
         method: 'POST', body: { placement, asset_id: assetId }, validate: isPlacementResponse,
       })
     }
@@ -170,7 +170,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
       const moves = currentGallery.map((assetId, index) => index === currentGallery.length - 1
         ? { asset_id: assetId }
         : { asset_id: assetId, before_asset_id: currentGallery[index + 1]! })
-      await dashboardApi(`/api/editor/sites/${siteId}/media/placements/reorder`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/media/placements/reorder`, {
         method: 'POST', body: { placement, moves: moves.reverse() }, validate: isPlacementResponse,
       })
     }
@@ -185,7 +185,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
     try {
       if (postId) {
         if (form.topic.post_type === 'alert') await syncMedia(postId)
-        const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}`, {
+        const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${siteId}/posts/${postId}`, {
           method: 'PATCH', body: buildPayload(ownerLocationId, postId), validate: isPostResponse,
         })
         if (form.topic.post_type !== 'alert') await syncMedia(postId)
@@ -193,7 +193,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
         savedSnapshot.value = snapshot()
         return res.post as ApiRecord
       }
-      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
+      const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${siteId}/posts`, {
         method: 'POST', body: buildPayload(ownerLocationId), validate: isPostResponse,
       })
       const created = res.post as ApiRecord
@@ -217,18 +217,18 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
     try {
       let id = postId
       if (!id) {
-        const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
+        const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${siteId}/posts`, {
           method: 'POST', body: buildPayload(ownerLocationId), validate: isPostResponse,
         })
         id = String((res.post as ApiRecord).id)
       } else if (isDirty.value) {
         if (form.topic.post_type === 'alert') await syncMedia(id)
-        await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${id}`, {
+        await dashboardApi<ApiRecord>(`/api/editor/organizations/${siteId}/posts/${id}`, {
           method: 'PATCH', body: buildPayload(ownerLocationId, id), validate: isPostResponse,
         })
         if (form.topic.post_type !== 'alert') await syncMedia(id)
       }
-      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${id}/publish`, {
+      const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${siteId}/posts/${id}/publish`, {
         method: 'POST', body: { channels: selectedChannels.value }, validate: isPostResponse,
       })
       originalMedia = form.media.map(item => ({ ...item }))
@@ -250,7 +250,7 @@ export function useLocationPostEditor(siteId: string, locationId: Ref<string | n
   async function remove(postId: string): Promise<boolean> {
     error.value = null
     try {
-      await dashboardApi(`/api/editor/sites/${siteId}/posts/${postId}`, {
+      await dashboardApi(`/api/editor/organizations/${siteId}/posts/${postId}`, {
         method: 'DELETE',
         validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })

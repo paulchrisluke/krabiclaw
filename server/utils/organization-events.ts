@@ -16,7 +16,6 @@ export type OrganizationEventType =
 export interface FireOrganizationEventParams {
   db: DbClient
   organizationId: string
-  siteId?: string | null
   locationId?: string | null
   actorId?: string | null
   eventType: OrganizationEventType
@@ -30,17 +29,17 @@ export interface FireOrganizationEventParams {
 }
 
 export async function fireOrganizationEvent(params: FireOrganizationEventParams): Promise<void> {
-  const { db, organizationId, siteId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = params
+  const { db, organizationId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = params
   const id = crypto.randomUUID()
   const actorKind = actorType === 'cloudflare' ? 'cloudflare' : actorId ? 'member' : 'system'
   await execute(db, `
     INSERT INTO activity_entries
-      (id, kind, scope_kind, organization_id, site_id, location_id, actor_kind, actor_user_id,
+      (id, kind, scope_kind, organization_id, location_id, actor_kind, actor_user_id,
        event_name, body, payload_json, occurred_at, created_at, dedupe_key)
-    VALUES (?, 'audit', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, siteId ? 'site' : 'organization', siteId ? null : organizationId, siteId ?? null, locationId ?? null,
+    VALUES (?, 'audit', 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, organizationId, locationId ?? null,
     actorKind, actorId ?? null, eventType, message ?? null,
-    JSON.stringify({ sourceOrganizationId: organizationId, entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
+    JSON.stringify({ entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
       beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),
     new Date().toISOString(), new Date().toISOString(), 'audit:' + id])
 }
@@ -52,7 +51,6 @@ export async function fireOrganizationEventSafe(params: FireOrganizationEventPar
     console.warn('organization_event_write_failed', {
       eventType: params.eventType,
       organizationId: params.organizationId,
-      siteId: params.siteId ?? null,
       entityType: params.entityType ?? null,
       entityId: params.entityId ?? null,
       error: error instanceof Error ? error.message : String(error),

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9afa919c4b4a57953f16641598dd69f2aaae532b35a1d507b7635be7b7da07a6",
+  "fingerprint": "sha256:1e6cf070ecb2cd38a3d7596bec2b8637908e3233964bc404bbdf06a572ce217f",
   "tools": [
     {
       "name": "append_content_block",
@@ -99,8 +99,8 @@
             },
             "type": "array"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "type": {
@@ -178,6 +178,10 @@
             "description": "The single media asset id to attach.",
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "placement": {
             "additionalProperties": false,
             "properties": {
@@ -186,7 +190,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -205,10 +209,6 @@
               "slot"
             ],
             "type": "object"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -321,7 +321,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -359,6 +359,10 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "products": {
             "items": {
               "additionalProperties": false,
@@ -619,10 +623,6 @@
             "maxItems": 400,
             "minItems": 1,
             "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -907,15 +907,15 @@
                 "publications": {
                   "items": {
                     "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
                       "published": {
                         "type": "boolean"
-                      },
-                      "site_id": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "site_id",
+                      "organization_id",
                       "published"
                     ],
                     "type": "object"
@@ -1264,18 +1264,9 @@
           "excerpt": {
             "type": "string"
           },
-          "robots": {
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
           },
           "scheduled_for": {
             "description": "Optional future ISO 8601 datetime with timezone. With no status or schedule, creation saves a draft.",
@@ -1303,10 +1294,6 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
           "status": {
             "description": "Creation defaults to draft. Scheduled requires a future scheduled_for; published goes live immediately.",
             "enum": [
@@ -1329,7 +1316,7 @@
           "visibility": {
             "description": "Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.",
             "enum": [
-              "public",
+              "listed",
               "unlisted"
             ],
             "type": "string"
@@ -1632,7 +1619,7 @@
               },
               "visibility": {
                 "enum": [
-                  "public",
+                  "listed",
                   "unlisted"
                 ],
                 "type": "string"
@@ -1650,7 +1637,6 @@
               "seo_description",
               "seo_keywords",
               "canonical_url",
-              "robots",
               "published",
               "published_at",
               "status",
@@ -1697,8 +1683,8 @@
           "name": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "sort_order": {
@@ -1732,7 +1718,7 @@
               "name": {
                 "type": "string"
               },
-              "site_id": {
+              "organization_id": {
                 "type": "string"
               },
               "slug": {
@@ -1744,7 +1730,7 @@
             },
             "required": [
               "id",
-              "site_id",
+              "organization_id",
               "location_id",
               "name",
               "slug",
@@ -1783,8 +1769,8 @@
           "namespace": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "validations": {
@@ -2167,6 +2153,10 @@
               }
             ]
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "post_type": {
             "enum": [
               "standard",
@@ -2208,10 +2198,6 @@
               }
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
           "slug": {
             "anyOf": [
               {
@@ -2234,7 +2220,7 @@
           },
           "visibility": {
             "enum": [
-              "public",
+              "listed",
               "unlisted"
             ]
           }
@@ -2378,8 +2364,8 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "tags": {
@@ -2829,15 +2815,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -3173,6 +3159,10 @@
               "null"
             ]
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "pageType": {
             "description": "The page's type. Send the page_type from the last read unless you are changing it.",
             "enum": [
@@ -3226,10 +3216,6 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
           "sortOrder": {
             "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",
             "type": "number"
@@ -3275,12 +3261,12 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "post_id": {
-            "description": "Post id or slug.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "post_id": {
+            "description": "Post id or slug.",
             "type": "string"
           }
         },
@@ -3314,8 +3300,8 @@
           "collection_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -3348,8 +3334,8 @@
             "description": "The block's updated_at from the last read.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -3393,8 +3379,8 @@
           "asset_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -3423,8 +3409,8 @@
           "definition_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -3450,11 +3436,11 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "post_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "post_id": {
             "type": "string"
           }
         },
@@ -3483,11 +3469,11 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "product_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "product_id": {
             "type": "string"
           }
         },
@@ -3516,22 +3502,22 @@
           "locale": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "resource_id": {
             "type": "string"
           },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
               "media_asset",
               "content_document"
             ],
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3559,7 +3545,7 @@
           },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
@@ -3587,8 +3573,8 @@
             "description": "The document timestamp from the last read, so a page edited since is refused rather than silently removed.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "variant_id": {
@@ -3641,12 +3627,12 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "post_id": {
-            "description": "Post id or slug.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "post_id": {
+            "description": "Post id or slug.",
             "type": "string"
           }
         },
@@ -3946,7 +3932,7 @@
               },
               "visibility": {
                 "enum": [
-                  "public",
+                  "listed",
                   "unlisted"
                 ],
                 "type": "string"
@@ -3964,7 +3950,6 @@
               "seo_description",
               "seo_keywords",
               "canonical_url",
-              "robots",
               "published",
               "published_at",
               "status",
@@ -3995,8 +3980,8 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -4059,8 +4044,8 @@
             "description": "Location id or slug.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -4525,15 +4510,753 @@
       }
     },
     {
+      "name": "get_organization",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "site": {
+            "properties": {
+              "brand_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "media": {
+                "items": {
+                  "properties": {
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "slot",
+                    "public_url",
+                    "thumbnail_url",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "subdomain": {
+                "type": "string"
+              },
+              "theme": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "subdomain",
+              "status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "site"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_organization_analytics",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "start_date": {
+            "description": "Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "attribution": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversionRate": {
+                  "type": "number"
+                },
+                "conversions": {
+                  "type": "number"
+                },
+                "medium": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "sessions",
+                "conversions",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "cities": {
+            "items": {
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "region": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "city",
+                "region",
+                "countryCode",
+                "views"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conversions": {
+            "items": {
+              "properties": {
+                "conversionRate": {
+                  "type": "number"
+                },
+                "count": {
+                  "type": "number"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "eventName",
+                "stage",
+                "count",
+                "conversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "countries": {
+            "items": {
+              "properties": {
+                "country": {
+                  "type": "string"
+                },
+                "countryCode": {
+                  "type": "string"
+                },
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "country",
+                "countryCode",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "dailyData": {
+            "items": {
+              "properties": {
+                "avgDuration": {
+                  "type": "number"
+                },
+                "date": {
+                  "type": "string"
+                },
+                "pageViews": {
+                  "type": "number"
+                },
+                "sessions": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "date",
+                "pageViews",
+                "sessions",
+                "avgDuration"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "devices": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "metrics": {
+            "properties": {
+              "avgSessionDuration": {
+                "type": "number"
+              },
+              "changePercent": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "pageViews": {
+                "type": "number"
+              },
+              "pagesPerSession": {
+                "type": "number"
+              },
+              "returningVisitors": {
+                "type": "number"
+              },
+              "uniqueSessions": {
+                "type": "number"
+              },
+              "uniqueVisitors": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "pageViews",
+              "uniqueSessions",
+              "uniqueVisitors",
+              "returningVisitors",
+              "avgSessionDuration",
+              "pagesPerSession",
+              "changePercent"
+            ],
+            "type": "object"
+          },
+          "period": {
+            "properties": {
+              "analyticsDataStartAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "endDate": {
+                "type": "string"
+              },
+              "startDate": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "startDate",
+              "endDate",
+              "timezone",
+              "analyticsDataStartAt"
+            ],
+            "type": "object"
+          },
+          "referrers": {
+            "items": {
+              "properties": {
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "source",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "topPages": {
+            "items": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "percentOfTotal": {
+                  "type": "number"
+                },
+                "views": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "path",
+                "views",
+                "percentOfTotal"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "period",
+          "metrics",
+          "dailyData",
+          "topPages",
+          "attribution",
+          "conversions",
+          "countries",
+          "cities",
+          "referrers",
+          "devices"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_organization_media_assets",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Filter by asset type.",
+            "enum": [
+              "image",
+              "video",
+              "file"
+            ],
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "assets": {
+            "items": {
+              "properties": {
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "asset_id": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "file_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "image",
+                    "video",
+                    "file"
+                  ],
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "active",
+                    "deleted",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "asset_id",
+                "kind",
+                "provider",
+                "source",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "assets",
+          "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_organization_settings",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "brand_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "canonical_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "careers_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "catering_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "contact_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "string"
+              },
+              "custom_domain_status": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "default_currency": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "google_analytics_measurement_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "google_site_verification": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "media": {
+                "items": {
+                  "properties": {
+                    "asset_id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "public_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "asset_id",
+                    "slot",
+                    "public_url",
+                    "thumbnail_url",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "partnerships_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "press_email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "robots": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seo_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "subdomain": {
+                "type": "string"
+              },
+              "theme": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "subdomain"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "get_post",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "post_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "post_id": {
             "type": "string"
           }
         },
@@ -5011,7 +5734,7 @@
               },
               "visibility": {
                 "enum": [
-                  "public",
+                  "listed",
                   "unlisted"
                 ]
               }
@@ -5030,11 +5753,11 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "product_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "product_id": {
             "type": "string"
           }
         },
@@ -5319,15 +6042,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -5536,8 +6259,8 @@
           "locale": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -5580,8 +6303,8 @@
             "description": "Optional location id to list only that location's reservations.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -5700,8 +6423,8 @@
           "location_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -5845,22 +6568,22 @@
           "locale": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "resource_id": {
             "type": "string"
           },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
               "media_asset",
               "content_document"
             ],
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5899,7 +6622,7 @@
                   },
                   "resource_type": {
                     "enum": [
-                      "site",
+                      "organization",
                       "business_location",
                       "product",
                       "collection",
@@ -5912,9 +6635,6 @@
                       "string",
                       "null"
                     ]
-                  },
-                  "site_id": {
-                    "type": "string"
                   },
                   "updated_at": {
                     "type": "string"
@@ -5931,7 +6651,6 @@
                 "required": [
                   "id",
                   "organization_id",
-                  "site_id",
                   "locale",
                   "created_at",
                   "updated_at",
@@ -6009,9 +6728,6 @@
                       "null"
                     ]
                   },
-                  "site_id": {
-                    "type": "string"
-                  },
                   "slug": {
                     "type": [
                       "string",
@@ -6037,7 +6753,6 @@
                 "required": [
                   "id",
                   "organization_id",
-                  "site_id",
                   "locale",
                   "created_at",
                   "updated_at",
@@ -6066,762 +6781,12 @@
       }
     },
     {
-      "name": "get_site",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "site": {
-            "properties": {
-              "brand_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "brand_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "id": {
-                "type": "string"
-              },
-              "last_published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "media": {
-                "items": {
-                  "properties": {
-                    "asset_id": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "public_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "slot": {
-                      "type": "string"
-                    },
-                    "thumbnail_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "asset_id",
-                    "slot",
-                    "public_url",
-                    "thumbnail_url",
-                    "kind"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "organization_id": {
-                "type": "string"
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "status": {
-                "type": "string"
-              },
-              "subdomain": {
-                "type": "string"
-              },
-              "theme": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "subdomain",
-              "status"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "site"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_site_analytics",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "end_date": {
-            "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "start_date": {
-            "description": "Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "attribution": {
-            "items": {
-              "properties": {
-                "campaign": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "conversionRate": {
-                  "type": "number"
-                },
-                "conversions": {
-                  "type": "number"
-                },
-                "medium": {
-                  "type": "string"
-                },
-                "sessions": {
-                  "type": "number"
-                },
-                "source": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "source",
-                "medium",
-                "campaign",
-                "sessions",
-                "conversions",
-                "conversionRate"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "cities": {
-            "items": {
-              "properties": {
-                "city": {
-                  "type": "string"
-                },
-                "countryCode": {
-                  "type": "string"
-                },
-                "region": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "views": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "city",
-                "region",
-                "countryCode",
-                "views"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "conversions": {
-            "items": {
-              "properties": {
-                "conversionRate": {
-                  "type": "number"
-                },
-                "count": {
-                  "type": "number"
-                },
-                "eventName": {
-                  "type": "string"
-                },
-                "stage": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "eventName",
-                "stage",
-                "count",
-                "conversionRate"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "countries": {
-            "items": {
-              "properties": {
-                "country": {
-                  "type": "string"
-                },
-                "countryCode": {
-                  "type": "string"
-                },
-                "percentOfTotal": {
-                  "type": "number"
-                },
-                "views": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "country",
-                "countryCode",
-                "views",
-                "percentOfTotal"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "dailyData": {
-            "items": {
-              "properties": {
-                "avgDuration": {
-                  "type": "number"
-                },
-                "date": {
-                  "type": "string"
-                },
-                "pageViews": {
-                  "type": "number"
-                },
-                "sessions": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "date",
-                "pageViews",
-                "sessions",
-                "avgDuration"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "devices": {
-            "items": {
-              "properties": {
-                "percentOfTotal": {
-                  "type": "number"
-                },
-                "type": {
-                  "type": "string"
-                },
-                "views": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "type",
-                "views",
-                "percentOfTotal"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "metrics": {
-            "properties": {
-              "avgSessionDuration": {
-                "type": "number"
-              },
-              "changePercent": {
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "pageViews": {
-                "type": "number"
-              },
-              "pagesPerSession": {
-                "type": "number"
-              },
-              "returningVisitors": {
-                "type": "number"
-              },
-              "uniqueSessions": {
-                "type": "number"
-              },
-              "uniqueVisitors": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "pageViews",
-              "uniqueSessions",
-              "uniqueVisitors",
-              "returningVisitors",
-              "avgSessionDuration",
-              "pagesPerSession",
-              "changePercent"
-            ],
-            "type": "object"
-          },
-          "period": {
-            "properties": {
-              "analyticsDataStartAt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "endDate": {
-                "type": "string"
-              },
-              "startDate": {
-                "type": "string"
-              },
-              "timezone": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "startDate",
-              "endDate",
-              "timezone",
-              "analyticsDataStartAt"
-            ],
-            "type": "object"
-          },
-          "referrers": {
-            "items": {
-              "properties": {
-                "percentOfTotal": {
-                  "type": "number"
-                },
-                "source": {
-                  "type": "string"
-                },
-                "views": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "source",
-                "views",
-                "percentOfTotal"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "topPages": {
-            "items": {
-              "properties": {
-                "path": {
-                  "type": "string"
-                },
-                "percentOfTotal": {
-                  "type": "number"
-                },
-                "views": {
-                  "type": "number"
-                }
-              },
-              "required": [
-                "path",
-                "views",
-                "percentOfTotal"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "period",
-          "metrics",
-          "dailyData",
-          "topPages",
-          "attribution",
-          "conversions",
-          "countries",
-          "cities",
-          "referrers",
-          "devices"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_site_media_assets",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "kind": {
-            "description": "Filter by asset type.",
-            "enum": [
-              "image",
-              "video",
-              "file"
-            ],
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "assets": {
-            "items": {
-              "properties": {
-                "alt_text": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "asset_id": {
-                  "type": "string"
-                },
-                "category": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": "string"
-                },
-                "file_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "kind": {
-                  "enum": [
-                    "image",
-                    "video",
-                    "file"
-                  ],
-                  "type": "string"
-                },
-                "provider": {
-                  "type": "string"
-                },
-                "public_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "source": {
-                  "type": "string"
-                },
-                "status": {
-                  "enum": [
-                    "pending",
-                    "active",
-                    "deleted",
-                    "failed"
-                  ],
-                  "type": "string"
-                },
-                "thumbnail_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "required": [
-                "asset_id",
-                "kind",
-                "provider",
-                "source",
-                "status"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "assets",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_site_settings",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "settings": {
-            "properties": {
-              "brand_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "brand_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "careers_email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "catering_email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "contact_email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "custom_domain_status": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "default_currency": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "google_analytics_measurement_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "google_site_verification": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "last_published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "media": {
-                "items": {
-                  "properties": {
-                    "asset_id": {
-                      "type": "string"
-                    },
-                    "kind": {
-                      "type": "string"
-                    },
-                    "public_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "slot": {
-                      "type": "string"
-                    },
-                    "thumbnail_url": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "asset_id",
-                    "slot",
-                    "public_url",
-                    "thumbnail_url",
-                    "kind"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "organization_id": {
-                "type": "string"
-              },
-              "partnerships_email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "press_email": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "status": {
-                "type": "string"
-              },
-              "subdomain": {
-                "type": "string"
-              },
-              "theme": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "subdomain"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "settings"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_tenant_page",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "variant_id": {
@@ -6886,31 +6851,19 @@
                   "null"
                 ]
               },
+              "organization_public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "organization_slug": {
                 "type": [
                   "string",
                   "null"
                 ]
               },
-              "site_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_subdomain": {
+              "organization_subdomain": {
                 "type": [
                   "string",
                   "null"
@@ -6987,70 +6940,11 @@
               "type": "object"
             },
             "type": "array"
-          },
-          "sites": {
-            "items": {
-              "properties": {
-                "active": {
-                  "description": "True when this is the currently active MCP site context.",
-                  "type": "boolean"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "description": "Brand name or subdomain slug.",
-                  "type": "string"
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
-                },
-                "organizationId": {
-                  "type": "string"
-                },
-                "organizationName": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "publicUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "status": {
-                  "enum": [
-                    "active",
-                    "inactive",
-                    "suspended"
-                  ],
-                  "type": "string"
-                },
-                "subdomain": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "organizationId",
-                "name",
-                "subdomain",
-                "orgSlug",
-                "status",
-                "active"
-              ],
-              "type": "object"
-            },
-            "type": "array"
           }
         },
         "required": [
           "context",
           "organizations",
-          "sites",
           "locations"
         ],
         "type": "object"
@@ -7071,8 +6965,8 @@
             "minimum": 1,
             "type": "number"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "status": {
@@ -7303,7 +7197,7 @@
                 },
                 "visibility": {
                   "enum": [
-                    "public",
+                    "listed",
                     "unlisted"
                   ],
                   "type": "string"
@@ -7321,7 +7215,6 @@
                 "seo_description",
                 "seo_keywords",
                 "canonical_url",
-                "robots",
                 "published",
                 "published_at",
                 "status",
@@ -7360,8 +7253,8 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -7391,7 +7284,7 @@
                 "name": {
                   "type": "string"
                 },
-                "site_id": {
+                "organization_id": {
                   "type": "string"
                 },
                 "slug": {
@@ -7403,7 +7296,7 @@
               },
               "required": [
                 "id",
-                "site_id",
+                "organization_id",
                 "location_id",
                 "name",
                 "slug",
@@ -7439,12 +7332,12 @@
           "location_id": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "published_only": {
             "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -7512,15 +7405,15 @@
                 "publications": {
                   "items": {
                     "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
                       "published": {
                         "type": "boolean"
-                      },
-                      "site_id": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "site_id",
+                      "organization_id",
                       "published"
                     ],
                     "type": "object"
@@ -7574,8 +7467,8 @@
           "location_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -7659,8 +7552,8 @@
           "location_id": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -7792,8 +7685,8 @@
             "minimum": 1,
             "type": "number"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -7871,8 +7764,8 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -7941,6 +7834,368 @@
       }
     },
     {
+      "name": "list_organization_locales",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "locales": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "locales"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_organization_qa",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "answer": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "question": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "items",
+          "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_organization_reviews",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          },
+          "reviews": {
+            "items": {
+              "properties": {
+                "author_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "collection_method": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "original_reference": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "original_review_date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "owner_reply": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "publication_authorized": {
+                  "type": "boolean"
+                },
+                "rating": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "reviews",
+          "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_organizations",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "currentUser": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "isPlatformAdmin": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "isPlatformAdmin"
+            ],
+            "type": "object"
+          },
+          "organizations": {
+            "items": {
+              "properties": {
+                "active": {
+                  "description": "True when this is the currently active MCP organization context.",
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Business name, or the subdomain slug when it has none.",
+                  "type": "string"
+                },
+                "orgSlug": {
+                  "description": "Organization slug — combine with locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/locations/{locationSlug}",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "publicUrl": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "active",
+                    "inactive",
+                    "suspended"
+                  ],
+                  "type": "string"
+                },
+                "subdomain": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "status",
+                "active"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page_info": {
+            "properties": {
+              "has_more": {
+                "type": "boolean"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "has_more",
+              "next_cursor"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "organizations",
+          "currentUser",
+          "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -7959,8 +8214,8 @@
             "description": "Filter to posts restricted to this location.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "status": {
@@ -8463,7 +8718,7 @@
                 },
                 "visibility": {
                   "enum": [
-                    "public",
+                    "listed",
                     "unlisted"
                   ]
                 }
@@ -8495,12 +8750,12 @@
             "minimum": 1,
             "type": "number"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "published_only": {
             "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [],
@@ -8566,15 +8821,15 @@
                 "publications": {
                   "items": {
                     "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
                       "published": {
                         "type": "boolean"
-                      },
-                      "site_id": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "site_id",
+                      "organization_id",
                       "published"
                     ],
                     "type": "object"
@@ -8611,374 +8866,6 @@
       }
     },
     {
-      "name": "list_site_locales",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "locales": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "locales"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_site_qa",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "page_path": {
-            "description": "Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "items": {
-            "items": {
-              "properties": {
-                "answer": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "location_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "question": {
-                  "type": "string"
-                },
-                "sort_order": {
-                  "type": "number"
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "items",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_site_reviews",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          },
-          "reviews": {
-            "items": {
-              "properties": {
-                "author_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "collection_method": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "content": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "location_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "original_reference": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "original_review_date": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "owner_reply": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "publication_authorized": {
-                  "type": "boolean"
-                },
-                "rating": {
-                  "type": "number"
-                },
-                "source": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                },
-                "title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "verified": {
-                  "type": "boolean"
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "reviews",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "list_sites",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "cursor": {
-            "description": "Opaque next_cursor from the previous page.",
-            "type": "string"
-          },
-          "limit": {
-            "description": "Page size. Defaults to 50; maximum 100.",
-            "maximum": 100,
-            "minimum": 1,
-            "type": "number"
-          }
-        },
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "currentUser": {
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "isPlatformAdmin": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "isPlatformAdmin"
-            ],
-            "type": "object"
-          },
-          "page_info": {
-            "properties": {
-              "has_more": {
-                "type": "boolean"
-              },
-              "next_cursor": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "has_more",
-              "next_cursor"
-            ],
-            "type": "object"
-          },
-          "sites": {
-            "items": {
-              "properties": {
-                "active": {
-                  "description": "True when this is the currently active MCP site context.",
-                  "type": "boolean"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "description": "Brand name or subdomain slug.",
-                  "type": "string"
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
-                },
-                "organizationId": {
-                  "type": "string"
-                },
-                "organizationName": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "publicUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "status": {
-                  "enum": [
-                    "active",
-                    "inactive",
-                    "suspended"
-                  ],
-                  "type": "string"
-                },
-                "subdomain": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "organizationId",
-                "name",
-                "subdomain",
-                "orgSlug",
-                "status",
-                "active"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "sites",
-          "currentUser",
-          "page_info"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "list_tenant_pages",
       "inputSchema": {
         "additionalProperties": false,
@@ -8999,8 +8886,8 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -9050,6 +8937,10 @@
             "description": "Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
@@ -9062,10 +8953,6 @@
               "string",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -9365,7 +9252,7 @@
               },
               "visibility": {
                 "enum": [
-                  "public",
+                  "listed",
                   "unlisted"
                 ],
                 "type": "string"
@@ -9383,7 +9270,6 @@
               "seo_description",
               "seo_keywords",
               "canonical_url",
-              "robots",
               "published",
               "published_at",
               "status",
@@ -9426,11 +9312,11 @@
             },
             "type": "array"
           },
-          "post_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "post_id": {
             "type": "string"
           }
         },
@@ -9533,12 +9419,16 @@
           "locale": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "resource_id": {
             "type": "string"
           },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
@@ -9552,10 +9442,6 @@
               "string",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           },
           "values": {
             "additionalProperties": true,
@@ -9602,7 +9488,7 @@
                   },
                   "resource_type": {
                     "enum": [
-                      "site",
+                      "organization",
                       "business_location",
                       "product",
                       "collection",
@@ -9615,9 +9501,6 @@
                       "string",
                       "null"
                     ]
-                  },
-                  "site_id": {
-                    "type": "string"
                   },
                   "updated_at": {
                     "type": "string"
@@ -9634,7 +9517,6 @@
                 "required": [
                   "id",
                   "organization_id",
-                  "site_id",
                   "locale",
                   "created_at",
                   "updated_at",
@@ -9712,9 +9594,6 @@
                       "null"
                     ]
                   },
-                  "site_id": {
-                    "type": "string"
-                  },
                   "slug": {
                     "type": [
                       "string",
@@ -9740,7 +9619,6 @@
                 "required": [
                   "id",
                   "organization_id",
-                  "site_id",
                   "locale",
                   "created_at",
                   "updated_at",
@@ -9775,6 +9653,10 @@
         "properties": {
           "deactivate_missing": {
             "type": "boolean"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
           },
           "products": {
             "items": {
@@ -10039,10 +9921,6 @@
             },
             "maxItems": 200,
             "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -10327,15 +10205,15 @@
                 "publications": {
                   "items": {
                     "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
                       "published": {
                         "type": "boolean"
-                      },
-                      "site_id": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "site_id",
+                      "organization_id",
                       "published"
                     ],
                     "type": "object"
@@ -10547,6 +10425,10 @@
             "description": "The single media asset id to detach.",
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "placement": {
             "additionalProperties": false,
             "properties": {
@@ -10555,7 +10437,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -10574,10 +10456,6 @@
               "slot"
             ],
             "type": "object"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -10690,7 +10568,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -10731,11 +10609,11 @@
           "location_id": {
             "type": "string"
           },
-          "product_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "product_id": {
             "type": "string"
           }
         },
@@ -11021,15 +10899,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -11248,8 +11126,8 @@
               "null"
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -11281,7 +11159,7 @@
                 "name": {
                   "type": "string"
                 },
-                "site_id": {
+                "organization_id": {
                   "type": "string"
                 },
                 "slug": {
@@ -11293,7 +11171,7 @@
               },
               "required": [
                 "id",
-                "site_id",
+                "organization_id",
                 "location_id",
                 "name",
                 "slug",
@@ -11338,6 +11216,10 @@
             },
             "type": "array"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "placement": {
             "additionalProperties": false,
             "properties": {
@@ -11346,7 +11228,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -11365,10 +11247,6 @@
               "slot"
             ],
             "type": "object"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -11481,7 +11359,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -11598,8 +11476,8 @@
             },
             "type": "array"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -11673,18 +11551,18 @@
           "locale": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
               "media_asset"
             ],
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11706,7 +11584,7 @@
           },
           "resource_type": {
             "enum": [
-              "site",
+              "organization",
               "business_location",
               "product",
               "collection",
@@ -11738,12 +11616,12 @@
             "description": "Raw base64 image bytes or a base64 data URL already available from an external source; use save_generated_image_file for a native ChatGPT generated attachment.",
             "type": "string"
           },
-          "prompt": {
-            "description": "The prompt used to generate the image (stored as alt text).",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "prompt": {
+            "description": "The prompt used to generate the image (stored as alt text).",
             "type": "string"
           }
         },
@@ -11798,12 +11676,12 @@
             ],
             "type": "object"
           },
-          "prompt": {
-            "description": "The prompt used to generate the image (stored as alt text).",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "prompt": {
+            "description": "The prompt used to generate the image (stored as alt text).",
             "type": "string"
           }
         },
@@ -11840,8 +11718,8 @@
             "description": "Color description in natural language (e.g., \"earthy\", \"warm terracotta\", \"ocean blue\") or hex format (e.g., #8F1D21).",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -11880,16 +11758,16 @@
           "collection_id": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "product_ids": {
             "items": {
               "type": "string"
             },
             "maxItems": 2000,
             "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -11940,15 +11818,15 @@
                 "publications": {
                   "items": {
                     "properties": {
+                      "organization_id": {
+                        "type": "string"
+                      },
                       "published": {
                         "type": "boolean"
-                      },
-                      "site_id": {
-                        "type": "string"
                       }
                     },
                     "required": [
-                      "site_id",
+                      "organization_id",
                       "published"
                     ],
                     "type": "object"
@@ -12008,8 +11886,8 @@
             ],
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -12046,6 +11924,10 @@
               "null"
             ]
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "placement": {
             "additionalProperties": false,
             "properties": {
@@ -12054,7 +11936,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -12073,10 +11955,6 @@
               "slot"
             ],
             "type": "object"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -12189,7 +12067,7 @@
               },
               "owner_type": {
                 "enum": [
-                  "site",
+                  "organization",
                   "business_location",
                   "product",
                   "content_document",
@@ -12233,15 +12111,15 @@
           "location_id": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "product_id": {
             "type": "string"
           },
           "published": {
             "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -12526,15 +12404,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -12740,15 +12618,15 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "product_id": {
             "type": "string"
           },
           "published": {
             "type": "boolean"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [
@@ -13033,15 +12911,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -13254,11 +13132,6 @@
           },
           {
             "required": [
-              "site_id"
-            ]
-          },
-          {
-            "required": [
               "location_id"
             ]
           }
@@ -13269,10 +13142,6 @@
             "type": "string"
           },
           "organization_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -13312,31 +13181,19 @@
                   "null"
                 ]
               },
+              "organization_public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "organization_slug": {
                 "type": [
                   "string",
                   "null"
                 ]
               },
-              "site_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "site_subdomain": {
+              "organization_subdomain": {
                 "type": [
                   "string",
                   "null"
@@ -13414,64 +13271,6 @@
             },
             "type": "array"
           },
-          "sites": {
-            "items": {
-              "properties": {
-                "active": {
-                  "description": "True when this is the currently active MCP site context.",
-                  "type": "boolean"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "description": "Brand name or subdomain slug.",
-                  "type": "string"
-                },
-                "orgSlug": {
-                  "description": "Organization slug — combine with this site's subdomain and locationSlug from list_locations to build the dashboard URL: https://krabiclaw.com/dashboard/{orgSlug}/sites/{subdomain}/locations/{locationSlug}",
-                  "type": "string"
-                },
-                "organizationId": {
-                  "type": "string"
-                },
-                "organizationName": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "publicUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "status": {
-                  "enum": [
-                    "active",
-                    "inactive",
-                    "suspended"
-                  ],
-                  "type": "string"
-                },
-                "subdomain": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "organizationId",
-                "name",
-                "subdomain",
-                "orgSlug",
-                "status",
-                "active"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
           "success": {
             "type": "boolean"
           }
@@ -13480,7 +13279,6 @@
           "success",
           "context",
           "organizations",
-          "sites",
           "locations"
         ],
         "type": "object"
@@ -13636,6 +13434,10 @@
             "description": "Required with content_blocks. Use updated_at returned by get_blog_post; stale tokens are rejected with a conflict.",
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
@@ -13646,19 +13448,6 @@
           },
           "reset_slug_override": {
             "type": "boolean"
-          },
-          "robots": {
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "seo_description": {
             "type": "string"
@@ -13676,10 +13465,6 @@
               "string",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           },
           "slug": {
             "description": "Manual URL slug override. Published slug changes preserve a permanent redirect by default.",
@@ -13700,7 +13485,7 @@
           },
           "visibility": {
             "enum": [
-              "public",
+              "listed",
               "unlisted"
             ],
             "type": "string"
@@ -14002,7 +13787,7 @@
               },
               "visibility": {
                 "enum": [
-                  "public",
+                  "listed",
                   "unlisted"
                 ],
                 "type": "string"
@@ -14020,7 +13805,6 @@
               "seo_description",
               "seo_keywords",
               "canonical_url",
-              "robots",
               "published",
               "published_at",
               "status",
@@ -14063,8 +13847,8 @@
           "name": {
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
           "sort_order": {
@@ -14098,7 +13882,7 @@
               "name": {
                 "type": "string"
               },
-              "site_id": {
+              "organization_id": {
                 "type": "string"
               },
               "slug": {
@@ -14110,7 +13894,7 @@
             },
             "required": [
               "id",
-              "site_id",
+              "organization_id",
               "location_id",
               "name",
               "slug",
@@ -14328,6 +14112,10 @@
             ],
             "description": "Canonical weekly endpoint periods. Days use Sunday=0. Null means unknown; periods [] means closed. Sunday 00:00 without a close means always open."
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "phone": {
             "description": "Public phone number shown to guests on the website and in booking/reservation confirmation emails.",
             "type": "string"
@@ -14359,10 +14147,6 @@
               "string",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           },
           "special_hours": {
             "anyOf": [
@@ -14564,8 +14348,8 @@
             ],
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           }
         },
@@ -14582,6 +14366,161 @@
         },
         "required": [
           "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_organization_settings",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "brand_description": {
+            "type": "string"
+          },
+          "canonical_url": {
+            "description": "Optional site-wide canonical URL override for the homepage.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "careers_email": {
+            "type": "string"
+          },
+          "catering_email": {
+            "type": "string"
+          },
+          "contact_email": {
+            "description": "Public contact email shown to guests. Pass null to clear it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_currency": {
+            "enum": [
+              "THB",
+              "USD",
+              "EUR",
+              "GBP",
+              "JPY",
+              "AUD",
+              "CAD",
+              "SGD",
+              "HKD",
+              "MYR",
+              "IDR",
+              "PHP",
+              "VND",
+              "INR"
+            ],
+            "type": "string"
+          },
+          "google_analytics_measurement_id": {
+            "type": "string"
+          },
+          "google_site_verification": {
+            "type": "string"
+          },
+          "media": {
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "type": "string"
+                },
+                "slot": {
+                  "enum": [
+                    "logo",
+                    "favicon"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id",
+                "slot"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "partnerships_email": {
+            "type": "string"
+          },
+          "press_email": {
+            "type": "string"
+          },
+          "robots": {
+            "description": "Search engine indexing directive for the homepage. Leave unset for the default index,follow.",
+            "enum": [
+              "index,follow",
+              "noindex,follow",
+              "index,nofollow",
+              "noindex,nofollow",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_description": {
+            "description": "Optional site-wide default SEO description override. Falls back to brand_description if unset.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seo_title": {
+            "description": "Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to name if unset.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "site_settings"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }
@@ -14862,6 +14801,10 @@
               }
             ]
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "post_id": {
             "type": "string"
           },
@@ -14906,10 +14849,6 @@
               }
             ]
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
           "slug": {
             "anyOf": [
               {
@@ -14932,7 +14871,7 @@
           },
           "visibility": {
             "enum": [
-              "public",
+              "listed",
               "unlisted"
             ]
           }
@@ -15076,11 +15015,11 @@
               "null"
             ]
           },
-          "product_id": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+          "product_id": {
             "type": "string"
           },
           "tags": {
@@ -15530,15 +15469,15 @@
               "publications": {
                 "items": {
                   "properties": {
+                    "organization_id": {
+                      "type": "string"
+                    },
                     "published": {
                       "type": "boolean"
-                    },
-                    "site_id": {
-                      "type": "string"
                     }
                   },
                   "required": [
-                    "site_id",
+                    "organization_id",
                     "published"
                   ],
                   "type": "object"
@@ -15791,6 +15730,10 @@
               "null"
             ]
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "reschedule_allowed": {
             "type": "boolean"
           },
@@ -15800,10 +15743,6 @@
               "number",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           },
           "slot_capacity": {
             "minimum": 0,
@@ -15886,161 +15825,6 @@
           "ok",
           "entity",
           "location_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "update_site_settings",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "brand_description": {
-            "type": "string"
-          },
-          "brand_name": {
-            "type": "string"
-          },
-          "canonical_url": {
-            "description": "Optional site-wide canonical URL override for the homepage.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "careers_email": {
-            "type": "string"
-          },
-          "catering_email": {
-            "type": "string"
-          },
-          "contact_email": {
-            "description": "Public contact email shown to guests. Pass null to clear it.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "default_currency": {
-            "enum": [
-              "THB",
-              "USD",
-              "EUR",
-              "GBP",
-              "JPY",
-              "AUD",
-              "CAD",
-              "SGD",
-              "HKD",
-              "MYR",
-              "IDR",
-              "PHP",
-              "VND",
-              "INR"
-            ],
-            "type": "string"
-          },
-          "google_analytics_measurement_id": {
-            "type": "string"
-          },
-          "google_site_verification": {
-            "type": "string"
-          },
-          "media": {
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "type": "string"
-                },
-                "slot": {
-                  "enum": [
-                    "logo",
-                    "favicon"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id",
-                "slot"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "partnerships_email": {
-            "type": "string"
-          },
-          "press_email": {
-            "type": "string"
-          },
-          "robots": {
-            "description": "Search engine indexing directive for the homepage. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_description": {
-            "description": "Optional site-wide default SEO description override. Falls back to brand_description if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to brand_name if unset.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "site_settings"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
         ],
         "type": "object"
       }
@@ -16180,6 +15964,10 @@
           "expected_updated_at": {
             "type": "string"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "pageType": {
             "description": "The page's type. Send the page_type from the last read unless you are changing it.",
             "enum": [
@@ -16232,10 +16020,6 @@
               "string",
               "null"
             ]
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           },
           "sortOrder": {
             "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",
@@ -16322,6 +16106,10 @@
             ],
             "type": "object"
           },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
           "poster_file": {
             "description": "Required poster/thumbnail image for video uploads. Invalid for non-video uploads.",
             "properties": {
@@ -16343,10 +16131,6 @@
               "file_id"
             ],
             "type": "object"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context or list_sites, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
           }
         },
         "required": [

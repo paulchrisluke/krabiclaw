@@ -47,7 +47,7 @@ async function organizationSubscriptionId(
 }
 
 export const useOrganizationSubscription = () => {
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
   const dashboardApi = useDashboardApi()
   const { trackSubscriptionUpgrade, trackSubscriptionDowngrade } = useAnalytics()
   const { startSubscriptionCheckout } = useSubscriptionCheckout()

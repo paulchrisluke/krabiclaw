@@ -189,7 +189,7 @@ onMounted(() => {
 onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })
 // This layout owns the context request. Nothing below it starts one.
 const context = useDashboardContextOwner()
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 // The page renders once the result held is the one for the destination route.
 // A refresh keeps the same-scope result in place, so the page stays mounted; a
 // scope change holds the previous scope's result until the new one lands, so
@@ -231,9 +231,6 @@ const dashboardContextRequestId = computed(() =>
 const retryDashboardContext = () => context.refresh()
 
 const organization = dashboard.organization
-const site = dashboard.site
-const sites = dashboard.sites
-const activeSiteId = dashboard.siteId
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
 const activeOrganizationId = computed(() => {
@@ -259,76 +256,37 @@ const impersonatedBy = computed(() => {
   return session?.impersonatedBy
 })
 
-const orgSlug = computed(() => organization.value?.slug ?? null)
 const realtimeOrganizationSlug = computed(() => {
   const slug = router.currentRoute.value.params.orgSlug
   return !stoppingImpersonation.value && typeof slug === 'string' ? slug : null
 })
 provideDashboardInvalidations(realtimeOrganizationSlug)
-const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
 
-const siteSlugFromRoute = computed(() => {
-  const slug = route.params.siteSlug
-  return typeof slug === 'string' ? slug : null
-})
-// Route-strict, deliberately: every site/location-scoped page carries these
-// segments in its own path, so falling back to residual dashboard-context state
-// (e.g. the last-viewed site/location) would misclassify scope at org/site root
-// once that state has been populated from an earlier page in the same session.
-const activeSiteSlug = computed(() => siteSlugFromRoute.value)
-const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBase.value}/sites/${activeSiteSlug.value}` : null)
 // Read straight off the route for navigation and routing purposes
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const organizationLabel = computed(() => organization.value?.name ?? 'Organization')
-// The organization is the business, and the business's mark is its brand logo.
-const organizationAvatar = computed(() => organization.value?.logo
-  ?? mediaStillUrl(sites.value[0]?.media.find(item => item.slot === 'logo'))
-  ?? undefined)
+// The organization is the business, and the business's mark is its `logo`
+// media placement. There is no second source: an organization with no logo
+// renders no avatar rather than another business's image or a generic icon
+// standing in for one.
+const organizationAvatar = computed(() =>
+  mediaStillUrl(organization.value?.media.find(item => item.slot === 'logo')) ?? undefined)
 
-const siteLabel = computed(() => site.value?.brand_name ?? site.value?.subdomain ?? 'No site')
-const siteAvatar = (candidate: (typeof sites.value)[number] | undefined) => {
-  const media = candidate?.media.find(item => item.slot === 'media')
-  return mediaStillUrl(media) || undefined
-}
 // Progressive drill-in: exactly one scope is active per route, and the sidebar's
 // single ContextSwitcher (this dropdown) and NavigationGroups both key off it —
 // there is no separate sidebar shell per scope, only scope-driven content inside
 // the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
-const scope = computed<'organization' | 'site' | 'location'>(() => {
-  if (routeLocationSlug.value) return 'location'
-  if (activeSiteSlug.value) return 'site'
-  return 'organization'
-})
+//
+// There used to be a 'site' scope between these two. A business is its
+// organization, so the drill-in is organization → location.
+const scope = computed<'organization' | 'location'>(() => routeLocationSlug.value ? 'location' : 'organization')
 
 // One reusable scope-header model feeds both the desktop sidebar and the mobile
 // navbar leading control. Detail pages may override it with an explicit index
 // parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
-  if (scope.value === 'site' || scope.value === 'location') {
-    const currentSite = sites.value.find(candidate => candidate.id === site.value?.id)
-    const currentSiteAvatar = siteAvatar(currentSite)
-    return {
-      scope: 'site',
-      current: {
-        label: siteLabel.value,
-        avatar: currentSiteAvatar,
-        icon: currentSiteAvatar ? undefined : 'i-lucide-globe'
-      },
-      parent: scope.value === 'location' && siteBase.value
-        ? { label: siteLabel.value, to: siteBase.value }
-        : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
-      peers: sites.value.map((s) => ({
-        label: s.brand_name ?? s.subdomain ?? s.id,
-        avatar: siteAvatar(s),
-        icon: siteAvatar(s) ? undefined : 'i-lucide-globe',
-        active: s.subdomain === activeSiteSlug.value,
-        to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined
-      })),
-    }
-  }
-
   return {
     scope: 'organization',
     current: {
@@ -409,10 +367,10 @@ interface DashboardMobileNavItem {
  * here the way Back does, following `meta.back` where a page declares a parent
  * the URL does not nest under and cutting a segment otherwise.
  *
- * Prefix matching cannot answer this. The links page lives at
- * `/sites/:siteSlug/links` but is reached from Pages, under Menu, so the URL
- * said Locations while every way out of it led to Menu. Asking the same
- * question Back asks means the lit tab is always the one the walk ends at.
+ * Prefix matching cannot answer this. The links page lives at `/links` but is
+ * reached from Pages, under Menu, so the URL said Locations while every way out
+ * of it led to Menu. Asking the same question Back asks means the lit tab is
+ * always the one the walk ends at.
  */
 function tabRootPath(stops: readonly string[]): string | null {
   let path = route.path
@@ -466,14 +424,11 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const routeOrgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
   if (!routeOrgSlug) return []
   const routeOrgBase = `/dashboard/${encodeURIComponent(routeOrgSlug)}`
-  const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
-  const routeSiteBase = routeSiteSlug ? `${routeOrgBase}/sites/${encodeURIComponent(routeSiteSlug)}` : null
-  const messagesTo = routeSiteBase ? `${routeSiteBase}/messages` : `${routeOrgBase}/messages`
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/sites` },
-    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: messagesTo },
+    { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
+    { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]
   return items
 })
@@ -495,7 +450,7 @@ const activeTabPath = computed(() => tabRootPath(tabStops.value))
 const primaryNavItems = computed(() => withActiveItem(navTargets.value, activeTabPath.value))
 // A signed-in owner always gets the header: the wordmark and the account menu
 // are user-scoped and need no organization. Only the nav links and the bottom
-// bar wait for an organization, because Today, Calendar, Sites and Messages do not
+// bar wait for an organization, because Today, Calendar, Locations and Messages do not
 // exist until there is one. Gating both together is what left an owner who
 // abandoned onboarding with no way to reach account settings or log out.
 const showNavChrome = computed(() => primaryNavItems.value.length > 0 && !isAccountRoute.value)
@@ -515,8 +470,9 @@ const isMenuPageActive = computed(() => activeTabPath.value === menuPageTo.value
 
 onMounted(async () => {
   // Track dashboard visit
-  if (activeSiteId.value) {
-    trackDashboardVisited(scope.value, activeSiteId.value)
+  const organizationId = organization.value?.id
+  if (organizationId) {
+    trackDashboardVisited(scope.value, organizationId)
   }
 })
 

@@ -16,11 +16,10 @@ test('analytics preserves duplicate, attribution, summary and retention semantic
     const db = await runtime.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
-    await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('org-proof', 'Proof', 'proof')").run()
-    await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, analytics_data_start_at)
-      VALUES ('site-proof', 'org-proof', 'proof', '{"config":{"default_timezone":"Asia/Bangkok"}}', '2026-09-04T17:00:00.000Z')`).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, analytics_data_start_at)
+      VALUES ('org-proof', 'Proof', 'proof', 'proof', '{"config":{"default_timezone":"Asia/Bangkok"}}', '2026-09-04T17:00:00.000Z')`).run()
     const input: TenantPageviewInput = {
-      eventId: 'event-first', organizationId: 'org-proof', siteId: 'site-proof', pagePath: '/menu', locale: 'en',
+      eventId: 'event-first', organizationId: 'org-proof', pagePath: '/menu', locale: 'en',
       referrerHost: 'google.com', attribution: { utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'first' },
       internalHosts: ['proof.example'], userAgent: 'Desktop', ipHash: 'proof-hash', sessionId: 'session-first',
       visitorId: 'visitor', country: 'th', region: 'Krabi', city: 'Krabi', locationId: null,
@@ -37,25 +36,25 @@ test('analytics preserves duplicate, attribution, summary and retention semantic
     assert.deepEqual(JSON.parse(attribution), { source: 'newsletter', medium: 'email', campaign: null, term: null, content: null,
       referrerHost: null, gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null })
     await Promise.all([
-      updateTenantPageviewDuration(db, { eventId: 'event-first', siteId: 'site-proof', sessionId: 'session-first', durationSeconds: 12, now: input.now }),
-      updateTenantPageviewDuration(db, { eventId: 'event-direct', siteId: 'site-proof', sessionId: 'session-first', durationSeconds: 8, now: input.now }),
+      updateTenantPageviewDuration(db, { eventId: 'event-first', organizationId: 'org-proof', sessionId: 'session-first', durationSeconds: 12, now: input.now }),
+      updateTenantPageviewDuration(db, { eventId: 'event-direct', organizationId: 'org-proof', sessionId: 'session-first', durationSeconds: 8, now: input.now }),
     ])
     assert.equal(await db.prepare("SELECT json_extract(payload_json, '$.duration_seconds') duration FROM analytics_summaries WHERE kind = 'session'").first('duration'), 20)
     await recordTenantPageview(db, { ...input, eventId: 'returning', sessionId: 'returning-session', now: '2026-09-06T02:00:00.000Z' })
-    const period = { siteId: 'site-proof', startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') }
+    const period = { organizationId: 'org-proof', startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') }
     const before = await getSiteAnalyticsReport(db, period)
     assert.equal(before.metrics.pageViews, 4)
     assert.equal(before.metrics.uniqueSessions, 2)
     assert.equal(before.countries[0]?.countryCode, 'TH')
-    for (const date of ['2026-09-05', '2026-09-06']) await aggregateSiteAnalyticsDate(db, 'site-proof', date)
+    for (const date of ['2026-09-05', '2026-09-06']) await aggregateSiteAnalyticsDate(db, 'org-proof', date)
     const after = await getSiteAnalyticsReport(db, period)
     assert.deepEqual(after, before)
-    await aggregateSiteAnalyticsDate(db, 'site-proof', '2026-09-05')
+    await aggregateSiteAnalyticsDate(db, 'org-proof', '2026-09-05')
     assert.deepEqual(await getSiteAnalyticsReport(db, period), before)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_summaries WHERE kind = 'session'").first('count(*)'), 2)
     const conversion = JSON.stringify({ event_name: 'contact_submit', stage: 'submitted', entity_type: 'request', entity_id: 'request-proof',
       attributed_at: '2026-09-05T02:03:00.000Z', attribution: { source: 'google', medium: 'cpc', campaign: 'first' } })
-    const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, site_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'site-proof', 'session-first', 'visitor', ?, '2026-09-05T02:03:00.000Z')"
+    const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'session-first', 'visitor', ?, '2026-09-05T02:03:00.000Z')"
     await Promise.all(['conversion-first', 'conversion-duplicate'].map(id => db.prepare(insert).bind(id, conversion).run()))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
     assert.equal((await getSiteAnalyticsReport(db, period)).conversions[0]?.count, 1)

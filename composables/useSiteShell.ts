@@ -8,7 +8,7 @@ import {
 } from '~/utils/public-resource-contracts'
 
 export const useSiteShellState = () => {
-  const { isPlatform, siteId } = useTenantSite();
+  const { isPlatform, organizationId } = useTenantSite();
   const requestEvent = useRequestEvent();
   const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
@@ -30,15 +30,15 @@ export const useSiteShellState = () => {
     locale: locale.value,
   }));
 
-  const key = computed(() => usePublicResourceKey('shell', siteId, params.value));
-  const url = computed(() => buildPublicPageUrl(siteId, params.value, 'shell'));
+  const key = computed(() => usePublicResourceKey('shell', organizationId, params.value));
+  const url = computed(() => buildPublicPageUrl(organizationId, params.value, 'shell'));
 
   let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>
   let pending: Ref<boolean>
   let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
-  if (isSyntheticServerAssetFetch || isPlatform || !siteId) {
+  if (isSyntheticServerAssetFetch || isPlatform || !organizationId) {
     data = ref<SiteShellPayload>()
     error = ref<Error | null>(null)
     pending = ref(false)
@@ -48,7 +48,7 @@ export const useSiteShellState = () => {
     const asyncData = useAsyncData<SiteShellPayload>(
           key,
           (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
-              siteId,
+              organizationId,
               resourceKind: 'shell',
               url: url.value,
               key: key.value,

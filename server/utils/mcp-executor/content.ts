@@ -119,7 +119,7 @@ function assertTenantPageReplacementConfirmed(
  */
 async function requireSiteDocument(ctx: McpExecutorContext, documentId: string) {
   const document = await getContentDocumentById(ctx.site.db, documentId)
-  if (!document || document.site_id !== ctx.site.siteId) {
+  if (!document || document.organization_id !== ctx.site.organizationId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Content document not found' })
   }
   return document
@@ -132,7 +132,7 @@ async function requireSiteDocument(ctx: McpExecutorContext, documentId: string) 
  */
 async function contentBlocksChanged(ctx: McpExecutorContext, document: { id: string; kind: string }, message: string) {
   const { site } = ctx
-  await executeBatch(site.db, [publicResourceCacheInvalidationQuery(site.siteId, `${document.kind}-block-write`)])
+  await executeBatch(site.db, [publicResourceCacheInvalidationQuery(site.organizationId, `${document.kind}-block-write`)])
   if (document.kind === 'article' && site.env) {
     await refreshSocialCard({ db: site.db, env: site.env, owner: { owner_type: 'content_document', owner_id: document.id } })
   }
@@ -149,8 +149,8 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
   switch (toolName) {
     case "list_tenant_pages":
       try {
-        const pages = await listTenantPages(site.db, site.siteId, { locale: optionalString(args, "locale") });
-        const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${site.siteId}:${optionalString(args, 'locale') ?? ''}` });
+        const pages = await listTenantPages(site.db, site.organizationId, { locale: optionalString(args, "locale") });
+        const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${site.organizationId}:${optionalString(args, 'locale') ?? ''}` });
         return { pages: page.items, page_info: page.page_info };
       } catch (error) {
         return rethrowAsInvalidParams(error);
@@ -158,7 +158,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     case "get_tenant_page":
       try {
         const page = await getTenantPageById(site.db, requiredString(args, "variant_id"), {
-          siteId: site.siteId,
           organizationId: site.organizationId,
         })
         return tenantPageLifecycleResponse("Read", {
@@ -172,7 +171,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       try {
         const created = await createTenantPage(site.db, {
           organizationId: site.organizationId,
-          siteId: site.siteId,
           userId: site.userId,
           data: {
             id: optionalString(args, "variant_id") ?? undefined,
@@ -203,13 +201,12 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       try {
         const variantId = requiredString(args, "variant_id");
         const page = await getTenantPageById(site.db, variantId, {
-          siteId: site.siteId,
           organizationId: site.organizationId,
         });
         assertTenantPageReplacementConfirmed(page, args)
         const updated = await updateTenantPage(site.db, variantId, {
           userId: site.userId,
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          scope: { organizationId: site.organizationId},
           data: {
             path: requiredString(args, "path"),
             title: requiredString(args, "title"),
@@ -233,7 +230,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     case "delete_tenant_page":
       try {
         const deleted = await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          scope: { organizationId: site.organizationId},
           expectedUpdatedAt: requiredString(args, "expected_updated_at"),
           env: site.env,
         });
@@ -290,7 +287,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       // asset must be this site's, an image block must carry its picture.
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
         site.db, [{ id, type: args.type as ContentBlockType, data: args.data as Record<string, unknown>, media: args.media as ContentBlockMedia[] | undefined, level: typeof args.level === 'number' ? args.level : null }],
-        site.siteId, site.organizationId,
+        site.organizationId,
       )
       const block = blocks[0]!
       // One batch: the block and its media land together or not at all.
@@ -303,7 +300,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       const document = await requireSiteDocument(ctx, existing.document_id)
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
         site.db, [{ id: blockId, type: existing.type, data: args.data as Record<string, unknown>, media: (args.media ?? existing.media) as ContentBlockMedia[], level: existing.level }],
-        site.siteId, site.organizationId,
+        site.organizationId,
       )
       await replaceContentBlock(site.db, blockId, { data: blocks[0]!.data, expected_updated_at: requiredString(args, "expected_updated_at") }, { additionalQueriesAfter: placementQueries })
       return await contentBlocksChanged(ctx, document, `Replaced the ${existing.type} block.`)

@@ -69,11 +69,11 @@
 definePageMeta({ layout: 'saya' })
 
 const { localePath, t } = useI18n()
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const { locations, media: photos, pending } = await usePublicPageData()
-const siteName = computed(() => site?.brand_name?.trim() ?? '')
+const siteName = computed(() => site?.name?.trim() ?? '')
 
 const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
 function locationTitle(photo) {

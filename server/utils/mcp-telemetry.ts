@@ -12,7 +12,7 @@ const PII_KEY_PATTERN = /email|phone|address/i;
 // Business/entity name fields — not personal data, safe to log verbatim even
 // though they end in "_name" like the person-name keys below.
 const NON_PERSONAL_NAME_KEYS = new Set([
-  "site_name", "business_name", "brand_name", "location_name",
+  "site_name", "business_name", "name", "location_name",
   "organization_name", "product_name", "experience_name",
 ]);
 
@@ -90,7 +90,6 @@ export type McpToolCallStatus = "success" | "error" | "auth_required" | "blocked
 export interface LogMcpToolCallEventInput {
   env?: ApiRecord | null;
   organizationId?: string | null;
-  siteId?: string | null;
   locationId?: string | null;
   userId?: string | null;
   mcpSurface?: "client" | "public_help";
@@ -137,18 +136,17 @@ export async function logMcpToolCallEvent(
       db,
       `
       INSERT INTO mcp_tool_call_events
-        (id, organization_id, site_id, location_id, user_id, mcp_surface, request_id,
+        (id, organization_id, location_id, user_id, mcp_surface, request_id,
          method, tool_name, tool_domain, is_mutating, arguments_summary_json,
          result_summary_json, status, error_code, error_message,
          http_status, jsonrpc_error_code, jsonrpc_error_message, protocol_version,
          session_id_hash, oauth_client_id_hash, user_agent, cf_ray_id,
          catalog_fingerprint, unknown_tool_name, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         crypto.randomUUID(),
         input.organizationId ?? null,
-        input.siteId ?? null,
         input.locationId ?? null,
         input.userId ?? null,
         input.mcpSurface ?? "client",
@@ -179,7 +177,6 @@ export async function logMcpToolCallEvent(
   if (input.method === "tools/call" && input.organizationId) {
     await recordUsageEvent(db, {
         organizationId: input.organizationId,
-        siteId: input.siteId,
         resource: "mcp_operation",
         source: input.mcpSurface ?? "client",
         provider: input.mcpSurface === "client" ? "chatgpt" : "krabiclaw",

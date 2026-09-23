@@ -5,7 +5,7 @@ import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineHandler(async (event) => {
   const query = getQuery(event)
-  const siteId = typeof query.site_id === 'string' && query.site_id.trim() ? query.site_id.trim() : null
+  const organizationId = typeof query.organization_id === 'string' && query.organization_id.trim() ? query.organization_id.trim() : null
   const locationId = typeof query.location_id === 'string' && query.location_id.trim() ? query.location_id.trim() : null
   const type = query.type === 'contact' || query.type === 'reservation' || query.type === 'booking'
     ? query.type as GuestThreadSubmissionType
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
   const occurrence = query.occurrence === 'past' || query.occurrence === 'upcoming' ? query.occurrence : null
 
   const payload = await loadOrganizationGuestThreads(event, {
-    siteId, locationId, type, conversationState, unreadOnly, occurrence, })
+    organizationId, locationId, type, conversationState, unreadOnly, occurrence, })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-organization-guest-threads', payload))
 })
 import { defineHandler } from 'nitro';

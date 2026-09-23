@@ -4,9 +4,8 @@ import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
   exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -39,14 +38,12 @@ export default defineHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?fb=expired' } })
   }
 
-  const { siteId, organizationId, userId } = stateData
+  const { organizationId, userId } = stateData
   const settingsRedirect = async (status: string) => {
     try {
-      const db = env.DB
-      if (!db) return `/dashboard?fb=${status}`
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
-      return context
-        ? `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings?fb=${status}`
+      const organization = await resolveUserOrganization(env, { userId, organizationId })
+      return organization
+        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings?fb=${status}`
         : `/dashboard?fb=${status}`
     } catch (e) {
       console.error('Facebook Pages redirect organization query failed:', e)
@@ -60,9 +57,9 @@ export default defineHandler(async (event) => {
     // `organizationId` arrives in the OAuth state, so it names an organization
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
-    const siteAccess = await loadMemberSiteRow(event, db, env, siteId, userId)
-    if (!siteAccess || siteAccess.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, siteId, event }))
+    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, userId)
+    if (!siteAccess || siteAccess.id !== organizationId) throw new Error('Access denied')
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)
@@ -74,9 +71,12 @@ export default defineHandler(async (event) => {
     }
 
     const firstPage = pages[0]
+    if (!firstPage) {
+      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
+    }
 
     await storeFacebookPagesConnection(env, {
-      organization_id: organizationId, site_id: siteId, connected_by_user_id: userId, facebook_user_id: userInfo.id, facebook_page_id: firstPage?.id, facebook_page_name: firstPage?.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
+      organization_id: organizationId, connected_by_user_id: userId, facebook_user_id: userInfo.id, page_id: firstPage.id, page_name: firstPage.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
 
     return new Response(null, {
       status: 302, headers: { Location: await settingsRedirect('connected') }, })

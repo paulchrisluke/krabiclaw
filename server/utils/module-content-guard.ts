@@ -2,7 +2,7 @@ import { queryFirst, type DbClient } from '~/server/db'
 import type { ProductFeature } from '~/config/cms-registry'
 
 export interface ModuleContentGuardScope {
-  siteId: string
+  organizationId: string
   locationId?: string | null
 }
 
@@ -17,11 +17,11 @@ async function productsHaveLiveData(db: DbClient, scope: ModuleContentGuardScope
   const row = await queryFirst<{ id: string }>(db, `
     SELECT p.id FROM products p
     JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      AND pub.site_id = ? AND pub.published = 1
+      AND pub.organization_id = ? AND pub.published = 1
     ${scope.locationId ? 'JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1' : ''}
     WHERE p.active = 1
     LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
+  `, scope.locationId ? [scope.organizationId, scope.locationId] : [scope.organizationId])
   return Boolean(row)
 }
 
@@ -30,11 +30,11 @@ async function reservationsHasLiveData(db: DbClient, scope: ModuleContentGuardSc
   // thread it hangs off holds only the conversation.
   const row = await queryFirst<{ id: string }>(db, `
     SELECT id FROM reservations
-    WHERE site_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
+    WHERE organization_id = ? ${scope.locationId ? 'AND location_id = ?' : ''}
       AND status NOT IN ('cancelled', 'completed')
       AND starts_at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
     LIMIT 1
-  `, scope.locationId ? [scope.siteId, scope.locationId] : [scope.siteId])
+  `, scope.locationId ? [scope.organizationId, scope.locationId] : [scope.organizationId])
   return Boolean(row)
 }
 
@@ -52,8 +52,8 @@ export const SERVICE_PAGE_SQL = `kind = 'page' AND row_role = 'root' AND (path =
 
 async function servicesHasLiveData(db: DbClient, scope: ModuleContentGuardScope): Promise<boolean> {
   const row = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM content_documents WHERE site_id = ? AND ${SERVICE_PAGE_SQL} LIMIT 1
-  `, [scope.siteId])
+    SELECT id FROM content_documents WHERE organization_id = ? AND ${SERVICE_PAGE_SQL} LIMIT 1
+  `, [scope.organizationId])
   return Boolean(row)
 }
 

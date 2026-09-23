@@ -11,9 +11,9 @@ export default defineHandler(async (event) => {
 
   const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
   const organizationId = organization.id
-  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, siteId: location.site_id, event }), locationId })
+  await assertLocationAccess(db, { ...memberAccessPrincipal(organization, { env, event }), locationId })
 
-  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.site_id, location.feature_overrides as string | null ?? null)
+  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides as string | null ?? null)
 
   return jsonResponse({ success: true, location: parseLocationPayload(location), ...capabilitySummary })
 })

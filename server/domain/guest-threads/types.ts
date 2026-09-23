@@ -1,13 +1,6 @@
 import type { GuestRequest } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 
-export interface OrganizationMemberAccessPrincipal {
-  userId: string
-  role: string
-  organizationId: string
-  teamIds: string[] | null
-}
-
 export type GuestThreadEntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
 export type GuestThreadActorKind = 'guest' | 'member' | 'system'
 export type GuestThreadChannel = 'web' | 'email' | 'whatsapp' | 'system'
@@ -54,7 +47,6 @@ export interface ThreadSummaryProjection {
   guestEmail: string | null
   guestPhone: string | null
   organizationId: string
-  siteId: string
   locationId: string | null
   locationTitle: string | null
   contextLabel: string
@@ -96,8 +88,7 @@ export interface ThreadDetailSourceModel {
 
 export interface GuestThreadListItemViewModel {
   id: string
-  siteId?: string
-  siteSlug?: string | null
+  organizationId?: string
   guestName: string
   submissionType: GuestThreadSubmissionType
   contextLabel: string
@@ -174,9 +165,8 @@ export interface GuestThreadDetailViewModel {
 
 export interface ListGuestThreadsOptions {
   organizationId?: string | null
-  siteId?: string | null
   locationId?: string | null
-  principal?: MemberAccessPrincipal | OrganizationMemberAccessPrincipal | null
+  principal?: MemberAccessPrincipal | null
   userId: string
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null

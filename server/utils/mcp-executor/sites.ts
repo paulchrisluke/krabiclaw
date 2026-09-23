@@ -9,34 +9,34 @@ import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredStrin
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
-    case "get_site":
+    case "get_organization":
       {
         const siteRecord = await getSiteForMcp(
           site.db,
           site.env,
-          site.siteId,
+          site.organizationId,
           site.userId,
         );
         const workspace = await resolveMcpWorkspace(
           site.db,
           site.env,
           site.userId,
-          { siteId: site.siteId },
+          { organizationId: site.organizationId },
         );
         return {
           site: siteRecord,
-          context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+          context: workspaceContextPayload(workspace.organization, workspace.location),
         };
       }
-    case "get_site_settings":
+    case "get_organization_settings":
       return {
         settings: await loadSettingsPayload(
           site.db,
           site.organizationId,
-          site.siteId,
+          
         ),
       };
-    case "update_site_settings": {
+    case "update_organization_settings": {
       const updates = args as Record<
         string,
         unknown
@@ -44,7 +44,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
         site.organizationId,
         updates,
         site.userId
@@ -56,7 +55,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         {
           ok: true,
           entity: "site_settings",
-          id: site.siteId,
+          id: site.organizationId,
           changed_fields: Object.keys(updates),
           updated_at: settingsResult.updated_at,
           context: updateSettingsContext,
@@ -74,7 +73,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
         site.organizationId,
         { default_currency: currency },
         site.userId,
@@ -96,7 +94,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,
-        site.siteId,
         site.organizationId,
         { brand_color: resolvedColor },
         site.userId,

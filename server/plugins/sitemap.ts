@@ -16,13 +16,13 @@ interface SitemapEntry {
   lastmod?: string
 }
 
-async function listPublishedTenantSitemapPages(db: DbClient, siteId: string) {
-  return await queryAll<{ path: string | null; lastmod: string | null; robots: string | null }>(db, `
-    SELECT v.path, v.updated_at AS lastmod, v.robots
+async function listPublishedTenantSitemapPages(db: DbClient, organizationId: string) {
+  return await queryAll<{ path: string | null; lastmod: string | null }>(db, `
+    SELECT v.path, v.updated_at AS lastmod
       FROM content_documents v
-     WHERE v.site_id = ? AND v.kind = 'page' AND v.row_role = 'root'
+     WHERE v.organization_id = ? AND v.kind = 'page' AND v.row_role = 'root'
      ORDER BY lastmod ASC, path ASC
-  `, [siteId])
+  `, [organizationId])
 }
 
 function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
@@ -61,14 +61,13 @@ export default definePlugin((nitroApp) => {
     const entries: SitemapEntry[] = []
 
     if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
-      const platformSiteId = event.context.siteId as string
+      const platformSiteId = event.context.organizationId as string
       entries.push(...PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc })))
 
-      // KrabiClaw's marketing pages are page documents on its own site, listed
-      // from the same table and with the same noindex rule every customer
-      // site's pages use.
+      // KrabiClaw's marketing pages are page documents on its own organization,
+      // listed from the same table as every customer's pages.
       for (const page of await listPublishedTenantSitemapPages(db, platformSiteId)) {
-        if (!page.path || /noindex/i.test(page.robots || '')) continue
+        if (!page.path) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
 
@@ -77,9 +76,8 @@ export default definePlugin((nitroApp) => {
         `SELECT slug, (metadata_json ->> '$.collection') AS collection, (metadata_json ->> '$.category') AS category, updated_at
          FROM content_documents
          WHERE kind = 'article' AND row_role = 'root' AND status = 'published'
-           AND site_id = ?
-           AND visibility = 'public'
-           AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
+           AND organization_id = ?
+           AND visibility = 'listed'`,
         [platformSiteId],
       )
 
@@ -107,16 +105,16 @@ export default definePlugin((nitroApp) => {
       return
     }
 
-    const siteId = event.context.siteId as string | undefined
-    if (!siteId) {
+    const organizationId = event.context.organizationId as string | undefined
+    if (!organizationId) {
       ctx.urls.length = 0
       return
     }
 
     const site = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
       db,
-      `SELECT vertical, theme_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1`,
-      [siteId],
+      `SELECT vertical, theme_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`,
+      [organizationId],
     )
 
     if (!site) {
@@ -129,17 +127,17 @@ export default definePlugin((nitroApp) => {
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
-        FROM site_locales l
-       WHERE l.site_id = ? AND l.is_source = 0 AND l.status = 'published'
+        FROM organization_locales l
+       WHERE l.organization_id = ? AND l.is_source = 0 AND l.status = 'published'
        ORDER BY l.locale
-    `, [siteId])
+    `, [organizationId])
     for (const candidate of localizedLocales) {
       try {
-        await assertSiteLanguageEntitlement(env, db, candidate.organization_id, siteId, candidate.locale)
+        await assertSiteLanguageEntitlement(env, db, candidate.organization_id, candidate.locale)
       } catch (error) {
         if (error instanceof HTTPError && (error.data?.code === 'LANGUAGE_ENTITLEMENT_REQUIRED' || error.data?.code === 'PLATFORM_LOCALE_UNAVAILABLE')) continue
         if (isSubscriptionStateInvalid(error)) {
-          console.error('organization_subscription_state_invalid', { organizationId: candidate.organization_id, siteId, locale: candidate.locale })
+          console.error('organization_subscription_state_invalid', { organizationId: candidate.organization_id, locale: candidate.locale })
           continue
         }
         throw error
@@ -147,18 +145,17 @@ export default definePlugin((nitroApp) => {
       const [resources, pages] = await Promise.all([
         queryAll<{ route_path: string; updated_at: string }>(db, `
           SELECT route_path, updated_at FROM resource_localizations
-           WHERE site_id = ? AND locale = ? AND route_path IS NOT NULL
+           WHERE organization_id = ? AND locale = ? AND route_path IS NOT NULL
            ORDER BY route_path
-        `, [siteId, candidate.locale]),
-        queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
-          SELECT d.path, d.updated_at, d.robots FROM content_documents d
+        `, [organizationId, candidate.locale]),
+        queryAll<{ path: string; updated_at: string }>(db, `
+          SELECT d.path, d.updated_at FROM content_documents d
             JOIN content_documents root ON root.id = d.root_id AND root.row_role = 'root'
-           WHERE d.site_id = ? AND d.locale = ? AND d.row_role = 'representation' AND d.path IS NOT NULL
-             AND (root.robots IS NULL OR root.robots NOT LIKE '%noindex%')
-             AND (root.kind = 'page' OR (root.kind = 'article' AND root.status = 'published' AND root.visibility = 'public')
-               OR (root.kind = 'social_post' AND root.status = 'published' AND root.visibility = 'public'))
+           WHERE d.organization_id = ? AND d.locale = ? AND d.row_role = 'representation' AND d.path IS NOT NULL
+             AND (root.kind = 'page' OR (root.kind = 'article' AND root.status = 'published' AND root.visibility = 'listed')
+               OR (root.kind = 'social_post' AND root.status = 'published' AND root.visibility = 'listed'))
            ORDER BY d.path
-        `, [siteId, candidate.locale]),
+        `, [organizationId, candidate.locale]),
       ])
       for (const resource of resources) entries.push({ loc: resource.route_path, lastmod: resource.updated_at })
       // A Product's localized route is derived from the location it is offered
@@ -171,13 +168,13 @@ export default definePlugin((nitroApp) => {
             FROM resource_localizations rl
             JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id AND p.active = 1
             JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-             AND pub.site_id = rl.site_id AND pub.published = 1
+             AND pub.organization_id = rl.organization_id AND pub.published = 1
             JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
              AND pl.published = 1 AND pl.active = 1
-            JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = rl.site_id AND bl.status = 'active'
-           WHERE rl.site_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
+            JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = rl.organization_id AND bl.status = 'active'
+           WHERE rl.organization_id = ? AND rl.locale = ? AND rl.resource_type = 'product'
            ORDER BY bl.slug, p.slug
-        `, [siteId, candidate.locale])
+        `, [organizationId, candidate.locale])
         // An Experience's page is site-wide, so it contributes one URL however
         // many branches offer it — and none when two do, because that URL is
         // ambiguous and 404s.
@@ -194,7 +191,6 @@ export default definePlugin((nitroApp) => {
         }
       }
       for (const page of pages) {
-        if (/noindex/i.test(page.robots || '')) continue
         const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`
         entries.push({ loc: localizedPath, lastmod: page.updated_at })
       }
@@ -210,21 +206,20 @@ export default definePlugin((nitroApp) => {
       // is no separate offering query, and no canonical_path to prefer over
       // the route the document actually publishes at.
       const [tenantPages, posts] = await Promise.all([
-        listPublishedTenantSitemapPages(db, siteId),
+        listPublishedTenantSitemapPages(db, organizationId),
         queryAll<ApiRecord>(
           db,
           `SELECT slug, updated_at
            FROM content_documents
-           WHERE site_id = ? AND kind = 'article' AND row_role = 'root' AND status = 'published'
-             AND visibility = 'public'
-             AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
-          [siteId],
+           WHERE organization_id = ? AND kind = 'article' AND row_role = 'root' AND status = 'published'
+             AND visibility = 'listed'`,
+          [organizationId],
         ),
       ])
 
       for (const loc of template.sitemap.exactPaths) entries.push({ loc })
       for (const page of tenantPages ?? []) {
-        if (!page.path || /noindex/i.test(page.robots || '')) continue
+        if (!page.path) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
       for (const post of posts ?? []) {
@@ -245,10 +240,9 @@ export default definePlugin((nitroApp) => {
         db,
         `SELECT id, slug, updated_at
          FROM business_locations
-         WHERE site_id = ?
-           AND status = 'active'
-           AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
-        [siteId],
+         WHERE organization_id = ?
+           AND status = 'active'`,
+        [organizationId],
       ),
       queryAll<ApiRecord>(
         db,
@@ -260,24 +254,23 @@ export default definePlugin((nitroApp) => {
          JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
          JOIN business_locations bl
            ON bl.id = pl.location_id
-          AND bl.site_id = pub.site_id
+          AND bl.organization_id = pub.organization_id
           AND bl.status = 'active'
-          AND pub.site_id = ?
+          AND pub.organization_id = ?
          WHERE p.active = 1
          ORDER BY pl.location_id, p.name, p.id`,
-        [siteId],
+        [organizationId],
       ),
       queryAll<ApiRecord>(
         db,
         `SELECT slug, updated_at
          FROM content_documents
-         WHERE site_id = ? AND kind = 'article' AND row_role = 'root'
+         WHERE organization_id = ? AND kind = 'article' AND row_role = 'root'
            AND status = 'published'
-           AND visibility = 'public'
-           AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
-        [siteId],
+           AND visibility = 'listed'`,
+        [organizationId],
       ),
-      listPublishedTenantSitemapPages(db, siteId),
+      listPublishedTenantSitemapPages(db, organizationId),
     ])
 
     entries.push({ loc: '/' }, { loc: '/about' }, { loc: '/contact' })
@@ -354,7 +347,7 @@ export default definePlugin((nitroApp) => {
         .filter(post => post.slug)
         .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined })),
       ...tenantPages
-        .filter(page => page.path && !/noindex/i.test(page.robots || ''))
+        .filter(page => page.path)
         .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),
     )
 

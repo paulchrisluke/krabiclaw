@@ -6,30 +6,28 @@ import { listUserOrganizations, resolveOrganizationMembership } from '~/server/u
 export interface McpWorkspacePreferenceRow {
   user_id: string
   organization_id: string | null
-  site_id: string | null
   location_id: string | null
   created_at: string
   updated_at: string
 }
 
-export interface McpSiteSummary {
+/**
+ * A tenant the caller can reach.
+ *
+ * This used to be an McpSiteSummary sitting beside an McpOrganizationSummary,
+ * and the workspace held both plus a list of each: a tool could be given an
+ * organization and a site that named different tenants. There is one.
+ */
+export interface McpOrganizationSummary {
   id: string
-  organization_id: string
-  organization_name: string | null
-  organization_slug: string | null
-  brand_name: string | null
+  name: string | null
+  slug: string | null
   subdomain: string | null
   custom_domain: string | null
   public_url: string | null
   status: string
   onboarding_status: string
   role: string
-}
-
-export interface McpOrganizationSummary {
-  id: string
-  name: string | null
-  slug: string | null
 }
 
 export interface McpLocationSummary {
@@ -44,18 +42,15 @@ export interface McpLocationSummary {
 export interface ResolvedMcpWorkspace {
   preference: McpWorkspacePreferenceRow | null
   organization: McpOrganizationSummary | null
-  site: McpSiteSummary | null
   location: McpLocationSummary | null
   organizations: McpOrganizationSummary[]
-  sites: McpSiteSummary[]
   locations: McpLocationSummary[]
 }
 
 interface ResolveWorkspaceOptions {
   organizationId?: string | null
-  siteId?: string | null
   locationId?: string | null
-  requireSite?: boolean
+  requireOrganization?: boolean
   requireLocation?: boolean
 }
 
@@ -69,47 +64,44 @@ export async function getMcpWorkspacePreference(
   userId: string,
 ) {
   return await queryFirst<McpWorkspacePreferenceRow>(db, `
-    SELECT user_id, organization_id, site_id, location_id, created_at, updated_at
+    SELECT user_id, organization_id, location_id, created_at, updated_at
     FROM user_workspace_state
     WHERE user_id = ?
     LIMIT 1
   `, [userId])
 }
 
-export async function listAccessibleSitesForMcp(
+export async function listAccessibleOrganizationsForMcp(
   db: D1Database,
   env: CloudflareEnv,
   userId: string,
-) {
+): Promise<McpOrganizationSummary[]> {
   const organizations = await listUserOrganizations(env, userId)
   if (!organizations.length) return []
   const memberships = await Promise.all(organizations.map(organization =>
     resolveOrganizationMembership(env, { organizationId: organization.id, userId }),
   ))
-  const organizationById = new Map(organizations.map(organization => [organization.id, organization]))
   const roleByOrganizationId = new Map(memberships.flatMap((membership, index) => membership
     ? [[organizations[index]!.id, membership.role] as const]
     : []))
-  const rows = await queryAll<Omit<McpSiteSummary, 'organization_name' | 'organization_slug' | 'role'>>(db, `
-    SELECT id, organization_id, brand_name, subdomain, (SELECT domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, status,
-           onboarding_status
-    FROM sites
-    WHERE organization_id IN (SELECT value FROM json_each(?))
-    ORDER BY updated_at DESC, created_at DESC
+  const rows = await queryAll<Omit<McpOrganizationSummary, 'role'>>(db, `
+    SELECT id, name, slug, subdomain,
+           (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url,
+           status, onboarding_status
+    FROM organization
+    WHERE id IN (SELECT value FROM json_each(?))
+    ORDER BY updated_at DESC, "createdAt" DESC
   `, [d1JsonStringSet(organizations.map(organization => organization.id))])
-  return rows.flatMap((site) => {
-    const organization = organizationById.get(site.organization_id)
-    const role = roleByOrganizationId.get(site.organization_id)
-    return organization && role
-      ? [{ ...site, organization_name: organization.name, organization_slug: organization.slug, role }]
-      : []
+  return rows.flatMap((row) => {
+    const role = roleByOrganizationId.get(row.id)
+    return role ? [{ ...row, role }] : []
   })
 }
 
 export async function listLocationsForMcp(
   db: D1Database,
   organizationId: string,
-  siteId: string,
 ) {
   const results = await queryAll<{
     id: string
@@ -120,9 +112,9 @@ export async function listLocationsForMcp(
   }>(db, `
     SELECT id, slug, title, COALESCE(address ->> '$.sublocality', address ->> '$.locality') AS place_name, status
     FROM business_locations
-    WHERE organization_id = ? AND site_id = ?
+    WHERE organization_id = ? 
     ORDER BY title ASC
-  `, [organizationId, siteId])
+  `, [organizationId])
 
   return results
 }
@@ -134,78 +126,49 @@ export async function resolveMcpWorkspace(
   options: ResolveWorkspaceOptions = {},
 ): Promise<ResolvedMcpWorkspace> {
   const preference = await getMcpWorkspacePreference(db, userId)
-  const sites = await listAccessibleSitesForMcp(db, env, userId)
-  const organizations = Array.from(
-    new Map(
-      sites.map((site) => [
-        site.organization_id,
-        {
-          id: site.organization_id,
-          name: site.organization_name,
-          slug: site.organization_slug,
-        } satisfies McpOrganizationSummary,
-      ]),
-    ).values(),
-  )
+  const organizations = await listAccessibleOrganizationsForMcp(db, env, userId)
 
   const requestedOrganizationId = normalizeId(options.organizationId)
   const preferredOrganizationId = normalizeId(preference?.organization_id)
-  const requestedSiteId = normalizeId(options.siteId)
-  const preferredSiteId = normalizeId(preference?.site_id)
-  const scopedSites = requestedOrganizationId
-    ? sites.filter((entry) => entry.organization_id === requestedOrganizationId)
-    : requestedSiteId
-      ? sites
-      : preferredOrganizationId
-        ? sites.filter((entry) => entry.organization_id === preferredOrganizationId)
-        : sites
-  // Exact technical identifiers (subdomain, custom domain) resolve directly here —
-  // they're unambiguous and the full candidate list is already in memory, so this
-  // costs nothing extra. Fuzzy name matching deliberately is not attempted: two
-  // sites/locations can share a word in their name, and guessing wrong is worse
-  // than requiring list_sites/list_locations first for that case.
-  let site = requestedSiteId
-    ? scopedSites.find((entry) => entry.id === requestedSiteId) ??
-      scopedSites.find((entry) =>
-        entry.subdomain === requestedSiteId ||
-        entry.custom_domain === requestedSiteId,
+
+  // Exact technical identifiers (id, subdomain, custom domain) resolve directly
+  // here — they're unambiguous and the full candidate list is already in memory,
+  // so this costs nothing extra. Fuzzy name matching deliberately is not
+  // attempted: two tenants can share a word in their name, and guessing wrong is
+  // worse than requiring list_organizations first for that case.
+  let organization = requestedOrganizationId
+    ? organizations.find((entry) => entry.id === requestedOrganizationId) ??
+      organizations.find((entry) =>
+        entry.subdomain === requestedOrganizationId ||
+        entry.custom_domain === requestedOrganizationId,
       ) ??
       null
     : null
 
-  if (requestedSiteId && !site) {
-    const domain = await queryFirst<{ site_id: string }>(db, "SELECT site_id FROM site_domains WHERE domain = ? AND status = 'active' LIMIT 1", [requestedSiteId])
-    site = scopedSites.find(entry => entry.id === domain?.site_id) ?? null
+  if (requestedOrganizationId && !organization) {
+    const domain = await queryFirst<{ organization_id: string }>(db, "SELECT organization_id FROM organization_domains WHERE domain = ? AND status = 'active' LIMIT 1", [requestedOrganizationId])
+    organization = organizations.find(entry => entry.id === domain?.organization_id) ?? null
   }
 
-  if (!requestedSiteId) {
-    if (!site && preferredSiteId) {
-      site = scopedSites.find((entry) => entry.id === preferredSiteId) ?? null
+  if (!requestedOrganizationId) {
+    if (preferredOrganizationId) {
+      organization = organizations.find((entry) => entry.id === preferredOrganizationId) ?? null
     }
-    if (!site && scopedSites.length === 1) {
-      site = scopedSites[0] ?? null
+    if (!organization && organizations.length === 1) {
+      organization = organizations[0] ?? null
     }
   }
-  const organization = site
-    ? organizations.find((entry) => entry.id === site.organization_id) ?? null
-    : requestedOrganizationId
-      ? organizations.find((entry) => entry.id === requestedOrganizationId) ?? null
-      : preferredOrganizationId
-        ? organizations.find((entry) => entry.id === preferredOrganizationId) ?? null
-        : organizations.length === 1
-          ? organizations[0] ?? null
-          : null
 
-  if (options.requireSite && !site) {
+  if (options.requireOrganization && !organization) {
     throw new Error(
-      scopedSites.length === 0
-        ? 'No accessible site found.'
-        : 'Site context is required. Call set_workspace_context or pass site_id explicitly.',
+      organizations.length === 0
+        ? 'No accessible organization found.'
+        : 'Organization context is required. Call set_workspace_context or pass organization_id explicitly.',
     )
   }
 
-  const locations = site
-    ? await listLocationsForMcp(db, site.organization_id, site.id)
+  const locations = organization
+    ? await listLocationsForMcp(db, organization.id)
     : []
 
   const requestedLocationId = normalizeId(options.locationId)
@@ -218,12 +181,12 @@ export async function resolveMcpWorkspace(
   if (options.requireLocation && !location) {
     if (requestedLocationId) {
       throw new Error(
-        `Location "${requestedLocationId}" was not found on the active site.`,
+        `Location "${requestedLocationId}" was not found on the active organization.`,
       )
     }
     throw new Error(
       locations.length === 0
-        ? 'No location found for the active site.'
+        ? 'No location found for the active organization.'
         : 'Location context is required. Call set_workspace_context or pass location_id explicitly.',
     )
   }
@@ -231,10 +194,8 @@ export async function resolveMcpWorkspace(
   return {
     preference: preference ?? null,
     organization,
-    site,
     location,
     organizations,
-    sites,
     locations,
   }
 }
@@ -244,24 +205,21 @@ export async function upsertMcpWorkspacePreference(
   input: {
     userId: string
     organizationId: string | null
-    siteId: string | null
     locationId: string | null
   },
 ) {
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO user_workspace_state (
-      user_id, organization_id, site_id, location_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      user_id, organization_id, location_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       organization_id = excluded.organization_id,
-      site_id = excluded.site_id,
       location_id = excluded.location_id,
       updated_at = excluded.updated_at
   `, [
     input.userId,
     input.organizationId,
-    input.siteId,
     input.locationId,
     now,
     now,

@@ -44,7 +44,7 @@ export const postMutationJsonSchema = {
   type: 'object', additionalProperties: false, properties: {
     title: optionalText, body: nonblank, slug: optionalText, seo_title: optionalText, seo_description: optionalText,
     location_id: { anyOf: [nonblank, absent] }, scheduled_for: { anyOf: [instant, absent] },
-    visibility: { enum: ['public', 'unlisted'] },
+    visibility: { enum: ['listed', 'unlisted'] },
     post_type: { enum: POST_TYPES }, event: { anyOf: [postEventJsonSchema, absent] },
     offer: { anyOf: [postOfferJsonSchema, absent] }, call_to_action: nullableAction,
     alert_type: { anyOf: [{ enum: ['covid_19'] }, absent] },

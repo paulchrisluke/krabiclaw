@@ -7,7 +7,7 @@ export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<u
   switch (toolName) {
     case "get_contact_inquiries":
       return {
-        submissions: await listContactSubmissions(site.db, site.siteId),
+        submissions: await listContactSubmissions(site.db, site.organizationId),
       };
     case "get_reservation_inquiries": {
       const reservationFilter = {
@@ -15,9 +15,9 @@ export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<u
         sinceDays: optionalDaysWindow(args, "days"),
       };
       const [submissions, total, byStatus] = await Promise.all([
-        listReservationSubmissions(site.db, site.siteId, reservationFilter),
-        countReservationSubmissions(site.db, site.siteId, reservationFilter),
-        getReservationSubmissionsByStatus(site.db, site.siteId, reservationFilter),
+        listReservationSubmissions(site.db, site.organizationId, reservationFilter),
+        countReservationSubmissions(site.db, site.organizationId, reservationFilter),
+        getReservationSubmissionsByStatus(site.db, site.organizationId, reservationFilter),
       ]);
       return {
         submissions,

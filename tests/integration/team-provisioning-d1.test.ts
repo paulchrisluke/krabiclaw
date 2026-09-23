@@ -4,9 +4,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { createDb, queryFirst } from '../../server/db/index.ts'
-import { ensureSiteTeam, organizationAdapter, siteTeamId } from '../../server/utils/member-access.ts'
+import { ensureLocationTeam, locationTeamId, organizationAdapter } from '../../server/utils/member-access.ts'
 
-// Better Auth owns `team`, `organization` and `member`. Site provisioning must
+// Better Auth owns `team`, `organization` and `member`. Location provisioning must
 // reach them through Better Auth's own organization adapter rather than
 // writing the rows itself, because the adapter is the only thing that knows
 // what a complete row is — `memberCount`, the epoch-seconds `createdAt`, and
@@ -45,19 +45,19 @@ async function seedOrganization(d1: D1Database, id: string) {
     .bind(id, `Org ${id}`, id).run()
 }
 
-async function seedSite(d1: D1Database, siteId: string, organizationId: string) {
-  await d1.prepare('INSERT INTO sites (id, organization_id, slug, subdomain, brand_name) VALUES (?, ?, ?, ?, ?)')
-    .bind(siteId, organizationId, siteId, siteId, `Site ${siteId}`).run()
+async function seedLocation(d1: D1Database, locationId: string, organizationId: string) {
+  await d1.prepare('INSERT INTO business_locations (id, organization_id, slug, title) VALUES (?, ?, ?, ?)')
+    .bind(locationId, organizationId, locationId, `Location ${locationId}`).run()
 }
 
-test('site provisioning writes its Better Auth team through the organization adapter', async () => {
+test('location provisioning writes its Better Auth team through the organization adapter', async () => {
   const { miniflare, d1, env, db } = await migratedEnv()
   try {
     await seedOrganization(d1, 'org-a')
-    await seedSite(d1, 'site-a', 'org-a')
+    await seedLocation(d1, 'location-a', 'org-a')
 
-    const teamId = await ensureSiteTeam(db, { env, organizationId: 'org-a', siteId: 'site-a', name: 'Site A' })
-    assert.equal(teamId, siteTeamId('site-a'))
+    const teamId = await ensureLocationTeam(db, { env, organizationId: 'org-a', locationId: 'location-a', name: 'Location A' })
+    assert.equal(teamId, locationTeamId('location-a'))
 
     // Read back through Better Auth, not through our own SQL: if the row were
     // hand-written and missing what the plugin expects, the adapter would not
@@ -66,18 +66,18 @@ test('site provisioning writes its Better Auth team through the organization ada
     const team = await adapter.findTeamById({ teamId, organizationId: 'org-a' })
     assert.ok(team, 'Better Auth must be able to read the provisioned team')
     assert.equal(team.organizationId, 'org-a')
-    assert.equal(team.name, 'Site A')
+    assert.equal(team.name, 'Location A')
     // Not merely "is a Date": a hand-written row storing an ISO string in this
     // epoch-seconds column still reads back as a Date object, just an invalid
     // one. The adapter is what puts a real timestamp there.
     assert.ok(Number.isFinite(team.createdAt?.getTime()), `createdAt must be a real timestamp, got ${team.createdAt}`)
 
-    const linked = await queryFirst<{ team_id: string | null }>(db, 'SELECT team_id FROM sites WHERE id = ?', ['site-a'])
+    const linked = await queryFirst<{ team_id: string | null }>(db, 'SELECT team_id FROM business_locations WHERE id = ?', ['location-a'])
     assert.equal(linked?.team_id, teamId)
 
     // Deterministic id, so the second call must find the row rather than
     // create a duplicate or a second organization's copy.
-    assert.equal(await ensureSiteTeam(db, { env, organizationId: 'org-a', siteId: 'site-a', name: 'Site A' }), teamId)
+    assert.equal(await ensureLocationTeam(db, { env, organizationId: 'org-a', locationId: 'location-a', name: 'Location A' }), teamId)
     const teams = await queryFirst<{ count: number }>(db, 'SELECT count(*) count FROM team WHERE id = ?', [teamId])
     assert.equal(teams?.count, 1)
   } finally {
@@ -85,21 +85,21 @@ test('site provisioning writes its Better Auth team through the organization ada
   }
 })
 
-test('a site team id owned by another organization is refused, not re-pointed', async () => {
+test('a location team id owned by another organization is refused, not re-pointed', async () => {
   const { miniflare, d1, env, db } = await migratedEnv()
   try {
     await seedOrganization(d1, 'org-a')
     await seedOrganization(d1, 'org-b')
-    await seedSite(d1, 'site-shared', 'org-a')
-    await ensureSiteTeam(db, { env, organizationId: 'org-a', siteId: 'site-shared', name: 'Site A' })
+    await seedLocation(d1, 'location-shared', 'org-a')
+    await ensureLocationTeam(db, { env, organizationId: 'org-a', locationId: 'location-shared', name: 'Location A' })
 
     await assert.rejects(
-      ensureSiteTeam(db, { env, organizationId: 'org-b', siteId: 'site-shared', name: 'Site B' }),
+      ensureLocationTeam(db, { env, organizationId: 'org-b', locationId: 'location-shared', name: 'Location B' }),
       /belongs to another organization/,
     )
 
     const adapter = await organizationAdapter(env)
-    const team = await adapter.findTeamById({ teamId: siteTeamId('site-shared') })
+    const team = await adapter.findTeamById({ teamId: locationTeamId('location-shared') })
     assert.equal(team?.organizationId, 'org-a')
   } finally {
     await miniflare.dispose()

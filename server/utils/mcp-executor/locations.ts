@@ -12,11 +12,11 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         site.db,
         site.env,
         site.userId,
-        { siteId: site.siteId },
+        { organizationId: site.organizationId },
       );
-      const page = paginateMcpCollection(workspaceLocationsPayload(workspace), args, { resource: `locations:${site.siteId}` });
+      const page = paginateMcpCollection(workspaceLocationsPayload(workspace), args, { resource: `locations:${site.organizationId}` });
       return {
-        context: workspaceContextPayload(workspace.organization, workspace.site, workspace.location),
+        context: workspaceContextPayload(workspace.organization, workspace.location),
         locations: page.items,
         page_info: page.page_info,
       };
@@ -28,7 +28,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           location: await getLocation(
           site.db,
           site.organizationId,
-          site.siteId,
             locationId,
           ),
           context: await mutationContextPayload(site, { locationId }),
@@ -40,7 +39,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const result = await updateLocation(
         site.db,
         site.organizationId,
-        site.siteId,
         locationId,
         updateFields as never,
         site.userId,

@@ -4,7 +4,7 @@ import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listSiteReviews } from '~/server/utils/site-reviews'
-import { getPublishedLocalizedSiteBlogPost } from '~/server/utils/content/publishing'
+import { getPublishedBlogPost } from '~/server/utils/content/publishing'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
   loadExactPublicLocalizations,
@@ -63,33 +63,33 @@ export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown):
  */
 export async function getActiveBlawbySite(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   options: { previewAuthorized?: boolean } = {},
-): Promise<{ organization_id: string; vertical: string; theme_id: string } | null> {
-  const site = await queryFirst<{ organization_id: string; vertical: string; theme_id: string }>(db, `
-    SELECT organization_id, vertical, theme_id
-      FROM sites
+): Promise<{ id: string; vertical: string; theme_id: string } | null> {
+  const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
+    SELECT id, vertical, theme_id
+      FROM organization
      WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
      LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   return siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })
     ? site
     : null
 }
 
-export async function listPublicBlogSummaries(db: DbClient, siteId: string, limit = 50, locale = 'en'): Promise<PublicBlogSummary[]> {
+export async function listPublicBlogSummaries(db: DbClient, organizationId: string, limit = 50, locale = 'en'): Promise<PublicBlogSummary[]> {
   const rows = await queryAll<ApiRecord>(db, `
     SELECT root.id, p.id AS representation_id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category,
            p.metadata_json ->> '$.tags' AS tags_json, root.published_at, p.canonical_url, p.path,
            ${COVER_SELECT}
       FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
       ${coverJoinSql('p')}
-     WHERE root.site_id = ? AND root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.visibility = 'public'
+     WHERE root.organization_id = ? AND root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.visibility = 'listed'
      ORDER BY root.published_at IS NULL, root.published_at DESC, root.id DESC
      LIMIT ?
-  `, [locale, siteId, Math.max(1, Math.min(50, Math.trunc(limit)))])
-  const socialMedia = await loadPublicSocialMedia(db, siteId, 'content_document', rows.map(row => String(row.representation_id)))
+  `, [locale, organizationId, Math.max(1, Math.min(50, Math.trunc(limit)))])
+  const socialMedia = await loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => String(row.representation_id)))
   return rows.map(row => ({
     id: String(row.id),
     title: String(row.title),
@@ -104,8 +104,8 @@ export async function listPublicBlogSummaries(db: DbClient, siteId: string, limi
   }))
 }
 
-export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
-  const pages = await listCanonicalTenantPages(env, db, siteId)
+export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<PublicTenantPage[]> {
+  const pages = await listCanonicalTenantPages(env, db, organizationId)
   return pages.map(page => ({
     id: page.id,
     page_id: page.page_id,
@@ -130,7 +130,7 @@ export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, si
 export async function getPublicTenantPageByPath(
   env: CloudflareEnv,
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   path: string,
   options: {
     locale?: string | null
@@ -138,7 +138,7 @@ export async function getPublicTenantPageByPath(
     localizations?: readonly ExactPublicLocalization[] | null
   } = {},
 ): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(env, db, siteId, path, options)
+  const page = await getPublicTenantPageForPath(env, db, organizationId, path, options)
   if (!page) return null
   return {
     id: page.id,
@@ -161,7 +161,7 @@ export async function getPublicTenantPageByPath(
   }
 }
 
-export async function getPublicConsultationSettings(db: DbClient, siteId: string): Promise<PublicConsultationSettings> {
+export async function getPublicConsultationSettings(db: DbClient, organizationId: string): Promise<PublicConsultationSettings> {
   const row = await queryFirst<ApiRecord>(db, `
     SELECT json_extract(settings_json, '$.consultation.mode') AS mode,
            json_extract(settings_json, '$.consultation.cta_label') AS cta_label,
@@ -170,10 +170,10 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
            json_extract(settings_json, '$.consultation.confirmation_path') AS confirmation_path,
            json_extract(settings_json, '$.consultation.tracking_enabled') AS tracking_enabled,
            json_extract(settings_json, '$.consultation.metadata_json') AS metadata_json
-      FROM sites
+      FROM organization
      WHERE id = ? AND json_type(settings_json, '$.consultation') = 'object'
      LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (!row) throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation settings are missing', data: { code: 'CONSULTATION_SETTINGS_MISSING' } })
   const metadata = row.metadata_json ? JSON.parse(row.metadata_json) as ApiRecord : {}
@@ -196,7 +196,7 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
   }
 }
 
-export async function getPublicCompliance(db: DbClient, siteId: string): Promise<PublicCompliance | null> {
+export async function getPublicCompliance(db: DbClient, organizationId: string): Promise<PublicCompliance | null> {
   const row = await queryFirst<ApiRecord>(db, `
     SELECT json_extract(settings_json, '$.compliance.entity_name') AS entity_name,
            json_extract(settings_json, '$.compliance.dba_name') AS dba_name,
@@ -213,20 +213,20 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
            json_extract(settings_json, '$.compliance.contact_points') AS contact_points,
            json_extract(settings_json, '$.compliance.address_visibility') AS address_visibility,
            json_extract(settings_json, '$.compliance.metadata_json') AS metadata_json
-      FROM sites
+      FROM organization
      WHERE id = ? AND json_type(settings_json, '$.compliance') = 'object'
      LIMIT 1
-  `, [siteId])
+  `, [organizationId])
   if (!row) return null
   const mediaRows = await queryAll<ApiRecord>(db, `
     SELECT ma.id, ma.public_url, ma.kind, ma.alt_text, ma.file_name,
            mp.slot
       FROM media_placements mp
       JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-     WHERE mp.site_id = ? AND mp.owner_type = 'site' AND mp.owner_id = ?
+     WHERE mp.organization_id = ? AND mp.owner_type = 'organization' AND mp.owner_id = ?
        AND mp.slot = 'compliance_document' AND mp.status = 'active'
      ORDER BY mp.sort_order
-  `, [siteId, siteId])
+  `, [organizationId, organizationId])
   return {
     entity_name: typeof row.entity_name === 'string' ? row.entity_name : null,
     dba_name: typeof row.dba_name === 'string' ? row.dba_name : null,
@@ -256,27 +256,27 @@ export async function getPublicCompliance(db: DbClient, siteId: string): Promise
 
 
 
-export async function getPublicThemeTokens(db: DbClient, siteId: string, templateSlug = 'blawby'): Promise<ApiRecord> {
+export async function getPublicThemeTokens(db: DbClient, organizationId: string, templateSlug = 'blawby'): Promise<ApiRecord> {
   const row = await queryFirst<{ tokens_json: string | null }>(db, `
     SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json
-      FROM sites
+      FROM organization
      WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
      LIMIT 1
-  `, ['$.theme_by_template.' + templateSlug, siteId, '$.theme_by_template.' + templateSlug])
+  `, ['$.theme_by_template.' + templateSlug, organizationId, '$.theme_by_template.' + templateSlug])
   return row?.tokens_json ? JSON.parse(row.tokens_json) as ApiRecord : {}
 }
 
-export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Promise<PublicBlawbyIdentity> {
+export async function getPublicBlawbyIdentity(db: DbClient, organizationId: string): Promise<PublicBlawbyIdentity> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT s.brand_name, s.brand_description, s.contact_phone
-      FROM sites s
+    SELECT s.name, s.brand_description, s.contact_phone
+      FROM organization s
      WHERE s.id = ?
      LIMIT 1
-  `, [siteId])
-  const socialMedia = (await loadPublicSocialMedia(db, siteId, 'site', [siteId])).get(siteId)
+  `, [organizationId])
+  const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'organization', [organizationId])).get(organizationId)
 
   return {
-    brand_name: requiredText(row?.brand_name, `site ${siteId}.brand_name`),
+    name: requiredText(row?.name, `site ${organizationId}.name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     social_image: socialMedia?.social_image ?? null,
@@ -288,26 +288,26 @@ export async function getPublicBlawbyIdentity(db: DbClient, siteId: string): Pro
 
 export async function getPublicBlawbyShellData(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   options: { locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
 ): Promise<PublicBlawbyShellData> {
   const locale = options.locale?.trim() || 'en'
   const localizations = options.localizations ?? []
-  const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId) ?? null
+  const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
   const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks] = await Promise.all([
-    getPublicBlawbyIdentity(db, siteId),
-    getPublicConsultationSettings(db, siteId),
-    getPublicCompliance(db, siteId),
-    getPublicThemeTokens(db, siteId),
-    listPublishedTenantPagePaths(db, siteId, locale),
+    getPublicBlawbyIdentity(db, organizationId),
+    getPublicConsultationSettings(db, organizationId),
+    getPublicCompliance(db, organizationId),
+    getPublicThemeTokens(db, organizationId),
+    listPublishedTenantPagePaths(db, organizationId, locale),
   ])
   const localizedRepresentation = locale !== 'en'
   const identity = localizedRepresentation
     ? {
         ...sourceIdentity,
-        brand_name: typeof siteLocalization?.values.brand_name === 'string' ? siteLocalization.values.brand_name : '',
+        name: typeof siteLocalization?.values.name === 'string' ? siteLocalization.values.name : '',
         brand_description: typeof siteLocalization?.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
       }
     : sourceIdentity
@@ -348,21 +348,21 @@ export async function getPublicBlawbyShellData(
 
 export async function getPublicBlawbyDocumentData(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
-  const site = await getActiveBlawbySite(db, siteId, { previewAuthorized: options.previewAuthorized })
+  const site = await getActiveBlawbySite(db, organizationId, { previewAuthorized: options.previewAuthorized })
   if (!site) return null
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
-    : await loadExactPublicLocalizations(env, db, site.organization_id, siteId, locale)
+    : await loadExactPublicLocalizations(env, db, organizationId, locale)
 
   const [shell, route] = await Promise.all([
-    getPublicBlawbyShellData(db, siteId, { locale, localizations }),
-    getPublicBlawbyRouteData(db, siteId, recipe, { ...options, locale, localizations }, env),
+    getPublicBlawbyShellData(db, organizationId, { locale, localizations }),
+    getPublicBlawbyRouteData(db, organizationId, recipe, { ...options, locale, localizations }, env),
   ])
   // Which path each recipe's document lives at is declared once, per template,
   // in utils/template-registry.ts; 'page' names its own path.
@@ -371,8 +371,8 @@ export async function getPublicBlawbyDocumentData(
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
   route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: site.organization_id,
-    siteId,
+    organizationId: organizationId,
+    
     sourcePath: pagePath ?? '/',
     documentId: route.page?.page_id,
   })
@@ -381,12 +381,12 @@ export async function getPublicBlawbyDocumentData(
 
 export async function resolvePublicBlawbyDocumentOrThrow(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
-  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options, env)
+  const document = await getPublicBlawbyDocumentData(db, organizationId, recipe, options, env)
   if (!document) {
     throw new HTTPError({
       statusCode: 404,
@@ -455,7 +455,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     robots: typeof row.robots === 'string' ? row.robots : null,
-    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'public',
+    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'listed',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
@@ -476,7 +476,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
 
 export async function getPublicBlawbyRouteData(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   recipe: PublicBlawbyRouteData['recipe'],
   options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null; localizations?: readonly ExactPublicLocalization[] } = {},
   env: CloudflareEnv,
@@ -489,15 +489,15 @@ export async function getPublicBlawbyRouteData(
 
   const [page, reviewRows, initialPosts, postRow] = await Promise.all([
     pagePath
-      ? getPublicTenantPageByPath(env, db, siteId, pagePath, {
+      ? getPublicTenantPageByPath(env, db, organizationId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
         })
       : Promise.resolve(null),
-    needsReviews ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
-    postLimit ? listPublicBlogSummaries(db, siteId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
+    needsReviews ? listSiteReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
+    postLimit ? listPublicBlogSummaries(db, organizationId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
-      ? getPublishedLocalizedSiteBlogPost(db, siteId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
+      ? getPublishedBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
       : Promise.resolve(null),
   ])
   let posts = initialPosts
@@ -505,7 +505,7 @@ export async function getPublicBlawbyRouteData(
     if (localized) posts = []
     else {
       const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
-      const summaries = await listPublicBlogSummaries(db, siteId, 50)
+      const summaries = await listPublicBlogSummaries(db, organizationId, 50)
       posts = summaries
         .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
         .slice(0, 3)
@@ -533,12 +533,12 @@ export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boole
   return Boolean(route.page)
 }
 
-export async function getPublicBlawbyData(env: CloudflareEnv, db: DbClient, siteId: string): Promise<PublicBlawbyData> {
+export async function getPublicBlawbyData(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<PublicBlawbyData> {
   const [tenantPages, compliance, consultation, themeTokens] = await Promise.all([
-    listPublicTenantPages(env, db, siteId),
-    getPublicCompliance(db, siteId),
-    getPublicConsultationSettings(db, siteId),
-    getPublicThemeTokens(db, siteId),
+    listPublicTenantPages(env, db, organizationId),
+    getPublicCompliance(db, organizationId),
+    getPublicConsultationSettings(db, organizationId),
+    getPublicThemeTokens(db, organizationId),
   ])
   return { tenantPages, compliance, consultation, themeTokens }
 }

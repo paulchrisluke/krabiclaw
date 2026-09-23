@@ -5,9 +5,9 @@ import { credentialSession } from './utils/e2e-auth.mjs'
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const SITE_ID = process.argv.includes('--site-id')
-  ? process.argv[process.argv.indexOf('--site-id') + 1]
-  : process.env.MCP_SITE_ID
+const ORGANIZATION_ID = process.argv.includes('--organization-id')
+  ? process.argv[process.argv.indexOf('--organization-id') + 1]
+  : process.env.MCP_ORGANIZATION_ID
 const LOCATION_ID = process.argv.includes('--location-id')
   ? process.argv[process.argv.indexOf('--location-id') + 1]
   : process.env.MCP_LOCATION_ID
@@ -97,9 +97,9 @@ function expectValue(label, condition, detail) {
 async function main() {
   console.log(`Checking MCP operations flow at ${BASE_URL}`)
   const headers = await getAuthHeaders()
-  const siteId = SITE_ID
-  if (!siteId) throw new Error('Pass --site-id for a disposable site provisioned through local setup or the CMS.')
-  if (!siteId) process.exit(1)
+  const organizationId = ORGANIZATION_ID
+  if (!organizationId) throw new Error('Pass --organization-id for a disposable organization provisioned through local setup or the CMS.')
+  if (!organizationId) process.exit(1)
 
   const locationId = LOCATION_ID
   if (!locationId) throw new Error('Pass --location-id for a disposable location provisioned through the CMS.')
@@ -108,7 +108,7 @@ async function main() {
   // membership row, not on the Product.
   const collectionIds = new Map()
   for (const name of ['Mains', 'Shots']) {
-    const collection = await mcp(headers, 'create_collection', { site_id: siteId, name })
+    const collection = await mcp(headers, 'create_collection', { organization_id: organizationId, name })
     expectStatus(`create_collection ${name} succeeds`, collection)
     const collectionId = data(collection.body)?.collection?.id
     expectValue('create_collection returns collection id', Boolean(collectionId), collection.body)
@@ -116,7 +116,7 @@ async function main() {
   }
 
   const product = await mcp(headers, 'create_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     name: 'MCP Ops Curry',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1250, currency: 'USD' }] }],
   })
@@ -126,16 +126,16 @@ async function main() {
 
   // Publication and location membership are separate states; neither implies
   // the other, and a read must show both.
-  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: productId, published: true }))
-  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { site_id: siteId, product_id: productId, location_id: locationId, active: true, published: true }))
-  expectStatus('set_collection_products succeeds', await mcp(headers, 'set_collection_products', { site_id: siteId, collection_id: collectionIds.get('Mains'), product_ids: [productId] }))
+  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { organization_id: organizationId, product_id: productId, published: true }))
+  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { organization_id: organizationId, product_id: productId, location_id: locationId, active: true, published: true }))
+  expectStatus('set_collection_products succeeds', await mcp(headers, 'set_collection_products', { organization_id: organizationId, collection_id: collectionIds.get('Mains'), product_ids: [productId] }))
 
-  const initialRead = await mcp(headers, 'get_product', { site_id: siteId, product_id: productId })
+  const initialRead = await mcp(headers, 'get_product', { organization_id: organizationId, product_id: productId })
   expectStatus('get_product succeeds after create', initialRead)
   expectValue('created Product has initial Price on its variant', data(initialRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1250, initialRead.body)
 
   const batch = await mcp(headers, 'batch_create_products', {
-    site_id: siteId,
+    organization_id: organizationId,
     products: [
       { name: 'B-52', variants: [{ name: 'Standard', prices: [{ unit_amount: 700, currency: 'USD' }] }] },
       { name: 'Lemon Drop', variants: [{ name: 'Standard', prices: [{ unit_amount: 800, currency: 'USD' }] }] },
@@ -145,24 +145,24 @@ async function main() {
   expectValue('batch_create_products adds two Products atomically', data(batch.body)?.products?.length === 2, batch.body)
 
   const productUpdate = await mcp(headers, 'update_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     product_id: productId,
     name: 'MCP Ops Green Curry',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1300, currency: 'USD' }] }],
   })
   expectStatus('update_product price succeeds', productUpdate)
 
-  const productRead = await mcp(headers, 'get_product', { site_id: siteId, product_id: productId })
+  const productRead = await mcp(headers, 'get_product', { organization_id: organizationId, product_id: productId })
   expectStatus('get_product succeeds', productRead)
   expectValue('get_product includes updated Product', data(productRead.body)?.product?.name === 'MCP Ops Green Curry', productRead.body)
   expectValue('get_product reports where the Product is offered', (data(productRead.body)?.product?.locations ?? []).some(entry => entry.location_id === locationId && entry.published), productRead.body)
   expectValue('updated Product has replacement Price', data(productRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1300, productRead.body)
-  const productDelete = await mcp(headers, 'delete_product', { site_id: siteId, product_id: productId })
+  const productDelete = await mcp(headers, 'delete_product', { organization_id: organizationId, product_id: productId })
   expectStatus('delete_product succeeds', productDelete)
   expectValue('delete_product returns deleted true', data(productDelete.body)?.deleted === true, productDelete.body)
 
   const post = await mcp(headers, 'create_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     title: 'MCP Ops Post',
     body: 'Post created by MCP ops checker',
   })
@@ -171,7 +171,7 @@ async function main() {
   expectValue('create_post returns post id', Boolean(postId), post.body)
 
   const postUpdate = await mcp(headers, 'update_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     post_id: postId,
     title: 'MCP Ops Post Updated',
     body: 'Post updated by MCP ops checker',
@@ -180,7 +180,7 @@ async function main() {
   expectValue('update_post returns changed_fields', Array.isArray(data(postUpdate.body)?.changed_fields), postUpdate.body)
 
   const postPublish = await mcp(headers, 'publish_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     post_id: postId,
     channels: ['site'],
   })
@@ -188,7 +188,7 @@ async function main() {
   expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
 
   const combinedPublish = await mcp(headers, 'publish_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     post_id: postId,
     channels: ['site', 'facebook'],
   })
@@ -201,7 +201,7 @@ async function main() {
     combinedPublish.body,
   )
 
-  const posts = await mcp(headers, 'list_posts', { site_id: siteId })
+  const posts = await mcp(headers, 'list_posts', { organization_id: organizationId })
   expectStatus('list_posts succeeds', posts)
   expectValue('list_posts includes published post', (data(posts.body)?.posts ?? []).some(post => post.id === postId), posts.body)
   const publishedPost = (data(posts.body)?.posts ?? []).find(post => post.id === postId)
@@ -210,7 +210,7 @@ async function main() {
   // A bookable Product is a Product: same tool, same shape. Booking is a
   // capability configured on it, not a second kind of row.
   const bookable = await mcp(headers, 'create_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     name: 'MCP Ops Kayak Tour',
     description: 'Half-day tour created by MCP ops checker',
     variants: [{ name: 'Per person', prices: [{ unit_amount: 150000, currency: 'THB' }] }],
@@ -219,18 +219,18 @@ async function main() {
   const bookableId = data(bookable.body)?.product?.id
   expectValue('create_product (bookable) returns Product id', Boolean(bookableId), bookable.body)
 
-  const invalidProduct = await mcp(headers, 'create_product', { site_id: siteId, name: '' })
+  const invalidProduct = await mcp(headers, 'create_product', { organization_id: organizationId, name: '' })
   expectStatus('create_product rejects an empty name over JSON-RPC transport', invalidProduct)
   expectValue('create_product invalid name returns tool error', invalidProduct.body?.result?.isError === true, invalidProduct.body)
 
   const bookableUpdate = await mcp(headers, 'update_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     product_id: bookableId,
     description: 'Updated through MCP ops checker',
   })
   expectStatus('update_product (bookable) succeeds', bookableUpdate)
 
-  const listed = await mcp(headers, 'list_products', { site_id: siteId })
+  const listed = await mcp(headers, 'list_products', { organization_id: organizationId })
   expectStatus('list_products succeeds', listed)
   const listedProduct = (data(listed.body)?.products ?? []).find(item => item.id === bookableId)
   expectValue('list_products includes the created Product', Boolean(listedProduct), listed.body)

@@ -48,8 +48,8 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { siteId } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 const reviewId = computed(() => String(route.params.reviewId))
@@ -72,12 +72,12 @@ const { data: review, pending, error } = await useAsyncData<ApiRecord>(
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      const result = await getPublicReview(db, String(siteId), slug.value, reviewId.value) as ApiRecord | null
+      const result = await getPublicReview(db, String(organizationId), slug.value, reviewId.value) as ApiRecord | null
       if (!result) throw createError({ statusCode: 404, statusMessage: 'Review not found' })
       return result
     }
 
-    const endpoint = `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}`
+    const endpoint = `/api/public/locations/${slug.value}/reviews/${reviewId.value}`
     const response = await publicApiRequest<{ review: ApiRecord }>(endpoint, {
       validate: (value): value is { review: ApiRecord } =>
         isRecord(value) && isRecord(value.review),
@@ -108,7 +108,7 @@ function openLightbox(index: number) {
 
 async function markHelpful() {
   const result = await publicApiMutation<{ helpful: boolean; helpfulCount: number }>(
-    `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}/helpful`,
+    `/api/public/locations/${slug.value}/reviews/${reviewId.value}/helpful`,
     {
       method: 'POST',
       validate: (value): value is { helpful: boolean; helpfulCount: number } =>

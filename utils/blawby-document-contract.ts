@@ -18,7 +18,7 @@ const isNullableString = (value: unknown) => value === null || typeof value === 
 
 function hasValidIdentity(value: unknown) {
   return isRecord(value)
-    && typeof value.brand_name === 'string'
+    && typeof value.name === 'string'
     && isNullableString(value.brand_description)
     && Array.isArray(value.media)
     && value.media.every(item => isRecord(item)

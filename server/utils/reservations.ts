@@ -289,7 +289,6 @@ export interface ReservationSlot {
 interface LocationHoursRow {
   id: string
   organization_id: string
-  site_id: string
   timezone: string | null
   status: string
   opening_hours: string | null
@@ -304,7 +303,7 @@ export async function listReservationSlots(db: DbClient, input: {
   excludeReservationId?: string | null
 }): Promise<{ timezone: string; slots: ReservationSlot[] }> {
   const location = await queryFirst<LocationHoursRow>(db, `
-    SELECT id, organization_id, site_id, timezone, status, opening_hours, special_hours
+    SELECT id, organization_id, timezone, status, opening_hours, special_hours
       FROM business_locations WHERE organization_id = ? AND id = ?
   `, [input.organizationId, input.locationId])
   if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
@@ -378,7 +377,6 @@ export class ReservationUnavailableError extends Error {
  */
 export async function claimReservation(db: DbClient, input: {
   organizationId: string
-  siteId: string
   locationId: string
   reservationId: string
   requestId: string | null
@@ -419,10 +417,10 @@ export async function claimReservation(db: DbClient, input: {
   const claim: BatchQuery = {
     query: `
       INSERT INTO reservations (
-        id, organization_id, site_id, location_id, customer_id, request_id,
+        id, organization_id, location_id, customer_id, request_id,
         timezone, starts_at, ends_at, party_size, status, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       WHERE EXISTS (
         SELECT 1 FROM location_reservation_configs c
         WHERE c.location_id = ? AND c.organization_id = ?
@@ -439,7 +437,7 @@ export async function claimReservation(db: DbClient, input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.reservationId, input.organizationId, input.siteId, input.locationId, input.customerId, null,
+      input.reservationId, input.organizationId, input.locationId, input.customerId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, 'confirmed', now, now,
       input.locationId, input.organizationId,
       input.date, input.timeSlot,

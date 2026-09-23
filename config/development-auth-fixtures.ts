@@ -8,7 +8,13 @@ export interface E2eAuthFixture {
     organizationId: string
     role: 'owner' | 'admin' | 'editor' | 'member'
   }>
-  siteIds?: string[]
+  /**
+   * Organizations whose every location team this fixture joins. This was
+   * `siteIds` and a single site team; the `site:*` teams are gone with `sites`,
+   * so an editor who needs reach across a whole business joins its location
+   * teams — the same expansion the production derivation performs (#1050).
+   */
+  organizationIds?: string[]
 }
 
 // Phone numbers come from Ofcom's reserved drama range (+44 7700 900000-900999),
@@ -33,7 +39,7 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     name: 'E2E Pottery Editor',
     email: 'pottery-editor@playwright.example',
     memberships: [{ organizationId: 'org-user-pottery-house', role: 'editor' }],
-    siteIds: ['site-pottery-house'],
+    organizationIds: ['org-user-pottery-house'],
   },
   {
     id: 'user-e2e-pottery-owner',

@@ -4,7 +4,7 @@ import { devLoginHeaders, testBaseUrl } from './test-env'
 
 const baseURL = testBaseUrl()
 const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(new URL(baseURL).hostname)
-const availabilityUrl = `${baseURL}/api/editor/sites/site-demo/locations/loc-demo/reservation-availability`
+const availabilityUrl = `${baseURL}/api/editor/organizations/org-demo/locations/loc-demo/reservation-availability`
 
 interface Slot { time_slot: string; capacity: number | null; claimed: number; remaining: number | null; is_closed: boolean; is_full: boolean }
 interface Day { date: string; timezone: string; slots: Slot[] }
@@ -44,7 +44,7 @@ test('reservation overrides close specific slots and never leak their private no
   expect(closedDays[0]!.slots.find(slot => slot.time_slot === openSlot!.time_slot)?.is_closed).toBe(true)
 
   // The guest-facing read shows the closure and never the note behind it.
-  const publicResponse = await request.get(`${baseURL}/api/public/sites/site-demo/reservations/availability`, {
+  const publicResponse = await request.get(`${baseURL}/api/public/reservations/availability`, {
     params: { location_id: 'loc-demo', date, days: 1 },
   })
   expect(publicResponse.status(), await publicResponse.text()).toBe(200)
@@ -85,7 +85,7 @@ test('concurrent guests cannot claim the same final reservation seat', async ({ 
   expect(configured.status(), await configured.text()).toBe(200)
 
   const attempt = Date.now()
-  const results = await Promise.all([1, 2].map(guest => request.post(`${baseURL}/api/public/sites/site-demo/reservations`, {
+  const results = await Promise.all([1, 2].map(guest => request.post(`${baseURL}/api/public/reservations`, {
     data: {
       name: `Last seat guest ${guest}`,
       email: `last-seat-${attempt}-${guest}@playwright.example`,

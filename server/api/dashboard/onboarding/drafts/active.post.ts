@@ -6,8 +6,8 @@ import { queryFirst } from '~/server/db'
 import {
   buildOnboardingDraftPayload, getDraftMedia, type DraftProductInput, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS, previewSecretOf } from '~/server/utils/preview-token'
-import { VALID_VERTICALS } from '~/server/utils/site-creation'
-import { applyOnboardingDraftToSite, ensureOnboardingSite } from '~/server/utils/onboarding-site'
+import { VALID_VERTICALS } from '~/server/utils/organization-provisioning'
+import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onboarding-apply'
 import { isValidTimezone } from '~/utils/timezone'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { getPhoneCountry } from '~/utils/phone'
@@ -193,44 +193,43 @@ export default defineHandler(async (event) => {
   const draft = await upsertActiveOnboardingDraft(db, {
     // /dashboard/onboarding is the "New Organization" entry point, so a draft
     // never carries the session's active organization: the first save creates a
-    // new one and records it here. Adding a site to an existing organization is
-    // POST /api/sites from that organization's dashboard.
+    // new one and records it here.
     userId: session.user.id, organizationId: null, name: payload.preview.brandName, vertical, sourceType, payload, })
 
-  // The site is real from this first save: pending, on its own reserved
+  // The tenant is real from this first save: pending, on its own reserved
   // subdomain, previewable with its preview token and invisible to the public
   // until POST /api/dashboard/onboarding/activate. There is no separate draft
-  // renderer — the preview is the site.
-  const site = await ensureOnboardingSite(env, db, session.user.id, {
+  // renderer — the preview is the real tenant.
+  const target = await ensureOnboardingTarget(env, db, session.user.id, {
     id: draft.id,
     organization_id: draft.organizationId,
     name: payload.preview.brandName,
     vertical,
     subdomain_candidate: draft.subdomainCandidate,
   })
-  if ('error' in site) return jsonResponse({ error: site.error }, { status: site.status })
+  if ('error' in target) return jsonResponse({ error: target.error }, { status: target.status })
 
-  // Every save writes the owner's answers onto that site, so the preview is
+  // Every save writes the owner's answers onto that tenant, so the preview is
   // never behind the conversation. Currency and timezone are only written once
   // they have actually been answered.
   const answeredTimezone = payload.source.details.timezone
-  const applied = await applyOnboardingDraftToSite(env, db, {
+  const applied = await applyOnboardingDraft(env, db, {
     userId: session.user.id,
-    target: site.target,
+    target: target.target,
     payload,
     defaultCurrency: payload.source.details.currency,
     timezone: isValidTimezone(answeredTimezone) ? answeredTimezone : null,
   })
   if ('error' in applied) return jsonResponse({ error: applied.error }, { status: applied.status })
 
-  const previewToken = await createPreviewToken(previewSecret, site.target.siteId, Date.now() + PREVIEW_TOKEN_TTL_MS)
+  const previewToken = await createPreviewToken(previewSecret, target.target.organizationId, Date.now() + PREVIEW_TOKEN_TTL_MS)
 
   return jsonResponse({
     success: true,
     draftId: draft.id,
     draftName: payload.preview.brandName,
-    siteId: site.target.siteId,
-    subdomainCandidate: site.target.subdomain,
+    organizationId: target.target.organizationId,
+    subdomainCandidate: target.target.subdomain,
     previewToken,
   })
 })

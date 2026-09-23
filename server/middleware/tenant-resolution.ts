@@ -1,6 +1,6 @@
 // Tenant resolution middleware: every host, KrabiClaw's own included, resolves
-// to a site row. The site's template decides whether it renders as the
-// platform (marketing, docs, blog) or as a customer site.
+// to an organization. The organization's template decides whether it renders as
+// the platform (marketing, docs, blog) or as a customer site.
 
 import { HTTPError, defineHandler  } from 'nitro';
 import type { H3Event } from 'nitro';
@@ -18,50 +18,51 @@ import { previewSecretOf, resolvePreviewAuthorization } from "../utils/preview-t
 import { PLATFORM_TEMPLATE, resolvePublicTemplate } from "~/utils/template-registry";
 import { publicSocialMediaFromJson } from '~/server/utils/public-social-image'
 
-interface TenantSiteRow {
+interface TenantRow {
   id: string;
-  organization_id: string;
   theme_id: string | null;
   subdomain: string;
   onboarding_status: string;
   canonical_domain: string | null;
-  brand_name: string | null;
+  name: string;
   media_json: string;
   vertical: string | null;
 }
 
-const SITE_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
+const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   'asset_id', ordered.asset_id, 'slot', ordered.slot, 'public_url', ordered.public_url,
   'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type
 )), json('[]')) FROM (
   SELECT mp.asset_id, mp.slot, ma.public_url, ma.thumbnail_url, ma.kind, ma.mime_type, mp.id
   FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-  WHERE mp.site_id = s.id AND mp.owner_type = 'site' AND mp.owner_id = s.id AND mp.status = 'active'
+  WHERE mp.organization_id = o.id AND mp.owner_type = 'organization' AND mp.owner_id = o.id AND mp.status = 'active'
   ORDER BY mp.slot, mp.sort_order, mp.id
 ) ordered)`
 
-// KrabiClaw's own site is the one active site running the platform template.
-// Platform hosts differ per environment (localhost, preview, staging, the apex),
-// so the host itself is not the key; the template is.
-async function resolvePlatformSite(db: DbClient): Promise<TenantSiteRow | null> {
-  return await queryFirst<TenantSiteRow>(
+const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.onboarding_status,
+             o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical`
+
+// KrabiClaw's own tenant is the one active organization running the platform
+// template. Platform hosts differ per environment (localhost, preview, staging,
+// the apex), so the host itself is not the key; the template is.
+async function resolvePlatformTenant(db: DbClient): Promise<TenantRow | null> {
+  return await queryFirst<TenantRow>(
     db,
     `
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-             canonical.domain AS canonical_domain,
-             s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
-      FROM sites s
-      LEFT JOIN site_domains canonical
-        ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
-      WHERE s.theme_id = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+      ${TENANT_SELECT_SQL},
+             canonical.domain AS canonical_domain
+      FROM organization o
+      LEFT JOIN organization_domains canonical
+        ON canonical.organization_id = o.id AND canonical.role = 'canonical' AND canonical.status = 'active'
+      WHERE o.theme_id = ? AND o.status = 'active' AND o.onboarding_status = 'active'
       LIMIT 1
     `,
     [PLATFORM_TEMPLATE.themeId],
   )
 }
 
-function publicTenantSiteMedia(site: Pick<TenantSiteRow, 'media_json'>) {
-  return publicSocialMediaFromJson(site.media_json)
+function publicTenantMedia(tenant: Pick<TenantRow, 'media_json'>) {
+  return publicSocialMediaFromJson(tenant.media_json)
 }
 
 export interface SpentSubdomainResolution {
@@ -70,7 +71,7 @@ export interface SpentSubdomainResolution {
 }
 
 function isSpentSubdomainResolution(
-  value: TenantSiteRow | SpentSubdomainResolution,
+  value: TenantRow | SpentSubdomainResolution,
 ): value is SpentSubdomainResolution {
   return 'spent' in value
 }
@@ -83,40 +84,39 @@ function normalizedPath(pathname: string) {
   return pathname === "/" ? "/" : pathname.replace(/\/$/, "");
 }
 
-function requireTenantMetadata(site: Pick<TenantSiteRow, 'theme_id' | 'vertical' | 'brand_name'>, source: string) {
-  const themeId = site.theme_id?.trim()
-  const vertical = site.vertical?.trim()
-  const brandName = site.brand_name?.trim()
-  if (!themeId || !vertical || !brandName) {
+function requireTenantMetadata(tenant: Pick<TenantRow, 'theme_id' | 'vertical' | 'name'>, source: string) {
+  const themeId = tenant.theme_id?.trim()
+  const vertical = tenant.vertical?.trim()
+  const name = tenant.name?.trim()
+  if (!themeId || !vertical || !name) {
     throw new HTTPError({
       statusCode: 500,
       statusMessage: `Tenant ${source} is missing canonical identity or template metadata`,
       data: { code: 'TENANT_METADATA_INCOMPLETE' },
     })
   }
-  return { themeId, vertical, brandName }
+  return { themeId, vertical, name }
 }
 
-async function resolveRegisteredSubdomainSite(
+async function resolveRegisteredSubdomainTenant(
   db: DbClient,
   tenantSlug: string,
-): Promise<TenantSiteRow | null> {
-  return await queryFirst<TenantSiteRow>(
+): Promise<TenantRow | null> {
+  return await queryFirst<TenantRow>(
     db,
     `
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-             canonical.domain AS canonical_domain,
-             s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
-      FROM sites s
-      JOIN site_domains requested
-        ON requested.site_id = s.id
+      ${TENANT_SELECT_SQL},
+             canonical.domain AS canonical_domain
+      FROM organization o
+      JOIN organization_domains requested
+        ON requested.organization_id = o.id
        AND requested.type = 'subdomain'
        AND requested.status = 'active'
-      LEFT JOIN site_domains canonical
-        ON canonical.site_id = s.id
+      LEFT JOIN organization_domains canonical
+        ON canonical.organization_id = o.id
        AND canonical.role = 'canonical'
        AND canonical.status = 'active'
-      WHERE s.subdomain = ? AND s.status = 'active'
+      WHERE o.subdomain = ? AND o.status = 'active'
       LIMIT 1
     `,
     [tenantSlug],
@@ -124,40 +124,39 @@ async function resolveRegisteredSubdomainSite(
 }
 
 /**
- * A site that has not finished onboarding is not public. It is served only to a
- * holder of a valid preview token for that site — which is what "preview" means
+ * A tenant that has not finished onboarding is not public. It is served only to
+ * a holder of a valid preview token for it — which is what "preview" means
  * everywhere in this product: the real site, on its real host, rendered by the
  * real templates, with unpublished content and no caching.
  *
- * Returns false when the request may not see this site at all.
+ * Returns false when the request may not see this tenant at all.
  */
-async function authorizeTenantSite(event: H3Event, site: TenantSiteRow): Promise<boolean> {
+async function authorizeTenant(event: H3Event, tenant: TenantRow): Promise<boolean> {
   const previewSecret = previewSecretOf(cloudflareEnv(event))
-  const authorized = await resolvePreviewAuthorization(event, site.id, previewSecret)
+  const authorized = await resolvePreviewAuthorization(event, tenant.id, previewSecret)
   event.context.previewAuthorized = authorized
   // A live site is public either way; the flag still travels, because preview
   // also means "show me the drafts" — an unpublished article on a site that is
   // already live is previewed the same way.
-  return site.onboarding_status === 'active' || authorized
+  return tenant.onboarding_status === 'active' || authorized
 }
 
 function setResolvedTenantContext(
   event: H3Event,
-  site: TenantSiteRow,
+  tenant: TenantRow,
   host: string,
   canonicalDomain: string | null,
 ) {
-  const metadata = requireTenantMetadata(site, site.id)
-  const socialMedia = publicTenantSiteMedia(site)
-  event.context.siteId = site.id
-  event.context.organizationId = site.organization_id
+  const metadata = requireTenantMetadata(tenant, tenant.id)
+  const socialMedia = publicTenantMedia(tenant)
+  event.context.organizationId = tenant.id
   event.context.themeId = metadata.themeId
-  event.context.onboardingStatus = site.onboarding_status
+  event.context.onboardingStatus = tenant.onboarding_status
   setTenantType(event, resolvePublicTemplate({ themeId: metadata.themeId }).slug === 'platform' ? TENANT_TYPES.PLATFORM : TENANT_TYPES.TENANT)
   event.context.tenantHost = hostnameOf(host)
   event.context.canonicalDomain = canonicalDomain
   event.context.site = {
-    brand_name: metadata.brandName,
+    name: metadata.name,
     ...socialMedia,
     vertical: metadata.vertical,
   }
@@ -175,10 +174,12 @@ export default defineHandler(async (event) => {
   const url = event.url;
   const tenantPath = normalizedPath(url.pathname);
   if (tenantPath === "/api/auth" || tenantPath.startsWith("/api/auth/")) return;
-  // Public site APIs carry an explicit site ID and resolve that site through
-  // their canonical service. Host-based tenant resolution would duplicate the
-  // same database lookup without adding an authorization boundary.
-  if (tenantPath.startsWith("/api/public/sites/")) return;
+  // `/api/public/**` used to be skipped here because each of those routes
+  // carried its own site id in the path. That id was a second answer to "which
+  // tenant", arriving beside the host that already knew — and a route reachable
+  // with one tenant's id on another tenant's domain. The id is gone and the
+  // host is the only answer, so the public API resolves here like everything
+  // else and reads `event.context.organizationId`.
   const host = (event.req.headers.get("host")) || "";
   const env = cloudflareEnv(event);
 
@@ -192,67 +193,67 @@ export default defineHandler(async (event) => {
     // branch below and answered 200 with KrabiClaw's own homepage — a request
     // for one site served a different site. Same refusal as an environment
     // alias that does not resolve.
-    const site = env.db && /^[a-z0-9-]+$/.test(previewSlug)
-      ? await resolveRegisteredSubdomainSite(env.db, previewSlug)
+    const tenant = env.db && /^[a-z0-9-]+$/.test(previewSlug)
+      ? await resolveRegisteredSubdomainTenant(env.db, previewSlug)
       : null
-    if (site && await authorizeTenantSite(event, site)) {
-      setResolvedTenantContext(event, site, host, hostnameOf(host))
+    if (tenant && await authorizeTenant(event, tenant)) {
+      setResolvedTenantContext(event, tenant, host, hostnameOf(host))
       return;
     }
     setTenantType(event, TENANT_TYPES.TENANT_404)
-    event.context.siteId = null
+    event.context.organizationId = null
     return
   }
 
   const aliasSlug = environmentTenantAliasSlug(host, env)
   if (aliasSlug) {
-    const site = env.db
-      ? await resolveRegisteredSubdomainSite(env.db, aliasSlug)
+    const tenant = env.db
+      ? await resolveRegisteredSubdomainTenant(env.db, aliasSlug)
       : null
-    if (site && await authorizeTenantSite(event, site)) {
-      setResolvedTenantContext(event, site, host, hostnameOf(host))
+    if (tenant && await authorizeTenant(event, tenant)) {
+      setResolvedTenantContext(event, tenant, host, hostnameOf(host))
       return
     }
     setTenantType(event, TENANT_TYPES.TENANT_404)
-    event.context.siteId = null
+    event.context.organizationId = null
     return
   }
 
-  // A platform host serves KrabiClaw's own site. Tenant hosts own their public
+  // A platform host serves KrabiClaw's own tenant. Tenant hosts own their public
   // route families.
   if (isPlatformHost(host, env)) {
-    const site = env.db ? await resolvePlatformSite(env.db) : null
-    if (!site) {
-      throw new HTTPError({ statusCode: 500, statusMessage: 'No active site runs the platform template', data: { code: 'PLATFORM_SITE_MISSING' } })
+    const tenant = env.db ? await resolvePlatformTenant(env.db) : null
+    if (!tenant) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'No active organization runs the platform template', data: { code: 'PLATFORM_TENANT_MISSING' } })
     }
-    setResolvedTenantContext(event, site, host, site.canonical_domain)
+    setResolvedTenantContext(event, tenant, host, tenant.canonical_domain)
     return;
   }
 
-  // Tenant site resolution
-  const site = await resolveTenantSite(host, event);
+  // Tenant resolution by host
+  const tenant = await resolveTenant(host, event);
 
-  if (site && isSpentSubdomainResolution(site)) {
-    if (site.successorDomain) {
-      return redirect(`https://${site.successorDomain}${url.pathname}${url.search}`, 301)
+  if (tenant && isSpentSubdomainResolution(tenant)) {
+    if (tenant.successorDomain) {
+      return redirect(`https://${tenant.successorDomain}${url.pathname}${url.search}`, 301)
     }
     throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
   }
 
-  if (site && await authorizeTenantSite(event, site)) {
-    setResolvedTenantContext(event, site, host, site.canonical_domain || null)
+  if (tenant && await authorizeTenant(event, tenant)) {
+    setResolvedTenantContext(event, tenant, host, tenant.canonical_domain || null)
     return;
   }
 
   // No tenant found - this is an unknown subdomain/custom domain
   setTenantType(event, TENANT_TYPES.TENANT_404);
-  event.context.siteId = null;
+  event.context.organizationId = null;
 });
 
-export async function resolveTenantSite(
+export async function resolveTenant(
   host: string,
   event: Parameters<typeof cloudflareEnv>[0],
-): Promise<TenantSiteRow | SpentSubdomainResolution | null> {
+): Promise<TenantRow | SpentSubdomainResolution | null> {
   const runtimeEnv = cloudflareEnv(event);
   const db = runtimeEnv.db;
   const hostname = hostnameOf(host);
@@ -262,41 +263,39 @@ export async function resolveTenantSite(
   // Local development support (e.g., demo.localhost)
   if (hostname.includes(".localhost")) {
     const subdomain = hostname.split(".")[0];
-    return await queryFirst<TenantSiteRow>(
+    return await queryFirst<TenantRow>(
       db,
       `
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-             s.subdomain || '.localhost' AS canonical_domain,
-             s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
-      FROM sites s
-      WHERE s.subdomain = ? AND s.status = 'active'
+      ${TENANT_SELECT_SQL},
+             o.subdomain || '.localhost' AS canonical_domain
+      FROM organization o
+      WHERE o.subdomain = ? AND o.status = 'active'
       LIMIT 1
     `,
       [subdomain],
     );
   }
 
-  const site = await queryFirst<TenantSiteRow>(
+  const tenant = await queryFirst<TenantRow>(
     db,
     `
-    SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
-           COALESCE(canonical.domain, sd.domain) AS canonical_domain,
-           s.brand_name, ${SITE_MEDIA_SELECT_SQL} AS media_json, s.vertical
-    FROM sites s
-    JOIN site_domains sd ON s.id = sd.site_id
-    LEFT JOIN site_domains canonical
-      ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
+    ${TENANT_SELECT_SQL},
+           COALESCE(canonical.domain, sd.domain) AS canonical_domain
+    FROM organization o
+    JOIN organization_domains sd ON o.id = sd.organization_id
+    LEFT JOIN organization_domains canonical
+      ON canonical.organization_id = o.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     WHERE sd.domain = ? AND sd.type IN ('custom', 'subdomain') AND sd.status = 'active'
-      AND s.status = 'active'
+      AND o.status = 'active'
     LIMIT 1
   `,
     [hostname],
   )
-  if (site) return site
+  if (tenant) return tenant
 
   const spent = await queryFirst<{ successor_domain: string | null }>(
     db,
-    "SELECT successor_domain FROM site_domains WHERE domain = ? AND status = 'retired' LIMIT 1",
+    "SELECT successor_domain FROM organization_domains WHERE domain = ? AND status = 'retired' LIMIT 1",
     [hostname],
   )
   return spent

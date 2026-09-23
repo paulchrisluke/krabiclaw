@@ -54,20 +54,20 @@ const isPublicPostResponse = (value: unknown): value is { post: PublicPost } =>
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 const { site: publicSite } = useSiteShellState()
 const { locale } = useI18n()
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => site?.brand_name?.trim() ?? '')
+const siteName = computed(() => site?.name?.trim() ?? '')
 const postBrand = computed(() => ({
   name: siteName.value,
   logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
 }))
 
 const { data, error } = await useAsyncData(
-  () => `public-post-${siteId}-${locale.value}-${slug.value}`,
+  () => `public-post-${organizationId}-${locale.value}-${slug.value}`,
   async () => {
     let post: PublicPost | null | undefined
     if (import.meta.server) {
@@ -79,10 +79,10 @@ const { data, error } = await useAsyncData(
       const env = cloudflareEnv(requestEvent)
       const db = env.DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      post = await getPublishedPostByPublicRoute(env, db, siteId, slug.value, locale.value) as PublicPost | null
+      post = await getPublishedPostByPublicRoute(env, db, organizationId, slug.value, locale.value) as PublicPost | null
     } else {
       const payload = await publicApiRequest<{ post: PublicPost }>(
-        `/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`,
+        `/api/public/posts/${encodeURIComponent(slug.value)}`,
         { query: { locale: locale.value }, validate: isPublicPostResponse },
       )
       post = payload.post

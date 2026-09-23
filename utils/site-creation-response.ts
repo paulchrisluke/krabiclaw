@@ -1,8 +1,8 @@
 export interface SiteCreationResponse {
-  siteId: string
+  organizationId: string
 }
 
 export function isSiteCreationResponse(value: unknown): value is SiteCreationResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return 'siteId' in value && typeof value.siteId === 'string'
+  return 'organizationId' in value && typeof value.organizationId === 'string'
 }

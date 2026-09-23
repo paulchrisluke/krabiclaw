@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
-import { MCP_GROWTH_SITE_ID, mcpRequest, mcpData, createScratchLocation, ensureSite, ensureLocation } from './helpers/mcp'
+import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData, createScratchLocation, ensureOrganization, ensureLocation } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
@@ -12,11 +12,11 @@ test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
 
     const sitesList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_sites',
+      toolName: 'list_organizations',
       args: {},
     })
     expect(sitesList.status()).toBe(200)
@@ -26,15 +26,15 @@ test.describe('stateless MCP server', () => {
 
     const siteRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_site',
-      args: { site_id: siteId },
+      toolName: 'get_organization',
+      args: { organization_id: organizationId },
     })
     expect(siteRead.status()).toBe(200)
 
     const pageList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_tenant_pages',
-      args: { site_id: siteId, locale: 'en' },
+      args: { organization_id: organizationId, locale: 'en' },
     })
     expect(pageList.status()).toBe(200)
     const homeVariant = mcpData<{ pages: Array<{ id: string; path: string }> }>(await pageList.json()).pages.find(page => page.path === '/')
@@ -43,7 +43,7 @@ test.describe('stateless MCP server', () => {
     const pageBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_tenant_page',
-      args: { site_id: siteId, variant_id: homeVariant!.id },
+      args: { organization_id: organizationId, variant_id: homeVariant!.id },
     })
     expect(pageBefore.status()).toBe(200)
     const pageBeforeData = mcpData<{
@@ -64,7 +64,7 @@ test.describe('stateless MCP server', () => {
       method: 'tools/call',
       toolName: 'update_tenant_page',
       args: {
-        site_id: siteId,
+        organization_id: organizationId,
         variant_id: homeVariant!.id,
         expected_updated_at: pageBeforeData.updated_at,
         path: pageBeforeData.path,
@@ -90,7 +90,7 @@ test.describe('stateless MCP server', () => {
     const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_tenant_page',
-      args: { site_id: siteId, variant_id: homeVariant!.id },
+      args: { organization_id: organizationId, variant_id: homeVariant!.id },
     })
     expect(contentRead.status()).toBe(200)
     const mergedBody = await contentRead.json()
@@ -99,22 +99,22 @@ test.describe('stateless MCP server', () => {
 
     const settingsBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_site_settings',
-      args: { site_id: siteId },
+      toolName: 'get_organization_settings',
+      args: { organization_id: organizationId },
     })
     expect(settingsBefore.status()).toBe(200)
 
     const settingsUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'update_site_settings',
-      args: { site_id: siteId, brand_description: 'Updated through MCP' },
+      toolName: 'update_organization_settings',
+      args: { organization_id: organizationId, brand_description: 'Updated through MCP' },
     })
     expect(settingsUpdate.status()).toBe(200)
 
     const brandColorUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'set_brand_color',
-      args: { site_id: siteId, color: '#0F4C5C' },
+      args: { organization_id: organizationId, color: '#0F4C5C' },
     })
     expect(brandColorUpdate.status()).toBe(200)
     const brandColorBody = await brandColorUpdate.json()
@@ -126,13 +126,13 @@ test.describe('stateless MCP server', () => {
   test('owner can use submission inquiry tools', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
 
-    const locationId = await ensureLocation(request, baseURL!, siteId)
+    const locationId = await ensureLocation(request, baseURL!, organizationId)
     const locationSetup = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'update_location',
       args: {
-        site_id: siteId, location_id: locationId, timezone: 'Asia/Bangkok',
+        organization_id: organizationId, location_id: locationId, timezone: 'Asia/Bangkok',
         opening_hours: { periods: Array.from({ length: 7 }, (_, day) => ({
           open: { day, hour: 12, minute: 0 }, close: { day, hour: 22, minute: 0 },
         })) },
@@ -145,15 +145,15 @@ test.describe('stateless MCP server', () => {
     // owner has said the branch takes tables.
     const policySetup = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'update_reservation_policy',
-      args: { site_id: siteId, location_id: locationId, slot_capacity: 20 },
+      args: { organization_id: organizationId, location_id: locationId, slot_capacity: 20 },
     })
     expect(policySetup.status(), await policySetup.text()).toBe(200)
 
-    const publicContact = await request.post(`${baseURL}/api/public/sites/${siteId}/contact`, {
+    const publicContact = await request.post(`${baseURL}/api/public/contact`, {
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
     })
     expect(publicContact.status()).toBe(201)
-    const publicReservation = await request.post(`${baseURL}/api/public/sites/${siteId}/reservations`, {
+    const publicReservation = await request.post(`${baseURL}/api/public/reservations`, {
       data: {
         name: 'MCP Reservation',
         email: `mcp-res-${Date.now()}@example.test`,
@@ -169,7 +169,7 @@ test.describe('stateless MCP server', () => {
     const listContacts = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_contact_inquiries',
-      args: { site_id: siteId },
+      args: { organization_id: organizationId },
     })
     expect(listContacts.status()).toBe(200)
     const contactsBody = await listContacts.json()
@@ -179,7 +179,7 @@ test.describe('stateless MCP server', () => {
     const listReservations = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_reservation_inquiries',
-      args: { site_id: siteId },
+      args: { organization_id: organizationId },
     })
     expect(listReservations.status()).toBe(200)
     const reservationsBody = await listReservations.json()
@@ -201,7 +201,7 @@ test.describe('stateless MCP server', () => {
 
     const tools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
-      siteId,
+      organizationId,
     })
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string }> } }
@@ -213,41 +213,41 @@ test.describe('stateless MCP server', () => {
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = MCP_GROWTH_SITE_ID
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
-    const locationId = await createScratchLocation(request, baseURL!, siteId)
+    const locationId = await createScratchLocation(request, baseURL!, organizationId)
 
     const locationRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_location',
-      args: { site_id: siteId, location_id: locationId },
+      args: { organization_id: organizationId, location_id: locationId },
     })
     expect(locationRead.status()).toBe(200)
 
     const locationUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_location',
-      args: { site_id: siteId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
+      args: { organization_id: organizationId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
     })
     expect(locationUpdate.status()).toBe(200)
 
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_location_reviews',
-      args: { site_id: siteId, location_id: locationId },
+      args: { organization_id: organizationId, location_id: locationId },
     })
     expect(reviewsList.status()).toBe(200)
 
     const qaList = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'list_location_qa',
-      args: { site_id: siteId, location_id: locationId },
+      args: { organization_id: organizationId, location_id: locationId },
     })
     expect(qaList.status()).toBe(200)
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
 
     const requestId = crypto.randomUUID()
     const cleanupStarted = Date.now()
-    const cleanupLog = { requestId, method: 'DELETE', path: `/api/sites/${siteId}/locations/${locationId}` }
+    const cleanupLog = { requestId, method: 'DELETE', path: `/api/organizations/${organizationId}/locations/${locationId}` }
     console.log('[e2e-cleanup]', JSON.stringify({ ...cleanupLog, event: 'started', testTimeoutMs: test.info().timeout }))
     try {
       const deleteLocationRes = await request.delete(`${baseURL}${cleanupLog.path}`, { headers: { 'x-request-id': requestId } })
@@ -261,26 +261,26 @@ test.describe('stateless MCP server', () => {
 
   test('Q&A and reviews are read-only through tenant MCP, and only Q&A is writable through the CMS', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = MCP_GROWTH_SITE_ID
-    for (const [toolName, key] of [['list_site_qa', 'items'], ['list_site_reviews', 'reviews']]) {
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
       const response = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName, args: { site_id: siteId },
+        method: 'tools/call', toolName, args: { organization_id: organizationId },
       })
       expect(response.status()).toBe(200)
       expect(mcpData<Record<string, unknown[]>>(await response.json())[key!]).toEqual(expect.any(Array))
     }
-    const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list', siteId })
+    const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list', organizationId })
     const tools = (await catalog.json()).result.tools as Array<{ name: string; annotations: { readOnlyHint: boolean } }>
     const reviewTools = tools.filter(tool => /(?:_qa|_review|_reviews)$/.test(tool.name))
-    expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_qa', 'list_location_reviews', 'list_site_qa', 'list_site_reviews'])
+    expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_qa', 'list_location_reviews', 'list_organization_qa', 'list_organization_reviews'])
     expect(reviewTools.every(tool => tool.annotations.readOnlyHint)).toBe(true)
     // #1001 gave a site the ability to edit the Q&A it wrote, so the CMS does
     // have a Q&A write route — it validates its body like any other, and a 404
     // here would mean that feature had been lost. A review is a guest's words,
     // so it stays unwritable everywhere.
-    const qaWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/qa`, { data: {} })
+    const qaWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/qa`, { data: {} })
     expect(qaWrite.status(), await qaWrite.text()).toBe(400)
-    const reviewWrite = await request.post(`${baseURL}/api/editor/sites/${siteId}/reviews`, { data: {} })
+    const reviewWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/reviews`, { data: {} })
     expect([404, 405]).toContain(reviewWrite.status())
   })
 
@@ -288,19 +288,19 @@ test.describe('stateless MCP server', () => {
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
       await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-      const siteId = await ensureSite(request, baseURL!)
-      const locationId = await ensureLocation(request, baseURL!, siteId)
+      const organizationId = await ensureOrganization(request, baseURL!)
+      const locationId = await ensureLocation(request, baseURL!, organizationId)
 
       const locationSetup = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_location',
-        args: { site_id: siteId, location_id: locationId, timezone: 'Asia/Bangkok' },
+        args: { organization_id: organizationId, location_id: locationId, timezone: 'Asia/Bangkok' },
       })
       expect(mcpData<{ ok: boolean }>(await locationSetup.json()).ok).toBe(true)
 
       const mediaList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'get_site_media_assets',
-        args: { site_id: siteId },
+        toolName: 'get_organization_media_assets',
+        args: { organization_id: organizationId },
       })
       expect(mediaList.status()).toBe(200)
 
@@ -310,7 +310,7 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call',
         toolName: 'create_product',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           name: 'MCP Kayak Tour',
           description: 'Half-day tour',
           variants: [{ name: 'Per person', prices: [{ unit_amount: 150000, currency: 'THB' }] }],
@@ -321,21 +321,21 @@ test.describe('stateless MCP server', () => {
       expect(created.id).toEqual(expect.any(String))
 
       for (const [toolName, args] of [
-        ['set_product_publication', { site_id: siteId, product_id: created.id, published: true }],
-        ['set_product_location', { site_id: siteId, product_id: created.id, location_id: locationId, active: true, published: true }],
+        ['set_product_publication', { organization_id: organizationId, product_id: created.id, published: true }],
+        ['set_product_location', { organization_id: organizationId, product_id: created.id, location_id: locationId, active: true, published: true }],
       ] as const) {
         const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args })
         expect(response.status(), await response.text()).toBe(200)
       }
 
       const listed = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'list_products', args: { site_id: siteId },
+        method: 'tools/call', toolName: 'list_products', args: { organization_id: organizationId },
       })
       expect(listed.status()).toBe(200)
       expect(mcpData<{ products: Array<{ id: string }> }>(await listed.json()).products.some(item => item.id === created.id)).toBe(true)
 
       const read = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_product', args: { site_id: siteId, product_id: created.id },
+        method: 'tools/call', toolName: 'get_product', args: { organization_id: organizationId, product_id: created.id },
       })
       expect(read.status()).toBe(200)
       const readProduct = mcpData<{ product: { slug: string; locations: Array<{ location_id: string; published: boolean }> } }>(await read.json()).product
@@ -344,25 +344,25 @@ test.describe('stateless MCP server', () => {
       const update = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'update_product',
-        args: { site_id: siteId, product_id: created.id, description: 'Updated through MCP', tags: ['small group'] },
+        args: { organization_id: organizationId, product_id: created.id, description: 'Updated through MCP', tags: ['small group'] },
       })
       expect(update.status()).toBe(200)
 
       const invalid = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_product', args: { site_id: siteId, name: '' },
+        method: 'tools/call', toolName: 'create_product', args: { organization_id: organizationId, name: '' },
       })
       expect(invalid.status()).toBe(200)
       expect((await invalid.json()).result?.isError).toBe(true)
 
       // A Product with no materialized sessions offers nothing to book, and
       // says so rather than inventing a slot from a rule nobody generated.
-      const sessions = await request.get(`${baseURL}/api/public/sites/${siteId}/products/${readProduct.slug}/sessions`)
+      const sessions = await request.get(`${baseURL}/api/public/products/${readProduct.slug}/sessions`)
       expect([200, 404, 409]).toContain(sessions.status())
       if (sessions.status() === 200) {
         const { sessions: rows } = await sessions.json() as { sessions: Array<{ id: string; is_full: boolean }> }
         const open = rows.find(session => !session.is_full)
         if (open) {
-          const booking = await request.post(`${baseURL}/api/public/sites/${siteId}/products/${readProduct.slug}/book`, {
+          const booking = await request.post(`${baseURL}/api/public/products/${readProduct.slug}/book`, {
             data: {
               guest_name: 'MCP Product Guest',
               guest_email: `mcp-product-${Date.now()}@example.test`,
@@ -380,12 +380,12 @@ test.describe('stateless MCP server', () => {
       const deleteCandidate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_product',
-        args: { site_id: siteId, name: 'Delete MCP Product', description: 'Temporary Product' },
+        args: { organization_id: organizationId, name: 'Delete MCP Product', description: 'Temporary Product' },
       })
       expect(deleteCandidate.status()).toBe(200)
       const deleteId = mcpData<{ product: { id: string } }>(await deleteCandidate.json()).product.id
       const deleted = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'delete_product', args: { site_id: siteId, product_id: deleteId },
+        method: 'tools/call', toolName: 'delete_product', args: { organization_id: organizationId, product_id: deleteId },
       })
       expect(deleted.status()).toBe(200)
     })

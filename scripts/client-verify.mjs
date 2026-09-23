@@ -7,7 +7,7 @@ import { formatOpeningHours } from '../utils/formatters.ts';
  * Usage:
  *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience
  *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience \
- *     --site-id site-pottery-house --slug pottery-house-krabi
+ *     --organization-id org-user-pottery-house --slug pottery-house-krabi
  *
  * With --slug, writes reports to client-imports/<slug>/:
  *   verify-report.latest.json    — structured results for this run
@@ -33,7 +33,7 @@ const { values: args } = parseArgs({
   options: {
     url: { type: "string" },
     vertical: { type: "string", default: "restaurant" },
-    "site-id": { type: "string" },
+    "organization-id": { type: "string" },
     "tenant-slug": { type: "string" },
     slug: { type: "string" },
     "out-dir": { type: "string" },
@@ -46,13 +46,13 @@ const { values: args } = parseArgs({
 
 if (!args.url) {
   console.error(
-    "Usage: node scripts/client-verify.mjs --url <site-url> --vertical <vertical> [--site-id <id>] [--slug <slug>]",
+    "Usage: node scripts/client-verify.mjs --url <site-url> --vertical <vertical> [--organization-id <id>] [--slug <slug>]",
   );
   process.exit(1);
 }
 
 const VERTICAL = args.vertical;
-const SITE_ID = args["site-id"];
+const ORGANIZATION_ID = args["organization-id"];
 const TENANT_SLUG = args["tenant-slug"];
 const inputUrl = new URL(args.url);
 const environmentAlias = TENANT_SLUG
@@ -70,7 +70,7 @@ const OUT_DIR =
 
 if (VERTICAL === "service") {
   const blawbyArgs = ["scripts/verify-blawby-site.mjs", "--url", BASE];
-  if (SITE_ID) blawbyArgs.push("--site-id", SITE_ID);
+  if (ORGANIZATION_ID) blawbyArgs.push("--organization-id", ORGANIZATION_ID);
   if (args["tenant-slug"]) blawbyArgs.push("--tenant-slug", args["tenant-slug"]);
 
   const importManifest = OUT_DIR ? join(OUT_DIR, "blawby-import.json") : null;
@@ -224,8 +224,8 @@ async function get(path, opts = {}) {
 let _bootstrapData = null;
 async function getBootstrap() {
   if (_bootstrapData !== null) return _bootstrapData;
-  if (!SITE_ID) return null;
-  const res = await get(`/api/public/sites/${SITE_ID}/shell`);
+  if (!ORGANIZATION_ID) return null;
+  const res = await get(`/api/public/shell`);
   if (!res.ok) return null;
   _bootstrapData = await res.json();
   return _bootstrapData;
@@ -288,12 +288,12 @@ if (OUT_DIR) {
 // Wellness sells Products on the same /products route as experience, so it is
 // checked here too: gating on experience/restaurant let a wellness site pass
 // verification without its product routes ever being loaded.
-if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant" || VERTICAL === "wellness")) {
+if (ORGANIZATION_ID && (VERTICAL === "experience" || VERTICAL === "restaurant" || VERTICAL === "wellness")) {
   info("── Slug route checks");
 
   // Every Saya vertical sells Products; only the route segment differs.
   const pageKind = VERTICAL === "restaurant" ? "menu" : "products";
-  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${pageKind}&datasets=products`;
+  const apiPath = `/api/public/page?page=${pageKind}&datasets=products`;
   const res = await get(apiPath);
 
   if (res.ok) {
@@ -331,7 +331,7 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant" || VERTIC
 
 // ── Phase 3: Location slug routing ───────────────────────────────────────────
 
-if (SITE_ID) {
+if (ORGANIZATION_ID) {
   info("── Location slug checks");
   const data = await getBootstrap();
 
@@ -533,7 +533,7 @@ if (altBySrc.size === 0) {
 
 // ── Phase 6: Bootstrap image URL validation ───────────────────────────────────
 
-if (SITE_ID) {
+if (ORGANIZATION_ID) {
   info("── Bootstrap image URL validation");
   const data = await getBootstrap();
 
@@ -561,7 +561,7 @@ if (SITE_ID) {
 
 // ── Phase 7: Contact data ─────────────────────────────────────────────────────
 
-if (SITE_ID) {
+if (ORGANIZATION_ID) {
   info("── Contact data check");
   const data = await getBootstrap();
 
@@ -578,9 +578,9 @@ if (SITE_ID) {
     else pass("No contact email in site config (allowed for WhatsApp-only contact setups)");
 
     const allJson = JSON.stringify(data);
-    if (allJson.includes("bamboo.chow@gmail.com") && SITE_ID !== "site-kikuzuki")
+    if (allJson.includes("bamboo.chow@gmail.com") && ORGANIZATION_ID !== "org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX")
       fail("Kikuzuki placeholder email found in another tenant response");
-    if (allJson.includes("Ember & Slice") && SITE_ID !== "site-demo")
+    if (allJson.includes("Ember & Slice") && ORGANIZATION_ID !== "org-demo")
       fail("Demo site data (Ember & Slice) found in another tenant response");
 
     // Guard: static fallback phone must not be served
@@ -649,7 +649,7 @@ if (OUT_DIR) {
     verified_at: new Date().toISOString(),
     url: BASE,
     vertical: VERTICAL,
-    site_id: SITE_ID ?? null,
+    organization_id: ORGANIZATION_ID ?? null,
     passes,
     failures,
     passed: failures === 0,
@@ -775,7 +775,7 @@ if (OUT_DIR && failures === 0) {
   const data = await getBootstrap();
 
   const handoffLines = [
-    `# Client Handoff: ${args.slug ?? SITE_ID ?? BASE}`,
+    `# Client Handoff: ${args.slug ?? ORGANIZATION_ID ?? BASE}`,
     "",
     `**Verified:** ${new Date().toISOString().slice(0, 10)}  `,
     `**Status:** PASSED (${passes} checks)  `,

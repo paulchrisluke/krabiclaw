@@ -11,8 +11,7 @@ export default defineHandler(async (event) => {
 
   if (organizationScoped) {
     const { env, db, organization, userId } = await getDashboardContext(event, {
-      requireSite: false,
-      requireOrganization: true,
+            requireOrganization: true,
     })
     if (!organization) {
       throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
@@ -24,7 +23,7 @@ export default defineHandler(async (event) => {
     // listDashboardLocations scopes on role and teamIds; nothing else here is read.
     const principal = { role: organization.role, teamIds }
 
-    const locations = await listDashboardLocations(db, organization.id, null, principal, true)
+    const locations = await listDashboardLocations(db, organization.id, principal)
     return jsonResponse({ success: true as const, locations })
   }
 

@@ -11,7 +11,7 @@ import {
   getProduct,
   listCollectionProducts,
   listLocationProducts,
-  listSiteProducts,
+  listOrganizationProducts,
   reconcileProducts,
   resolveVariantPrice,
   setCollectionProducts,
@@ -34,24 +34,21 @@ async function boot() {
   const db = await runtime.getD1Database('DB')
   const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
-  await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Org', 'org')").bind(ORG).run()
+  await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
+    VALUES (?, 'Org', 'org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'restaurant', ?)`)
+    .bind(ORG, NOW).run()
   await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Actor', 'actor@example.test', 0, 0, 0)").bind(ACTOR.actorId).run()
-  for (const [site, currency] of [['site-a', 'THB'], ['site-b', 'USD']]) {
-    await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, created_at, updated_at)
-      VALUES (?, ?, ?, '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', ?, 'active', 'complete', 'flat', 'restaurant', ?, ?)`)
-      .bind(site, ORG, site, currency, NOW, NOW).run()
-  }
-  for (const [loc, site] of [['loc-a', 'site-a'], ['loc-b', 'site-b']]) {
-    await db.prepare(`INSERT INTO business_locations (id, organization_id, site_id, slug, title, status, timezone, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'active', 'Asia/Bangkok', ?, ?)`).bind(loc, ORG, site, loc, loc, NOW, NOW).run()
+  for (const loc of ['loc-a', 'loc-b']) {
+    await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'active', 'Asia/Bangkok', ?, ?)`).bind(loc, ORG, loc, loc, NOW, NOW).run()
   }
   return { runtime, db }
 }
 
-test('one product identity serves two sites and two locations', { timeout: 120_000 }, async () => {
+test('one product identity serves two locations', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Tom Yum Soup',
       variants: [{ name: 'Default', prices: [
         { unit_amount: 25000, currency: 'THB' },
@@ -62,15 +59,14 @@ test('one product identity serves two sites and two locations', { timeout: 120_0
     assert.equal(product.variants.length, 1, 'a product with no options still has one real variant')
     assert.equal(product.variants[0]!.prices.length, 3)
 
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: true, actor: ACTOR })
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-b', published: true, actor: ACTOR })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
     await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: 'loc-a', published: true, actor: ACTOR })
     await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: 'loc-b', published: true, actor: ACTOR })
 
-    assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 1, 'publishing twice did not duplicate identity')
-    assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-a', publishedOnly: true })).length, 1)
-    assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-b', publishedOnly: true })).length, 1)
-    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 1)
+    assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 1, 'offering it at two locations did not duplicate identity')
+    assert.equal((await listOrganizationProducts(db, { organizationId: ORG, publishedOnly: true })).length, 1)
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnly: true })).length, 1)
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-b', publishedOnly: true })).length, 1)
 
     // Scope-specific prices stay independent, resolved through one contract.
     const variant = (await getProduct(db, ORG, product.id)).variants[0]!
@@ -84,14 +80,14 @@ test('one product identity serves two sites and two locations', { timeout: 120_0
   } finally { await runtime.dispose() }
 })
 
-test('merchant activation, site publication, and location publication are distinct states', { timeout: 120_000 }, async () => {
+test('merchant activation, organization publication, and location publication are distinct states', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: { name: 'Pad Thai' } })
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: true, actor: ACTOR })
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { name: 'Pad Thai' } })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
     await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: 'loc-a', published: true, active: true, actor: ACTOR })
 
-    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, patch: { active: false }, actor: ACTOR })
+    await updateProduct(db, { organizationId: ORG, productId: product.id, patch: { active: false }, actor: ACTOR })
     const disabled = await getProduct(db, ORG, product.id)
     assert.equal(disabled.active, false, 'the merchant sale switch is off')
     assert.equal(disabled.publications[0]!.published, true, 'disabling did not unpublish it')
@@ -100,21 +96,21 @@ test('merchant activation, site publication, and location publication are distin
     // and a disabled product has made no claim about either.
     assert.equal(Object.hasOwn(disabled, 'available'), false)
 
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: false, actor: ACTOR })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: false, actor: ACTOR })
     const withheld = await getProduct(db, ORG, product.id)
-    assert.equal(withheld.locations[0]!.published, true, 'site publication is independent of location publication')
-    assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-a', publishedOnly: true })).length, 0)
-    assert.equal((await listSiteProducts(db, { organizationId: ORG, siteId: 'site-a' })).length, 1, 'the site still carries it, withheld')
+    assert.equal(withheld.locations[0]!.published, true, 'organization publication is independent of location publication')
+    assert.equal((await listOrganizationProducts(db, { organizationId: ORG, publishedOnly: true })).length, 0)
+    assert.equal((await listOrganizationProducts(db, { organizationId: ORG })).length, 1, 'the organization still carries it, withheld')
   } finally { await runtime.dispose() }
 })
 
 test('a simple product and an optioned product use the same variant-price path', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const simple = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const simple = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Espresso', variants: [{ name: 'Default', prices: [{ unit_amount: 8000, currency: 'THB' }] }],
     } })
-    const optioned = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const optioned = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Latte',
       options: [{ id: 'opt-size', name: 'Size', values: [{ id: 'val-s', value: 'Small' }, { id: 'val-l', value: 'Large' }] }],
       variants: [
@@ -131,12 +127,12 @@ test('a simple product and an optioned product use the same variant-price path',
     assert.deepEqual(optioned.variants.map(v => v.option_values), [{ 'opt-size': 'val-s' }, { 'opt-size': 'val-l' }])
 
     // Invalid option combinations are refused.
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Broken A',
       options: [{ id: 'o1', name: 'Size', values: [{ id: 'v1', value: 'S' }] }],
       variants: [{ name: 'No selection', option_values: {} }],
     } }), /must select a value for every option/)
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Broken B',
       options: [{ id: 'o1', name: 'Size', values: [{ id: 'v1', value: 'S' }] }],
       variants: [
@@ -144,7 +140,7 @@ test('a simple product and an optioned product use the same variant-price path',
         { name: 'Two', option_values: { o1: 'v1' } },
       ],
     } }), /same combination/)
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Broken C',
       options: [{ id: 'o1', name: 'Size', values: [{ id: 'v1', value: 'S' }] }],
       variants: [{ name: 'Alien', option_values: { o2: 'v9' } }],
@@ -155,7 +151,7 @@ test('a simple product and an optioned product use the same variant-price path',
 test('ambiguous pricing is refused at write time, not resolved at read time', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Two Prices',
       variants: [{ name: 'Default', prices: [
         { unit_amount: 10000, currency: 'THB' },
@@ -163,13 +159,13 @@ test('ambiguous pricing is refused at write time, not resolved at read time', { 
       ] }],
     } }), AmbiguousPriceError)
 
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Bad Recurrence',
       variants: [{ name: 'Default', prices: [{ unit_amount: 10000, currency: 'THB', type: 'recurring' }] }],
     } }), /recurring price requires/)
 
     // Consecutive windows are not a conflict.
-    const scheduled = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const scheduled = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Seasonal',
       variants: [{ name: 'Default', prices: [
         { unit_amount: 10000, currency: 'THB', valid_until_at: '2026-10-01T00:00:00.000Z' },
@@ -185,11 +181,11 @@ test('ambiguous pricing is refused at write time, not resolved at read time', { 
 test('collections carry grouping and order without copying the product', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const a = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: { name: 'Soup' } })
-    const b = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: { name: 'Salad' } })
-    const starters = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { site_id: 'site-a', name: 'Starters' } })
-    const featured = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { site_id: 'site-a', name: 'Featured' } })
-    const branch = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { site_id: 'site-a', location_id: 'loc-a', name: 'Branch Menu' } })
+    const a = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { name: 'Soup' } })
+    const b = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { name: 'Salad' } })
+    const starters = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { name: 'Starters' } })
+    const featured = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { name: 'Featured' } })
+    const branch = await createCollection(db, { organizationId: ORG, actor: ACTOR, collection: { location_id: 'loc-a', name: 'Branch Menu' } })
 
     await setCollectionProducts(db, { organizationId: ORG, collectionId: starters.id, productIds: [b.id, a.id], actor: ACTOR })
     await setCollectionProducts(db, { organizationId: ORG, collectionId: featured.id, productIds: [a.id], actor: ACTOR })
@@ -219,16 +215,16 @@ test('metafields carry descriptive attributes, and an undefined one is refused',
     } })
     assert.notEqual(allergens.id, bring.id)
 
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Pad Thai', metafields: { 'menu.allergens': ['Peanuts'], 'menu.what-to-bring': ['Appetite'] },
     } })
     assert.deepEqual(product.metafields['menu.allergens'], ['Peanuts'])
     assert.deepEqual(product.metafields['menu.what-to-bring'], ['Appetite'], 'inclusions and preparation stay distinct')
 
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Undefined attribute', metafields: { 'menu.unknown': ['x'] },
     } }), /has no definition/)
-    await assert.rejects(createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    await assert.rejects(createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Wrong type', metafields: { 'menu.allergens': 'Peanuts' },
     } }), /must be a list/)
   } finally { await runtime.dispose() }
@@ -238,20 +234,20 @@ test('reconcile converges instead of duplicating, and deletion respects the cano
   const { runtime, db } = await boot()
   try {
     const rows = [{ product_id: 'src-1', name: 'Imported One' }, { product_id: 'src-2', name: 'Imported Two' }]
-    await reconcileProducts(db, { organizationId: ORG, siteId: 'site-a', products: rows, actor: ACTOR })
-    await reconcileProducts(db, { organizationId: ORG, siteId: 'site-a', products: rows, actor: ACTOR })
+    await reconcileProducts(db, { organizationId: ORG, products: rows, actor: ACTOR })
+    await reconcileProducts(db, { organizationId: ORG, products: rows, actor: ACTOR })
     assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 2, 'running the same import twice converges')
 
-    await reconcileProducts(db, { organizationId: ORG, siteId: 'site-a', products: [rows[0]!], actor: ACTOR, deactivateMissing: true })
+    await reconcileProducts(db, { organizationId: ORG, products: [rows[0]!], actor: ACTOR, deactivateMissing: true })
     assert.equal(await db.prepare("SELECT active FROM products WHERE id = 'src-2'").first<number>('active'), 0,
       'a product missing from the import is deactivated, not deleted')
     assert.equal(await db.prepare('SELECT count(*) n FROM products').first<number>('n'), 2)
 
     // A canonical page blocks deletion loudly rather than vanishing.
-    await db.prepare(`INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status, created_at, updated_at)
-      VALUES ('sl-en', ?, 'site-a', 'en', 1, 'published', ?, ?)`).bind(ORG, NOW, NOW).run()
-    await db.prepare(`INSERT INTO content_documents (id, organization_id, site_id, kind, row_role, locale, product_id, title, path, sort_order, metadata_json, created_at, updated_at)
-      VALUES ('doc-1', ?, 'site-a', 'page', 'root', 'en', 'src-1', 'One', '/one', 0, '{"page_type":"custom"}', ?, ?)`).bind(ORG, NOW, NOW).run()
+    await db.prepare(`INSERT INTO organization_locales (id, organization_id, locale, is_source, status, created_at, updated_at)
+      VALUES ('sl-en', ?, 'en', 1, 'published', ?, ?)`).bind(ORG, NOW, NOW).run()
+    await db.prepare(`INSERT INTO content_documents (id, organization_id, kind, row_role, locale, product_id, title, path, sort_order, metadata_json, created_at, updated_at)
+      VALUES ('doc-1', ?, 'page', 'root', 'en', 'src-1', 'One', '/one', 0, '{"page_type":"custom"}', ?, ?)`).bind(ORG, NOW, NOW).run()
     await assert.rejects(deleteProduct(db, { organizationId: ORG, productId: 'src-1' }), /Unbind or delete the product page/)
 
     await db.prepare("DELETE FROM content_documents WHERE id = 'doc-1'").run()
@@ -264,17 +260,17 @@ test('reconcile converges instead of duplicating, and deletion respects the cano
 test('editing a product keeps variant identity, so bookings survive', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Class', variants: [{ id: 'var-adult', name: 'Adult', prices: [{ unit_amount: 50000, currency: 'THB' }] }],
     } })
     await db.prepare(`INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by)
       VALUES (?, ?, 60, 5, 'a', 'a')`).bind(product.id, ORG).run()
     await db.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, timezone, starts_at, ends_at, capacity, status, created_by, updated_by)
       VALUES ('s1', ?, ?, 'Asia/Bangkok', '2099-01-01T00:00:00.000Z', '2099-01-01T01:00:00.000Z', 5, 'scheduled', 'a', 'a')`).bind(ORG, product.id).run()
-    await db.prepare(`INSERT INTO bookings (id, organization_id, site_id, product_id, product_session_id, product_variant_id, party_size, status)
-      VALUES ('b1', ?, 'site-a', ?, 's1', 'var-adult', 2, 'confirmed')`).bind(ORG, product.id).run()
+    await db.prepare(`INSERT INTO bookings (id, organization_id, product_id, product_session_id, product_variant_id, party_size, status)
+      VALUES ('b1', ?, ?, 's1', 'var-adult', 2, 'confirmed')`).bind(ORG, product.id).run()
 
-    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, patch: { description: 'Now with clay' }, actor: ACTOR })
+    await updateProduct(db, { organizationId: ORG, productId: product.id, patch: { description: 'Now with clay' }, actor: ACTOR })
     assert.equal(await db.prepare("SELECT count(*) n FROM bookings WHERE id = 'b1'").first<number>('n'), 1,
       'editing the product did not drop the booking')
     assert.equal((await getProduct(db, ORG, product.id)).description, 'Now with clay')
@@ -284,7 +280,7 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
     // the booking's foreign key cascades, so a delete that went through would
     // take the guest's seat with it.
     await assert.rejects(
-      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+      updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
         variants: [{ name: 'Child', prices: [{ unit_amount: 25000, currency: 'THB' }] }],
       } }),
       (error: unknown) => String((error as { statusMessage?: string }).statusMessage).includes('bookings'),
@@ -298,7 +294,7 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
     // the same key. The option stops being sold by being turned off.
     await db.prepare("UPDATE bookings SET status = 'cancelled', cancelled_at = '2099-01-01T00:00:00.000Z' WHERE id = 'b1'").run()
     await assert.rejects(
-      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+      updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
         variants: [{ name: 'Child', prices: [{ unit_amount: 25000, currency: 'THB' }] }],
       } }),
       (error: unknown) => String((error as { statusMessage?: string }).statusMessage).includes('bookings'),
@@ -339,31 +335,31 @@ test('editing a product keeps variant identity, so bookings survive', { timeout:
   } finally { await runtime.dispose() }
 })
 
-test('a site that withholds a product does not show it, at any location', { timeout: 120_000 }, async () => {
+test('an organization that withholds a product does not show it, at any location', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Seasonal Special', variants: [{ name: 'Default', prices: [{ unit_amount: 19000, currency: 'THB' }] }],
     } })
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: true, actor: ACTOR })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
     await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: 'loc-a', published: true, actor: ACTOR })
-    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 1)
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnly: true })).length, 1)
 
-    // Site publication and location publication are separate switches, and the
-    // public answer needs both. Withholding it on the site hides it even
-    // though the location still offers it.
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: 'site-a', published: false, actor: ACTOR })
-    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnSiteId: 'site-a' })).length, 0,
+    // Organization publication and location publication are separate switches,
+    // and the public answer needs both. Withholding it hides it even though
+    // the location still offers it.
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: false, actor: ACTOR })
+    assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a', publishedOnly: true })).length, 0,
       'a withheld product is not public at its location')
     assert.equal((await listLocationProducts(db, { organizationId: ORG, locationId: 'loc-a' })).length, 1,
-      'the merchant still sees what the site is withholding')
+      'the merchant still sees what the organization is withholding')
   } finally { await runtime.dispose() }
 })
 
 test('a patch that says nothing about variants leaves every price row as it was', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Pad Thai', variants: [{ name: 'Default', prices: [
         { unit_amount: 18000, currency: 'THB', location_id: 'loc-a' },
         { unit_amount: 14000, currency: 'THB', location_id: 'loc-b' },
@@ -373,14 +369,14 @@ test('a patch that says nothing about variants leaves every price row as it was'
       .map(price => `${price.id}:${price.unit_amount}:${price.location_id}:${price.created_at}`).sort()
     assert.equal(before.length, 2)
 
-    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, patch: { description: 'With prawns' }, actor: ACTOR })
+    await updateProduct(db, { organizationId: ORG, productId: product.id, patch: { description: 'With prawns' }, actor: ACTOR })
     const after = (await getProduct(db, ORG, product.id)).variants[0]!.prices
       .map(price => `${price.id}:${price.unit_amount}:${price.location_id}:${price.created_at}`).sort()
     assert.deepEqual(after, before, 'editing the description kept both offers, their scopes and their identity')
 
     // A caller that does restate the variants keeps the identity it restates.
     const kept = (await getProduct(db, ORG, product.id)).variants[0]!
-    await updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: product.id, actor: ACTOR, patch: {
+    await updateProduct(db, { organizationId: ORG, productId: product.id, actor: ACTOR, patch: {
       variants: [{ id: kept.id, name: kept.name, option_values: {}, prices: kept.prices.map(price => ({
         id: price.id, unit_amount: price.location_id === 'loc-a' ? 19000 : price.unit_amount,
         currency: price.currency, location_id: price.location_id,
@@ -396,7 +392,7 @@ test('a patch that says nothing about variants leaves every price row as it was'
 test('two options can offer the same value label without colliding', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Mug',
       options: [
         { name: 'Inside colour', values: [{ value: 'White' }, { value: 'Blue' }] },
@@ -427,11 +423,11 @@ test('an id from another tenant is refused, not upserted onto', { timeout: 120_0
     await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-other','org-other','Their Product','their-product','actor-other','actor-other')`).run()
     await db.prepare(`INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-other','org-other','prod-other','Their Variant','actor-other','actor-other')`).run()
 
-    const mine = await createProduct(db, { organizationId: ORG, siteId: 'site-a', actor: ACTOR, product: {
+    const mine = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Mine', variants: [{ name: 'Default', prices: [{ unit_amount: 1000, currency: 'THB' }] }],
     } })
     await assert.rejects(
-      updateProduct(db, { organizationId: ORG, siteId: 'site-a', productId: mine.id, actor: ACTOR, patch: {
+      updateProduct(db, { organizationId: ORG, productId: mine.id, actor: ACTOR, patch: {
         variants: [{ id: 'var-other', name: 'Hijacked', option_values: {}, prices: [] }],
       } }),
       /does not belong to this product/,

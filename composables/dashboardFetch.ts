@@ -14,7 +14,6 @@ type DashboardRequestOptions = Omit<FetchOptions<'json'>, 'method'> & {
 
 export interface DashboardRequestScope {
   orgSlug: string
-  siteSlug?: string | null
 }
 
 const dashboardInFlightReads = new Map<string, Promise<unknown>>()
@@ -109,10 +108,7 @@ export function useDashboardRouteScope(route: MaybeRefOrGetter<ReturnType<typeof
     const params = toValue(route).params
     const orgSlug = typeof params.orgSlug === 'string' ? params.orgSlug : null
     if (!orgSlug) return null
-    return {
-      orgSlug,
-      siteSlug: typeof params.siteSlug === 'string' ? params.siteSlug : null,
-    }
+    return { orgSlug }
   })
 }
 

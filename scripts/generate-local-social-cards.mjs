@@ -4,7 +4,7 @@ import { credentialSession } from './utils/e2e-auth.mjs'
 
 const { values: args } = parseArgs({ options: {
   'base-url': { type: 'string', default: 'http://localhost:3000' },
-  'site-id': { type: 'string' },
+  'organization-id': { type: 'string' },
   platform: { type: 'boolean', default: false },
   email: { type: 'string', default: 'developer@playwright.example' },
   password: { type: 'string' },
@@ -14,10 +14,11 @@ const password = args.password || process.env.E2E_TEST_PASSWORD
 if (!password) throw new Error('E2E_TEST_PASSWORD or --password is required. Use the credential provisioned by local:setup.')
 const { cookie } = await credentialSession(baseURL, { email: args.email, password })
 const headers = { cookie, origin: new URL(baseURL).origin, 'content-type': 'application/json' }
-const sites = []
-if (args.platform) sites.push({ id: 'platform', endpoint: '/api/editor/sites/platform/social-cards/regenerate' })
-if (args['site-id']) sites.push({ id: args['site-id'], endpoint: `/api/editor/sites/${encodeURIComponent(args['site-id'])}/social-cards/regenerate` })
-if (!args.platform && !args['site-id']) {
+const endpointFor = id => `/api/editor/organizations/${encodeURIComponent(id)}/social-cards/regenerate`
+const tenants = []
+if (args.platform) tenants.push({ id: 'platform', endpoint: endpointFor('platform') })
+if (args['organization-id']) tenants.push({ id: args['organization-id'], endpoint: endpointFor(args['organization-id']) })
+if (!args.platform && !args['organization-id']) {
   const list = await fetch(new URL('/api/auth/organization/list', baseURL), { headers })
   if (!list.ok) throw new Error(`Could not list organizations: ${list.status}`)
   const organizations = await list.json()
@@ -26,16 +27,16 @@ if (!args.platform && !args['site-id']) {
     const context = await fetch(new URL(`/api/dashboard/context?org=${encodeURIComponent(organization.slug)}`, baseURL), { headers })
     if (!context.ok) throw new Error(`${organization.slug}: context ${context.status}`)
     const payload = await context.json()
-    if (!Array.isArray(payload.sites)) throw new Error(`${organization.slug}: invalid site list`)
-    for (const site of payload.sites) sites.push({ id: site.id, endpoint: `/api/editor/sites/${encodeURIComponent(site.id)}/social-cards/regenerate` })
+    if (!payload.organization?.id) throw new Error(`${organization.slug}: invalid dashboard context`)
+    tenants.push({ id: payload.organization.id, endpoint: endpointFor(payload.organization.id) })
   }
 }
-if (!sites.length) throw new Error('No sites are available for social-card generation.')
+if (!tenants.length) throw new Error('No organizations are available for social-card generation.')
 let generated = 0
 let reused = 0
 let skipped = 0
 let failed = 0
-for (const site of sites) {
+for (const site of tenants) {
   let after = null
   try {
     do {

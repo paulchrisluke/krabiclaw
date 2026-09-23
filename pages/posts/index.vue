@@ -39,14 +39,14 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 const { locale, localePath } = useI18n()
 const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 const { googleBusiness, locations } = await usePublicPageData()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 // Progressive reveal — 6 at a time
 const PAGE_SIZE = 6

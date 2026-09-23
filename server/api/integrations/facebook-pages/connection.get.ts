@@ -1,21 +1,21 @@
 import { jsonResponse } from '../../../utils/api-response'
 import { getFacebookPagesConnection } from '../../../utils/facebook-pages'
-import { requireRequestedLocationAccess, requireRequestedSiteWideAccess } from '~/server/utils/location-access'
+import { requireRequestedLocationAccess, requireRequestedOrganizationWideAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const query = getQuery(event) as { siteId?: string; locationId?: string }
-  const { env, site } = query.locationId
-    ? await requireRequestedLocationAccess(event, query.locationId, query.siteId)
-    : await requireRequestedSiteWideAccess(event, query.siteId)
+  const query = getQuery(event) as { organizationId?: string; locationId?: string }
+  const { env, organization } = query.locationId
+    ? await requireRequestedLocationAccess(event, query.locationId, query.organizationId)
+    : await requireRequestedOrganizationWideAccess(event, query.organizationId)
 
-  const connection = await getFacebookPagesConnection(env, site.organization_id, site.id)
+  const connection = await getFacebookPagesConnection(env, organization.id)
 
   if (!connection) {
     return jsonResponse({ connected: false })
   }
 
   return jsonResponse({
-    connected: true, facebook_user_id: connection.facebook_user_id, facebook_page_id: connection.facebook_page_id, facebook_page_name: connection.facebook_page_name, status: connection.status, created_at: connection.created_at, })
+    connected: true, facebook_user_id: connection.facebook_user_id, page_id: connection.page_id, page_name: connection.page_name, status: connection.status, created_at: connection.created_at, })
 })
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

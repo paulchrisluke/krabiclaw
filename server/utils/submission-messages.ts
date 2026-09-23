@@ -56,34 +56,32 @@ export function isSubmissionType(value: string): value is SubmissionType {
   return value === 'contact' || value === 'reservation' || value === 'booking'
 }
 
-export async function getSubmissionOrgSite(db: DbClient, submissionType: SubmissionType, submissionId: string): Promise<{ organizationId: string; siteId: string } | null> {
-  const row = await queryFirst<{ organization_id: string; site_id: string }>(db, 'SELECT organization_id, site_id FROM requests WHERE kind = ? AND id = ?', [submissionType, submissionId])
-  return row ? { organizationId: row.organization_id, siteId: row.site_id } : null
+export async function getSubmissionOrgSite(db: DbClient, submissionType: SubmissionType, submissionId: string): Promise<{ organizationId: string } | null> {
+  const row = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM requests WHERE kind = ? AND id = ?', [submissionType, submissionId])
+  return row ? { organizationId: row.organization_id } : null
 }
 
 export interface SubmissionContact {
   email: string | null
   phone: string | null
   organizationId: string
-  siteId: string
 }
 
-export async function getSubmissionContact(db: DbClient, siteId: string, submissionType: SubmissionType, submissionId: string): Promise<SubmissionContact | null> {
-  return queryFirst<SubmissionContact>(db, `SELECT organization_id AS organizationId, site_id AS siteId, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.guest.phone') AS phone FROM requests WHERE id = ? AND site_id = ? AND kind = ?`, [submissionId, siteId, submissionType])
+export async function getSubmissionContact(db: DbClient, organizationId: string, submissionType: SubmissionType, submissionId: string): Promise<SubmissionContact | null> {
+  return queryFirst<SubmissionContact>(db, `SELECT organization_id AS organizationId, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.guest.phone') AS phone FROM requests WHERE id = ? AND organization_id = ? AND kind = ?`, [submissionId, organizationId, submissionType])
 }
 
 export interface SubmissionMatch {
   submissionType: SubmissionType
   submissionId: string
   organizationId: string
-  siteId: string
 }
 
-export async function findSubmissionByPhone(db: DbClient, phone: string, organizationId?: string, siteId?: string): Promise<SubmissionMatch | null> {
-  return queryFirst<SubmissionMatch>(db, `SELECT kind AS submissionType, id AS submissionId, organization_id AS organizationId, site_id AS siteId FROM requests
+export async function findSubmissionByPhone(db: DbClient, phone: string, organizationId?: string): Promise<SubmissionMatch | null> {
+  return queryFirst<SubmissionMatch>(db, `SELECT kind AS submissionType, id AS submissionId, organization_id AS organizationId FROM requests
     WHERE kind IN ('reservation', 'booking') AND json_extract(payload_json, '$.guest.phone') = ? AND status != 'cancelled'
-    ${organizationId ? 'AND organization_id = ?' : ''} ${siteId ? 'AND site_id = ?' : ''}
-    ORDER BY created_at DESC LIMIT 1`, [phone, ...(organizationId ? [organizationId] : []), ...(siteId ? [siteId] : [])])
+    ${organizationId ? 'AND organization_id = ?' : ''}
+    ORDER BY created_at DESC LIMIT 1`, [phone, ...(organizationId ? [organizationId] : [])])
 }
 
 export interface SendReplyEmailResult {

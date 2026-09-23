@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { ensureLocation, ensureSite, mcpData, mcpRequest } from './helpers/mcp'
+import { ensureLocation, ensureOrganization, mcpData, mcpRequest } from './helpers/mcp'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 
 interface PriceRow {
@@ -38,14 +38,14 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
       })]),
     },
   })
-  const siteId = await ensureSite(request, baseURL!)
-  const locationId = await ensureLocation(request, baseURL!, siteId)
+  const organizationId = await ensureOrganization(request, baseURL!)
+  const locationId = await ensureLocation(request, baseURL!, organizationId)
 
   const create = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
     args: {
-      site_id: siteId,
+      organization_id: organizationId,
       name: 'Salmon Roll',
       variants: [
         { name: 'Six pieces', prices: [{ unit_amount: 500, currency: 'USD' }] },
@@ -61,8 +61,8 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   // Publication and location membership are separate states, and a read must
   // report both rather than implying one from the other.
   for (const [toolName, args] of [
-    ['set_product_publication', { site_id: siteId, product_id: created.id, published: true }],
-    ['set_product_location', { site_id: siteId, product_id: created.id, location_id: locationId, active: true, published: true }],
+    ['set_product_publication', { organization_id: organizationId, product_id: created.id, published: true }],
+    ['set_product_location', { organization_id: organizationId, product_id: created.id, location_id: locationId, active: true, published: true }],
   ] as const) {
     const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args })
     expect(response.status(), await response.text()).toBe(200)
@@ -73,7 +73,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const unpriced = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
-    args: { site_id: siteId, name: "Chef's Choice", variants: [{ name: 'Standard' }] },
+    args: { organization_id: organizationId, name: "Chef's Choice", variants: [{ name: 'Standard' }] },
   })
   expect(unpriced.status()).toBe(200)
   const unpricedProduct = mcpData<{ product: ProductRow }>(await unpriced.json()).product
@@ -86,7 +86,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
     method: 'tools/call',
     toolName: 'create_product',
     args: {
-      site_id: siteId,
+      organization_id: organizationId,
       name: 'Ambiguous Roll',
       variants: [{ name: 'Standard', prices: [
         { unit_amount: 500, currency: 'USD' },

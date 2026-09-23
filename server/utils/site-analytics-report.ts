@@ -45,12 +45,12 @@ interface DailySlice {
 
 const n = (value: unknown) => Number(value || 0)
 
-export async function resolveSiteAnalyticsContext(db: DbClient, siteId: string): Promise<SiteContext> {
+export async function resolveSiteAnalyticsContext(db: DbClient, organizationId: string): Promise<SiteContext> {
   const row = await queryFirst<{ organization_id: string; analytics_data_start_at: string | null; timezone: string | null }>(db, `
-    SELECT s.organization_id, s.analytics_data_start_at, json_extract(s.settings_json, '$.config.default_timezone') AS timezone
-    FROM sites s
+    SELECT s.id AS organization_id, s.analytics_data_start_at, json_extract(s.settings_json, '$.config.default_timezone') AS timezone
+    FROM organization s
     WHERE s.id = ? LIMIT 1
-  `, [siteId])
+  `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   if (!isValidTimezone(row.timezone)) throw new HTTPError({ statusCode: 422, statusMessage: 'Site default_timezone is missing or invalid' })
   return {
@@ -60,7 +60,7 @@ export async function resolveSiteAnalyticsContext(db: DbClient, siteId: string):
   }
 }
 
-const sessionFactsSql = `SELECT id, site_id, key session_id,
+const sessionFactsSql = `SELECT id, organization_id, key session_id,
   (payload_json ->> '$.visitor_id') visitor_id,
   (payload_json ->> '$.started_at') started_at,
   (payload_json ->> '$.last_seen_at') last_seen_at,
@@ -70,14 +70,14 @@ const sessionFactsSql = `SELECT id, site_id, key session_id,
   (payload_json ->> '$.attribution.campaign') campaign
   FROM analytics_summaries WHERE kind = 'session'`
 
-const daySummariesSql = `WITH input AS (SELECT ? site_id, ? starts_at, ? ends_at),
+const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ? ends_at),
   views AS (
     SELECT e.*, (payload_json ->> '$.country') country,
       (payload_json ->> '$.region') region, (payload_json ->> '$.city') city,
       (payload_json ->> '$.user_agent') user_agent, (payload_json ->> '$.referrer') referrer
-    FROM analytics_events e JOIN input i ON e.site_id = i.site_id
+    FROM analytics_events e JOIN input i ON e.organization_id = i.organization_id
     WHERE e.kind = 'pageview' AND e.created_at >= i.starts_at AND e.created_at < i.ends_at
-  ), sessions AS (SELECT * FROM (${sessionFactsSql}) WHERE site_id = (SELECT site_id FROM input)),
+  ), sessions AS (SELECT * FROM (${sessionFactsSql}) WHERE organization_id = (SELECT organization_id FROM input)),
   metrics AS (SELECT COUNT(*) page_views, COUNT(DISTINCT session_id) unique_sessions,
     COUNT(DISTINCT visitor_id) unique_visitors FROM views),
   dimensions AS (
@@ -90,7 +90,7 @@ const daySummariesSql = `WITH input AS (SELECT ? site_id, ? starts_at, ? ends_at
       WHEN user_agent IS NULL OR user_agent = '' THEN 'Unknown' ELSE 'Desktop' END, '' FROM views
     UNION ALL SELECT 'referrer', CASE
       WHEN v.referrer IS NULL OR v.referrer = '' THEN 'Direct'
-      WHEN EXISTS (SELECT 1 FROM site_domains d WHERE d.site_id = v.site_id AND d.status = 'active' AND lower(d.domain) = lower(v.referrer)) THEN 'Internal'
+      WHEN EXISTS (SELECT 1 FROM organization_domains d WHERE d.organization_id = v.organization_id AND d.status = 'active' AND lower(d.domain) = lower(v.referrer)) THEN 'Internal'
       ELSE lower(v.referrer) END, '' FROM views v
   )
   SELECT 'site_day' kind, '' key, json_object(
@@ -136,26 +136,26 @@ function dailySlice(date: string, rows: Omit<AnalyticsSummaryRow, 'date'>[]): Da
   }
 }
 
-export async function aggregateSiteAnalyticsDate(db: DbClient, siteId: string, date: string): Promise<void> {
-  const context = await resolveSiteAnalyticsContext(db, siteId)
+export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: string, date: string): Promise<void> {
+  const context = await resolveSiteAnalyticsContext(db, organizationId)
   const { start, end } = localDateBounds(date, context.timezone)
   const now = new Date().toISOString()
   await executeBatch(db, [
-    { query: "DELETE FROM analytics_summaries WHERE site_id = ? AND date = ? AND kind IN ('page_day', 'dimension_day')", params: [siteId, date] },
+    { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND date = ? AND kind IN ('page_day', 'dimension_day')", params: [organizationId, date] },
     {
-      query: `INSERT INTO analytics_summaries (id, kind, organization_id, site_id, date, key, payload_json, created_at, updated_at)
-        SELECT lower(hex(randomblob(16))), kind, ?, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
-        ON CONFLICT(site_id, kind, date, key) DO UPDATE SET organization_id = excluded.organization_id,
+      query: `INSERT INTO analytics_summaries (id, kind, organization_id, date, key, payload_json, created_at, updated_at)
+        SELECT lower(hex(randomblob(16))), kind, ?, ?, key, payload_json, ?, ? FROM (${daySummariesSql}) WHERE true
+        ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET organization_id = excluded.organization_id,
           payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
-      params: [context.organizationId, siteId, date, now, now, siteId, start, end],
+      params: [context.organizationId, date, now, now, organizationId, start, end],
     },
-  ], { operation: `aggregate analytics for ${siteId} ${date}` })
+  ], { operation: `aggregate analytics for ${organizationId} ${date}` })
 }
 
-async function loadSlices(db: DbClient, siteId: string, dates: string[], timezone: string, now: Date, cutoffDate: string | null): Promise<DailySlice[]> {
+async function loadSlices(db: DbClient, organizationId: string, dates: string[], timezone: string, now: Date, cutoffDate: string | null): Promise<DailySlice[]> {
   if (dates.length === 0) return []
   const rows = await queryAll<AnalyticsSummaryRow>(db, `SELECT kind, date, key, payload_json FROM analytics_summaries
-    WHERE site_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [siteId, dates[0]!, dates.at(-1)!])
+    WHERE organization_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [organizationId, dates[0]!, dates.at(-1)!])
   const rawRetentionCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
   const result: DailySlice[] = []
   for (const date of dates) {
@@ -170,37 +170,37 @@ async function loadSlices(db: DbClient, siteId: string, dates: string[], timezon
     }
     const { start, end } = localDateBounds(date, timezone)
     if (start < rawRetentionCutoff) throw new HTTPError({ statusCode: 500, statusMessage: `Analytics aggregate missing for retained date ${date}` })
-    result.push(dailySlice(date, await queryAll<Omit<AnalyticsSummaryRow, 'date'>>(db, daySummariesSql, [siteId, start, end])))
+    result.push(dailySlice(date, await queryAll<Omit<AnalyticsSummaryRow, 'date'>>(db, daySummariesSql, [organizationId, start, end])))
   }
   return result
 }
 
 export async function getSiteAnalyticsReport(db: DbClient, input: {
-  siteId: string; startDate?: string; endDate?: string; now?: Date
+  organizationId: string; startDate?: string; endDate?: string; now?: Date
 }): Promise<SiteAnalyticsReport> {
   const now = input.now ?? new Date()
-  const context = await resolveSiteAnalyticsContext(db, input.siteId)
+  const context = await resolveSiteAnalyticsContext(db, input.organizationId)
   const range = parseAnalyticsRange({ startDate: input.startDate, endDate: input.endDate, timeZone: context.timezone, now })
   const { start } = localDateBounds(range.startDate, context.timezone)
   const { end } = localDateBounds(range.endDate, context.timezone)
   const cutoffDate = context.analyticsDataStartAt ? localDateAt(new Date(context.analyticsDataStartAt), context.timezone) : null
-  const slices = await loadSlices(db, input.siteId, range.dates, context.timezone, now, cutoffDate)
+  const slices = await loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate)
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const [sessionStats, returningStats, attributionRows, conversionRows, attributionConversions] = await Promise.all([
     queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) sessions, COUNT(DISTINCT visitor_id) visitors,
       COALESCE(ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END)), 0) avg_duration
-      FROM (${sessionFactsSql}) WHERE site_id = ? AND started_at < ? AND last_seen_at >= ?`, [input.siteId, end, start]),
+      FROM (${sessionFactsSql}) WHERE organization_id = ? AND started_at < ? AND last_seen_at >= ?`, [input.organizationId, end, start]),
     queryFirst<{ count: number }>(db, `SELECT COUNT(DISTINCT current.visitor_id) count FROM (${sessionFactsSql}) current
-      WHERE current.site_id = ? AND current.started_at < ? AND current.last_seen_at >= ?
-      AND EXISTS (SELECT 1 FROM (${sessionFactsSql}) previous WHERE previous.site_id = current.site_id
+      WHERE current.organization_id = ? AND current.started_at < ? AND current.last_seen_at >= ?
+      AND EXISTS (SELECT 1 FROM (${sessionFactsSql}) previous WHERE previous.organization_id = current.organization_id
         AND previous.visitor_id = current.visitor_id AND previous.session_id <> current.session_id
-        AND previous.started_at < ?)`, [input.siteId, end, start, start]),
+        AND previous.started_at < ?)`, [input.organizationId, end, start, start]),
     queryAll<Record<string, unknown>>(db, `SELECT source, medium, campaign, COUNT(*) sessions
-      FROM (${sessionFactsSql}) WHERE site_id = ? AND started_at < ? AND last_seen_at >= ? GROUP BY 1,2,3`, [input.siteId, end, start]),
+      FROM (${sessionFactsSql}) WHERE organization_id = ? AND started_at < ? AND last_seen_at >= ? GROUP BY 1,2,3`, [input.organizationId, end, start]),
     queryAll<Record<string, unknown>>(db, `SELECT (payload_json ->> '$.event_name') event_name, (payload_json ->> '$.stage') stage, COUNT(*) count FROM analytics_events
-      WHERE kind = 'conversion' AND site_id = ? AND created_at >= ? AND created_at < ? GROUP BY event_name, stage ORDER BY count DESC`, [input.siteId, start, end]),
+      WHERE kind = 'conversion' AND organization_id = ? AND created_at >= ? AND created_at < ? GROUP BY event_name, stage ORDER BY count DESC`, [input.organizationId, start, end]),
     queryAll<Record<string, unknown>>(db, `SELECT (payload_json ->> '$.attribution.source') source, (payload_json ->> '$.attribution.medium') medium, (payload_json ->> '$.attribution.campaign') campaign, COUNT(*) conversions FROM analytics_events
-      WHERE kind = 'conversion' AND site_id = ? AND created_at >= ? AND created_at < ? GROUP BY 1,2,3`, [input.siteId, start, end]),
+      WHERE kind = 'conversion' AND organization_id = ? AND created_at >= ? AND created_at < ? GROUP BY 1,2,3`, [input.organizationId, start, end]),
   ])
   const uniqueSessions = n(sessionStats?.sessions)
   const previousStart = localDateBounds(range.previousStartDate, context.timezone).start
@@ -209,7 +209,7 @@ export async function getSiteAnalyticsReport(db: DbClient, input: {
   if (previousAvailable) {
     const previousDates = []
     for (let date = range.previousStartDate; date <= range.previousEndDate; date = addLocalDays(date, 1)) previousDates.push(date)
-    const previousViews = (await loadSlices(db, input.siteId, previousDates, context.timezone, now, cutoffDate)).reduce((sum, slice) => sum + slice.pageViews, 0)
+    const previousViews = (await loadSlices(db, input.organizationId, previousDates, context.timezone, now, cutoffDate)).reduce((sum, slice) => sum + slice.pageViews, 0)
     changePercent = previousViews === 0 ? 0 : Math.round((pageViews - previousViews) / previousViews * 100)
   }
 
@@ -262,7 +262,7 @@ export async function getSiteAnalyticsReport(db: DbClient, input: {
 }
 
 export async function aggregatePreviousLocalDateForAllSites(db: DbClient, now = new Date()): Promise<string[]> {
-  const sites = await queryAll<{ id: string; timezone: string | null }>(db, `SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM sites s WHERE s.status = 'active'`)
+  const sites = await queryAll<{ id: string; timezone: string | null }>(db, `SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s WHERE s.status = 'active'`)
   const aggregated: string[] = []
   for (const site of sites) {
     if (!isValidTimezone(site.timezone)) throw new Error(`Site ${site.id} default_timezone is missing or invalid`)
@@ -278,7 +278,7 @@ export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Pr
   const rawCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
   const retainedCutoff = new Date(now.getTime() - 740 * 86_400_000).toISOString()
   const sites = await queryAll<{ id: string; timezone: string | null }>(db, `
-    SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM sites s
+    SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s
   `)
   const initialResults = await executeBatch(db, [
     { query: "DELETE FROM analytics_events WHERE kind = 'pageview' AND created_at < ?", params: [rawCutoff] },
@@ -290,7 +290,7 @@ export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Pr
     const timezone = site.timezone
     const retainedDate = addLocalDays(localDateAt(now, timezone), -739)
     const results = await executeBatch(db, [
-      { query: "DELETE FROM analytics_summaries WHERE site_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date < ?", params: [site.id, retainedDate] },
+      { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date < ?", params: [site.id, retainedDate] },
     ], { operation: `clean retained tenant analytics aggregates for ${site.id}` })
     changes += results.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0)
   }

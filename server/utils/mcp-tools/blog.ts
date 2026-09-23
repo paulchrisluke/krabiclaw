@@ -1,6 +1,6 @@
 import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
 // A block's place is its index in the array; there is no position to state.
@@ -69,8 +69,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         seo_description: { type: 'string' },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
         canonical_url: { type: 'string' },
-        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
-        visibility: { type: 'string', enum: ['public', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
+        visibility: { type: 'string', enum: ['listed', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
         status: { type: 'string', enum: ['draft', 'scheduled', 'published'], description: 'Creation defaults to draft. Scheduled requires a future scheduled_for; published goes live immediately.' },
         scheduled_for: { ...instantSchema, type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. With no status or schedule, creation saves a draft.' },
       },
@@ -96,8 +95,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         seo_description: { type: 'string' },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
         canonical_url: { type: 'string' },
-        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null] },
-        visibility: { type: 'string', enum: ['public', 'unlisted'] },
+        visibility: { type: 'string', enum: ['listed', 'unlisted'] },
         slug: { type: ['string', 'null'], description: 'Manual URL slug override. Published slug changes preserve a permanent redirect by default.' },
         redirect_old_slug: { type: 'boolean', description: 'Defaults true after first publish.' },
         reset_slug_override: { type: 'boolean' },

@@ -40,7 +40,7 @@ async function trackBackgroundWork(event: H3Event, operation: Promise<void>) {
 
 export async function loadPublicBlawbyDocument(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   recipe: BlawbyRouteRecipe,
   options: PublicBlawbyDocumentLoadOptions = {},
 ): Promise<BlawbyDocumentPayload> {
@@ -65,7 +65,7 @@ export async function loadPublicBlawbyDocument(
   const host = event.req.headers.get('host') ?? ''
   const cache = env.SITE_CACHE
   const useCache = !options.previewAuthorized && !isNonProductionHost(host) && Boolean(cache)
-  const cacheKey = buildPublicBlawbyDocumentCacheKey(siteId, recipe, slug, locale)
+  const cacheKey = buildPublicBlawbyDocumentCacheKey(organizationId, recipe, slug, locale)
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true
 
   if (useCache && cache) {
@@ -81,14 +81,14 @@ export async function loadPublicBlawbyDocument(
         return parsed
       } catch (error) {
         console.warn('[public-resource-cache] corrupt Blawby document entry', {
-          siteId,
+          organizationId,
           recipe,
           slug,
           error: error instanceof Error ? error.message : String(error),
         })
         await trackBackgroundWork(event, cache.delete(cacheKey).catch((deleteError: unknown) => {
           console.warn('[public-resource-cache] corrupt Blawby document deletion failed', {
-            siteId,
+            organizationId,
             recipe,
             slug,
             error: String(deleteError),
@@ -102,7 +102,7 @@ export async function loadPublicBlawbyDocument(
   }
 
   const loadStartedAt = performance.now()
-  const payload = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug, locale, previewAuthorized: options.previewAuthorized }, env)
+  const payload = await resolvePublicBlawbyDocumentOrThrow(db, organizationId, recipe, { slug, locale, previewAuthorized: options.previewAuthorized }, env)
   recordRequestPhase(event, 'document', loadStartedAt)
   options.signal?.throwIfAborted()
 

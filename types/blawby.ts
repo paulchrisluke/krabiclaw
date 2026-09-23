@@ -64,7 +64,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
   seo_description: string | null
   canonical_url: string
   robots: string | null
-  visibility: 'public' | 'unlisted'
+  visibility: 'listed' | 'unlisted'
   created_at: string | null
   updated_at: string | null
   content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
@@ -161,7 +161,7 @@ export interface PublicCompliance {
 }
 
 export interface PublicBlawbyIdentity {
-  brand_name: string
+  name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: SocialImageSource | null

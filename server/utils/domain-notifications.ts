@@ -21,7 +21,6 @@ interface DomainNotificationEnv extends CloudflareEnv {
 
 interface DomainNotificationInput {
   organizationId: string
-  siteId: string
   domain: string
   status: string
   title: string
@@ -52,10 +51,9 @@ export async function notifyDomainLifecycle(
   const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
   await createCanonicalNotification(db, {
     publishEnv: env,
-    scope: 'site',
+    scope: 'organization',
     severity: opts.status === 'active' ? 'success' : 'warning',
     organizationId: opts.organizationId,
-    siteId: opts.siteId,
     title: opts.title,
     message: opts.message,
     deepLink: dashboardUrl,
@@ -97,7 +95,7 @@ export async function notifyDomainLifecycle(
     unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
   })))
   emailResults.forEach((result) => {
-    if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { siteId: opts.siteId, error: result.error })
+    if (result.status !== 'sent') console.error('domain_notification_email_send_failed', { organizationId: opts.organizationId, error: result.error })
   })
 
   // Gated like every other owner alert. This send used to go straight to the
@@ -105,28 +103,26 @@ export async function notifyDomainLifecycle(
   // site-and-billing mail nor whether that number is allowed to receive
   // anything for this organization, so a tenant who switched the category off
   // still got the WhatsApp.
-  const phone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
+  const phone = await getOrgWhatsAppPhone(db, opts.organizationId)
   if (phone) {
     const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
       env,
       phone,
       organizationId: opts.organizationId,
-      siteId: opts.siteId,
       locationId: null,
-      requireSiteWide: true,
+      requireOrganizationWide: true,
     })
     const wanted = recipient ? await wantsNotification(db, recipient.userId, 'site_and_billing', 'whatsapp') : false
     if (!recipient) {
-      console.error('whatsapp_delivery_blocked', { siteId: opts.siteId, reason: 'recipient_access_pending' })
+      console.error('whatsapp_delivery_blocked', { organizationId: opts.organizationId, reason: 'recipient_access_pending' })
     } else if (wanted) {
       const result = await sendWhatsAppNotification(env, {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         toPhone: phone,
         template: 'domain_update',
         vars: toWhatsAppVars(message, 'domain_update').vars,
       })
-      if (!result.success) console.error('domain_notification_whatsapp_send_failed', { siteId: opts.siteId, error: result.error })
+      if (!result.success) console.error('domain_notification_whatsapp_send_failed', { organizationId: opts.organizationId, error: result.error })
     }
   }
 }

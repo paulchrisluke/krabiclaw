@@ -38,7 +38,7 @@ test('inbox transport failures do not reject publication, while configuration, H
     const namespace = env.GUEST_INBOX_HUBS
     const eventFor = (organizationId: string): Parameters<typeof publishDashboardInvalidation>[1] => ({
       eventId: crypto.randomUUID(), type: 'thread.changed', organizationId,
-      siteId: 'proof-site', locationId: null, threadId: 'proof-thread', occurredAt: new Date().toISOString(),
+      locationId: null, threadId: 'proof-thread', occurredAt: new Date().toISOString(),
     })
     for (const mode of ['healthy', 'reset', 'throws', 'unavailable']) {
       const event = eventFor(mode)

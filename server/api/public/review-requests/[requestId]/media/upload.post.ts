@@ -88,7 +88,6 @@ export default defineHandler(async (event) => {
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
-      siteId: result.context.site_id,
       organizationId: result.context.organization_id,
       userId: sessionUser.id,
       buffer: videoData,
@@ -110,7 +109,6 @@ export default defineHandler(async (event) => {
         buildMediaPlacementInsertQuery({
           id: mediaLinkId,
           organizationId: result.context.organization_id,
-          siteId: result.context.site_id,
           ownerType: 'review_request',
           ownerId: requestId,
           slot: 'gallery',
@@ -128,7 +126,7 @@ export default defineHandler(async (event) => {
             sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
     } catch (linkError) {
       try {
-        await deleteMediaAsset(db, env, uploaded.assetId, result.context.site_id, sessionUser.id)
+        await deleteMediaAsset(db, env, uploaded.assetId, result.context.organization_id, sessionUser.id)
       } catch (cleanupError) {
         throw new AggregateError([linkError, cleanupError], 'Review video could not be linked or cleaned up')
       }

@@ -95,7 +95,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       outputSchema: mediaMutationOutputSchema,
     }),
   siteTool({
-      name: 'get_site_media_assets',
+      name: 'get_organization_media_assets',
       description: 'List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
       domain: 'media',
       minimumRole: 'editor',

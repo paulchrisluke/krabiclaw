@@ -14,7 +14,6 @@ interface ReviewRequestTaskContext {
 interface SendDueRow {
   id: string
   organization_id: string
-  site_id: string
   booking_type: ReviewBookingType
 }
 
@@ -29,7 +28,7 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
   const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
   const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
   const candidates = await queryAllPages<SendDueRow>(db, `
-      SELECT r.id, r.organization_id, r.site_id, r.kind AS booking_type
+      SELECT r.id, r.organization_id, r.kind AS booking_type
         FROM requests r JOIN customers c ON c.id = r.customer_id
         JOIN (
           SELECT b.request_id, b.status, ps.ends_at FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id

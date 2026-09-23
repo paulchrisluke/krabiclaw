@@ -22,15 +22,15 @@ function pathFromLoc(input: unknown) {
   }
 }
 
-async function publishedTenantSitemapScope(db: DbClient | undefined, siteId: string | undefined) {
+async function publishedTenantSitemapScope(db: DbClient | undefined, organizationId: string | undefined) {
   const paths = new Set<string>(), locales = new Set<string>()
-  if (!db || !siteId) return { paths, locales }
+  if (!db || !organizationId) return { paths, locales }
   const rows = await queryAll<{ path: string | null; locale: string }>(db, `
     SELECT l.locale, CASE WHEN l.locale = 'en' THEN d.path WHEN d.path = '/' THEN '/' || l.locale ELSE '/' || l.locale || d.path END AS path
-      FROM site_locales l LEFT JOIN content_documents d ON d.site_id = l.site_id AND d.organization_id = l.organization_id AND d.locale = l.locale
+      FROM organization_locales l LEFT JOIN content_documents d ON d.organization_id = l.organization_id AND d.organization_id = l.organization_id AND d.locale = l.locale
         AND d.kind = 'page' AND d.row_role IN ('root','representation')
-     WHERE l.site_id = ? AND l.status = 'published'
-  `, [siteId])
+     WHERE l.organization_id = ? AND l.status = 'published'
+  `, [organizationId])
   for (const row of rows) {
     locales.add(row.locale)
     if (row.path) paths.add(row.path === '/' ? '/' : row.path.replace(/\/$/, ''))
@@ -56,7 +56,7 @@ export default definePlugin((nitroApp) => {
   const filterTenantUrls = async <T>(ctx: { event: H3Event; urls: T[] }) => {
     if (ctx.event.context.tenantType !== TENANT_TYPES.TENANT) return
     const env = cloudflareEnv(ctx.event)
-    const scope = await publishedTenantSitemapScope(env.db, ctx.event.context.siteId as string | undefined)
+    const scope = await publishedTenantSitemapScope(env.db, ctx.event.context.organizationId as string | undefined)
     ctx.urls = ctx.urls.filter((url) => isAllowedTenantPath(ctx.event, pathFromLoc(url), scope))
   }
 

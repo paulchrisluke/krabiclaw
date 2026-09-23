@@ -8,7 +8,6 @@ import { createMediaAsset, type MediaAsset } from "~/server/utils/media-asset-ma
 interface UploadResolvedMediaInputBase {
   db: DbClient;
   env: Parameters<typeof uploadImageBuffer>[0];
-  siteId: string;
   organizationId: string;
   buffer: ArrayBuffer | Uint8Array<ArrayBuffer>;
   contentType: string;
@@ -53,7 +52,7 @@ export async function uploadResolvedMediaToAssetStore(
   const assetId = crypto.randomUUID();
   const provider = input.provider ?? (input.kind === "image" ? "cloudflare_images" : "cloudflare_r2");
 
-  const r2Key = provider === "cloudflare_r2" ? buildR2Key(input.siteId, assetId, input.filename) : null;
+  const r2Key = provider === "cloudflare_r2" ? buildR2Key(input.organizationId, assetId, input.filename) : null;
   const startedAt = Date.now();
   const timings: Record<string, number> = {};
   let stage = input.kind === 'video' ? 'poster_upload' : provider === 'cloudflare_images' ? 'image_upload' : 'r2_put';
@@ -87,7 +86,6 @@ export async function uploadResolvedMediaToAssetStore(
     await createMediaAsset(input.db, {
       id: assetId,
       organization_id: input.organizationId,
-      site_id: input.siteId,
       kind: input.kind,
       provider,
       source: input.source,
@@ -109,7 +107,7 @@ export async function uploadResolvedMediaToAssetStore(
     timings[stage] = Date.now() - stageStartedAt;
   } catch (persistError) {
     timings[stage] = Date.now() - stageStartedAt;
-    console.error({ event: 'media_upload_failed', asset_id: assetId, site_id: input.siteId,
+    console.error({ event: 'media_upload_failed', asset_id: assetId, organization_id: input.organizationId,
       provider, kind: input.kind, stage, bytes: input.buffer.byteLength,
       duration_ms: Date.now() - startedAt, timings_ms: timings, errors: errorChainForTelemetry(persistError) });
     const cleanupStartedAt = Date.now();
@@ -140,7 +138,7 @@ export async function uploadResolvedMediaToAssetStore(
     }
     throw persistError;
   }
-  console.info({ event: 'media_upload_completed', asset_id: assetId, site_id: input.siteId,
+  console.info({ event: 'media_upload_completed', asset_id: assetId, organization_id: input.organizationId,
     provider, kind: input.kind, bytes: input.buffer.byteLength,
     duration_ms: Date.now() - startedAt, timings_ms: timings });
 

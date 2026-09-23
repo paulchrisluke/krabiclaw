@@ -465,7 +465,6 @@ export class CapacityUnavailableError extends Error {
 export function sessionClaimQuery(input: {
   bookingId: string
   organizationId: string
-  siteId: string
   productId: string
   sessionId: string
   productVariantId: string
@@ -489,18 +488,18 @@ export function sessionClaimQuery(input: {
    * would let a losing acceptance take seats it then cannot attach to
    * anything.
    */
-  requireUndecided?: { requestId: string; siteId: string; updatedAt: string; decisionDedupeKey: string } | null
+  requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
   now: string
 }): BatchQuery {
   return {
     query: `
       INSERT INTO bookings (
-        id, organization_id, site_id, product_id, product_session_id, product_variant_id,
+        id, organization_id, product_id, product_session_id, product_variant_id,
         customer_id, request_id, party_size, status, created_at, updated_at
       )
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
       WHERE ${input.requireUndecided
-        ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND site_id = ? AND updated_at = ?)
+        ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
         : ''}EXISTS (
         SELECT 1 FROM product_sessions s
@@ -522,10 +521,10 @@ export function sessionClaimQuery(input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.bookingId, input.organizationId, input.siteId, input.productId, input.sessionId, input.productVariantId,
+      input.bookingId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
       input.customerId ?? null, input.requestId ?? null, input.partySize, input.now, input.now,
       ...(input.requireUndecided
-        ? [input.requireUndecided.requestId, input.requireUndecided.siteId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
+        ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
       input.sessionId, input.organizationId, input.productId, input.now, input.partySize, input.replacingBookingId ?? null,
     ],
@@ -546,7 +545,6 @@ export function sessionClaimQuery(input: {
  */
 export async function claimSessionCapacity(db: DbClient, input: {
   organizationId: string
-  siteId: string
   productId: string
   sessionId: string
   productVariantId: string
@@ -567,8 +565,8 @@ export async function claimSessionCapacity(db: DbClient, input: {
 
   if (input.requestId) {
     const existing = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM bookings WHERE organization_id = ? AND site_id = ? AND request_id = ?
-    `, [input.organizationId, input.siteId, input.requestId])
+      SELECT id FROM bookings WHERE organization_id = ?  AND request_id = ?
+    `, [input.organizationId, input.requestId])
     if (existing) return { bookingId: existing.id }
   }
 

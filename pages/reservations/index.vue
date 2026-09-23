@@ -173,7 +173,7 @@ function formatTitleItalics(text: string | null | undefined): string {
 
 definePageMeta({ layout: 'saya' })
 
-const { site, siteId } = useTenantSite()
+const { site, organizationId } = useTenantSite()
 const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
@@ -328,7 +328,7 @@ const availabilityLoading = ref(false)
 let availabilityRequestId = 0
 
 async function loadAvailability() {
-  if (!siteId || !reservationForm.value.location_id) {
+  if (!organizationId || !reservationForm.value.location_id) {
     availabilityDates.value = []
     return
   }
@@ -338,7 +338,7 @@ async function loadAvailability() {
   try {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/sites/${siteId}/reservations/availability`, {
+    const res = await $fetch<{ dates: RawDateAvailability[] }>(`/api/public/reservations/availability`, {
       query: { location_id: locationId, date: dateStr, days: 14 },
     })
     // Ignore stale responses from a location that was changed away from before this resolved
@@ -374,7 +374,7 @@ async function handleContactSubmit(contactState: { name: string, email: string, 
 }
 
 async function handleReservation() {
-  if (submitting.value || !siteId || !timeSelection.value) return
+  if (submitting.value || !organizationId || !timeSelection.value) return
   reservationForm.value.date = timeSelection.value.day
   reservationForm.value.time = timeSelection.value.time
   reservationForm.value.guests = guests.value >= 8 ? '8+' : String(guests.value)
@@ -388,13 +388,13 @@ async function handleReservation() {
     // into "Failed to submit" — which the guest answers by booking a second one.
     const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
     const timezone = reservationTimezone.value
-    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/sites/${siteId}/reservations`, {
+    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/reservations`, {
       method: 'POST',
       body: reservationForm.value,
     })
     setBookingConfirmation({
       type: 'reservation',
-      siteId,
+      organizationId,
       siteName: brandName.value,
       guestName: reservationForm.value.name,
       // The guest picked a wall-clock slot at this location; the instant it
@@ -438,7 +438,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const brandName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 useSocialMetadata(() => ({
   path: '/reservations',
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,

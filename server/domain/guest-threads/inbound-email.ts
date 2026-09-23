@@ -46,7 +46,6 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
       const summary = await requestSummary(db, source)
       await notifyGuestThreadReply(env, db, {
         organizationId: orgSite.organizationId,
-        siteId: orgSite.siteId,
         locationId: summary.locationId,
         threadId: thread.id,
         sourceEntryId: entry.id,

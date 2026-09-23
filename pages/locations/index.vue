@@ -107,8 +107,8 @@ import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/uti
 
 definePageMeta({ layout: 'saya' })
 
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 const session = authClient.useSession()
 const isAuthenticated = computed(() => Boolean(session.value.data?.user))
 const { locale, localePath, t } = useI18n()
@@ -138,7 +138,7 @@ function todayHours(location: ApiRecord): string {
   return getTodayHoursLabel(location.opening_hours, t('saya.location.closed'), location.timezone, new Date(), location.special_hours, locale.value) ?? ''
 }
 
-const siteName = computed(() => unref(site)?.brand_name || '')
+const siteName = computed(() => unref(site)?.name || '')
 
 useSocialMetadata(() => ({
   path: '/locations',

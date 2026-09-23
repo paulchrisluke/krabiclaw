@@ -55,7 +55,7 @@
         <UTextarea :model-value="str('bio')" :rows="8" autoresize autofocus class="w-full" @update:model-value="set('bio', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'photo'" label="Photo">
-        <MediaPicker :site-id="siteId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
+        <MediaPicker :organization-id="organizationId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
       </UFormField>
     </template>
 
@@ -76,7 +76,7 @@
         <UInput :model-value="str('icon')" size="xl" autofocus class="w-full" @update:model-value="set('icon', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'image'" label="Image">
-        <MediaPicker :site-id="siteId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
+        <MediaPicker :organization-id="organizationId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
       </UFormField>
       <template v-else-if="field === 'link'">
         <UFormField label="Link label">
@@ -110,9 +110,9 @@ import {
  * record's field — and it is one function so the list, the rows and the field
  * all edit the same block in the same page draft.
  */
-export function useTenantPageBlockRecords(siteId: string, pageId: string, blockId: string, collectionSource: MaybeRefOrGetter<TenantPageBlockCollection | null>, recordIndex: MaybeRefOrGetter<number> = -1) {
-  const { draft } = useTenantPageDraft(siteId, pageId)
-  const newBlock = useTenantPageNewBlock(siteId, pageId)
+export function useTenantPageBlockRecords(organizationId: string, pageId: string, blockId: string, collectionSource: MaybeRefOrGetter<TenantPageBlockCollection | null>, recordIndex: MaybeRefOrGetter<number> = -1) {
+  const { draft } = useTenantPageDraft(organizationId, pageId)
+  const newBlock = useTenantPageNewBlock(organizationId, pageId)
 
   // A section being created is not in the page draft yet — it is held beside it
   // until Create — and reading only the draft is how a Team under construction
@@ -265,7 +265,7 @@ export function useTenantPageBlockRecords(siteId: string, pageId: string, blockI
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   pageId: string
   blockId: string
   collection: TenantPageBlockCollection
@@ -275,6 +275,6 @@ const props = defineProps<{
 }>()
 
 const { record, isPerson, str, set, recordImage, recordImageMedia, setRecordImage } = useTenantPageBlockRecords(
-  props.siteId, props.pageId, props.blockId, props.collection, () => props.recordIndex,
+  props.organizationId, props.pageId, props.blockId, props.collection, () => props.recordIndex,
 )
 </script>

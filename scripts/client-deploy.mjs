@@ -7,7 +7,7 @@
  *   yarn client:deploy \
  *     --slug pottery-house-krabi \
  *     --vertical experience \
- *     --site-id site-pottery-house-krabi
+ *     --organization-id org-pottery-house-krabi
  *
  * Flags:
  *   --skip-seed    Skip the D1 apply step when the import was already applied
@@ -21,7 +21,7 @@ const { values: args } = parseArgs({
   options: {
     slug: { type: 'string' },
     vertical: { type: 'string', default: 'restaurant' },
-    'site-id': { type: 'string' },
+    'organization-id': { type: 'string' },
     url: { type: 'string' },
     'allow-stock': { type: 'boolean', default: false },
     'skip-seed': { type: 'boolean', default: false },
@@ -31,13 +31,13 @@ const { values: args } = parseArgs({
 
 if (!args.slug) {
   console.error('Error: --slug is required')
-  console.error('Usage: yarn client:deploy --slug <slug> --vertical <vertical> [--site-id <id>]')
+  console.error('Usage: yarn client:deploy --slug <slug> --vertical <vertical> [--organization-id <id>]')
   process.exit(1)
 }
 
 const slug = args.slug
 const vertical = args.vertical
-const siteId = args['site-id'] ?? `site-${slug}`
+const organizationId = args['organization-id'] ?? `org-${slug}`
 const liveUrl = args.url ?? `https://${slug}.krabiclaw.com`
 
 function rule(char = '─', width = 64) {
@@ -72,7 +72,7 @@ const verifyResult = spawnSync('node', [
   'scripts/client-verify.mjs',
   '--url', liveUrl,
   '--vertical', vertical,
-  '--site-id', siteId,
+  '--organization-id', organizationId,
   '--slug', slug,
 ], { stdio: 'inherit', cwd: process.cwd() })
 
@@ -86,7 +86,7 @@ if (verifyResult.status === 0) {
 
 console.error('  ✗ Live verification failed')
 console.error('\n  Fix the reported issues, then verify the existing deployment again:')
-console.error(`    yarn client:deploy --slug ${slug} --vertical ${vertical} --site-id ${siteId} --skip-seed`)
+console.error(`    yarn client:deploy --slug ${slug} --vertical ${vertical} --organization-id ${organizationId} --skip-seed`)
 console.error('  Worker fixes must go through staging and main.')
 console.log(rule('═'))
 process.exit(verifyResult.status ?? 1)

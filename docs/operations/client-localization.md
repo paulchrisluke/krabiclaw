@@ -12,7 +12,7 @@ Keep client source exports, translations, and publish bundles under the ignored
 removing a worktree. The public repository must not contain client exports or
 access tokens. Commit publisher code and operational instructions only.
 
-A bundle identifies one exact `origin`, `site_id`, and `locale`, and contains:
+A bundle identifies one exact `origin`, `organization_id`, and `locale`, and contains:
 
 - `products`: all products in that environment, each with `product_id`,
   `source: { name, description }`, complete translated `values`, and `route_path`.
@@ -24,7 +24,7 @@ A bundle identifies one exact `origin`, `site_id`, and `locale`, and contains:
 
 The publisher supports the catalog epoch's product model, where a product is
 owned by its organization and reaches a site through a `product_publications`
-row rather than carrying a `site_id` of its own. Build a fresh production bundle
+row rather than carrying an `organization_id` of its own. Build a fresh production bundle
 from the production catalog after its approved epoch cutover. Do not
 reuse staging IDs or replace production's larger menu with staging's fixture
 catalog. Reuse the exact English-to-Thai dictionary, and stop for any new or

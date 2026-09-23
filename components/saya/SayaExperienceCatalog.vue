@@ -16,7 +16,7 @@ const presentation = EXPERIENCE_PRESENTATION
 const rawCurrency = config.value.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
 const currency = rawCurrency
-const brandName = String(site.value?.brand_name ?? '').trim()
+const brandName = String(site.value?.name ?? '').trim()
 if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
 const { t } = useI18n()
 // The page shows what a guest can book. A product the merchant sells over the

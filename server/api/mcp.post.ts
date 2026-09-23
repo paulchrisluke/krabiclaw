@@ -18,7 +18,7 @@ import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
-  getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
+  getActiveEntitlements, getVisibleOrganizationContext, requireMcpUser, roleSatisfies, type McpUserContext, } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
@@ -69,7 +69,7 @@ Whenever an image is needed (hero, logo, post thumbnail, Product photo, experien
 **AI-generated (user asks you to generate or create an image):**
 1. Prepare an image prompt tailored to the business.
 2. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the prepared prompt.
-3. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
+3. Immediately call save_generated_image_file({ organization_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 4. Show the generated image directly in the conversation for review; use the returned public_url when needed.
 5. After the user approves, use the returned asset_id with set_media for a single image or attach_media for an ordered gallery. Use placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
 6. If the user wants changes, revise the prompt and repeat from step 2.
@@ -83,7 +83,7 @@ This entire flow runs within the current conversation — do not tell the user t
 2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
 3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
+5. After confirmation, call upload_user_media({ organization_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
 7. After upload_user_media returns asset_id/public_url, call set_media with asset_id for a single-value placement. For an ordered placement, call attach_media for each new asset and reorder_media only when needed.
 8. Reply with the exact site, placement, asset_id, and public_url that were updated.
@@ -91,7 +91,7 @@ This entire flow runs within the current conversation — do not tell the user t
 **Videos:**
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
 - Every video requires a poster image. Ask the user to attach one before uploading the video.
-- Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
+- Call upload_user_media({ organization_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
 - After upload_user_media returns asset_id/public_url, use the exact owner id from a read tool. Call set_media with asset_id for a single cover/hero/logo; call attach_media for a gallery or document list and reorder_media only when needed.
 
 ## Choosing a content type
@@ -102,39 +102,39 @@ KrabiClaw has three distinct content-creation tools — do not default to whiche
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
 
 ## Session start
-Start every conversation by calling get_workspace_context. If no active site is set yet, call list_sites to discover the user's sites and present them clearly.
-- If they have no sites, explain that site and location setup must be completed in the KrabiClaw CMS before content can be managed here.
-- Present available sites and wait for the user to select one, even when only one is available. Then call set_workspace_context with that explicit selection.
-- Creating, copying, or deleting sites and locations is managed in the CMS. Do not attempt these operations through other tools.
+Start every conversation by calling get_workspace_context. If no active organization is set yet, call list_organizations to discover the user's organizations and present them clearly.
+- If they have none, explain that organization and location setup must be completed in the KrabiClaw CMS before content can be managed here.
+- Present the available organizations and wait for the user to select one, even when only one is available. Then call set_workspace_context with that explicit selection.
+- Creating, copying, or deleting organizations and locations is managed in the CMS. Do not attempt these operations through other tools.
 
 ## Workspace context
-- Use set_workspace_context whenever the user chooses a site or location.
-- Use get_workspace_context whenever you need to confirm the active organization/site/location before mutating content.
+- Use set_workspace_context whenever the user chooses an organization or location.
+- Use get_workspace_context whenever you need to confirm the active organization and location before mutating content.
 - If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
-- site_id means the internal KrabiClaw site ID returned by get_workspace_context or list_sites, such as site-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or site name is never a valid site_id.
-- If the user gives a public URL such as https://www.potteryhousekrabi.com/products/ceramics-painting-class, first call get_workspace_context or list_sites and match the URL to the returned site's public_url/domain context before calling site-scoped tools.
+- organization_id means the internal KrabiClaw organization ID returned by get_workspace_context or list_organizations, such as org-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or business name is never a valid organization_id.
+- If the user gives a public URL such as https://www.potteryhousekrabi.com/products/ceramics-painting-class, first call get_workspace_context or list_organizations and match the URL to the returned organization's public_url/domain context before calling tenant-scoped tools.
 
-## Site confirmation policy — enforced before every mutation
+## Tenant confirmation policy — enforced before every mutation
 
-Before calling any mutating tool, the active site must be confirmed for this conversation.
+Before calling any mutating tool, the active organization must be confirmed for this conversation.
 
-A site is confirmed when the user explicitly selects it from get_workspace_context or list_sites in this conversation. If no site exists, direct the user to the CMS for setup before making mutations.
+An organization is confirmed when the user explicitly selects it from get_workspace_context or list_organizations in this conversation. If none exists, direct the user to the CMS for setup before making mutations.
 
 Tool categories:
-- **Read-only** (list_*, get_*) — safe to call once list_sites returns
-- **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
+- **Read-only** (list_*, get_*) — safe to call once list_organizations returns
+- **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed organization
 
-If the user asks you to mutate content before a site is confirmed, call list_sites first, confirm the active site, then proceed.
+If the user asks you to mutate content before an organization is confirmed, call list_organizations first, confirm the active organization, then proceed.
 
-After applying, always confirm: "[Placement] updated for [site name]." — never leave the target ambiguous.
+After applying, always confirm: "[Placement] updated for [business name]." — never leave the target ambiguous.
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
-All other tools require a site_id obtained from get_workspace_context or list_sites. Never guess, invent, derive, or pass through site IDs from URLs/domains.
+All other tools require an organization_id obtained from get_workspace_context or list_organizations. Never guess, invent, derive, or pass through IDs from URLs/domains.
 
-For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says which sites carry it, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID at the site exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
+For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says whether it is carried, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID in the organization exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
 
-Common workflows: manage a site's Products and the collections that group them, create and publish site posts, triage contact, reservation and booking submissions, update page content directly, upload media, list reviews (replies are managed in Google, not here), and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`;
+Common workflows: manage an organization's Products and the collections that group them, create and publish website posts, triage contact, reservation and booking submissions, update page content directly, upload media, list reviews (replies are managed in Google, not here), and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Social publishing is available only when explicitly enabled; otherwise direct the user to the dashboard.`;
 
 // Everything a per-request Server factory needs, threaded through
 // `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.
@@ -209,18 +209,18 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
   server.setRequestHandler("tools/list", async () => {
     const { event, mcpUser, cfEnv } = factoryContextFrom(ctx);
     if (!mcpUser) throw new ProtocolError(MCP_ERROR.internal, "Missing authenticated MCP request context.");
-    // site_id is a KrabiClaw-specific extension for site-scoped tool
+    // organization_id is a KrabiClaw-specific extension for site-scoped tool
     // discovery — not part of the MCP spec's ListToolsRequestParams (only
     // cursor/_meta). @modelcontextprotocol/server validates tools/list
     // params against the spec's schema and silently drops unrecognized
-    // properties, so a client-supplied params.site_id never reaches this
+    // properties, so a client-supplied params.organization_id never reaches this
     // handler (confirmed empirically: request.params arrives as {}). It has
     // to travel outside the validated params object — a request header,
     // which the SDK doesn't touch — instead.
-    const siteIdHeader = event.req.headers.get("x-krabiclaw-site-id");
-    const hasSiteIdParam = siteIdHeader !== null;
-    const siteId = siteIdHeader?.trim() || null;
-    const siteCtx = siteId ? await getVisibleSiteContext(event, siteId) : null;
+    const organizationIdHeader = event.req.headers.get("x-krabiclaw-organization-id");
+    const hasOrganizationIdParam = organizationIdHeader !== null;
+    const organizationId = organizationIdHeader?.trim() || null;
+    const siteCtx = organizationId ? await getVisibleOrganizationContext(event, organizationId) : null;
 
     const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 
@@ -228,24 +228,24 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       ? [...new Set(visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(Boolean) as string[])]
       : [];
     const activeEntitlements = siteCtx
-      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys, siteCtx.siteId)
+      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys)
       : new Set<string>();
 
     // The role gate is the permission matrix now, so resolve it once per tool
     // before filtering rather than awaiting inside a sync predicate.
     const roleAllowsTool = new Map<string, boolean>()
-    if (hasSiteIdParam && siteId && siteCtx) {
+    if (hasOrganizationIdParam && organizationId && siteCtx) {
       await Promise.all(visibleSurfaceTools.map(async (tool) => {
         roleAllowsTool.set(tool.name, await roleSatisfies(siteCtx.organizationId, siteCtx.role, tool.minimumRole))
       }))
     }
 
     const tools = visibleSurfaceTools.filter((tool) => {
-      // Without a site_id, return all tools so AI clients (e.g. ChatGPT) can discover
+      // Without a organization_id, return all tools so AI clients (e.g. ChatGPT) can discover
       // the full capability set on first connection. A supplied but inaccessible
       // site must fail closed instead of receiving the unscoped catalog.
-      if (!hasSiteIdParam) return true;
-      if (!siteId) return false;
+      if (!hasOrganizationIdParam) return true;
+      if (!organizationId) return false;
       if (!siteCtx) return false;
       if (!roleAllowsTool.get(tool.name)) return false;
       if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false;
@@ -260,7 +260,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))];
     logMcpEventDetached(event, cfEnv.DB, {
-      organizationId: siteCtx?.organizationId ?? null, siteId: siteCtx?.siteId ?? null, userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
+      organizationId: siteCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
 
     // Our own McpToolDefinition types inputSchema/outputSchema as a loose
     // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
@@ -307,11 +307,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         // instead of falling back to a generic internal error.
         const telemetryErrorMessage = describeErrorForTelemetry(toolError);
         logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
         throw new ProtocolError(mcpErr.code, mcpErr.message, mcpErr.data);
       }
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
       // Any other tool-execution failure (including a plain `throw new
       // Error(...)` from a business-rule guard, which asMcpError falls back
       // to classifying as kind:'transport') must still resolve as a
@@ -327,32 +327,32 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     // Resolved once and reused for both telemetry and the cache-purge below.
     const structuredContextSiteId = structuredContent && typeof structuredContent === "object" && "context" in structuredContent
-      ? (structuredContent.context as Record<string, unknown>)?.site_id
+      ? (structuredContent.context as Record<string, unknown>)?.organization_id
       : null;
     const metaContextSiteId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === "object"
-      ? (result.privateMeta.context as Record<string, unknown>)?.site_id
+      ? (result.privateMeta.context as Record<string, unknown>)?.organization_id
       : null;
     const ctxSiteId = typeof structuredContextSiteId === "string" ? structuredContextSiteId : metaContextSiteId;
     const resolvedSiteId = typeof ctxSiteId === "string"
       ? ctxSiteId.trim()
-      : typeof rawArgs.site_id === "string" ? rawArgs.site_id.trim() : null;
+      : typeof rawArgs.organization_id === "string" ? rawArgs.organization_id.trim() : null;
 
     logMcpEventDetached(event, cfEnv.DB, {
-      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: resolvedSiteId, requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
 
     // After any mutating tool call, purge KV HTML cache for the site so the
     // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
     // Fire-and-forget — never block the MCP response on cache ops.
     if (isMcpMutatingTool(toolDef)) {
-      const siteId = resolvedSiteId;
-      if (siteId) {
+      const organizationId = resolvedSiteId;
+      if (organizationId) {
         const env = cloudflareEnv(event);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const db = (env as any).DB as D1Database | undefined;
         if (kv) {
-          // Public resource cache is keyed by siteId directly (not hostname), so no
+          // Public resource cache is keyed by organizationId directly (not hostname), so no
           // domain lookup is needed here — unlike the HTML purge below.
           // Awaited inline (not waitUntil) so the MCP response never returns
           // before the stale public resource entry is cleared — otherwise a client
@@ -364,7 +364,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
               DB: env.db,
               SITE_CACHE: kv,
               NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
-            }, siteId);
+            }, organizationId);
           } catch (err: unknown) {
             console.warn("[mcp-cache-purge] public resource purge failed:", String(err));
           } finally {
@@ -374,9 +374,9 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         if (kv && db) {
           // Look up all active hostnames for this site (subdomain + custom domains)
           const purgeAsync = queryAll<{ domain: string }>(
-            db, `SELECT domain FROM site_domains
-                 WHERE site_id = ? AND status = 'active'
-                 LIMIT 20`, [siteId], )
+            db, `SELECT domain FROM organization_domains
+                 WHERE organization_id = ? AND status = 'active'
+                 LIMIT 20`, [organizationId], )
             .then((results) => {
               const hostnames = (results ?? []).map((r) => r.domain);
               if (hostnames.length > 0) return purgeSiteKvCache(kv, hostnames);
@@ -399,7 +399,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const kv = env.SITE_CACHE;
       const db = env.db ?? (env.DB ? createDb(env.DB) : null);
       if (kv && db) {
-        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { siteId: resolvedSiteId, limit: 100 })
+        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedSiteId, limit: 100 })
           .catch((error: unknown) => console.warn(`[ai-search] site change drain failed after tenant MCP ${toolName}: ${String(error)}`));
         const waitUntil = getCloudflareWaitUntil(event);
         if (waitUntil) waitUntil(drained);

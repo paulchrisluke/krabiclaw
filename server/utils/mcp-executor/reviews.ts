@@ -7,10 +7,10 @@ import { NOT_HANDLED, requiredString } from './shared'
 export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
-    case "list_site_reviews":
+    case "list_organization_reviews":
       {
-        const reviews = await listSiteReviews(site.db, site.siteId);
-        const page = paginateMcpCollection(reviews, args, { resource: `site-reviews:${site.siteId}` });
+        const reviews = await listSiteReviews(site.db, site.organizationId);
+        const page = paginateMcpCollection(reviews, args, { resource: `site-reviews:${site.organizationId}` });
         return { reviews: page.items, page_info: page.page_info };
       }
     case "list_location_reviews":
@@ -18,10 +18,10 @@ export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unkno
         const locationId = requiredString(args, "location_id");
         const reviews = await listLocationReviews(
           site.db,
-          site.siteId,
+          site.organizationId,
           locationId,
         );
-        const page = paginateMcpCollection(reviews, args, { resource: `location-reviews:${site.siteId}:${locationId}` });
+        const page = paginateMcpCollection(reviews, args, { resource: `location-reviews:${site.organizationId}:${locationId}` });
         return { reviews: page.items, page_info: page.page_info };
       }
     default:

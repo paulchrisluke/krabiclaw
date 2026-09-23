@@ -9,9 +9,9 @@ import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, Gue
 export async function getGuestThreadDetail(
   db: DbClient,
   threadId: string,
-  siteId: string,
+  organizationId: string,
 ): Promise<GuestThreadDetailViewModel | null> {
-  const thread = await getGuestRequest(db, threadId, siteId)
+  const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return null
 
 

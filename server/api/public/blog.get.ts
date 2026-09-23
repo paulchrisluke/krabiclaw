@@ -1,24 +1,63 @@
-// GET /api/public/blog?collection=blog|docs - KrabiClaw's published articles in one collection
+// GET /api/public/blog?collection=blog|docs — the requesting tenant's published articles
+//
+// This was two routes. `/api/public/blog` served KrabiClaw's own articles
+// through `listPublicPlatformBlogPosts`, which was `listBlogPosts` with the
+// platform site looked up and hardcoded; `/api/public/blog`
+// served everyone else's from a near-identical query. The platform is an
+// ordinary tenant, so that was one concept with two implementations, and the
+// tenant half took its site id from the URL instead of from the host that had
+// already identified it.
+//
+// One route now. The tenant comes from `event.context.organizationId`, which
+// tenant-resolution sets from the host, so krabiclaw.com gets KrabiClaw's
+// articles and a tenant domain gets that tenant's, by the same code.
+import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listPublicPlatformBlogPosts } from '~/server/utils/content/publishing'
+import { attachCover } from '~/server/utils/content/publishing'
+import { COVER_SELECT, coverJoinSql } from '~/server/utils/content/cover'
 import { isArticleCollection } from '~/utils/article-collections'
+import { defineHandler } from 'nitro'
 import { getQuery } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
+  const organizationId = event.context.organizationId as string | null | undefined
+  if (!organizationId) return jsonResponse({ error: 'Unknown tenant' }, { status: 404 })
+
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
+  // Absent means the blog, the same collection `listPublicPlatformBlogPosts`
+  // defaults to, because this route answers the blog index and that function
+  // renders it server-side; a route that answered every collection put the
+  // documentation in the platform's blog feed while its own SSR left it out.
+  // Every article carries a collection, so no caller loses rows to the filter.
   const requested = getQuery(event).collection
+  if (requested !== undefined && !isArticleCollection(requested)) {
+    return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
+  }
   const collection = requested === undefined ? 'blog' : requested
-  if (!isArticleCollection(collection)) return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
+
+  const sql = `
+    SELECT
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection,
+      (p.metadata_json ->> '$.category') AS category, p.seo_description, p.seo_keywords,
+      p.canonical_url, p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
+    FROM content_documents p
+    ${coverJoinSql('p')}
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
+      AND p.organization_id = ? AND p.visibility = 'listed'
+      AND (p.metadata_json ->> '$.collection') = ?
+    ORDER BY ${collection === 'docs' ? 'p.sort_order, p.title' : 'p.published_at IS NULL, p.published_at DESC, p.id DESC'}
+    LIMIT 200
+  `
 
   try {
-    const posts = await listPublicPlatformBlogPosts(db, collection)
-    return jsonResponse({ posts })
+    const params = [organizationId, collection]
+    const results = await queryAll<ApiRecord>(db, sql, params)
+    return jsonResponse({ posts: (results ?? []).map(attachCover) })
   } catch (err) {
     console.error('Failed to fetch public blog posts:', err)
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })
   }
 })
-import { defineHandler } from 'nitro';

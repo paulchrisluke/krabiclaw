@@ -144,7 +144,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Review the homepage and suggest top improvements",
         text: [
-          "Call get_workspace_context to confirm the active site, then call list_tenant_pages and resolve the page whose path is \"/\", call get_tenant_page with that variant id to see the current homepage content, and get_site_media_assets to see what photos are already available.",
+          "Call get_workspace_context to confirm the active site, then call list_tenant_pages and resolve the page whose path is \"/\", call get_tenant_page with that variant id to see the current homepage content, and get_organization_media_assets to see what photos are already available.",
           "Look at the main photo at the top of the page (the hero/cover photo), the headline and call-to-action button text, and the story section photo and text.",
           "Suggest 2-3 concrete, highest-impact changes — for example a stronger call-to-action, a better main photo, or a punchier headline. Explain each suggestion in plain language, not in terms of field names.",
           "Ask the user which suggestion to act on first rather than changing everything at once. After confirmation, use set_media for a single hero/image placement, or attach_media/remove_media/reorder_media for a gallery. Apply copy/text suggestions with update_tenant_page without resubmitting media arrays.",
@@ -167,8 +167,8 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Check what's missing and guide the user through finishing setup",
         text: [
-          "Call get_workspace_context first. If there is no active site yet, call list_sites and help the user pick or create one before continuing.",
-          "Check what's in place: call get_site_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\", call list_locations, then call every list_location_products page for each relevant location.",
+          "Call get_workspace_context first. If there is no active site yet, call list_organizations and help the user pick or create one before continuing.",
+          "Check what's in place: call get_organization_media_assets (kind=\"image\") to see available photos, call list_tenant_pages and get_tenant_page for the variants whose paths are \"/\" and \"/about\", call list_locations, then call every list_location_products page for each relevant location.",
           "Identify the single most important missing piece — a main photo, Products, the about/story text, or a first post — and ask the user if they want to work on that now.",
           "Guide them through completing just that one thing at a time. Don't ask for everything up front.",
         ].join(" "),
@@ -189,7 +189,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "General visual and content review with concrete suggestions",
         text: [
-          "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\", plus get_site_media_assets, to see current photos and text.",
+          "Call get_workspace_context, then call list_tenant_pages and get_tenant_page for the variant whose path is \"/\", plus get_organization_media_assets, to see current photos and text.",
           "Review the main photo, headline, story section, and overall completeness. Note anything that looks unfinished, generic, or low-quality (e.g. a missing or blurry main photo, thin story text, no Products).",
           "Suggest specific, actionable improvements in plain language — avoid internal field names. Offer to act on one at a time, starting with whichever has the biggest visual impact (usually the main photo).",
           "Only make changes the user has explicitly approved.",
@@ -200,7 +200,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
       return {
         description: "Combine traffic, listing completeness, and booking demand into one concrete next move",
         text: [
-          "Call get_workspace_context, then get_site_analytics for the last 30 days to see traffic, top pages, and whether traffic is up or down versus the prior period.",
+          "Call get_workspace_context, then get_organization_analytics for the last 30 days to see traffic, top pages, and whether traffic is up or down versus the prior period.",
           "Call list_locations and every relevant list_location_products page to check whether Products have clear pricing, descriptions, and availability. Call get_reservation_inquiries to see current demand and whether anything is sitting unanswered.",
           "Cross-reference the three: if traffic is healthy but the listing is thin or reservations are sitting unanswered, say so explicitly — don't treat these as separate topics.",
           "Suggest exactly one highest-impact next move, not a list — for example answering waiting reservations, completing a thin listing, or publishing a post about a specific under-booked Product. Explain it in plain language tied to what you actually found in the data.",
