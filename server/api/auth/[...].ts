@@ -1,7 +1,7 @@
 
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';
-import { createAuth, healStaleCimdClient, type CloudflareEnv } from '~/server/utils/auth'
+import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { HTTPError, type H3Event } from 'nitro';
@@ -111,52 +111,14 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   })
 }
 
-async function extractOAuthClientId(request: Request): Promise<string | null> {
-  if (request.method === 'GET' || request.method === 'HEAD') {
-    return new URL(request.url).searchParams.get('client_id')
-  }
-  const contentType = request.headers.get('content-type')?.toLowerCase() ?? ''
-  if (!contentType.includes('application/x-www-form-urlencoded')) return null
-  try {
-    // Clone so the token/introspection/revocation body is still readable by
-    // auth.handler below — a Request body can only be consumed once. Reuse
-    // the same bounded reader as phone auth so an oversized body can't be
-    // fully buffered in memory just to peek at client_id; oversized/unreadable
-    // bodies just skip self-heal (best-effort) rather than rejecting the
-    // underlying request.
-    const bounded = await readBoundedBody(request.clone())
-    return new URLSearchParams(new TextDecoder().decode(bounded)).get('client_id')
-  } catch {
-    return null
-  }
-}
-
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   const auth = createAuth(env)
 
   const isHeadRequest = event.req.method === 'HEAD'
 
-  // The self-heal runs on every oauth2 request, not only the stale ones, so a
-  // failed repair must not take down a sign-in that was going to work. It is kept
-  // instead of logged: if the request then fails, the error below names the repair
-  // that did not happen, which is the context that makes that failure readable.
-  let healFailure: unknown = null
-
   try {
     const request = await normalizedAuthRequest(event)
-
-    if (new URL(request.url).pathname.startsWith('/api/auth/oauth2/')) {
-      const clientId = await extractOAuthClientId(request)
-      if (clientId) {
-        try {
-          await healStaleCimdClient(await auth.$context, clientId)
-        } catch (error) {
-          healFailure = error
-        }
-      }
-    }
-
     const response = await auth.handler(request)
 
     // HEAD must carry the GET status and headers with no body.
@@ -205,7 +167,6 @@ export default defineHandler(async (event) => {
         statement_count: metrics.statementCount,
         d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
         error_chain: errorChainForTelemetry(error),
-        heal_failure: healFailure ? errorChainForTelemetry(healFailure) : null,
       }))
     } catch {
       // Telemetry must never replace the auth response.
@@ -215,9 +176,7 @@ export default defineHandler(async (event) => {
     
     throw new HTTPError({
       statusCode: 500,
-      statusMessage: healFailure
-        ? `Auth error: ${errorMessage} (the stale OAuth client repair had also failed: ${healFailure instanceof Error ? healFailure.message : String(healFailure)})`
-        : `Auth error: ${errorMessage}`
+      statusMessage: `Auth error: ${errorMessage}`
     })
   }
 })
