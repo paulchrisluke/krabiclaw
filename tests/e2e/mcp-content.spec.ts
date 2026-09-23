@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import Ajv from 'ajv'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
-import { mcpRequest, mcpData, ensureSite } from './helpers/mcp'
+import { mcpRequest, mcpData, ensureOrganization } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
@@ -20,11 +20,11 @@ test.describe('stateless MCP server', () => {
 
   test('invalid event and offer posts are rejected with validation errors', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
 
     const invalidEvent = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
-      args: { site_id: siteId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
+      args: { organization_id: organizationId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
     })
     expect(invalidEvent.status()).toBe(200)
     const invalidEventBody = await invalidEvent.json()
@@ -33,7 +33,7 @@ test.describe('stateless MCP server', () => {
 
     const invalidOffer = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
-      args: { site_id: siteId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
+      args: { organization_id: organizationId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
     })
     expect(invalidOffer.status()).toBe(200)
     const invalidOfferBody = await invalidOffer.json()
@@ -44,14 +44,14 @@ test.describe('stateless MCP server', () => {
   test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
     let createdPostId: string | undefined
 
     try {
       const upload = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'upload_user_media',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           category: 'other',
           file: {
             download_url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
@@ -66,7 +66,7 @@ test.describe('stateless MCP server', () => {
       const create = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_post',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           title: `MCP explicit publication ${now}`,
           body: 'Visible after explicit publication through MCP and the public API.',
         },
@@ -79,7 +79,7 @@ test.describe('stateless MCP server', () => {
       const placement = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, placement: { owner_type: 'content_document', owner_id: created.id, slot: 'cover' }, asset_id: imageAssetId },
+        args: { organization_id: organizationId, placement: { owner_type: 'content_document', owner_id: created.id, slot: 'cover' }, asset_id: imageAssetId },
       })
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)
@@ -88,18 +88,18 @@ test.describe('stateless MCP server', () => {
       expect(placementBody.result.isError).toBe(false)
 
       const read = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
       })
       expect(read.status()).toBe(200)
       const draft = mcpData<{ post: { status: string; slug: string; published_at: string | null; public_url: string | null } }>(await read.json()).post
       expect(draft.status).toBe('draft')
       expect(draft.published_at).toBeNull()
       expect(draft.public_url).toBeNull()
-      expect((await request.get(`${baseURL}/api/public/sites/${siteId}/posts/${encodeURIComponent(draft.slug)}`)).status()).toBe(404)
+      expect((await request.get(`${baseURL}/api/public/posts/${encodeURIComponent(draft.slug)}`)).status()).toBe(404)
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { site_id: siteId, post_id: created.id, channels: ['site', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.id, channels: ['site', 'facebook'] },
       })
       expect(publish.status()).toBe(200)
       const publishData = mcpData<{ channel_outcomes: Record<string, { status: string, reason?: string }> }>(await publish.json())
@@ -108,14 +108,14 @@ test.describe('stateless MCP server', () => {
       expect(publishData.channel_outcomes.facebook?.reason).toMatch(/not_connected|not_entitled|social_publishing_disabled/)
 
       const publishedRead = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
       })
       const firstPost = mcpData<{ post: { status: string, slug: string, published_at: string, media: Array<{ asset_id: string, slot: string }> } }>(await publishedRead.json()).post
       expect(firstPost.status).toBe('published')
       expect(firstPost.published_at).toEqual(expect.any(String))
       expect(firstPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
-      const publicRead = await request.get(`${baseURL}/api/public/sites/${siteId}/posts/${encodeURIComponent(firstPost.slug)}`)
+      const publicRead = await request.get(`${baseURL}/api/public/posts/${encodeURIComponent(firstPost.slug)}`)
       expect(publicRead.status()).toBe(200)
       const publicPost = (await publicRead.json() as { post: { id: string, media: Array<{ asset_id: string, slot: string }> } }).post
       expect(publicPost.id).toBe(created.id)
@@ -123,11 +123,11 @@ test.describe('stateless MCP server', () => {
 
       const repeat = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { site_id: siteId, post_id: created.id, channels: ['site', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.id, channels: ['site', 'facebook'] },
       })
       expect(repeat.status()).toBe(200)
       const reread = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
       })
       const repeatedPost = mcpData<{ post: { published_at: string, channels: Array<{ channel: string }> } }>(await reread.json()).post
       expect(repeatedPost.published_at).toBe(firstPost.published_at)
@@ -135,7 +135,7 @@ test.describe('stateless MCP server', () => {
       expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
     } finally {
       if (createdPostId) {
-        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: createdPostId } })
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { organization_id: organizationId, post_id: createdPostId } })
         expect(cleanup.status()).toBe(200)
         expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
       }
@@ -149,7 +149,7 @@ test.describe('stateless MCP server', () => {
   test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
     const now = Date.now()
     const createdPostIds: string[] = []
 
@@ -158,28 +158,28 @@ test.describe('stateless MCP server', () => {
       const eventDetails = { title: 'MCP Event', schedule: { start_date: eventDay, start_time: '15:00:00.123456789', end_date: eventDay, end_time: '17:00:00' }, recurrence_info: { kind: 'weekly', days_of_week: [] } }
       const event = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_post',
-        args: { site_id: siteId, title: `Valid event ${now}`, body: 'Event details.', post_type: 'event', event: eventDetails },
+        args: { organization_id: organizationId, title: `Valid event ${now}`, body: 'Event details.', post_type: 'event', event: eventDetails },
       })
       expect(event.status()).toBe(200)
       const eventId = mcpData<{ id: string }>(await event.json()).id
       createdPostIds.push(eventId)
-      const eventRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: eventId } })
+      const eventRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: eventId } })
       const eventPost = mcpData<{ post: { post_type: string, event: typeof eventDetails } }>(await eventRead.json()).post
       expect(eventPost).toMatchObject({ post_type: 'event', event: eventDetails })
 
       const offer = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_post',
-        args: { site_id: siteId, title: `Valid offer ${now}`, body: 'Offer details.', post_type: 'offer', event: eventDetails, offer: { coupon_code: 'MCP20', terms_conditions: 'Valid during the E2E window.' } },
+        args: { organization_id: organizationId, title: `Valid offer ${now}`, body: 'Offer details.', post_type: 'offer', event: eventDetails, offer: { coupon_code: 'MCP20', terms_conditions: 'Valid during the E2E window.' } },
       })
       expect(offer.status()).toBe(200)
       const offerId = mcpData<{ id: string }>(await offer.json()).id
       createdPostIds.push(offerId)
-      const offerRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: offerId } })
+      const offerRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: offerId } })
       const offerPost = mcpData<{ post: { post_type: string, offer: { coupon_code: string, terms_conditions: string } } }>(await offerRead.json()).post
       expect(offerPost).toMatchObject({ post_type: 'offer', offer: { coupon_code: 'MCP20', terms_conditions: 'Valid during the E2E window.' } })
     } finally {
       for (const postId of createdPostIds) {
-        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
+        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { organization_id: organizationId, post_id: postId } })
         expect(cleanup.status()).toBe(200)
         expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
       }
@@ -189,7 +189,7 @@ test.describe('stateless MCP server', () => {
   test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = await ensureSite(request, baseURL!)
+    const organizationId = await ensureOrganization(request, baseURL!)
     const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
     expect(discovery.status()).toBe(200)
     const catalog = await discovery.json() as { result: { tools: Array<{ name: string; outputSchema: object }> } }
@@ -201,7 +201,7 @@ test.describe('stateless MCP server', () => {
       const create = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_blog_post',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           title: `MCP canonical blog ${Date.now()}`,
           category: 'Guides',
           content_blocks: [
@@ -220,7 +220,7 @@ test.describe('stateless MCP server', () => {
 
       const get = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'get_blog_post',
-        args: { site_id: siteId, post_id: postId },
+        args: { organization_id: organizationId, post_id: postId },
       })
       expect(get.status()).toBe(200)
       const readData = mcpData<{ post: Record<string, unknown> & { updated_at: string; content_blocks: Array<{ type: string }> } }>(await get.json())
@@ -236,7 +236,7 @@ test.describe('stateless MCP server', () => {
       const update = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_blog_post',
         args: {
-          site_id: siteId,
+          organization_id: organizationId,
           post_id: postId,
           expected_updated_at: readPost.updated_at,
           content_blocks: [
@@ -252,7 +252,7 @@ test.describe('stateless MCP server', () => {
       expect(updatedPost.updated_at).not.toBe(readPost.updated_at)
 
       const updatedRead = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_blog_post', args: { site_id: siteId, post_id: postId },
+        method: 'tools/call', toolName: 'get_blog_post', args: { organization_id: organizationId, post_id: postId },
       })
       expect(updatedRead.status()).toBe(200)
       const updatedReadPost = mcpData<{ post: { status: string; public_url: string | null; content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await updatedRead.json()).post
@@ -260,7 +260,7 @@ test.describe('stateless MCP server', () => {
       expect(updatedReadPost.content_blocks[0]?.data.text).toBe('Edited through MCP')
       expect(updatedReadPost.status).toBe('draft')
       expect(updatedReadPost.public_url).toBeNull()
-      const editorRead = await request.get(`${baseURL}/api/editor/sites/${siteId}/blog/${postId}`)
+      const editorRead = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/blog/${postId}`)
       expect(editorRead.status()).toBe(200)
       const editorPost = (await editorRead.json() as { post: { body: string } }).post
       expect(editorPost.body).toContain('Edited through MCP')
@@ -268,7 +268,7 @@ test.describe('stateless MCP server', () => {
 
       const schedule = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { site_id: siteId, post_id: postId, expected_updated_at: updatedPost.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: updatedPost.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
       })
       const scheduled = mcpData<{ post: { status: string; updated_at: string; published_at: string | null; preview_url: string | null } }>(await schedule.json()).post
       expect(scheduled.status).toBe('scheduled')
@@ -276,7 +276,7 @@ test.describe('stateless MCP server', () => {
       expect(scheduled.preview_url).toContain('?preview_token=')
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { site_id: siteId, post_id: postId, expected_updated_at: scheduled.updated_at },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: scheduled.updated_at },
       })
       const published = mcpData<{ post: { status: string; updated_at: string; public_url: string; published_at: string } }>(await publish.json()).post
       expect(published.status).toBe('published')
@@ -284,12 +284,12 @@ test.describe('stateless MCP server', () => {
       expect(published.published_at).toEqual(expect.any(String))
       const reschedule = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { site_id: siteId, post_id: postId, expected_updated_at: published.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: published.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
       })
       expect((await reschedule.json()).result?.isError).toBe(true)
       const unlist = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_blog_post',
-        args: { site_id: siteId, post_id: postId, expected_updated_at: published.updated_at, visibility: 'unlisted' },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: published.updated_at, visibility: 'unlisted' },
       })
       const unlisted = mcpData<{ post: { status: string; visibility: string; public_url: string; published_at: string } }>(await unlist.json()).post
       expect(unlisted.status).toBe('published')
@@ -299,7 +299,7 @@ test.describe('stateless MCP server', () => {
     } finally {
       if (postId) {
         const cleanup = await mcpRequest(request, baseURL!, {
-          method: 'tools/call', toolName: 'delete_blog_post', args: { site_id: siteId, post_id: postId },
+          method: 'tools/call', toolName: 'delete_blog_post', args: { organization_id: organizationId, post_id: postId },
         })
         expect(cleanup.status()).toBe(200)
       }
@@ -328,13 +328,13 @@ test.describe('stateless MCP server', () => {
     const toolsList = await mcpRequest(request, baseURL!, { method: 'tools/list', id: 'list-no-site' })
     expect(toolsList.status()).toBe(200)
     const listBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
-    // Without site_id, all non-gated tools must be discoverable so AI clients (e.g. ChatGPT) see
+    // Without organization_id, all non-gated tools must be discoverable so AI clients (e.g. ChatGPT) see
     // the full capability set on first connection. Security gates enforce at execution time, not
     // at discovery.
     const allToolNames = listBody.result.tools.map(tool => tool.name)
     expect(allToolNames).toEqual(expect.arrayContaining([
-      'list_sites',
-      'get_site', 'list_locations', 'list_location_products', 'list_posts', 'get_site_media_assets',
+      'list_organizations',
+      'get_organization', 'list_locations', 'list_location_products', 'list_posts', 'get_organization_media_assets',
       'list_tenant_pages', 'list_products', 'list_collections', 'get_contact_inquiries',
     ]))
     const invalid = await mcpRequest(request, baseURL!, { method: 'bad/method', id: 'bad-method' })

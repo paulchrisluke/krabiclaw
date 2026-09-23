@@ -26,31 +26,31 @@ const placedAsset = (
 
 test('a page prefers its own media and never its neighbours', () => {
   const selected = selectSocialCardPlacements([
-    placedAsset('site', 'site-1', 'social_card', 'site-card'),
+    placedAsset('organization', 'org-1', 'social_card', 'org-card'),
     placedAsset('business_location', 'location-1', 'social_card', 'owner-card'),
     placedAsset('business_location', 'location-1', 'hero', 'owner-hero'),
-    placedAsset('site', 'site-1', 'social_share', 'site-share'),
-  ], { owner_type: 'business_location', owner_id: 'location-1' }, 'site-1')
+    placedAsset('organization', 'org-1', 'social_share', 'org-share'),
+  ], { owner_type: 'business_location', owner_id: 'location-1' }, 'org-1')
   assert.equal(selected.current?.asset_id, 'owner-card')
   assert.equal(selected.source?.asset_id, 'owner-hero')
   // A sibling location's hero is not a source for this one.
   assert.equal(selectSocialCardPlacements([
     placedAsset('business_location', 'location-2', 'hero', 'sibling-hero'),
-  ], { owner_type: 'business_location', owner_id: 'location-1' }, 'site-1').source, null)
+  ], { owner_type: 'business_location', owner_id: 'location-1' }, 'org-1').source, null)
   assert.equal(selectSocialCardPlacements([
-    placedAsset('site', 'site-1', 'logo', 'site-logo'),
-    placedAsset('site', 'site-1', 'social_share', 'site-share'),
-  ], { owner_type: 'site', owner_id: 'site-1' }, 'site-1').source?.asset_id, 'site-share')
+    placedAsset('organization', 'org-1', 'logo', 'org-logo'),
+    placedAsset('organization', 'org-1', 'social_share', 'org-share'),
+  ], { owner_type: 'organization', owner_id: 'org-1' }, 'org-1').source?.asset_id, 'org-share')
   assert.equal(selectSocialCardPlacements([
-    placedAsset('site', 'site-1', 'logo', 'site-logo'),
-  ], { owner_type: 'site', owner_id: 'site-1' }, 'site-1').source, null)
+    placedAsset('organization', 'org-1', 'logo', 'org-logo'),
+  ], { owner_type: 'organization', owner_id: 'org-1' }, 'org-1').source, null)
   const video = { ...placedAsset('content_document', 'post-1', 'cover', 'video-1'), kind: 'video' as const, thumbnail_url: 'https://img.example/poster.png' }
-  assert.equal(selectSocialCardPlacements([video], { owner_type: 'content_document', owner_id: 'post-1' }, 'site-1').source?.thumbnail_url, video.thumbnail_url)
-  assert.equal(selectSocialCardPlacements([{ ...video, thumbnail_url: null }], { owner_type: 'content_document', owner_id: 'post-1' }, 'site-1').source, null)
+  assert.equal(selectSocialCardPlacements([video], { owner_type: 'content_document', owner_id: 'post-1' }, 'org-1').source?.thumbnail_url, video.thumbnail_url)
+  assert.equal(selectSocialCardPlacements([{ ...video, thumbnail_url: null }], { owner_type: 'content_document', owner_id: 'post-1' }, 'org-1').source, null)
 })
 
-test('every page gets a card: an owner with no media of its own falls back to the site share image', () => {
-  const share = placedAsset('site', 'site-1', 'social_share', 'site-share')
+test('every page gets a card: an owner with no media of its own falls back to the organization share image', () => {
+  const share = placedAsset('organization', 'org-1', 'social_share', 'org-share')
   // The page types that carry no picture of their own: tenant pages, docs, reviews.
   for (const owner of [
     { owner_type: 'content_document' as const, owner_id: 'page-about' },
@@ -59,29 +59,29 @@ test('every page gets a card: an owner with no media of its own falls back to th
     { owner_type: 'product' as const, owner_id: 'product-1' },
   ]) {
     assert.equal(
-      selectSocialCardPlacements([placedAsset('site', 'site-1', 'logo', 'site-logo'), share], owner, 'site-1').source?.asset_id,
-      'site-share',
-      `${owner.owner_type} should fall back to the site share image`,
+      selectSocialCardPlacements([placedAsset('organization', 'org-1', 'logo', 'org-logo'), share], owner, 'org-1').source?.asset_id,
+      'org-share',
+      `${owner.owner_type} should fall back to the organization's share image`,
     )
   }
-  // The owner's own media still wins over the site share image.
+  // The owner's own media still wins over the organization's share image.
   assert.equal(selectSocialCardPlacements([
     share,
     placedAsset('content_document', 'post-1', 'cover', 'post-cover'),
-  ], { owner_type: 'content_document', owner_id: 'post-1' }, 'site-1').source?.asset_id, 'post-cover')
+  ], { owner_type: 'content_document', owner_id: 'post-1' }, 'org-1').source?.asset_id, 'post-cover')
   // So does a leading image block, which is an article's cover.
   assert.equal(selectSocialCardPlacements([
     share,
     placedAsset('content_block', 'lead-block', 'media', 'block-cover'),
-  ], { owner_type: 'content_document', owner_id: 'article-1' }, 'site-1', 'lead-block').source?.asset_id, 'block-cover')
-  // A site with no share image set leaves the page cardless; there is nothing to render.
+  ], { owner_type: 'content_document', owner_id: 'article-1' }, 'org-1', 'lead-block').source?.asset_id, 'block-cover')
+  // An organization with no share image set leaves the page cardless; there is nothing to render.
   assert.equal(selectSocialCardPlacements([
-    placedAsset('site', 'site-1', 'logo', 'site-logo'),
-  ], { owner_type: 'content_document', owner_id: 'page-about' }, 'site-1').source, null)
+    placedAsset('organization', 'org-1', 'logo', 'org-logo'),
+  ], { owner_type: 'content_document', owner_id: 'page-about' }, 'org-1').source, null)
   // A video share image with no poster frame cannot be a source either.
   assert.equal(selectSocialCardPlacements([
     { ...share, kind: 'video' as const, thumbnail_url: null },
-  ], { owner_type: 'content_document', owner_id: 'page-about' }, 'site-1').source, null)
+  ], { owner_type: 'content_document', owner_id: 'page-about' }, 'org-1').source, null)
 })
 
 test('an article social card derives from its leading image block', () => {
@@ -91,10 +91,10 @@ test('an article social card derives from its leading image block', () => {
     placedAsset('content_block', 'lead-block', 'media', 'cover-1'),
     placedAsset('content_block', 'other-block', 'media', 'body-1'),
   ]
-  assert.equal(selectSocialCardPlacements(assets, owner, 'site-1', 'lead-block').source?.asset_id, 'cover-1')
+  assert.equal(selectSocialCardPlacements(assets, owner, 'org-1', 'lead-block').source?.asset_id, 'cover-1')
   // Without a leading image block nothing in the body stands in for the cover.
-  assert.equal(selectSocialCardPlacements(assets, owner, 'site-1', null).source?.asset_id, 'gallery-1')
-  assert.equal(selectSocialCardPlacements(assets.filter(item => item.owner_type !== 'content_document'), owner, 'site-1', null).source, null)
+  assert.equal(selectSocialCardPlacements(assets, owner, 'org-1', null).source?.asset_id, 'gallery-1')
+  assert.equal(selectSocialCardPlacements(assets.filter(item => item.owner_type !== 'content_document'), owner, 'org-1', null).source, null)
 })
 
 test('social card generation keys change when a byte-producing source changes', () => {

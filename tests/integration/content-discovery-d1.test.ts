@@ -19,31 +19,31 @@ test('public discovery resolves translations through current publication owners'
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
     for (const id of ['platform', 'tenant', 'other']) {
-      await db.prepare('INSERT INTO organization (id,name,slug) VALUES (?,?,?)').bind(id, id, id).run()
-      // KrabiClaw's own site is the one running the platform template.
-      await db.prepare('INSERT INTO sites (id,organization_id,slug,theme_id,vertical) VALUES (?,?,?,?,?)').bind(id, id, id, id === 'platform' ? 'krabiclaw-theme-v1' : 'saya-theme-v1', id === 'platform' ? 'service' : 'restaurant').run()
-      for (const locale of ['en', 'th']) await db.prepare('INSERT INTO site_locales (id,organization_id,site_id,locale,is_source,status) VALUES (?,?,?,?,?,?)')
-        .bind(id + locale, id, id, locale, Number(locale === 'en'), 'published').run()
+      // KrabiClaw's own organization is the one running the platform template.
+      await db.prepare('INSERT INTO organization (id,name,slug,subdomain,theme_id,vertical) VALUES (?,?,?,?,?,?)')
+        .bind(id, id, id, id, id === 'platform' ? 'krabiclaw-theme-v1' : 'saya-theme-v1', id === 'platform' ? 'service' : 'restaurant').run()
+      for (const locale of ['en', 'th']) await db.prepare('INSERT INTO organization_locales (id,organization_id,locale,is_source,status) VALUES (?,?,?,?,?)')
+        .bind(id + locale, id, locale, Number(locale === 'en'), 'published').run()
     }
-    // Documentation is the platform site's docs article collection.
-    await createContentDocumentWithBlocks(db, { id: 'guide', organizationId: 'platform', siteId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
-      title: 'guide', slug: 'guide', summary: 'guide summary', status: 'published', visibility: 'public',
+    // Documentation is the platform organization's docs article collection.
+    await createContentDocumentWithBlocks(db, { id: 'guide', organizationId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
+      title: 'guide', slug: 'guide', summary: 'guide summary', status: 'published', visibility: 'listed',
       metadata: { collection: 'docs', category: 'Getting Started', tags: [] },
     }, [{ id: 'guide-body', type: 'markdown', data: { markdown: 'guide exact body', editor_mode: 'rich' } }])
-    for (const [id, site] of [['news', 'platform'], ['tenant-story', 'tenant'], ['other-story', 'other']] as const) {
-      await createContentDocumentWithBlocks(db, { id, organizationId: site, siteId: site, kind: 'article', rowRole: 'root', locale: 'en',
-        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing', tags: ['shared'] }, status: 'published', visibility: 'public',
+    for (const [id, org] of [['news', 'platform'], ['tenant-story', 'tenant'], ['other-story', 'other']] as const) {
+      await createContentDocumentWithBlocks(db, { id, organizationId: org, kind: 'article', rowRole: 'root', locale: 'en',
+        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing', tags: ['shared'] }, status: 'published', visibility: 'listed',
       }, [{ id: id + '-body', type: 'markdown', data: { markdown: id + ' exact body', editor_mode: 'rich' } }])
     }
     for (const [id, path] of [['home', '/'], ['about', '/about']]) await createContentDocumentWithBlocks(db, {
-      id, organizationId: 'tenant', siteId: 'tenant', kind: 'page', rowRole: 'root', locale: 'en', title: id, path,
+      id, organizationId: 'tenant', kind: 'page', rowRole: 'root', locale: 'en', title: id, path,
       metadata: { page_type: 'custom' },
     }, [])
-    const { document: hidden } = await createContentDocumentWithBlocks(db, { id: 'hidden', organizationId: 'tenant', siteId: 'tenant',
+    const { document: hidden } = await createContentDocumentWithBlocks(db, { id: 'hidden', organizationId: 'tenant',
       kind: 'article', rowRole: 'root', locale: 'en', title: 'Hidden', slug: 'hidden', status: 'published', visibility: 'unlisted' }, [])
-    await createContentDocumentWithBlocks(db, { id: 'future', organizationId: 'tenant', siteId: 'tenant', kind: 'article', rowRole: 'root',
-      locale: 'en', title: 'Future', slug: 'future', status: 'scheduled', visibility: 'public', scheduledFor: '2099-01-01T00:00:00.000Z' }, [])
-    await createContentDocumentWithBlocks(db, { id: 'story-th', organizationId: 'tenant', siteId: 'tenant', kind: 'article', rowRole: 'representation',
+    await createContentDocumentWithBlocks(db, { id: 'future', organizationId: 'tenant', kind: 'article', rowRole: 'root',
+      locale: 'en', title: 'Future', slug: 'future', status: 'scheduled', visibility: 'listed', scheduledFor: '2099-01-01T00:00:00.000Z' }, [])
+    await createContentDocumentWithBlocks(db, { id: 'story-th', organizationId: 'tenant', kind: 'article', rowRole: 'representation',
       rootId: 'tenant-story', locale: 'th', title: 'Translated story', slug: 'translated', path: '/blog/translated', summary: 'Translated summary' }, [])
     const tenantRecords = await buildTenantBlogDocuments(db)
     assert.deepEqual(tenantRecords.map(record => record.id).sort(), ['tenant-blog:other-story', 'tenant-blog:tenant-story'])

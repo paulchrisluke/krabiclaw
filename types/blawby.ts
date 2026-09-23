@@ -6,6 +6,22 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 
 export type BlawbyShieldVariant = 'about' | 'blog' | 'contact' | 'pricing' | 'schedule' | 'confirmation' | 'donate' | 'privacy' | 'terms' | 'third-party-notices'
 
+/**
+ * Which shield a page opens under. The page says, because the page is what
+ * differs. It lives here because two components ask the same question — the
+ * hero that draws the shield and the divider that repeats its fill — and a
+ * second copy of this map is a second answer waiting to disagree.
+ */
+const SHIELDS: Record<string, BlawbyShieldVariant> = {
+  '/about': 'about', '/contact': 'contact', '/schedule': 'schedule', '/donate': 'donate', '/pricing': 'pricing',
+  '/blog': 'blog', '/policies/privacy': 'privacy', '/policies/terms': 'terms',
+  '/third-party-notices': 'third-party-notices',
+}
+
+export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
+  return SHIELDS[path] ?? 'about'
+}
+
 
 export interface PublicBlawbyPageLink {
   id: string
@@ -64,7 +80,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
   seo_description: string | null
   canonical_url: string
   robots: string | null
-  visibility: 'public' | 'unlisted'
+  visibility: 'listed' | 'unlisted'
   created_at: string | null
   updated_at: string | null
   content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
@@ -161,7 +177,7 @@ export interface PublicCompliance {
 }
 
 export interface PublicBlawbyIdentity {
-  brand_name: string
+  name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: SocialImageSource | null

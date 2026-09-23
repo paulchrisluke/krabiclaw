@@ -49,11 +49,11 @@ import { collectionsOnSurface, presentationForSurface } from '~/utils/product-pr
 const props = defineProps<{ surface: ProductSurface }>()
 
 const dashboardApi = useDashboardApi()
-const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
+const organizationId = await useDashboardOrganizationId()
+const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
-const vertical = dashboard.site.value?.vertical
+const vertical = dashboard.organization.value?.vertical
 if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
 // The words are the surface's own: a collection of classes is read as
 // experiences, a section of a menu as dishes.
@@ -74,7 +74,7 @@ interface CollectionRow extends Collection {
   products: Product[]
 }
 
-const catalog = useLocationProductCatalog(siteId, locationId)
+const catalog = useLocationProductCatalog(organizationId, locationId)
 const pending = catalog.pending
 
 // The count and cover are what make a collection legible at a glance, and they
@@ -145,7 +145,7 @@ async function removeCollection(item: { row: CollectionRow }) {
   removingId.value = item.row.id
   deleteError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/collections/${item.row.id}`, { method: 'DELETE', validate: isRecord })
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/${item.row.id}`, { method: 'DELETE', validate: isRecord })
     await load()
   } catch (error) {
     deleteError.value = getErrorMessage(error, `Failed to delete ${words.collectionGroupLabel.toLowerCase()}`)
@@ -189,7 +189,7 @@ async function commitOrder() {
   localOrder.value = null
   orderError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/collections/order`, {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/collections/order`, {
       method: 'PUT',
       body: { collection_ids: order, location_id: id },
       validate: isRecord,

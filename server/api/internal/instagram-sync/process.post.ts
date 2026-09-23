@@ -42,9 +42,9 @@ export default defineHandler(async (event) => {
     }
   }
 
-  // Query all sites with active Facebook Pages connections
-  const connections = await queryAll<{ organization_id: string; site_id: string }>(db, `
-    SELECT organization_id, id AS site_id FROM sites
+  // Every organization with an active Facebook Pages connection
+  const connections = await queryAll<{ organization_id: string; }>(db, `
+    SELECT id AS organization_id FROM organization
     WHERE json_extract(integrations_json, '$.facebook.status') = 'active'
   `)
 
@@ -53,7 +53,6 @@ export default defineHandler(async (event) => {
   }
 
   const results: Array<{
-    siteId: string
     organizationId: string
     success: number
     errors: number
@@ -63,10 +62,10 @@ export default defineHandler(async (event) => {
 
   for (const connection of connections) {
     try {
-      const fbConnection = await getFacebookPagesConnection(env, connection.organization_id, connection.site_id)
-      if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.facebook_page_id) {
+      const fbConnection = await getFacebookPagesConnection(env, connection.organization_id)
+      if (!fbConnection || !fbConnection.encrypted_page_token || !fbConnection.page_id) {
         results.push({
-          siteId: connection.site_id, organizationId: connection.organization_id, success: 0, errors: 0, skipped: 0, error: 'No valid Facebook connection or page selected', })
+          organizationId: connection.organization_id, success: 0, errors: 0, skipped: 0, error: 'No valid Facebook connection or page selected', })
         continue
       }
 
@@ -75,10 +74,10 @@ export default defineHandler(async (event) => {
       let fbPlatformErrors = 0
       try {
         fbResult = await syncFacebookPosts(
-          env, connection.organization_id, connection.site_id, fbConnection.encrypted_page_token, fbConnection.facebook_page_id, limit
+          env, connection.organization_id, fbConnection.encrypted_page_token, fbConnection.page_id, limit
         )
       } catch (fbErr) {
-        console.error('Facebook sync failed for site:', connection.site_id, fbErr)
+        console.error('Facebook sync failed for site:', connection.organization_id, fbErr)
         fbPlatformErrors = 1
       }
 
@@ -86,14 +85,14 @@ export default defineHandler(async (event) => {
       let igResult = { success: 0, errors: 0, skipped: 0 }
       let igPlatformErrors = 0
       let igPlatformSkipped = 0
-      const igUserId = await getLinkedInstagramAccount(fbConnection.encrypted_page_token, fbConnection.facebook_page_id)
+      const igUserId = await getLinkedInstagramAccount(fbConnection.encrypted_page_token, fbConnection.page_id)
       if (igUserId) {
         try {
           igResult = await syncInstagramPosts(
-            env, connection.organization_id, connection.site_id, fbConnection.encrypted_page_token, igUserId, limit
+            env, connection.organization_id, fbConnection.encrypted_page_token, igUserId, limit
           )
         } catch (igErr) {
-          console.error('Instagram sync failed for site:', connection.site_id, igErr)
+          console.error('Instagram sync failed for site:', connection.organization_id, igErr)
           igPlatformErrors = 1
         }
       } else {
@@ -101,11 +100,11 @@ export default defineHandler(async (event) => {
       }
 
       results.push({
-        siteId: connection.site_id, organizationId: connection.organization_id, success: fbResult.success + igResult.success, errors: fbResult.errors + igResult.errors + fbPlatformErrors + igPlatformErrors, skipped: fbResult.skipped + igResult.skipped + igPlatformSkipped, ...(fbPlatformErrors + igPlatformErrors > 0 ? { error: 'Platform-level sync error' } : {}), })
+        organizationId: connection.organization_id, success: fbResult.success + igResult.success, errors: fbResult.errors + igResult.errors + fbPlatformErrors + igPlatformErrors, skipped: fbResult.skipped + igResult.skipped + igPlatformSkipped, ...(fbPlatformErrors + igPlatformErrors > 0 ? { error: 'Platform-level sync error' } : {}), })
     } catch (err) {
-      console.error('Social sync failed for site:', connection.site_id, err)
+      console.error('Social sync failed for site:', connection.organization_id, err)
       results.push({
-        siteId: connection.site_id, organizationId: connection.organization_id, success: 0, errors: 1, skipped: 0, error: err instanceof Error ? err.message : 'Unknown error', })
+        organizationId: connection.organization_id, success: 0, errors: 1, skipped: 0, error: err instanceof Error ? err.message : 'Unknown error', })
     }
   }
 

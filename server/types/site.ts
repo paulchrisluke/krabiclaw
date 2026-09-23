@@ -9,13 +9,12 @@ export type { CurrencyCode }
 export interface SiteSettings {
   id: string
   organization_id: string
-  site_id: string
   subdomain: string
   theme: string
   status: 'active' | 'inactive' | 'suspended'
   public_url: string | null
   custom_domain_status: DomainStatus | 'none'
-  brand_name: string
+  name: string
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
@@ -26,20 +25,17 @@ export interface SiteSettings {
   default_currency: CurrencyCode | null
   google_analytics_measurement_id?: string
   google_site_verification?: string
-  last_published_at: string | null
   created_at: string
   updated_at: string
 }
 
 export interface UpdateSiteSettingsRequest {
   name?: string
-  brand_name?: string
   brand_description?: string
   contact_email?: string
   brand_color?: string
   font_preset?: SiteFontPreset
   default_currency?: CurrencyCode
-  last_published_at?: string
   press_email?: string
   partnerships_email?: string
   catering_email?: string
@@ -60,7 +56,7 @@ export interface UpdateSiteSettingsRequest {
 }
 
 export interface LaunchReadiness {
-  site_id: string
+  organization_id: string
   overall_ready: boolean
   missing_critical: number
   missing_optional: number
@@ -68,7 +64,7 @@ export interface LaunchReadiness {
     site_identity: {
       ready: boolean
       items: {
-        brand_name: boolean
+        name: boolean
         subdomain: boolean
         theme: boolean
         status: boolean
@@ -78,7 +74,7 @@ export interface LaunchReadiness {
     brand_basics: {
       ready: boolean
       items: {
-        brand_name: boolean
+        name: boolean
         description: boolean
         contact_email: boolean
       }

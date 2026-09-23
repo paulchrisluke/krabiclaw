@@ -4,13 +4,13 @@ import { jsonResponse } from '../../../utils/api-response'
 import { getFacebookAuthUrl } from '../../../utils/facebook-pages'
 import { signOAuthState } from '../../../utils/encryption'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { requireRequestedSiteWideAccess } from '~/server/utils/location-access'
+import { requireRequestedOrganizationWideAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event) as { siteId?: string } | undefined
-  const { env, db, session, site } = await requireRequestedSiteWideAccess(event, body?.siteId)
+  const body = await readBody(event) as { organizationId?: string } | undefined
+  const { env, db, session, organization } = await requireRequestedOrganizationWideAccess(event, body?.organizationId)
 
-  const allowed = await hasSiteEntitlement(env, db, site.id, 'managed_service')
+  const allowed = await hasSiteEntitlement(env, db, organization.id, 'managed_service')
   if (!allowed) {
     return jsonResponse({ error: 'Facebook sync requires Growth.' }, { status: 403 })
   }
@@ -21,12 +21,12 @@ export default defineHandler(async (event) => {
 
   const version = await queryFirst<IntegrationVersion>(db, `
       SELECT json_extract(integrations_json, '$.facebook.revision') AS revision
-        FROM sites WHERE id = ? AND organization_id = ?
-    `, [site.id, site.organization_id])
-  if (!version) throw new Error('Site no longer belongs to this organization')
+        FROM organization WHERE id = ?
+    `, [organization.id])
+  if (!version) throw new Error('Organization no longer exists')
 
   const state = await signOAuthState(env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string, {
-    ...version, siteId: site.id, organizationId: site.organization_id, userId: session.user.id, timestamp: Date.now(), })
+    ...version, organizationId: organization.id, userId: session.user.id, timestamp: Date.now(), })
 
   const authUrl = getFacebookAuthUrl(env, state)
   return jsonResponse({ success: true, authUrl })

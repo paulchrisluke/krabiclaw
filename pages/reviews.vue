@@ -66,8 +66,8 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { organizationId, site } = useTenantSite()
+if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
 const { googleBusiness, locations } = await usePublicPageData()
@@ -93,7 +93,7 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/reviews',

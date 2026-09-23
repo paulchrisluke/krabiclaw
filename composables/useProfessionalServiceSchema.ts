@@ -21,7 +21,7 @@ export function useBlawbyOrgIdentity(
     const id = toValue(identity)
     const comp = toValue(compliance)
     return {
-      name: id?.brand_name || comp?.entity_name || null,
+      name: id?.name || comp?.entity_name || null,
       description: id?.brand_description || null,
       logoUrl: id?.media.find(item => item.slot === 'logo')?.public_url || null,
       entityType: comp?.entity_type || null,

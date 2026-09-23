@@ -6,8 +6,8 @@
 // enforces the invariants that matter (only an existing owner can grant or
 // touch the owner role, the last owner can't demote themselves). This route
 // wraps that call the same way remove.post.ts wraps removeMember: the only
-// thing layered on top is our app-specific site/location team scoping for
-// the 'editor' role, which Better Auth's flat role model has no concept of.
+// thing layered on top is our app-specific location team scoping for the
+// 'editor' role, which Better Auth's flat role model has no concept of.
 
 import { queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
@@ -29,18 +29,16 @@ export default defineHandler(async (event) => {
   const memberId = String(getRouterParam(event, 'memberId') || '').trim()
   if (!memberId) return jsonResponse({ error: 'Member id is required' }, { status: 400 })
 
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, {})
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can change member roles' }, { status: 403 })
   }
 
   const body = await readBody(event).catch(() => null) as {
     role?: unknown
-    siteId?: unknown
     locationId?: unknown
   } | null
   const role = typeof body?.role === 'string' ? body.role.trim() : ''
-  const siteId = typeof body?.siteId === 'string' ? body.siteId.trim() : ''
   const locationId = typeof body?.locationId === 'string' && body.locationId.trim() ? body.locationId.trim() : null
 
   if (!ALLOWED_ROLES.has(role)) {
@@ -49,8 +47,10 @@ export default defineHandler(async (event) => {
   if (role === 'owner' && organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can grant the owner role' }, { status: 403 })
   }
-  if (role === 'editor' && !siteId) {
-    return jsonResponse({ error: 'Editors must be assigned to a site' }, { status: 400 })
+  // An editor is scoped to locations, so one has to be named: there is no
+  // organization-wide team to fall back to.
+  if (role === 'editor' && !locationId) {
+    return jsonResponse({ error: 'Editors must be assigned to a location' }, { status: 400 })
   }
 
   const target = await findOrganizationMemberById(env, memberId)
@@ -58,20 +58,13 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Member not found' }, { status: 404 })
   }
 
-  if (role === 'editor') {
-    const site = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-    `, [siteId, organization.id])
-    if (!site) return jsonResponse({ error: 'siteId must reference a site in this organization' }, { status: 400 })
-
-    if (locationId) {
-      const location = await queryFirst<{ id: string }>(db, `
-        SELECT id FROM business_locations
-        WHERE id = ? AND site_id = ? AND organization_id = ?
-        LIMIT 1
-      `, [locationId, siteId, organization.id])
-      if (!location) return jsonResponse({ error: 'locationId must reference a location on that site' }, { status: 400 })
-    }
+  if (locationId) {
+    const location = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM business_locations
+      WHERE id = ? AND organization_id = ?
+      LIMIT 1
+    `, [locationId, organization.id])
+    if (!location) return jsonResponse({ error: 'locationId must reference a location in this organization' }, { status: 400 })
   }
 
   const auth = createAuth(env)
@@ -100,11 +93,10 @@ export default defineHandler(async (event) => {
   }
 
   // Better Auth's role column is now authoritative — reconcile our
-  // app-specific site/location Teams scoping (which it has no concept of)
-  // to match.
-  if (role === 'editor') {
+  // app-specific location Teams scoping (which it has no concept of) to match.
+  if (role === 'editor' && locationId) {
     await addMemberResourceAccess(db, {
-      env, userId: target.userId, organizationId: organization.id, siteId, locationId, })
+      env, userId: target.userId, organizationId: organization.id, locationId, })
   } else if (isScopedRole(target.role)) {
     await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }

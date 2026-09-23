@@ -21,10 +21,10 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/contact',
-  title: page.value?.seo_title || `Contact | ${identity.value.brand_name}`,
+  title: page.value?.seo_title || `Contact | ${identity.value.name}`,
   description: page.value?.seo_description || page.value?.summary || '',
   brand: {
-    siteName: identity.value.brand_name,
+    siteName: identity.value.name,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

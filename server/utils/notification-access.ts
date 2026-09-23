@@ -2,7 +2,6 @@ import type { H3Event } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole, listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
-import { queryAll } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 
 export interface NotificationVisibilityPrincipal {
@@ -12,8 +11,11 @@ export interface NotificationVisibilityPrincipal {
     id: string
     role: string
   } | null
-  siteWideSiteIds?: string[]
-  locationIds?: string[]
+  /**
+   * The locations a location-scoped member can reach. `null` is an
+   * organization-wide member, who reaches all of them.
+   */
+  locationIds?: string[] | null
 }
 
 export function buildNotificationVisibilityFilter(principal: NotificationVisibilityPrincipal) {
@@ -24,29 +26,19 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
   const params: unknown[] = [principal.userId]
   const visibilityClauses: string[] = []
 
-  if (principal.platformAdmin) visibilityClauses.push(`json_extract(n.payload_json, '$.visibility_scope') = 'platform'`)
+  // scope_kind is the column the CHECK constrains, so it is the only place a
+  // notification's scope is read from.
+  if (principal.platformAdmin) visibilityClauses.push(`n.scope_kind = 'global'`)
 
   if (principal.organization) {
-    const organizationWide = isOrganizationWideRole(principal.organization.role)
-    if (organizationWide) {
-      visibilityClauses.push(`(json_extract(n.payload_json, '$.visibility_scope') IN ('organization', 'site') AND n.organization_id = ?)`)
+    if (isOrganizationWideRole(principal.organization.role)) {
+      visibilityClauses.push(`(n.scope_kind = 'organization' AND n.organization_id = ?)`)
       params.push(principal.organization.id)
-    } else {
-      const accessClauses: string[] = []
-      if (principal.siteWideSiteIds?.length) {
-        accessClauses.push(`n.context_site_id IN (SELECT value FROM json_each(?))`)
-      }
-      if (principal.locationIds?.length) {
-        accessClauses.push(`n.location_id IN (SELECT value FROM json_each(?))`)
-      }
-      if (accessClauses.length) {
-        visibilityClauses.push(`(json_extract(n.payload_json, '$.visibility_scope') = 'site' AND n.organization_id = ? AND (${accessClauses.join(' OR ')}))`)
-        params.push(
-          principal.organization.id,
-          ...(principal.siteWideSiteIds?.length ? [d1JsonStringSet(principal.siteWideSiteIds)] : []),
-          ...(principal.locationIds?.length ? [d1JsonStringSet(principal.locationIds)] : []),
-        )
-      }
+    } else if (principal.locationIds?.length) {
+      // A location-scoped member sees their locations' notifications, never the
+      // organization-wide ones that carry no location.
+      visibilityClauses.push(`(n.scope_kind = 'organization' AND n.organization_id = ? AND n.location_id IN (SELECT value FROM json_each(?)))`)
+      params.push(principal.organization.id, d1JsonStringSet(principal.locationIds))
     }
   }
 
@@ -59,25 +51,15 @@ export function buildNotificationVisibilityFilter(principal: NotificationVisibil
 }
 
 export async function getNotificationAccess(event: H3Event) {
-  const context = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
+  const context = await getDashboardContext(event, { requireOrganization: false })
   const platformAdmin = await hasPlatformEventPermission(event, context.env, { platform: ['access'] })
-  const siteWideSiteIds: string[] = []
-  const locationIds: string[] = []
-  if (context.organization && !isOrganizationWideRole(context.organization.role)) {
-    const sites = await queryAll<{ id: string }>(context.db, `
-      SELECT id FROM sites WHERE organization_id = ?
-    `, [context.organization.id])
-    await Promise.all(sites.map(async (site) => {
-      const accessibleLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization!, { env: context.env, siteId: site.id }))
-      if (accessibleLocationIds === null) siteWideSiteIds.push(site.id)
-      else locationIds.push(...accessibleLocationIds)
-    }))
-  }
+  const locationIds = context.organization && !isOrganizationWideRole(context.organization.role)
+    ? await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env, event }))
+    : null
   const filter = buildNotificationVisibilityFilter({
     userId: context.userId,
     platformAdmin,
     organization: context.organization,
-    siteWideSiteIds,
     locationIds,
   })
 

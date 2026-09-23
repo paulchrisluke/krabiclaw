@@ -38,7 +38,7 @@
     />
     <TenantPageBlockFields
       v-else-if="singleSection && block"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
       :section-key="singleSection.key"
@@ -101,11 +101,11 @@ import TenantPageBlockFields from '~/components/dashboard/TenantPageBlockFields.
 import { getErrorMessage, showNotFound } from '~/utils/errors'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
-const props = defineProps<{ siteId: string; pageId: string; blockId: string }>()
+const props = defineProps<{ organizationId: string; pageId: string; blockId: string }>()
 
 const level = useRouteLevel()
-const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
-const newBlock = useTenantPageNewBlock(props.siteId, props.pageId)
+const { draft, dirty, ready, revert, commit } = useTenantPageDraft(props.organizationId, props.pageId)
+const newBlock = useTenantPageNewBlock(props.organizationId, props.pageId)
 
 const isNew = computed(() => props.blockId === 'new')
 const saving = ref(false)

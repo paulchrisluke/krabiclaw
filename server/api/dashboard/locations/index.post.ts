@@ -11,7 +11,7 @@ import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cac
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { postalAddressFromAnswers } from '~/utils/postal-address'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
 type SetupEnv = Parameters<typeof createLocation>[0]
 
@@ -50,11 +50,11 @@ function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | n
   return { ok: true, value: parsed.e164 }
 }
 
-async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {
+async function uniqueLocationSlug(db: DbClient, organizationId: string, base: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`
     const existing = await queryFirst<{ id: string }>(
-      db, 'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1', [siteId, slug], )
+      db, 'SELECT id FROM business_locations WHERE organization_id = ? AND slug = ? LIMIT 1', [organizationId, slug], )
     if (!existing) return slug
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
@@ -68,15 +68,9 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const dashboard = await getDashboardContext(event, { requireSite: true })
-  if (!dashboard?.site) {
-    return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
-  }
-
-  const { site, organization } = dashboard
-  const siteId = site.id as string
-  const organizationId = organization?.id as string
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId, event }))
+  const { organization } = await getDashboardContext(event)
+  const organizationId = organization.id
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
   const body = await readBody(event) as {
     mapsUrl?: unknown
@@ -105,16 +99,16 @@ export default defineHandler(async (event) => {
     }
 
     const baseSlug = slugify(name).slice(0, 50)
-    const slug = await uniqueLocationSlug(db, siteId, baseSlug)
+    const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
     const result = await createLocation(
-      env as SetupEnv, db, organizationId, siteId, {
+      env as SetupEnv, db, organizationId, {
         title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, address: detailsAddress(details), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
     }
-    await purgePublicResourceCacheSafe(env, siteId)
+    await purgePublicResourceCacheSafe(env, organizationId)
 
     return jsonResponse({ success: true, locationSlug: slug, orgSlug: organization.slug })
   }
@@ -154,10 +148,10 @@ export default defineHandler(async (event) => {
   }
 
   const baseSlug = slugify(place.name).slice(0, 50)
-  const slug = await uniqueLocationSlug(db, siteId, baseSlug)
+  const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
   const result = await createLocation(
-    env as SetupEnv, db, organizationId, siteId, {
+    env as SetupEnv, db, organizationId, {
       title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name, slug, phone: typeof details?.phone === 'string' && details.phone.trim()
         ? details.phone.trim()
         : place.phone ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
@@ -173,12 +167,12 @@ export default defineHandler(async (event) => {
   const locationId = (result.data as { location?: { id: string } }).location?.id
   if (locationId) {
     const now = new Date().toISOString()
-    await executeBatch(db, googleReviewUpserts({ organizationId, siteId, locationId }, place.reviews, now))
+    await executeBatch(db, googleReviewUpserts({ organizationId, locationId }, place.reviews, now))
   }
-  await purgePublicResourceCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, organizationId)
 
   return jsonResponse({
-    success: true, siteId, locationSlug: slug, orgSlug: organization.slug, })
+    success: true, organizationId, locationSlug: slug, orgSlug: organization.slug, })
 })
 import { defineHandler } from 'nitro';
 import { readBody } from 'nitro/h3';

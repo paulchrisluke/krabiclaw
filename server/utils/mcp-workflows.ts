@@ -19,47 +19,43 @@ export async function listSitesForUser(
   if (!orgIds.length) return [];
 
   return await queryAll<Record<string, unknown>>(db, `
-    SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-           (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.created_at, s.updated_at, s.onboarding_status
-    FROM sites s
-    WHERE s.organization_id IN (SELECT value FROM json_each(?))
-    ORDER BY s.created_at DESC
+    SELECT s.id, s.theme_id, s.name, s.slug, s.subdomain,
+           (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s."createdAt" AS created_at, s.updated_at, s.onboarding_status
+    FROM organization s
+    WHERE s.id IN (SELECT value FROM json_each(?))
+    ORDER BY s."createdAt" DESC
   `, [d1JsonStringSet(orgIds)]);
 }
 
 export async function getSiteForMcp(
   db: D1Database,
   env: CloudflareEnv,
-  siteId: string,
+  organizationId: string,
   userId: string,
 ) {
   const site = await queryFirst<Record<string, unknown>>(db, `
-      SELECT s.id, s.organization_id, s.theme_id, s.brand_name, s.slug, s.subdomain,
-             (SELECT domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM site_domains WHERE site_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.created_at, s.updated_at, s.onboarding_status
-      FROM sites s
+      SELECT s.id, s.name, s.theme_id, s.slug, s.subdomain,
+             (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.updated_at, s.onboarding_status
+      FROM organization s
       WHERE s.id = ?
       LIMIT 1
-    `, [siteId]);
+    `, [organizationId]);
 
-  const organizationId = typeof site?.organization_id === 'string' ? site.organization_id : ''
-  const membership = organizationId
-    ? await resolveOrganizationMembership(env, { organizationId, userId })
-    : null
-  if (!site || !membership) throw new Error("Site not found or access denied");
+  const membership = await resolveOrganizationMembership(env, { organizationId, userId })
+  if (!site || !membership) throw new Error("Organization not found or access denied");
   return site;
 }
 
 export async function getNotificationsSettings(
   db: D1Database,
   organizationId: string,
-  siteId: string,
 ) {
   const [whatsappPhone, channelsRow] = await Promise.all([
-    getOrgWhatsAppPhone(db, organizationId, siteId),
+    getOrgWhatsAppPhone(db, organizationId),
     queryFirst<{ value: string }>(
       db,
-      `SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM sites WHERE organization_id = ? AND id = ? LIMIT 1`,
-      [organizationId, siteId],
+      `SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM organization WHERE id = ? LIMIT 1`,
+      [organizationId],
     ),
   ])
   // Mirrors the send-time default in server/utils/notifications.ts getOwnerNotificationChannels:
@@ -85,7 +81,6 @@ export async function getNotificationsSettings(
 export async function updateNotificationsSettings(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   whatsappPhone?: string,
   channels?: string[],
 ) {
@@ -93,10 +88,10 @@ export async function updateNotificationsSettings(
   const trimmedPhone = whatsappPhone?.trim()
   // Explicit null or empty string means clear the phone
   if (whatsappPhone !== undefined) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, siteId, trimmedPhone || ''))
+    ops.push(setOrgWhatsAppPhone(db, organizationId, trimmedPhone || ''))
   }
   if (channels) {
-    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId, siteId)
+    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId)
     const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
     // Filter out whatsapp if no phone is available
     const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
@@ -105,21 +100,21 @@ export async function updateNotificationsSettings(
     ops.push(
       execute(
         db,
-        `UPDATE sites SET settings_json = json_set(settings_json, '$.config.owner_notification_channels', json(?)) WHERE organization_id = ? AND id = ?`,
-        [value, organizationId, siteId],
+        `UPDATE organization SET settings_json = json_set(settings_json, '$.config.owner_notification_channels', json(?)) WHERE id = ?`,
+        [value, organizationId],
       )
     )
   }
   await Promise.all(ops)
-  return await getNotificationsSettings(db, organizationId, siteId)
+  return await getNotificationsSettings(db, organizationId)
 }
 
 export async function listContactSubmissions(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   opts: { locationIds?: string[] | null } = {},
 ) {
-  const params: string[] = [siteId]
+  const params: string[] = [organizationId]
   let locationClause = ''
   if (opts.locationIds) {
     if (opts.locationIds.length === 0) return []
@@ -127,8 +122,8 @@ export async function listContactSubmissions(
     params.push(d1JsonStringSet(opts.locationIds))
   }
   return await queryAll<Record<string, unknown>>(db, `
-    SELECT id, organization_id, site_id, location_id, json_extract(payload_json, '$.guest.name') AS name, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.subject') AS subject, json_extract(payload_json, '$.message') AS message, created_at FROM requests
-    WHERE kind = 'contact' AND site_id = ?
+    SELECT id, organization_id, location_id, json_extract(payload_json, '$.guest.name') AS name, json_extract(payload_json, '$.guest.email') AS email, json_extract(payload_json, '$.subject') AS subject, json_extract(payload_json, '$.message') AS message, created_at FROM requests
+    WHERE kind = 'contact' AND organization_id = ?
       ${locationClause}
     ORDER BY created_at DESC
     LIMIT 200
@@ -137,11 +132,11 @@ export async function listContactSubmissions(
 
 export async function listReservationSubmissions(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   opts: { locationId?: string | null; sinceDays?: number | null } = {},
 ) {
-  const params: (string | number)[] = [siteId]
-  let where = `rs.kind = 'reservation' AND rs.site_id = ?`
+  const params: (string | number)[] = [organizationId]
+  let where = `rs.kind = 'reservation' AND rs.organization_id = ?`
   if (opts.locationId) {
     where += ` AND res.location_id = ?`
     params.push(opts.locationId)
@@ -151,7 +146,7 @@ export async function listReservationSubmissions(
     params.push(`-${opts.sinceDays} days`)
   }
   const rows = await queryAll<Record<string, unknown> & { starts_at: string; timezone: string }>(db, `
-    SELECT rs.id, rs.organization_id, rs.site_id, res.location_id, rs.customer_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
+    SELECT rs.id, rs.organization_id, res.location_id, rs.customer_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
     FROM requests rs
     JOIN reservations res ON res.request_id = rs.id
     LEFT JOIN business_locations bl ON bl.id = res.location_id
@@ -174,11 +169,11 @@ export async function listReservationSubmissions(
 
 export async function countReservationSubmissions(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   opts: { locationId?: string | null; sinceDays?: number | null } = {},
 ) {
-  const params: (string | number)[] = [siteId]
-  let where = `rs.kind = 'reservation' AND rs.site_id = ?`
+  const params: (string | number)[] = [organizationId]
+  let where = `rs.kind = 'reservation' AND rs.organization_id = ?`
   if (opts.locationId) {
     where += ` AND res.location_id = ?`
     params.push(opts.locationId)
@@ -197,11 +192,11 @@ export async function countReservationSubmissions(
 
 export async function getReservationSubmissionsByStatus(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   opts: { locationId?: string | null; sinceDays?: number | null } = {},
 ): Promise<Record<string, number>> {
-  const params: (string | number)[] = [siteId]
-  let where = `rs.kind = 'reservation' AND rs.site_id = ?`
+  const params: (string | number)[] = [organizationId]
+  let where = `rs.kind = 'reservation' AND rs.organization_id = ?`
   if (opts.locationId) {
     where += ` AND res.location_id = ?`
     params.push(opts.locationId)
@@ -228,39 +223,37 @@ export async function getReservationSubmissionsByStatus(
 export async function updateLocationQa(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationId: string,
   qaId: string,
   updates: Record<string, unknown>,
 ) {
-  return updateQa(db, { organizationId, siteId, locationId }, qaId, updates)
+  return updateQa(db, { organizationId, locationId }, qaId, updates)
 }
 
 export async function reorderLocationQa(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationId: string,
   updates: Array<{ id: string; sort_order: number }>,
 ) {
-  return reorderQa(db, { organizationId, siteId, locationId }, updates)
+  return reorderQa(db, { organizationId, locationId }, updates)
 }
 
 export async function listLocationReviews(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   locationId: string,
 ) {
   const rows = await queryAll<Record<string, unknown>>(db, `
     SELECT r.id, r.author_name, r.rating, r.title, r.content, r.owner_reply, r.owner_reply_at,
            r.source, r.status, r.created_at, r.updated_at
     FROM reviews r
-    WHERE r.site_id = ? AND r.location_id = ?
+    WHERE r.organization_id = ? AND r.location_id = ?
     ORDER BY r.created_at DESC
-  `, [siteId, locationId]);
+  `, [organizationId, locationId]);
 
   const { attachReviewMedia } = await import('~/server/utils/site-reviews')
-  return await attachReviewMedia(db, siteId, rows)
+  return await attachReviewMedia(db, organizationId, rows)
 }
 export function buildTenantPageReplacementConfirmationToken(expectedUpdatedAt: string, removedBlockIds: readonly string[]) {
   return `tenant-page-replacement:${expectedUpdatedAt}:${[...removedBlockIds].sort().join(',')}`

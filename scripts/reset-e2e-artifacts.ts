@@ -13,18 +13,17 @@ const FIXTURE_ORG_IDS = [
 ]
 
 // The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
-// indexed site/org columns keeps the email marker queries bounded.
-const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-kikuzuki', 'site-ncls-blawby']
+// the indexed organization column keeps the email marker queries bounded.
+const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby']
 
-// E2E creates throwaway `e2e-*` sites in the protected fixture organizations.
-// They must be swept by site ID rather than by deleting the fixture
-// organizations/users.
-// Retained/audit tables are explicit because their site foreign keys are often
-// SET NULL (or intentionally polymorphic), so deleting the site alone would
-// leave rows behind in the shared preview database.
+// E2E creates throwaway `e2e-*` organizations of its own, which the allowlist
+// below already excludes from the fixture set.
+// Retained/audit tables are explicit because their organization foreign keys
+// are often SET NULL (or intentionally polymorphic), so deleting the
+// organization alone would leave rows behind in the shared preview database.
 // `reservations` and `bookings` restrict their request's deletion, so they are
 // swept first. Order here is the order the statements are emitted in.
-const RETAINED_SITE_TABLES = [
+const RETAINED_ORG_TABLES = [
   'usage_events',
   'stripe_ga4_subscription_intents',
   'mcp_tool_call_events',
@@ -81,7 +80,7 @@ const cutoffUnixSeconds = Math.floor(cutoffDate.getTime() / 1000)
 
 const fixtureOrgIdList = FIXTURE_ORG_IDS.map((id) => `'${id}'`).join(', ')
 const fixtureUserIdList = FIXTURE_USER_IDS.map((id) => `'${id}'`).join(', ')
-const guestBookingSiteIdList = GUEST_BOOKING_SITE_IDS.map((id) => `'${id}'`).join(', ')
+const guestBookingOrgIdList = GUEST_BOOKING_ORG_IDS.map((id) => `'${id}'`).join(', ')
 
 const batchArg = process.argv.find((arg) => arg.startsWith('--batch-size='))
 const batchSize = batchArg ? Number(batchArg.split('=')[1]) : 500
@@ -90,22 +89,11 @@ if (!Number.isInteger(batchSize) || batchSize <= 0) {
   process.exit(1)
 }
 
-const eligibleE2eFixtureSiteIds = `
-  SELECT id FROM sites
-  WHERE organization_id IN (${fixtureOrgIdList})
-    AND (subdomain LIKE 'e2e-%' OR subdomain LIKE 'mcp-e2e-%')
-    AND created_at < '${cutoff}'
-  ORDER BY id
-  LIMIT ${batchSize}
-`
-
-
 // Repeat the bounded selector in each statement; D1 remote execution does not allow temporary tables.
 const eligibleOrgIds = `
   SELECT id FROM organization
   WHERE id NOT IN (${fixtureOrgIdList})
     AND createdAt < ${cutoffUnixSeconds}
-    AND id NOT IN (SELECT organization_id FROM sites WHERE created_at >= '${cutoff}')
   LIMIT ${batchSize}
 `
 
@@ -117,20 +105,15 @@ const eligibleUserIds = `
   LIMIT ${batchSize}
 `
 
-const eligibleSiteIds = `
-  SELECT id FROM sites WHERE organization_id IN (${eligibleOrgIds})
-  UNION SELECT id FROM (${eligibleE2eFixtureSiteIds})
-`
-
-const retainedSiteDeletes = RETAINED_SITE_TABLES.map(table => `
-DELETE FROM ${table} WHERE site_id IN (${eligibleSiteIds});
+const retainedOrgDeletes = RETAINED_ORG_TABLES.map(table => `
+DELETE FROM ${table} WHERE organization_id IN (${eligibleOrgIds});
 `).join('\n')
 
 // What a guest booked holds its request open: `reservations` and `bookings`
 // reference it ON DELETE RESTRICT, so both are cleared before the request is.
 const disposableGuestRequestIds = `
   SELECT id FROM requests
-  WHERE site_id IN (${guestBookingSiteIdList})
+  WHERE organization_id IN (${guestBookingOrgIdList})
     AND kind IN ('contact', 'reservation', 'booking')
     AND payload_json ->> '$.guest.email' LIKE '%@playwright.example'
     AND created_at < '${cutoff}'
@@ -149,20 +132,19 @@ PRAGMA foreign_keys = ON;
 -- explicitly.
 DELETE FROM subscription WHERE referenceId IN (${eligibleOrgIds});
 
-${retainedSiteDeletes}
+${retainedOrgDeletes}
 
 UPDATE user_workspace_state
 SET whatsapp_pending_confirmation = NULL, whatsapp_updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE json_extract(whatsapp_pending_confirmation, '$.siteId') IN (${eligibleSiteIds})
+WHERE json_extract(whatsapp_pending_confirmation, '$.organizationId') IN (${eligibleOrgIds})
    OR EXISTS (SELECT 1 FROM json_each(whatsapp_pending_confirmation, '$.candidates') candidate
-              WHERE json_extract(candidate.value, '$.siteId') IN (${eligibleSiteIds}));
+              WHERE json_extract(candidate.value, '$.organizationId') IN (${eligibleOrgIds}));
 
 UPDATE user_workspace_state
-SET site_id = NULL, location_id = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE site_id IN (${eligibleSiteIds})
-   OR location_id IN (SELECT id FROM business_locations WHERE site_id IN (${eligibleSiteIds}));
+SET organization_id = NULL, location_id = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE organization_id IN (${eligibleOrgIds})
+   OR location_id IN (SELECT id FROM business_locations WHERE organization_id IN (${eligibleOrgIds}));
 
-DELETE FROM sites WHERE id IN (${eligibleE2eFixtureSiteIds});
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
 
 DELETE FROM reservations WHERE request_id IN (${disposableGuestRequestIds});

@@ -154,7 +154,6 @@ interface LocationFeaturesValidationError {
 async function resolveValidatedLocationFeatures(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   featureOverrides: CmsCapabilityOverrideDelta | null | undefined,
   locationId?: string,
 ): Promise<{ ok: true; normalized: string | null | undefined } | LocationFeaturesValidationError> {
@@ -169,8 +168,8 @@ async function resolveValidatedLocationFeatures(
     return { ok: false, status: 400, data: { error: "feature_overrides.enabled/disabled must be arrays of feature ids or null." } };
   }
   const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
-    SELECT vertical, theme_id, feature_overrides FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [siteId, organizationId]);
+    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId]);
   if (!parentSite) {
     return { ok: false, status: 404, data: { error: "Site not found." } };
   }
@@ -195,7 +194,7 @@ async function resolveValidatedLocationFeatures(
   }
   if (locationId) {
     for (const feature of disabled) {
-      const guard = await checkModuleHasLiveData(db, { siteId, locationId }, feature as ProductFeature);
+      const guard = await checkModuleHasLiveData(db, { organizationId, locationId }, feature as ProductFeature);
       if (guard.blocked) {
         return { ok: false, status: 409, data: { error: guard.reason ?? "Module has live content." } };
       }
@@ -218,12 +217,11 @@ export interface LocationCapabilitySummary {
 export async function resolveLocationCapabilitySummary(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationFeatureOverridesRaw: string | null,
 ): Promise<LocationCapabilitySummary | null> {
   const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
-    SELECT vertical, theme_id, feature_overrides FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [siteId, organizationId]);
+    SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId]);
   if (!site) return null;
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
   try {
@@ -248,7 +246,7 @@ export async function resolveLocationCapabilitySummary(
     // reporting a fake "everything disabled" summary — that would look like real product state
     // instead of an unresolved config problem. Callers already handle a null summary safely
     // (spreading null into a response object is a no-op).
-    console.error("resolveLocationCapabilitySummary: failed to resolve capabilities", { siteId, error });
+    console.error("resolveLocationCapabilitySummary: failed to resolve capabilities", { organizationId, error });
     return null;
   }
 }
@@ -262,13 +260,12 @@ export async function resolveLocationCapabilitySummary(
 export async function getLocation(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationIdOrSlug: string,
 ) {
-  const row = await loadLocation(db, organizationId, siteId, locationIdOrSlug)
+  const row = await loadLocation(db, organizationId, locationIdOrSlug)
   if (!row) return null
   const { getMediaPlacements } = await import('~/server/utils/media-placement')
-  const placements = await getMediaPlacements(db, { siteId, ownerType: 'business_location', ownerIds: [row.id] })
+  const placements = await getMediaPlacements(db, { organizationId, ownerType: 'business_location', ownerIds: [row.id] })
   return {
     ...row,
     address: parsePostalAddress(row.address),
@@ -282,27 +279,26 @@ export async function getLocation(
 async function loadLocation(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationIdOrSlug: string,
 ) {
   const columns = `id, slug, title, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
            facebook_url, instagram_url, tiktok_url,
-           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots,
+           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<LocationRecord>(
     db,
-    `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [locationIdOrSlug, organizationId, siteId],
+    `SELECT ${columns} FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1`,
+    [locationIdOrSlug, organizationId],
   );
   if (byId) return byId;
   return queryFirst<LocationRecord>(
     db,
-    `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
-    [locationIdOrSlug, organizationId, siteId],
+    `SELECT ${columns} FROM business_locations WHERE slug = ? AND organization_id = ?  LIMIT 1`,
+    [locationIdOrSlug, organizationId],
   );
 }
 
@@ -310,7 +306,6 @@ export async function createLocation(
   env: SetupEnv,
   db: D1Database,
   organizationId: string,
-  siteId: string,
   input: CreateLocationInput,
   userId: string,
   options: { refreshSocialCardAfterCreate?: boolean } = {},
@@ -364,7 +359,7 @@ export async function createLocation(
   // Same validation/semantics as updateLocation's feature_overrides handling: undefined/omitted
   // means "inherit the parent site's effective features" (stored as NULL); no locationId is
   // passed since a location being created has no existing content for the live-data guard to check.
-  const featuresResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides);
+  const featuresResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides);
   if (!featuresResult.ok) {
     return { status: featuresResult.status, data: featuresResult.data };
   }
@@ -407,18 +402,17 @@ export async function createLocation(
       statements.push({
         query: `
           INSERT INTO business_locations (
-            id, organization_id, site_id, title, slug, phone, email, website_url, maps_url,
+            id, organization_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url,
             notification_phone, timezone, max_capacity, status,
-            seo_title, seo_description, canonical_url, robots, feature_overrides, created_at, updated_at
+            seo_title, seo_description, canonical_url, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
           organizationId,
-          siteId,
           title,
           slug,
           input.phone ?? null,
@@ -444,7 +438,6 @@ export async function createLocation(
           input.seo_title ?? null,
           input.seo_description ?? null,
           input.canonical_url ?? null,
-          normalizeLocationRobots(input.robots),
           normalizedEnabledFeatures,
           now,
           now,
@@ -456,25 +449,25 @@ export async function createLocation(
         await ensureLocationTeam(db, {
           env,
           organizationId,
-          siteId,
+          
           locationId: id,
           name: title,
         });
       } catch (teamError) {
         const compensating = [{
-          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`,
-          params: [id, organizationId, siteId],
+          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ?`,
+          params: [id, organizationId],
         }];
         await executeBatch(db, compensating).catch((cleanupError) => {
           console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
         });
         throw teamError;
       }
-      const location = await loadLocation(db, organizationId, siteId, id);
+      const location = await loadLocation(db, organizationId, id);
       await fireOrganizationEventSafe({
         db,
         organizationId,
-        siteId,
+        
         locationId: id,
         actorId: userId,
         eventType: "location.created",
@@ -508,13 +501,12 @@ export async function createLocation(
 export async function updateLocation(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationIdOrSlug: string,
   input: UpdateLocationInput,
   userId: string,
   env?: CloudflareEnv,
 ) {
-  const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
+  const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
     return { status: 404, data: { error: "Location not found." } };
   }
@@ -534,7 +526,7 @@ export async function updateLocation(
   if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
     return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
   }
-  const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, siteId, input.feature_overrides, locationId);
+  const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
     return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
   }
@@ -702,7 +694,7 @@ export async function updateLocation(
       query: `
         UPDATE business_locations
         SET ${sets.join(", ")}
-        WHERE id = ? AND organization_id = ? AND site_id = ?
+        WHERE id = ? AND organization_id = ?
       `,
       params: boundParams,
     });
@@ -715,19 +707,18 @@ export async function updateLocation(
       const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
       const boundParams = [...params];
       boundParams[slugParamIndex] = slug;
-      boundParams.push(locationId, organizationId, siteId);
+      boundParams.push(locationId, organizationId);
       try {
         await runUpdate(boundParams);
         const location = await loadLocation(
           db,
           organizationId,
-          siteId,
           locationId,
         );
         await fireOrganizationEventSafe({
           db,
           organizationId,
-          siteId,
+          
           locationId,
           actorId: userId,
           eventType: "location.updated",
@@ -756,13 +747,13 @@ export async function updateLocation(
     };
   }
 
-  params.push(locationId, organizationId, siteId);
+  params.push(locationId, organizationId);
   await runUpdate(params);
-  const location = await loadLocation(db, organizationId, siteId, locationId);
+  const location = await loadLocation(db, organizationId, locationId);
   await fireOrganizationEventSafe({
     db,
     organizationId,
-    siteId,
+    
     locationId,
     actorId: userId,
     eventType: "location.updated",
@@ -780,58 +771,57 @@ export async function deleteLocation(
   env: SetupEnv,
   db: D1Database,
   organizationId: string,
-  siteId: string,
   locationIdOrSlug: string,
 ) {
-  const existing = await loadLocation(db, organizationId, siteId, locationIdOrSlug);
+  const existing = await loadLocation(db, organizationId, locationIdOrSlug);
   if (!existing) {
     return { status: 404, data: { error: "Location not found." } };
   }
   const locationId = existing.id;
   const now = new Date().toISOString();
   const statements = [
-    ...prepareContentDocumentDeletion({ locationId, organizationId, siteId }),
-    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] }),
+    ...prepareContentDocumentDeletion({ locationId, organizationId}),
+    ...resourceLocalizationDeletionQueries('business_location', { query: 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ?', params: [locationId, organizationId] }),
     // Deleting a location does NOT delete the products it offered: the
     // catalog belongs to the organization and other locations may still sell
     // them. The membership row goes (cascaded by the foreign key) and the
     // product stays. Only the location's own media and redirects are removed.
-    { query: `DELETE FROM site_redirects WHERE organization_id = ? AND site_id = ? AND (
+    { query: `DELETE FROM organization_redirects WHERE organization_id = ? AND (
         (owner_type = 'business_location' AND owner_id = ?) OR
         (owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?))
-      )`, params: [organizationId, siteId, locationId, locationId] },
-    { query: `DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND
+      )`, params: [organizationId, locationId, locationId] },
+    { query: `DELETE FROM media_placements WHERE organization_id = ? AND
         owner_type = 'review' AND owner_id IN (SELECT id FROM reviews WHERE location_id = ?)
-      `, params: [organizationId, siteId, locationId] },
-    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ? AND site_id = ?', params: [locationId, organizationId, siteId] },
+      `, params: [organizationId, locationId] },
+    { query: 'DELETE FROM reviews WHERE location_id = ? AND organization_id = ?', params: [locationId, organizationId] },
     {
       query: `
       DELETE FROM media_placements
-      WHERE organization_id = ? AND site_id = ? AND owner_type = 'business_location' AND owner_id = ?
+      WHERE organization_id = ? AND owner_type = 'business_location' AND owner_id = ?
     `,
-      params: [organizationId, siteId, locationId],
+      params: [organizationId, locationId],
     },
     {
       query: `
       UPDATE user_workspace_state
       SET location_id = NULL,
           updated_at = ?
-      WHERE organization_id = ? AND site_id = ? AND location_id = ?
+      WHERE organization_id = ? AND location_id = ?
     `,
-      params: [now, organizationId, siteId, locationId],
+      params: [now, organizationId, locationId],
     },
     {
       query: `
-      DELETE FROM requests WHERE organization_id = ? AND site_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
+      DELETE FROM requests WHERE organization_id = ? AND location_id = ? AND kind IN ('reservation', 'booking')
     `,
-      params: [organizationId, siteId, locationId],
+      params: [organizationId, locationId],
     },
     {
       query: `
       DELETE FROM business_locations
-      WHERE id = ? AND organization_id = ? AND site_id = ?
+      WHERE id = ? AND organization_id = ?
     `,
-      params: [locationId, organizationId, siteId],
+      params: [locationId, organizationId],
     },
   ];
 

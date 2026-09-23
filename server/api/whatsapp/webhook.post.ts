@@ -123,7 +123,6 @@ function submissionTypeLabel(type: string): string {
 
 interface QuotedDeliveryMatch {
   threadId: string
-  siteId: string
   organizationId: string
   locationId: string | null
   guestEmail: string
@@ -134,11 +133,10 @@ async function resolveQuotedDelivery(
   const thread = await queryFirst<{
     request_id: string
     organization_id: string
-    site_id: string
     location_id: string | null
     guest_email: string | null
   }>(db, `
-    SELECT gt.id AS request_id, gt.organization_id, gt.site_id, gt.location_id,
+    SELECT gt.id AS request_id, gt.organization_id, gt.location_id,
            json_extract(gt.payload_json, '$.guest.email') AS guest_email
     FROM guest_thread_deliveries d
     JOIN activity_entries e ON e.id = d.entry_id
@@ -150,10 +148,10 @@ async function resolveQuotedDelivery(
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
     env: env as CloudflareEnv,
-    phone, organizationId: thread.organization_id, siteId: thread.site_id, locationId: thread.location_id, requireSiteWide: false, })
+    phone, organizationId: thread.organization_id, locationId: thread.location_id, requireOrganizationWide: false, })
   if (!authorized) return null
 
-  return { threadId: thread.request_id, siteId: thread.site_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
+  return { threadId: thread.request_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
 }
 
 async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord, userId: string): Promise<DisambiguationCandidate[]> {
@@ -161,12 +159,11 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
   const rows = await queryAll<{
     threadId: string
     organizationId: string
-    siteId: string
     locationId: string | null
     guestName: string
     submissionType: string
   }>(db, `
-    SELECT gt.id AS threadId, gt.organization_id AS organizationId, gt.site_id AS siteId,
+    SELECT gt.id AS threadId, gt.organization_id AS organizationId,
            gt.location_id AS locationId, json_extract(gt.payload_json, '$.guest.name') AS guestName,
            gt.kind AS submissionType, MAX(d.created_at) AS createdAt
     FROM guest_thread_deliveries d
@@ -184,11 +181,11 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
       userId,
     })
     if (!membership) return null
-    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv, siteId: row.siteId }))
+    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv}))
     return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
   }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
   return authorizedRows.map((r) => ({
-    threadId: r.threadId, siteId: r.siteId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
+    threadId: r.threadId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
 }
 
 // Issue #293 Section C direct-reply routing contract, applied only to messages from a
@@ -270,7 +267,6 @@ async function routeManagerWhatsAppMessage(
         const newState: PendingWhatsAppReplyState = {
           kind: 'confirm_send',
           threadId: match.threadId,
-          siteId: match.siteId,
           organizationId: match.organizationId,
           locationId: match.locationId,
           replyBody: trimmedText,
@@ -331,7 +327,6 @@ async function routeManagerWhatsAppMessage(
         env: env as CloudflareEnv,
         phone: opts.toPhone,
         organizationId: pendingState.organizationId,
-        siteId: pendingState.siteId,
         locationId: pendingState.locationId,
       })
       if (!authorized) {
@@ -347,7 +342,7 @@ async function routeManagerWhatsAppMessage(
       const result = actorMemberId
         ? await executeGuestThreadOperation(db, {
             threadId: pendingState.threadId,
-            siteId: pendingState.siteId,
+            organizationId: pendingState.organizationId,
             action: 'reply',
             actorUserId: opts.userId,
             body: pendingState.replyBody,
@@ -384,7 +379,6 @@ async function routeManagerWhatsAppMessage(
         env: env as CloudflareEnv,
         phone: opts.toPhone,
         organizationId: chosen.organizationId,
-        siteId: chosen.siteId,
         locationId: chosen.locationId,
       })
       if (!authorized) {
@@ -393,7 +387,7 @@ async function routeManagerWhatsAppMessage(
         return
       }
 
-      const chosenThread = await getGuestRequest(db, chosen.threadId, chosen.siteId)
+      const chosenThread = await getGuestRequest(db, chosen.threadId, chosen.organizationId)
       const chosenGuestEmail = chosenThread?.payload.guest.email ?? null
       if (!chosenGuestEmail) {
         await clearPending()
@@ -404,7 +398,6 @@ async function routeManagerWhatsAppMessage(
       const newState: PendingWhatsAppReplyState = {
         kind: 'collect_reply',
         threadId: chosen.threadId,
-        siteId: chosen.siteId,
         organizationId: chosen.organizationId,
         locationId: chosen.locationId,
         guestEmailMasked,
@@ -424,7 +417,6 @@ async function routeManagerWhatsAppMessage(
     const newState: PendingWhatsAppReplyState = {
       kind: 'confirm_send',
       threadId: pendingState.threadId,
-      siteId: pendingState.siteId,
       organizationId: pendingState.organizationId,
       locationId: pendingState.locationId,
       replyBody: rawText,
@@ -458,7 +450,6 @@ async function routeManagerWhatsAppMessage(
       const newState: PendingWhatsAppReplyState = {
         kind: 'confirm_send',
         threadId: match.threadId,
-        siteId: match.siteId,
         organizationId: match.organizationId,
         locationId: match.locationId,
         replyBody: rawText,
@@ -506,7 +497,6 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
           submissionType: existingThread.kind,
           submissionId: existingThread.id,
           organizationId: existingThread.organization_id,
-          siteId: existingThread.site_id,
         }
       : await findSubmissionByPhone(db, toPhone)
     if (match) {
@@ -530,7 +520,6 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             const summary = await requestSummary(db, source)
             await notifyGuestThreadReply(env, db, {
               organizationId: match.organizationId,
-              siteId: match.siteId,
               locationId: summary.locationId,
               threadId: thread.id,
               sourceEntryId: entry.id,

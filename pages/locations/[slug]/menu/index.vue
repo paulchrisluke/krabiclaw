@@ -16,7 +16,7 @@ const { products, collections, locations, location, config, site } = await usePu
 const goods = computed(() => products.value.filter(product => !isExperience(product)))
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404 })
-const brandName = site.value?.brand_name
+const brandName = site.value?.name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
 const vertical = String(site.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)

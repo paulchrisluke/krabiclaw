@@ -14,17 +14,17 @@ export const PROMOTE_PRODUCT_COVERS_SQL = `UPDATE media_placements
  WHERE id IN (
    SELECT (SELECT g.id FROM media_placements g
             WHERE g.owner_type = 'product' AND g.slot = 'gallery' AND g.status = 'active'
-              AND g.owner_id = owners.owner_id AND g.site_id = owners.site_id
+              AND g.owner_id = owners.owner_id AND g.organization_id = owners.organization_id
             ORDER BY g.sort_order, g.id LIMIT 1)
-     FROM (SELECT DISTINCT owner_id, site_id FROM media_placements
+     FROM (SELECT DISTINCT owner_id, organization_id FROM media_placements
             WHERE owner_type = 'product' AND slot = 'gallery' AND status = 'active') owners
     WHERE NOT EXISTS (SELECT 1 FROM media_placements i
                        WHERE i.owner_type = 'product' AND i.slot = 'image' AND i.status = 'active'
-                         AND i.owner_id = owners.owner_id AND i.site_id = owners.site_id))`
+                         AND i.owner_id = owners.owner_id AND i.organization_id = owners.organization_id))`
 
 /** The gallery a cover was taken out of closes the gap it left. */
 export const RENUMBER_PRODUCT_GALLERIES_SQL = `UPDATE media_placements AS m
    SET sort_order = ordered.position, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  FROM (SELECT id, row_number() OVER (PARTITION BY site_id, owner_id ORDER BY sort_order, id) - 1 AS position
+  FROM (SELECT id, row_number() OVER (PARTITION BY organization_id, owner_id ORDER BY sort_order, id) - 1 AS position
           FROM media_placements WHERE owner_type = 'product' AND slot = 'gallery') AS ordered
  WHERE m.id = ordered.id AND m.sort_order <> ordered.position`

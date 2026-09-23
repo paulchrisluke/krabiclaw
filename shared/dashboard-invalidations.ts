@@ -6,14 +6,12 @@ interface DashboardInvalidationBase {
 
 export interface GuestThreadInvalidation extends DashboardInvalidationBase {
   type: 'thread.created' | 'thread.changed' | 'entry.appended' | 'delivery.changed'
-  siteId: string
   locationId: string | null
   threadId: string
 }
 
 export interface NotificationInvalidation extends DashboardInvalidationBase {
   type: 'notification.created' | 'notification.read'
-  siteId: string | null
   locationId: string | null
   targetUserId: string | null
 }
@@ -29,7 +27,6 @@ export function isDashboardInvalidation(value: unknown): value is DashboardInval
     || typeof value.eventId !== 'string' || !value.eventId
     || typeof value.organizationId !== 'string' || !value.organizationId
     || typeof value.occurredAt !== 'string' || !value.occurredAt
-    || !(value.siteId === null || typeof value.siteId === 'string')
     || !(value.locationId === null || typeof value.locationId === 'string')) return false
 
   if (value.type === 'notification.created' || value.type === 'notification.read') {
@@ -40,6 +37,5 @@ export function isDashboardInvalidation(value: unknown): value is DashboardInval
     || value.type === 'thread.changed'
     || value.type === 'entry.appended'
     || value.type === 'delivery.changed')
-    && typeof value.siteId === 'string' && Boolean(value.siteId)
     && typeof value.threadId === 'string' && Boolean(value.threadId)
 }

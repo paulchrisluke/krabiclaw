@@ -44,7 +44,7 @@
 // The site's Google connection: one OAuth grant, then the GA4 property and
 // Search Console site are picked from lists. The measurement id the public
 // site loads comes from the chosen property; nothing is typed by hand.
-const props = defineProps<{ siteId: string }>()
+const props = defineProps<{ organizationId: string }>()
 const emit = defineEmits<{ /** The connection changed on the server; the list beside this leaf reads it too. */ changed: [] }>()
 
 const dashboardApi = useDashboardApi()
@@ -102,7 +102,7 @@ async function loadConnection() {
   loading.value = true
   pageError.value = null
   try {
-    const res = await dashboardApi<PropertiesResponse>(`/api/sites/${props.siteId}/integrations/google-analytics/properties`, { validate: isPropertiesResponse })
+    const res = await dashboardApi<PropertiesResponse>(`/api/organizations/${props.organizationId}/integrations/google-analytics/properties`, { validate: isPropertiesResponse })
     connection.value = res.connection
     ga4Properties.value = res.ga4Properties
     searchConsoleSites.value = res.searchConsoleSites
@@ -121,7 +121,7 @@ async function connectGoogle() {
   connecting.value = true
   pageError.value = null
   try {
-    const res = await dashboardApi<{ success: boolean; authUrl: string }>(`/api/sites/${props.siteId}/integrations/google-analytics/auth`, { method: 'POST', validate: isAuthUrlResponse })
+    const res = await dashboardApi<{ success: boolean; authUrl: string }>(`/api/organizations/${props.organizationId}/integrations/google-analytics/auth`, { method: 'POST', validate: isAuthUrlResponse })
     const parsed = new URL(res.authUrl)
     if (parsed.protocol !== 'https:' || parsed.hostname !== 'accounts.google.com') throw new Error('Invalid OAuth redirect URL')
     window.location.href = res.authUrl
@@ -135,7 +135,7 @@ async function disconnectGoogle() {
   disconnecting.value = true
   pageError.value = null
   try {
-    await dashboardApi(`/api/sites/${props.siteId}/integrations/google-analytics/disconnect`, { method: 'POST', validate: isSuccessResponse })
+    await dashboardApi(`/api/organizations/${props.organizationId}/integrations/google-analytics/disconnect`, { method: 'POST', validate: isSuccessResponse })
     await loadConnection()
     emit('changed')
   } catch {
@@ -150,7 +150,7 @@ async function saveSelection() {
   pageError.value = null
   try {
     const property = ga4Properties.value.find(p => p.propertyId === selectedGa4Property.value)
-    await dashboardApi(`/api/sites/${props.siteId}/integrations/google-analytics/select`, {
+    await dashboardApi(`/api/organizations/${props.organizationId}/integrations/google-analytics/select`, {
       method: 'POST',
       body: { ga4_property_id: selectedGa4Property.value, ga4_property_name: property?.propertyName ?? null, search_console_site_url: selectedSearchConsoleSite.value },
       validate: isSuccessResponse,

@@ -151,7 +151,7 @@ import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/pro
 import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
 interface Site {
-  brand_name?: string | null
+  name?: string | null
   brand_description?: string | null
   media?: Array<{ slot?: string; public_url?: string | null }>
   plan?: string | null
@@ -238,7 +238,7 @@ const year = new Date().getFullYear()
 const logoUrl = computed(() => Array.isArray(props.site?.media)
   ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
   : null)
-const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
+const restaurantName = computed(() => props.site?.name?.trim() || '')
 const tagline = computed(() => props.site?.brand_description?.trim() || '')
 const sitePlan = computed(() => props.site?.plan)
 const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')

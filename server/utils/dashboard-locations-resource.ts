@@ -1,4 +1,3 @@
-import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
@@ -11,6 +10,7 @@ export interface DashboardLocationResource {
   id: string
   slug: string
   title: string
+  team_id: string | null
   status: string
   address: string | null | Record<string, unknown>
   phone: string | null
@@ -20,27 +20,24 @@ export interface DashboardLocationResource {
 
 export async function listDashboardLocationsResource(
   event: H3Event,
-  scope: { organizationSlug?: string; siteSlug?: string } = {},
+  scope: { organizationSlug?: string } = {},
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, {
-    requireSite: true,
+  const { env, db, organization } = await getDashboardContext(event, {
     organizationSlug: scope.organizationSlug,
-    siteSlug: scope.siteSlug,
   })
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
+  const accessibleLocationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization, { env, event }))
   if (accessibleLocationIds?.length === 0) return { success: true as const, locations: [] }
   const locationFilter = accessibleLocationIds
     ? `AND id IN (SELECT value FROM json_each(?))`
     : ''
   const locations = await queryAll<DashboardLocationResource>(db, `
-    SELECT id, slug, title, status, address, phone, email,
+    SELECT id, slug, title, team_id, status, address, phone, email,
            notification_phone
       FROM business_locations
-     WHERE organization_id = ? AND site_id = ?
+     WHERE organization_id = ?
        ${locationFilter}
      ORDER BY title ASC
-  `, [organization.id, site.id, ...(accessibleLocationIds ? [d1JsonStringSet(accessibleLocationIds)] : [])])
+  `, [organization.id, ...(accessibleLocationIds ? [d1JsonStringSet(accessibleLocationIds)] : [])])
   return {
     success: true as const,
     locations: locations.map(location => ({

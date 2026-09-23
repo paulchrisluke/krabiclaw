@@ -106,8 +106,8 @@ const optionObject = {
 
 const publicationObject = {
   type: 'object',
-  properties: { site_id: { type: 'string' }, published: { type: 'boolean' } },
-  required: ['site_id', 'published'],
+  properties: { organization_id: { type: 'string' }, published: { type: 'boolean' } },
+  required: ['organization_id', 'published'],
 } as const
 
 const productLocationObject = {
@@ -125,11 +125,11 @@ const collectionMembershipObject = {
 const collectionObject = {
   type: 'object',
   properties: {
-    id: { type: 'string' }, site_id: { type: 'string' }, location_id: { type: ['string', 'null'] },
+    id: { type: 'string' }, organization_id: { type: 'string' }, location_id: { type: ['string', 'null'] },
     name: { type: 'string' }, slug: { type: 'string' }, description: { type: ['string', 'null'] },
     sort_order: { type: 'integer' },
   },
-  required: ['id', 'site_id', 'location_id', 'name', 'slug', 'description', 'sort_order'],
+  required: ['id', 'organization_id', 'location_id', 'name', 'slug', 'description', 'sort_order'],
 } as const
 
 const metafieldDefinitionObject = {

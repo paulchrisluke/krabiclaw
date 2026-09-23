@@ -35,21 +35,21 @@
 
     <TenantPageCalculatorField
       v-else-if="field.kind === 'calculator'"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
     />
 
     <TenantPageGalleryField
       v-else-if="field.kind === 'media' && field.slot === 'gallery'"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
     />
 
     <MediaPicker
       v-else-if="field.kind === 'media'"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :model-value="mediaAsset?.asset_id"
       :selected-summary="mediaAsset"
       :accept="field.accept ?? 'image'"
@@ -120,7 +120,7 @@ import type { TenantPageField } from '~/utils/tenant-page-blocks'
  * because the registry declares it, and it is editable because it exists.
  */
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   pageId: string
   blockId: string
   fieldKey: string
@@ -132,8 +132,8 @@ const props = defineProps<{
 
 defineEmits<{ splitInsert: [{ after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 
-const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
-const dashboard = useDashboardSite()
+const block = useTenantPageBlock(props.organizationId, props.pageId, () => props.blockId)
+const dashboard = useDashboardOrganization()
 
 
 const stringValue = computed(() => {
@@ -149,7 +149,7 @@ const stringList = computed(() => {
 const multipleReference = computed(() => props.fieldKey.endsWith('_ids'))
 
 const options = computed(() => {
-  const platform = isPlatformTemplate({ themeId: dashboard.site.value?.theme_id })
+  const platform = isPlatformTemplate({ themeId: dashboard.organization.value?.theme_id })
   return (props.field.options ?? []).filter(option => !option.platformOnly || platform)
 })
 

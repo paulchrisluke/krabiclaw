@@ -8,7 +8,7 @@ import {
  * article path carried the category.
  */
 export default defineHandler(async (event) => {
-  if (!event.context.siteId) return textResponse('Post not found\n', { status: 404 })
+  if (!event.context.organizationId) return textResponse('Post not found\n', { status: 404 })
 
   const slugParam = getRouterParam(event, 'slug')
   const pathMatch = event.path?.match(/^\/blog-md\/(.+)\.md$/)
@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return textResponse('Database not available\n', { status: 500 })
 
-  const post = await getPublishedTenantBlogPostBySlug(db, String(event.context.siteId), slug, 'blog')
+  const post = await getPublishedTenantBlogPostBySlug(db, String(event.context.organizationId), slug, 'blog')
   if (!post) return textResponse('Post not found\n', { status: 404 })
 
   return textResponse(renderTenantBlogMarkdown(post, resolvePublicOrigin(event), { themeId: String(event.context.themeId ?? '') }), {}, 'text/markdown; charset=utf-8')

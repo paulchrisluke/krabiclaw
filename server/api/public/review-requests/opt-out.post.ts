@@ -24,14 +24,12 @@ export default defineHandler(async (event) => {
         SET review_request_opted_out_at = COALESCE(review_request_opted_out_at, ?), updated_at = ?
         WHERE id = ?
           AND organization_id = ?
-          AND site_id = ?
           AND EXISTS (
             SELECT 1
             FROM review_requests rr
             WHERE rr.id = ?
               AND rr.token_hash = ?
               AND rr.organization_id = ?
-              AND rr.site_id = ?
               AND rr.customer_id = customers.id
               AND rr.booking_type = ?
               AND rr.booking_id = ?
@@ -39,7 +37,7 @@ export default defineHandler(async (event) => {
               AND rr.submitted_at IS NULL
               AND rr.expires_at > ?
           )`, params: [
-        now, now, result.request.customer_id, result.context.organization_id, result.context.site_id, result.request.id, result.request.token_hash, result.context.organization_id, result.context.site_id, result.request.booking_type, result.request.booking_id, now, ], }, {
+        now, now, result.request.customer_id, result.context.organization_id, result.request.id, result.request.token_hash, result.context.organization_id, result.request.booking_type, result.request.booking_id, now, ], }, {
       query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review opt-out lost its request-state guard'], }, ])
   return jsonResponse({ optedOut: true })
 })

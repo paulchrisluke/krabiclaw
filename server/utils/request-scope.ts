@@ -15,7 +15,7 @@ type Store = Map<string, Promise<unknown>>
  * latency.
  *
  * `event.context` is H3's per-request store and is already how this codebase
- * carries request-scoped values (tenantType, siteId, publicResourceProvider).
+ * carries request-scoped values (tenantType, organizationId, publicResourceProvider).
  * The promise is stored, not the resolved value, so concurrent callers in the
  * same `Promise.all` share one round trip rather than racing to start two.
  *

@@ -9,7 +9,7 @@
 // `selectLocation` right beside it fast-failed on the same lookup. Two answers to
 // one question, neither reachable.
 export function useDashboardLocation() {
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
   const route = useRoute()
 
   const routeLocationSlug = computed(() => {

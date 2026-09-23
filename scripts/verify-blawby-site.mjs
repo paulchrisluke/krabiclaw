@@ -63,7 +63,7 @@ function parseArgs(argv) {
   const args = {
     url: '',
     out: '',
-    siteId: '',
+    organizationId: '',
     tenantSlug: '',
     importManifest: '',
     evidenceDir: '',
@@ -74,7 +74,7 @@ function parseArgs(argv) {
     const arg = argv[i]
     if (arg === '--url') args.url = argv[++i]
     else if (arg === '--out') args.out = argv[++i]
-    else if (arg === '--site-id') args.siteId = argv[++i]
+    else if (arg === '--organization-id') args.organizationId = argv[++i]
     else if (arg === '--tenant-slug') args.tenantSlug = argv[++i]
     else if (arg === '--import-manifest') args.importManifest = argv[++i]
     else if (arg === '--evidence-dir') args.evidenceDir = argv[++i]
@@ -304,12 +304,12 @@ async function checkRoute(base, route, options = {}) {
   }
 }
 
-async function fetchBlawbyData(base, siteId) {
-  if (!base || !siteId) return null
+async function fetchBlawbyData(base, organizationId) {
+  if (!base || !organizationId) return null
   const recipes = ['home', 'services', 'pricing', 'donate', 'privacy', 'terms']
   const documents = {}
   for (const recipe of recipes) {
-    const path = `/api/public/sites/${siteId}/blawby/document?recipe=${encodeURIComponent(recipe)}`
+    const path = `/api/public/blawby/document?recipe=${encodeURIComponent(recipe)}`
     const { response, timer } = await fetchResponseWithTimeout(resolveUrl(base, path))
     try {
       if (!response.ok) return null
@@ -607,7 +607,7 @@ function writeClientHandoff(outPath, report, manifest) {
   if (!outPath || !report.ok || !manifest) return
   const handoffPath = path.join(path.dirname(path.resolve(outPath)), 'client-handoff.md')
   const lines = [
-    `# Client Handoff: ${manifest.site?.brand_name || report.site_id || 'Blawby tenant'}`,
+    `# Client Handoff: ${manifest.site?.brand_name || report.organization_id || 'Blawby tenant'}`,
     '',
     `**Verified:** ${report.checked_at.slice(0, 10)}  `,
     `**Status:** PASSED (${report.checks.length} checks)  `,
@@ -656,7 +656,7 @@ function writeClientHandoff(outPath, report, manifest) {
 
 const args = parseArgs(process.argv.slice(2))
 if (!args.url && !args.importManifest) {
-  console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--site-id site-id] [--tenant-slug slug] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
+  console.error('Usage: node scripts/verify-blawby-site.mjs --url https://example.com [--organization-id <id>] [--tenant-slug slug] [--import-manifest file] [--evidence-dir dir] [--out artifact.json]')
   process.exit(2)
 }
 
@@ -714,8 +714,8 @@ if (baseUrl) {
 }
 
 validateArtifacts(checks, manifest)
-const publicData = await fetchBlawbyData(baseUrl, args.siteId)
-validatePublicData(checks, publicData, Boolean(args.siteId))
+const publicData = await fetchBlawbyData(baseUrl, args.organizationId)
+validatePublicData(checks, publicData, Boolean(args.organizationId))
 if (baseUrl) await validateRemoteMedia(checks, manifest, publicData)
 if (baseUrl) validateSitemap(checks, await fetchSitemap(baseUrl), manifest, new URL(baseUrl).hostname)
 validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
@@ -723,7 +723,7 @@ validateScreenshots(checks, args.evidenceDir, args.requireScreenshots)
 const report = {
   checked_at: new Date().toISOString(),
   base_url: baseUrl || null,
-  site_id: args.siteId || null,
+  organization_id: args.organizationId || null,
   ok: checks.every((check) => check.ok),
   routes: routeChecks.map((route) => ({
     route: route.route,

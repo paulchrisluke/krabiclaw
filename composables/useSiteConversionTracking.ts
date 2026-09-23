@@ -17,9 +17,9 @@ interface ConversionPayload {
   tier_amount?: number | null
 }
 
-function nativeConversion(siteId: string, payload: ConversionPayload) {
+function nativeConversion(organizationId: string, payload: ConversionPayload) {
   if (!import.meta.client) return
-  void fetch(`/api/public/sites/${siteId}/conversion-events`, {
+  void fetch(`/api/public/conversion-events`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
@@ -39,11 +39,11 @@ function mirrorConversion(payload: ConversionPayload) {
 }
 
 export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
-  const { siteId } = useTenantSite()
+  const { organizationId } = useTenantSite()
 
   function track(payload: ConversionPayload) {
-    if (!siteId) return
-    nativeConversion(siteId, payload)
+    if (!organizationId) return
+    nativeConversion(organizationId, payload)
     mirrorConversion(payload)
   }
 

@@ -49,7 +49,7 @@
             <template #image-editor="{ block, index }">
               <component
                 :is="mediaPickerComponent"
-                :site-id="siteId"
+                :organization-id="organizationId"
                 :model-value="block.media?.find(item => item.slot === 'media')?.asset_id || ''"
                 accept="image"
                 @change="changeImage(index, $event)"
@@ -93,7 +93,7 @@ export const SETTINGS_LABELS: Record<SettingsSection, string> = {
 
 /** The post's draft and what its leaves show beside their one field. */
 export interface BlogEditor {
-  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; seo_title: string; seo_description: string; slug: string; canonical_url: string; robots: string; visibility: 'public' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
+  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; seo_title: string; seo_description: string; slug: string; canonical_url: string; robots: string; visibility: 'listed' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
   tagsText: Ref<string>
   publishTiming: Ref<'Now' | 'Scheduled'>
   post: Ref<BlogPost | null>
@@ -130,8 +130,8 @@ import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalize
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
-const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
-  initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; organizationId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; panelId?: string; mediaPickerComponent: Component }>(), {
+  initialPost: null, deferLoad: false, postId: undefined, organizationId: '', isEdit: false, backUrl: '/dashboard', backLabel: 'Posts', panelId: 'blog-post-editor',
 })
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
@@ -160,7 +160,7 @@ const section = computed<SettingsSection | null>(() => {
   return segment && (SETTINGS_SECTIONS as string[]).includes(segment) ? segment as SettingsSection : null
 })
 
-const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
+const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'listed' as 'listed' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || 'saya')
@@ -379,7 +379,7 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersion(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'listed', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'

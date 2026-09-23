@@ -106,7 +106,6 @@ const { values: rawArgs } = parseArgs({
     'maps-url':        { type: 'string', multiple: true, default: [] },
     images:            { type: 'string' },
     'images-place-id': { type: 'string' },
-    'site-id':         { type: 'string' },
     'live-url':        { type: 'string' },
     url:               { type: 'string' },  // alias for --live-url
     remote:            { type: 'boolean', default: false },
@@ -128,7 +127,7 @@ if (args.from) {
   if (!args.slug     && intake.slug)       args.slug = intake.slug
   if (!args.vertical && intake.vertical)   args.vertical = intake.vertical
   if (!args['live-url'] && intake.live_url) args['live-url'] = intake.live_url
-  if (!args['site-id']  && intake.site_id)  args['site-id']  = intake.site_id
+  if (!args['organization-id'] && intake.organization_id) args['organization-id'] = intake.organization_id
   if (!args['organization-id'] && intake.organization_id) args['organization-id'] = intake.organization_id
   if (!args.images      && intake.images_dir) args.images = intake.images_dir
   if (!args['images-place-id'] && intake.images_place_id) args['images-place-id'] = intake.images_place_id
@@ -211,14 +210,14 @@ if (args.images) importArgs.push('--images', args.images)
 if (args['images-place-id']) importArgs.push('--images-place-id', args['images-place-id'])
 if (REMOTE) importArgs.push('--remote')
 
-const siteId  = args['site-id'] ?? `site-${SLUG}`
+const organizationId = args['organization-id'] ?? `org-${SLUG}`
 const baseUrl = args['live-url'] ?? args.url ?? (REMOTE ? `https://${SLUG}.krabiclaw.com` : 'http://localhost:3000')
 
 const verifyArgs = [
   'scripts/client-verify.mjs',
   '--url', baseUrl,
   '--vertical', VERTICAL,
-  '--site-id', siteId,
+  '--organization-id', organizationId,
   '--slug', SLUG,
 ]
 
@@ -318,6 +317,6 @@ if (existsSync(reportPath)) {
 if (!REMOTE) {
   console.log(`\n  To deploy and verify production:`)
   console.log('    Merge through staging to main; CI deploys and verifies each environment')
-  console.log(`    yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id ${siteId} --slug ${SLUG}`)
+  console.log(`    yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --organization-id ${organizationId} --slug ${SLUG}`)
 }
 console.log(hr('═'))

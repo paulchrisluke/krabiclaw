@@ -9,7 +9,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 export function useOrganizationSettingsNavigation() {
   const route = useRoute()
   const { orgPaths, businessPaths } = useDashboardSiteLinks()
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
 
   const settingsPath = computed(() => orgPaths.value.settings)
 
@@ -20,7 +20,7 @@ export function useOrganizationSettingsNavigation() {
    * dashboard — so this row is a deliberate addition, not parity.
    */
   const isPlatformSite = computed(() => {
-    const site = dashboard.site.value
+    const site = dashboard.organization.value
     if (!site) return false
     return resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).slug === 'platform'
   })

@@ -22,7 +22,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
-        siteId: site.siteId,
         organizationId: site.organizationId,
         userId: site.userId,
         buffer: upload.buffer,
@@ -48,7 +47,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
-        siteId: site.siteId,
         organizationId: site.organizationId,
         userId: site.userId,
         buffer: upload.buffer,

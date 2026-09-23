@@ -101,7 +101,7 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
 interface Site {
-  brand_name?: string | null
+  name?: string | null
   media?: Array<{ slot?: string; public_url?: string | null }>
   plan?: string
   vertical?: string | null
@@ -163,7 +163,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => props.site?.brand_name?.trim() || '')
+const restaurantName = computed(() => props.site?.name?.trim() || '')
 const logoUrl = computed(() => Array.isArray(props.site?.media)
   ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
   : null)

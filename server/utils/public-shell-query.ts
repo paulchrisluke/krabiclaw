@@ -29,7 +29,6 @@ export interface PublicShellQueryIndexes {
 export function appendPublicShellQueries(
   queries: BatchQuery[],
   organizationId: string,
-  siteId: string,
 ): PublicShellQueryIndexes {
   const push = (query: string, params: unknown[]) => {
     const index = queries.length
@@ -44,35 +43,34 @@ export function appendPublicShellQueries(
                      bl.review_count, bl.status,
                      bl.description, bl.short_description,
                      bl.last_synced_at, bl.seo_title, bl.seo_description,
-                     bl.canonical_url, bl.robots, bl.feature_overrides, mp.asset_id AS asset_id,
+                     bl.canonical_url, bl.feature_overrides, mp.asset_id AS asset_id,
                      ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind,
                      social_mp.asset_id AS social_asset_id, social_ma.public_url AS social_public_url,
                      social_ma.thumbnail_url AS social_thumbnail_url, social_ma.kind AS social_kind
                 FROM business_locations bl
-                LEFT JOIN media_placements mp ON mp.site_id = bl.site_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
+                LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
                 LEFT JOIN media_assets ma ON mp.asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
-                  AND ma.site_id = bl.site_id
-                LEFT JOIN media_placements social_mp ON social_mp.site_id = bl.site_id
+                  AND ma.organization_id = bl.organization_id
+                LEFT JOIN media_placements social_mp ON social_mp.organization_id = bl.organization_id
                   AND social_mp.owner_type = 'business_location' AND social_mp.owner_id = bl.id
                   AND social_mp.slot = 'social_card' AND social_mp.sort_order = 0 AND social_mp.status = 'active'
                 LEFT JOIN media_assets social_ma ON social_mp.asset_id = social_ma.id
                   AND social_ma.status = 'active'
                   AND social_ma.organization_id = bl.organization_id
-                  AND social_ma.site_id = bl.site_id
-               WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-               ORDER BY bl.title ASC`, [organizationId, siteId]),
+               WHERE bl.organization_id = ?  AND bl.status = 'active'
+               ORDER BY bl.title ASC`, [organizationId]),
     config: push(`SELECT setting.key, setting.value
-                FROM sites s, json_each(s.settings_json, '$.config') setting
-               WHERE s.organization_id = ? AND s.id = ?
+                FROM organization s, json_each(s.settings_json, '$.config') setting
+               WHERE s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_site_verification', 'default_timezone')
-              `, [organizationId, siteId]),
+              `, [organizationId]),
     locales: push(`SELECT locale, label, is_source, status
-                FROM site_locales
-               WHERE organization_id = ? AND site_id = ?
+                FROM organization_locales
+               WHERE organization_id = ? 
                  AND (is_source = 1 OR status = 'published')
-               ORDER BY is_source DESC, locale ASC`, [organizationId, siteId]),
+               ORDER BY is_source DESC, locale ASC`, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three
     // are separate states (see product_publications / product_locations in
@@ -88,10 +86,10 @@ export function appendPublicShellQueries(
                               JOIN products p ON p.id = pl.product_id AND p.organization_id = pl.organization_id
                               JOIN product_publications pp ON pp.product_id = p.id AND pp.organization_id = p.organization_id
                               LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
-                             WHERE pl.organization_id = ? AND pp.site_id = ? AND pp.published = 1
+                             WHERE pl.organization_id = ?  AND pp.published = 1
                                AND pl.published = 1 AND pl.active = 1 AND p.active = 1
                              GROUP BY pl.location_id
-                             ORDER BY pl.location_id`, [organizationId, siteId]),
+                             ORDER BY pl.location_id`, [organizationId]),
   }
 }
 
@@ -150,7 +148,7 @@ export function buildPublicShellPayload(
   config.default_currency = site.default_currency
   if (site.contact_email) config.contact_email = site.contact_email
   if (site.contact_phone) config.contact_phone = site.contact_phone
-  if (site.brand_name) config.brand_name = site.brand_name
+  if (site.name) config.name = site.name
   if (site.brand_description) config.brand_description = site.brand_description
   if (site.seo_title) config.seo_title = site.seo_title
   if (site.seo_description) config.seo_description = site.seo_description
@@ -165,7 +163,7 @@ export function buildPublicShellPayload(
   return {
     platformMessages: null,
     site: {
-      brand_name: site.brand_name,
+      name: site.name,
       brand_description: site.brand_description,
       vertical: site.vertical,
       media: site.media,

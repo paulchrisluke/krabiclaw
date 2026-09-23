@@ -251,9 +251,9 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, previewAuthorized, site } = useTenantSite()
+const { isPlatform, organizationId, previewAuthorized, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform || !siteId) throw createError({ statusCode: 404 })
+if (isPlatform || !organizationId) throw createError({ statusCode: 404 })
 
 const { locale, localePath, t } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
@@ -265,7 +265,7 @@ import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 const inputClass = FORM_INPUT_CLASS
 
-const businessName = computed(() => site?.brand_name?.trim() ?? '')
+const businessName = computed(() => site?.name?.trim() ?? '')
 // A preview is the real site, so the form is real too — but an owner looking
 // at an unlaunched site should not be able to file a guest thread against it.
 const isDraftPreview = computed(() => previewAuthorized)
@@ -360,7 +360,7 @@ const validateTenantContact = (state: TenantContactForm): TenantFieldError[] => 
 
 const handleTenantContact = async () => {
   if (isDraftPreview.value) return
-  if (!siteId) {
+  if (!organizationId) {
     tenantSubmitError.value = t('saya.contact_page.message_failed')
     return
   }
@@ -370,7 +370,7 @@ const handleTenantContact = async () => {
 
   tenantSubmitting.value = true
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
+    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
       body: { ...tenantForm.value },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
@@ -386,7 +386,7 @@ const handleTenantContact = async () => {
   // never make a successful submission look like it failed.
   try {
     setContactConfirmation({
-      siteId,
+      organizationId,
       siteName: businessName.value,
       guestName: tenantForm.value.name,
       subject: tenantForm.value.subject,

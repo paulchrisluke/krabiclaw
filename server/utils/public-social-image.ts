@@ -54,7 +54,7 @@ export function publicSocialMediaFromJson(mediaJson: string) {
 
 export async function loadPublicSocialMedia(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   ownerType: MediaPlacementOwnerType,
   ownerIds: readonly string[],
 ): Promise<Map<string, PublicSocialMedia>> {
@@ -62,7 +62,7 @@ export async function loadPublicSocialMedia(
   const uniqueOwnerIds = [...new Set(ownerIds)]
   // Only the owner's own placements are read. The second query fetched the
   // site's media purely to fall back to its logo, which hid missing cards.
-  const ownerPlacements = await readMediaPlacements(db, { siteId, ownerType, ownerIds: uniqueOwnerIds })
+  const ownerPlacements = await readMediaPlacements(db, { organizationId, ownerType, ownerIds: uniqueOwnerIds })
   return new Map(uniqueOwnerIds.map(ownerId => [
     ownerId,
     publicSocialMediaFromPlacements(ownerPlacements.get(ownerId) ?? []),

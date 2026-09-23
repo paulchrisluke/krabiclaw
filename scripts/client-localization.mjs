@@ -80,7 +80,7 @@ async function publish() {
   if (options.apply && options.verify) throw new Error('Choose --apply or --verify')
   const bundle = await json(options.bundle)
   if (bundle.origin !== base.origin) throw new Error('Bundle origin does not match --base-url; prepare a separate bundle for this environment')
-  if (!bundle.site_id || !bundle.locale || !Array.isArray(bundle.products) || !Array.isArray(bundle.resources) || !Array.isArray(bundle.pages)) throw new Error('Invalid localization bundle')
+  if (!bundle.organization_id || !bundle.locale || !Array.isArray(bundle.products) || !Array.isArray(bundle.resources) || !Array.isArray(bundle.pages)) throw new Error('Invalid localization bundle')
   for (const page of bundle.pages) page.blocks = normalizeTenantPageBlocks(page.blocks)
   const token = await json(options['token-file'])
   if (token.origin !== base.origin || !Number.isFinite(token.expires_at) || token.expires_at <= Date.now()) throw new Error('OAuth authorization is expired or belongs to another environment')
@@ -100,7 +100,7 @@ async function publish() {
     return envelope.result
   }
   async function call(name, args = {}) {
-    const result = await rpc('tools/call', { name, arguments: { ...args, site_id: bundle.site_id } })
+    const result = await rpc('tools/call', { name, arguments: { ...args, organization_id: bundle.organization_id } })
     if (result.structuredContent) return result.structuredContent
     const content = result.content?.find(item => item.type === 'text')?.text
     if (!content) throw new Error(`${name} omitted its result`)
@@ -140,7 +140,7 @@ async function publish() {
   for (const page of bundle.pages) {
     if (existingPages.has(page.page_id)) await verifyPage(existingPages.get(page.page_id), page)
   }
-  console.log(`${base.origin} · ${bundle.site_id} · ${bundle.locale}: ${expectedIds.length} products, ${bundle.resources.length} resources, ${bundle.pages.length} pages`)
+  console.log(`${base.origin} · ${bundle.organization_id} · ${bundle.locale}: ${expectedIds.length} products, ${bundle.resources.length} resources, ${bundle.pages.length} pages`)
   if (!options.apply && !options.verify) { console.log('Preflight passed. No writes. Use --apply to publish this exact bundle.'); return }
   if (options.apply) {
     // Products are resources; the bundle keeps them in their own list because

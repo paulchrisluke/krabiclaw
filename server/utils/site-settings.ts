@@ -30,9 +30,8 @@ export class SiteSettingsNotFoundError extends Error {
 
 interface SiteSettingsRow {
   id: string
-  organization_id: string
   subdomain: string | null
-  brand_name: string | null
+  name: string | null
   vertical: string
   theme_id: string
 }
@@ -56,7 +55,6 @@ interface FullSiteRow extends SiteSettingsRow {
   social_share_thumbnail_url: string | null
   social_share_kind: 'image' | 'video' | null
   contact_email: string | null
-  last_published_at: string | null
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
@@ -86,12 +84,11 @@ function buildSlug(value: string): string {
 export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
-  siteId: string
 ) {
   const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
-    SELECT sites.id, sites.organization_id, subdomain, sites.status,
-           (SELECT 'https://' || domain FROM site_domains WHERE site_id = sites.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM site_domains WHERE site_id = sites.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
-           brand_name, brand_description,
+    SELECT organization.id, subdomain, organization.status,
+           (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
+           name, brand_description,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
@@ -99,29 +96,29 @@ export async function loadSettingsPayload(
            smp.asset_id AS social_share_media_id, sma.public_url AS social_share_public_url,
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
-           seo_title, seo_description, canonical_url, robots,
+           seo_title, seo_description, canonical_url,
            social_facebook_url, social_instagram_url, social_tiktok_url,
-           feature_overrides, last_published_at, sites.created_at, sites.updated_at,
+           feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
            vertical, theme_id
-    FROM sites
-    LEFT JOIN media_placements mp ON mp.site_id = sites.id AND mp.owner_type = 'site'
-      AND mp.owner_id = sites.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
+    FROM organization
+    LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
+      AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-    LEFT JOIN media_placements fmp ON fmp.site_id = sites.id AND fmp.owner_type = 'site'
-      AND fmp.owner_id = sites.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
+    LEFT JOIN media_placements fmp ON fmp.organization_id = organization.id AND fmp.owner_type = 'organization'
+      AND fmp.owner_id = organization.id AND fmp.slot = 'favicon' AND fmp.sort_order = 0 AND fmp.status = 'active'
     LEFT JOIN media_assets fma ON fma.id = fmp.asset_id AND fma.status = 'active'
-    LEFT JOIN media_placements smp ON smp.site_id = sites.id AND smp.owner_type = 'site'
-      AND smp.owner_id = sites.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
+    LEFT JOIN media_placements smp ON smp.organization_id = organization.id AND smp.owner_type = 'organization'
+      AND smp.owner_id = organization.id AND smp.slot = 'social_share' AND smp.sort_order = 0 AND smp.status = 'active'
     LEFT JOIN media_assets sma ON sma.id = smp.asset_id AND sma.status = 'active'
-    WHERE sites.id = ? AND sites.organization_id = ?
+    WHERE organization.id = ?
     LIMIT 1
-  `, [siteId, organizationId])
+  `, [organizationId])
 
   if (!updatedSite) {
     throw new SiteSettingsNotFoundError()
   }
 
-  const siteConfig = await getConfig(db, organizationId, siteId)
+  const siteConfig = await getConfig(db, organizationId)
 
   let toggleableFeatures: readonly ProductFeature[] = []
   let effectiveFeatures: readonly ProductFeature[] = []
@@ -140,15 +137,13 @@ export async function loadSettingsPayload(
 
   return {
     id: updatedSite.id,
-    organization_id: updatedSite.organization_id,
-    site_id: updatedSite.id,
     subdomain: updatedSite.subdomain,
     theme: resolvePublicTemplate({ themeId: updatedSite.theme_id }).slug,
     status: updatedSite.status,
 
     public_url: updatedSite.public_url,
     custom_domain_status: updatedSite.custom_domain_status,
-    brand_name: updatedSite.brand_name,
+    name: updatedSite.name,
     brand_description: updatedSite.brand_description,
     media: [
       ...(updatedSite.logo_media_id ? [{
@@ -194,7 +189,6 @@ export async function loadSettingsPayload(
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
     google_site_verification: siteConfig.google_site_verification || '',
-    last_published_at: updatedSite.last_published_at,
     created_at: updatedSite.created_at,
     updated_at: updatedSite.updated_at,
   }
@@ -203,14 +197,13 @@ export async function loadSettingsPayload(
 async function updateNonSiteConfigFields(
   db: D1Database,
   organizationId: string,
-  siteId: string,
   updates: UpdateSiteSettingsRequest
 ): Promise<SiteSettingsUpdateResult | null> {
   if (updates.brand_color !== undefined) {
     if (updates.brand_color) {
-      await setConfig(db, organizationId, siteId, 'brand_color', updates.brand_color)
+      await setConfig(db, organizationId, 'brand_color', updates.brand_color)
     } else {
-      await deleteConfig(db, organizationId, siteId, 'brand_color')
+      await deleteConfig(db, organizationId, 'brand_color')
     }
   }
 
@@ -231,9 +224,9 @@ async function updateNonSiteConfigFields(
     if (updates[key] !== undefined) {
       const value = updates[key]
       if (value) {
-        await setConfig(db, organizationId, siteId, key, value)
+        await setConfig(db, organizationId, key, value)
       } else {
-        await deleteConfig(db, organizationId, siteId, key)
+        await deleteConfig(db, organizationId, key)
       }
     }
   }
@@ -244,7 +237,7 @@ async function updateNonSiteConfigFields(
 async function syncAnalyticsSettingToZaraz(
   db: D1Database,
   env: SetupEnv,
-  siteId: string,
+  organizationId: string,
   measurementId: unknown
 ) {
   if (measurementId === undefined) return
@@ -252,7 +245,7 @@ async function syncAnalyticsSettingToZaraz(
   try {
     await reconcileZarazAnalytics(env, db)
   } catch (error) {
-    console.error('zaraz_reconciliation_failed', { siteId, error })
+    console.error('zaraz_reconciliation_failed', { organizationId, error })
   }
 }
 
@@ -260,7 +253,6 @@ async function attemptSiteUpdate(
   db: D1Database,
   env: SetupEnv,
   site: SiteSettingsRow,
-  siteId: string,
   organizationId: string,
   updates: UpdateSiteSettingsRequest,
   userId: string,
@@ -274,9 +266,9 @@ async function attemptSiteUpdate(
     setParts.push("settings_json = json_set(settings_json, '$.config.font_preset', ?)")
     params.push(updates.font_preset)
   }
-  if (updates.brand_name !== undefined) {
-    setParts.push('brand_name = ?', 'subdomain = ?')
-    params.push(updates.brand_name, subdomain)
+  if (updates.name !== undefined) {
+    setParts.push('name = ?', 'subdomain = ?')
+    params.push(updates.name, subdomain)
   }
   if (updates.brand_description !== undefined) {
     setParts.push('brand_description = ?')
@@ -311,10 +303,6 @@ async function attemptSiteUpdate(
     }
     setParts.push('default_currency = ?')
     params.push(currency)
-  }
-  if (updates.last_published_at !== undefined) {
-    setParts.push('last_published_at = ?')
-    params.push(updates.last_published_at ?? null)
   }
   if (updates.seo_title !== undefined) {
     setParts.push('seo_title = ?')
@@ -379,7 +367,7 @@ async function attemptSiteUpdate(
 
       // Disabling a module that still has live content/bookings must not silently hide it.
       for (const feature of newDelta.disabled ?? []) {
-        const guard = await checkModuleHasLiveData(db, { siteId }, feature as ProductFeature)
+        const guard = await checkModuleHasLiveData(db, { organizationId }, feature as ProductFeature)
         if (guard.blocked) {
           return { status: 409, data: { error: guard.reason } }
         }
@@ -394,8 +382,8 @@ async function attemptSiteUpdate(
     // location's stale override must not block a legitimate site feature update.
     const overriddenLocations = await queryAll<{ title: string; feature_overrides: string }>(db, `
       SELECT title, feature_overrides FROM business_locations
-      WHERE site_id = ? AND organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
-    `, [siteId, organizationId])
+       WHERE organization_id = ? AND status = 'active' AND feature_overrides IS NOT NULL
+    `, [ organizationId])
     const newEffectiveSet = new Set(newEffectiveFeatures)
     const brokenLocations = overriddenLocations
       .filter(loc => (parseCmsFeatureOverrideDelta(loc.feature_overrides)?.enabled ?? []).some(feature => !newEffectiveSet.has(feature)))
@@ -412,7 +400,7 @@ async function attemptSiteUpdate(
   }
 
   if (setParts.length === 0 && siteMedia === undefined) {
-    const settings = await loadSettingsPayload(db, organizationId, siteId)
+    const settings = await loadSettingsPayload(db, organizationId)
     return {
       status: 200,
       data: {
@@ -429,20 +417,20 @@ async function attemptSiteUpdate(
     params.push(now, userId)
   }
 
-  const siteUpdate = {
+  const organizationUpdate = {
     sql: `
-    UPDATE sites
+    UPDATE organization
     SET ${setParts.join(', ')}
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
   `,
-    values: [...params, siteId, organizationId],
+    values: [...params, organizationId],
   }
 
-  const isRename = updates.brand_name !== undefined && subdomain && subdomain !== site.subdomain
+  const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
   if (isRename && setParts.length > 0) {
-    await createSystemSubdomain(env, db, siteId, organizationId, subdomain, { siteUpdate })
+    await createSystemSubdomain(env, db, organizationId, subdomain, { organizationUpdate })
   } else if (setParts.length > 0) {
-    const result = await execute(db, siteUpdate.sql, siteUpdate.values)
+    const result = await execute(db, organizationUpdate.sql, organizationUpdate.values)
     if (!result.success) {
       throw new Error('Failed to update site settings')
     }
@@ -450,30 +438,30 @@ async function attemptSiteUpdate(
 
   // All settings callers use this mutation path; refresh both public resource
   // and HTML caches when typography changes, including a reset to Default.
-  if (updates.font_preset !== undefined) await purgePublicResourceCacheSafe(env, siteId)
+  if (updates.font_preset !== undefined) await purgePublicResourceCacheSafe(env, organizationId)
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))
     const queries = [...targetSlots].flatMap(slot => buildSingleMediaPlacementQueries({
       organizationId,
-      siteId,
-      placement: { owner_type: 'site', owner_id: siteId, slot },
+      
+      placement: { owner_type: 'organization', owner_id: organizationId, slot },
       media: siteMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
       now,
     }))
     await executeBatch(db, queries)
   }
 
-  const cardInputChanged = updates.brand_name !== undefined
+  const cardInputChanged = updates.name !== undefined
     || updates.brand_description !== undefined
     || updates.seo_title !== undefined
     || updates.seo_description !== undefined
     || siteMedia?.some(item => item.slot === 'logo' || item.slot === 'social_share') === true
   if (cardInputChanged) {
-    await refreshSocialCard({ db, env, owner: { owner_type: 'site', owner_id: siteId }, actorId: userId })
+    await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: userId })
   }
 
-  const settings = await loadSettingsPayload(db, organizationId, siteId)
+  const settings = await loadSettingsPayload(db, organizationId)
   return {
     status: 200,
     data: {
@@ -487,7 +475,6 @@ async function attemptSiteUpdate(
 export async function updateSiteSettingsFields(
   db: D1Database,
   env: SetupEnv & CloudflareEnv,
-  siteId: string,
   organizationId: string,
   updates: UpdateSiteSettingsRequest,
   userId: string
@@ -500,11 +487,11 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, organization_id, subdomain, brand_name, vertical, theme_id
-    FROM sites
-    WHERE id = ? AND organization_id = ?
+    SELECT id, subdomain, name, vertical, theme_id
+    FROM organization
+    WHERE id = ?
     LIMIT 1
-  `, [siteId, organizationId])
+  `, [organizationId])
 
   if (!site) {
     return {
@@ -531,7 +518,7 @@ export async function updateSiteSettingsFields(
     try {
       await hydrateMediaAssetRefs(db, {
         organizationId,
-        siteId,
+        
         refs: siteMedia.filter(item => item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
         allowedKinds: ['image'],
       })
@@ -540,17 +527,17 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  const configError = await updateNonSiteConfigFields(db, organizationId, siteId, updates)
+  const configError = await updateNonSiteConfigFields(db, organizationId, updates)
   if (configError) return configError
   await syncAnalyticsSettingToZaraz(
     db,
     env,
-    siteId,
+    organizationId,
     updates.google_analytics_measurement_id,
   )
 
-  if (updates.brand_name !== undefined) {
-    const baseSlug = buildSlug(updates.brand_name)
+  if (updates.name !== undefined) {
+    const baseSlug = buildSlug(updates.name)
     if (!baseSlug) {
       return {
         status: 400,
@@ -563,10 +550,10 @@ export async function updateSiteSettingsFields(
 
       const existing = await queryFirst(db, `
         SELECT id
-        FROM sites
+        FROM organization
         WHERE subdomain = ? AND id != ?
         LIMIT 1
-      `, [subdomain, siteId])
+      `, [subdomain, organizationId])
       if (existing) continue
       if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
@@ -576,7 +563,6 @@ export async function updateSiteSettingsFields(
           db,
           env,
           site,
-          siteId,
           organizationId,
           updates,
           userId,
@@ -593,7 +579,7 @@ export async function updateSiteSettingsFields(
       // subdomain collision and must not spend another attempt.
       if (result.status === 200) {
         const adapter = await organizationAdapter(env)
-        await adapter.updateOrganization(organizationId, { name: updates.brand_name.trim() })
+        await adapter.updateOrganization(organizationId, { name: updates.name.trim() })
       }
       return result
     }
@@ -608,7 +594,6 @@ export async function updateSiteSettingsFields(
     db,
     env,
     site,
-    siteId,
     organizationId,
     updates,
     userId,

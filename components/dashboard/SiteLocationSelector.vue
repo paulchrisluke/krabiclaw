@@ -1,6 +1,6 @@
 <template>
   <!-- Kept as a utility class, not scoped CSS, so the loading skeleton in
-       SitesPage can reserve exactly this layout.
+       LocationsPage can reserve exactly this layout.
 
        Tiles are 20/19, near square, matching the listings grid this follows.
        A square crop is only safe because the tile shows a photograph: the name

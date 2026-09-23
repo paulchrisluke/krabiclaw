@@ -17,7 +17,6 @@ export default defineHandler(async (event) => {
     await publishNotificationInvalidation(access.env, {
       type: 'notification.read',
       organizationId: access.organization.id,
-      siteId: null,
       locationId: null,
       targetUserId: access.userId,
     })

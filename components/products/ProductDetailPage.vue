@@ -381,7 +381,7 @@ import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   vertical: string
   product: Product
   location: PublicProductLocationPayload
@@ -637,7 +637,7 @@ async function loadSessions() {
       // This page is one branch's page, so it asks for that branch's
       // occurrences. Two branches running the same class at the same hour
       // would otherwise be indistinguishable by date and time alone.
-      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
+      `/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
       {
         validate: (value): value is { success: true; sessions: PublicSession[] } =>
           isRecord(value) && value.success === true && Array.isArray(value.sessions),
@@ -739,7 +739,7 @@ async function submitBooking(contact: ContactFormState) {
   bookingError.value = ''
   try {
     const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; policy_summary?: ApiRecord | null }>(
-      `/api/public/sites/${encodeURIComponent(props.siteId)}/products/${encodeURIComponent(props.product.slug)}/book`,
+      `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
       {
         method: 'POST',
         body: {
@@ -758,7 +758,7 @@ async function submitBooking(contact: ContactFormState) {
     )
     setBookingConfirmation({
       type: 'booking',
-      siteId: props.siteId,
+      organizationId: props.organizationId,
       siteName: props.location.title,
       guestName: contact.name,
       startsAt: session.starts_at,

@@ -8,7 +8,7 @@ const localizedValuesSchema = {
   additionalProperties: true,
 } as const
 
-const localizationIdentity = { id: { type: 'string' }, organization_id: { type: 'string' }, site_id: { type: 'string' },
+const localizationIdentity = { id: { type: 'string' }, organization_id: { type: 'string' }, 
   locale: { type: 'string' }, created_at: { type: 'string' }, updated_at: { type: 'string' } } as const
 const localizationObject = { oneOf: [
   { type: 'object', properties: { ...localizationIdentity, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] },
@@ -25,7 +25,7 @@ const localizationObject = { oneOf: [
 
 export const LOCALES_TOOLS: McpToolDefinition[] = [
   siteTool({
-    name: 'list_site_locales',
+    name: 'list_organization_locales',
     description: 'List the immutable English source locale and exact authored secondary locales for this site. Billing is managed only in the dashboard.',
     domain: 'locales',
     minimumRole: 'editor',

@@ -1,11 +1,10 @@
-import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 import type { IntegrationOAuthState } from '~/shared/site-settings'
 import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -31,26 +30,21 @@ export default defineHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?ga=error' } })
   }
 
-  const { siteId, organizationId, userId, timestamp } = stateData
+  const { organizationId, userId, timestamp } = stateData
 
-  if (!siteId || !organizationId || !userId || Date.now() - timestamp > 10 * 60 * 1000) {
+  if (!organizationId || !organizationId || !userId || Date.now() - timestamp > 10 * 60 * 1000) {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?ga=expired' } })
   }
 
   const connectionRedirect = async (status: string) => {
-    const db = env.DB
-    if (!db) return `/dashboard?ga=${status}`
-
     try {
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
-      if (!context) return `/dashboard?ga=${status}`
-      const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
-      return `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(context.siteSlug)}/settings/analytics?ga=${status}`
+      const organization = await resolveUserOrganization(env, { userId, organizationId })
+      if (!organization) return `/dashboard?ga=${status}`
+      return `/dashboard/${encodeURIComponent(organization.slug)}/settings/analytics?ga=${status}`
     } catch (e) {
       console.error('Google Analytics redirect organization query failed:', e)
       return `/dashboard?ga=${status}`
     }
-
   }
 
   try {
@@ -58,9 +52,9 @@ export default defineHandler(async (event) => {
     // `organizationId` arrives in the OAuth state, so it names an organization
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
-    const access = await loadMemberSiteRow(event, env.DB, env, siteId, userId)
-    if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, siteId, event }))
+    const access = await loadMemberOrganizationRow(event, env.DB, env, organizationId, userId)
+    if (!access || access.id !== organizationId) throw new Error('Access denied')
+    await assertOrganizationWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, event }))
     const tokenData = await exchangeGoogleAnalyticsCode(env, code)
 
     const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -75,7 +69,7 @@ export default defineHandler(async (event) => {
     }
 
     await storeGoogleAnalyticsConnection(env, {
-      organization_id: organizationId, site_id: siteId, connected_by_user_id: userId, provider_account_email: userInfo.email, encrypted_access_token: tokenData.accessToken, encrypted_refresh_token: tokenData.refreshToken, scopes: tokenData.scope, expires_at: new Date(Date.now() + tokenData.expiresIn * 1000).toISOString(), status: 'active'
+      organization_id: organizationId, connected_by_user_id: userId, provider_account_email: userInfo.email, encrypted_access_token: tokenData.accessToken, encrypted_refresh_token: tokenData.refreshToken, scopes: tokenData.scope, expires_at: new Date(Date.now() + tokenData.expiresIn * 1000).toISOString(), status: 'active'
     }, stateData)
 
     return new Response(null, { status: 302, headers: { Location: await connectionRedirect('connected') } })

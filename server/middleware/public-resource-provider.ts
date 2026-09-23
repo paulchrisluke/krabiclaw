@@ -8,16 +8,16 @@ import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 export default defineHandler((event) => {
   const provider: PublicResourceProvider = async (options) => {
     options.signal?.throwIfAborted()
-    if (!options.siteId) {
+    if (!options.organizationId) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Public site context unavailable' })
     }
     if (options.resourceKind === 'shell') {
-      const payload = await loadPublicShell(event, options.siteId, {
+      const payload = await loadPublicShell(event, options.organizationId, {
         locale: options.query.locale, }, {
         mutateResponseHeaders: false, signal: options.signal, })
       return finalizeRequestMetrics(event, 'public-shell-ssr', payload)
     }
-    const payload = await loadPublicPage(event, options.siteId, options.query, {
+    const payload = await loadPublicPage(event, options.organizationId, options.query, {
       mutateResponseHeaders: false, signal: options.signal, })
     return finalizeRequestMetrics(event, 'public-page-ssr', payload)
   }

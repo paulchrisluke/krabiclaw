@@ -9,7 +9,7 @@ through it with the same tools.
 - Protected resource: `/.well-known/oauth-protected-resource`
 - Server entrypoint: `server/api/mcp.post.ts`
 - Scope: `tenant`
-- Exposes: existing-site content management, menus, experiences, posts, articles
+- Exposes: existing-tenant content management, menus, experiences, posts, articles
   (blog and, on KrabiClaw's own site, documentation), media, reviews,
   submissions, notifications, Q&A, analytics
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
@@ -17,9 +17,10 @@ through it with the same tools.
 - Google Places lookup and domain setup are CMS-only. Social/OAuth publishing is feature-flagged.
   Manual locale management remains available as ordinary content editing.
 
-KrabiClaw's marketing site is an ordinary site row running the platform
-template. Its blog and documentation are article collections on that site and
-are edited with the same tools as any tenant's articles, using its `site_id`.
+KrabiClaw's marketing site is an ordinary organization running the platform
+template. Its blog and documentation are article collections on that
+organization and are edited with the same tools as any tenant's articles, using
+its `organization_id`.
 
 ## Auth Model
 
@@ -53,7 +54,7 @@ output schema, and executor must agree. Unknown tool names return JSON-RPC
 - `reconcile_products` is one atomic create/update operation for an explicitly selected location, not an ongoing sync. Each row supplies its intended Price or null. `set_missing_unavailable: true` explicitly makes omitted products unavailable.
 - `replace_resource_localizations` replaces only the submitted resources’ translations for one resource type and locale; omitted resources are untouched.
 
-MCP names map to shared domain functions. REST uses HTTP methods on the same resources; it does not need duplicate verb-named endpoints. `get_site`, `list_sites`, and workspace context expose the canonical public site URL; publishing a post returns its full public URL. DNS setup remains in the CMS.
+MCP names map to shared domain functions. REST uses HTTP methods on the same resources; it does not need duplicate verb-named endpoints. `get_organization`, `list_organizations`, and workspace context expose the canonical public site URL; publishing a post returns its full public URL. DNS setup remains in the CMS.
 
 ### Release sequence
 

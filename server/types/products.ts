@@ -33,7 +33,7 @@ export interface ProductOption {
 
 /** Site publication state. Absent from the map means the site does not carry it. */
 export interface ProductPublication {
-  site_id: string
+  organization_id: string
   published: boolean
 }
 
@@ -46,7 +46,7 @@ export interface ProductLocation {
 
 export interface Collection {
   id: string
-  site_id: string
+  organization_id: string
   location_id: string | null
   name: string
   slug: string
@@ -156,7 +156,7 @@ export interface CreateProductInput {
 export type UpdateProductInput = Partial<Omit<CreateProductInput, 'source'>>
 
 export interface SetProductPublicationInput {
-  site_id: string
+  organization_id: string
   published: boolean
 }
 
@@ -167,7 +167,6 @@ export interface SetProductLocationInput {
 }
 
 export interface CreateCollectionInput {
-  site_id: string
   location_id?: string | null
   name: string
   description?: string | null
@@ -187,7 +186,7 @@ export interface SetCollectionProductsInput {
 }
 
 export interface ReorderCollectionsInput {
-  site_id: string
+  organization_id: string
   location_id?: string | null
   collection_ids: string[]
 }

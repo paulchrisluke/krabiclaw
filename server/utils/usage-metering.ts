@@ -8,7 +8,6 @@ export type UsageResource =
 
 export interface UsageEventInput {
   organizationId: string
-  siteId?: string | null
   resource: UsageResource | string
   source: string
   provider?: string | null
@@ -38,13 +37,12 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
 
   const result = await execute(db, `
     INSERT OR IGNORE INTO usage_events
-      (id, organization_id, site_id, resource, source, provider, channel,
+      (id, organization_id, resource, source, provider, channel,
        session_id, quantity, unit, metadata_json, idempotency_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     crypto.randomUUID(),
     input.organizationId,
-    input.siteId ?? null,
     input.resource,
     input.source,
     input.provider ?? null,

@@ -27,7 +27,7 @@
       </UButton>
       <DashboardResourceLocalization
         v-if="form.id"
-        :site-id="siteId"
+        :organization-id="organizationId"
         resource-type="content_document"
         :resource-id="form.id"
         resource-label="links page"
@@ -49,7 +49,7 @@
 <script lang="ts">
 import type { InjectionKey, Reactive, Ref } from 'vue'
 import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS, type RobotsIntent } from '~/shared/robots-directive'
-import type { LinkItemStatus } from '~/server/utils/site-links'
+import type { LinkItemStatus } from '~/server/utils/links-page'
 
 export interface LinksPage {
   id: string
@@ -76,7 +76,7 @@ export interface LinkItem {
 export interface LinksEditor {
   form: Reactive<LinksPage>
   items: Ref<LinkItem[]>
-  siteId: string
+  organizationId: string
   saving: Ref<boolean>
   errorMessage: Ref<string>
   editorReady: Ref<boolean>
@@ -134,14 +134,14 @@ const isLinksWriteResponse = (
   && Array.isArray((value as Record<string, unknown>).created_item_ids)
   && ((value as Record<string, unknown>).created_item_ids as unknown[]).every(id => typeof id === 'string')
 
-const siteId = await useDashboardSiteId()
-const dashboard = useDashboardSite()
+const organizationId = await useDashboardOrganizationId()
+const dashboard = useDashboardOrganization()
 const copiedUrl = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | undefined
 const saving = ref(false)
 const errorMessage = ref('')
 
-const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/links`)
+const linksPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/links`)
 const itemsPath = computed(() => `${linksPath.value}/items`)
 
 const form = reactive<LinksPage>({
@@ -158,15 +158,15 @@ const linksPageLocalizationFields = computed(() => [
   { key: 'seo_title', label: 'SEO title', source: data.value?.page.seo_title },
   { key: 'seo_description', label: 'SEO description', source: data.value?.page.seo_description, multiline: true },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }
 
 const { data, pending } = await useAsyncData(
-  `links-page-editor-${siteId}`,
+  `links-page-editor-${organizationId}`,
   () => dashboardApi<{ page: ApiLinksPage; items: LinkItem[] }>(
-    `/api/editor/sites/${siteId}/links-page`,
+    `/api/editor/organizations/${organizationId}/links-page`,
     { validate: isLinksResponse },
   ),
   { server: false },
@@ -191,7 +191,7 @@ async function loadLinksLocalization(locale: string, linkItemId?: string): Promi
   let translation: LinksTranslation | null = null
   try {
     const response = await dashboardApi<{ localization: LinksTranslation }>(
-      `/api/editor/sites/${siteId}/localization/content_document/${form.id}/${encodeURIComponent(locale)}`, { validate: isLinksTranslation })
+      `/api/editor/organizations/${organizationId}/localization/content_document/${form.id}/${encodeURIComponent(locale)}`, { validate: isLinksTranslation })
     translation = response.localization
   } catch (cause) {
     if (!isRecord(cause) || cause.statusCode !== 404) throw cause
@@ -216,7 +216,7 @@ async function saveLinksLocalization(locale: string, submitted: Record<string, u
     for (const field of ['title', 'seo_title', 'seo_description'] as const) values[field] = typeof submitted[field] === 'string' ? submitted[field] : null
   }
   const response = await dashboardApi<{ localization: LinksTranslation }>(
-    `/api/editor/sites/${siteId}/localization/content_document/${form.id}/${encodeURIComponent(locale)}`, {
+    `/api/editor/organizations/${organizationId}/localization/content_document/${form.id}/${encodeURIComponent(locale)}`, {
       method: 'PUT', body: { values, route_path: `/${locale}/links`, content_blocks: blocks,
         ...(state.translation ? { expected_updated_at: state.translation.updated_at } : {}) }, validate: isLinksTranslation,
     })
@@ -250,7 +250,7 @@ watch(data, (value) => {
 // through SSR and the first paint and false once the rows have data.
 const editorReady = computed(() => !pending.value)
 const publicLinksUrl = computed(() => {
-  const base = dashboard.site.value?.public_url || ''
+  const base = dashboard.organization.value?.public_url || ''
   return base ? `${base.replace(/\/+$/, '')}/links` : ''
 })
 
@@ -275,7 +275,7 @@ async function copyPublicUrl() {
  * is where a newly created link picks up its id.
  */
 async function persist(nextItems: Array<Omit<LinkItem, 'id'> & { id?: string }>) {
-  const response = await dashboardApi(`/api/editor/sites/${siteId}/links-page`, {
+  const response = await dashboardApi(`/api/editor/organizations/${organizationId}/links-page`, {
     method: 'PATCH',
     body: {
       page: {
@@ -364,7 +364,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
 provide(linksEditorKey, {
   form,
   items,
-  siteId,
+  organizationId,
   saving,
   errorMessage,
   editorReady,

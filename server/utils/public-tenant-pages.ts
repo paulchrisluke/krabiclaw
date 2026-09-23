@@ -90,7 +90,7 @@ export interface PublicTenantPageHydrationResources {
  */
 export async function listPublicTenantPageReferenceRows(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   pageIds: readonly string[],
   locale = 'en',
 ): Promise<PublicTenantPageReferenceRow[]> {
@@ -103,12 +103,12 @@ export async function listPublicTenantPageReferenceRows(
            COALESCE(rep.slug, root.slug) AS slug, COALESCE(rep.path, root.path) AS path
       FROM content_documents root
       LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
-     WHERE root.site_id = ? AND root.row_role = 'root' AND root.kind = 'page'
+     WHERE root.organization_id = ? AND root.row_role = 'root' AND root.kind = 'page'
        AND root.path IS NOT NULL AND root.title IS NOT NULL
        AND root.id IN (SELECT value FROM json_each(?))
      ORDER BY root.sort_order ASC, root.title ASC
-  `, [locale, siteId, d1JsonStringSet(pageIds)])
-  const placements = await loadPublicSocialMedia(db, siteId, 'content_document', rows.map(row => row.id))
+  `, [locale, organizationId, d1JsonStringSet(pageIds)])
+  const placements = await loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
 
@@ -120,7 +120,7 @@ export async function listPublicTenantPageReferenceRows(
  */
 export async function listPublicTenantPageProductRows(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   selection: { collectionId?: string | null; productIds?: readonly string[] },
   currency: string,
 ): Promise<PublicTenantPageProductRow[]> {
@@ -141,8 +141,8 @@ export async function listPublicTenantPageProductRows(
   const collectionLocationId = selection.collectionId
     ? (await queryFirst<{ location_id: string | null }>(
         db,
-        'SELECT location_id FROM collections WHERE id = ? AND site_id = ? LIMIT 1',
-        [selection.collectionId, siteId],
+        'SELECT location_id FROM collections WHERE id = ? AND organization_id = ? LIMIT 1',
+        [selection.collectionId, organizationId],
       ))?.location_id ?? null
     : null
   const rows = await queryAll<Omit<PublicTenantPageProductRow, 'media'>>(db, `
@@ -150,11 +150,11 @@ export async function listPublicTenantPageProductRows(
            EXISTS (SELECT 1 FROM product_booking_configs bc WHERE bc.product_id = p.id AND bc.organization_id = p.organization_id) AS is_bookable,
            COALESCE(
              (SELECT bl.slug FROM product_locations pl
-                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = ? AND bl.status = 'active'
                WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
                  AND pl.location_id = ?),
              (SELECT CASE WHEN count(*) = 1 THEN min(bl.slug) END FROM product_locations pl
-                JOIN business_locations bl ON bl.id = pl.location_id AND bl.site_id = ? AND bl.status = 'active'
+                JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = ? AND bl.status = 'active'
                WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1)
            ) AS location_slug,
            offer.unit_amount, offer.compare_at_unit_amount, offer.currency
@@ -176,17 +176,17 @@ export async function listPublicTenantPageProductRows(
            AND (pr.valid_from_at IS NULL OR pr.valid_from_at <= ?)
            AND (pr.valid_until_at IS NULL OR pr.valid_until_at > ?)
       ) offer ON offer.product_id = p.id AND offer.rank = 1
-     WHERE pub.site_id = ? AND pub.published = 1 AND p.active = 1
+     WHERE pub.organization_id = ? AND pub.published = 1 AND p.active = 1
        AND (cp.product_id IS NOT NULL OR p.id IN (SELECT value FROM json_each(?)))
      ORDER BY cp.sort_order ASC, p.name ASC
-  `, [siteId, collectionLocationId, siteId, selection.collectionId ?? null, collectionLocationId, currency, now, now, siteId, d1JsonStringSet(productIds)])
-  const placements = await loadPublicSocialMedia(db, siteId, 'product', rows.map(row => row.id))
+  `, [organizationId, collectionLocationId, organizationId, selection.collectionId ?? null, collectionLocationId, currency, now, now, organizationId, d1JsonStringSet(productIds)])
+  const placements = await loadPublicSocialMedia(db, organizationId, 'product', rows.map(row => row.id))
   return rows.map(row => ({ ...row, media: placements.get(row.id)?.media ?? [] }))
 }
 
 async function hydrateBlocks(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   pagePath: string,
   locale: string,
   blocks: TenantPageBlock[],
@@ -225,14 +225,14 @@ async function hydrateBlocks(
   // lives, its vertical decides where a product lives, and its currency
   // decides which offers apply.
   const siteRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
-    db, 'SELECT theme_id, vertical, default_currency FROM sites WHERE id = ? LIMIT 1', [siteId])
+    db, 'SELECT theme_id, vertical, default_currency FROM organization WHERE id = ? LIMIT 1', [organizationId])
   if (!siteRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
   const template = resolvePublicTemplate({ themeId: siteRow.theme_id, vertical: siteRow.vertical })
   const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
       ? (await resources.pages).filter(page => pageIds.has(page.id))
-      : await listPublicTenantPageReferenceRows(db, siteId, [...pageIds], locale)
+      : await listPublicTenantPageReferenceRows(db, organizationId, [...pageIds], locale)
     : []
   // Each grid gets the products it named, and only those. Keyed by collection
   // rather than flattened into one list: two grids on a page name two different
@@ -244,9 +244,9 @@ async function hydrateBlocks(
     throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
   }
   const productsByCollection = new Map(await Promise.all([...collectionIds].map(async collectionId =>
-    [collectionId, await listPublicTenantPageProductRows(db, siteId, { collectionId }, currency!)] as const)))
+    [collectionId, await listPublicTenantPageProductRows(db, organizationId, { collectionId }, currency!)] as const)))
   const productById = new Map((productIds.size
-    ? await listPublicTenantPageProductRows(db, siteId, { productIds: [...productIds] }, currency!)
+    ? await listPublicTenantPageProductRows(db, organizationId, { productIds: [...productIds] }, currency!)
     : []).map(product => [product.id, product]))
   const sourceLocations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; address: string | null; description: string | null; short_description: string | null; asset_id: string | null; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null }>(db, `
@@ -254,8 +254,8 @@ async function hydrateBlocks(
           FROM business_locations bl
           LEFT JOIN media_placements mp ON mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
           LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-         WHERE bl.site_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
-      `, [siteId, d1JsonStringSet([...locationIds])])
+         WHERE bl.organization_id = ? AND bl.status = 'active' AND bl.id IN (SELECT value FROM json_each(?))
+      `, [organizationId, d1JsonStringSet([...locationIds])])
     : []
   // The row stores the address as text and a translation carries only the parts
   // that are words, so the canonical one is read first: the overlay then merges
@@ -273,16 +273,16 @@ async function hydrateBlocks(
       })
     : parsedLocations
   const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
-    Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, siteId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
-    hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
+    Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, organizationId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
+    hasReviewSource ? listSiteReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
     hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
       SELECT p.id, p.title, p.slug, p.summary AS excerpt, p.canonical_url, ${COVER_SELECT}
         FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
         ${coverJoinSql('p')}
-       WHERE root.kind = 'article' AND root.row_role = 'root' AND p.site_id = ? AND root.status = 'published' AND root.visibility = 'public'
+       WHERE root.kind = 'article' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'listed'
        ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
-    `, [locale, siteId]) : Promise.resolve([]),
-    hasUpdateSource ? getPublishedPosts(db, siteId, 12, undefined, locale) : Promise.resolve([]),
+    `, [locale, organizationId]) : Promise.resolve([]),
+    hasUpdateSource ? getPublishedPosts(db, organizationId, 12, undefined, locale) : Promise.resolve([]),
   ])
   const reviewRows = sourceReviewRows
   const postRows = sourcePostRows
@@ -461,7 +461,7 @@ function mapPage(
 export async function getPublicTenantPageForPath(
   env: CloudflareEnv,
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   path: string,
   options: {
     locale?: string | null
@@ -471,20 +471,20 @@ export async function getPublicTenantPageForPath(
   } = {},
 ): Promise<PublicTenantPage | null> {
   const page = options.preview
-    ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
-    : await getPublishedTenantPage(db, siteId, path, options.locale)
+    ? await getTenantPageForEditor(db, await resolveVariantId(db, organizationId, path, options.locale))
+    : await getPublishedTenantPage(db, organizationId, path, options.locale)
   if (!page) return null
   const localizations = page.locale === 'en'
     ? null
-    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, siteId, page.locale)
+    : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, page.locale)
   const [blocks, media, sourceLocale] = await Promise.all([
-    hydrateBlocks(db, siteId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
-    loadPublicSocialMedia(db, siteId, 'content_document', [page.id]),
+    hydrateBlocks(db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
+    loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
     queryFirst<{ locale: string }>(db, `
-      SELECT locale FROM site_locales
-       WHERE organization_id = ? AND site_id = ? AND is_source = 1
+      SELECT locale FROM organization_locales
+       WHERE organization_id = ?  AND is_source = 1
        LIMIT 1
-    `, [page.organization_id, siteId]),
+    `, [page.organization_id]),
   ])
   const localizedMedia = page.locale === 'en'
     ? media.get(page.id) ?? { media: [], social_image: null }
@@ -505,8 +505,8 @@ export async function getPublicTenantPageForPath(
   }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: page.organization_id,
-    siteId,
-    sourcePath: await resolvePublicDocumentSourcePath(db, siteId, page.page_id),
+    
+    sourcePath: await resolvePublicDocumentSourcePath(db, organizationId, page.page_id),
     documentId: page.page_id,
   })
   const publicPage = page.locale === sourceLocale.locale
@@ -515,24 +515,24 @@ export async function getPublicTenantPageForPath(
   return mapPage(publicPage, blocks, localizedMedia, localeRepresentations)
 }
 
-async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
+async function resolveVariantId(db: DbClient, organizationId: string, path: string, locale?: string | null): Promise<string> {
   const row = await queryFirst<{ id: string } | null>(db, `
     SELECT v.id
       FROM content_documents v
-     WHERE v.kind = 'page' AND v.row_role IN ('root','representation') AND v.site_id = ? AND v.path = ?
+     WHERE v.kind = 'page' AND v.row_role IN ('root','representation') AND v.organization_id = ? AND v.path = ?
        AND (? IS NULL OR v.locale = ?)
      ORDER BY v.locale ASC
      LIMIT 1
-  `, [siteId, path, locale ?? null, locale ?? null])
+  `, [organizationId, path, locale ?? null, locale ?? null])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant page not found' })
   return row.id
 }
 
-export async function listCanonicalTenantPages(env: CloudflareEnv, db: DbClient, siteId: string, locale?: string | null) {
-  const paths = await listPublishedTenantPagePaths(db, siteId, locale)
+export async function listCanonicalTenantPages(env: CloudflareEnv, db: DbClient, organizationId: string, locale?: string | null) {
+  const paths = await listPublishedTenantPagePaths(db, organizationId, locale)
   const pages: PublicTenantPage[] = []
   for (const item of paths) {
-    const page = await getPublicTenantPageForPath(env, db, siteId, item.path, { locale })
+    const page = await getPublicTenantPageForPath(env, db, organizationId, item.path, { locale })
     if (page) pages.push(page)
   }
   return pages

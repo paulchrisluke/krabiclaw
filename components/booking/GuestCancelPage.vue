@@ -74,7 +74,7 @@ const props = defineProps<{ kind: 'reservation' | 'booking' }>()
 
 const { locale, t } = useI18n()
 const route = useRoute()
-const { siteId, site } = useTenantSite()
+const { site } = useTenantSite()
 const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
 
 const keyPrefix = computed(() => props.kind === 'booking' ? 'experience_cancel' : 'reservation_cancel')
@@ -94,7 +94,7 @@ interface GuestBookingView {
 
 const { data, pending } = await useAsyncData<{ success: true; booking: GuestBookingView }>(
   `guest-cancel-${requestId.value}`,
-  () => $fetch(`/api/public/sites/${siteId}/booking-requests/${requestId.value}`, {
+  () => $fetch(`/api/public/booking-requests/${requestId.value}`, {
     headers: { Authorization: `Bearer ${token.value}` },
   }),
   { immediate: Boolean(requestId.value) && Boolean(token.value) },
@@ -125,7 +125,7 @@ async function handleCancel() {
   loading.value = true
   cancelError.value = ''
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/booking-requests/${requestId.value}/cancel`, {
+    await publicApiMutation<{ success: true }>(`/api/public/booking-requests/${requestId.value}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token.value}` },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,

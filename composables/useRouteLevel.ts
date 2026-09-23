@@ -96,7 +96,7 @@ export function useRouteLevel() {
   /**
    * Where Back goes, or `null` at a tab root, which has nothing above it.
    * Where the dashboard is walked differently from the way the URL nests — the
-   * links page lives under `/sites/:siteSlug` but is reached from Pages — the
+   * links page lives under the organization root but is reached from Pages — the
    * page names its own with `definePageMeta({ back: '<route name>' })`.
    */
   const to = computed<string | null>(() => {

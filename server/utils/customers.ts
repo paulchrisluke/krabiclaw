@@ -12,7 +12,6 @@ export type CustomerSource =
 
 export interface FindOrCreateCustomerInput {
   organizationId: string
-  siteId: string
   name?: string | null
   email?: string | null
   phone?: string | null
@@ -23,7 +22,6 @@ export interface FindOrCreateCustomerInput {
 export interface CustomerRow {
   id: string
   organization_id: string
-  site_id: string
   user_id: string | null
   stripe_customer_id: string | null
   name: string | null
@@ -39,7 +37,7 @@ export interface CustomerRow {
 }
 
 const CUSTOMER_SELECT = `
-  SELECT id, organization_id, site_id, user_id, stripe_customer_id, name, email,
+  SELECT id, organization_id, user_id, stripe_customer_id, name, email,
          email_normalized, email_hash, phone, phone_normalized, phone_metadata_version, source, status
   FROM customers
 `
@@ -71,25 +69,25 @@ function isUniqueCustomerConflict(error: unknown): boolean {
 
 async function findExistingCustomer(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   emailNormalized: string | null,
   phoneNormalized: string | null,
 ): Promise<CustomerRow | null> {
   if (emailNormalized) {
     return await queryFirst<CustomerRow>(db, `
       ${CUSTOMER_SELECT}
-      WHERE site_id = ? AND email_normalized = ? AND status = 'active'
+      WHERE organization_id = ? AND email_normalized = ? AND status = 'active'
       LIMIT 1
-    `, [siteId, emailNormalized])
+    `, [organizationId, emailNormalized])
   }
 
   if (phoneNormalized) {
     return await queryFirst<CustomerRow>(db, `
       ${CUSTOMER_SELECT}
-      WHERE site_id = ? AND phone_normalized = ? AND status = 'active'
+      WHERE organization_id = ? AND phone_normalized = ? AND status = 'active'
       ORDER BY created_at ASC
       LIMIT 1
-    `, [siteId, phoneNormalized])
+    `, [organizationId, phoneNormalized])
   }
 
   return null
@@ -97,7 +95,7 @@ async function findExistingCustomer(
 
 async function hasCustomerEmailConflict(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   emailNormalized: string | null,
   customerId: string,
 ): Promise<boolean> {
@@ -106,11 +104,11 @@ async function hasCustomerEmailConflict(
   const existing = await queryFirst<{ id: string }>(db, `
     SELECT id
     FROM customers
-    WHERE site_id = ?
+    WHERE organization_id = ?
       AND email_normalized = ?
       AND id != ?
     LIMIT 1
-  `, [siteId, emailNormalized, customerId])
+  `, [organizationId, emailNormalized, customerId])
 
   return Boolean(existing)
 }
@@ -127,7 +125,7 @@ export async function findOrCreateCustomer(
   const emailHash = emailNormalized ? await hashIdentifier(emailNormalized) : null
   const name = input.name?.trim() || null
 
-  const existing = await findExistingCustomer(db, input.siteId, emailNormalized, phoneNormalized)
+  const existing = await findExistingCustomer(db, input.organizationId, emailNormalized, phoneNormalized)
   if (existing) {
     return {
       ...existing,
@@ -140,14 +138,13 @@ export async function findOrCreateCustomer(
   try {
     await execute(db, `
       INSERT INTO customers (
-        id, organization_id, site_id, user_id, name, email, email_normalized, email_hash,
+        id, organization_id, user_id, name, email, email_normalized, email_hash,
         phone, phone_normalized, phone_metadata_version, source, status, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
     `, [
       id,
       input.organizationId,
-      input.siteId,
       input.userId ?? null,
       name,
       email,
@@ -162,7 +159,7 @@ export async function findOrCreateCustomer(
     ])
   } catch (error) {
     if (!isUniqueCustomerConflict(error)) throw error
-    const racedCustomer = await findExistingCustomer(db, input.siteId, emailNormalized, phoneNormalized)
+    const racedCustomer = await findExistingCustomer(db, input.organizationId, emailNormalized, phoneNormalized)
     if (racedCustomer) return { ...racedCustomer, created: false }
     throw error
   }
@@ -170,7 +167,6 @@ export async function findOrCreateCustomer(
   return {
     id,
     organization_id: input.organizationId,
-    site_id: input.siteId,
     user_id: null,
     stripe_customer_id: null,
     name,
@@ -259,7 +255,7 @@ export async function recordCustomerBooking(
 ): Promise<void> {
   const email = input.email?.trim() || null
   const emailNormalized = normalizeCustomerEmail(email)
-  const includeEmail = !(await hasCustomerEmailConflict(db, input.siteId, emailNormalized, customerId))
+  const includeEmail = !(await hasCustomerEmailConflict(db, input.organizationId, emailNormalized, customerId))
 
   try {
     await updateCustomerBooking(db, customerId, input, includeEmail)
@@ -286,8 +282,8 @@ export async function linkAnonymousCustomerToUser(
   anonymousUserId: string,
   realUserId: string,
 ): Promise<void> {
-  const anonymousRows = await queryAll<{ id: string; site_id: string }>(db, `
-    SELECT id, site_id FROM customers WHERE user_id = ? AND status != 'deleted'
+  const anonymousRows = await queryAll<{ id: string; organization_id: string }>(db, `
+    SELECT id, organization_id FROM customers WHERE user_id = ? AND status != 'deleted'
   `, [anonymousUserId])
   if (!anonymousRows || anonymousRows.length === 0) return
 
@@ -296,12 +292,12 @@ export async function linkAnonymousCustomerToUser(
     const existingForRealUser = await queryFirst<{ id: string }>(db, `
       SELECT id
       FROM customers
-      WHERE site_id = ?
+      WHERE organization_id = ?
         AND user_id = ?
         AND id != ?
         AND status = 'active'
       LIMIT 1
-    `, [row.site_id, realUserId, row.id])
+    `, [row.organization_id, realUserId, row.id])
 
     if (existingForRealUser) {
       await execute(db, `

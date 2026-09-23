@@ -2,12 +2,12 @@
   <div class="space-y-3">
     <div v-for="(media, index) in slotMedia" :key="`${media.asset_id}-${index}`" class="flex items-center gap-3">
       <span class="w-6 shrink-0 text-center text-xs text-muted">{{ index + 1 }}</span>
-      <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="media.asset_id" :selected-summary="media" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
+      <MediaPicker class="min-w-0 flex-1" :organization-id="organizationId" :model-value="media.asset_id" :selected-summary="media" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset(index, $event)" />
       <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" square aria-label="Remove gallery image" :loading="galleryBusy" :disabled="galleryBusy" @click="commitGalleryAsset(index, null)" />
     </div>
     <div v-if="pendingNewGallerySlot" class="flex items-center gap-3">
       <span class="w-6 shrink-0 text-center text-xs text-muted">{{ slotMedia.length + 1 }}</span>
-      <MediaPicker class="min-w-0 flex-1" :site-id="siteId" :model-value="null" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset('new', $event)" />
+      <MediaPicker class="min-w-0 flex-1" :organization-id="organizationId" :model-value="null" accept="image" :disabled="galleryBusy" @update:model-value="commitGalleryAsset('new', $event)" />
       <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="xs" square aria-label="Cancel adding image" :disabled="galleryBusy" @click="pendingNewGallerySlot = false" />
     </div>
     <UButton icon="i-lucide-plus" color="neutral" variant="soft" size="sm" :disabled="pendingNewGallerySlot || galleryBusy" @click="pendingNewGallerySlot = true">Add image</UButton>
@@ -29,12 +29,12 @@ import { useTenantPageDraft, useTenantPageBlock } from '~/composables/useTenantP
  * way through leaves the editor showing what the server actually holds. An
  * unsaved block has no placements yet and edits its draft directly.
  */
-const props = defineProps<{ siteId: string; pageId: string; blockId: string }>()
+const props = defineProps<{ organizationId: string; pageId: string; blockId: string }>()
 
 const dashboardApi = useDashboardApi()
-const { savedBlockIds } = useTenantPageDraft(props.siteId, props.pageId)
+const { savedBlockIds } = useTenantPageDraft(props.organizationId, props.pageId)
 
-const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
+const block = useTenantPageBlock(props.organizationId, props.pageId, () => props.blockId)
 const isPersisted = computed(() => savedBlockIds.value.has(block.value.id))
 const slotMedia = computed(() => mediaForSlot('gallery'))
 
@@ -114,7 +114,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
   try {
     if (index === 'new') {
       if (!assetId) { pendingNewGallerySlot.value = false; return }
-      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+      const result = await dashboardApi(`/api/editor/organizations/${props.organizationId}/media/placements/attach`, {
         method: 'POST',
         body: { placement: galleryPlacement.value, asset_id: assetId },
         validate: isMediaMutationResponse,
@@ -127,7 +127,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     const existing = current[index]
     if (!existing) return
     if (!assetId) {
-      const result = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+      const result = await dashboardApi(`/api/editor/organizations/${props.organizationId}/media/placements/remove`, {
         method: 'POST',
         body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
         validate: isMediaMutationResponse,
@@ -142,7 +142,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     // reorder the new asset back to this exact position. Each step's response
     // is applied immediately — if a later step throws, whatever already
     // committed server-side stays reflected here instead of going stale.
-    const attachResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/attach`, {
+    const attachResult = await dashboardApi(`/api/editor/organizations/${props.organizationId}/media/placements/attach`, {
       method: 'POST',
       body: { placement: galleryPlacement.value, asset_id: assetId },
       validate: isMediaMutationResponse,
@@ -154,7 +154,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
     // image and gained a misplaced one. This order fails towards two images in
     // the right order, which the editor can finish by hand.
     const anchor = current[index + 1]
-    const reordered = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/reorder`, {
+    const reordered = await dashboardApi(`/api/editor/organizations/${props.organizationId}/media/placements/reorder`, {
       method: 'POST',
       body: {
         placement: galleryPlacement.value,
@@ -163,7 +163,7 @@ async function commitGalleryAsset(index: number | 'new', assetId: string | null 
       validate: isMediaMutationResponse,
     })
     applyCanonicalGalleryMedia(reordered.media)
-    const removeResult = await dashboardApi(`/api/editor/sites/${props.siteId}/media/placements/remove`, {
+    const removeResult = await dashboardApi(`/api/editor/organizations/${props.organizationId}/media/placements/remove`, {
       method: 'POST',
       body: { placement: galleryPlacement.value, asset_id: existing.asset_id },
       validate: isMediaMutationResponse,

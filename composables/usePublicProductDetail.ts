@@ -77,7 +77,7 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
 export async function usePublicProductDetail(routeKind: ProductSurface) {
   const route = useRoute()
   const requestEvent = useRequestEvent()
-  const { siteId } = useTenantSite()
+  const { organizationId } = useTenantSite()
   // An Experience's page is site-wide: /experiences/<product-slug> names the
   // Product in its only slug segment, where a vertical's product page names the
   // branch first. Same payload either way, so one composable serves both.
@@ -88,10 +88,10 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
   const productSlug = siteWideExperience ? routeSlug : productSlugParam
   const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
-  if (!siteId || !productSlug || (!siteWideExperience && !locationSlug)) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+  if (!organizationId || !productSlug || (!siteWideExperience && !locationSlug)) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
-    `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,
+    `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}`,
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -106,8 +106,8 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
         const previewAuthorized = Boolean(requestEvent.context.previewAuthorized)
         const detail = siteWideExperience
-          ? await loadPublicExperienceDetail(env, db, siteId, previewAuthorized, productSlug, locale)
-          : await loadPublicProductDetail(env, db, siteId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
+          ? await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, productSlug, locale)
+          : await loadPublicProductDetail(env, db, organizationId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
         if (!detail) return null
         // The collection this product belongs to on this site, in the site's
         // own order. Several means the first by that order — one documented
@@ -119,7 +119,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           location: publicLocationPayload(detail.location),
           currency: detail.currency,
           vertical: detail.site.vertical,
-          brandName: detail.site.brand_name,
+          brandName: detail.site.name,
           reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
           booking: detail.booking,
           // Siblings come from the collection this product actually belongs
@@ -131,16 +131,16 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
                 currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
               })
             : [],
-          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.organization_id),
+          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.id),
           localeRepresentations: detail.localeRepresentations,
         }
       }
       const path = siteWideExperience
-        ? `/api/public/sites/${encodeURIComponent(siteId)}/experiences/${encodeURIComponent(productSlug)}`
-        : `/api/public/sites/${encodeURIComponent(siteId)}/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
+        ? `/api/public/experiences/${encodeURIComponent(productSlug)}`
+        : `/api/public/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
       return publicApiRequest(`${path}?locale=${encodeURIComponent(locale)}`, {
         signal,
-        coalesceKey: `public-product-${siteId}-${locale}-${locationSlug}-${productSlug}`,
+        coalesceKey: `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}`,
         validate: isPublicProductDetailPayload,
       })
     },
@@ -149,5 +149,5 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
   if (error.value) throw error.value
   if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
   localeRepresentations.value = data.value.localeRepresentations
-  return { siteId, detail: data as Ref<PublicProductDetailPayload> }
+  return { organizationId, detail: data as Ref<PublicProductDetailPayload> }
 }

@@ -49,7 +49,7 @@ function canReceive(attachment: InboxSocketAttachment, event: DashboardInvalidat
   if (event.type === 'notification.read' && event.targetUserId === attachment.userId) return true
   if (attachment.allowedSiteIds === null) return true
   return Boolean(
-    event.siteId && attachment.allowedSiteIds.includes(event.siteId)
+    event.organizationId && attachment.allowedSiteIds.includes(event.organizationId)
     || event.locationId && attachment.allowedLocationIds.includes(event.locationId),
   )
 }

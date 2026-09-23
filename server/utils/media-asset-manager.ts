@@ -27,7 +27,6 @@ interface MediaStorageReferenceState {
 export interface MediaAsset {
   id: string
   organization_id: string
-  site_id: string
   kind: 'image' | 'video' | 'file'
   provider: 'cloudflare_images' | 'cloudflare_r2'
   source: 'uploaded' | 'generated' | 'external'
@@ -100,13 +99,12 @@ export function parseMediaAssetRefs(value: unknown): MediaAssetRefInput[] {
   })
 }
 
-export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
-  Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
+export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'organization_id' | 'kind' | 'provider' | 'source'> &
+  Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'organization_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
 
 export interface MediaPlacementInsertInput {
   id?: string
   organizationId: string
-  siteId: string
   ownerType: string
   ownerId: string
   slot: string
@@ -118,26 +116,26 @@ export interface MediaPlacementInsertInput {
 }
 
 const OWNER_TABLES = {
-  site: 'sites', business_location: 'business_locations', product: 'products',
+  organization: 'organization', business_location: 'business_locations', product: 'products',
   content_document: 'content_documents', review: 'reviews',
   review_request: 'review_requests',
   content_block: 'content_blocks',
 } as const satisfies Record<MediaPlacementOwnerType, string>
 
 export function mediaPlacementOwnerQuery(input: {
-  ownerType: string; ownerId: string; organizationId: string; siteId: string
+  ownerType: string; ownerId: string; organizationId: string
 }): BatchQuery {
   if (!isMediaPlacementOwnerType(input.ownerType)) throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported media owner' })
-  const params = [input.ownerId, input.organizationId, input.siteId]
+  const params = [input.ownerId, input.organizationId]
   if (input.ownerType === 'content_block') return {
     query: `SELECT root.location_id FROM content_blocks cb JOIN content_documents owner ON owner.id = cb.document_id
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
-      WHERE cb.id = ? AND owner.organization_id = ? AND owner.site_id = ?`, params,
+      WHERE cb.id = ? AND owner.organization_id = ?`, params,
   }
   if (input.ownerType === 'content_document') return {
     query: `SELECT root.location_id FROM content_documents owner
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
-      WHERE owner.id = ? AND owner.organization_id = ? AND owner.site_id = ?`, params,
+      WHERE owner.id = ? AND owner.organization_id = ?`, params,
   }
   // A product is organization-owned and reaches a site through its publication.
   // Its locations are a many relationship (product_locations), so there is no
@@ -145,13 +143,13 @@ export function mediaPlacementOwnerQuery(input: {
   if (input.ownerType === 'product') return {
     query: `SELECT NULL AS location_id FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      WHERE p.id = ? AND p.organization_id = ? AND pub.site_id = ?`, params,
+      WHERE p.id = ? AND p.organization_id = ?`, params,
   }
   const table = OWNER_TABLES[input.ownerType]
   const location = input.ownerType === 'business_location' ? 'id'
     : ['review', 'review_request'].includes(input.ownerType) ? 'location_id' : 'NULL'
   return {
-    query: `SELECT ${location} AS location_id FROM ${table} WHERE id = ? AND organization_id = ? AND ${input.ownerType === 'site' ? 'id' : 'site_id'} = ?`, params,
+    query: `SELECT ${location} AS location_id FROM ${table} WHERE id = ? AND ${input.ownerType === 'organization' ? 'id' : 'organization_id'} = ?`, params,
   }
 }
 
@@ -162,17 +160,16 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
   const createdAt = input.createdAt ?? new Date().toISOString()
   const owner = mediaPlacementOwnerQuery(input)
   return {
-    query: `INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
-        AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND site_id = ?
-          AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
+    query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
+        AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
         AND (? != 'content_document' OR ? NOT IN ('cover', 'gallery') OR EXISTS
         (SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
-          WHERE d.id = ? AND d.organization_id = ? AND d.site_id = ?
+          WHERE d.id = ? AND d.organization_id = ?
           AND (root.kind != 'social_post' OR (root.metadata_json ->> '$.post_type') != 'alert'))) THEN ? ELSE NULL END, ?, ?, ?, ?)`,
-    params: [input.id ?? crypto.randomUUID(), input.organizationId, input.siteId, input.ownerType, input.ownerId, input.slot,
-      ...owner.params!, input.assetId, input.organizationId, input.siteId, input.ownerType, input.status ?? 'active',
-      input.ownerType, input.slot, input.ownerId, input.organizationId, input.siteId, input.assetId,
+    params: [input.id ?? crypto.randomUUID(), input.organizationId, input.ownerType, input.ownerId, input.slot,
+      ...owner.params!, input.assetId, input.organizationId, input.ownerType, input.status ?? 'active',
+      input.ownerType, input.slot, input.ownerId, input.organizationId, input.assetId,
       input.sortOrder, input.status ?? 'active', createdAt, input.updatedAt ?? createdAt],
   }
 }
@@ -188,7 +185,6 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
 // and insertInitialMediaPlacements below for the two sanctioned callers.
 function buildMediaPlacementReplacementQueries(input: {
   organizationId: string
-  siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
   media: Array<{ asset_id: string }>
   now?: string
@@ -199,12 +195,11 @@ function buildMediaPlacementReplacementQueries(input: {
   const now = input.now ?? new Date().toISOString()
   return [
     {
-      query: 'DELETE FROM media_placements WHERE organization_id = ? AND site_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?',
-      params: [input.organizationId, input.siteId, input.placement.owner_type, input.placement.owner_id, input.placement.slot],
+      query: 'DELETE FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?',
+      params: [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot],
     },
     ...input.media.map((asset, sortOrder) => buildMediaPlacementInsertQuery({
       organizationId: input.organizationId,
-      siteId: input.siteId,
       ownerType: input.placement.owner_type,
       ownerId: input.placement.owner_id,
       slot: input.placement.slot,
@@ -222,7 +217,6 @@ function buildMediaPlacementReplacementQueries(input: {
 // ordered collection; use attach/remove/reorder for those instead.
 export function buildSingleMediaPlacementQueries(input: {
   organizationId: string
-  siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
   media: Array<{ asset_id: string }>
   now?: string
@@ -244,7 +238,6 @@ export function buildSingleMediaPlacementQueries(input: {
 // every other write to an ordered collection.
 export function insertInitialMediaPlacements(input: {
   organizationId: string
-  siteId: string
   placement: { owner_type: string; owner_id: string; slot: string }
   media: Array<{ asset_id: string }>
   now?: string
@@ -261,7 +254,6 @@ export function buildDeleteOwnerPlacementsQuery(input: {
   ownerType: string
   ownerId: string
   organizationId?: string
-  siteId?: string
 }): BatchQuery {
   const conditions = ['owner_type = ?']
   const params: string[] = [input.ownerType]
@@ -269,10 +261,7 @@ export function buildDeleteOwnerPlacementsQuery(input: {
     conditions.push('organization_id = ?')
     params.push(input.organizationId)
   }
-  if (input.siteId) {
-    conditions.push('site_id = ?')
-    params.push(input.siteId)
-  }
+  
   conditions.push('owner_id = ?')
   params.push(input.ownerId)
   return {
@@ -319,7 +308,7 @@ type MediaPlacementRow = MediaAsset & {
 }
 
 export async function readMediaPlacements(db: DbClient, input: {
-  siteId: string
+  organizationId: string
   ownerType: MediaPlacementOwnerType
   ownerIds: string[]
   slot?: string
@@ -332,13 +321,13 @@ export async function readMediaPlacements(db: DbClient, input: {
     SELECT mp.id AS placement_id, mp.owner_type, mp.owner_id, mp.slot, mp.sort_order,
            ma.*
       FROM media_placements mp
-      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.site_id = mp.site_id
-     WHERE mp.site_id = ? AND mp.owner_type = ?
+      JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id
+     WHERE mp.organization_id = ? AND mp.owner_type = ?
        AND mp.owner_id IN (SELECT value FROM json_each(?))
        ${input.slot ? 'AND mp.slot = ?' : ''}
        AND (mp.status = 'active' ${input.includePendingSocialCard ? "OR (mp.slot = 'social_card' AND mp.status = 'pending')" : ''}) AND ma.status = 'active'
      ORDER BY mp.owner_id, mp.slot, mp.sort_order
-  `, [input.siteId, input.ownerType, d1JsonStringSet(ownerIds), ...(input.slot ? [input.slot] : [])])
+  `, [input.organizationId, input.ownerType, d1JsonStringSet(ownerIds), ...(input.slot ? [input.slot] : [])])
   for (const row of rows) {
     result.get(row.owner_id)?.push({
       ...toResolvedMediaAsset(row),
@@ -360,7 +349,6 @@ export async function hydrateMediaAssetRefs(
   db: DbClient,
   input: {
     organizationId: string
-    siteId: string
     refs: MediaAssetRefInput[]
     allowedKinds?: Array<ResolvedMediaAsset['kind']>
     fieldName?: string
@@ -382,10 +370,10 @@ export async function hydrateMediaAssetRefs(
   const rows = await queryAll<MediaAsset>(
     db,
     `SELECT * FROM media_assets
-      WHERE organization_id = ? AND site_id = ? AND status = 'active'
+      WHERE organization_id = ?  AND status = 'active'
         AND generation_key IS NULL
         AND id IN (SELECT value FROM json_each(?))`,
-    [input.organizationId, input.siteId, d1JsonStringSet(ids)],
+    [input.organizationId, d1JsonStringSet(ids)],
   )
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))
@@ -411,7 +399,6 @@ export async function hydrateMediaPlacementRefs(
   db: DbClient,
   input: {
     organizationId: string
-    siteId: string
     refs: Array<MediaAssetRefInput & { slot: string }>
     allowedKinds?: Array<ResolvedMediaAsset['kind']>
     fieldName?: string
@@ -426,7 +413,6 @@ export async function hydrateMediaPlacementRefs(
   for (const [slot, refs] of refsBySlot) {
     await hydrateMediaAssetRefs(db, {
       organizationId: input.organizationId,
-      siteId: input.siteId,
       refs,
       allowedKinds: input.allowedKinds,
       fieldName: `${input.fieldName ?? 'media'}.${slot}`,
@@ -440,13 +426,13 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
   }
   return {
     query: `INSERT INTO media_assets (
-      id, organization_id, site_id, kind, provider, source, generation_key,
+      id, organization_id, kind, provider, source, generation_key,
       cloudflare_image_id, r2_key,
       public_url, thumbnail_url, mime_type, file_name, file_size,
       width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
-      data.id, data.organization_id, data.site_id, data.kind, data.provider, data.source,
+      data.id, data.organization_id, data.kind, data.provider, data.source,
       data.generation_key ?? null,
       data.cloudflare_image_id ?? null, data.r2_key ?? null,
       data.public_url ?? null, data.thumbnail_url ?? null,
@@ -460,12 +446,11 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
   const query = buildMediaAssetInsertQuery(data)
-  await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.site_id, 'media-create')])
+  await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.organization_id, 'media-create')])
 
   await fireOrganizationEventSafe({
     db,
     organizationId: data.organization_id,
-    siteId: data.site_id,
     locationId: null,
     actorId: data.created_by_user_id ?? null,
     eventType: 'media.uploaded',
@@ -480,21 +465,21 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
   })
 }
 
-export async function getMediaAsset(db: DbClient, id: string, siteId: string): Promise<MediaAsset | null> {
+export async function getMediaAsset(db: DbClient, id: string, organizationId: string): Promise<MediaAsset | null> {
   return await queryFirst<MediaAsset>(
     db,
-    `SELECT * FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
-    [id, siteId],
+    `SELECT * FROM media_assets WHERE id = ? AND organization_id = ? LIMIT 1`,
+    [id, organizationId],
   ) ?? null
 }
 
 export async function listMediaAssets(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   opts: { kind?: string; search?: string; ownerType?: string; ownerId?: string; slot?: string; limit?: number; offset?: number } = {}
 ): Promise<MediaAsset[]> {
-  const conditions = [`ma.site_id = ?`, `ma.status = 'active'`, `ma.generation_key IS NULL`]
-  const params: SqlBindValue[] = [siteId]
+  const conditions = [`ma.organization_id = ?`, `ma.status = 'active'`, `ma.generation_key IS NULL`]
+  const params: SqlBindValue[] = [organizationId]
   if (opts.kind) { conditions.push(`ma.kind = ?`); params.push(opts.kind) }
   if (opts.search) { conditions.push(`ma.file_name LIKE ? ESCAPE '\\'`); params.push(`%${opts.search.replace(/[\\%_]/g, '\\$&')}%`) }
   if (opts.ownerType && opts.ownerId) {
@@ -505,13 +490,13 @@ export async function listMediaAssets(
   params.push(opts.limit ?? 50, opts.offset ?? 0)
   const results = await queryAll<MediaAsset>(
     db,
-    `SELECT ma.id, ma.organization_id, ma.site_id, ma.kind, ma.provider, ma.source,
+    `SELECT ma.id, ma.organization_id, ma.kind, ma.provider, ma.source,
             ma.cloudflare_image_id, ma.r2_key,
             ma.public_url, ma.thumbnail_url, ma.mime_type, ma.file_name, ma.file_size,
             ma.width, ma.height, ma.duration, ma.alt_text, ma.category, ma.status, ma.created_by_user_id, ma.created_at, ma.updated_at
             ${opts.ownerType && opts.ownerId ? ', mp.updated_at AS placement_updated_at' : ''}
      FROM media_assets ma
-     ${opts.ownerType && opts.ownerId ? 'JOIN media_placements mp ON mp.asset_id = ma.id AND mp.site_id = ma.site_id' : ''}
+     ${opts.ownerType && opts.ownerId ? 'JOIN media_placements mp ON mp.asset_id = ma.id AND mp.organization_id = ma.organization_id' : ''}
      WHERE ${conditions.join(' AND ')} ORDER BY ${opts.ownerType && opts.ownerId ? 'mp.sort_order' : 'ma.created_at DESC'} LIMIT ? OFFSET ?`
     , params,
   )
@@ -521,7 +506,7 @@ export async function listMediaAssets(
 export async function activateMediaAsset(
   db: DbClient,
   id: string,
-  siteId: string,
+  organizationId: string,
   updates: { public_url?: string | null; thumbnail_url?: string | null; cloudflare_image_id?: string | null }
 ): Promise<boolean> {
   const now = new Date().toISOString()
@@ -530,18 +515,18 @@ export async function activateMediaAsset(
   if (updates.public_url !== undefined) { sets.push('public_url = ?'); params.push(updates.public_url) }
   if (updates.thumbnail_url !== undefined) { sets.push('thumbnail_url = ?'); params.push(updates.thumbnail_url) }
   if (updates.cloudflare_image_id !== undefined) { sets.push('cloudflare_image_id = ?'); params.push(updates.cloudflare_image_id) }
-  params.push(id, siteId)
+  params.push(id, organizationId)
   const [result] = await executeBatch(db, [
-    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ? AND status = 'pending'`, params },
-    publicResourceCacheInvalidationQuery(siteId, 'media-activate'),
+    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND status = 'pending'`, params },
+    publicResourceCacheInvalidationQuery(organizationId, 'media-activate'),
   ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
-export async function updateMediaAssetAlt(db: DbClient, id: string, siteId: string, altText: string): Promise<boolean> {
+export async function updateMediaAssetAlt(db: DbClient, id: string, organizationId: string, altText: string): Promise<boolean> {
   const [result] = await executeBatch(db, [
-    { query: `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND site_id = ?`, params: [altText, new Date().toISOString(), id, siteId] },
-    publicResourceCacheInvalidationQuery(siteId, 'media-update'),
+    { query: `UPDATE media_assets SET alt_text = ?, updated_at = ? WHERE id = ? AND organization_id = ?`, params: [altText, new Date().toISOString(), id, organizationId] },
+    publicResourceCacheInvalidationQuery(organizationId, 'media-update'),
   ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
@@ -549,7 +534,7 @@ export async function updateMediaAssetAlt(db: DbClient, id: string, siteId: stri
 export async function updateMediaAssetMetadata(
   db: DbClient,
   id: string,
-  siteId: string,
+  organizationId: string,
   updates: { alt_text?: string | null; category?: MediaAsset['category'] }
 ): Promise<boolean> {
   const sets: string[] = ['updated_at = ?']
@@ -564,10 +549,10 @@ export async function updateMediaAssetMetadata(
   }
   if (sets.length === 1) return false
 
-  params.push(id, siteId)
+  params.push(id, organizationId)
   const [result] = await executeBatch(db, [
-    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params },
-    publicResourceCacheInvalidationQuery(siteId, 'media-update'),
+    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? `, params },
+    publicResourceCacheInvalidationQuery(organizationId, 'media-update'),
   ])
   return Number(result?.meta?.changes ?? 0) > 0
 }
@@ -623,7 +608,7 @@ async function getMediaStorageReferenceState(
 }
 
 /** Soft-delete in DB and delete each owned Cloudflare object once. */
-export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string, deletedByUserId: string | null): Promise<void> {
+export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, organizationId: string, deletedByUserId: string | null): Promise<void> {
   const pendingAsset = await queryFirst<{
     id: string
     provider: MediaAsset['provider']
@@ -635,14 +620,14 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   }>(db, `
     SELECT id, provider, cloudflare_image_id, r2_key, organization_id, created_by_user_id, source
     FROM media_assets
-    WHERE id = ? AND site_id = ? AND status != 'deleted'
-  `, [id, siteId]) ?? null
+    WHERE id = ? AND organization_id = ? AND status != 'deleted'
+  `, [id, organizationId]) ?? null
 
   if (!pendingAsset) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
   const sourcePlacements = pendingAsset.source === 'generated' ? [] : await queryAll<{ owner_type: string; owner_id: string; slot: string }>(db,
-    'SELECT owner_type, owner_id, slot FROM media_placements WHERE asset_id = ? AND site_id = ?', [id, siteId])
+    'SELECT owner_type, owner_id, slot FROM media_placements WHERE asset_id = ? AND organization_id = ?', [id, organizationId])
 
   const references = await getMediaStorageReferenceState(db, {
     assetId: pendingAsset.id,
@@ -668,12 +653,12 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   }
 
   const [result] = await executeBatch(db, [{
-    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND site_id = ? AND status != 'deleted'`,
-    params: [new Date().toISOString(), pendingAsset.id, siteId],
+    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
+    params: [new Date().toISOString(), pendingAsset.id, organizationId],
   }, {
-    query: 'DELETE FROM media_placements WHERE site_id = ? AND asset_id = ?',
-    params: [siteId, pendingAsset.id],
-  }, publicResourceCacheInvalidationQuery(siteId, 'media-delete')])
+    query: 'DELETE FROM media_placements WHERE organization_id = ? AND asset_id = ?',
+    params: [organizationId, pendingAsset.id],
+  }, publicResourceCacheInvalidationQuery(organizationId, 'media-delete')])
   if (Number(result?.meta?.changes ?? 0) !== 1) {
     throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
   }
@@ -681,7 +666,6 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   await fireOrganizationEventSafe({
     db,
     organizationId: pendingAsset.organization_id,
-    siteId,
     locationId: null,
     actorId: deletedByUserId,
     eventType: 'media.deleted',

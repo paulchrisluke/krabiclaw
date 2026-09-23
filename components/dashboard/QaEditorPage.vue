@@ -3,7 +3,7 @@
   <DashboardIndexPanel id="site-qa-record" :title="isNew ? 'New question' : form.question || 'Question'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="!isNew" #right>
       <DashboardResourceLocalization
-        :site-id="siteId"
+        :organization-id="organizationId"
         resource-type="content_document"
         :resource-id="qaId"
         resource-label="question"
@@ -61,16 +61,16 @@ const dashboardApi = useDashboardApi()
 
 const qaId = computed(() => String(route.params.qaId ?? ''))
 const qaPath = computed(() => props.locationId
-  ? `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}/qa`
-  : `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/qa`)
+  ? `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}/qa`
+  : `/dashboard/${String(route.params.orgSlug)}/qa`)
 const recordPath = computed(() => `${qaPath.value}/${qaId.value}`)
 const level = useRouteLevel()
 
-const siteId = await useDashboardSiteId()
+const organizationId = await useDashboardOrganizationId()
 const isNew = computed(() => qaId.value === 'new')
 const qaEndpoint = computed(() => props.locationId
-  ? `/api/editor/sites/${siteId}/locations/${props.locationId}/qa`
-  : `/api/editor/sites/${siteId}/qa`)
+  ? `/api/editor/organizations/${organizationId}/locations/${props.locationId}/qa`
+  : `/api/editor/organizations/${organizationId}/qa`)
 
 const detailKey = computed(() => level.child.value)
 /** With nothing open the pane still shows the first section rather than empty space. */
@@ -90,7 +90,7 @@ function emptyDraft() {
 }
 
 // Keyed to the record so the draft survives the remount between sections.
-const form = useState(`qa-draft-${siteId}-${props.locationId ?? 'site'}-${qaId.value}`, emptyDraft).value
+const form = useState(`qa-draft-${organizationId}-${props.locationId ?? 'site'}-${qaId.value}`, emptyDraft).value
 
 const saving = ref(false)
 const errorMessage = ref('')
@@ -101,7 +101,7 @@ const errorMessage = ref('')
  * is not scoped, so its record is found in the list.
  */
 const { data, refresh } = await useAsyncData(
-  () => `dashboard-qa-record-${siteId}-${props.locationId ?? 'site'}-${qaId.value}`,
+  () => `dashboard-qa-record-${organizationId}-${props.locationId ?? 'site'}-${qaId.value}`,
   async () => isNew.value
     ? null
     : await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
@@ -130,7 +130,7 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {

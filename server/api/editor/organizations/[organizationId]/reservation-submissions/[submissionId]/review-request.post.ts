@@ -1,0 +1,30 @@
+import { jsonResponse } from '~/server/utils/api-response'
+import { queryFirst } from '~/server/db'
+import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
+
+export default defineHandler(async (event) => {
+  const organizationId = getRouterParam(event, 'organizationId')
+  const submissionId = getRouterParam(event, 'submissionId')
+  if (!organizationId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
+
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const submission = await queryFirst<{ id: string; location_id: string }>(db, `
+    SELECT rs.id, rs.location_id
+    FROM requests rs
+    WHERE rs.kind = 'reservation' AND rs.id = ? AND rs.organization_id = ?
+    LIMIT 1
+  `, [submissionId, organizationId])
+  if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
+
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: submission.location_id })
+
+  const body = await readBody(event) as { kind?: string } | undefined
+  const kind = body?.kind === 'reminder' ? 'reminder' : 'first'
+  const result = await sendReviewRequestForBooking(env, db, 'reservation', submissionId, kind)
+
+  return jsonResponse(result, { status: result.sent ? 200 : 502 })
+})
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

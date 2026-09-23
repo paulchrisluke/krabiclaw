@@ -33,10 +33,10 @@ import { getErrorMessage } from '~/utils/errors'
 import { tenantPageBlockSummary } from '~/utils/tenant-page-editor'
 import { tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
 
-const props = defineProps<{ siteId: string; pageId: string }>()
+const props = defineProps<{ organizationId: string; pageId: string }>()
 
 const level = useRouteLevel()
-const { draft, dirty, revert, commit } = useTenantPageDraft(props.siteId, props.pageId)
+const { draft, dirty, revert, commit } = useTenantPageDraft(props.organizationId, props.pageId)
 
 const editing = ref(false)
 const saving = ref(false)

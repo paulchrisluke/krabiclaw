@@ -26,23 +26,22 @@ export function normalizeLocale(value: unknown): string | null {
 export async function getConfiguredSourceLocale(
   db: DbClient,
   organizationId: string,
-  siteId: string,
 ): Promise<'en'> {
-  const source = await getPersistedSourceLocale(db, organizationId, siteId)
+  const source = await getPersistedSourceLocale(db, organizationId)
   return source.locale as 'en'
 }
 
 export async function resolveSiteLocale(
   env: CloudflareEnv,
   db: DbClient,
-  site: { id: string; organization_id: string },
+  organizationId: string,
   requestedLocale: unknown,
 ): Promise<SiteLocaleState> {
-  const sourceLocale = await getConfiguredSourceLocale(db, site.organization_id, site.id)
+  const sourceLocale = await getConfiguredSourceLocale(db, organizationId)
   const requested = requestedLocale === undefined || requestedLocale === null || requestedLocale === ''
     ? sourceLocale
     : assertExactCanonicalLocale(requestedLocale)
-  const entitlement = await assertSiteLanguageEntitlement(env, db, site.organization_id, site.id, requested)
+  const entitlement = await assertSiteLanguageEntitlement(env, db, organizationId, requested)
   return {
     requestedLocale: requested,
     sourceLocale,

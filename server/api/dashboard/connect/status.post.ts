@@ -6,7 +6,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { getStripeConnectedAccount, refreshStripeConnectedAccount } from '~/server/utils/stripe-connect'
 
 export default defineHandler(async (event) => {
-  const { env, db, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, organization } = await getDashboardContext(event, {})
   // Connecting the organization's Stripe account is an integration change:
   // owner and admin, per utils/organization-access.ts.
   await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })

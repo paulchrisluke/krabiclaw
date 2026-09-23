@@ -293,13 +293,13 @@ const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
-const { siteId, site } = useTenantSite()
+const { organizationId, site } = useTenantSite()
 const { locale, localePath, t } = useI18n()
 const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-if (!siteId) throw createError({ statusCode: 404 })
+if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
+const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
 
 const {
   location,

@@ -3,7 +3,7 @@ import { pageInfoObject, paginationInputSchema, reviewObject, siteTool } from '.
 
 export const REVIEWS_TOOLS: McpToolDefinition[] = [
   siteTool({
-    name: 'list_site_reviews',
+    name: 'list_organization_reviews',
     description: 'List tenant-wide reviews that are not associated with a location, including provenance and verification status.',
     domain: 'reviews',
     minimumRole: 'editor',

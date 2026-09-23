@@ -299,7 +299,7 @@ export function buildOnboardingDraftPayload(input: {
   // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
   const uploadedHero = input.brandDraft?.heroImage ?? null
   const uploadedLogo = input.brandDraft?.logoImage ?? null
-  // A site's first location is 'main' everywhere else — seedNewSite creates it
+  // A tenant's first location is 'main' everywhere else — seedNewOrganization creates it
   // under that slug and seeds its page at /locations/main. Deriving a slug from
   // the brand name here renamed the location out from under that page, leaving
   // every onboarded site serving 200 "Location Not Found" at /locations/main.

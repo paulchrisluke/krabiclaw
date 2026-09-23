@@ -7,7 +7,7 @@ import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { defineHandler } from 'nitro'
 import {  readBody } from 'nitro/h3';
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineHandler(async (event) => {
@@ -18,12 +18,9 @@ export default defineHandler(async (event) => {
       { error: 'No update fields provided' }, { status: 400 }, )
   }
 
-  const { env, db, session, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, session, organization } = await getDashboardContext(event)
 
-  if (!site) {
-    return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  }
-  await assertSiteWideAccess(db, memberAccessPrincipal(organization, { env, siteId: site.id, event }))
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
 
   try {
@@ -33,7 +30,7 @@ export default defineHandler(async (event) => {
     }
 
     const result = await updateSiteSettingsFields(
-      db, env, site.id, organization.id, body, session.user.id, )
+      db, env, organization.id, body, session.user.id, )
 
     return jsonResponse(result.data, { status: result.status })
   } catch (error) {

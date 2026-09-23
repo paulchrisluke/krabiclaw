@@ -1,6 +1,5 @@
 export interface DisambiguationCandidate {
   threadId: string
-  siteId: string
   organizationId: string
   locationId: string | null
   label: string
@@ -10,7 +9,6 @@ export type PendingWhatsAppReplyState =
   | {
       kind: 'confirm_send'
       threadId: string
-      siteId: string
       organizationId: string
       locationId: string | null
       replyBody: string
@@ -23,7 +21,6 @@ export type PendingWhatsAppReplyState =
   | {
       kind: 'collect_reply'
       threadId: string
-      siteId: string
       organizationId: string
       locationId: string | null
       guestEmailMasked: string

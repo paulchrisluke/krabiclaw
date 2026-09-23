@@ -1,9 +1,8 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import {
-  isOrganizationWideRole,
-  isScopedRole,
   listAccessibleLocationIds,
+  type MemberAccessPrincipal,
 } from '~/server/utils/member-access'
 import type {
   ConversationState,
@@ -53,7 +52,7 @@ const PLACE_IMAGE_SQL = `
   LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = gt.location_id
     AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
   LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id AND ma_hero.status = 'active'
-  LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'site' AND mp_logo.owner_id = gt.site_id
+  LEFT JOIN media_placements mp_logo ON gt.location_id IS NULL AND mp_logo.owner_type = 'organization' AND mp_logo.owner_id = gt.organization_id
     AND mp_logo.slot = 'logo' AND mp_logo.status = 'active'
   LEFT JOIN media_assets ma_logo ON ma_logo.id = mp_logo.asset_id AND ma_logo.status = 'active'`
 
@@ -84,15 +83,15 @@ export interface OperationSummary {
 
 export async function getGuestThreadOperationSummary(
   db: DbClient,
-  siteId: string | null,
+  organizationId: string | null,
   opts: ListGuestThreadsOptions,
 ): Promise<OperationSummary> {
   const params: Array<string | number> = []
   let where: string
 
-  if (siteId) {
-    params.push(siteId)
-    where = 'gt.site_id = ?'
+  if (organizationId) {
+    params.push(organizationId)
+    where = 'gt.organization_id = ?'
   } else if (opts.organizationId) {
     params.push(opts.organizationId)
     where = 'gt.organization_id = ?'
@@ -104,7 +103,7 @@ export async function getGuestThreadOperationSummary(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (opts.principal && 'siteId' in opts.principal) {
+  if (opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) {
@@ -119,17 +118,6 @@ export async function getGuestThreadOperationSummary(
         params.push(d1JsonStringSet(accessibleLocationIds))
       }
     }
-  } else if (opts.principal && isScopedRole(opts.principal.role)) {
-    const teamIds = opts.principal.teamIds ?? []
-    if (teamIds.length === 0) return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
-    const teamIdsJson = d1JsonStringSet(teamIds)
-    where += ` AND (
-      EXISTS (SELECT 1 FROM sites scoped_site WHERE scoped_site.id = gt.site_id AND scoped_site.team_id IN (SELECT value FROM json_each(?)))
-      OR EXISTS (SELECT 1 FROM business_locations scoped_location WHERE scoped_location.id = gt.location_id AND scoped_location.team_id IN (SELECT value FROM json_each(?)))
-    )`
-    params.push(teamIdsJson, teamIdsJson)
-  } else if (opts.principal && !isOrganizationWideRole(opts.principal.role)) {
-    return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
   }
 
   const counts = await queryFirst<OperationSummary>(db, `
@@ -180,7 +168,6 @@ type GuestThreadListRow = GuestThreadRow & {
   guest_name: string
   location_title: string | null
   site_name?: string | null
-  site_slug?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
   source_preview: string | null
@@ -197,17 +184,17 @@ type GuestThreadListRow = GuestThreadRow & {
 /** Returns list view models with member-specific unread and one canonical `preview` field. */
 export async function listGuestThreads(
   db: DbClient,
-  siteId: string,
+  organizationId: string,
   opts: ListGuestThreadsOptions,
 ): Promise<GuestThreadListItemViewModel[]> {
-  const params: Array<string | number> = [siteId]
-  let where = 'gt.site_id = ?'
+  const params: Array<string | number> = [organizationId]
+  let where = 'gt.organization_id = ?'
 
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (opts.principal && 'siteId' in opts.principal) {
+  if (opts.principal) {
     const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
     if (accessibleLocationIds !== null) {
       if (accessibleLocationIds.length === 0) return []
@@ -316,33 +303,28 @@ export async function listOrganizationGuestThreads(
   db: DbClient,
   opts: Omit<ListGuestThreadsOptions, 'principal'> & {
     organizationId: string
-    principal: {
-      userId: string
-      role: string
-      organizationId: string
-      teamIds: string[] | null
-    }
+    principal: MemberAccessPrincipal
   },
 ): Promise<GuestThreadListItemViewModel[]> {
   const params: Array<string | number> = [opts.organizationId]
   let where = 'gt.organization_id = ?'
 
-  if (opts.siteId) {
-    where += ' AND gt.site_id = ?'
-    params.push(opts.siteId)
-  }
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (isScopedRole(opts.principal.role)) {
-    const teamIds = opts.principal.teamIds ?? []
-    if (teamIds.length === 0) return []
-    const teamIdsJson = d1JsonStringSet(teamIds)
-    where += ` AND (s.team_id IN (SELECT value FROM json_each(?)) OR bl.team_id IN (SELECT value FROM json_each(?)))`
-    params.push(teamIdsJson, teamIdsJson)
-  } else if (!isOrganizationWideRole(opts.principal.role)) {
-    return []
+  // The same question the thread list asks, asked the same way. This used to
+  // read `teamIds` the caller had assembled and match them against a site team
+  // that no longer exists, which is a second answer to "which locations".
+  const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
+  if (accessibleLocationIds !== null) {
+    if (accessibleLocationIds.length === 0) return []
+    if (opts.locationId) {
+      if (!accessibleLocationIds.includes(opts.locationId)) return []
+    } else {
+      where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
+      params.push(d1JsonStringSet(accessibleLocationIds))
+    }
   }
   if (opts.type) {
     where += ' AND gt.kind = ?'
@@ -381,8 +363,7 @@ export async function listOrganizationGuestThreads(
       gt.*,
       ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
-      s.brand_name AS site_name,
-      s.subdomain AS site_slug,
+      s.name AS site_name,
       (
         SELECT body FROM activity_entries
         WHERE request_id = gt.id AND kind = 'message'
@@ -399,7 +380,7 @@ export async function listOrganizationGuestThreads(
       op.status AS operational_status
     FROM requests gt${OPERATIONAL_RECORD_SQL}
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
-    LEFT JOIN sites s ON s.id = gt.site_id${PLACE_IMAGE_SQL}
+    LEFT JOIN organization s ON s.id = gt.organization_id${PLACE_IMAGE_SQL}
     WHERE gt.kind IN ('contact', 'reservation', 'booking') AND ${where}
     ${unreadFilter}
     ORDER BY gt.updated_at DESC
@@ -412,16 +393,13 @@ export async function listOrganizationGuestThreads(
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
     const unread = unreadIds.has(row.id)
-    const siteSlug = row.site_slug?.trim()
-    if (!siteSlug) throw new Error(`Guest thread ${row.id} belongs to a site without a subdomain`)
     const contextLabel = row.site_name && row.location_title
       ? `${row.site_name} · ${row.location_title}`
       : row.site_name || row.location_title || ''
     const preview = sourcePreviewText(row)
     items.push({
       id: row.id,
-      siteId: row.site_id,
-      siteSlug,
+      organizationId: row.organization_id,
       guestName: row.guest_name,
       submissionType: row.kind,
       contextLabel,

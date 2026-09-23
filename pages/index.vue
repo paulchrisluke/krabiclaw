@@ -14,7 +14,7 @@
 import { authClient } from '~/lib/auth-client'
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId } = useTenantSite()
+const { isPlatform, organizationId } = useTenantSite()
 const { template } = usePublicTemplate()
 // Where this template keeps its home document. KrabiClaw's own homepage is an
 // ordinary published page on the platform site, read by the same loader every
@@ -22,7 +22,7 @@ const { template } = usePublicTemplate()
 const homePath = useTenantPageDocumentPath('home')
 const layout = computed(() => template.value!.layout as 'saya' | 'blawby' | 'platform')
 
-if (!isPlatform && !siteId) {
+if (!isPlatform && !organizationId) {
   throw createError({ statusCode: 404, statusMessage: 'Site not found' })
 }
 

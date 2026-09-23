@@ -36,19 +36,21 @@ type ValueShape = 'text' | 'string_array' | 'metafields' | { readonly [field: st
 type LocalizedRouteAddressing = 'none' | 'stored' | 'derived'
 
 /**
- * How a row of the resource's table is bound to the site localizing it.
+ * How a row of the resource's table is bound to the tenant localizing it.
  *
- * - `self`: the site row itself; a site localizes only itself.
- * - `site_column`: the row carries the site it belongs to.
- * - `publication`: the row is owned by the organization and reaches a site
- *   through `product_publications`. A Product has no site column — the same
- *   product is carried by however many of the organization's sites publish it.
+ * - `self`: the organization row itself; a tenant localizes only itself.
+ * - `organization_column`: the row carries the organization it belongs to.
+ *
+ * There used to be a third, `publication`: a Product had no site column and
+ * reached a site through `product_publications`, because one organization could
+ * carry several sites. It carries one tenant, so a Product is bound by its own
+ * `organization_id` like everything else.
  */
-export type ResourceSiteScope = 'self' | 'site_column' | 'publication'
+export type ResourceTenantScope = 'self' | 'organization_column'
 
 interface ResourceLocalizationDefinition {
   table: string
-  siteScope: ResourceSiteScope
+  tenantScope: ResourceTenantScope
   fields: Readonly<Record<string, ValueShape>>
   route: LocalizedRouteAddressing
 }
@@ -62,17 +64,17 @@ const ADDRESS_FIELDS = { addressLines: 'string_array', locality: 'text',
   sublocality: 'text', administrativeArea: 'text' } as const
 
 export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceType, ResourceLocalizationDefinition>> = Object.freeze({
-  site: { table: 'sites', siteScope: 'self', fields: { brand_name: 'text', brand_description: 'text', seo_title: 'text', seo_description: 'text',
+  organization: { table: 'organization', tenantScope: 'self', fields: { name: 'text', brand_description: 'text', seo_title: 'text', seo_description: 'text',
     compliance: { service_area: 'text', disclaimer: 'text', footer_disclaimer: 'text' }, consultation: { cta_label: 'text' } }, route: 'none' },
-  business_location: { table: 'business_locations', siteScope: 'site_column', fields: { title: 'text', address: ADDRESS_FIELDS,
+  business_location: { table: 'business_locations', tenantScope: 'organization_column', fields: { title: 'text', address: ADDRESS_FIELDS,
     description: 'text', short_description: 'text', seo_title: 'text', seo_description: 'text',
     reservation: { policy: POLICY_FIELDS } }, route: 'stored' },
   // Product SEO is owned by the canonical content document, so it is not
   // localized here: a second SEO source would be a second thing to keep true.
-  product: { table: 'products', siteScope: 'publication', fields: { name: 'text', description: 'text', tags: 'string_array',
+  product: { table: 'products', tenantScope: 'organization_column', fields: { name: 'text', description: 'text', tags: 'string_array',
     marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'derived' },
-  collection: { table: 'collections', siteScope: 'site_column', fields: { name: 'text', description: 'text' }, route: 'none' },
-  media_asset: { table: 'media_assets', siteScope: 'site_column', fields: { alt_text: 'text' }, route: 'none' },
+  collection: { table: 'collections', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
+  media_asset: { table: 'media_assets', tenantScope: 'organization_column', fields: { alt_text: 'text' }, route: 'none' },
 })
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -7,9 +7,9 @@ import { credentialSession } from './utils/e2e-auth.mjs'
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
-const SITE_ID = process.argv.includes('--site-id')
-  ? process.argv[process.argv.indexOf('--site-id') + 1]
-  : process.env.MCP_SITE_ID
+const ORGANIZATION_ID = process.argv.includes('--organization-id')
+  ? process.argv[process.argv.indexOf('--organization-id') + 1]
+  : process.env.MCP_ORGANIZATION_ID
 const LOCATION_ID = process.argv.includes('--location-id')
   ? process.argv[process.argv.indexOf('--location-id') + 1]
   : process.env.MCP_LOCATION_ID
@@ -122,9 +122,9 @@ async function assertResolvableImage(url, label) {
   })
 }
 
-async function assertSavedImage(headers, siteId, imageData, label) {
+async function assertSavedImage(headers, organizationId, imageData, label) {
   const response = await mcp(headers, 'save_generated_image', {
-    site_id: siteId,
+    organization_id: organizationId,
     image_data_base64: imageData,
     prompt: `${label} prompt`,
   })
@@ -139,9 +139,9 @@ async function assertSavedImage(headers, siteId, imageData, label) {
 }
 
 
-async function createProduct(headers, siteId, locationId) {
+async function createProduct(headers, organizationId, locationId) {
   const product = await mcp(headers, 'create_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1200, currency: 'USD' }] }],
@@ -151,14 +151,14 @@ async function createProduct(headers, siteId, locationId) {
   expectValue('create_product returns Product id', Boolean(productId), product.body)
   // Publication and location membership are separate rows; a Product nobody
   // published is not on the site, which is what the image checks read back.
-  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: productId, published: true }))
-  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { site_id: siteId, product_id: productId, location_id: locationId, active: true, published: true }))
+  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { organization_id: organizationId, product_id: productId, published: true }))
+  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { organization_id: organizationId, product_id: productId, location_id: locationId, active: true, published: true }))
   return productId
 }
 
-async function createPost(headers, siteId) {
+async function createPost(headers, organizationId) {
   const response = await mcp(headers, 'create_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     title: 'MCP Image Post',
     body: 'Post used for image tool coverage',
   })
@@ -168,9 +168,9 @@ async function createPost(headers, siteId) {
   return postId
 }
 
-async function createSecondProduct(headers, siteId) {
+async function createSecondProduct(headers, organizationId) {
   const response = await mcp(headers, 'create_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     name: 'MCP Image Class',
     description: 'Second Product used for image tool coverage',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 4500, currency: 'USD' }] }],
@@ -181,7 +181,7 @@ async function createSecondProduct(headers, siteId) {
   // Carrying is not publishing, and the media steps below read this Product
   // through the site. The first Product publishes itself; this one did not, so
   // the later site-scoped reads were exercising an unpublished row.
-  expectStatus('set_product_publication (second) succeeds', await mcp(headers, 'set_product_publication', { site_id: siteId, product_id: id, published: true }))
+  expectStatus('set_product_publication (second) succeeds', await mcp(headers, 'set_product_publication', { organization_id: organizationId, product_id: id, published: true }))
   return id
 }
 
@@ -195,13 +195,13 @@ async function assertImageAssignmentTool(headers, name, args, expectation) {
 async function main() {
   console.log(`Checking MCP image flow at ${BASE_URL}`)
   const headers = await getAuthHeaders()
-  const siteId = SITE_ID
-  if (!siteId) throw new Error('Pass --site-id for a disposable site provisioned through local setup or the CMS.')
-  if (!siteId) process.exit(1)
+  const organizationId = ORGANIZATION_ID
+  if (!organizationId) throw new Error('Pass --organization-id for a disposable organization provisioned through local setup or the CMS.')
+  if (!organizationId) process.exit(1)
 
   const fixture = await buildFixtureImageBase64()
-  const rawBase64Image = await assertSavedImage(headers, siteId, fixture.rawBase64, 'raw-base64')
-  const dataUrlImage = await assertSavedImage(headers, siteId, fixture.dataUrl, 'data-url')
+  const rawBase64Image = await assertSavedImage(headers, organizationId, fixture.rawBase64, 'raw-base64')
+  const dataUrlImage = await assertSavedImage(headers, organizationId, fixture.dataUrl, 'data-url')
   const assetId = rawBase64Image?.asset_id
   const secondAssetId = dataUrlImage?.asset_id
   expectValue('saved image fixture returns reusable asset_id', Boolean(assetId), rawBase64Image)
@@ -210,27 +210,27 @@ async function main() {
   const locationId = LOCATION_ID
   if (!locationId) throw new Error('Pass --location-id for a disposable location provisioned through the CMS.')
   const workspaceSet = await mcp(headers, 'set_workspace_context', {
-    site_id: siteId,
+    organization_id: organizationId,
     location_id: locationId,
   })
   expectStatus('set_workspace_context with location succeeds', workspaceSet)
   const workspacePayload = data(workspaceSet.body)
   expectValue('workspace context stores active location', workspacePayload?.context?.location_id === locationId, workspacePayload)
-  const productId = await createProduct(headers, siteId, locationId)
-  const postId = await createPost(headers, siteId)
-  const secondProductId = await createSecondProduct(headers, siteId)
+  const productId = await createProduct(headers, organizationId, locationId)
+  const postId = await createPost(headers, organizationId)
+  const secondProductId = await createSecondProduct(headers, organizationId)
 
   await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
-    placement: { owner_type: 'site', owner_id: siteId, slot: 'logo' },
+    organization_id: organizationId,
+    placement: { owner_type: 'site', owner_id: organizationId, slot: 'logo' },
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_media site_logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
-    expectValue('set_media site_logo returns context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media site_logo returns context', payload?.context?.organization_id === organizationId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'business_location', owner_id: locationId, slot: 'hero' },
     asset_id: assetId,
   }, (payload) => {
@@ -239,16 +239,16 @@ async function main() {
   })
 
   await assertImageAssignmentTool(headers, 'attach_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'product', owner_id: productId, slot: 'gallery' },
     asset_id: assetId,
   }, (payload) => {
     expectValue('attach_media Product gallery returns Product id', payload?.id === productId, payload)
-    expectValue('attach_media Product gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media Product gallery returns site context', payload?.context?.organization_id === organizationId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'attach_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'product', owner_id: productId, slot: 'gallery' },
     asset_id: secondAssetId,
   }, (payload) => {
@@ -256,7 +256,7 @@ async function main() {
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'product', owner_id: productId, slot: 'image' },
     asset_id: assetId,
   }, (payload) => {
@@ -264,32 +264,32 @@ async function main() {
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'content_document', owner_id: postId, slot: 'cover' },
     asset_id: assetId,
   }, (payload) => {
     expectValue('set_media post_image returns post id', payload?.id === postId, payload)
-    expectValue('set_media post_image returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media post_image returns site context', payload?.context?.organization_id === organizationId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'attach_media', {
-    site_id: siteId,
+    organization_id: organizationId,
     placement: { owner_type: 'product', owner_id: secondProductId, slot: 'gallery' },
     asset_id: assetId,
   }, (payload) => {
     expectValue('attach_media second Product gallery returns its id', payload?.id === secondProductId, payload)
-    expectValue('attach_media second Product gallery returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('attach_media second Product gallery returns site context', payload?.context?.organization_id === organizationId, payload)
   })
 
   const locationRead = await mcp(headers, 'get_location', {
-    site_id: siteId,
+    organization_id: organizationId,
     location_id: locationId,
   })
   expectStatus('get_location succeeds', locationRead)
   expectValue('set_media updates location hero', data(locationRead.body)?.location?.media?.some(media => media.slot === 'hero' && media.asset_id === assetId), data(locationRead.body))
 
   const productRead = await mcp(headers, 'get_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     product_id: productId,
   })
   const readProduct = data(productRead.body)?.product
@@ -302,14 +302,14 @@ async function main() {
   expectValue('set_media updates explicit Product primary', readProduct?.image?.asset_id === assetId, readProduct)
 
   const postRead = await mcp(headers, 'get_post', {
-    site_id: siteId,
+    organization_id: organizationId,
     post_id: postId,
   })
   expectStatus('get_post succeeds', postRead)
   expectValue('set_media updates post cover', data(postRead.body)?.post?.media?.some(media => media.slot === 'cover' && media.asset_id === assetId), data(postRead.body))
 
   const secondProductRead = await mcp(headers, 'get_product', {
-    site_id: siteId,
+    organization_id: organizationId,
     product_id: secondProductId,
   })
   expectStatus('get_product (second) succeeds', secondProductRead)

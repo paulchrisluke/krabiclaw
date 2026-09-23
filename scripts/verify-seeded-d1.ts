@@ -17,11 +17,11 @@ if (values.preview && values['local-dev']) {
   throw new Error('--local-dev is available only for local D1 fixture verification.')
 }
 
-const siteIds = ['site-demo', 'site-pottery-house', 'site-kikuzuki', 'site-ncls-blawby'] as const
+const organizationIds = ['org-demo', 'org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby'] as const
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`
 const sql = `
 SELECT
-  (SELECT COUNT(*) FROM sites WHERE id IN (${siteIds.map(sqlString).join(', ')})) AS seeded_sites,
+  (SELECT COUNT(*) FROM organization WHERE id IN (${organizationIds.map(sqlString).join(', ')})) AS seeded_organizations,
   (SELECT COUNT(*) FROM user WHERE id LIKE 'user-e2e-%') AS fixture_users,
   (SELECT COUNT(*) FROM account WHERE userId LIKE 'user-e2e-%' AND providerId = 'credential') AS fixture_credentials,
   (SELECT COUNT(*) FROM user WHERE id = ${sqlString(LOCAL_DEVELOPER_AUTH_FIXTURE.id)}) AS local_developer_users,
@@ -46,7 +46,7 @@ const row = executions.find(execution => execution.success)?.results?.[0]
 if (!row) throw new Error('D1 fixture verification returned no result row.')
 
 const invariants: Array<[string, number, number]> = [
-  ['seeded sites', Number(row.seeded_sites), siteIds.length],
+  ['seeded organizations', Number(row.seeded_organizations), organizationIds.length],
   ['fixture users', Number(row.fixture_users), E2E_AUTH_FIXTURES.length],
   ['fixture credentials', Number(row.fixture_credentials), E2E_AUTH_FIXTURES.length],
   ['local developer users', Number(row.local_developer_users), values['local-dev'] ? 1 : 0],
@@ -62,4 +62,4 @@ if (failures.length > 0) {
 }
 
 const localDeveloperSummary = values['local-dev'] ? ', the local developer credential' : ''
-console.log(`Verified ${values.preview ? 'preview' : 'local'} D1: ${siteIds.length} curated sites, ${E2E_AUTH_FIXTURES.length} E2E credentials${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)
+console.log(`Verified ${values.preview ? 'preview' : 'local'} D1: ${organizationIds.length} curated businesses, ${E2E_AUTH_FIXTURES.length} E2E credentials${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)

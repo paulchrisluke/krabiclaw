@@ -9,11 +9,11 @@ import { isThreadDetailResponse, type ThreadDetail } from '~/lib/components/work
  * `useAsyncData` key means that is one request.
  */
 export async function useGuestThread(threadId: Ref<string> | ComputedRef<string>) {
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
   const dashboardScope = useDashboardRouteScope()
   const dashboardApi = useDashboardApi(dashboardScope)
 
-  const siteId = computed(() => dashboard.siteId.value)
+  const siteId = computed(() => dashboard.organizationId.value)
   const key = computed(() => `dashboard-guest-thread:${siteId.value ?? 'pending-site'}:${threadId.value}`)
 
   const { data, pending, error, refresh } = await useAsyncData<{ thread: ThreadDetail }>(key, async () => {
@@ -24,7 +24,7 @@ export async function useGuestThread(threadId: Ref<string> | ComputedRef<string>
       throw createError({ statusCode: 400, statusMessage: 'Thread detail requires site scope' })
     }
     return await dashboardApi<{ thread: ThreadDetail }>(
-      `/api/dashboard/sites/${siteId.value}/guest-threads/${threadId.value}`,
+      `/api/dashboard/organizations/${siteId.value}/guest-threads/${threadId.value}`,
       { validate: isThreadDetailResponse },
     )
   })

@@ -3,7 +3,6 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 export interface PublicDraftSiteContent {
   id: string
   organization_id: string
-  site_id: string
   location_id?: string
   page: string
   field: string
@@ -42,7 +41,7 @@ export function tenantPageToContentRows(page: PublicTenantPage): PublicDraftSite
     const base = {
       id: block.id,
       organization_id: '',
-      site_id: '',
+      
       page: page.path === '/' ? 'home' : page.path.slice(1).replaceAll('/', '-'),
       field,
       type: block.type === 'image' || block.type === 'gallery' ? 'media' : 'text',

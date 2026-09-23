@@ -13,7 +13,7 @@ import {
   listCollections,
   listLocationProducts,
   listMetafieldDefinitions,
-  listSiteProducts,
+  listOrganizationProducts,
   reconcileProducts,
   removeProductLocation,
   reorderCollections,
@@ -39,7 +39,7 @@ import { NOT_HANDLED, objectArray, omit, requiredString, requiredStringArray } f
  */
 async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
   await assertResourceAccess(ctx.site.db, {
-    ...memberAccessPrincipal(ctx.site.membership, { env: ctx.site.env, siteId: ctx.site.siteId }),
+    ...memberAccessPrincipal(ctx.site.membership, { env: ctx.site.env }),
     resourceLocationId: locationId,
   })
 }
@@ -53,7 +53,7 @@ async function authorizeLocation(ctx: McpExecutorContext, locationId: string) {
  */
 async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string): Promise<Product> {
   return await requireSiteProduct(ctx.site.db, {
-    organizationId: ctx.site.organizationId, siteId: ctx.site.siteId, productId,
+    organizationId: ctx.site.organizationId, productId,
   }).catch((error: unknown) => {
     const message = (error as { statusMessage?: string }).statusMessage
     throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
@@ -93,7 +93,7 @@ function definitionResult(definition: MetafieldDefinition) {
 export async function handleProductsTools(ctx: McpExecutorContext) {
   const { toolName, args, site } = ctx
   const actor = { actorId: site.userId }
-  const scope = { organizationId: site.organizationId, siteId: site.siteId }
+  const scope = { organizationId: site.organizationId}
 
   switch (toolName) {
     // Both list tools read the window first and ask the database for exactly
@@ -101,7 +101,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
     // answer a request for fifty.
     case 'list_products': {
       const window = mcpPageWindow(args, { resource: 'products' })
-      const products = await listSiteProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
+      const products = await listOrganizationProducts(site.db, { ...scope, publishedOnly: args.published_only === true, window })
       return productPage(products, window)
     }
     case 'list_location_products': {
@@ -110,7 +110,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       const window = mcpPageWindow(args, { resource: 'products' })
       const products = await listLocationProducts(site.db, {
         organizationId: site.organizationId, locationId, window,
-        ...(args.published_only === true ? { publishedOnSiteId: site.siteId } : {}),
+        publishedOnly: args.published_only === true,
       })
       return productPage(products, window)
     }
@@ -121,7 +121,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       // The site carries what it created, withheld until someone publishes it
       // — written with the product, so the product is loaded once.
       const product = await createProduct(site.db, {
-        organizationId: site.organizationId, siteId: site.siteId,
+        organizationId: site.organizationId,
         product: args as unknown as CreateProductInput, actor,
         publication: { published: false },
       })
@@ -151,7 +151,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       // permission to edit it everywhere.
       if (target.publications.length > 0) {
         const visible = new Set((await listSitesForUser(site.db, site.env, site.userId)).map(row => String(row.id)))
-        if (target.publications.some(entry => !visible.has(entry.site_id))) {
+        if (target.publications.some(entry => !visible.has(entry.organization_id))) {
           throw mcpProtocolError(MCP_ERROR.invalidParams, 'That product is carried by a site you do not have access to')
         }
       }
@@ -213,7 +213,7 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
         collection: await createCollection(site.db, {
           organizationId: site.organizationId,
           collection: {
-            site_id: site.siteId, location_id: locationId,
+            location_id: locationId,
             name: requiredString(args, 'name'),
             description: typeof args.description === 'string' ? args.description : null,
             sort_order: typeof args.sort_order === 'number' ? args.sort_order : undefined,

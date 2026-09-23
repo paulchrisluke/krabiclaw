@@ -54,7 +54,7 @@ const props = defineProps<{
 const { localePath, t } = useI18n()
 
 const year = new Date().getFullYear()
-const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || '')
+const brandName = computed(() => props.site.name || props.compliance?.entity_name || '')
 const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
 const documents = computed(() => props.compliance?.media.filter(item => item.slot === 'document' && item.public_url) ?? [])
 const footerLogo = computed(() => props.site.media.find(item => item.slot === 'logo_dark')?.public_url

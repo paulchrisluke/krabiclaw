@@ -3,7 +3,7 @@
     <TenantPageFieldControl
       v-for="(entry, index) in fields"
       :key="entry.key"
-      :site-id="siteId"
+      :organization-id="organizationId"
       :page-id="pageId"
       :block-id="blockId"
       :field-key="entry.key"
@@ -46,7 +46,7 @@ import type { TenantPageField } from '~/utils/tenant-page-blocks'
  * source the writer refuses.
  */
 const props = defineProps<{
-  siteId: string
+  organizationId: string
   pageId: string
   blockId: string
   sectionKey: string
@@ -54,13 +54,13 @@ const props = defineProps<{
 
 defineEmits<{ splitInsert: [{ after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 
-const block = useTenantPageBlock(props.siteId, props.pageId, () => props.blockId)
+const block = useTenantPageBlock(props.organizationId, props.pageId, () => props.blockId)
 
 const fields = computed(() => tenantPageBlockFieldsForSection(block.value, props.sectionKey))
 const validationErrors = computed(() => validateTenantPageBlock(block.value))
 
 // ── Records a reference field may point at ──────────────
-const dashboard = useDashboardSite()
+const dashboard = useDashboardOrganization()
 
 const needsPages = computed(() => fields.value.some(entry => entry.field.reference === 'page'))
 const needsProducts = computed(() => fields.value.some(entry => entry.field.reference === 'product' || entry.field.reference === 'collection'))
@@ -74,20 +74,20 @@ const isProductsResponse = (value: unknown): value is { products: NamedRow[] } =
     && value.products.every(row => isRecord(row) && typeof row.id === 'string' && typeof row.name === 'string')
 
 const { data: pagesData } = await useAsyncData(
-  () => `tenant-page-options-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/pages`, { validate: isTenantPageListResponse }),
+  () => `tenant-page-options-${props.organizationId}`,
+  () => useDashboardApi()(`/api/editor/organizations/${props.organizationId}/pages`, { validate: isTenantPageListResponse }),
   { immediate: needsPages.value, watch: [needsPages], default: () => null },
 )
 
 const { data: collectionsData } = await useAsyncData(
-  () => `tenant-page-collections-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/collections`, { validate: isCollectionsResponse }),
+  () => `tenant-page-collections-${props.organizationId}`,
+  () => useDashboardApi()(`/api/editor/organizations/${props.organizationId}/collections`, { validate: isCollectionsResponse }),
   { immediate: needsProducts.value, watch: [needsProducts], default: () => null },
 )
 
 const { data: productsData } = await useAsyncData(
-  () => `tenant-page-products-${props.siteId}`,
-  () => useDashboardApi()(`/api/editor/sites/${props.siteId}/products`, { validate: isProductsResponse }),
+  () => `tenant-page-products-${props.organizationId}`,
+  () => useDashboardApi()(`/api/editor/organizations/${props.organizationId}/products`, { validate: isProductsResponse }),
   { immediate: needsProducts.value, watch: [needsProducts], default: () => null },
 )
 

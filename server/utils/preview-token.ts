@@ -40,19 +40,19 @@ async function signPreviewPayload(secret: string, payload: string) {
   return base64UrlEncode(signature)
 }
 
-export async function createPreviewToken(secret: string, siteId: string, expiresAt: number) {
-  const signature = await signPreviewPayload(secret, `site:${siteId}.${expiresAt}`)
+export async function createPreviewToken(secret: string, organizationId: string, expiresAt: number) {
+  const signature = await signPreviewPayload(secret, `site:${organizationId}.${expiresAt}`)
   return `${expiresAt}.${signature}`
 }
 
-export async function verifyPreviewToken(secret: string, siteId: string, token: string) {
+export async function verifyPreviewToken(secret: string, organizationId: string, token: string) {
   const [expiresAtRaw, signature] = token.split('.')
   const expiresAt = Number(expiresAtRaw)
 
   if (!Number.isFinite(expiresAt) || !signature) return false
   if (Date.now() > expiresAt) return false
 
-  const expected = await createPreviewToken(secret, siteId, expiresAt)
+  const expected = await createPreviewToken(secret, organizationId, expiresAt)
 
   const tokenBuf = textEncoder.encode(token)
   const expectedBuf = textEncoder.encode(expected)
@@ -68,7 +68,7 @@ export async function verifyPreviewToken(secret: string, siteId: string, token: 
 }
 
 /**
- * Is this request authorized to preview `siteId`?
+ * Is this request authorized to preview `organizationId`?
  *
  * Accepts the token from `?preview_token=` and, when it is valid, promotes it
  * to the cookie so the rest of the visit — every link the site renders, every
@@ -77,7 +77,7 @@ export async function verifyPreviewToken(secret: string, siteId: string, token: 
  */
 export async function resolvePreviewAuthorization(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   previewSecret: string | null,
 ): Promise<boolean> {
   if (!previewSecret) return false
@@ -85,7 +85,7 @@ export async function resolvePreviewAuthorization(
   const queryToken = getQuery(event)[PREVIEW_TOKEN_QUERY]
   const token = typeof queryToken === 'string' && queryToken ? queryToken : null
   if (token) {
-    if (!await verifyPreviewToken(previewSecret, siteId, token)) return false
+    if (!await verifyPreviewToken(previewSecret, organizationId, token)) return false
     setCookie(event, PREVIEW_COOKIE_NAME, token, {
       httpOnly: true,
       secure: true,
@@ -99,7 +99,7 @@ export async function resolvePreviewAuthorization(
 
   const cookieToken = getCookie(event, PREVIEW_COOKIE_NAME)
   if (!cookieToken) return false
-  return await verifyPreviewToken(previewSecret, siteId, cookieToken)
+  return await verifyPreviewToken(previewSecret, organizationId, cookieToken)
 }
 
 /**

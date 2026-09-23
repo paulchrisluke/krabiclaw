@@ -71,7 +71,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     SELECT organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1
   `, [siteId])
   if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-  const source = await getPersistedSourceLocale(db, currentSite.organization_id, siteId)
+  const source = await getPersistedSourceLocale(db, currentSite.organization_id)
   const sourceCatalog = platformLocale(source.locale)
   if (!sourceCatalog) throw createError({ statusCode: 500, statusMessage: 'Site primary language is unavailable' })
   state.value = source.locale
@@ -87,7 +87,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
      LIMIT 1
   `, [siteId, candidate])
   if (!locale) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
-  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, siteId, locale.locale)
+  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, locale.locale)
   if (!entitlement.platform_messages) {
     throw createError({ statusCode: 503, statusMessage: 'Published platform locale messages are unavailable' })
   }

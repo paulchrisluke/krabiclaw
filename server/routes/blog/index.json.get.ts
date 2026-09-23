@@ -9,11 +9,11 @@ export default defineHandler(async (event) => {
 
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
-  const siteId = isTenant ? String(event.context.siteId || '') : ''
-  const posts = isTenant && siteId
-    ? await listPublishedTenantBlogPostsForLlm(db, siteId, env)
+  const organizationId = isTenant ? String(event.context.organizationId || '') : ''
+  const posts = isTenant && organizationId
+    ? await listPublishedTenantBlogPostsForLlm(db, organizationId, env)
     : await listPublishedPlatformBlogPostsForLlm(db, env)
-  const entries = isTenant && siteId
+  const entries = isTenant && organizationId
     ? buildTenantBlogLinkEntries(posts ?? [], origin, { themeId: String(event.context.themeId ?? '') })
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildBlogIndexJson(entries))

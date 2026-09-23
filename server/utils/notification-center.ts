@@ -5,7 +5,7 @@ export const NOTIFICATION_EVENT_TYPES = {
   PLATFORM_USER_SIGNUP: 'platform.user_signup',
 } as const
 
-export type NotificationScope = 'global' | 'organization' | 'site'
+export type NotificationScope = 'global' | 'organization'
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'error'
 
 export interface CreateNotificationInput {
@@ -14,7 +14,6 @@ export interface CreateNotificationInput {
   template: string
   severity?: NotificationSeverity
   organizationId?: string | null
-  siteId?: string | null
   locationId?: string | null
   sourceEntryId?: string | null
   targetUserId?: string | null
@@ -51,26 +50,23 @@ export function buildCanonicalNotificationInsert(
   id: string = crypto.randomUUID(),
   now = new Date().toISOString(),
 ): CanonicalNotificationInsert {
-  if (input.scope === 'global' && (input.organizationId || input.siteId)) {
-    throw new Error('Platform notifications cannot be organization or site scoped')
+  if (input.scope === 'global' && input.organizationId) {
+    throw new Error('Platform notifications cannot be organization scoped')
   }
   if (input.scope !== 'global' && !input.organizationId) {
     throw new Error(`${input.scope} notifications require an organization`)
-  }
-  if (input.scope === 'site' && !input.siteId) {
-    throw new Error('Site notifications require a site')
   }
   return {
     id,
     query: `
       INSERT INTO activity_entries
-        (id, kind, scope_kind, organization_id, context_site_id, location_id, parent_id, actor_kind, target_user_id, body, event_name, payload_json, dedupe_key, occurred_at, created_at)
-      VALUES (?, 'notification', ?, ?, ?, ?, ?, 'system', ?, ?, ?, ?, ?, ?, ?)
+        (id, kind, scope_kind, organization_id, location_id, parent_id, actor_kind, target_user_id, body, event_name, payload_json, dedupe_key, occurred_at, created_at)
+      VALUES (?, 'notification', ?, ?, ?, ?, 'system', ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT DO NOTHING
     `,
-    params: [id, input.scope === 'global' ? 'global' : 'organization', input.organizationId ?? null, input.siteId ?? null,
+    params: [id, input.scope, input.organizationId ?? null,
       input.locationId ?? null, input.sourceEntryId ?? null, input.targetUserId ?? null, input.message ?? null, input.template,
-      JSON.stringify({ visibility_scope: input.scope, severity: input.severity ?? 'info', title: input.title, thread_id: input.threadId ?? null, deep_link: input.deepLink ?? null }),
+      JSON.stringify({ severity: input.severity ?? 'info', title: input.title, thread_id: input.threadId ?? null, deep_link: input.deepLink ?? null }),
       `notification:${input.idempotencyKey ?? id}`, now, now],
   }
 }
@@ -82,7 +78,6 @@ export async function createCanonicalNotification(db: DbClient, input: CreateNot
     await publishNotificationInvalidation(input.publishEnv, {
       type: 'notification.created',
       organizationId: input.organizationId,
-      siteId: input.siteId ?? null,
       locationId: input.locationId ?? null,
       targetUserId: input.targetUserId ?? null,
     })

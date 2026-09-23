@@ -28,7 +28,7 @@ export interface PublicShellLoadOptions {
 
 export async function loadPublicShellSource(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   query: Pick<Record<string, string | undefined>, 'locale'>,
   options: PublicShellLoadOptions = {},
 ) {
@@ -40,10 +40,10 @@ export async function loadPublicShellSource(
 
   const locale = typeof query.locale === 'string' ? query.locale : undefined
   if (locale !== undefined) assertExactCanonicalLocale(locale)
-  const previewAuthorized = await resolvePreviewAuthorization(event, siteId, previewSecretOf(env))
+  const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(env))
   const host = (event.req.headers.get('host')) ?? ''
   const useCache = !previewAuthorized && !isNonProductionHost(host)
-  const cacheKey = buildPublicResourceCacheKey(siteId, {
+  const cacheKey = buildPublicResourceCacheKey(organizationId, {
     contract: 'shell',
     page: null,
     location: null,
@@ -70,12 +70,12 @@ export async function loadPublicShellSource(
         return parsed
       } catch (error) {
         console.warn('[public-resource-cache] corrupt shell entry', {
-          siteId,
+          organizationId,
           error: error instanceof Error ? error.message : String(error),
         })
         const deletion = cache.delete(cacheKey).catch((deleteError: unknown) => {
           console.warn('[public-resource-cache] corrupt shell deletion failed', {
-            siteId,
+            organizationId,
             error: String(deleteError),
           })
         })
@@ -87,10 +87,10 @@ export async function loadPublicShellSource(
     setHeader(event, 'x-bootstrap-cache', useCache ? 'NO-KV' : 'SKIP')
   }
 
-  const { site } = await loadPublicBase(event, siteId, { previewAuthorized })
+  const { site } = await loadPublicBase(event, organizationId, { previewAuthorized })
   options.signal?.throwIfAborted()
   const shellQueries: BatchQuery[] = []
-  const shellIndexes = appendPublicShellQueries(shellQueries, site.organization_id, siteId)
+  const shellIndexes = appendPublicShellQueries(shellQueries, site.id)
   const shellResults = await executeBatch(db, shellQueries)
   options.signal?.throwIfAborted()
   const payload = {
@@ -100,7 +100,7 @@ export async function loadPublicShellSource(
     platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
-    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.organization_id, siteId, locale)
+    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.id, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     if (!entitlement.platform_messages) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Published platform locale messages are unavailable' })
@@ -109,21 +109,21 @@ export async function loadPublicShellSource(
     const localizedRows = await queryAll<StoredPublicLocalizationRow>(db, `
       SELECT resource_type, resource_id, locale, values_json, route_path
        FROM resource_localizations
-       WHERE organization_id = ? AND site_id = ? AND locale = ?
-         AND resource_type IN ('site', 'business_location')
-    `, [site.organization_id, siteId, locale])
+       WHERE organization_id = ?  AND locale = ?
+         AND resource_type IN ('organization', 'business_location')
+    `, [site.id, locale])
     // The shell reads the site and its locations; neither carries metafields,
     // so no definition is in scope here.
     const localizations = indexStoredPublicLocalizations(localizedRows, new Map())
-    const siteLocalization = localizations.find(item => item.resourceType === 'site' && item.resourceId === siteId)
+    const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
     payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
     const localizedSite = siteLocalization
-      ? projectExactLocalizedResource('site', { ...payload.site, id: siteId }, siteLocalization)
-      : { ...payload.site, id: siteId, brand_name: null, brand_description: null }
+      ? projectExactLocalizedResource('organization', { ...payload.site, id: organizationId }, siteLocalization)
+      : { ...payload.site, id: organizationId, name: null, brand_description: null }
     const { id: _localizedSiteId, ...localizedSiteValues } = localizedSite
     payload.site = localizedSiteValues
     const {
-      brand_name: _sourceBrandName,
+      name: _sourceBrandName,
       brand_description: _sourceBrandDescription,
       seo_title: _sourceSeoTitle,
       seo_description: _sourceSeoDescription,
@@ -131,9 +131,9 @@ export async function loadPublicShellSource(
     } = payload.config
     payload.config = {
       ...nonLocalizedConfig,
-      ...(typeof localizedSite.brand_name === 'string' ? {
-        brand_name: localizedSite.brand_name,
-        seo_title: localizedSite.brand_name,
+      ...(typeof localizedSite.name === 'string' ? {
+        name: localizedSite.name,
+        seo_title: localizedSite.name,
       } : {}),
       ...(typeof localizedSite.brand_description === 'string' ? {
         brand_description: localizedSite.brand_description,
@@ -153,18 +153,18 @@ export async function loadPublicShellSource(
 
 export function loadPublicShell(
   event: H3Event,
-  siteId: string,
+  organizationId: string,
   query: Pick<Record<string, string | undefined>, 'locale'>,
   options?: PublicShellLoadOptions,
 ) {
   if (options?.signal) {
     const startedAt = performance.now()
-    return loadPublicShellSource(event, siteId, query, options)
+    return loadPublicShellSource(event, organizationId, query, options)
       .finally(() => recordRequestPhase(event, 'shell', startedAt))
   }
-  return oncePerRequest(event, `public-shell:${siteId}:${query.locale ?? ''}`, () => {
+  return oncePerRequest(event, `public-shell:${organizationId}:${query.locale ?? ''}`, () => {
     const startedAt = performance.now()
-    return loadPublicShellSource(event, siteId, query, options)
+    return loadPublicShellSource(event, organizationId, query, options)
       .finally(() => recordRequestPhase(event, 'shell', startedAt))
   })
 }

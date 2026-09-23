@@ -38,14 +38,14 @@ export async function useBlawbyDocument(
   options: { server?: boolean; lazy?: boolean } = {},
 ) {
   const nuxtApp = useNuxtApp()
-  const { siteId, isTenant } = useTenantSite()
+  const { organizationId, isTenant } = useTenantSite()
   const locale = useState<string>('public-locale', () => 'en')
-  if (!isTenant || !siteId) {
+  if (!isTenant || !organizationId) {
     throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
   }
 
   const normalizedSlug = slug?.trim() || ''
-  const key = () => `blawby-document-${siteId}-${recipe}-${normalizedSlug || 'index'}-${locale.value}`
+  const key = () => `blawby-document-${organizationId}-${recipe}-${normalizedSlug || 'index'}-${locale.value}`
   const asyncData = await useAsyncData<BlawbyDocumentPayload>(
     key,
     async () => {
@@ -53,7 +53,7 @@ export async function useBlawbyDocument(
         const requestEvent = useRequestEvent()
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
         const { loadPublicBlawbyDocument } = await import('~/server/utils/public-blawby-document')
-        return await loadPublicBlawbyDocument(requestEvent, siteId, recipe, {
+        return await loadPublicBlawbyDocument(requestEvent, organizationId, recipe, {
           slug: normalizedSlug,
           previewAuthorized: Boolean(requestEvent.context.previewAuthorized),
           locale: locale.value,
@@ -62,7 +62,7 @@ export async function useBlawbyDocument(
       }
       // The preview cookie travels with this request, so the API resolves the
       // same authorization the server render used.
-      return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
+      return await publicApiRequest<BlawbyDocumentPayload>('/api/public/blawby/document', {
         query: { recipe, locale: locale.value, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
         validate: value => isBlawbyDocumentPayload(value, recipe),
       })

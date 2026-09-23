@@ -10,29 +10,27 @@ export default defineHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const query = getQuery(event)
-  const siteId = typeof query.site_id === 'string' ? query.site_id : null
   const organizationId = typeof query.organization_id === 'string' ? query.organization_id : null
   const locationId = typeof query.location_id === 'string' ? query.location_id : null
   const since = typeof query.since === 'string' ? query.since : null
   const limit = Math.min(Math.max(Number.parseInt(String(query.limit ?? '200'), 10) || 200, 1), 500)
   const filters: string[] = []
   const binds: Array<string | number> = []
-  if (siteId) { filters.push('gt.site_id = ?'); binds.push(siteId) }
   if (organizationId) { filters.push('gt.organization_id = ?'); binds.push(organizationId) }
   if (locationId) { filters.push('gt.location_id = ?'); binds.push(locationId) }
   if (since) { filters.push('d.created_at >= ?'); binds.push(since) }
 
   const notifications = await queryAll(db, `
-    SELECT id, organization_id, context_site_id AS site_id, location_id, parent_id AS source_entry_id,
-           json_extract(payload_json, '$.visibility_scope') AS scope, json_extract(payload_json, '$.severity') AS severity, event_name AS template, json_extract(payload_json, '$.title') AS title, created_at
+    SELECT id, organization_id, location_id, parent_id AS source_entry_id,
+           scope_kind AS scope, json_extract(payload_json, '$.severity') AS severity, event_name AS template, json_extract(payload_json, '$.title') AS title, created_at
     FROM activity_entries
-    WHERE kind = 'notification' AND (? IS NULL OR context_site_id = ?)
+    WHERE kind = 'notification'
       AND (? IS NULL OR organization_id = ?)
       AND (? IS NULL OR location_id = ?)
       AND (? IS NULL OR created_at >= ?)
     ORDER BY created_at DESC
     LIMIT ?
-  `, [siteId, siteId, organizationId, organizationId, locationId, locationId, since, since, limit])
+  `, [organizationId, organizationId, locationId, locationId, since, since, limit])
   const deliveries = await queryAll(db, `
     SELECT d.id, e.request_id, d.entry_id, d.channel, d.provider, d.purpose,
            d.status, d.provider_message_id, d.error, d.created_at, d.updated_at

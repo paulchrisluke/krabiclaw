@@ -42,14 +42,14 @@ export default defineHandler(async (event) => {
     })
     if ('refused' in outcome) {
       // The draft stays open: it still owns the address, and closing it here
-      // would strand the site with nothing left to discard it from.
-      if (outcome.refused === 'site_is_live') {
+      // would strand the organization with nothing left to discard it from.
+      if (outcome.refused === 'organization_is_live') {
         return jsonResponse({ error: 'This site is already live. Delete it from its dashboard instead.' }, { status: 409 })
       }
       if (outcome.refused === 'not_owner') {
-        return jsonResponse({ error: 'Only an owner of this organization can discard its draft site.' }, { status: 403 })
+        return jsonResponse({ error: 'Only an owner of this organization can discard its draft.' }, { status: 403 })
       }
-      return jsonResponse({ error: 'Could not discard this draft’s site. Please try again.' }, { status: 500 })
+      return jsonResponse({ error: 'Could not discard this draft. Please try again.' }, { status: 500 })
     }
     deleted = outcome.removed !== 'nothing'
   }

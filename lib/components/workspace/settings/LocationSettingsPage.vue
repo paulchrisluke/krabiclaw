@@ -15,7 +15,7 @@
     v-if="editor.location.value"
     v-model:open="localizeOpen"
     row-trigger
-    :site-id="siteId"
+    :organization-id="organizationId"
     resource-type="business_location"
     :resource-id="editor.location.value.id"
     resource-label="location"
@@ -82,7 +82,7 @@ export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[n
  * as the route moves between locations, so a path read once at setup froze
  * every row to the location that happened to be open first.
  */
-export async function useLocationEditor(siteId: string, locationId: Ref<string | null>, key: LocationEditorKey | null, settingsPath: MaybeRefOrGetter<string> = '') {
+export async function useLocationEditor(organizationId: string, locationId: Ref<string | null>, key: LocationEditorKey | null, settingsPath: MaybeRefOrGetter<string> = '') {
   // Captured before the first await: an await in setup leaves the active effect
   // scope, so a watcher created after one is bound to nothing and never stops.
   // Thirteen leaves call this, each leaving its watcher behind on unmount.
@@ -91,7 +91,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   const route = useRoute()
   const dashboardApi = useDashboardApi()
     const editorError = ref<string | null>(null)
-  const dashboard = useDashboardSite()
+  const dashboard = useDashboardOrganization()
 
 
 
@@ -111,7 +111,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   const locationEffectiveFeatures = ref<ProductFeature[]>([])
 
   const locationToggleableFeatures = computed<ProductFeature[]>(() => {
-    const site = dashboard.site.value
+    const site = dashboard.organization.value
     if (!site?.vertical) return []
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical as SiteVertical }).slug
     const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
@@ -119,7 +119,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
   })
 
   const locationFeatureLabels = computed<Map<ProductFeature, string>>(() => {
-    const site = dashboard.site.value
+    const site = dashboard.organization.value
     if (!site?.vertical) return new Map()
     const vertical = site.vertical as SiteVertical
     const template = resolvePublicTemplate({ themeId: site.theme_id, vertical }).slug
@@ -263,7 +263,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     status: 'active',
     notification_phone: '',
   })
-  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/settings/localization`)
+  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
   const locationLocalizationFields = computed(() => [
     { key: 'title', label: 'Name', source: location.value?.title },
     { key: 'short_description', label: 'Short description', source: location.value?.short_description },
@@ -413,7 +413,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
       fillDetailsForm(response.location)
       originalSignature.value = editorSignature(key)
       // The index beside this editor draws the same location from its own read.
-      await refreshNuxtData(`dashboard-location-overview:${siteId}:${requestedLocationId}`)
+      await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
       if (response.location.slug !== previousSlug) {
         await dashboard.refresh()
         // The record moved: same level, its new address.
@@ -432,14 +432,14 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     editorError.value = null
     try {
       const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${organizationId}/locations/${requestedLocationId}/reservation-config`,
         { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
       )
       if (locationId.value !== requestedLocationId) return
       reservationConfig.value = response.config
       reservationForm.value = reservationPatchFrom(response.config)
       originalSignature.value = editorSignature(key)
-      await refreshNuxtData(`dashboard-location-overview:${siteId}:${requestedLocationId}`)
+      await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
     } catch (error) {
       editorError.value = getErrorMessage(error, 'Failed to save the reservation policy')
     } finally {
@@ -453,14 +453,14 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     editorError.value = null
     try {
       await dashboardApi<{ success: true }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${organizationId}/locations/${requestedLocationId}/reservation-config`,
         { method: 'DELETE', validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true },
       )
       if (locationId.value !== requestedLocationId) return
       reservationConfig.value = null
       reservationForm.value = {}
       originalSignature.value = editorSignature(key)
-      await refreshNuxtData(`dashboard-location-overview:${siteId}:${requestedLocationId}`)
+      await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
     } catch (error) {
       editorError.value = getErrorMessage(error, 'Failed to close reservations')
     } finally {
@@ -567,7 +567,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
     reservationConfig: { success: true; config: LocationReservationConfig | null }
   }
 
-  const locationSettingsKey = computed(() => `dashboard-location-settings-${siteId}-${locationId.value}`)
+  const locationSettingsKey = computed(() => `dashboard-location-settings-${organizationId}-${locationId.value}`)
   const {
     data: locationSettingsResource,
     pending: locationSettingsPending,
@@ -582,7 +582,7 @@ export async function useLocationEditor(siteId: string, locationId: Ref<string |
         { validate: isLocationResponse },
       ),
       dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
-        `/api/editor/sites/${siteId}/locations/${requestedLocationId}/reservation-config`,
+        `/api/editor/organizations/${organizationId}/locations/${requestedLocationId}/reservation-config`,
         { validate: isReservationConfigResponse },
       ),
     ])
@@ -633,8 +633,8 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 
 const level = useRouteLevel()
 const dashboardLocation = useDashboardLocation()
-const siteId = await useDashboardSiteId()
-const editor = await useLocationEditor(siteId, dashboardLocation.currentLocationId, null, level.path)
+const organizationId = await useDashboardOrganizationId()
+const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, null, level.path)
 
 const localizeOpen = ref(false)
 function onRowAction(id: string) {

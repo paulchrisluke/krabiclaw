@@ -11,12 +11,12 @@ export default defineHandler(async (event) => {
 
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
-  const siteId = isTenant ? String(event.context.siteId || '') : ''
+  const organizationId = isTenant ? String(event.context.organizationId || '') : ''
 
-  if (isTenant && siteId) {
-    const siteName = (event.context.site as { brand_name?: string | null } | undefined)?.brand_name?.trim() || ''
+  if (isTenant && organizationId) {
+    const siteName = (event.context.site as { name?: string | null } | undefined)?.name?.trim() || ''
     if (!siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
-    const posts = await listPublishedTenantBlogPostsForLlm(db, siteId, env)
+    const posts = await listPublishedTenantBlogPostsForLlm(db, organizationId, env)
     const entries = buildTenantBlogLinkEntries(posts ?? [], origin, { themeId: String(event.context.themeId ?? '') })
     return textResponse(
       buildNamedBlogRss(origin, entries, {

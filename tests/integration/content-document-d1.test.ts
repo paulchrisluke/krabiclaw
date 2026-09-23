@@ -24,14 +24,13 @@ test('document scopes, translations, block ownership and concurrent edits persis
     const currentSchema = await generateSQLiteDrizzleJson(schema)
     for (const statement of await generateSQLiteMigration(empty, currentSchema)) await db.prepare(statement).run()
     for (const id of ['one', 'two']) {
-      await db.prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)').bind(id, id, id).run()
-      await db.prepare('INSERT INTO sites (id, organization_id, slug, subdomain) VALUES (?, ?, ?, ?)').bind(id, id, id, id).run()
-      for (const locale of ['en', 'th']) await db.prepare('INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, ?, ?, ?)')
-        .bind(id + locale, id, id, locale, Number(locale === 'en'), 'published').run()
+      await db.prepare('INSERT INTO organization (id, name, slug, subdomain) VALUES (?, ?, ?, ?)').bind(id, id, id, id).run()
+      for (const locale of ['en', 'th']) await db.prepare('INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES (?, ?, ?, ?, ?)')
+        .bind(id + locale, id, locale, Number(locale === 'en'), 'published').run()
     }
     const { document } = await createContentDocumentWithBlocks(db, {
-      id: 'article', organizationId: 'one', siteId: 'one', kind: 'article', rowRole: 'root', locale: 'en',
-      title: 'Original', slug: 'article', status: 'published', visibility: 'public',
+      id: 'article', organizationId: 'one', kind: 'article', rowRole: 'root', locale: 'en',
+      title: 'Original', slug: 'article', status: 'published', visibility: 'listed',
     }, [{ id: 'body', type: 'markdown', data: { markdown: 'Original', editor_mode: 'rich' } }])
     const prepare = (label: string) => prepareContentDocumentUpdate(document, { expected_updated_at: document.updated_at,
       changes: { title: label, summary: label }, blocks: [{ id: 'body', type: 'markdown', data: { markdown: label, editor_mode: 'rich' } }],
@@ -45,7 +44,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
       { id: 'page-body', parent_block_id: 'page-heading', type: 'markdown', position: 1002, data: { markdown: 'Page copy', editor_mode: 'rich' } },
     ]
     const page = await createContentDocumentWithBlocks(db, {
-      id: 'roundtrip-page', organizationId: 'one', siteId: 'one', kind: 'page', rowRole: 'root', locale: 'en', title: 'About', path: '/about', metadata: { page_type: 'custom', recipe: null },
+      id: 'roundtrip-page', organizationId: 'one', kind: 'page', rowRole: 'root', locale: 'en', title: 'About', path: '/about', metadata: { page_type: 'custom', recipe: null },
     }, pageBlocks)
     const beforePage = await listBlocksForDocument(db, page.document.id)
     const { normalizeTenantPageBlocks } = await import('../../utils/tenant-page-blocks.ts')
@@ -57,22 +56,22 @@ test('document scopes, translations, block ownership and concurrent edits persis
     const content = (rows: typeof beforePage) => rows.map(({ updated_at, created_at, ...row }) => row)
     assert.deepEqual(content(afterPage), content(beforePage), 'a full page read/save changing only its title preserves block content, position, level and parent')
 
-    const translated = await createContentDocumentWithBlocks(db, { id: 'translation', organizationId: 'one', siteId: 'one',
+    const translated = await createContentDocumentWithBlocks(db, { id: 'translation', organizationId: 'one',
       kind: 'article', rowRole: 'representation', rootId: document.id, locale: 'th', title: 'Translated', slug: 'translated' },
     [{ id: 'translated-body', type: 'markdown', data: { markdown: 'Translated', editor_mode: 'rich' } }])
-    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'two', siteId: 'two', kind: 'article',
+    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'two', kind: 'article',
       rowRole: 'representation', rootId: document.id, locale: 'th' }, []))
-    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'one', siteId: 'one', kind: 'qa',
+    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'one', kind: 'qa',
       rowRole: 'representation', rootId: document.id, locale: 'th' }, []))
-    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'one', siteId: 'one', kind: 'article',
+    await assert.rejects(createContentDocumentWithBlocks(db, { organizationId: 'one', kind: 'article',
       rowRole: 'representation', rootId: translated.document.id, locale: 'th' }, []))
     await assert.rejects(updateContentDocument(db, translated.document.id, { expected_updated_at: translated.document.updated_at,
       blocks: [{ id: 'body', type: 'markdown', data: { markdown: 'Cross-document overwrite', editor_mode: 'rich' } }] }))
-    await db.prepare("INSERT INTO media_assets (id,organization_id,site_id,kind,provider,source) VALUES ('shared-image','one','one','image','cloudflare_r2','uploaded')").run()
-    const sourceLinks = await createContentDocumentWithBlocks(db, { id: 'links', organizationId: 'one', siteId: 'one',
+    await db.prepare("INSERT INTO media_assets (id,organization_id,kind,provider,source) VALUES ('shared-image','one','image','cloudflare_r2','uploaded')").run()
+    const sourceLinks = await createContentDocumentWithBlocks(db, { id: 'links', organizationId: 'one',
       kind: 'page', rowRole: 'root', locale: 'en', title: 'Links', path: '/links', metadata: { recipe: 'links', page_type: 'custom' } },
     [{ id: 'link-a', type: 'cta', data: { label: 'A', url: '/a', status: 'active' } }, { id: 'link-b', type: 'cta', data: { label: 'B', url: '/b', status: 'active' } }])
-    const translatedLinks = await createContentDocumentWithBlocks(db, { id: 'links-th', organizationId: 'one', siteId: 'one',
+    const translatedLinks = await createContentDocumentWithBlocks(db, { id: 'links-th', organizationId: 'one',
       kind: 'page', rowRole: 'representation', rootId: sourceLinks.document.id, locale: 'th', title: 'Translated links', path: '/links' },
     [{ id: 'link-a-th', source_block_id: 'link-a', type: 'cta', data: { label: 'Translated A' } },
       { id: 'translated-link-image', parent_block_id: 'link-a-th', type: 'image', data: {} }])
@@ -94,7 +93,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
     assert.equal(secondLink.source_block_id, 'link-b')
     await deleteContentBlock(db, secondLink.id, { expected_updated_at: secondLink.updated_at })
     assert.equal((await listBlocksForDocument(db, translatedLinks.document.id)).find(block => block.id === firstLink.id)?.source_block_id, 'link-a')
-    await executeBatch(db, [buildMediaPlacementInsertQuery({ id: 'translated-descendant-image', organizationId: 'one', siteId: 'one',
+    await executeBatch(db, [buildMediaPlacementInsertQuery({ id: 'translated-descendant-image', organizationId: 'one',
       ownerType: 'content_block', ownerId: 'translated-link-image', slot: 'media', assetId: 'shared-image', sortOrder: 0 })])
     const beforeTypeChange = await listBlocksForDocument(db, sourceLinks.document.id)
     const beforeTranslatedTypeChange = await listBlocksForDocument(db, translatedLinks.document.id)
@@ -128,47 +127,47 @@ test('document scopes, translations, block ownership and concurrent edits persis
     await assert.rejects(updateContentDocument(db, headingSource.id, { expected_updated_at: headingSource.updated_at,
       blocks: [{ id: 'link-b', type: 'markdown', data: { markdown: 'Changed type', editor_mode: 'rich' } }] }))
     await updateContentDocument(db, headingSource.id, { expected_updated_at: headingSource.updated_at,
-      additionalQueriesBefore: prepareContentDocumentDeletion({ documentId: emptyTranslation.id, organizationId: 'one', siteId: 'one' }),
+      additionalQueriesBefore: prepareContentDocumentDeletion({ documentId: emptyTranslation.id, organizationId: 'one' }),
       blocks: [{ id: 'link-b', type: 'markdown', data: { markdown: 'Changed after removing translation', editor_mode: 'rich' } }] })
     assert.equal((await listBlocksForDocument(db, headingSource.id))[0]?.type, 'markdown')
     assert.equal(await getContentDocumentById(db, emptyTranslation.id), undefined)
-    await assert.rejects(db.prepare("INSERT INTO content_documents(id,organization_id,site_id,kind,row_role,locale,summary,status,published_at,source,metadata_json) VALUES ('invalid-social','one','one','social_post','root','en','Body','published','2026-09-06T00:00:00.000Z','manual','{}')").run())
+    await assert.rejects(db.prepare("INSERT INTO content_documents(id,organization_id,kind,row_role,locale,summary,status,published_at,source,metadata_json) VALUES ('invalid-social','one','social_post','root','en','Body','published','2026-09-06T00:00:00.000Z','manual','{}')").run())
     for (const [id, type, owner, slot] of [['root-image', 'content_document', document.id, 'cover'],
       ['translated-image', 'content_block', 'translated-body', 'media'], ['retained-image', 'content_document', sourceLinks.document.id, 'cover']]) {
-      await executeBatch(db, [buildMediaPlacementInsertQuery({ id, organizationId: 'one', siteId: 'one', ownerType: type,
+      await executeBatch(db, [buildMediaPlacementInsertQuery({ id, organizationId: 'one', ownerType: type,
         ownerId: owner, slot, assetId: 'shared-image', sortOrder: 0 })])
     }
-    await assert.rejects(executeBatch(db, [buildMediaPlacementInsertQuery({ organizationId: 'two', siteId: 'two',
+    await assert.rejects(executeBatch(db, [buildMediaPlacementInsertQuery({ organizationId: 'two',
       ownerType: 'content_document', ownerId: document.id, slot: 'cover', assetId: 'shared-image', sortOrder: 0 })]))
-    await executeBatch(db, prepareContentDocumentDeletion({ documentId: document.id, organizationId: 'one', siteId: 'one' }))
+    await executeBatch(db, prepareContentDocumentDeletion({ documentId: document.id, organizationId: 'one' }))
     assert.equal(await getContentDocumentById(db, translated.document.id), undefined)
     assert.deepEqual(await listBlocksForDocument(db, translated.document.id), [])
     assert.deepEqual((await db.prepare('SELECT id FROM media_placements').all()).results, [{ id: 'retained-image' }])
     assert.equal(await db.prepare('SELECT count(*) AS count FROM media_assets').first('count'), 1)
-    await db.prepare("INSERT INTO business_locations (id,organization_id,site_id,slug,title) VALUES ('delete-location','one','one','delete','Delete'),('keep-location','one','one','keep','Keep')").run()
-    await db.prepare("INSERT INTO media_assets (id,organization_id,site_id,kind,provider,source,status) VALUES ('retained-asset','one','one','image','cloudflare_r2','uploaded','active')").run()
-    const deletion = prepareContentDocumentDeletion({ locationId: 'delete-location', organizationId: 'one', siteId: 'one' })
+    await db.prepare("INSERT INTO business_locations (id,organization_id,slug,title) VALUES ('delete-location','one','delete','Delete'),('keep-location','one','keep','Keep')").run()
+    await db.prepare("INSERT INTO media_assets (id,organization_id,kind,provider,source,status) VALUES ('retained-asset','one','image','cloudflare_r2','uploaded','active')").run()
+    const deletion = prepareContentDocumentDeletion({ locationId: 'delete-location', organizationId: 'one' })
     for (const id of ['late-a', 'late-b', 'keep']) {
-      await db.prepare(`INSERT INTO content_documents (id,organization_id,site_id,location_id,kind,row_role,locale,title,slug,status,visibility)
-        VALUES (?,'one','one',?,'article','root','en',?,?,'published','public')`).bind(id, id === 'keep' ? 'keep-location' : 'delete-location', id, id).run()
-      await db.prepare(`INSERT INTO content_documents (id,organization_id,site_id,kind,row_role,root_id,root_role,locale,title,slug)
-        VALUES (?,'one','one','article','representation',?,'root','th',?,?)`).bind(id + '-th', id, id, id).run()
+      await db.prepare(`INSERT INTO content_documents (id,organization_id,location_id,kind,row_role,locale,title,slug,status,visibility)
+        VALUES (?,'one',?,'article','root','en',?,?,'published','listed')`).bind(id, id === 'keep' ? 'keep-location' : 'delete-location', id, id).run()
+      await db.prepare(`INSERT INTO content_documents (id,organization_id,kind,row_role,root_id,root_role,locale,title,slug)
+        VALUES (?,'one','article','representation',?,'root','th',?,?)`).bind(id + '-th', id, id, id).run()
       for (const owner of [id, id + '-th']) {
         await db.prepare("INSERT INTO content_blocks (id,document_id,type,data_json) VALUES (?,?,'markdown','{}')").bind(owner + '-parent', owner).run()
         await db.prepare("INSERT INTO content_blocks (id,document_id,parent_block_id,type,data_json) VALUES (?,?,?,'image','{}')").bind(owner + '-child', owner, owner + '-parent').run()
         for (const [type, ownerId] of [['content_document', owner], ['content_block', owner + '-child']]) {
-          await db.prepare("INSERT INTO media_placements (id,organization_id,site_id,owner_type,owner_id,slot,asset_id) VALUES (?,'one','one',?,?,'image','retained-asset')").bind(ownerId + '-media', type, ownerId).run()
-          await db.prepare("INSERT INTO site_redirects (id,organization_id,site_id,from_path,to_path,owner_type,owner_id,locale) VALUES (?,'one','one',?,'/target',?,?,'en')").bind(ownerId + '-redirect', '/' + ownerId, type, ownerId).run()
+          await db.prepare("INSERT INTO media_placements (id,organization_id,owner_type,owner_id,slot,asset_id) VALUES (?,'one',?,?,'image','retained-asset')").bind(ownerId + '-media', type, ownerId).run()
+          await db.prepare("INSERT INTO organization_redirects (id,organization_id,from_path,to_path,owner_type,owner_id,locale) VALUES (?,'one',?,'/target',?,?,'en')").bind(ownerId + '-redirect', '/' + ownerId, type, ownerId).run()
         }
       }
     }
-    await assert.rejects(executeBatch(db, [...deletion, { query: "INSERT INTO sites (id,organization_id,slug) VALUES ('invalid',NULL,'invalid')" }]))
+    await assert.rejects(executeBatch(db, [...deletion, { query: "INSERT INTO organization (id,name,slug) VALUES ('invalid',NULL,'invalid')" }]))
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_placements WHERE asset_id='retained-asset'").first('count'), 12)
-    await executeBatch(db, [...deletion, { query: "DELETE FROM business_locations WHERE id='delete-location' AND organization_id='one' AND site_id='one'" }])
+    await executeBatch(db, [...deletion, { query: "DELETE FROM business_locations WHERE id='delete-location' AND organization_id='one'" }])
     assert.equal(await db.prepare("SELECT count(*) AS count FROM content_documents WHERE id LIKE 'late-%'").first('count'), 0)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM content_blocks WHERE id LIKE 'late-%'").first('count'), 0)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_placements WHERE asset_id='retained-asset'").first('count'), 4)
-    assert.equal(await db.prepare("SELECT count(*) AS count FROM site_redirects WHERE id LIKE 'late-%'").first('count'), 0)
+    assert.equal(await db.prepare("SELECT count(*) AS count FROM organization_redirects WHERE id LIKE 'late-%'").first('count'), 0)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_assets WHERE id='retained-asset'").first('count'), 1)
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0)
   } finally {

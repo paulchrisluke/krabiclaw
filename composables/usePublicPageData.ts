@@ -54,15 +54,15 @@ export const usePublicPageData = async (options: {
   lazy?: boolean
   routeOwned?: boolean
 } = {}) => {
-  const { isPlatform, siteId } = useTenantSite();
+  const { isPlatform, organizationId } = useTenantSite();
   const route = useRoute();
   const params = usePublicPageRequest();
   const requestedParams = computed(() => options.datasets
     ? { ...params.value, datasets: [...options.datasets] }
     : { ...params.value, datasets: [...params.value.datasets] })
-  const key = computed(() => usePublicPageKey(siteId, requestedParams.value));
+  const key = computed(() => usePublicPageKey(organizationId, requestedParams.value));
 
-  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value));
+  const url = computed(() => buildPublicPageUrl(organizationId, requestedParams.value));
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
@@ -71,14 +71,14 @@ export const usePublicPageData = async (options: {
     && options.lazy === true;
 
   const asyncData =
-    isPlatform || !siteId
+    isPlatform || !organizationId
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
       : useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => {
             const currentParams = requestedParams.value
             return loadPublicResourcePayload<PublicPagePayload>({
-              siteId,
+              organizationId,
               resourceKind: 'page',
               url: url.value,
               key: key.value,

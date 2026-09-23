@@ -23,7 +23,6 @@ export type DomainRole = 'canonical' | 'secondary'
 export interface DomainRecord {
   id: string
   organization_id: string
-  site_id: string
   domain: string
   type: 'subdomain' | 'custom'
   role: DomainRole
@@ -107,12 +106,12 @@ const MAX_RETRY_COUNT = 12
 const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
 const DNS_QUERY_TIMEOUT_MS = 5_000
 
-async function reconcileZarazForDomainChange(env: DomainEnv, db: D1Database, siteId: string): Promise<void> {
+async function reconcileZarazForDomainChange(env: DomainEnv, db: D1Database, organizationId: string): Promise<void> {
   try {
     const { reconcileZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
     await reconcileZarazAnalytics(env, db)
   } catch (error) {
-    console.error('zaraz_reconciliation_failed', { siteId, error })
+    console.error('zaraz_reconciliation_failed', { organizationId, error })
   }
 }
 
@@ -185,13 +184,13 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
   return { valid: true }
 }
 
-export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {
-  const params = excludeSiteId ? [d1JsonStringSet(domains), excludeSiteId] : [d1JsonStringSet(domains)]
-  const exclusion = excludeSiteId ? 'AND (site_id IS NULL OR site_id != ?)' : ''
+export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeOrganizationId?: string): Promise<void> {
+  const params = excludeOrganizationId ? [d1JsonStringSet(domains), excludeOrganizationId] : [d1JsonStringSet(domains)]
+  const exclusion = excludeOrganizationId ? 'AND (organization_id IS NULL OR organization_id != ?)' : ''
 
   const existing = await queryFirst<{ domain?: string }>(db, `
     SELECT domain
-    FROM site_domains
+    FROM organization_domains
     WHERE domain IN (SELECT value FROM json_each(?)) AND status != 'deleted' ${exclusion}
     LIMIT 1
   `, params)
@@ -207,7 +206,7 @@ export async function isSystemSubdomainSpent(
   const domain = `${subdomain}.${platformHostname(env)}`
   const spent = await queryFirst<{ domain: string }>(
     db,
-    "SELECT domain FROM site_domains WHERE domain = ? AND status = 'retired' LIMIT 1",
+    "SELECT domain FROM organization_domains WHERE domain = ? AND status = 'retired' LIMIT 1",
     [domain],
   )
   return Boolean(spent)
@@ -216,11 +215,10 @@ export async function isSystemSubdomainSpent(
 export async function createSystemSubdomain(
   env: DomainEnv,
   db: D1Database,
-  siteId: string,
   organizationId: string,
   subdomain: string,
   options: {
-    siteUpdate?: { sql: string; values: unknown[] }
+    organizationUpdate?: { sql: string; values: unknown[] }
   } = {},
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
@@ -228,15 +226,15 @@ export async function createSystemSubdomain(
   const existing = await queryFirst<Pick<DomainRecord, 'id' | 'domain' | 'role' | 'created_at'>>(
     db,
     `SELECT id, domain, role, created_at
-       FROM site_domains
-      WHERE site_id = ? AND organization_id = ? AND type = 'subdomain' AND status = 'active'
+       FROM organization_domains
+       WHERE organization_id = ? AND type = 'subdomain' AND status = 'active'
       ORDER BY created_at ASC
       LIMIT 1`,
-    [siteId, organizationId],
+    [ organizationId],
   )
 
   if (existing?.domain === domain) {
-    return (await queryFirst<DomainRecord>(db, 'SELECT * FROM site_domains WHERE id = ?', [existing.id])) as DomainRecord
+    return (await queryFirst<DomainRecord>(db, 'SELECT * FROM organization_domains WHERE id = ?', [existing.id])) as DomainRecord
   }
 
   if (await isSystemSubdomainSpent(env, db, subdomain)) {
@@ -245,40 +243,40 @@ export async function createSystemSubdomain(
 
   const role = existing?.role ?? 'canonical'
   const id = existing
-    ? `domain-${siteId}-subdomain-${subdomain}`
-    : `domain-${siteId}-subdomain`
+    ? `domain-${organizationId}-subdomain-${subdomain}`
+    : `domain-${organizationId}-subdomain`
 
   const stmts: Array<{ sql: string; values: unknown[] }> = []
 
   if (existing) {
     stmts.push(
       {
-        sql: `UPDATE site_domains
-                SET role = 'secondary', status = 'retired', former_site_id = site_id, successor_domain = ?, retired_at = ?,
-                    organization_id = NULL, site_id = NULL, updated_at = ?
-              WHERE id = ? AND site_id = ? AND organization_id = ? AND status = 'active'`,
-        values: [domain, now, now, existing.id, siteId, organizationId],
+        sql: `UPDATE organization_domains
+                SET role = 'secondary', status = 'retired', former_organization_id = organization_id, successor_domain = ?, retired_at = ?,
+                    organization_id = NULL, updated_at = ?
+              WHERE id = ? AND organization_id = ? AND status = 'active'`,
+        values: [domain, now, now, existing.id, organizationId],
       },
     )
   }
 
   stmts.push(
     {
-      sql: `INSERT INTO site_domains
-        (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
-      values: [id, organizationId, siteId, domain, role, platformHostname(env), now, now, now],
+      sql: `INSERT INTO organization_domains
+        (id, organization_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
+        VALUES (?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
+      values: [id, organizationId, domain, role, platformHostname(env), now, now, now],
     },
   )
 
 
-  if (options.siteUpdate) {
-    stmts.push(options.siteUpdate)
+  if (options.organizationUpdate) {
+    stmts.push(options.organizationUpdate)
   }
 
   await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
 
-  return (await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [id])) as DomainRecord
+  return (await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [id])) as DomainRecord
 }
 
 function requireCloudflareConfig(env: DomainEnv) {
@@ -384,7 +382,6 @@ async function logDomainEvent(
   db: D1Database,
   opts: {
     organizationId: string
-    siteId: string
     domainId?: string | null
     eventType: OrganizationEventType
     actorType?: DomainActorType
@@ -400,7 +397,7 @@ async function logDomainEvent(
 
 async function queueReconciliation(db: D1Database, domainId: string, runAfter?: string) {
   await execute(db, `
-    UPDATE site_domains SET next_check_at = ?, reconciliation_token = NULL, reconciliation_expires_at = NULL,
+    UPDATE organization_domains SET next_check_at = ?, reconciliation_token = NULL, reconciliation_expires_at = NULL,
       updated_at = ? WHERE id = ? AND status NOT IN ('deleted', 'retired', 'disabled')
   `, [runAfter ?? new Date().toISOString(), new Date().toISOString(), domainId])
 }
@@ -517,7 +514,7 @@ async function persistCloudflareState(
     triggeredRevalidation?: boolean
   } = {}
 ): Promise<DomainRecord> {
-  const before = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
+  const before = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId])
   if (!before) throw new Error('Domain not found')
   if ((before.reconciliation_token ?? null) !== (options.leaseToken ?? null)) throw new Error('Domain reconciliation was superseded')
 
@@ -549,21 +546,21 @@ async function persistCloudflareState(
   const updates: D1PreparedStatement[] = []
   if (status === 'active' && before.role === 'canonical') {
     updates.push(db.prepare(`
-      UPDATE site_domains
+      UPDATE organization_domains
       SET role = 'secondary', updated_at = ?
-      WHERE site_id = ?
+      WHERE organization_id = ?
         AND id != ?
         AND role = 'canonical'
         AND EXISTS (
           SELECT 1
-          FROM site_domains expected
+          FROM organization_domains expected
           WHERE expected.id = ? AND expected.role = 'canonical' AND expected.reconciliation_token IS ?
         )
-    `).bind(now, before.site_id, domainId, domainId, options.leaseToken ?? null))
+    `).bind(now, before.organization_id, domainId, domainId, options.leaseToken ?? null))
   }
 
   updates.push(db.prepare(`
-    UPDATE site_domains
+    UPDATE organization_domains
     SET cloudflare_hostname_id = ?,
         cloudflare_hostname_status = ?,
         cloudflare_ssl_status = ?,
@@ -638,16 +635,15 @@ async function persistCloudflareState(
   const updated = (await db.batch(updates)).at(-1)
   if (updated?.meta?.changes !== 1) throw new Error('Domain reconciliation was superseded')
 
-  const after = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId]) as DomainRecord
+  const after = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId]) as DomainRecord
 
   if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
-    await reconcileZarazForDomainChange(env, db, after.site_id)
+    await reconcileZarazForDomainChange(env, db, after.organization_id)
   }
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
     await logDomainEvent(db, {
       organizationId: after.organization_id,
-      siteId: after.site_id,
       domainId,
       eventType: 'domain_state_changed',
       actorType: options.actorType ?? 'cloudflare',
@@ -661,7 +657,6 @@ async function persistCloudflareState(
       await fireOrganizationEventSafe({
         db,
         organizationId: after.organization_id,
-        siteId: after.site_id,
         actorId: options.actorId ?? null,
         eventType: after.status === 'active' ? 'domain.verified' : 'domain.failed',
         entityType: 'domain',
@@ -672,11 +667,11 @@ async function persistCloudflareState(
   }
 
   // promoteCanonicalIfReady can call setCanonicalDomain, which reads/writes
-  // site_domains rows for this site — callers still inserting other domain
+  // organization_domains rows for this site — callers still inserting other domain
   // rows for the same batch (createCustomDomainPair) must defer this until
   // after those inserts are done, so the candidate rows already exist.
   if (options.skipPromotion) return after
-  if (after.status === 'active') await promoteCanonicalIfReady(db, after.site_id)
+  if (after.status === 'active') await promoteCanonicalIfReady(db, after.organization_id)
   else await queueReconciliation(db, domainId, after.next_check_at || undefined)
 
   return after
@@ -688,7 +683,6 @@ export async function createCustomDomainPair(
   env: DomainEnv,
   db: D1Database,
   opts: {
-    siteId: string
     organizationId: string
     domain: string
     includeWww?: boolean
@@ -698,7 +692,7 @@ export async function createCustomDomainPair(
 ): Promise<DomainRecord[]> {
   const domains = domainPair(opts.domain, opts.includeWww !== false)
   const canonical = canonicalDomainForPair(opts.domain, opts.includeWww !== false)
-  await ensureDomainAvailable(db, domains, opts.siteId)
+  await ensureDomainAvailable(db, domains, opts.organizationId)
 
   const now = new Date().toISOString()
   const entries = domains.map((domain) => ({
@@ -721,15 +715,14 @@ export async function createCustomDomainPair(
 
     for (const entry of entries) {
       await execute(db, `
-        INSERT INTO site_domains
-        (id, organization_id, site_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
-      `, [entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
+        INSERT INTO organization_domains
+        (id, organization_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
+        VALUES (?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
+      `, [entry.id, opts.organizationId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
       insertedDomainIds.push(entry.id)
 
       await logDomainEvent(db, {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         domainId: entry.id,
         eventType: 'domain_added',
         actorType: opts.actorType ?? 'owner',
@@ -748,19 +741,18 @@ export async function createCustomDomainPair(
     // after the inserts above since promoteCanonicalIfReady/setCanonicalDomain
     // write to the same rows and should see them already committed.
     for (const record of records) {
-      if (record.status === 'active') await promoteCanonicalIfReady(db, record.site_id)
+      if (record.status === 'active') await promoteCanonicalIfReady(db, record.organization_id)
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
     }
 
     // Fired only once the whole pairing flow (Cloudflare provisioning, DB
     // inserts, state sync, promotion/reconciliation) has succeeded — the catch
-    // block below rolls back site_domains rows on failure, so firing earlier
+    // block below rolls back organization_domains rows on failure, so firing earlier
     // could record a domain.connected event for a domain that never existed.
     for (const entry of entries) {
       await fireOrganizationEventSafe({
         db,
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         actorId: opts.actorId ?? null,
         eventType: 'domain.connected',
         entityType: 'domain',
@@ -785,13 +777,13 @@ export async function createCustomDomainPair(
       }
     }
 
-    // Clean up partially inserted site_domains rows to avoid blocking retries.
+    // Clean up partially inserted organization_domains rows to avoid blocking retries.
     for (const domainId of insertedDomainIds) {
       try {
-        await execute(db, 'DELETE FROM site_domains WHERE id = ?', [domainId])
+        await execute(db, 'DELETE FROM organization_domains WHERE id = ?', [domainId])
       } catch (cleanupError) {
         const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('unknown cleanup error')
-        console.error('createCustomDomainPair: site_domains cleanup failed', {
+        console.error('createCustomDomainPair: organization_domains cleanup failed', {
           domainId,
           error: normalizedCleanupError.message
         })
@@ -801,7 +793,6 @@ export async function createCustomDomainPair(
     for (const entry of entries) {
       await logDomainEvent(db, {
         organizationId: opts.organizationId,
-        siteId: opts.siteId,
         eventType: 'cloudflare_create_failed',
         actorType: 'cloudflare',
         message: `${entry.domain}: ${message}`,
@@ -830,7 +821,7 @@ export async function syncDomainWithCloudflare(
     const leaseToken = options.leaseToken ?? crypto.randomUUID()
     const now = new Date().toISOString()
     const domain = await queryFirst<DomainRecord>(db, `
-      UPDATE site_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
+      UPDATE organization_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
       WHERE id = ? AND type = 'custom' AND desired_state = 'active' AND status NOT IN ('deleted', 'disabled')
         AND (reconciliation_token = ? OR reconciliation_expires_at IS NULL OR reconciliation_expires_at <= ?)
       RETURNING *
@@ -886,7 +877,7 @@ export async function deleteCustomDomain(
 ): Promise<void> {
   const token = leaseToken ?? crypto.randomUUID()
   const domain = await queryFirst<DomainRecord>(db, `
-    UPDATE site_domains SET desired_state = 'deleted', reconciliation_token = ?, reconciliation_expires_at = ?
+    UPDATE organization_domains SET desired_state = 'deleted', reconciliation_token = ?, reconciliation_expires_at = ?
     WHERE id = ? AND type = 'custom' AND status <> 'deleted'
       AND (reconciliation_token = ? OR reconciliation_expires_at IS NULL OR reconciliation_expires_at <= ?)
     RETURNING *
@@ -917,14 +908,13 @@ export async function deleteCustomDomain(
   // instead, so cleanup is retried until the Cloudflare side actually clears.
   if (cloudflareDeleteError) {
     await execute(db, `
-      UPDATE site_domains
+      UPDATE organization_domains
       SET error_message = ?, updated_at = ?, retry_count = MIN(12, retry_count + 1), next_check_at = ?,
           reconciliation_token = NULL, reconciliation_expires_at = NULL
       WHERE id = ? AND reconciliation_token = ?
     `, [`Cloudflare delete failed: ${cloudflareDeleteError}`, now, nextCheckAt(Number(domain.retry_count ?? 0) + 1), domainId, token])
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
-      siteId: domain.site_id,
       domainId,
       eventType: 'cloudflare_delete_failed',
       actorType: 'cloudflare',
@@ -938,7 +928,7 @@ export async function deleteCustomDomain(
   }
 
   const deleted = await execute(db, `
-    UPDATE site_domains
+    UPDATE organization_domains
     SET status = 'deleted', role = 'secondary', updated_at = ?, next_check_at = NULL,
         reconciliation_token = NULL, reconciliation_expires_at = NULL
     WHERE id = ? AND reconciliation_token = ?
@@ -946,30 +936,29 @@ export async function deleteCustomDomain(
   if (deleted.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
 
   if (domain.status === 'active') {
-    await reconcileZarazForDomainChange(env, db, domain.site_id)
+    await reconcileZarazForDomainChange(env, db, domain.organization_id)
   }
   await logDomainEvent(db, {
     organizationId: domain.organization_id,
-    siteId: domain.site_id,
     domainId,
     eventType: 'domain_deleted',
     actorType,
     actorId,
     message: `${domain.domain} deleted`,
   })
-  await promoteCanonicalIfReady(db, domain.site_id)
+  await promoteCanonicalIfReady(db, domain.organization_id)
 }
 
-// Releases the Cloudflare custom hostnames behind a set of site_domains rows.
+// Releases the Cloudflare custom hostnames behind a set of organization_domains rows.
 // Best-effort per domain: one domain's Cloudflare failure (queued for
 // reconciliation retry by deleteCustomDomain) must not stop the rest.
 async function deleteCustomDomainsWhere(
   env: DomainEnv,
   db: D1Database,
-  scope: { column: 'organization_id' | 'site_id'; value: string },
+  scope: { column: 'organization_id' | 'organization_id'; value: string },
 ): Promise<void> {
   const domains = await queryAll<{ id: string }>(db, `
-    SELECT id FROM site_domains
+    SELECT id FROM organization_domains
     WHERE ${scope.column} = ? AND type = 'custom' AND status != 'deleted'
   `, [scope.value])
   for (const domain of domains || []) {
@@ -993,40 +982,32 @@ export async function deleteOrganizationCustomDomains(
   await deleteCustomDomainsWhere(env, db, { column: 'organization_id', value: organizationId })
 }
 
-export async function deleteSiteCustomDomains(
-  env: DomainEnv,
-  db: D1Database,
-  siteId: string
-): Promise<void> {
-  await deleteCustomDomainsWhere(env, db, { column: 'site_id', value: siteId })
-}
-
 export async function setCanonicalDomain(
   db: D1Database,
-  siteId: string,
+  organizationId: string,
   domainId: string,
   actorType: DomainActorType,
   actorId?: string | null
 ): Promise<DomainRecord> {
   const domain = await queryFirst<DomainRecord>(db, `
     SELECT *
-    FROM site_domains
-    WHERE id = ? AND site_id = ? AND status = 'active'
+    FROM organization_domains
+    WHERE id = ? AND organization_id = ? AND status = 'active'
     LIMIT 1
-  `, [domainId, siteId])
+  `, [domainId, organizationId])
   if (!domain) throw new Error('Only active domains can be canonical')
 
   const priorCanonical = await queryFirst<DomainRecord>(db, `
-    SELECT * FROM site_domains WHERE site_id = ? AND role = 'canonical' LIMIT 1
-  `, [siteId])
+    SELECT * FROM organization_domains WHERE organization_id = ? AND role = 'canonical' LIMIT 1
+  `, [organizationId])
 
   const now = new Date().toISOString()
   try {
-    await execute(db, `UPDATE site_domains SET role = 'secondary', updated_at = ? WHERE site_id = ? AND role = 'canonical'`, [now, siteId])
-    await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
+    await execute(db, `UPDATE organization_domains SET role = 'secondary', updated_at = ? WHERE organization_id = ? AND role = 'canonical'`, [now, organizationId])
+    await execute(db, `UPDATE organization_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
     await logDomainEvent(db, {
       organizationId: domain.organization_id,
-      siteId,
+      
       domainId,
       eventType: 'canonical_domain_changed',
       actorType,
@@ -1035,59 +1016,59 @@ export async function setCanonicalDomain(
     })
   } catch (error) {
     if (priorCanonical) {
-      await execute(db, `UPDATE site_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, priorCanonical.id])
+      await execute(db, `UPDATE organization_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, priorCanonical.id])
     }
     if (domain.role !== 'canonical') {
-      await execute(db, `UPDATE site_domains SET role = ?, updated_at = ? WHERE id = ?`, [domain.role, now, domainId])
+      await execute(db, `UPDATE organization_domains SET role = ?, updated_at = ? WHERE id = ?`, [domain.role, now, domainId])
     }
     throw error
   }
 
-  const row = await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [domainId])
+  const row = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId])
   if (!row) throw new Error(`Domain not found: ${domainId}`)
   return row
 }
 
-async function promoteCanonicalIfReady(db: D1Database, siteId: string): Promise<void> {
+async function promoteCanonicalIfReady(db: D1Database, organizationId: string): Promise<void> {
   const activeCanonical = await queryFirst<DomainRecord>(db, `
     SELECT *
-    FROM site_domains
-    WHERE site_id = ? AND role = 'canonical' AND status = 'active'
+    FROM organization_domains
+    WHERE organization_id = ? AND role = 'canonical' AND status = 'active'
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (activeCanonical) return
 
   const activeCustom = await queryFirst<DomainRecord>(db, `
     SELECT *
-    FROM site_domains
-    WHERE site_id = ? AND type = 'custom' AND status = 'active'
+    FROM organization_domains
+    WHERE organization_id = ? AND type = 'custom' AND status = 'active'
     ORDER BY domain LIKE 'www.%' DESC, created_at ASC
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (activeCustom) {
-    await setCanonicalDomain(db, siteId, activeCustom.id, 'system')
+    await setCanonicalDomain(db, organizationId, activeCustom.id, 'system')
     return
   }
 
   const activeSubdomain = await queryFirst<DomainRecord>(db, `
     SELECT *
-    FROM site_domains
-    WHERE site_id = ? AND type = 'subdomain' AND status = 'active'
+    FROM organization_domains
+    WHERE organization_id = ? AND type = 'subdomain' AND status = 'active'
     ORDER BY created_at ASC
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (!activeSubdomain) return
 
-  await setCanonicalDomain(db, siteId, activeSubdomain.id, 'system')
+  await setCanonicalDomain(db, organizationId, activeSubdomain.id, 'system')
 }
 
 export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit = 25): Promise<{ checked: number; failed: number }> {
   const now = new Date().toISOString()
   const rows = await queryAll<{ id: string }>(db, `
-    SELECT id FROM site_domains WHERE type = 'custom' AND status <> 'deleted'
+    SELECT id FROM organization_domains WHERE type = 'custom' AND status <> 'deleted'
       AND (status IN ('pending', 'verifying', 'failed', 'blocked') OR desired_state = 'deleted')
       AND (next_check_at IS NULL OR next_check_at <= ?)
       AND (reconciliation_expires_at IS NULL OR reconciliation_expires_at <= ?)
@@ -1099,7 +1080,7 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
     const token = crypto.randomUUID()
     const currentTime = new Date().toISOString()
     const claim = await queryFirst<{ desired_state: 'active' | 'deleted'; retry_count: number }>(db, `
-      UPDATE site_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
+      UPDATE organization_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
       WHERE id = ? AND status <> 'deleted'
         AND (status IN ('pending', 'verifying', 'failed', 'blocked') OR desired_state = 'deleted')
         AND (next_check_at IS NULL OR next_check_at <= ?)
@@ -1115,7 +1096,7 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
       failed += 1
       const retryCount = Math.min(MAX_RETRY_COUNT, claim.retry_count + 1)
       await execute(db, `
-        UPDATE site_domains SET retry_count = ?, next_check_at = ?, error_message = ?, updated_at = ?,
+        UPDATE organization_domains SET retry_count = ?, next_check_at = ?, error_message = ?, updated_at = ?,
           reconciliation_token = NULL, reconciliation_expires_at = NULL
         WHERE id = ? AND reconciliation_token = ?
       `, [retryCount, nextCheckAt(retryCount), error instanceof Error ? error.message : 'Domain reconciliation failed', new Date().toISOString(), row.id, token])

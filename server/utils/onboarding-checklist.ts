@@ -4,7 +4,7 @@ import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { requireSiteAccess } from '~/server/utils/location-access'
+import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { SERVICE_PAGE_SQL } from '~/server/utils/module-content-guard'
 import { normalizeVertical } from '~/utils/vertical-copy'
 
@@ -36,7 +36,7 @@ export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = Object.freeze({
 
 interface ChecklistRow {
   vertical: string
-  brand_name: string | null
+  name: string | null
   business_info: number
   has_hero: number
   products: number
@@ -52,26 +52,26 @@ export async function loadOnboardingChecklist(
   const db = cloudflareEnv(event).DB
   if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
 
-  let siteId: string
+  let organizationId: string
   let brandName: string | null
   if (querySiteId) {
-    const { site } = await requireSiteAccess(event, querySiteId, 'site-wide')
-    siteId = site.id
-    brandName = site.brand_name
+    const { organization } = await requireOrganizationAccess(event, querySiteId)
+    organizationId = organization.id
+    brandName = organization.name
   } else {
-    const dashboard = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
-    if (!dashboard?.site) return EMPTY_ONBOARDING_CHECKLIST
-    siteId = dashboard.site.id
-    brandName = dashboard.site.brand_name
+    const dashboard = await getDashboardContext(event, { requireOrganization: false })
+    if (!dashboard.organization) return EMPTY_ONBOARDING_CHECKLIST
+    organizationId = dashboard.organization.id
+    brandName = dashboard.organization.name
   }
 
   const row = await queryFirst<ChecklistRow>(db, `
     SELECT
       s.vertical,
-      s.brand_name,
+      s.name,
       EXISTS(
         SELECT 1 FROM business_locations
-        WHERE site_id = s.id AND status = 'active' AND (
+        WHERE organization_id = s.id AND status = 'active' AND (
           (phone IS NOT NULL AND phone != '')
           OR (maps_url IS NOT NULL AND maps_url != '')
           OR (google_place_id IS NOT NULL AND google_place_id != '')
@@ -80,28 +80,28 @@ export async function loadOnboardingChecklist(
       EXISTS(
         SELECT 1 FROM media_placements mp
         JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-        WHERE mp.site_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
+        WHERE mp.organization_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
       ) AS has_hero,
       (SELECT COUNT(DISTINCT p.id) FROM products p
          JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-        WHERE pub.site_id = s.id AND pub.published = 1 AND p.active = 1) AS products,
-      (SELECT COUNT(*) FROM content_documents WHERE site_id = s.id AND ${SERVICE_PAGE_SQL}) AS service_pages,
+        WHERE pub.organization_id = s.id AND pub.published = 1 AND p.active = 1) AS products,
+      (SELECT COUNT(*) FROM content_documents WHERE organization_id = s.id AND ${SERVICE_PAGE_SQL}) AS service_pages,
       (
         SELECT COUNT(*)
         FROM content_documents v
         JOIN content_blocks b ON b.document_id = v.id
-        WHERE v.site_id = s.id AND v.kind = 'page' AND v.row_role = 'root' AND v.path = '/about'
+        WHERE v.organization_id = s.id AND v.kind = 'page' AND v.row_role = 'root' AND v.path = '/about'
           AND b.type = 'markdown'
           AND length(COALESCE(json_extract(b.data_json, '$.markdown'), '')) > 20
       ) AS story,
       (
         SELECT COUNT(*) FROM content_documents
-        WHERE kind = 'social_post' AND row_role = 'root' AND site_id = s.id AND status = 'published' AND source <> 'template'
+        WHERE kind = 'social_post' AND row_role = 'root' AND organization_id = s.id AND status = 'published' AND source <> 'template'
       ) AS post
-    FROM sites s
+    FROM organization s
     WHERE s.id = ?
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
 
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const vertical = normalizeVertical(row.vertical)
@@ -110,7 +110,7 @@ export async function loadOnboardingChecklist(
   return {
     success: true,
     vertical,
-    brandName: row.brand_name ?? brandName,
+    brandName: row.name ?? brandName,
     items: {
       business_info: Boolean(row.business_info),
       hero_image: heroIsReal,

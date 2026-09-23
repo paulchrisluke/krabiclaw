@@ -87,7 +87,7 @@ For an auth or MCP change, exercise the deployed flow end to end:
 - OAuth protected-resource and authorization-server discovery;
 - credentialed authorization with PKCE and token exchange;
 - bearer-authenticated MCP `initialize` and `tools/list`;
-- `get_workspace_context` and a tenant-scoped read such as `list_sites`;
+- `get_workspace_context` and a tenant-scoped read such as `list_organizations`;
 - the affected safe write or media journey when tool behavior changed;
 - one real ChatGPT app session when the defect involves ChatGPT tool selection,
   attachment delivery, or host-provided file arguments.
@@ -151,8 +151,10 @@ change is the surface that reads the rows, not the count of rules that would
 have produced them.
 
 A change that deletes or moves a public route lists every retired path and what
-answers it now, in the pull request: a restored route, a 301 to a named
-successor, or a deliberate 404 with the reason. The same change updates the
+answers it now, in the pull request: a restored route, or a deliberate 404 with
+the reason. A retired path is not redirected — a 301 keeps the retired shape
+addressable and reachable forever, which is the thing the deletion was for, and
+it hides from every caller that the route it holds no longer exists. The same change updates the
 production verification spec, the template sitemap allowlist, and any robots
 rule that named the path — those three are where a retired route keeps
 answering after the page is gone. Customer-facing names are decided with the
