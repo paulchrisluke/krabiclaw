@@ -169,6 +169,16 @@ export async function ensureOrganization(request: APIRequestContext, baseURL: st
     // prices are quoted in rather than inheriting one nobody chose.
     data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId, defaultCurrency: 'THB' },
   })
+  // The fixture's organization is reused deliberately — it carries the growth
+  // subscription these tools are gated on — and it is already provisioned under
+  // its own subdomain. Provisioning it again under a fresh e2e-mcp-* one would
+  // rewrite a live tenant's address, status and vertical in place, so the route
+  // refuses it, and that refusal is precisely what this helper wanted to know.
+  // Only the exact 409 counts; any other non-2xx is still a failure.
+  if (res.status() === 409) {
+    expect(await res.text()).toContain('already provisioned')
+    return organizationId
+  }
   expect(res.ok(), await res.text()).toBe(true)
   const created = await res.json() as { organizationId: string }
   expect(created.organizationId).toEqual(expect.any(String))
@@ -184,8 +194,14 @@ export async function ensureLocation(request: APIRequestContext, baseURL: string
   expect(locations.status()).toBe(200)
   const locationsBody = await locations.json()
   const data = mcpData<{ locations: Array<{ id: string }> }>(locationsBody)
-  expect(data.locations, 'A newly provisioned tenant has one seeded location').toHaveLength(1)
-  return data.locations[0]!.id
+  // This used to assert exactly one location on the premise that the tenant had
+  // just been provisioned. It is not: ensureOrganization reuses the fixture's
+  // existing tenant, which has two. What the caller needs is a location it can
+  // work against, so the assertion is that the tenant has one at all, and the
+  // choice is pinned by id so a second location cannot silently change which
+  // location a test edits.
+  expect(data.locations.length, 'The tenant has no location to exercise').toBeGreaterThan(0)
+  return [...data.locations].sort((left, right) => left.id.localeCompare(right.id))[0]!.id
 }
 
 // Create disposable locations through the same API the CMS uses. That endpoint
