@@ -221,20 +221,20 @@ export function buildSearchFilters(surface: PlatformKnowledgeSurface, type?: Pub
     filters.type = { $eq: type }
   }
 
-  // tenant_blog is one shared corpus across every tenant site — the surface
+  // tenant_blog is one shared corpus across every tenant — the surface
   // filter alone isn't enough, results must also be pinned to one organization_id or
   // every tenant's posts would be searchable from every other tenant's blog.
   // A missing organizationId must exclude every tenant_blog document, not just skip
   // the predicate, or an unscoped request would search the entire corpus.
   if (surface === 'tenant_blog') {
-    filters.organization_id = { $eq: organizationId || '__no_site__' }
+    filters.organization_id = { $eq: organizationId || '__no_organization__' }
   }
 
   // The dashboard reads one business's own records plus the platform's guides
-  // and help answers, which carry no site. Both in one query: the filter is a
+  // and help answers, which carry no organization. Both in one query: the filter is a
   // membership test, and a missing organizationId again matches no business at all.
   if (surface === 'dashboard') {
-    filters.organization_id = { $in: [organizationId || '__no_site__', ''] }
+    filters.organization_id = { $in: [organizationId || '__no_organization__', ''] }
   }
 
   return filters

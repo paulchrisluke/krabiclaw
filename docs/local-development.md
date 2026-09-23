@@ -104,25 +104,24 @@ individual seed or provisioning script as an alternate repair path.
 
 ## Dashboard URLs
 
-Follow links rendered by the dashboard whenever possible. When constructing a
-dashboard route, the URL segment named `siteSlug` contains the site's
-**subdomain**, not the `sites.slug` database value.
+Follow links rendered by the dashboard whenever possible. A dashboard route
+carries one tenant segment, the organization's slug.
 
-| Tenant | Organization segment | Site segment (`subdomain`) |
-| --- | --- | --- |
-| Ember & Slice | `ember-slice-demo` | `demo` |
-| Pottery House | `pottery-house-krabi` | `pottery-house` |
-| Kikuzuki | `kikuzuki-krabi-thailand` | `kikuzuki-krabi-thailand` |
-| NCLS | `north-carolina-legal-services` | `ncls` |
+| Tenant | Organization segment (`orgSlug`) |
+| --- | --- |
+| Ember & Slice | `ember-slice-demo` |
+| Pottery House | `pottery-house-krabi` |
+| Kikuzuki | `kikuzuki-krabi-thailand` |
+| NCLS | `north-carolina-legal-services` |
 
 For example, Kikuzuki starts at:
 
 ```text
-http://localhost:3000/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand
+http://localhost:3000/dashboard/kikuzuki-krabi-thailand
 ```
 
-Using `kikuzuki` for the site segment returns 404 because the capability guard
-resolves that segment against `sites.subdomain`.
+The subdomain is the tenant's public address, not a dashboard segment: Kikuzuki
+serves its website at `kikuzuki-krabi-thailand.localhost:3000`.
 
 ## Before pushing
 
@@ -159,4 +158,4 @@ The standard local Worker preparation and worktree-local D1 storage remain in us
 The diagnostic `test:mcp:edit` script requires `--site-id`. The `test:mcp:image`
 and `test:mcp:ops` scripts require both `--site-id` and `--location-id` for
 explicit disposable fixtures provisioned through the approved setup/CMS path;
-they no longer create business sites or locations through MCP.
+they no longer create organizations or locations through MCP.

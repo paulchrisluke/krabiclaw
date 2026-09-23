@@ -151,8 +151,10 @@ change is the surface that reads the rows, not the count of rules that would
 have produced them.
 
 A change that deletes or moves a public route lists every retired path and what
-answers it now, in the pull request: a restored route, a 301 to a named
-successor, or a deliberate 404 with the reason. The same change updates the
+answers it now, in the pull request: a restored route, or a deliberate 404 with
+the reason. A retired path is not redirected — a 301 keeps the retired shape
+addressable and reachable forever, which is the thing the deletion was for, and
+it hides from every caller that the route it holds no longer exists. The same change updates the
 production verification spec, the template sitemap allowlist, and any robots
 rule that named the path — those three are where a retired route keeps
 answering after the page is gone. Customer-facing names are decided with the

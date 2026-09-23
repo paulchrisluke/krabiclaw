@@ -35,10 +35,10 @@ KrabiClaw uses the native `AI_SEARCH` Workers namespace binding as the canonical
 
 One instance holds two kinds of document, told apart by metadata:
 
-- The platform's own corpus, with no `site_id`: published platform docs and blog posts,
+- The platform's own corpus, with no `organization_id`: published platform docs and blog posts,
   the help FAQ, and the public platform pages (home, pricing, features, templates).
   Canonical metadata lives in [config/platform-knowledge.ts](../config/platform-knowledge.ts).
-- Each business's slice, carrying its `site_id`: its published blog (the `tenant_blog`
+- Each business's slice, carrying its `organization_id`: its published blog (the `tenant_blog`
   surface, read by its public site) and every record its dashboard can open — locations,
   products and collections, Q&A, posts, pages, articles including drafts, guest threads,
   members and media (the `dashboard` surface). `buildWorkspaceDocuments()` in
@@ -46,8 +46,8 @@ One instance holds two kinds of document, told apart by metadata:
   document carries the dashboard URL it opens at.
 
 The dashboard's command palette reads `/api/dashboard/search`, which checks the member's
-access to the site and filters the query to `surface = dashboard` and
-`site_id IN (<that site>, '')`, so a business sees its own records and the platform's
+access to the organization and filters the query to `surface = dashboard` and
+`organization_id IN (<that organization>, '')`, so a business sees its own records and the platform's
 guides and nothing else. Navigation rows in the palette come from the Menu's own
 navigation, not the index.
 
@@ -59,7 +59,7 @@ write's own batch: content documents, products and collections, locations, media
 threads at intake, and Better Auth's member hooks. The drainer
 (`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
 `syncSiteSearchIndex()`, which lists the site's own items (`items.list` with a
-`metadata_filter` on `site_id`), rebuilds its documents from D1, uploads the ones whose
+`metadata_filter` on `organization_id`), rebuilds its documents from D1, uploads the ones whose
 `content_hash` changed and deletes the ones that are gone. It runs right after every
 dashboard editor response and every mutating MCP tool call, and every two minutes from the
 scheduled task. A write therefore costs one list of the site's items plus one upload per
