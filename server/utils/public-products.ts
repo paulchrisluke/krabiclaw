@@ -355,6 +355,6 @@ export async function loadPublicProductReviews(
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.site.id, detail.site.id, detail.location.id, detail.product.id])
+  `, [detail.site.id, detail.location.id, detail.product.id])
   return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

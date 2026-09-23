@@ -109,6 +109,20 @@ export async function provisionOrganization(
         [themeId, vertical, now, organizationId])
       return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
     }
+    // The guard above answers "is this subdomain taken", which was the only
+    // question while provisioning inserted a `sites` row: a second run made a
+    // second row and the organization was untouched. Provisioning now writes
+    // the organization itself, so a run naming a different subdomain rewrites a
+    // live tenant's address, status and vertical in place. An organization that
+    // already carries one is already provisioned, and re-provisioning it is
+    // refused rather than performed.
+    const target = await queryFirst<{ subdomain: string | null }>(db, `
+      SELECT subdomain FROM organization WHERE id = ? LIMIT 1
+    `, [organizationId])
+    if (target?.subdomain && target.subdomain !== normalizedSubdomain) {
+      return { status: 409, data: { error: 'This organization is already provisioned' } }
+    }
+
     if (await isSystemSubdomainSpent(env, db, normalizedSubdomain)) {
       return { status: 409, data: { error: 'This subdomain is permanently unavailable' } }
     }

@@ -1021,7 +1021,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
       ]
     : []
   const updateVariant: BatchQuery = {
-    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ? = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
+    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
     params: [path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, input.userId, variantId, input.scope.organizationId],
   }
   const updatePage: BatchQuery = {
