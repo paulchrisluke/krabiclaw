@@ -61,7 +61,6 @@ export const GOOGLE_PRODUCT_SCOPES: Record<GoogleProduct, readonly string[]> = {
 
 export interface StoredGoogleCredential extends GoogleCredential {
   organization_id: string
-  site_id: string
 }
 
 export function googleAuthUrl(env: GoogleCredentialEnv, product: GoogleProduct, state: string): string {
@@ -148,7 +147,6 @@ export async function storeGoogleCredential(
   env: GoogleCredentialEnv,
   input: {
     organization_id: string
-    site_id: string
     connected_by_user_id: string
     provider_account_email: string
     access_token: string
@@ -160,7 +158,7 @@ export async function storeGoogleCredential(
 ): Promise<void> {
   if (!env.DB) throw new Error('Database not available')
 
-  const existing = await readGoogleCredential(env, input.organization_id, input.site_id)
+  const existing = await readGoogleCredential(env, input.organization_id)
   const sameAccount = existing?.provider_account_email === input.provider_account_email
   const refreshToken = input.refresh_token ?? (sameAccount ? existing?.encrypted_refresh_token : null)
   if (!refreshToken) {
@@ -170,7 +168,7 @@ export async function storeGoogleCredential(
   const now = new Date().toISOString()
   const tokenEnv = encryptionEnv(env)
   const payload = JSON.stringify({
-    id: existing && sameAccount ? existing.id : `google-credential-${input.organization_id}-${input.site_id}`,
+    id: existing && sameAccount ? existing.id : `google-credential-${input.organization_id}`,
     revision: crypto.randomUUID(),
     connected_by_user_id: input.connected_by_user_id,
     provider_account_email: input.provider_account_email,
@@ -184,10 +182,10 @@ export async function storeGoogleCredential(
   })
 
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_set(integrations_json, '$.google_credential', json(?))
-    WHERE id = ? AND organization_id = ?
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_credential', json(?))
+    WHERE id = ?
       AND json_extract(integrations_json, '$.google_credential.revision') IS ?
-  `, [payload, input.site_id, input.organization_id, expected.revision])
+  `, [payload, input.organization_id, expected.revision])
   if (result.meta?.changes !== 1) {
     throw new Error('The site or its Google connection changed during authorization. Try again.')
   }
@@ -196,11 +194,10 @@ export async function storeGoogleCredential(
 export async function readGoogleCredential(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
 ): Promise<StoredGoogleCredential | null> {
   if (!env.DB) return null
   const row = await queryFirst<StoredGoogleCredential>(env.DB, `
-    SELECT id AS site_id, organization_id,
+    SELECT id AS organization_id,
            json_extract(integrations_json, '$.google_credential.id') AS id,
            json_extract(integrations_json, '$.google_credential.revision') AS revision,
            json_extract(integrations_json, '$.google_credential.connected_by_user_id') AS connected_by_user_id,
@@ -212,11 +209,11 @@ export async function readGoogleCredential(
            json_extract(integrations_json, '$.google_credential.expires_at') AS expires_at,
            json_extract(integrations_json, '$.google_credential.created_at') AS created_at,
            json_extract(integrations_json, '$.google_credential.updated_at') AS updated_at
-      FROM sites
-     WHERE organization_id = ? AND id = ?
+      FROM organization
+     WHERE id = ?
        AND json_extract(integrations_json, '$.google_credential.status') = 'active'
      LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId])
   if (!row) return null
 
   const tokenEnv = encryptionEnv(env)
@@ -234,9 +231,8 @@ export function credentialGrants(credential: Pick<GoogleCredential, 'scopes'>, p
 export async function googleAccessToken(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
 ): Promise<string> {
-  const credential = await readGoogleCredential(env, organizationId, siteId)
+  const credential = await readGoogleCredential(env, organizationId)
   if (!credential) throw new Error('No Google account is connected to this site.')
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new Error('Missing Google OAuth client configuration.')
 
@@ -266,34 +262,33 @@ export async function googleAccessToken(
 export async function releaseGoogleCredential(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
-): Promise<void> {
-  if (!env.DB) return
+): Promise<string | null> {
+  if (!env.DB) return null
   const remaining = await queryFirst<{ analytics: string | null; search_console: string | null }>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_analytics') AS analytics,
            json_extract(integrations_json, '$.google_search_console') AS search_console
-      FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [siteId, organizationId])
-  if (!remaining || remaining.analytics || remaining.search_console) return
+      FROM organization WHERE id = ? LIMIT 1
+  `, [organizationId])
+  if (!remaining || remaining.analytics || remaining.search_console) return null
 
-  const credential = await readGoogleCredential(env, organizationId, siteId)
+  const credential = await readGoogleCredential(env, organizationId)
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_remove(integrations_json, '$.google_credential')
-    WHERE id = ? AND organization_id = ?
+    UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_credential')
+    WHERE id = ?
       AND json_extract(integrations_json, '$.google_analytics') IS NULL
       AND json_extract(integrations_json, '$.google_search_console') IS NULL
-  `, [siteId, organizationId])
-  if (result.meta?.changes !== 1 || !credential) return
+  `, [organizationId])
+  if (result.meta?.changes !== 1 || !credential) return null
 
-  // Best effort, and deliberately after the row is gone: a revoke Google
-  // refuses must not leave the site holding a credential the tenant asked us
-  // to drop.
-  try {
-    await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(credential.encrypted_refresh_token)}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    })
-  } catch (error) {
-    console.error('google_credential_revoke_failed', { siteId, error })
-  }
+  // Deliberately after the row is gone: a revoke Google refuses must not leave
+  // the tenant holding a credential they asked us to drop. The caller is told
+  // rather than the failure disappearing into a log.
+  const response = await fetch(
+    `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(credential.encrypted_refresh_token)}`,
+    { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' } },
+  ).catch((error: unknown) => error instanceof Error ? error : new Error(String(error)))
+
+  return response instanceof Error || !response.ok
+    ? 'the Google account authorization could not be revoked at Google'
+    : null
 }

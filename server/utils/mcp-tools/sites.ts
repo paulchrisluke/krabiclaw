@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, siteTool, withToolAnnotations } from './shared'
+import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, siteTool, withToolAnnotations } from './shared'
 
 const SITE_MEDIA_ITEM_SCHEMA = {
   type: 'object',
@@ -96,7 +96,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               seo_title: { type: ['string', 'null'] },
               seo_description: { type: ['string', 'null'] },
               canonical_url: { type: ['string', 'null'] },
-              robots: { type: ['string', 'null'] },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
             },
@@ -132,7 +131,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         seo_title: { type: ['string', 'null'], description: 'Optional site-wide default SEO title override for the homepage and any page without its own override. Falls back to name if unset.' },
         seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
         canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
-        robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },
       },
       outputSchema: {
         type: 'object',

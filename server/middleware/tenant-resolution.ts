@@ -22,6 +22,7 @@ interface TenantRow {
   id: string;
   theme_id: string | null;
   subdomain: string;
+  status: string;
   onboarding_status: string;
   canonical_domain: string | null;
   name: string;

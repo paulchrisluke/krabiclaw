@@ -3,7 +3,6 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
-import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
@@ -58,7 +57,6 @@ interface FullSiteRow extends SiteSettingsRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   social_facebook_url: string | null
   social_instagram_url: string | null
   social_tiktok_url: string | null
@@ -167,7 +165,6 @@ export async function loadSettingsPayload(
     seo_title: updatedSite.seo_title,
     seo_description: updatedSite.seo_description,
     canonical_url: updatedSite.canonical_url,
-    robots: updatedSite.robots,
     social_facebook_url: updatedSite.social_facebook_url,
     social_instagram_url: updatedSite.social_instagram_url,
     social_tiktok_url: updatedSite.social_tiktok_url,
@@ -312,12 +309,6 @@ async function attemptSiteUpdate(
     setParts.push('canonical_url = ?')
     params.push(updates.canonical_url ?? null)
   }
-  if (updates.robots !== undefined) {
-    const parsed = parseRobotsIntent(updates.robots)
-    if (!parsed.ok) return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(', ')}` } }
-    setParts.push('robots = ?')
-    params.push(parsed.intent)
-  }
   for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
     if (updates[key] === undefined) continue
     const trimmed = updates[key]?.trim() || null
@@ -450,13 +441,7 @@ async function attemptSiteUpdate(
   // Zaraz serves analytics only for tenants that are Live, so taking one to
   // Draft has to withdraw its tag rather than leave it collecting from a
   // website the owner believes is unpublished.
-  if (updates.status !== undefined) {
-    try {
-      await reconcileZarazAnalytics(env, db)
-    } catch (error) {
-      console.error('zaraz_reconciliation_failed', { organizationId, error })
-    }
-  }
+  if (updates.status !== undefined) await reconcileZarazAnalytics(env, db)
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))

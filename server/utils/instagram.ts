@@ -36,7 +36,6 @@ const INSTAGRAM_SCOPES = [
 
 export interface InstagramConnection extends InstagramIntegration {
   organization_id: string
-  site_id: string
 }
 
 export function getInstagramAuthUrl(env: InstagramEnv, state: string): string {
@@ -121,7 +120,6 @@ export async function storeInstagramConnection(
   env: InstagramEnv,
   input: {
     organization_id: string
-    site_id: string
     connected_by_user_id: string
     instagram_user_id: string
     username: string
@@ -133,7 +131,7 @@ export async function storeInstagramConnection(
   if (!env.DB) throw new Error('Database not available')
   const now = new Date().toISOString()
   const payload = JSON.stringify({
-    id: `instagram-${input.organization_id}-${input.site_id}`,
+    id: `instagram-${input.organization_id}`,
     revision: crypto.randomUUID(),
     connected_by_user_id: input.connected_by_user_id,
     instagram_user_id: input.instagram_user_id,
@@ -146,11 +144,11 @@ export async function storeInstagramConnection(
     updated_at: now,
   })
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_set(integrations_json, '$.instagram',
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.instagram',
       json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.instagram.created_at'), ?)))
-    WHERE id = ? AND organization_id = ?
+    WHERE id = ?
       AND json_extract(integrations_json, '$.instagram.revision') IS ?
-  `, [payload, now, input.site_id, input.organization_id, expected.revision])
+  `, [payload, now, input.organization_id, expected.revision])
   if (result.meta?.changes !== 1) {
     throw new Error('The site or its Instagram connection changed during authorization. Try again.')
   }
@@ -159,11 +157,10 @@ export async function storeInstagramConnection(
 export async function readInstagramConnection(
   env: InstagramEnv,
   organizationId: string,
-  siteId: string,
 ): Promise<InstagramConnection | null> {
   if (!env.DB) return null
   const row = await queryFirst<InstagramConnection>(env.DB, `
-    SELECT id AS site_id, organization_id,
+    SELECT id AS organization_id,
            json_extract(integrations_json, '$.instagram.id') AS id,
            json_extract(integrations_json, '$.instagram.revision') AS revision,
            json_extract(integrations_json, '$.instagram.connected_by_user_id') AS connected_by_user_id,
@@ -175,11 +172,11 @@ export async function readInstagramConnection(
            json_extract(integrations_json, '$.instagram.status') AS status,
            json_extract(integrations_json, '$.instagram.created_at') AS created_at,
            json_extract(integrations_json, '$.instagram.updated_at') AS updated_at
-      FROM sites
-     WHERE organization_id = ? AND id = ?
+      FROM organization
+     WHERE id = ?
        AND json_extract(integrations_json, '$.instagram.status') = 'active'
      LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId])
   if (!row) return null
   row.encrypted_access_token = await decryptSecret(row.encrypted_access_token, encryptionEnv(env))
   return row

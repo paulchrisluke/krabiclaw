@@ -30,6 +30,12 @@ export interface SiteSettings {
 
 export interface UpdateSiteSettingsRequest {
   name?: string
+  /**
+   * The website's publication state, and the only one there is. A tenant moves
+   * between 'active' (Live) and 'inactive' (Draft); 'suspended' is KrabiClaw's
+   * and is rejected here. server/utils/site-settings.ts enforces it.
+   */
+  status?: 'active' | 'inactive'
   brand_description?: string
   contact_email?: string
   brand_color?: string

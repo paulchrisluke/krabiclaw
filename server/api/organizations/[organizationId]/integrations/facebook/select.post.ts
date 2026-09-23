@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
   const { env, organization} = await requireOrganizationAccess(event, organizationId)
 
   const pending = await readPendingPageSelection(env, handle)
-  if (!pending || pending.siteId !== organization.id || pending.organizationId !== site.organization_id) {
+  if (!pending || pending.organizationId !== organization.id) {
     return jsonResponse({ error: 'That Facebook authorization has expired. Connect again.' }, { status: 410 })
   }
 
@@ -31,7 +31,6 @@ export default defineHandler(async (event) => {
   try {
     await storeFacebookPagesConnection(env, {
       organization_id: pending.organizationId,
-      site_id: pending.siteId,
       connected_by_user_id: pending.userId,
       facebook_user_id: pending.facebookUserId,
       page_id: page.id,

@@ -75,7 +75,6 @@ interface TenantBlogPost {
   seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   updated_at?: string | null
@@ -213,7 +212,6 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value?.title || t('saya.footer.blog'), seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
   seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
   baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
-  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
 }))
 
 const { canonicalUrl } = useSocialMetadata(() => ({
@@ -223,7 +221,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   pageType: 'article',
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: resolvedSeo.value.robots,
+  discoverability: post.value?.visibility === 'unlisted' ? 'unlisted' : 'listed',
   brand: {
     siteName: siteName.value,
   },

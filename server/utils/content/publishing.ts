@@ -33,7 +33,6 @@ import { buildSingleMediaPlacementQueries, hydrateMediaPlacementRefs, insertInit
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import { attachPageQa } from '~/server/utils/location-qa'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
-import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { findAuthUsersByIds, type CloudflareEnv } from '~/server/utils/auth'
@@ -60,7 +59,6 @@ const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
   'seo_description',
   'seo_keywords',
   'canonical_url',
-  'robots',
   'visibility',
   'slug',
   'redirect_old_slug',
@@ -126,7 +124,6 @@ export interface PlatformBlogCreateInput {
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   scheduled_for?: string | null
 }
@@ -141,7 +138,6 @@ export interface PlatformBlogUpdateInput {
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean
@@ -226,14 +222,6 @@ function assertStringLength(value: string | null | undefined, max: number, field
   if (value != null && value.length > max) {
     badRequest(`${field} exceeds maximum length (${max})`)
   }
-}
-
-/** Canonicalizes the submitted intent in place; an unsupported value is a bad request. */
-function normalizeRobotsField(input: { robots?: string | null }) {
-  if (input.robots === undefined) return
-  const parsed = parseRobotsIntent(input.robots)
-  if (!parsed.ok) badRequest(`robots must be one of: ${ROBOTS_INTENTS.join(', ')}`)
-  input.robots = parsed.intent
 }
 
 function articleCollectionOf(value: unknown): ArticleCollection {
@@ -498,7 +486,6 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
   if (input.seo_description !== undefined) assertStringLength(input.seo_description ?? null, BLOG_SEO_DESCRIPTION_MAX, 'seo_description')
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
   if (input.canonical_url !== undefined) assertValidCanonicalUrl(input.canonical_url)
-  normalizeRobotsField(input)
 }
 
 /**
@@ -739,7 +726,7 @@ export async function createBlogPost(
         title: input.title, slug, summary: input.excerpt ?? null, status, visibility: input.visibility ?? 'listed',
         authorId, scheduledFor, publishedAt, firstPublishedAt: publishedAt,
         seoTitle: input.seo_title, seoDescription: input.seo_description, seoKeywords: input.seo_keywords,
-        canonicalUrl: input.canonical_url, robots: input.robots,
+        canonicalUrl: input.canonical_url,
         metadata: { collection, category: input.category ?? null, tags: input.tags ?? null, slug_manually_overridden: customSlug ? 1 : 0 },
       }, canonicalBlocks, { bodyMarkdown: canonicalBody,
         additionalQueriesAfter: await contentBlockPlacementQueries(db, canonicalBlocks, placementScope, now),

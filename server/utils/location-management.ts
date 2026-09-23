@@ -12,15 +12,6 @@ import type { CloudflareEnv } from "~/server/utils/auth";
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { prepareContentDocumentDeletion } from '~/server/utils/content/documents'
-import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
-
-/** A location stores an indexing intent, never a rendered directive. */
-function normalizeLocationRobots(value: unknown) {
-  const parsed = parseRobotsIntent(value)
-  if (!parsed.ok) throw new Error(`robots must be one of: ${ROBOTS_INTENTS.join(', ')}`)
-  return parsed.intent
-}
-
 export function normalizeLocationNotificationPhone(raw: string | null | undefined): string | null {
   if (raw === undefined || raw === null || !raw.trim()) return null;
   const parsed = parsePhone(raw, { defaultCountry: "TH" });
@@ -62,7 +53,6 @@ export interface CreateLocationInput {
   seo_title?: string | null;
   seo_description?: string | null;
   canonical_url?: string | null;
-  robots?: string | null;
   // Additive/subtractive delta layered on top of the parent site's effective feature set
   // (config/cms-registry.ts) — null clears the override back to pure inheritance. `enabled`
   // entries must be a subset of the site's effective feature set; validated below.
@@ -102,7 +92,6 @@ export interface LocationRecord {
   seo_title?: string | null;
   seo_description?: string | null;
   canonical_url?: string | null;
-  robots?: string | null;
   feature_overrides?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -318,9 +307,6 @@ export async function createLocation(
   // An unusable robots value is a bad request, like every other field checked
   // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
   // caller as a 500 saying nothing about which field was wrong.
-  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
-    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
-  }
 
   if (
     input.rating !== undefined &&
@@ -533,9 +519,6 @@ export async function updateLocation(
   // An unusable robots value is a bad request, like every other field checked
   // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
   // caller as a 500 saying nothing about which field was wrong.
-  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
-    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
-  }
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
     return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
@@ -635,7 +618,6 @@ export async function updateLocation(
     "seo_title",
     "seo_description",
     "canonical_url",
-    "robots",
   ] as const;
 
   for (const field of simpleFields) {
@@ -646,8 +628,6 @@ export async function updateLocation(
           ? normalizedTimezone ?? null
           : field === "notification_phone"
             ? normalizedNotificationPhone ?? null
-            : field === "robots"
-              ? normalizeLocationRobots(input.robots)
               : input[field] ?? null,
       );
     }

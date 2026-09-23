@@ -28,11 +28,10 @@ export default defineHandler(async (event) => {
       { revision: current?.revision ?? null },
     )
 
-    try {
-      await reconcileZarazAnalytics(env, env.DB)
-    } catch (error) {
-      console.error('zaraz_reconciliation_failed', { organizationId: organization.id, error })
-    }
+    // The property is only in effect once the tracking configuration carries
+    // its measurement id, so this failure belongs to the save that asked for
+    // it rather than to a log nobody reads.
+    await reconcileZarazAnalytics(env, env.DB)
 
     return jsonResponse({ success: true, measurement_id: measurementId })
   } catch (error) {

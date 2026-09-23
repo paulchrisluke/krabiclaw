@@ -96,36 +96,37 @@ const PRODUCT_CHANNEL: Partial<Record<IntegrationProduct, string>> = {
  */
 async function eraseImportedContent(
   env: CloudflareEnv,
-  siteId: string,
+  organizationId: string,
   channel: string,
   actorUserId: string | null,
   warnings: string[],
 ): Promise<number> {
   const documents = await queryAll<{ id: string }>(env.DB, `
     SELECT id FROM content_documents
-     WHERE site_id = ?
+     WHERE organization_id = ?
        AND (metadata_json ->> ?) IS NOT NULL
-  `, [siteId, `$.channels.${channel}.provider_post_id`])
+  `, [organizationId, `$.channels.${channel}.provider_post_id`])
   if (!documents.length) return 0
 
-  const placeholders = documents.map(() => '?').join(', ')
+  const ids = documents.map(document => document.id)
+  const placeholders = ids.map(() => '?').join(', ')
   const assets = await queryAll<{ asset_id: string }>(env.DB, `
     SELECT DISTINCT asset_id FROM media_placements
-     WHERE site_id = ? AND owner_type = 'content_document' AND owner_id IN (${placeholders})
-  `, [siteId, ...documents.map(document => document.id)])
+     WHERE organization_id = ? AND owner_type = 'content_document' AND owner_id IN (${placeholders})
+  `, [organizationId, ...ids])
 
   // Documents first: the placements are theirs and go with them, so an asset
   // delete that fails cannot leave a post pointing at an image that is gone.
-  await execute(env.DB, `DELETE FROM content_documents WHERE site_id = ? AND id IN (${placeholders})`,
-    [siteId, ...documents.map(document => document.id)])
+  await execute(env.DB, `DELETE FROM content_documents WHERE organization_id = ? AND id IN (${placeholders})`,
+    [organizationId, ...ids])
 
   for (const { asset_id: assetId } of assets) {
     try {
-      await deleteMediaAsset(env.DB, env, assetId, siteId, actorUserId)
+      await deleteMediaAsset(env.DB, env, assetId, organizationId, actorUserId)
     } catch (error) {
       warnings.push(`media asset ${assetId} could not be deleted`)
       console.error('integration_release_media_delete_failed', {
-        siteId, assetId, error: error instanceof Error ? error.message : String(error),
+        assetId, error: error instanceof Error ? error.message : String(error),
       })
     }
   }
@@ -137,20 +138,19 @@ async function eraseImportedContent(
 async function revokeProviderAuthorization(
   env: CloudflareEnv,
   organizationId: string,
-  siteId: string,
   product: IntegrationProduct,
   warnings: string[],
 ): Promise<void> {
   try {
     if (product === 'facebook') {
-      const connection = await getFacebookPagesConnection(env, organizationId, siteId)
+      const connection = await getFacebookPagesConnection(env, organizationId)
       if (connection?.facebook_user_id) {
         await revokeFacebookAuthorization(connection.facebook_user_id, connection.encrypted_user_token)
       }
       return
     }
     if (product === 'instagram') {
-      const connection = await readInstagramConnection(env, organizationId, siteId)
+      const connection = await readInstagramConnection(env, organizationId)
       if (connection?.instagram_user_id) {
         await revokeInstagramAuthorization(connection.instagram_user_id, connection.encrypted_access_token)
       }
@@ -163,7 +163,7 @@ async function revokeProviderAuthorization(
     // tenant unable to disconnect.
     warnings.push(`${product} authorization could not be revoked at the provider`)
     console.error('integration_release_revoke_failed', {
-      siteId, product, error: error instanceof Error ? error.message : String(error),
+      product, error: error instanceof Error ? error.message : String(error),
     })
   }
 }
@@ -171,7 +171,6 @@ async function revokeProviderAuthorization(
 export async function releaseIntegration(
   env: CloudflareEnv,
   organizationId: string,
-  siteId: string,
   product: IntegrationProduct,
   options: ReleaseIntegrationOptions = {},
 ): Promise<ReleaseIntegrationResult> {
@@ -180,35 +179,36 @@ export async function releaseIntegration(
 
   const present = await queryFirst<{ connected: number }>(env.DB, `
     SELECT json_extract(integrations_json, ?) IS NOT NULL AS connected
-      FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [`$.${key}`, siteId, organizationId])
+      FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
+  `, [`$.${key}`, organizationId])
   const released = Boolean(present?.connected)
 
   // Revoke before the record goes: the token lives in the row being removed.
-  if (released) await revokeProviderAuthorization(env, organizationId, siteId, product, warnings)
+  if (released) await revokeProviderAuthorization(env, organizationId, product, warnings)
 
   let erasedDocuments = 0
   const channel = PRODUCT_CHANNEL[product]
   if (options.eraseProviderData && channel) {
-    erasedDocuments = await eraseImportedContent(env, siteId, channel, options.actorUserId ?? null, warnings)
+    erasedDocuments = await eraseImportedContent(env, organizationId, channel, options.actorUserId ?? null, warnings)
   }
 
   if (product === 'google-analytics') {
-    await clearAnalyticsIntegration(env, organizationId, siteId)
+    await clearAnalyticsIntegration(env, organizationId)
   } else if (product === 'google-search-console') {
-    await clearSearchConsoleIntegration(env, organizationId, siteId)
+    await clearSearchConsoleIntegration(env, organizationId)
   } else {
     await execute(env.DB, `
-      UPDATE sites SET integrations_json = json_remove(integrations_json, ?)
-      WHERE id = ? AND organization_id = ?
-    `, [`$.${key}`, siteId, organizationId])
+      UPDATE organization SET integrations_json = json_remove(integrations_json, ?)
+      WHERE id = ?
+    `, [`$.${key}`, organizationId])
   }
 
   // Both Google products go through this; it drops and revokes the shared
   // credential only once neither is connected, which is what keeps one
   // disconnect from taking the other's account away.
   if (product === 'google-analytics' || product === 'google-search-console') {
-    await releaseGoogleCredential(env, organizationId, siteId)
+    const warning = await releaseGoogleCredential(env, organizationId)
+    if (warning) warnings.push(warning)
   }
 
   // Zaraz serves the measurement id of connected sites, so losing Analytics
@@ -220,7 +220,7 @@ export async function releaseIntegration(
     } catch (error) {
       warnings.push('analytics tag could not be reconciled')
       console.error('integration_release_zaraz_failed', {
-        siteId, error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error),
       })
     }
   }
@@ -228,22 +228,9 @@ export async function releaseIntegration(
   return { product, released, erasedDocuments, warnings }
 }
 
-/** Releases every product a site has, for tenant deletion and for a wholesale erase. */
-export async function releaseSiteIntegrations(
-  env: CloudflareEnv,
-  organizationId: string,
-  siteId: string,
-  options: ReleaseIntegrationOptions = {},
-): Promise<ReleaseIntegrationResult[]> {
-  const results: ReleaseIntegrationResult[] = []
-  for (const product of INTEGRATION_PRODUCTS) {
-    results.push(await releaseIntegration(env, organizationId, siteId, product, options))
-  }
-  return results
-}
-
 /**
- * Releases every integration of every site an organization owns.
+ * Releases every product a tenant has — for tenant deletion, and for a
+ * wholesale erase.
  *
  * Tenant deletion calls this before the rows go, because a credential named
  * only by a row that no longer exists can never be revoked afterwards — the
@@ -253,22 +240,22 @@ export async function releaseOrganizationIntegrations(
   env: CloudflareEnv,
   organizationId: string,
   options: ReleaseIntegrationOptions = {},
-): Promise<void> {
-  const sites = await queryAll<{ id: string }>(env.DB,
-    'SELECT id FROM sites WHERE organization_id = ?', [organizationId])
-
-  for (const site of sites) {
+): Promise<ReleaseIntegrationResult[]> {
+  const results: ReleaseIntegrationResult[] = []
+  for (const product of INTEGRATION_PRODUCTS) {
     try {
-      await releaseSiteIntegrations(env, organizationId, site.id, options)
+      results.push(await releaseIntegration(env, organizationId, product, options))
     } catch (error) {
-      // As with Cloudflare Images: an external release that fails is logged
-      // and skipped rather than keeping the customer's rows alive in D1.
-      console.error('tenant_deletion_integration_release_failed', {
-        organizationId, siteId: site.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
+      // As with Cloudflare Images: one product that will not release must not
+      // keep the customer's rows alive in D1, so the loop continues — but the
+      // failure travels back in the results rather than only into a log, so a
+      // caller can see the tenant was deleted with something left behind.
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('tenant_deletion_integration_release_failed', { organizationId, product, error: message })
+      results.push({ product, released: false, erasedDocuments: 0, warnings: [`${product} could not be released: ${message}`] })
     }
   }
+  return results
 }
 
 /**
@@ -281,18 +268,18 @@ export async function releaseMetaUserIntegrations(
   metaUserId: string,
   options: ReleaseIntegrationOptions = {},
 ): Promise<ReleaseIntegrationResult[]> {
-  const rows = await queryAll<{ id: string; organization_id: string; product: string }>(env.DB, `
-    SELECT id, organization_id, 'facebook' AS product FROM sites
+  const rows = await queryAll<{ organization_id: string; product: string }>(env.DB, `
+    SELECT id AS organization_id, 'facebook' AS product FROM organization
      WHERE json_extract(integrations_json, '$.facebook.facebook_user_id') = ?
     UNION ALL
-    SELECT id, organization_id, 'instagram' AS product FROM sites
+    SELECT id AS organization_id, 'instagram' AS product FROM organization
      WHERE json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
   `, [metaUserId, metaUserId])
 
   const results: ReleaseIntegrationResult[] = []
   for (const row of rows) {
     if (!isIntegrationProduct(row.product)) continue
-    results.push(await releaseIntegration(env, row.organization_id, row.id, row.product, options))
+    results.push(await releaseIntegration(env, row.organization_id, row.product, options))
   }
   return results
 }

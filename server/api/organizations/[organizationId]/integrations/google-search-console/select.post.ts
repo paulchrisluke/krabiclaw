@@ -5,7 +5,7 @@ import {
   listSearchConsoleSites, storeSearchConsoleSelection, verifyAndAddProperty,
 } from '~/server/utils/google-search-console'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 
 /**
  * Connecting a Search Console property.
@@ -46,7 +46,7 @@ export default defineHandler(async (event) => {
     await verifyAndAddProperty(env, organization.id, ownUrl, async () => {
       // The tag has to be on the live page before Google fetches it, and the
       // public HTML is cached.
-      await purgePublicResourceCacheSafe(env, organization.id)
+      await purgePublicResourceCacheNow(env, organization.id)
     })
 
     return jsonResponse({ success: true, site_url: ownUrl, verified: true })

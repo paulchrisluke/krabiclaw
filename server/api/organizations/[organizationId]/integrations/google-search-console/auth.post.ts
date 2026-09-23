@@ -19,14 +19,13 @@ export default defineHandler(async (event) => {
   const current = await queryFirst<{ revision: string | null }>(db, `
     SELECT json_extract(integrations_json, '$.google_credential.revision') AS revision
       FROM sites WHERE id = ? AND organization_id = ?
-  `, [organization.id, site.organization_id])
+  `, [organization.id, organization.id])
   if (!current) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const state = await signOAuthState(hmacSecret, {
     revision: current.revision,
     product: 'search-console',
     organizationId: organization.id,
-    organizationId: site.organization_id,
     userId: session.user.id,
     timestamp: Date.now(),
   })

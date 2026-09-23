@@ -19,7 +19,7 @@ export default defineHandler(async (event) => {
   const handle = event.url.searchParams.get('handle')
   const pending = handle ? await readPendingPageSelection(env, handle) : null
   // A handle names a pending authorization, not a site; it must be this one's.
-  const choices = pending && pending.siteId === organization.id
+  const choices = pending && pending.organizationId === organization.id
     ? pending.pages.map(page => ({ id: page.id, name: page.name }))
     : []
 

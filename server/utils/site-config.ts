@@ -46,7 +46,7 @@ export const getConfig = async (
   `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const config: SiteConfig = {}
-  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
+  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
     const value = row[key]
     if (value == null) continue
     if (typeof value !== 'string') throw new Error('Invalid stored site setting: ' + key)

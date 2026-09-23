@@ -625,7 +625,6 @@ const PENDING_SELECTION_TTL_SECONDS = 600
 const pendingSelectionKey = (handle: string) => `facebook-page-selection:${handle}`
 
 export interface PendingPageSelection {
-  siteId: string
   organizationId: string
   userId: string
   facebookUserId: string

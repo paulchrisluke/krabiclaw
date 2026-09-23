@@ -3,16 +3,9 @@ import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
-<<<<<<< HEAD
-  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
+  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, storePendingPageSelection, } from '../../../utils/facebook-pages'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
-=======
-  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, storePendingPageSelection, } from '../../../utils/facebook-pages'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
->>>>>>> 30db278e (One way an integration is released)
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -77,21 +70,12 @@ export default defineHandler(async (event) => {
       return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
     }
 
-<<<<<<< HEAD
-    const firstPage = pages[0]
-    if (!firstPage) {
-      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
-    }
-
-    await storeFacebookPagesConnection(env, {
-      organization_id: organizationId, connected_by_user_id: userId, facebook_user_id: userInfo.id, page_id: firstPage.id, page_name: firstPage.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
-=======
     // More than one Page is a question only the tenant can answer. Taking
     // pages[0] connected whichever Page Facebook happened to list first, which
     // for an agency account is rarely the one they meant.
     if (pages.length > 1) {
       const handle = await storePendingPageSelection(env, {
-        siteId, organizationId, userId,
+        organizationId, userId,
         facebookUserId: userInfo.id,
         userToken: systemUserToken,
         revision: stateData.revision,
@@ -106,12 +90,11 @@ export default defineHandler(async (event) => {
     const onlyPage = pages[0]!
 
     await storeFacebookPagesConnection(env, {
-      organization_id: organizationId, site_id: siteId, connected_by_user_id: userId,
+      organization_id: organizationId, connected_by_user_id: userId,
       facebook_user_id: userInfo.id, page_id: onlyPage.id, page_name: onlyPage.name,
       encrypted_user_token: systemUserToken, encrypted_page_token: onlyPage.access_token,
       user_token_expires_at: undefined, scopes: undefined, status: 'active',
     }, stateData)
->>>>>>> 30db278e (One way an integration is released)
 
     return new Response(null, {
       status: 302, headers: { Location: await settingsRedirect('connected') }, })

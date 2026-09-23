@@ -83,7 +83,6 @@ export async function addSearchConsoleSite(accessToken: string, siteUrl: string)
 export async function readSearchConsoleIntegration(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
 ): Promise<GoogleSearchConsoleIntegration | null> {
   if (!env.DB) return null
   const row = await queryFirst<Omit<GoogleSearchConsoleIntegration, 'verified'> & { verified: number }>(env.DB, `
@@ -94,11 +93,11 @@ export async function readSearchConsoleIntegration(
            json_extract(integrations_json, '$.google_search_console.status') AS status,
            json_extract(integrations_json, '$.google_search_console.created_at') AS created_at,
            json_extract(integrations_json, '$.google_search_console.updated_at') AS updated_at
-      FROM sites
-     WHERE organization_id = ? AND id = ?
+      FROM organization
+     WHERE id = ?
        AND json_extract(integrations_json, '$.google_search_console') IS NOT NULL
      LIMIT 1
-  `, [organizationId, siteId])
+  `, [organizationId])
   return row ? { ...row, verified: Boolean(row.verified) } : null
 }
 
@@ -110,7 +109,6 @@ export async function readSearchConsoleIntegration(
 export async function storeVerificationToken(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
   siteUrl: string,
   token: string,
 ): Promise<void> {
@@ -126,10 +124,10 @@ export async function storeVerificationToken(
     updated_at: now,
   })
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_set(integrations_json, '$.google_search_console',
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_search_console',
       json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.google_search_console.created_at'), ?)))
-    WHERE id = ? AND organization_id = ?
-  `, [payload, now, siteId, organizationId])
+    WHERE id = ?
+  `, [payload, now, organizationId])
   if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before connecting.')
 }
 
@@ -141,7 +139,6 @@ export async function storeVerificationToken(
 export async function storeSearchConsoleSelection(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
   siteUrl: string,
   verificationToken: string | null,
 ): Promise<void> {
@@ -157,10 +154,10 @@ export async function storeSearchConsoleSelection(
     updated_at: now,
   })
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_set(integrations_json, '$.google_search_console',
+    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_search_console',
       json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.google_search_console.created_at'), ?)))
-    WHERE id = ? AND organization_id = ?
-  `, [payload, now, siteId, organizationId])
+    WHERE id = ?
+  `, [payload, now, organizationId])
   if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before saving.')
 }
 
@@ -168,13 +165,12 @@ export async function storeSearchConsoleSelection(
 export async function clearSearchConsoleIntegration(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
 ): Promise<void> {
   if (!env.DB) throw new Error('Database not available')
   const result = await execute(env.DB, `
-    UPDATE sites SET integrations_json = json_remove(integrations_json, '$.google_search_console')
-    WHERE id = ? AND organization_id = ?
-  `, [siteId, organizationId])
+    UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_search_console')
+    WHERE id = ?
+  `, [organizationId])
   if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before disconnecting.')
 }
 
@@ -187,15 +183,14 @@ export async function clearSearchConsoleIntegration(
 export async function verifyAndAddProperty(
   env: GoogleCredentialEnv,
   organizationId: string,
-  siteId: string,
   siteUrl: string,
   publish: () => Promise<void>,
 ): Promise<void> {
-  const accessToken = await googleAccessToken(env, organizationId, siteId)
+  const accessToken = await googleAccessToken(env, organizationId)
   const token = await requestVerificationToken(accessToken, siteUrl)
-  await storeVerificationToken(env, organizationId, siteId, siteUrl, token)
+  await storeVerificationToken(env, organizationId, siteUrl, token)
   await publish()
   await verifySiteOwnership(accessToken, siteUrl)
   await addSearchConsoleSite(accessToken, siteUrl)
-  await storeSearchConsoleSelection(env, organizationId, siteId, siteUrl, token)
+  await storeSearchConsoleSelection(env, organizationId, siteUrl, token)
 }

@@ -31,7 +31,6 @@ import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
-import { parseRobotsIntent, ROBOTS_INTENTS, type RobotsIntent } from '~/shared/robots-directive'
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import { loadSiteTemplate } from '~/server/utils/content/publishing'
 import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
@@ -49,7 +48,6 @@ export interface TenantPageEditorInput {
   seoTitle?: string | null
   seoDescription?: string | null
   canonicalUrl?: string | null
-  robots?: string | null
   pageType?: TenantPageType
   recipe?: string | null
   sortOrder?: number | null
@@ -73,7 +71,6 @@ export interface TenantPageDto {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   page_type: TenantPageType
   recipe: string | null
   sort_order: number
@@ -93,7 +90,6 @@ interface PageRepresentationRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   page_type: TenantPageType
   recipe: string | null
   sort_order: number
@@ -122,12 +118,6 @@ function asString(value: unknown, field: string, required = false): string | nul
   return value.trim()
 }
 
-function asRobotsIntent(value: unknown): RobotsIntent | null {
-  const parsed = parseRobotsIntent(asString(value, 'robots'))
-  if (!parsed.ok) badRequest(`robots must be one of: ${ROBOTS_INTENTS.join(', ')}`)
-  return parsed.intent
-}
-
 function metadataForInput(input: TenantPageEditorInput, locale: string, path: string): TenantPageSnapshotMetadata {
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
@@ -139,7 +129,6 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
     seoTitle: asString(input.seoTitle, 'seoTitle'),
     seoDescription: asString(input.seoDescription, 'seoDescription'),
     canonicalUrl: asString(input.canonicalUrl, 'canonicalUrl'),
-    robots: asRobotsIntent(input.robots),
     pageType,
     recipe: asString(input.recipe, 'recipe'),
   }
@@ -472,7 +461,6 @@ function pageDto(row: PageRepresentationRow, document: TenantPageDocument, block
     seo_title: row.seo_title,
     seo_description: row.seo_description,
     canonical_url: row.canonical_url,
-    robots: row.robots,
     page_type: row.page_type,
     recipe: row.recipe,
     sort_order: row.sort_order,
@@ -660,7 +648,6 @@ export interface OnboardingTenantPageInput {
   seoTitle: string | null
   seoDescription: string | null
   canonicalUrl: string | null
-  robots: string | null
   pageType: TenantPageType
   recipe: string | null
   blocks: unknown
@@ -771,7 +758,6 @@ export async function applyOnboardingTenantPages(
           seoTitle: page.seoTitle,
           seoDescription: page.seoDescription,
           canonicalUrl: page.canonicalUrl,
-          robots: page.robots,
           pageType: page.pageType,
           recipe: page.recipe,
           blocks: page.blocks,
@@ -1046,7 +1032,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
 
 export async function listPublishedTenantPagePaths(db: DbClient, organizationId: string, locale?: string | null) {
   const resolvedLocale = await resolveLocale(db, organizationId, locale)
-  return await queryAll<{ id: string; path: string; title: string; summary: string | null; sort_order: number; updated_at: string; robots: string | null }>(db, `
+  return await queryAll<{ id: string; path: string; title: string; summary: string | null; sort_order: number; updated_at: string }>(db, `
     SELECT v.id, v.path, v.title, v.summary, p.sort_order, v.updated_at
       FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id)
      WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ?

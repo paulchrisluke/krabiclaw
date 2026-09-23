@@ -1,11 +1,10 @@
-import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertSiteWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { loadMemberOrganizationRow } from '~/server/utils/location-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   exchangeGoogleCode, googleUserEmail, storeGoogleCredential, type GoogleProduct,
 } from '~/server/utils/google-credential'
 import { verifyOAuthState } from '~/server/utils/encryption'
-import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 
 /**
  * One callback for every Google product.
@@ -22,7 +21,6 @@ import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects
 interface GoogleOAuthState {
   revision: string | null
   product: GoogleProduct
-  siteId: string
   organizationId: string
   userId: string
   timestamp: number
@@ -46,21 +44,20 @@ export default defineHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?google=error' } })
   }
 
-  const { siteId, organizationId, userId, timestamp, product } = stateData
-  if (!siteId || !organizationId || !userId || Date.now() - timestamp > 10 * 60 * 1000) {
+  const { organizationId, userId, timestamp, product } = stateData
+  if (!organizationId || !userId || Date.now() - timestamp > 10 * 60 * 1000) {
     return new Response(null, { status: 302, headers: { Location: '/dashboard?google=expired' } })
   }
 
   const leaf = product === 'search-console' ? 'google-search-console' : 'google-analytics'
   const redirectTo = async (status: string) => {
-    const db = env.DB
-    if (!db) return `/dashboard?google=${status}`
     try {
-      const context = await getDashboardSiteRouteContext(db, env, userId, organizationId, siteId)
-      if (!context) return `/dashboard?google=${status}`
-      return `/dashboard/${encodeURIComponent(context.organizationSlug)}/sites/${encodeURIComponent(context.siteSlug)}/settings/integrations/${leaf}?google=${status}`
+      const organization = await resolveUserOrganization(env, { userId, organizationId })
+      return organization
+        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/integrations/${leaf}?google=${status}`
+        : `/dashboard?google=${status}`
     } catch (error) {
-      console.error('google_oauth_redirect_lookup_failed', { siteId, error })
+      console.error('google_oauth_redirect_lookup_failed', { organizationId, error })
       return `/dashboard?google=${status}`
     }
   }
@@ -70,16 +67,15 @@ export default defineHandler(async (event) => {
     // `organizationId` arrives in the OAuth state, so it names an organization
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
-    const access = await loadMemberSiteRow(event, env.DB, env, siteId, userId)
-    if (!access || access.organization_id !== organizationId) throw new Error('Access denied')
-    await assertSiteWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, siteId, event }))
+    const access = await loadMemberOrganizationRow(event, env.DB, env, organizationId, userId)
+    if (!access || access.id !== organizationId) throw new Error('Access denied')
+    await assertOrganizationWideAccess(env.DB, memberAccessPrincipal(access.membership, { env, event }))
 
     const token = await exchangeGoogleCode(env, code)
     const email = await googleUserEmail(token.accessToken)
 
     await storeGoogleCredential(env, {
       organization_id: organizationId,
-      site_id: siteId,
       connected_by_user_id: userId,
       provider_account_email: email,
       access_token: token.accessToken,
@@ -90,7 +86,7 @@ export default defineHandler(async (event) => {
 
     return new Response(null, { status: 302, headers: { Location: await redirectTo('connected') } })
   } catch (error) {
-    console.error('google_oauth_callback_failed', { siteId, product, error })
+    console.error('google_oauth_callback_failed', { organizationId, product, error })
     return new Response(null, { status: 302, headers: { Location: await redirectTo('error') } })
   }
 })
