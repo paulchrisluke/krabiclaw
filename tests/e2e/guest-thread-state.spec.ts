@@ -33,7 +33,7 @@ interface DeliveryList {
 }
 
 const baseURL = testBaseUrl()
-const organizationId = 'org-pottery-house'
+const organizationId = 'org-user-pottery-house'
 const ownerId = 'user-e2e-pottery-owner'
 const secondOwnerId = 'user-e2e-pottery-location-owner'
 const foreignOwnerId = 'user-e2e-kikuzuki-owner'

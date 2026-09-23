@@ -7,7 +7,7 @@ import { formatOpeningHours } from '../utils/formatters.ts';
  * Usage:
  *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience
  *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience \
- *     --organization-id org-pottery-house --slug pottery-house-krabi
+ *     --organization-id org-user-pottery-house --slug pottery-house-krabi
  *
  * With --slug, writes reports to client-imports/<slug>/:
  *   verify-report.latest.json    — structured results for this run
@@ -578,7 +578,7 @@ if (ORGANIZATION_ID) {
     else pass("No contact email in site config (allowed for WhatsApp-only contact setups)");
 
     const allJson = JSON.stringify(data);
-    if (allJson.includes("bamboo.chow@gmail.com") && ORGANIZATION_ID !== "org-kikuzuki")
+    if (allJson.includes("bamboo.chow@gmail.com") && ORGANIZATION_ID !== "org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX")
       fail("Kikuzuki placeholder email found in another tenant response");
     if (allJson.includes("Ember & Slice") && ORGANIZATION_ID !== "org-demo")
       fail("Demo site data (Ember & Slice) found in another tenant response");

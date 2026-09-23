@@ -13,7 +13,7 @@ test.describe('stateless MCP server', () => {
   // that guesses the name never reads the catalog.
   test('a role sees and can invoke only its own tools', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-pottery-editor')
-    const organizationId = 'org-pottery-house'
+    const organizationId = 'org-user-pottery-house'
 
     const listForOrg = await mcpRequest(request, baseURL!, { method: 'tools/list', organizationId })
     expect(listForOrg.status()).toBe(200)

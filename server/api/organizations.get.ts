@@ -49,7 +49,7 @@ export default defineHandler(async (event) => {
 
     // Build WHERE clause for multiple organization IDs
     const sites = await queryAll(db, `
-      SELECT id, organization_id, theme_id, name, slug, subdomain,
+      SELECT id, theme_id, name, slug, subdomain,
              (SELECT domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, status, created_at, updated_at,
              onboarding_status
       FROM organization
@@ -59,7 +59,7 @@ export default defineHandler(async (event) => {
 
     const results = (sites || []).map((site: ApiValue) => ({
       ...site as object,
-      is_demo: (site as { organization_id: string }).organization_id === DEMO_ORG_ID,
+      is_demo: (site as { id: string }).id === DEMO_ORG_ID,
     }))
 
     return jsonResponse({

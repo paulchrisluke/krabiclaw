@@ -23,9 +23,9 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<{ id: string; organization_id: string; status: string; default_currency: string }>(
+    const site = await queryFirst<{ id: string; status: string; default_currency: string }>(
       db, `
-      SELECT id, organization_id, status, default_currency FROM organization
+      SELECT id, status, default_currency FROM organization
       WHERE id = ? AND status = 'active'
       LIMIT 1
     `, [organizationId], )
@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
       FROM business_locations bl
       LEFT JOIN media_placements mp ON mp.organization_id = bl.organization_id AND mp.owner_type = 'business_location' AND mp.owner_id = bl.id AND mp.slot = 'hero' AND mp.sort_order = 0 AND mp.status = 'active'
       LEFT JOIN media_assets ma ON mp.asset_id = ma.id AND ma.status = 'active'
-        AND ma.organization_id = bl.organization_id AND ma.organization_id = bl.organization_id
+        AND ma.organization_id = bl.organization_id
       WHERE bl.organization_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
     `, [organizationId, slug], )

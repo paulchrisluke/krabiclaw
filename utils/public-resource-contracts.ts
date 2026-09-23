@@ -142,7 +142,7 @@ export function isPublicProduct(value: unknown): value is Product {
 export function isPublicCollection(value: unknown): value is Collection {
   return isRecord(value)
     && typeof value.id === 'string'
-    && typeof value.site_id === 'string'
+    && typeof value.organization_id === 'string'
     && typeof value.name === 'string'
     && typeof value.slug === 'string'
     && Number.isInteger(value.sort_order)

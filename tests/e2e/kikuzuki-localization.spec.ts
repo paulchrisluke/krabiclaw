@@ -3,7 +3,7 @@ import { openTenantPage } from './helpers'
 import { loginAs } from './helpers/auth'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
-const organizationId = 'org-kikuzuki'
+const organizationId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
 const locale = 'th'
 
 async function expectStatus(response: APIResponse, expected: number) {
@@ -51,7 +51,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
         brand_description: 'อาหารญี่ปุ่นต้นตำรับในกระบี่',
       },
     })
-    const locationResponse = await owner.get('/api/organizations/org-kikuzuki/locations/loc-kikuzuki')
+    const locationResponse = await owner.get('/api/organizations/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/locations/loc-kikuzuki')
     await expectStatus(locationResponse, 200)
     expect(await locationResponse.json()).toMatchObject({
       location: {

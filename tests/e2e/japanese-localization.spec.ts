@@ -12,7 +12,7 @@ let releaseTenantMutationLock: (() => Promise<void>) | undefined
 
 test.beforeAll(async ({ browser: _browser }, testInfo) => {
   test.setTimeout(700_000)
-  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, 'org-kikuzuki')
+  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX')
 })
 
 test.afterAll(async () => {
@@ -44,7 +44,7 @@ async function restoreAll(steps: Array<[string, () => Promise<APIResponse>]>) {
 
 test('Japanese is a second secondary language and keeps its public shell through hydration', async ({ playwright, page }) => {
   test.setTimeout(180_000)
-  const organizationId = 'org-kikuzuki'
+  const organizationId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')

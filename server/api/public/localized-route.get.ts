@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const site = await queryFirst<{ id: string }>(db, `
-    SELECT organization_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1
+    SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
   return { route: await resolveLocalizedPublicRoute(env, db, organizationId, path) }

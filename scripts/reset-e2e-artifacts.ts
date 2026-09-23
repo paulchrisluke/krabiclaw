@@ -14,7 +14,7 @@ const FIXTURE_ORG_IDS = [
 
 // The customer fixtures targeted by tenant-guest-journeys.spec.ts. Scoping by
 // the indexed organization column keeps the email marker queries bounded.
-const GUEST_BOOKING_ORG_IDS = ['org-pottery-house', 'org-kikuzuki', 'org-ncls-blawby']
+const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby']
 
 // E2E creates throwaway `e2e-*` organizations of its own, which the allowlist
 // below already excludes from the fixture set.

@@ -58,7 +58,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     // product's rules. Generation is idempotent, so the journey makes sure
     // there is something on the calendar to book before it tries.
     await loginAs(request, testBaseUrl(), 'user-e2e-pottery-owner')
-    const generated = await request.post(`${testBaseUrl()}/api/editor/organizations/org-pottery-house/products/exp-ph-wheel/sessions/generate`, {
+    const generated = await request.post(`${testBaseUrl()}/api/editor/organizations/org-user-pottery-house/products/exp-ph-wheel/sessions/generate`, {
       headers: { 'x-preview-tenant': 'pottery-house' },
       data: { through: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10) },
     })
@@ -78,7 +78,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect((await response.json() as { booking_id?: string }).booking_id).toEqual(expect.any(String))
     await expect(page).toHaveURL(/\/bookings\/confirmed/)
     await expect(page.locator('main')).toContainText(/booking|received|confirmed/i)
-    const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-pottery-house', since, state =>
+    const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-user-pottery-house', since, state =>
       state.notifications.some(row => row.template === 'new_booking')
       && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
@@ -120,7 +120,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await expect(page).toHaveURL(/\/reservations\/confirmed/)
     await expect(page.locator('main')).toContainText('Reservation confirmed')
     await expect(page.locator('main')).not.toContainText(/confirm your .* shortly/i)
-    const state = await waitForNotifications(request, baseURL, 'org-kikuzuki', since, state =>
+    const state = await waitForNotifications(request, baseURL, 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', since, state =>
       state.notifications.some(row => row.template === 'new_reservation')
       && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
@@ -141,7 +141,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await page.getByRole('button', { name: /send a message/i }).click()
     expect((await submission).status()).toBe(201)
     await expect(page).toHaveURL(/\/contact\/confirmed/)
-    const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-pottery-house', since, state =>
+    const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-user-pottery-house', since, state =>
       state.notifications.some(row => row.template === 'new_contact_msg')
       && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),

@@ -138,7 +138,7 @@ function phase(name: string) {
 // [font-phase] markers.
 test('Mali saves through Brand, renders before hydration, and stays within the cold-mobile regression budget', async ({ browser, playwright }, testInfo) => {
   test.setTimeout(600_000)
-  const organizationId = 'org-kikuzuki'
+  const organizationId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')

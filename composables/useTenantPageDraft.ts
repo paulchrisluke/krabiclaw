@@ -34,7 +34,6 @@ export interface TenantPageDraft {
 export interface TenantPageResponse {
   id: string
   page_id: string
-  site_id: string
   organization_id: string
   locale: string
   path: string
@@ -73,7 +72,7 @@ function isOptionalString(value: unknown): value is string | null {
 export function isTenantPageResponse(value: unknown): value is { page: TenantPageResponse } {
   if (!isRecord(value) || !isRecord(value.page)) return false
   const page = value.page
-  return ['id', 'page_id', 'site_id', 'organization_id', 'locale', 'path', 'title', 'page_type', 'updated_at']
+  return ['id', 'page_id', 'organization_id', 'locale', 'path', 'title', 'page_type', 'updated_at']
     .every(field => typeof page[field] === 'string')
     && ['summary', 'seo_title', 'seo_description', 'canonical_url', 'robots', 'recipe'].every(field => isOptionalString(page[field]))
     && typeof page.sort_order === 'number'

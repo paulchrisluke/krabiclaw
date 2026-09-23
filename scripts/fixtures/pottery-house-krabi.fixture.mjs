@@ -20,9 +20,9 @@
  *   - Demo data (Ember & Slice) must not appear
  *
  * Usage:
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --organization-id org-pottery-house
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://www.potteryhousekrabi.com --organization-id org-pottery-house
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --organization-id org-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --organization-id org-user-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://www.potteryhousekrabi.com --organization-id org-user-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --organization-id org-user-pottery-house
  *
  * Site identifiers default to the actual live production values (site id
  * `site-pottery-house`, subdomain `pottery-house`) — the client was originally
@@ -43,7 +43,7 @@ import { existsSync, readFileSync } from 'node:fs'
 const { values: args } = parseArgs({
   options: {
     url:       { type: 'string' },
-    'organization-id': { type: 'string', default: 'org-pottery-house' },
+    'organization-id': { type: 'string', default: 'org-user-pottery-house' },
     slug:      { type: 'string', default: 'pottery-house' },
   },
   allowPositionals: false,

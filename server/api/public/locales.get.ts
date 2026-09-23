@@ -17,8 +17,8 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT id, organization_id
+  const site = await queryFirst<{ id: string }>(db, `
+    SELECT id
     FROM organization
     WHERE id = ? AND status = 'active'
     LIMIT 1

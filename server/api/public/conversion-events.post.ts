@@ -28,8 +28,8 @@ export default defineHandler(async (event) => {
 
   const eventName = cleanString(body.event_name, 80)
   if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
-  const site = await queryFirst<{ id: string; organization_id: string; vertical: string | null }>(db,
-    `SELECT id, organization_id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; vertical: string | null }>(db,
+    `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
   if (!site || !normalizeVertical(site.vertical)) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const ipHash = await hashClientIp(getClientIp(event))

@@ -98,7 +98,7 @@ export interface PublicProductReview {
 // request: a site that has not finished onboarding is readable only with it.
 async function loadProductSite(db: DbClient, organizationId: string, routeKind: ProductSurface, previewAuthorized: boolean) {
   const site = await queryFirst<PublicProductSiteRow>(db, `
-    SELECT id, organization_id, name, vertical, theme_id, feature_overrides, default_currency
+    SELECT id, name, vertical, theme_id, feature_overrides, default_currency
       FROM organization
      WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"}
        AND name IS NOT NULL AND trim(name) <> ''

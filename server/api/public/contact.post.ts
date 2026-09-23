@@ -48,8 +48,8 @@ export default defineHandler(async (event) => {
   if (subject && !VALID_SUBJECTS.includes(subject))
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
-    db, 'SELECT id, organization_id, name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
+  const site = await queryFirst<{ id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
+    db, 'SELECT id, name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
   const consentAcknowledged = body.consent === true

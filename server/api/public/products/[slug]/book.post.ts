@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; name: string | null; public_url: string | null }>(db, `SELECT id, organization_id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = site.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; name: string | null; public_url: string | null }>(db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = site.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `

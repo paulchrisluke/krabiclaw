@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; organization_id: string }>(db, `SELECT id, organization_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const location = await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [locationId, organizationId])
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
