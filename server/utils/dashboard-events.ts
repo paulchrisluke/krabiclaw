@@ -15,7 +15,6 @@ export interface DashboardEvent {
 
 export interface DashboardEventsQuery {
   limit?: number
-  organizationId?: string
   locationId?: string
   eventType?: string
   actorId?: string
@@ -28,9 +27,8 @@ export async function listDashboardEvents(
   query: DashboardEventsQuery,
 ): Promise<{ events: DashboardEvent[]; nextCursor: string | null }> {
   const limit = Math.max(1, Math.min(query.limit || 20, 50))
-  const conditions = ["e.kind = 'audit'", "(CASE WHEN e.scope_kind = 'site' THEN event_site.id ELSE e.organization_id END) = ?"]
+  const conditions = ["e.kind = 'audit'", 'e.organization_id = ?']
   const params: unknown[] = [organizationId]
-  if (query.organizationId) { conditions.push('e.organization_id = ?'); params.push(query.organizationId) }
   if (query.locationId) { conditions.push('e.location_id = ?'); params.push(query.locationId) }
   if (query.eventType) { conditions.push('e.event_name = ?'); params.push(query.eventType) }
   if (query.actorId) { conditions.push('e.actor_user_id = ?'); params.push(query.actorId) }
@@ -52,7 +50,6 @@ export async function listDashboardEvents(
            e.actor_user_id AS actor_id,
            l.title AS location_title
     FROM activity_entries e
-    LEFT JOIN organization event_site ON event_site.id = e.organization_id
     LEFT JOIN business_locations l ON l.id = e.location_id
     WHERE ${conditions.join(' AND ')}
     ORDER BY e.created_at DESC, e.id DESC

@@ -9,13 +9,12 @@ import { getPublicTenantPageForPath } from '../../server/utils/public-tenant-pag
 import type { CloudflareEnv } from '../../server/types/cloudflare.ts'
 
 const ORG = 'org'
-const SITE = 'site-a'
 const LOC = 'loc-a'
 const ACTOR = { actorId: 'actor' }
 const NOW = '2026-09-16T00:00:00.000Z'
 
 const COVER = 'https://imagedelivery.net/acct/cover/public'
-const REEL = 'https://media.example.test/sites/site-a/media/reel.mp4'
+const REEL = 'https://media.example.test/org/media/reel.mp4'
 const REEL_POSTER = 'https://imagedelivery.net/acct/reel/public'
 
 async function boot() {
@@ -27,15 +26,13 @@ async function boot() {
   const db = await runtime.getD1Database('DB')
   const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
-  await db.prepare("INSERT INTO organization (id, name, slug) VALUES (?, 'Org', 'org')").bind(ORG).run()
+  await db.prepare(`INSERT INTO organization (id, name, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
+    VALUES (?, 'Org', 'org', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'saya-theme-v1', 'THB', 'active', 'complete', 'flat', 'restaurant', ?)`).bind(ORG, NOW).run()
   await db.prepare("INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, 'Actor', 'actor@example.test', 0, 0, 0)").bind(ACTOR.actorId).run()
-  await db.prepare(`INSERT INTO sites (id, organization_id, slug, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, name, created_at, updated_at)
-    VALUES (?, ?, ?, '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'saya-theme-v1', 'THB', 'active', 'complete', 'flat', 'restaurant', 'Site A', ?, ?)`)
-    .bind(SITE, ORG, SITE, NOW, NOW).run()
-  await db.prepare("INSERT INTO site_locales (id, organization_id, site_id, locale, is_source, status) VALUES (?, ?, ?, 'en', 1, 'published')")
-    .bind('locale-en', ORG, SITE).run()
-  await db.prepare(`INSERT INTO business_locations (id, organization_id, site_id, slug, title, status, timezone, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'Branch', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOC, ORG, SITE, LOC, NOW, NOW).run()
+  await db.prepare("INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES (?, ?, 'en', 1, 'published')")
+    .bind('locale-en', ORG).run()
+  await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
+    VALUES (?, ?, ?, 'Branch', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOC, ORG, LOC, NOW, NOW).run()
   return { runtime, db }
 }
 
@@ -48,12 +45,12 @@ async function placeAsset(db: D1Database, input: {
   thumbnailUrl: string
   mimeType: string
 }) {
-  await db.prepare(`INSERT INTO media_assets (id, organization_id, site_id, kind, provider, source, public_url, thumbnail_url, mime_type, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'cloudflare_images', 'uploaded', ?, ?, ?, 'active', ?, ?)`)
-    .bind(input.assetId, ORG, SITE, input.kind, input.publicUrl, input.thumbnailUrl, input.mimeType, NOW, NOW).run()
-  await db.prepare(`INSERT INTO media_placements (id, organization_id, site_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-    VALUES (?, ?, ?, 'product', ?, ?, ?, 0, 'active', ?, ?)`)
-    .bind(`placement-${input.assetId}`, ORG, SITE, input.ownerId, input.slot, input.assetId, NOW, NOW).run()
+  await db.prepare(`INSERT INTO media_assets (id, organization_id, kind, provider, source, public_url, thumbnail_url, mime_type, status, created_at, updated_at)
+    VALUES (?, ?, ?, 'cloudflare_images', 'uploaded', ?, ?, ?, 'active', ?, ?)`)
+    .bind(input.assetId, ORG, input.kind, input.publicUrl, input.thumbnailUrl, input.mimeType, NOW, NOW).run()
+  await db.prepare(`INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+    VALUES (?, ?, 'product', ?, ?, ?, 0, 'active', ?, ?)`)
+    .bind(`placement-${input.assetId}`, ORG, input.ownerId, input.slot, input.assetId, NOW, NOW).run()
 }
 
 /**
@@ -67,22 +64,22 @@ async function placeAsset(db: D1Database, input: {
 test('a product grid item carries the product cover, not whichever placement sorted first', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, siteId: SITE, actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
       name: 'Ceramics Painting Class',
       variants: [{ name: 'Default', prices: [{ unit_amount: 140000, currency: 'THB' }] }],
     } })
-    await setProductPublication(db, { organizationId: ORG, productId: product.id, siteId: SITE, published: true, actor: ACTOR })
+    await setProductPublication(db, { organizationId: ORG, productId: product.id, published: true, actor: ACTOR })
     await setProductLocation(db, { organizationId: ORG, productId: product.id, locationId: LOC, published: true, actor: ACTOR })
     // Slot order is alphabetical in the placement read: gallery, then image.
     await placeAsset(db, { assetId: 'asset-reel', ownerId: product.id, slot: 'gallery', kind: 'video', publicUrl: REEL, thumbnailUrl: REEL_POSTER, mimeType: 'video/mp4' })
     await placeAsset(db, { assetId: 'asset-cover', ownerId: product.id, slot: 'image', kind: 'image', publicUrl: COVER, thumbnailUrl: `${COVER}/thumbnail`, mimeType: 'image/png' })
 
     await createContentDocumentWithBlocks(db, {
-      id: 'home', organizationId: ORG, siteId: SITE, kind: 'page', rowRole: 'root', locale: 'en',
+      id: 'home', organizationId: ORG, kind: 'page', rowRole: 'root', locale: 'en',
       title: 'Home', path: '/', status: 'published', visibility: 'listed', metadata: { page_type: 'custom' },
     }, [{ id: 'home-products', type: 'product_grid', data: { product_ids: [product.id] } }])
 
-    const page = await getPublicTenantPageForPath({} as CloudflareEnv, db, SITE, '/')
+    const page = await getPublicTenantPageForPath({} as CloudflareEnv, db, ORG, '/')
     assert(page, 'the published home page resolves')
     const grid = page.blocks.find(block => block.type === 'product_grid')
     assert(grid, 'the home page carries its product grid')

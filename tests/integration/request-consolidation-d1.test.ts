@@ -12,7 +12,6 @@ import { buildCanonicalNotificationInsert } from '../../server/utils/notificatio
 import { acknowledgeNotification } from '../../server/utils/notification-acknowledgement.ts'
 
 const ORG = 'org-proof'
-const SITE = 'site-proof'
 const LOCATION = 'location-proof'
 const ACTOR = 'user-proof'
 const NOW = '2026-09-11T00:00:00.000Z'
@@ -38,9 +37,8 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.batch([
       `INSERT INTO organization (id,name,slug) VALUES ('${ORG}','Proof','proof')`,
-      `INSERT INTO sites (id,organization_id,slug,subdomain,name) VALUES ('${SITE}','${ORG}','proof','proof','Proof')`,
       `INSERT INTO user (id,name,email) VALUES ('${ACTOR}','Proof','owner@proof.example')`,
-      `INSERT INTO business_locations (id,organization_id,site_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','${SITE}','proof','Proof','Asia/Bangkok')`,
+      `INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('${LOCATION}','${ORG}','proof','Proof','Asia/Bangkok')`,
       `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('product-proof','${ORG}','Pottery Class','pottery-class','${ACTOR}','${ACTOR}')`,
       `INSERT INTO product_variants (id,organization_id,product_id,name,created_by,updated_by) VALUES ('variant-proof','${ORG}','product-proof','Standard','${ACTOR}','${ACTOR}')`,
       // The branch offers it: a session at a location takes seats only while
@@ -57,11 +55,11 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     // booking takes the thread's id.
     async function bookSession(id: string) {
       return claimSessionCapacity(db, {
-        organizationId: ORG, siteId: SITE, productId: 'product-proof', sessionId: 'session-proof',
+        organizationId: ORG, productId: 'product-proof', sessionId: 'session-proof',
         productVariantId: 'variant-proof', partySize: 1, customerId: null, requestId: null,
         following: bookingId => [
           ...requestInsertQueries({
-            id, kind: 'booking', organization_id: ORG, site_id: SITE, location_id: LOCATION,
+            id, kind: 'booking', organization_id: ORG, location_id: LOCATION,
             customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
             payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
             created_at: NOW, updated_at: NOW,
@@ -89,14 +87,14 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     assert.equal(record?.party_size, 1)
     assert.equal(record?.starts_at, '2099-01-05T07:00:00.000Z')
 
-    const inbox = await listGuestThreads(db, SITE, { userId: ACTOR, locationId: LOCATION, type: 'booking', search: 'guest@proof.example' })
+    const inbox = await listGuestThreads(db, ORG, { userId: ACTOR, locationId: LOCATION, type: 'booking', search: 'guest@proof.example' })
     assert.deepEqual(inbox.map(item => item.id), [winner])
 
     // Cancelling is idempotent: the same operation key twice writes one entry.
     // A booking arrives confirmed and is complete once its end passes, so
     // cancelling is the only transition a person makes.
     await setBookingStatus(db, { organizationId: ORG, bookingId: record!.id, status: 'confirmed' })
-    const operation = { threadId: winner, siteId: SITE, action: 'cancel', actorUserId: ACTOR, idempotencyKey: 'cancel-proof', env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' } }
+    const operation = { threadId: winner, organizationId: ORG, action: 'cancel', actorUserId: ACTOR, idempotencyKey: 'cancel-proof', env: { NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', EMAIL_REPLY_SECRET: 'local-reply-proof', EMAIL_DELIVERY_MODE: 'log_only', WHATSAPP_DELIVERY_MODE: 'log_only' } }
     assert.equal((await executeGuestThreadOperation(db, operation)).ok, true)
     assert.equal((await executeGuestThreadOperation(db, operation)).ok, true)
     assert.equal(await db.prepare("SELECT status FROM bookings WHERE request_id=?").bind(winner).first('status'), 'cancelled')
@@ -107,7 +105,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     await upsertLocationReservationConfig(db, { organizationId: ORG, locationId: LOCATION, patch: { slot_capacity: 1 }, actorId: ACTOR })
     const reservationThread = 'reservation-proof'
     await db.batch(requestInsertQueries({
-      id: reservationThread, kind: 'reservation', organization_id: ORG, site_id: SITE, location_id: LOCATION,
+      id: reservationThread, kind: 'reservation', organization_id: ORG, location_id: LOCATION,
       customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: {
         ...threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
@@ -116,7 +114,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
       created_at: NOW, updated_at: NOW,
     }).map(write => db.prepare(write.query).bind(...write.params)))
     const reserved = await claimReservation(db, {
-      organizationId: ORG, siteId: SITE, locationId: LOCATION, reservationId: 'reservation-row-proof',
+      organizationId: ORG, locationId: LOCATION, reservationId: 'reservation-row-proof',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
       date: '2099-01-06', timeSlot: '16:00',
       partySize: 1, customerId: null, requestId: reservationThread,
@@ -125,7 +123,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     // The location seats one party per slot, so the second claim is refused
     // rather than silently overbooking the same start instant.
     const secondClaim = await claimReservation(db, {
-      organizationId: ORG, siteId: SITE, locationId: LOCATION, reservationId: 'reservation-row-second',
+      organizationId: ORG, locationId: LOCATION, reservationId: 'reservation-row-second',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
       date: '2099-01-06', timeSlot: '16:00',
       partySize: 1, customerId: null, requestId: null,
@@ -135,32 +133,30 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
 
     // The token is spendable exactly once, however many times it is presented.
     const cancellations = await Promise.all([1, 2].map(() => cancelBookingRequest(db, {
-      id: reservationThread, siteId: SITE, kind: 'reservation', tokenHash: 'hash', now: '2098-01-01T00:00:00.000Z',
+      id: reservationThread, organizationId: ORG, kind: 'reservation', tokenHash: 'hash', now: '2098-01-01T00:00:00.000Z',
     })))
     assert.equal(cancellations.filter(Boolean).length, 1)
     assert.equal(await db.prepare('SELECT status FROM reservations WHERE request_id=?').bind(reservationThread).first('status'), 'cancelled')
     const cancelledThread = await getGuestRequest(db, reservationThread)
     assert.equal(cancelledThread?.payload.cancellation.used_at, '2098-01-01T00:00:00.000Z')
 
-    // Notifications and their acknowledgements survive the organization that
-    // owned the site they happened on being deleted.
+    // A notification is acknowledged only by someone the visibility filter
+    // admits, and the acknowledgement is an entry of its own.
     const entryId = await db.prepare("SELECT id FROM activity_entries WHERE request_id=? LIMIT 1").bind(winner).first<string>('id')
-    const notification = buildCanonicalNotificationInsert({ scope: 'site', organizationId: ORG, siteId: SITE, title: 'Reply', template: 'guest.reply', sourceEntryId: entryId }, 'notification-proof')
+    const notification = buildCanonicalNotificationInsert({ scope: 'organization', organizationId: ORG, title: 'Reply', template: 'guest.reply', sourceEntryId: entryId }, 'notification-proof')
     await db.prepare(notification.query).bind(...notification.params).run()
     const visibility = { userId: ACTOR, whereSql: 'n.organization_id = ?', whereParams: [ORG] }
     assert.equal(await acknowledgeNotification(db, visibility, notification.id), true)
     assert.equal(await acknowledgeNotification(db, { ...visibility, whereParams: ['another-org'] }, notification.id), false)
     assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE kind='acknowledgement' AND parent_id=? AND actor_user_id=?").bind(notification.id, ACTOR).first('count(*)'), 1)
 
+    // An audit entry belongs to the organization it describes and goes with it.
     await db.batch([
-      "INSERT INTO organization (id,name,slug) VALUES ('org-former','Former','former')",
-      "INSERT INTO organization (id,name,slug) VALUES ('org-current','Current','current')",
-      "INSERT INTO sites (id,organization_id,slug,subdomain) VALUES ('site-transferred','org-current','transferred','transferred')",
-      `INSERT INTO activity_entries (id,kind,scope_kind,site_id,actor_kind,event_name,payload_json,dedupe_key,occurred_at) VALUES ('audit-proof','audit','site','site-transferred','system','site.changed','{"sourceOrganizationId":"org-former"}','audit-proof','2026-09-01T00:00:00.000Z')`,
+      "INSERT INTO organization (id,name,slug) VALUES ('org-other','Other','other')",
+      `INSERT INTO activity_entries (id,kind,scope_kind,organization_id,actor_kind,event_name,payload_json,dedupe_key,occurred_at) VALUES ('audit-proof','audit','organization','org-other','system','organization.changed','{}','audit-proof','2026-09-01T00:00:00.000Z')`,
     ].map(statement => db.prepare(statement)))
-    await db.prepare("DELETE FROM organization WHERE id='org-former'").run()
     assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE id='audit-proof'").first('count(*)'), 1)
-    await db.prepare("DELETE FROM organization WHERE id='org-current'").run()
+    await db.prepare("DELETE FROM organization WHERE id='org-other'").run()
     assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE id='audit-proof'").first('count(*)'), 0)
   } finally {
     clearTimeout(deadline)

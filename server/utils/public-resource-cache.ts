@@ -9,7 +9,7 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // params instead of host + pathname — public resources are looked up by organizationId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<organizationId>~v3~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<organizationId>~v4~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
@@ -39,16 +39,6 @@ export function publicResourceCacheInvalidationQuery(
       (id, organization_id, reason, status, attempt_count, created_at)
       VALUES (?, ?, ?, 'pending', 0, ?)`,
     params: values,
-  }
-}
-
-/** The same row for every site of an organization: a member changed, and members belong to the organization. */
-export function organizationSitesInvalidationQuery(organizationId: string, reason: string): BatchQuery {
-  return {
-    query: `INSERT INTO public_resource_cache_invalidations
-      (id, organization_id, reason, status, attempt_count, created_at)
-      SELECT lower(hex(randomblob(16))), id, ?, 'pending', 0, ? FROM organization WHERE organization_id = ?`,
-    params: [reason, new Date().toISOString(), organizationId],
   }
 }
 
@@ -159,7 +149,7 @@ export function buildPublicBlawbyDocumentCacheKey(
   return [
     'public',
     encodeKeyField(organizationId),
-    'v3',
+    'v4',
     'blawby-document',
     encodeKeyField(recipe),
     encodeKeyField(slug),
@@ -171,7 +161,7 @@ export function buildPublicResourceCacheKey(organizationId: string, params: Publ
   return [
     'public',
     encodeKeyField(organizationId),
-    'v3',
+    'v4',
     params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),

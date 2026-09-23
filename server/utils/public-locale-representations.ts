@@ -41,7 +41,7 @@ export async function resolvePublicLocalizationSourcePath(
 
 export async function resolvePublicDocumentSourcePath(db: DbClient, organizationId: string, documentId: string): Promise<string> {
   const [row] = await queryAll<{ id: string; kind: string; path: string | null; slug: string | null; category: string | null; vertical: string; theme_id: string }>(db, `
-    SELECT d.id, d.kind, d.path, d.slug, (d.metadata_json ->> '$.category') AS category, s.vertical, s.theme_id
+    SELECT d.id, d.kind, d.path, d.slug, (d.metadata_json ->> '$.category') AS category, o.vertical, o.theme_id
       FROM content_documents d JOIN organization o ON o.id = d.organization_id
      WHERE d.organization_id = ? AND d.id = ? AND d.row_role = 'root' LIMIT 1`, [organizationId, documentId])
   if (row?.kind === 'page' && row.path) return row.path

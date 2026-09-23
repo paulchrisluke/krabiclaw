@@ -471,10 +471,9 @@ export async function buildTenantBlogDocuments(db: DbClient, platformSiteId?: st
 // A business's own records, for its dashboard's search
 // ---------------------------------------------------------------------------
 
-interface WorkspaceSiteRow {
+interface WorkspaceOrganizationRow {
   id: string
-  organization_id: string
-  org_slug: string
+  slug: string
   subdomain: string
   vertical: string | null
   first_location_slug: string | null
@@ -507,21 +506,21 @@ function joinWords(...parts: Array<string | null | undefined>) {
 export async function buildWorkspaceDocuments(db: DbClient, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
   const siteWhere = organizationId ? ' AND s.id = ?' : ''
   const siteParams = organizationId ? [organizationId] : []
-  const sites = await queryAll<WorkspaceSiteRow>(db, `
-    SELECT s.id, s.organization_id, o.slug AS org_slug, s.subdomain, s.vertical,
+  const sites = await queryAll<WorkspaceOrganizationRow>(db, `
+    SELECT s.id, s.slug, s.subdomain, s.vertical,
       (SELECT bl.slug FROM business_locations bl WHERE bl.organization_id = s.id ORDER BY bl.title LIMIT 1) AS first_location_slug
-    FROM organization s JOIN organization o ON o.id = s.organization_id
+    FROM organization s
     WHERE s.status = 'active' AND s.subdomain IS NOT NULL${siteWhere}
   `, siteParams)
   if (!sites?.length) return []
   const bySite = new Map(sites.map(site => [site.id, site]))
-  const base = (site: WorkspaceSiteRow) => `/dashboard/${site.org_slug}/sites/${site.subdomain}`
-  const locationPath = (site: WorkspaceSiteRow, slug: string | null) => {
+  const base = (site: WorkspaceOrganizationRow) => `/dashboard/${site.slug}`
+  const locationPath = (site: WorkspaceOrganizationRow, slug: string | null) => {
     const location = slug ?? site.first_location_slug
     return location ? `${base(site)}/locations/${location}` : null
   }
-  const segment = (site: WorkspaceSiteRow) => resolveProductPresentation(site.vertical)?.locationCollectionSegment ?? 'products'
-  const doc = (site: WorkspaceSiteRow, type: PlatformKnowledgeResultType, id: string, fields: { title: string; path: string; snippet: string; section: string; icon: string; body: string }): PlatformKnowledgeDocument => ({
+  const segment = (site: WorkspaceOrganizationRow) => resolveProductPresentation(site.vertical)?.locationCollectionSegment ?? 'products'
+  const doc = (site: WorkspaceOrganizationRow, type: PlatformKnowledgeResultType, id: string, fields: { title: string; path: string; snippet: string; section: string; icon: string; body: string }): PlatformKnowledgeDocument => ({
     id: `dashboard:${type}:${site.id}:${id}`,
     key: `workspace/${type}/${site.id}/${id}`,
     type,
@@ -585,12 +584,12 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     queryAll<{ id: string; organization_id: string; role: string; name: string | null; email: string }>(db, `
       SELECT m.id, m."organizationId" AS organization_id, m.role, u.name, u.email
       FROM member m JOIN "user" u ON u.id = m."userId"
-      WHERE m."organizationId" IN (SELECT s.organization_id FROM organization s WHERE s.status = 'active' AND s.subdomain IS NOT NULL${siteWhere})
+      WHERE m."organizationId" IN (SELECT s.id FROM organization s WHERE s.status = 'active' AND s.subdomain IS NOT NULL${siteWhere})
     `, siteParams),
     queryAll<{ id: string; organization_id: string; file_name: string | null; category: string | null; kind: string; location_slug: string | null }>(db, `
       SELECT ma.id, ma.organization_id, ma.file_name, ma.category, ma.kind,
         (SELECT bl.slug FROM media_placements mp JOIN business_locations bl ON bl.id = mp.owner_id
-          WHERE mp.asset_id = ma.id AND mp.owner_type = 'location' AND mp.status = 'active' LIMIT 1) AS location_slug
+          WHERE mp.asset_id = ma.id AND mp.owner_type = 'business_location' AND mp.status = 'active' LIMIT 1) AS location_slug
       FROM media_assets ma ${WORKSPACE_SITE_SQL} AND s.id = ma.organization_id
       WHERE ma.status = 'active'${siteWhere}
     `, siteParams),
@@ -671,7 +670,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     for (const site of sites) {
       if (site.id !== row.organization_id) continue
       records.push(doc(site, 'member', row.id, {
-        title: row.name?.trim() || row.email, path: `/dashboard/${site.org_slug}/settings/members`, snippet: `${row.email} · ${row.role}`,
+        title: row.name?.trim() || row.email, path: `${base(site)}/settings/members`, snippet: `${row.email} · ${row.role}`,
         section: 'Team', icon: 'users', body: joinWords(row.name, row.email, row.role),
       }))
     }

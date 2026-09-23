@@ -27,7 +27,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { FREE_PLAN, getOrganizationPlans } from '~/server/utils/billing-access'
 import { deleteImage } from '~/server/utils/cloudflare-images'
-import { deleteOrganizationCustomDomains, deleteSiteCustomDomains } from '~/server/utils/domains'
+import { deleteOrganizationCustomDomains } from '~/server/utils/domains'
 import { listOrganizationMembers, listUserOrganizations, organizationAdapter, resolveOrganizationMembership, type OrganizationAdapter } from '~/server/utils/member-access'
 
 /** How long an owner has to change their mind. */
@@ -230,33 +230,25 @@ export async function deleteAccountNow(env: CloudflareEnv, userId: string): Prom
  * `nothing` when the draft never got as far as creating either.
  */
 export type AbandonedDraftTenantOutcome =
-  | { removed: 'organization' | 'site' | 'nothing' }
-  | { refused: 'site_is_live' | 'not_owner' | 'delete_incomplete' }
+  | { removed: 'organization' | 'nothing' }
+  | { refused: 'organization_is_live' | 'not_owner' | 'delete_incomplete' }
 
 /**
- * Abandoning a wizard draft: delete the pending site it created, now.
+ * Abandoning a wizard draft: delete the pending organization it created, now.
  *
- * There is no grace period because nothing was ever public — the site has not
- * finished onboarding, so tenant resolution has only ever served it to the
- * holder of its preview token. Deleting it immediately also gives the owner
- * their address back straight away, which matters when they abandoned the
- * draft precisely because they typed the wrong business name.
+ * There is no grace period because nothing was ever public — onboarding has not
+ * finished, so tenant resolution has only ever served it to the holder of its
+ * preview token. Deleting it immediately also gives the owner their address
+ * back straight away, which matters when they abandoned the draft precisely
+ * because they typed the wrong business name.
  *
- * The draft's claim is (organization, subdomain), so this resolves the site
- * from that pair rather than from a site id the caller looked up with a
- * narrower filter of its own: a site that is no longer pending has to come
- * back as `site_is_live`, and the caller cannot report that if its own lookup
+ * The draft's claim is (organization, subdomain), so this resolves the row from
+ * that pair rather than from an id the caller looked up with a narrower filter
+ * of its own: an organization that is no longer pending has to come back as
+ * `organization_is_live`, and the caller cannot report that if its own lookup
  * silently found nothing.
  *
- * Removes the organization with the site when this was the only site in it and
- * the owner is its only member — that is the organization onboarding created
- * for this draft, and leaving it behind is what made the next attempt at the
- * same address collide. An organization with another site or another member is
- * a workspace in its own right and keeps standing. A draft that claimed an
- * organization but never got a site created (site creation failed) still owns
- * that empty organization, so abandoning it removes that too.
- *
- * Re-reads the site row after deleting it: a delete or a cascade that left it
+ * Re-reads the row after deleting it: a delete or a cascade that left it
  * standing must not come back as success.
  */
 export async function deleteAbandonedDraftTenant(
@@ -269,58 +261,25 @@ export async function deleteAbandonedDraftTenant(
   const membership = await resolveOrganizationMembership(env, { organizationId, userId })
   if (membership?.role !== 'owner') return { refused: 'not_owner' }
 
-  const site = await queryFirst<{ id: string; onboarding_status: string }>(db, `
-    SELECT id, onboarding_status FROM organization WHERE organization_id = ? AND subdomain = ? LIMIT 1
+  const draft = await queryFirst<{ id: string; onboarding_status: string }>(db, `
+    SELECT id, onboarding_status FROM organization WHERE id = ? AND subdomain = ? LIMIT 1
   `, [organizationId, subdomain])
-  // Only an activated site is live. A site whose onboarding failed is not, and
-  // refusing it as live told the owner their site was published while its tile
-  // read "Setup incomplete" — and left them no way to release the address.
-  if (site && site.onboarding_status === 'active') return { refused: 'site_is_live' }
+  if (!draft) return { removed: 'nothing' }
+  // Only an activated organization is live. One whose onboarding failed is not,
+  // and refusing it as live told the owner their site was published while its
+  // tile read "Setup incomplete" — and left them no way to release the address.
+  if (draft.onboarding_status === 'active') return { refused: 'organization_is_live' }
 
-  const others = await queryFirst<{ n: number }>(db, `
-    SELECT count(*) AS n FROM organization WHERE organization_id = ? AND id IS NOT ?
-  `, [organizationId, site ? site.id : null])
-  const members = await listOrganizationMembers(env, organizationId)
-
-  if ((others?.n ?? 0) === 0 && members.length === 1) {
-    await deleteOrganizationNow(env, organizationId)
-    const survivor = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM organization WHERE organization_id = ? LIMIT 1
-    `, [organizationId])
-    if (survivor) {
-      console.error('tenant_deletion_draft_cascade_incomplete', { organizationId, })
-      return { refused: 'delete_incomplete' }
-    }
-    return { removed: 'organization' }
-  }
-
-  // The organization stands: it has another site or another member. Only this
-  // site's own resources go.
-  if (!site) return { removed: 'nothing' }
-  for (const imageId of await ownedImageIds(db, { column: 'organization_id', value: site.id })) {
-    await deleteImage(env, imageId).catch((error: unknown) => {
-      console.error('tenant_deletion_image_release_failed', {
-        organizationId: site.id, imageId, error: error instanceof Error ? error.message : String(error),
-      })
-    })
-  }
-  await deleteSiteCustomDomains(env, db, site.id)
-  // As above: the site's own guest records are released before the site, so
-  // the deletion does not depend on which cascade SQLite resolves first.
-  await executeBatch(db, [
-    { query: 'DELETE FROM bookings WHERE organization_id = ?', params: [site.id] },
-    { query: 'DELETE FROM reservations WHERE organization_id = ?', params: [site.id] },
-  ], { operation: 'Release site guest records' })
-  await execute(db, 'DELETE FROM organization WHERE id = ?', [site.id])
+  await deleteOrganizationNow(env, organizationId)
   // Read the row back rather than counting changes: a cascade makes
   // meta.changes the number of rows the whole tree lost (15 for a seeded
-  // onboarding site), so it says nothing about this one row.
-  const survivor = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? LIMIT 1', [site.id])
+  // onboarding organization), so it says nothing about this one row.
+  const survivor = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? LIMIT 1', [organizationId])
   if (survivor) {
-    console.error('tenant_deletion_draft_site_not_removed', { organizationId, })
+    console.error('tenant_deletion_draft_cascade_incomplete', { organizationId, })
     return { refused: 'delete_incomplete' }
   }
-  return { removed: 'site' }
+  return { removed: 'organization' }
 }
 
 export interface DeletionSweepResult {

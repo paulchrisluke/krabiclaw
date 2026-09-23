@@ -423,7 +423,7 @@ async function attemptSiteUpdate(
     params.push(now, userId)
   }
 
-  const siteUpdate = {
+  const organizationUpdate = {
     sql: `
     UPDATE organization
     SET ${setParts.join(', ')}
@@ -434,9 +434,9 @@ async function attemptSiteUpdate(
 
   const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
   if (isRename && setParts.length > 0) {
-    await createSystemSubdomain(env, db, organizationId, subdomain, { siteUpdate })
+    await createSystemSubdomain(env, db, organizationId, subdomain, { organizationUpdate })
   } else if (setParts.length > 0) {
-    const result = await execute(db, siteUpdate.sql, siteUpdate.values)
+    const result = await execute(db, organizationUpdate.sql, organizationUpdate.values)
     if (!result.success) {
       throw new Error('Failed to update site settings')
     }

@@ -11,7 +11,7 @@ import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
 import { createDb, execute, queryAll, schema } from '~/server/db'
-import { organizationSitesInvalidationQuery } from '~/server/utils/public-resource-cache'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -267,7 +267,7 @@ export function createAuth(env: CloudflareEnv) {
   // Members are indexed for the dashboard's search; a change to one is a change
   // to every site of the organization. Never lets an auth write fail over it.
   const recordMemberChange = async (organizationId: string) => {
-    const change = organizationSitesInvalidationQuery(organizationId, 'member-change')
+    const change = publicResourceCacheInvalidationQuery(organizationId, 'member-change')
     await execute(db, change.query, change.params ?? []).catch((error: unknown) => console.error('member_search_invalidation_failed', error))
   }
   const configuredOrganizationOptions = {

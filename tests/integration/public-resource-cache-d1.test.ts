@@ -37,8 +37,7 @@ async function migratedCacheD1(context: TestContext) {
       await db.prepare(statement).run()
     }
   }
-  await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('org', 'Org', 'org')").run()
-  await db.prepare("INSERT INTO sites (id, organization_id, slug, subdomain) VALUES ('site', 'org', 'site', 'site')").run()
+  await db.prepare("INSERT INTO organization (id, name, slug, subdomain) VALUES ('org', 'Org', 'org', 'org')").run()
   return { db, kv }
 }
 
@@ -55,8 +54,8 @@ async function insertInvalidation(
 ) {
   await db.prepare(`
     INSERT INTO public_resource_cache_invalidations
-      (id, site_id, reason, status, attempt_count, claimed_at, processed_at, created_at)
-    VALUES (?, 'site', 'test', ?, ?, ?, ?, ?)
+      (id, organization_id, reason, status, attempt_count, claimed_at, processed_at, created_at)
+    VALUES (?, 'org', 'test', ?, ?, ?, ?, ?)
   `).bind(input.id, input.status, input.attemptCount, input.claimedAt ?? null, input.processedAt ?? null, input.createdAt).run()
 }
 
@@ -76,11 +75,11 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
     `).first<{ status: string; attempt_count: number }>()
     assert.deepEqual(row, { status: 'pending', attempt_count: 0 })
 
-    await kv.put('public~site~v3~page', 'public resource')
-    await kv.put('html:site.krabiclaw.com:/', 'html')
+    await kv.put('public~org~v4~page', 'public resource')
+    await kv.put('html:org.krabiclaw.com:/', 'html')
     assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 1)
-    assert.equal(await kv.get('public~site~v3~page'), null)
-    assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
+    assert.equal(await kv.get('public~org~v4~page'), null)
+    assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
     const processed = await db.prepare(`
       SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'pending'
     `).first<{ status: string; attempt_count: number }>()
@@ -138,31 +137,31 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
 })
 
 
-test('a site write purges that site despite an older invalidation for another site', async (t) => {
+test('an organization write purges that organization despite an older invalidation for another', async (t) => {
   const { db, kv } = await migratedCacheD1(t)
-  await db.prepare("INSERT INTO sites (id, organization_id, slug, subdomain) VALUES ('changed', 'org', 'changed', 'changed')").run()
+  await db.prepare("INSERT INTO organization (id, name, slug, subdomain) VALUES ('changed', 'Changed', 'changed', 'changed')").run()
   await insertInvalidation(db, {
-    id: 'older-other-site', status: 'pending', attemptCount: 0, createdAt: '2026-01-01T00:00:00.000Z',
+    id: 'older-other-org', status: 'pending', attemptCount: 0, createdAt: '2026-01-01T00:00:00.000Z',
   })
-  for (const site of ['site', 'changed']) {
-    await kv.put(`public~${site}~v3~page`, 'cached public resource')
+  for (const site of ['org', 'changed']) {
+    await kv.put(`public~${site}~v4~page`, 'cached public resource')
     await kv.put(`html:${site}.krabiclaw.com:/`, 'cached HTML')
   }
   await purgePublicResourceCacheSafe({ DB: db, SITE_CACHE: kv, NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, 'changed')
-  assert.equal(await kv.get('public~changed~v3~page'), null)
+  assert.equal(await kv.get('public~changed~v4~page'), null)
   assert.equal(await kv.get('html:changed.krabiclaw.com:/'), null)
-  assert.equal(await kv.get('public~site~v3~page'), 'cached public resource')
-  assert.equal(await kv.get('html:site.krabiclaw.com:/'), 'cached HTML')
-  // The write clears its own site's caches and queues the row that makes every
+  assert.equal(await kv.get('public~org~v4~page'), 'cached public resource')
+  assert.equal(await kv.get('html:org.krabiclaw.com:/'), 'cached HTML')
+  // The write clears its own organization's caches and queues the row that makes every
   // other worker converge; the queue's own bookkeeping belongs to the drainer,
   // not to a mutation's response time.
-  const rows = await db.prepare('SELECT site_id, status, attempt_count FROM public_resource_cache_invalidations ORDER BY site_id')
-    .all<{ site_id: string; status: string; attempt_count: number }>()
+  const rows = await db.prepare('SELECT organization_id, status, attempt_count FROM public_resource_cache_invalidations ORDER BY organization_id')
+    .all<{ organization_id: string; status: string; attempt_count: number }>()
   assert.deepEqual(rows.results, [
-    { site_id: 'changed', status: 'pending', attempt_count: 0 },
-    { site_id: 'site', status: 'pending', attempt_count: 0 },
+    { organization_id: 'changed', status: 'pending', attempt_count: 0 },
+    { organization_id: 'org', status: 'pending', attempt_count: 0 },
   ])
   assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 2)
-  assert.equal(await kv.get('public~site~v3~page'), null)
-  assert.equal(await kv.get('html:site.krabiclaw.com:/'), null)
+  assert.equal(await kv.get('public~org~v4~page'), null)
+  assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
 })

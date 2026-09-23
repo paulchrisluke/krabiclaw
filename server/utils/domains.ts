@@ -184,9 +184,9 @@ export function validateCustomDomain(env: DomainEnv, domain: string): { valid: b
   return { valid: true }
 }
 
-export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeSiteId?: string): Promise<void> {
-  const params = excludeSiteId ? [d1JsonStringSet(domains), excludeSiteId] : [d1JsonStringSet(domains)]
-  const exclusion = excludeSiteId ? 'AND (organization_id IS NULL OR organization_id != ?)' : ''
+export async function ensureDomainAvailable(db: D1Database, domains: string[], excludeOrganizationId?: string): Promise<void> {
+  const params = excludeOrganizationId ? [d1JsonStringSet(domains), excludeOrganizationId] : [d1JsonStringSet(domains)]
+  const exclusion = excludeOrganizationId ? 'AND (organization_id IS NULL OR organization_id != ?)' : ''
 
   const existing = await queryFirst<{ domain?: string }>(db, `
     SELECT domain
@@ -218,7 +218,7 @@ export async function createSystemSubdomain(
   organizationId: string,
   subdomain: string,
   options: {
-    siteUpdate?: { sql: string; values: unknown[] }
+    organizationUpdate?: { sql: string; values: unknown[] }
   } = {},
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
@@ -252,8 +252,8 @@ export async function createSystemSubdomain(
     stmts.push(
       {
         sql: `UPDATE organization_domains
-                SET role = 'secondary', status = 'retired', former_site_id = organization_id, successor_domain = ?, retired_at = ?,
-                    organization_id = NULL, organization_id = NULL, updated_at = ?
+                SET role = 'secondary', status = 'retired', former_organization_id = organization_id, successor_domain = ?, retired_at = ?,
+                    organization_id = NULL, updated_at = ?
               WHERE id = ? AND organization_id = ? AND status = 'active'`,
         values: [domain, now, now, existing.id, organizationId],
       },
@@ -270,8 +270,8 @@ export async function createSystemSubdomain(
   )
 
 
-  if (options.siteUpdate) {
-    stmts.push(options.siteUpdate)
+  if (options.organizationUpdate) {
+    stmts.push(options.organizationUpdate)
   }
 
   await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
@@ -975,14 +975,6 @@ async function deleteCustomDomainsWhere(
 }
 
 export async function deleteOrganizationCustomDomains(
-  env: DomainEnv,
-  db: D1Database,
-  organizationId: string
-): Promise<void> {
-  await deleteCustomDomainsWhere(env, db, { column: 'organization_id', value: organizationId })
-}
-
-export async function deleteSiteCustomDomains(
   env: DomainEnv,
   db: D1Database,
   organizationId: string
