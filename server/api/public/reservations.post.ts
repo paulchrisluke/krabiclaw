@@ -3,7 +3,7 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { notifyReservationCreated } from '~/server/utils/notifications'
+import { notifyReservationCreated, raiseSettledFailures } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
@@ -20,7 +20,7 @@ import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking }
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -172,32 +172,31 @@ export default defineHandler(async (event) => {
     }),
   ])
 
-  try {
-    await notifyReservationCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
-  } catch (error) {
-    console.error('reservation_notification_failed', {
-      organizationId: site.id, reservationId: id, error: error instanceof Error ? error.message : String(error)
-    })
-  }
-
+  // Telling the owner and recording the conversion are independent, so both are
+  // attempted before either failure is raised.
   const requestedLocale = cleanString(body.locale, 10)
-  const [policy, locale] = await Promise.all([
+  const [policy, locale, ...followUps] = await Promise.all([
     requireLocationReservationConfig(db, { organizationId: site.id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
       : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
-      organizationId: site.id,
-      eventName: 'reservation_submit',
-      stage: 'submitted',
-      locationId: resolvedLocationId,
-      entityType: 'request',
-      entityId: id,
-      pageType: 'reservations',
-      pagePath: '/reservations',
-    }),
+    ...await Promise.allSettled([
+      notifyReservationCreated(env, db, {
+        organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, }),
+      recordSiteConversionEvent(db, event, {
+        organizationId: site.id,
+        eventName: 'reservation_submit',
+        stage: 'submitted',
+        locationId: resolvedLocationId,
+        entityType: 'request',
+        entityId: id,
+        pageType: 'reservations',
+        pagePath: '/reservations',
+      }),
+    ]),
   ])
+  raiseSettledFailures('reservation follow-up', `reservationId ${id}`, followUps,
+    ['notifyReservationCreated', 'recordSiteConversionEvent'])
 
   return jsonResponse({
     success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })

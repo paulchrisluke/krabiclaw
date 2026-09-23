@@ -149,11 +149,19 @@ test.describe('stateless MCP server', () => {
     })
     expect(policySetup.status(), await policySetup.text()).toBe(200)
 
+    // The public routes resolve their tenant from the host, and baseURL is the
+    // platform's. This used to land on the right tenant only because
+    // ensureOrganization re-provisioned the fixture organization on every run and
+    // moved its subdomain; naming the tenant is what the other guest journeys
+    // already do, and it does not depend on rewriting a live tenant to work.
+    const asTenant = { 'x-preview-tenant': 'demo' }
     const publicContact = await request.post(`${baseURL}/api/public/contact`, {
+      headers: asTenant,
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
     })
     expect(publicContact.status()).toBe(201)
     const publicReservation = await request.post(`${baseURL}/api/public/reservations`, {
+      headers: asTenant,
       data: {
         name: 'MCP Reservation',
         email: `mcp-res-${Date.now()}@example.test`,
@@ -224,12 +232,27 @@ test.describe('stateless MCP server', () => {
     })
     expect(locationRead.status()).toBe(200)
 
+    // Unique per run. A constant would pass on a value a previous run had left
+    // on the row, which is the exact failure this read-back exists to catch.
+    const updatedPhone = `+1 555 555 ${String(Date.now() % 10000).padStart(4, '0')}`
     const locationUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_location',
-      args: { organization_id: organizationId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
+      args: { organization_id: organizationId, location_id: locationId, phone: updatedPhone },
     })
     expect(locationUpdate.status()).toBe(200)
+    // A 200 is the tool answering, not the row changing. updateTenantPage
+    // carried `canonical_url = ? = ?` for weeks: the batch aborted on a binding
+    // count and the route still replied 200, because nothing read the write back
+    // through a different path than the one that made it.
+    const locationAfter = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_location',
+      args: { organization_id: organizationId, location_id: locationId },
+    })
+    expect(locationAfter.status()).toBe(200)
+    expect(mcpData<{ location: { phone: string } }>(await locationAfter.json()).location)
+      .toMatchObject({ phone: updatedPhone })
 
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

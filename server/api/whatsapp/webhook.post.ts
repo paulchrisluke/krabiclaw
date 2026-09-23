@@ -101,18 +101,16 @@ async function resolveUser(env: ApiRecord, from: string): Promise<UserRow | null
 
 function parsePendingReplyState(raw: string | null | undefined): PendingWhatsAppReplyState | null {
   if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as { kind?: unknown }
-    // The same pending_confirmation column also carries an unrelated
-    // `{ intent: 'pending_media' }` marker from the media-upload flow — only claim
-    // objects that actually match one of our reply-routing state shapes.
-    if (parsed.kind === 'confirm_send' || parsed.kind === 'disambiguate' || parsed.kind === 'collect_reply') {
-      return parsed as PendingWhatsAppReplyState
-    }
-    return null
-  } catch {
-    return null
+  const parsed = JSON.parse(raw) as { kind?: unknown }
+  // The same pending_confirmation column also carries an unrelated
+  // `{ intent: 'pending_media' }` marker from the media-upload flow — only claim
+  // objects that actually match one of our reply-routing state shapes. A shape
+  // this router does not own is not an error; JSON that will not parse at all is
+  // corruption, and reading it as "no pending state" dropped the guest's reply.
+  if (parsed.kind === 'confirm_send' || parsed.kind === 'disambiguate' || parsed.kind === 'collect_reply') {
+    return parsed as PendingWhatsAppReplyState
   }
+  return null
 }
 
 function submissionTypeLabel(type: string): string {

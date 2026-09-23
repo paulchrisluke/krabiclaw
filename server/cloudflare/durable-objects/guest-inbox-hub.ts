@@ -129,15 +129,31 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
       return new Response('Invalid dashboard invalidation', { status: 400 })
     }
 
+    // A send that throws is usually a socket the client has already dropped, and
+    // the other dashboards watching this organization should still be told. But
+    // if every eligible socket failed then the event reached nobody who was
+    // entitled to it, and answering 204 to that is the publisher's cue to carry
+    // on as though the dashboards had been updated.
     const encoded = JSON.stringify(event)
+    let eligible = 0
+    let delivered = 0
+    const failures: string[] = []
     for (const socket of this.ctx.getWebSockets()) {
       const attachment: unknown = socket.deserializeAttachment()
       if (!isSocketAttachment(attachment) || !canReceive(attachment, event)) continue
+      eligible += 1
       try {
         socket.send(encoded)
+        delivered += 1
       } catch (error) {
-        console.error('Dashboard invalidation delivery failed', error)
+        failures.push(error instanceof Error ? error.message : String(error))
       }
+    }
+    if (eligible > 0 && delivered === 0) {
+      return new Response(
+        `Dashboard invalidation reached none of ${eligible} connected dashboards: ${failures.join('; ')}`,
+        { status: 500 },
+      )
     }
 
     return new Response(null, { status: 204 })

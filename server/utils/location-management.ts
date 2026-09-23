@@ -1,6 +1,6 @@
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
+import { fireOrganizationEvent } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import { parsePhone } from "~/utils/phone";
@@ -394,6 +394,7 @@ export async function createLocation(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  let created: { id: string; location: Awaited<ReturnType<typeof loadLocation>> } | null = null;
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
@@ -463,24 +464,8 @@ export async function createLocation(
         });
         throw teamError;
       }
-      const location = await loadLocation(db, organizationId, id);
-      await fireOrganizationEventSafe({
-        db,
-        organizationId,
-        
-        locationId: id,
-        actorId: userId,
-        eventType: "location.created",
-        entityType: "business_location",
-        entityId: id,
-        metadata: {
-          title,
-        },
-      })
-      if (options.refreshSocialCardAfterCreate !== false) {
-        await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: id }, actorId: userId })
-      }
-      return { status: 201, data: { success: true, location } };
+      created = { id, location: await loadLocation(db, organizationId, id) };
+      break;
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;
       if (error instanceof Error) {
@@ -488,6 +473,31 @@ export async function createLocation(
       }
       throw error;
     }
+  }
+
+  // Outside the retry, because the location is committed by the time these run
+  // and neither is a slug conflict. Inside it, a failed audit write was returned
+  // to the caller as a 400 — a client error for a server failure, on a location
+  // that exists — and, worse, activity_entries.dedupe_key is unique, so a
+  // duplicate audit key matched isUniqueConstraintError and sent the loop round
+  // again to create a second location.
+  if (created) {
+    await fireOrganizationEvent({
+      db,
+      organizationId,
+      locationId: created.id,
+      actorId: userId,
+      eventType: "location.created",
+      entityType: "business_location",
+      entityId: created.id,
+      metadata: {
+        title,
+      },
+    })
+    if (options.refreshSocialCardAfterCreate !== false) {
+      await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: created.id }, actorId: userId })
+    }
+    return { status: 201, data: { success: true, location: created.location } };
   }
 
   return {
@@ -703,6 +713,7 @@ export async function updateLocation(
   };
 
   if (slugBase && slugParamIndex !== null) {
+    let updated: { location: Awaited<ReturnType<typeof loadLocation>> } | null = null;
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
       const boundParams = [...params];
@@ -715,21 +726,8 @@ export async function updateLocation(
           organizationId,
           locationId,
         );
-        await fireOrganizationEventSafe({
-          db,
-          organizationId,
-          
-          locationId,
-          actorId: userId,
-          eventType: "location.updated",
-          entityType: "business_location",
-          entityId: locationId,
-          metadata: {
-            title: location?.title ?? null,
-          },
-        })
-        if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
-        return { status: 200, data: { success: true, location } };
+        updated = { location };
+        break;
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
         if (error instanceof Error) {
@@ -737,6 +735,27 @@ export async function updateLocation(
         }
         throw error;
       }
+    }
+
+    // Outside the retry, for the same reason as createLocation: the row is
+    // already written, neither of these is a slug conflict, and the unique
+    // dedupe_key on an audit row matched isUniqueConstraintError and sent the
+    // loop round again.
+    if (updated) {
+      await fireOrganizationEvent({
+        db,
+        organizationId,
+        locationId,
+        actorId: userId,
+        eventType: "location.updated",
+        entityType: "business_location",
+        entityId: locationId,
+        metadata: {
+          title: updated.location?.title ?? null,
+        },
+      })
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
+      return { status: 200, data: { success: true, location: updated.location } };
     }
 
     return {
@@ -750,7 +769,7 @@ export async function updateLocation(
   params.push(locationId, organizationId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, locationId);
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId,
     

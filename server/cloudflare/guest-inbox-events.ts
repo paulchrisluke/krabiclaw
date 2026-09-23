@@ -54,21 +54,13 @@ export async function publishDashboardInvalidation(
     body: JSON.stringify(event),
   }
   const publication = { eventId: event.eventId, type: event.type, organizationId: event.organizationId }
-  let response: Response
-  try {
-    response = await hub.fetch('https://guest-inbox.internal/broadcast', request)
-  } catch (error) {
-    console.error('dashboard_invalidation_transport_failed', {
-      ...publication,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return
-  }
-  if (response.status >= 500) {
-    console.error('dashboard_invalidation_transport_failed', { ...publication, status: response.status })
-    return
-  }
+  // This broadcast is how an open dashboard learns a booking just arrived. A
+  // transport error or a 5xx used to return quietly while a 4xx threw, so the
+  // failures that meant the hub was actually broken were the ones that stayed
+  // invisible and the tenant's inbox simply never updated.
+  const response = await hub.fetch('https://guest-inbox.internal/broadcast', request)
   if (!response.ok) {
+    console.error('dashboard_invalidation_transport_failed', { ...publication, status: response.status })
     throw new Error(`Dashboard invalidation publication failed with HTTP ${response.status}`)
   }
 }

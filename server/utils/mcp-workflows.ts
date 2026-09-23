@@ -63,16 +63,14 @@ export async function getNotificationsSettings(
   const defaultChannels = whatsappPhone ? ['whatsapp'] : ['email']
   let channels: string[] = defaultChannels
   if (channelsRow?.value) {
-    try {
-      const parsed = JSON.parse(channelsRow.value)
-      if (Array.isArray(parsed)) {
-        const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
-        // Drop whatsapp from channels if no whatsapp phone is configured
-        const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
-        channels = availableChannels.length ? availableChannels : defaultChannels
-      }
-    } catch {
-      channels = defaultChannels
+    // Falling back to the defaults on a parse failure quietly re-enabled channels
+    // the tenant had turned off, which is the opposite of what their row said.
+    const parsed = JSON.parse(channelsRow.value)
+    if (Array.isArray(parsed)) {
+      const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
+      // Drop whatsapp from channels if no whatsapp phone is configured
+      const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
+      channels = availableChannels.length ? availableChannels : defaultChannels
     }
   }
   return { whatsapp_phone: whatsappPhone, channels }

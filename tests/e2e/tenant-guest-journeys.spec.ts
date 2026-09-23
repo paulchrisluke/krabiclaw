@@ -38,7 +38,24 @@ function expectOwnerDispatch(state: NotificationState) {
   expect(state.notifications.length).toBeGreaterThan(0)
   expect(state.deliveries.some(row => row.purpose === 'owner_alert' && row.status === 'sent')).toBe(true)
   expect(state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent')).toBe(true)
+  // Whatever channels this tenant does dispatch on, none of them may have failed.
+  // Asserting only that one channel succeeded let a second channel sit in
+  // 'failed' or 'unknown' forever with the journey still green.
+  const unsettled = state.deliveries.filter(row => row.status !== 'sent')
+  expect(unsettled, `deliveries not settled as sent: ${JSON.stringify(unsettled)}`).toHaveLength(0)
 }
+
+// A location that carries a notification_phone is a location whose owner asked
+// to be told on WhatsApp, so that is what this asserts. It was briefly weakened
+// to email-only because the local run could not satisfy it; production says the
+// assertion was right and the environment is what is wrong. Kikuzuki's
+// +66952932112 matches a verified member and its alerts deliver; Pottery House's
+// two numbers match no member account, so resolveAuthorizedWhatsAppRecipient
+// declines and writes whatsapp_delivery_blocked to a console the owner cannot
+// read. Until that is fixed this fails, and it should.
+const ownerAlertSent = (state: NotificationState) =>
+  state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+  && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'email' && row.status === 'sent')
 
 async function chooseFirstAvailableTime(page: Page) {
   const slot = page.getByRole('button', { name: /\bAvailable$/ }).first()
@@ -80,7 +97,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await expect(page.locator('main')).toContainText(/booking|received|confirmed/i)
     const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-user-pottery-house', since, state =>
       state.notifications.some(row => row.template === 'new_booking')
-      && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+      && ownerAlertSent(state)
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )
     expectOwnerDispatch(state)
@@ -143,7 +160,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     await expect(page).toHaveURL(/\/contact\/confirmed/)
     const state = await waitForNotifications(request, potteryHouseBaseURL, 'org-user-pottery-house', since, state =>
       state.notifications.some(row => row.template === 'new_contact_msg')
-      && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
+      && ownerAlertSent(state)
       && state.deliveries.some(row => row.purpose === 'guest_acknowledgement' && row.channel === 'email' && row.status === 'sent'),
     )
     expectOwnerDispatch(state)

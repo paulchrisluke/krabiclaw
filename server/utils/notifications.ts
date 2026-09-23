@@ -315,7 +315,7 @@ async function sendEmailNotification(
     unsubscribeOneClickUrl?: string | null
     delivery?: ThreadDeliveryContext | null
   }
-): Promise<boolean> {
+): Promise<void> {
   const provider = getEmailDeliveryMode(env) === 'provider' && !isReservedTestDomain(opts.to)
     ? 'resend'
     : 'log_only'
@@ -336,7 +336,11 @@ async function sendEmailNotification(
     if (!succeeded && claim.delivery.provider === 'resend' && (eligibility === 'claimable' || eligibility === 'in_flight')) {
       throw new Error('Email delivery remains eligible for webhook retry')
     }
-    return succeeded
+    // Another worker owns this receipt. If it settled as sent there is nothing
+    // left to do; if it settled as failed, this call has no delivery either, and
+    // says so rather than resolving as though it had one.
+    if (!succeeded) throw new Error(`Email delivery already settled as ${claim.delivery.status}: ${claim.delivery.error ?? 'no provider error recorded'}`)
+    return
   }
 
   const result = await sendEmail(env, {
@@ -368,8 +372,13 @@ async function sendEmailNotification(
       title: opts.title,
       providerMessageId: result.messageId,
     })
-    return true
+    return
   }
+  // A send that will not be retried is a terminal failure, and it is raised.
+  // Returning false made a failed delivery indistinguishable from a successful
+  // one to Promise.allSettled, which is how a booking could answer 200 with the
+  // owner's email never sent. The outcome is already recorded against the
+  // delivery receipt above; this is what makes the caller account for it.
   console.error('email_delivery_failed', {
     organizationId: opts.organizationId,
     template: opts.template,
@@ -377,7 +386,7 @@ async function sendEmailNotification(
     error: result.error,
   })
   if (requestWebhookRetry) throw new Error('Email delivery remains eligible for webhook retry')
-  return false
+  throw new Error(`Email delivery failed (${result.status}): ${result.error ?? 'no provider error reported'}`)
 }
 
 async function sendWhatsAppThreadNotification(
@@ -486,6 +495,27 @@ async function getLocationNotificationPhone(db: DbClient, locationId: string, or
     SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1
   `, [locationId, organizationId])
   return row?.notification_phone ?? null
+}
+
+// Both sends are attempted before either failure is raised: an owner alert that
+// fails must not cancel the guest's acknowledgement, nor the reverse. But a send
+// that failed is a failure, so it is raised rather than logged. Logging it here
+// is what let a booking answer 200 while the business was never told — the
+// per-channel outcome is already durable in guest_thread_deliveries; this is
+// what stops the route above from reporting success it did not have.
+export function raiseSettledFailures(
+  label: string,
+  context: string,
+  results: readonly PromiseSettledResult<unknown>[],
+  tasks: readonly string[] = ['notifyOwner', 'sendEmailNotification'],
+): void {
+  const failed = results.flatMap((result, index) =>
+    result.status === 'rejected' ? [{ task: tasks[index] ?? String(index), reason: result.reason }] : [])
+  if (failed.length === 0) return
+  throw new AggregateError(
+    failed.map(({ reason }) => reason instanceof Error ? reason : new Error(String(reason))),
+    `${label} failed for ${context}: ${failed.map(({ task }) => task).join(' and ')}`,
+  )
 }
 
 async function notifyOwner(
@@ -679,15 +709,7 @@ export async function notifyReservationCreated(
     }),
   ])
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error('notifyReservationCreated_failed', {
-        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
-        reservationId: opts.reservationId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
-      })
-    }
-  })
+  raiseSettledFailures('notifyReservationCreated', `reservationId ${opts.reservationId}`, results)
 }
 
 export async function notifyReservationCancelled(
@@ -766,15 +788,7 @@ export async function notifyReservationCancelled(
     }),
   ])
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error('notifyReservationCancelled_failed', {
-        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
-        reservationId: opts.reservationId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
-      })
-    }
-  })
+  raiseSettledFailures('notifyReservationCancelled', `reservationId ${opts.reservationId}`, results)
 }
 
 export async function notifyContactSubmitted(
@@ -840,15 +854,7 @@ export async function notifyContactSubmitted(
     }),
   ])
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error('notifyContactSubmitted_failed', {
-        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
-        contactId: opts.contactId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
-      })
-    }
-  })
+  raiseSettledFailures('notifyContactSubmitted', `contactId ${opts.contactId}`, results)
 
 }
 
@@ -863,43 +869,36 @@ export async function notifyReviewReceived(
     locationId: opts.locationId,
   })
 
-  try {
-    const ownerMessage = reviewReceivedMessage({
-      authorName: opts.authorName,
-      rating: opts.rating,
-      content: opts.content ?? '',
-      siteName: restaurant,
-      reviewsUrl,
-    })
+  const ownerMessage = reviewReceivedMessage({
+    authorName: opts.authorName,
+    rating: opts.rating,
+    content: opts.content ?? '',
+    siteName: restaurant,
+    reviewsUrl,
+  })
 
-    await notifyOwner(env, db, {
-      ...opts,
-      template: 'new_review',
-      title: ownerMessage.title,
-      payload: {
-        review_id: opts.reviewId,
-        author_name: opts.authorName,
-        rating: String(opts.rating),
-        content_preview: (opts.content ?? '').slice(0, 200),
-        site_name: restaurant,
-        deep_link: reviewsUrl ?? '',
-      },
-      message: ownerMessage,
-      whatsappTemplate: 'new_review',
-    })
-  } catch (error) {
-    console.error('notifyReviewReceived_failed', {
-      reviewId: opts.reviewId,
-      error: error instanceof Error ? error.message : String(error)
-    })
-  }
+  await notifyOwner(env, db, {
+    ...opts,
+    template: 'new_review',
+    title: ownerMessage.title,
+    payload: {
+      review_id: opts.reviewId,
+      author_name: opts.authorName,
+      rating: String(opts.rating),
+      content_preview: (opts.content ?? '').slice(0, 200),
+      site_name: restaurant,
+      deep_link: reviewsUrl ?? '',
+    },
+    message: ownerMessage,
+    whatsappTemplate: 'new_review',
+  })
 }
 
 export async function notifyReviewRequest(
   env: NotificationEnv,
   db: DbClient,
   opts: ReviewRequestNotificationInput
-): Promise<boolean> {
+): Promise<void> {
   const restaurant = siteName(opts)
   const platformDomain = getPlatformDomain(env)
   const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
@@ -918,7 +917,7 @@ export async function notifyReviewRequest(
     reminder: opts.kind === 'reminder',
   }), { platformDomain })
 
-  return await sendEmailNotification(env, db, {
+  await sendEmailNotification(env, db, {
     ...opts,
     to: opts.email,
     template: templateName,
@@ -1020,15 +1019,7 @@ export async function notifyBookingCreated(
     }),
   ])
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error('notifyBookingCreated_failed', {
-        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
-        bookingId: opts.bookingId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-      })
-    }
-  })
+  raiseSettledFailures('notifyBookingCreated', `bookingId ${opts.bookingId}`, results)
 }
 
 export async function notifyBookingCancelled(
@@ -1106,15 +1097,7 @@ export async function notifyBookingCancelled(
     }),
   ])
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      console.error('notifyBookingCancelled_failed', {
-        task: index === 0 ? 'notifyOwner' : 'sendEmailNotification',
-        bookingId: opts.bookingId,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-      })
-    }
-  })
+  raiseSettledFailures('notifyBookingCancelled', `bookingId ${opts.bookingId}`, results)
 }
 
 /** Notify the tenant through the same dashboard/email/WhatsApp path as other booking events. */

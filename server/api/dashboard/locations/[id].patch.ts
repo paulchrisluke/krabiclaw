@@ -4,7 +4,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { resolveLocationCapabilitySummary, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
 import { parsePhone } from '~/utils/phone'
 import type { ProductFeature } from '~/config/cms-registry'
@@ -87,7 +87,7 @@ export default defineHandler(async (event) => {
     return jsonResponse(result.data, { status: result.status })
   }
 
-  await purgePublicResourceCacheSafe(env, organizationId)
+  await purgePublicResourceCacheNow(env, organizationId)
 
   const location = (result.data as { location?: { feature_overrides?: string | null } }).location
   const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides ?? null) : null

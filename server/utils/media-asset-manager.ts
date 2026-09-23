@@ -4,7 +4,7 @@ import { deleteFromR2 } from './cloudflare-r2'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import {
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
@@ -448,7 +448,7 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
   const query = buildMediaAssetInsertQuery(data)
   await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.organization_id, 'media-create')])
 
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId: data.organization_id,
     locationId: null,
@@ -663,7 +663,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
   }
 
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId: pendingAsset.organization_id,
     locationId: null,

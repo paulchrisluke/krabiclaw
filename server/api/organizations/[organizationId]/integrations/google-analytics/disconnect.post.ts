@@ -20,11 +20,10 @@ export default defineHandler(async (event) => {
 
   if (result.meta?.changes !== 1) return jsonResponse({ error: 'Organization changed. Reload before disconnecting.' }, { status: 409 })
 
-  try {
-    await reconcileZarazAnalytics(env, db)
-  } catch (error) {
-    console.error('zaraz_reconciliation_failed', { organizationId: organization.id, error })
-  }
+  // Reconciliation is what actually removes the tracking script from the live
+  // site. Logging its failure and answering success told the tenant they had
+  // disconnected Google Analytics while their visitors were still being tracked.
+  await reconcileZarazAnalytics(env, db)
 
   return jsonResponse({ success: true })
 })

@@ -388,7 +388,7 @@ async function assertTenantPageRedirectWritable(
   }
 }
 
-async function assertTenantPageRedirectLocaleSafe(
+async function assertTenantPageRedirectLocale(
   db: DbClient,
   input: { organizationId: string; locale: string; fromPath: string; variantId: string },
 ) {
@@ -998,7 +998,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, blocks, now)
   const pathChanged = path !== row.path
   if (pathChanged) {
-    await assertTenantPageRedirectLocaleSafe(db, { organizationId: row.organization_id, locale: row.locale, fromPath: row.path, variantId })
+    await assertTenantPageRedirectLocale(db, { organizationId: row.organization_id, locale: row.locale, fromPath: row.path, variantId })
     await assertTenantPageRedirectWritable(db, {
       organizationId: row.organization_id,
       locale: row.locale,

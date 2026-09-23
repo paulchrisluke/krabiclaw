@@ -1,7 +1,7 @@
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, parsePostTopic, PostValidationError, type PostTopic } from '~/shared/posts'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import type { DomainEnv } from '~/server/utils/domains'
 import { insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
@@ -372,7 +372,7 @@ export async function createPost(
 
   const createdPost = await getPost(db, organizationId, id)
   if (!createdPost) throw new Error('Post not found after creation')
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId,
     
@@ -501,7 +501,7 @@ export async function publishPost(
 
   const post = await getPost(db, organizationId, postId)
   if (post && channels.includes('site') && existing.status !== 'published') {
-    await fireOrganizationEventSafe({
+    await fireOrganizationEvent({
       db,
       organizationId,
       
@@ -680,7 +680,7 @@ export async function publishDuePosts(db: DbClient, now = new Date()) {
     ])
     if (Number(results[0]?.meta?.changes ?? 0) !== 1) continue
     published += 1
-    await fireOrganizationEventSafe({
+    await fireOrganizationEvent({
       db,
       organizationId: post.organization_id,
       locationId: post.location_id,

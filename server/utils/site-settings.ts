@@ -5,7 +5,7 @@ import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
@@ -120,20 +120,15 @@ export async function loadSettingsPayload(
 
   const siteConfig = await getConfig(db, organizationId)
 
-  let toggleableFeatures: readonly ProductFeature[] = []
-  let effectiveFeatures: readonly ProductFeature[] = []
-  let defaultFeatures: readonly ProductFeature[] = []
-  try {
-    const { template, capabilities } = resolveSiteCmsCapabilities(updatedSite.vertical, updatedSite.theme_id, {
-      siteEnabledFeatures: updatedSite.feature_overrides,
-    })
-    toggleableFeatures = toggleableModulesForScope(template, 'site')
-    effectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
-    defaultFeatures = defaultModuleFeaturesForVertical(updatedSite.vertical as SiteVertical)
-  } catch {
-    // Unsupported vertical/template combination — leave the feature toggle list empty rather
-    // than 500ing the whole settings payload over an unrelated field.
-  }
+  // An empty toggle list is what a tenant with no modules looks like, so serving
+  // one on an unsupported vertical/template pair showed them a settings page that
+  // said their features were off rather than that we could not resolve them.
+  const { template, capabilities } = resolveSiteCmsCapabilities(updatedSite.vertical, updatedSite.theme_id, {
+    siteEnabledFeatures: updatedSite.feature_overrides,
+  })
+  const toggleableFeatures: readonly ProductFeature[] = toggleableModulesForScope(template, 'site')
+  const effectiveFeatures: readonly ProductFeature[] = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
+  const defaultFeatures: readonly ProductFeature[] = defaultModuleFeaturesForVertical(updatedSite.vertical as SiteVertical)
 
   return {
     id: updatedSite.id,
@@ -242,11 +237,9 @@ async function syncAnalyticsSettingToZaraz(
 ) {
   if (measurementId === undefined) return
 
-  try {
-    await reconcileZarazAnalytics(env, db)
-  } catch (error) {
-    console.error('zaraz_reconciliation_failed', { organizationId, error })
-  }
+  // The setting is only in effect once the tracking configuration carries it, so
+  // this failure belongs to the save that asked for it.
+  await reconcileZarazAnalytics(env, db)
 }
 
 async function attemptSiteUpdate(
@@ -438,7 +431,7 @@ async function attemptSiteUpdate(
 
   // All settings callers use this mutation path; refresh both public resource
   // and HTML caches when typography changes, including a reset to Default.
-  if (updates.font_preset !== undefined) await purgePublicResourceCacheSafe(env, organizationId)
+  if (updates.font_preset !== undefined) await purgePublicResourceCacheNow(env, organizationId)
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))

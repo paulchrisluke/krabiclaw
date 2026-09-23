@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
-import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheSafe } from '../../server/utils/public-resource-cache.ts'
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from '../../server/utils/public-resource-cache.ts'
 
 async function migratedCacheD1(context: TestContext) {
   const miniflare = new Miniflare({
@@ -147,7 +147,7 @@ test('an organization write purges that organization despite an older invalidati
     await kv.put(`public~${site}~v4~page`, 'cached public resource')
     await kv.put(`html:${site}.krabiclaw.com:/`, 'cached HTML')
   }
-  await purgePublicResourceCacheSafe({ DB: db, SITE_CACHE: kv, NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, 'changed')
+  await purgePublicResourceCacheNow({ DB: db, SITE_CACHE: kv, NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, 'changed')
   assert.equal(await kv.get('public~changed~v4~page'), null)
   assert.equal(await kv.get('html:changed.krabiclaw.com:/'), null)
   assert.equal(await kv.get('public~org~v4~page'), 'cached public resource')

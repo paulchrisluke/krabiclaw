@@ -169,13 +169,8 @@ export default defineHandler(async (event) => {
 
   await executeBatch(db, batch)
 
-  try {
-    await notifyReviewReceived(env, db, {
-      organizationId: result.context.organization_id, siteName: result.context.site_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
-  } catch (error) {
-    console.error('notifyReviewReceived_failed', {
-      reviewId, error: error instanceof Error ? error.message : String(error), })
-  }
+  await notifyReviewReceived(env, db, {
+    organizationId: result.context.organization_id, siteName: result.context.site_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
 
   return jsonResponse({ success: true, reviewId, status: 'pending' }, { status: 201 })
 })

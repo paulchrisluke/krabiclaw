@@ -43,16 +43,15 @@ if (import.meta.client) {
   watchEffect(() => {
     const brandColor = config?.value.brand_color
     if (!brandColor) return
-    try {
-      const themeColors = calculateThemeColors(brandColor)
-      const root = document.documentElement
-      root.style.setProperty('--brand-color', themeColors.brandColor)
-      root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
-      root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
-      root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
-    } catch (error) {
-      console.error('Failed to apply brand color theme:', error)
-    }
+    // A brand colour the tenant saved that cannot be turned into a theme is a
+    // stored value that is wrong, and swallowing it painted every page in the
+    // platform default while the dashboard showed their colour set.
+    const themeColors = calculateThemeColors(brandColor)
+    const root = document.documentElement
+    root.style.setProperty('--brand-color', themeColors.brandColor)
+    root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
+    root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
+    root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
   })
 }
 </script>

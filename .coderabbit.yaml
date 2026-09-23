@@ -1,19 +1,80 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
 reviews:
-  profile: "chill"
+  # Was "chill", which is the profile that holds comments back. The defects this
+  # repository actually ships — a 200 over a failed notification, a test that
+  # asserts a status code — are exactly the ones a reticent reviewer lets pass.
+  profile: "assertive"
   high_level_summary: true
   poem: false
   review_status: true
   collapse_walkthrough: false
+  # Deliberately absent. It blocks the PR until findings are resolved, and an
+  # agent cannot dismiss a review after fixing one, so the gate would deadlock
+  # on the author it is meant to hold to account.
   auto_review:
     enabled: true
     drafts: false
+    # Default is 5. A branch of more than five commits stopped being reviewed
+    # partway through, which is silent and is the same shape of problem as
+    # everything else here: the later commits were the unreviewed ones.
+    auto_pause_after_reviewed_commits: 0
+  pre_merge_checks:
+    custom_checks:
+      - name: "Failures are reported, never logged"
+        mode: "error"
+        instructions: |
+          Fail if any catch block in the diff writes the error to a console, or to
+          nothing at all, and then continues — it must throw, return an error
+          status or failed result, or put the reason into state a caller reads.
+
+          Fail if a route answers 2xx when work it performed did not complete.
+          A write whose notification, cache purge, index refresh, reconciliation
+          or audit row failed has not succeeded.
+
+          Fail if a function resolves a sentinel that a caller cannot distinguish
+          from success — returning false, null or [] where the failure is
+          terminal, especially inside Promise.allSettled.
+
+          Fail if missing or unparseable required state is defaulted, placeholdered
+          or otherwise manufactured rather than raised.
+
+          Fail on a new name ending in Safe, or a wrapper whose whole body is a
+          try/catch around one call.
+
+          Reject any justification of the form "best effort", "non-fatal",
+          "transient", or blame placed on Cloudflare or another provider without
+          evidence that provider was at fault. Assume the fault is ours.
+      - name: "Assertions prove outcomes"
+        mode: "error"
+        instructions: |
+          Applies to tests/**.
+
+          Fail if a test asserts only a status code or `ok()` where an outcome is
+          observable. Status assertions must be exact — toBeLessThan(400) passes a
+          redirect and a 304.
+
+          Fail if a write is asserted only by the response of the route that made
+          it. Read it back through a different path.
+
+          Fail if a test creates the state it then asserts on. Treat any helper
+          named ensure*, getOrCreate* or *OrDefault as a prompt to check whether
+          it is manufacturing its own premise or mutating shared/tenant state.
+
+          Fail if a test asserts on global or shared state it does not own, such
+          as a total row count in an inbox another test can write to.
+
+          Fail if an assertion only proves a shape exists — toEqual(expect.any(Array))
+          passes on [], which is what a call that returned nothing produces.
+
+          Fail if an assertion was widened, a matcher loosened or a case removed
+          to make a failing test pass, unless the diff states which of the spec or
+          the application was wrong and why the old premise no longer holds.
   path_instructions:
     - path: '**/*'
       instructions: |
         Focus only on genuine bugs, security vulnerabilities, and data integrity issues.
-        
+
         DO NOT suggest:
         - Defensive null checks or fallbacks that add redundant safety layers
         - Restoring previously removed filters or validation that was intentionally deleted
@@ -22,7 +83,8 @@ reviews:
         - "Pre-existing" workarounds or compatibility shims
         - New layers, schema, routes, services, wrappers, state, or dependencies unless replacing an existing one
         - New abstractions, helpers, or architectural patterns when existing code can be deleted or modified
-        
+        - Catching an error in order to log it, degrade, or continue
+
         DO suggest:
         - Missing status filters on media placement joins (mp.status = 'active')
         - Race conditions in concurrent operations
@@ -34,7 +96,28 @@ reviews:
         - Optional chaining where null shouldn't be possible per API contract
         - Component-level guards that mask API contract violations
         - "Guarantee" or "normalize" defensive wrappers
-        
+        - A caught error that reaches only a console, and a success reported over work that failed
+        - Manufactured stand-in state where required state was missing or unparseable
+
         This project is actively removing legacy code, fallbacks, and defensive patterns.
         Assume intentional deletions are cleanup, not regression.
         Default order: delete, reuse, modify, add.
+    - path: 'tests/**'
+      instructions: |
+        A green test is only worth what it asserts. Judge these against outcomes,
+        not against whether they pass.
+
+        Flag:
+        - A status code or ok() standing in for an outcome a customer would notice
+        - toBeLessThan(400) or any "not an error" assertion instead of an exact status
+        - A write asserted only through the response of the route that wrote it
+        - A test that creates the state it then asserts, or that provisions, mutates
+          or re-seeds a shared tenant to make its own precondition true
+        - An assertion over shared state the test does not own, such as a total count
+        - toEqual(expect.any(...)) or a bare shape check as the only assertion
+        - An empty result treated as a pass, where the expected count is knowable
+        - An assertion widened or deleted to get a failing test green, without the
+          diff saying which of the spec or the application was wrong
+
+        Do not suggest adding new test files or fixtures. Prefer strengthening an
+        assertion that already exists, or deleting a test that proves nothing.

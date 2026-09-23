@@ -2,8 +2,8 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/availability'
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { notifyBookingCreated } from '~/server/utils/notifications'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
+import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
@@ -174,36 +174,38 @@ export default defineHandler(async (event) => {
   // One instant, one zone: the message the guest reads and the record the
   // host sees are formatted from the same session row.
   const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at))
-  try {
-    const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-      resolveLocationContact(db, organizationId, session.location_id),
-      buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
-    ])
-    const siteBaseUrl = site.public_url?.replace(/\/$/, '')
-    const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
-    await notifyBookingCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: session.location_id,
-      bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-      productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
-      partySize, notes: notes || null,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
-    })
-  } catch (error) {
-    console.error('booking_notification_failed', { organizationId: site.id, threadId, error: error instanceof Error ? error.message : String(error) })
-  }
-
+  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+    resolveLocationContact(db, organizationId, session.location_id),
+    buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
+  ])
+  const siteBaseUrl = site.public_url?.replace(/\/$/, '')
+  const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
+  // Telling the owner and recording the conversion are independent, so both are
+  // attempted before either failure is raised: running the notification first
+  // meant a failed dispatch silently cost the tenant the conversion record too.
   const requestedLocale = cleanString(body.locale, 10)
-  const [full, locale] = await Promise.all([
+  const [full, locale, ...followUps] = await Promise.all([
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
     getProduct(db, site.id, product.id),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
-      organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
-      locationId: session.location_id, entityType: 'request', entityId: threadId,
-      pageType: 'product', pagePath: `/products/${slug}`,
-    }),
+    ...await Promise.allSettled([
+      notifyBookingCreated(env, db, {
+        organizationId: site.id, siteName: site.name, locationId: session.location_id,
+        bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+        productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
+        partySize, notes: notes || null,
+        cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+      }),
+      recordSiteConversionEvent(db, event, {
+        organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
+        locationId: session.location_id, entityType: 'request', entityId: threadId,
+        pageType: 'product', pagePath: `/products/${slug}`,
+      }),
+    ]),
   ])
+  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps,
+    ['notifyBookingCreated', 'recordSiteConversionEvent'])
 
   return jsonResponse({
     success: true, booking_id: threadId, cancellation_token: cancellation.token,

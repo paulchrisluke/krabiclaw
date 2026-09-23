@@ -37,15 +37,13 @@ export default defineHandler(async (event) => {
   const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
   let socialPublish: PostSocialPublish | null = null
   if (wantsSocial) {
-    try {
-      const connection = await getFacebookPagesConnection(env, site.id)
-      socialPublish = connection?.page_id && connection.encrypted_page_token
-        ? { kind: 'connected', pageId: connection.page_id, pageToken: connection.encrypted_page_token }
-        : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
-    } catch (error) {
-      console.error('[publish] getFacebookPagesConnection failed:', error)
-      socialPublish = { kind: 'unavailable', reason: 'Facebook connection error.' }
-    }
+    // "No Facebook Page connected" is a real answer; a lookup that threw is not,
+    // and reporting the second as the first told an author their post had no
+    // destination when the truth was that we never found out.
+    const connection = await getFacebookPagesConnection(env, site.id)
+    socialPublish = connection?.page_id && connection.encrypted_page_token
+      ? { kind: 'connected', pageId: connection.page_id, pageToken: connection.encrypted_page_token }
+      : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
   }
 
   const post = await publishPost(db, site.id, postId, channels, env, socialPublish)

@@ -345,6 +345,11 @@ export async function flushRequestMetrics(event: HTTPEvent, response: Response) 
   const status = response.status
   const errorCode = status >= 400 ? `HTTP_${status}` : null
   const totalDuration = performance.now() - metrics.startedAt
+  // These headers decorate a response that has already succeeded, so a response
+  // whose headers are immutable must not be turned into a failure over them. The
+  // reason goes into the one metrics line below rather than a console.warn of its
+  // own, so the record of the request says it is missing its headers and why.
+  let metricHeadersError: string | null = null
   if (response.status !== 101 && !response.headers.has('x-d1-query-count')) {
     try {
       response.headers.set('x-request-id', metrics.requestId)
@@ -353,15 +358,11 @@ export async function flushRequestMetrics(event: HTTPEvent, response: Response) 
       response.headers.set('x-d1-duration-ms', metrics.d1DurationMs.toFixed(2))
       response.headers.set('x-total-duration-ms', totalDuration.toFixed(2))
     } catch (error) {
-      console.warn('[data-request]', JSON.stringify({
-        event: 'metric_headers_not_writable',
-        requestId: metrics.requestId,
-        resource: new URL(event.req.url).pathname,
-        error: error instanceof Error ? error.message : String(error),
-      }))
+      metricHeadersError = error instanceof Error ? error.message : String(error)
     }
   }
   console.info('[data-request]', JSON.stringify({
+    metricHeadersError,
     requestId: metrics.requestId,
     rayId: event.req.headers.get('cf-ray'),
     phases: Object.fromEntries(Object.entries(metrics.phases).map(([name, duration]) => [name, Number(duration.toFixed(2))])),

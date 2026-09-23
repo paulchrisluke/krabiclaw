@@ -7,7 +7,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces, googleReviewUpserts, PlaceDetailsError } from '~/server/utils/google-places'
 import { createLocation } from '~/server/utils/location-management'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { postalAddressFromAnswers } from '~/utils/postal-address'
@@ -108,7 +108,7 @@ export default defineHandler(async (event) => {
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
     }
-    await purgePublicResourceCacheSafe(env, organizationId)
+    await purgePublicResourceCacheNow(env, organizationId)
 
     return jsonResponse({ success: true, locationSlug: slug, orgSlug: organization.slug })
   }
@@ -169,7 +169,7 @@ export default defineHandler(async (event) => {
     const now = new Date().toISOString()
     await executeBatch(db, googleReviewUpserts({ organizationId, locationId }, place.reviews, now))
   }
-  await purgePublicResourceCacheSafe(env, organizationId)
+  await purgePublicResourceCacheNow(env, organizationId)
 
   return jsonResponse({
     success: true, organizationId, locationSlug: slug, orgSlug: organization.slug, })
