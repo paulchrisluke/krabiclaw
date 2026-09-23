@@ -30,7 +30,7 @@ export default defineHandler(async (event) => {
     const organizationId = getRouterParam(event, 'organizationId')
     if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-    const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+    const { env, db, session } = await requireOrganizationAccess(event, organizationId)
 
     const query = getQuery(event)
     const rawCategory = queryValue(query.category)

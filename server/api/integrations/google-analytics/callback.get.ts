@@ -1,11 +1,10 @@
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
-import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 import type { IntegrationOAuthState } from '~/shared/site-settings'
 import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
-import { resolveUserOrganization } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)

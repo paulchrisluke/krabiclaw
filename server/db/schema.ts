@@ -1951,7 +1951,7 @@ export const user_workspace_state = sqliteTable("user_workspace_state", {
 	whatsapp_pending_confirmation: text(),
 	whatsapp_last_inbound_id: text(),
 	whatsapp_updated_at: text(),
-}, (table) => [
+}, () => [
 	check("user_workspace_state_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (whatsapp_updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', whatsapp_updated_at, '+0 days') IS whatsapp_updated_at)`),
 	check("user_workspace_state_whatsapp_pending_check", sql`whatsapp_pending_confirmation IS NULL OR (json_valid(whatsapp_pending_confirmation) AND json_type(whatsapp_pending_confirmation) IS 'object')`),
 ]);

@@ -28,7 +28,7 @@ import { ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection }
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveSlugMutation } from '~/utils/blog-editor'
 import { createBlogRedirect } from '~/server/utils/blog-publishing'
-import { PLATFORM_TEMPLATE, resolvePublicTemplate } from '~/utils/template-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import { buildSingleMediaPlacementQueries, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import { attachPageQa } from '~/server/utils/location-qa'

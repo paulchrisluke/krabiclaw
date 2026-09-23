@@ -1,4 +1,3 @@
-import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'

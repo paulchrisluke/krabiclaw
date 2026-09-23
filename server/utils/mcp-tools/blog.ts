@@ -1,6 +1,6 @@
 import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
-import { ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
 // A block's place is its index in the array; there is no position to state.

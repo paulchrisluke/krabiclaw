@@ -256,13 +256,11 @@ const impersonatedBy = computed(() => {
   return session?.impersonatedBy
 })
 
-const orgSlug = computed(() => organization.value?.slug ?? null)
 const realtimeOrganizationSlug = computed(() => {
   const slug = router.currentRoute.value.params.orgSlug
   return !stoppingImpersonation.value && typeof slug === 'string' ? slug : null
 })
 provideDashboardInvalidations(realtimeOrganizationSlug)
-const orgBase = computed(() => orgSlug.value ? `/dashboard/${orgSlug.value}` : null)
 
 // Read straight off the route for navigation and routing purposes
 const routeLocationSlug = computed(() => typeof route.params.locationSlug === 'string' ? route.params.locationSlug : null)

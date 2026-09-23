@@ -4,9 +4,8 @@ import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
   exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
-import { resolveUserOrganization } from '~/server/utils/member-access'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
-import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)

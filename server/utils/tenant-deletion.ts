@@ -22,7 +22,7 @@
 // only path — a raw call to that route would skip the grace period and leak
 // every external resource above.
 
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { FREE_PLAN, getOrganizationPlans } from '~/server/utils/billing-access'

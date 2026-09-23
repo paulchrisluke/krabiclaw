@@ -106,7 +106,6 @@ const { values: rawArgs } = parseArgs({
     'maps-url':        { type: 'string', multiple: true, default: [] },
     images:            { type: 'string' },
     'images-place-id': { type: 'string' },
-    'organization-id':  { type: 'string' },
     'live-url':        { type: 'string' },
     url:               { type: 'string' },  // alias for --live-url
     remote:            { type: 'boolean', default: false },

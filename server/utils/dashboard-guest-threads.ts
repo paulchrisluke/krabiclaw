@@ -12,7 +12,7 @@ import type {
   GuestThreadSubmissionType,
 } from '~/server/domain/guest-threads/types'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { assertMemberScope, isOrganizationWideRole, listUserOrganizationTeamIds, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
+import { assertMemberScope, memberAccessPrincipal, assertRoleAllows } from '~/server/utils/member-access'
 import { publishNotificationInvalidation } from '~/server/cloudflare/guest-inbox-events'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { acknowledgeThreadNotifications } from '~/server/utils/notification-acknowledgement'

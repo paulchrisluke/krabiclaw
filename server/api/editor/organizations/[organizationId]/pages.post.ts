@@ -6,7 +6,7 @@ import type { TenantPageEditorInput } from '~/server/utils/content/pages'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
-  const { env, db, organization, userId } = await requireTenantPageWriteAccess(event, organizationId)
+  const { env, db, userId } = await requireTenantPageWriteAccess(event, organizationId)
   try {
     const body = await readRequiredBody<TenantPageEditorInput>(event)
     return jsonResponse(await createTenantPage(db, {

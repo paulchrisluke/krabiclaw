@@ -74,7 +74,7 @@ const props = defineProps<{ kind: 'reservation' | 'booking' }>()
 
 const { locale, t } = useI18n()
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { site } = useTenantSite()
 const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
 
 const keyPrefix = computed(() => props.kind === 'booking' ? 'experience_cancel' : 'reservation_cancel')
