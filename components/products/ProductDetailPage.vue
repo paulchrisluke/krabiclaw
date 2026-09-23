@@ -877,30 +877,6 @@ function sessionEvent(session: PublicProductSession) {
   }
 }
 
-/**
- * The window these occurrences fall in, and the days they fall on.
- *
- * `byDay` is read off the sessions themselves. No `repeatFrequency` is stated:
- * sessions are materialized rows, and the recurrence rule that produced them is
- * not something this page can see — so it describes what is scheduled rather
- * than asserting a cadence.
- */
-const schemaEventSchedule = computed(() => {
-  const list = schemaSessions.value
-  const first = list[0]
-  const last = list[list.length - 1]
-  if (!first || !last) return undefined
-  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: first.timezone })
-  return {
-    '@type': 'Schedule',
-    scheduleTimezone: first.timezone,
-    startDate: first.starts_at,
-    endDate: last.ends_at,
-    byDay: [...new Set(list.map(session => `https://schema.org/${weekday.format(new Date(session.starts_at))}`))],
-    ...(props.booking?.duration_minutes ? { duration: `PT${props.booking.duration_minutes}M` } : {}),
-  }
-})
-
 useSchemaOrg(computed(() => {
   const type = structuredDataType.value
   const list = schemaSessions.value
@@ -921,7 +897,6 @@ useSchemaOrg(computed(() => {
           eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
           eventStatus: 'https://schema.org/EventScheduled',
           location: schemaPlace.value,
-          eventSchedule: schemaEventSchedule.value,
           // One offer per occurrence, so the markup says when each seat is for.
           offers: list.map(sessionOffer),
           ...(type === 'EventSeries' ? { subEvent: list.map(sessionEvent) } : {}),
