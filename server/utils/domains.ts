@@ -747,21 +747,6 @@ export async function createCustomDomainPair(
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
     }
 
-    // Fired only once the whole pairing flow (Cloudflare provisioning, DB
-    // inserts, state sync, promotion/reconciliation) has succeeded — the catch
-    // block below rolls back organization_domains rows on failure, so firing earlier
-    // could record a domain.connected event for a domain that never existed.
-    for (const entry of entries) {
-      await fireOrganizationEvent({
-        db,
-        organizationId: opts.organizationId,
-        actorId: opts.actorId ?? null,
-        eventType: 'domain.connected',
-        entityType: 'domain',
-        entityId: entry.id,
-        metadata: { domain: entry.domain, role: entry.role },
-      })
-    }
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')
     const message = normalizedError.message || 'Cloudflare hostname creation failed'
@@ -803,6 +788,24 @@ export async function createCustomDomainPair(
     }
 
     throw new Error(message, { cause: error })
+  }
+
+  // Outside the try, and that is the point. These record that the pairing above
+  // succeeded, and the catch tears down the Cloudflare hostnames and the
+  // organization_domains rows. Firing them inside it meant an audit write that
+  // failed would delete a domain pair that had provisioned correctly. The events
+  // still raise — a missing audit row is a real failure — but they raise after
+  // the work they describe is safe.
+  for (const entry of entries) {
+    await fireOrganizationEvent({
+      db,
+      organizationId: opts.organizationId,
+      actorId: opts.actorId ?? null,
+      eventType: 'domain.connected',
+      entityType: 'domain',
+      entityId: entry.id,
+      metadata: { domain: entry.domain, role: entry.role },
+    })
   }
 
   return records

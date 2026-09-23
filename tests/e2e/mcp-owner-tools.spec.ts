@@ -232,10 +232,13 @@ test.describe('stateless MCP server', () => {
     })
     expect(locationRead.status()).toBe(200)
 
+    // Unique per run. A constant would pass on a value a previous run had left
+    // on the row, which is the exact failure this read-back exists to catch.
+    const updatedPhone = `+1 555 555 ${String(Date.now() % 10000).padStart(4, '0')}`
     const locationUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_location',
-      args: { organization_id: organizationId, location_id: locationId, phone: '+1 555 555 0111' },
+      args: { organization_id: organizationId, location_id: locationId, phone: updatedPhone },
     })
     expect(locationUpdate.status()).toBe(200)
     // A 200 is the tool answering, not the row changing. updateTenantPage
@@ -249,7 +252,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(locationAfter.status()).toBe(200)
     expect(mcpData<{ location: { phone: string } }>(await locationAfter.json()).location)
-      .toMatchObject({ phone: '+1 555 555 0111' })
+      .toMatchObject({ phone: updatedPhone })
 
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',

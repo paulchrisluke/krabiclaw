@@ -2,7 +2,7 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/availability'
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { notifyBookingCreated } from '~/server/utils/notifications'
+import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
 import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
@@ -180,26 +180,32 @@ export default defineHandler(async (event) => {
   ])
   const siteBaseUrl = site.public_url?.replace(/\/$/, '')
   const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
-  await notifyBookingCreated(env, db, {
-    organizationId: site.id, siteName: site.name, locationId: session.location_id,
-    bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-    productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
-    partySize, notes: notes || null,
-    cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
-  })
-
+  // Telling the owner and recording the conversion are independent, so both are
+  // attempted before either failure is raised: running the notification first
+  // meant a failed dispatch silently cost the tenant the conversion record too.
   const requestedLocale = cleanString(body.locale, 10)
-  const [full, locale] = await Promise.all([
+  const [full, locale, ...followUps] = await Promise.all([
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
     getProduct(db, site.id, product.id),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.id),
-    recordSiteConversionEvent(db, event, {
-      organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
-      locationId: session.location_id, entityType: 'request', entityId: threadId,
-      pageType: 'product', pagePath: `/products/${slug}`,
-    }),
+    ...await Promise.allSettled([
+      notifyBookingCreated(env, db, {
+        organizationId: site.id, siteName: site.name, locationId: session.location_id,
+        bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+        productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
+        partySize, notes: notes || null,
+        cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+      }),
+      recordSiteConversionEvent(db, event, {
+        organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
+        locationId: session.location_id, entityType: 'request', entityId: threadId,
+        pageType: 'product', pagePath: `/products/${slug}`,
+      }),
+    ]),
   ])
+  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps,
+    ['notifyBookingCreated', 'recordSiteConversionEvent'])
 
   return jsonResponse({
     success: true, booking_id: threadId, cancellation_token: cancellation.token,

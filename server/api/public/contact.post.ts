@@ -3,7 +3,7 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { executeBatch, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { notifyContactSubmitted } from '~/server/utils/notifications'
+import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
 import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
@@ -96,10 +96,14 @@ export default defineHandler(async (event) => {
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
-  await notifyContactSubmitted(env, db, {
-    organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
-
-  await recordSiteConversionEvent(db, event, {
+  // Both are attempted before either failure is raised. Telling the owner and
+  // recording the conversion are independent of each other, and running them in
+  // sequence meant a failed notification silently cost the tenant the conversion
+  // record as well.
+  const followUps = await Promise.allSettled([
+    notifyContactSubmitted(env, db, {
+      organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
+    recordSiteConversionEvent(db, event, {
     organizationId: site.id,
     eventName: 'contact_submit',
     stage: 'submitted',
@@ -108,7 +112,10 @@ export default defineHandler(async (event) => {
     entityId: id,
     pageType: 'contact',
     pagePath: '/contact',
-  })
+    }),
+  ])
+  raiseSettledFailures('contact submission follow-up', `contactId ${id}`, followUps,
+    ['notifyContactSubmitted', 'recordSiteConversionEvent'])
 
   return jsonResponse({
     success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })

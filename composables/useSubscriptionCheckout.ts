@@ -46,6 +46,7 @@ export function useSubscriptionCheckout() {
     input.onAction?.(action)
 
     const analyticsContext = getBillingAnalyticsContext()
+    analyticsIntentError.value = null
     try {
       await recordBillingAnalyticsIntent(dashboardApi, {
         organizationId: input.organizationId,

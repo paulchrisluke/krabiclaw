@@ -503,7 +503,7 @@ async function getLocationNotificationPhone(db: DbClient, locationId: string, or
 // is what let a booking answer 200 while the business was never told — the
 // per-channel outcome is already durable in guest_thread_deliveries; this is
 // what stops the route above from reporting success it did not have.
-function raiseSettledFailures(
+export function raiseSettledFailures(
   label: string,
   context: string,
   results: readonly PromiseSettledResult<unknown>[],
