@@ -310,8 +310,8 @@
         <h3><strong>2.1 Organization Owner</strong></h3>
         <p>
           <span style="font-weight: 400"
-            >Krabiclaw accounts may contain one or more organizations, sites,
-            locations, or other workspaces.</span
+            >Krabiclaw accounts may contain one or more organizations, sites, or
+            locations.</span
           >
         </p>
         <p>
@@ -1791,7 +1791,7 @@
           <span style="font-weight: 400"
             >Krabiclaw may permit authorized MCP clients, AI assistants, agents,
             or other compatible software to interact with your Krabiclaw
-            workspace.</span
+            organization.</span
           >
         </p>
         <p>
@@ -1803,32 +1803,37 @@
           <li style="font-weight: 400">
             <span style="font-weight: 400"
               >the client may be able to read information from your
-              workspace;</span
+              organization only if your account has permissions for that information;</span
             >
           </li>
           <li style="font-weight: 400">
             <span style="font-weight: 400"
               >the client may be able to create, modify, publish, or delete
-              information where corresponding permissions exist;</span
+              information only if your account has permissions for those actions;</span
             >
           </li>
           <li style="font-weight: 400">
             <span style="font-weight: 400"
               >tool calls made through an authorized client are treated as
-              actions authorized by your account;</span
+              actions authorized by your account and your permissions;</span
+            >
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400"
+              >you are responsible for reviewing significant actions performed
+              through an agentic or automated client before and after execution;</span
             >
           </li>
           <li style="font-weight: 400">
             <span style="font-weight: 400"
               >information returned through MCP may be transmitted to the
-              third-party client providing the conversation or agent experience;
-              and</span
+              third-party client providing the conversation or agent experience; and</span
             >
           </li>
           <li style="font-weight: 400">
             <span style="font-weight: 400"
               >the third-party provider's own terms and privacy practices apply
-              to its handling of information.</span
+              to its handling of information. These are merchant-selected clients, not Krabiclaw providers. Krabiclaw makes no representation about that provider's training, retention, confidentiality, or deletion practices.</span
             >
           </li>
         </ul>
@@ -1838,12 +1843,6 @@
             Services but does not control how a third-party AI model, client, or
             provider generates instructions, interprets prompts, or handles
             information after receiving it.</span
-          >
-        </p>
-        <p>
-          <span style="font-weight: 400"
-            >You are responsible for reviewing significant actions performed
-            through an agentic or automated client.</span
           >
         </p>
         <h3><strong>11.4 Third-Party Responsibility</strong></h3>
@@ -2173,6 +2172,49 @@
             <span style="font-weight: 400"
               >technical processing necessary to complete deletion.</span
             >
+          </li>
+        </ul>
+        <h3><strong>14.2.1 Account and Organization Deletion</strong></h3>
+        <p><span style="font-weight: 400">Account deletion is subject to the following rules:</span></p>
+        <ul>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">If you are the sole owner and sole member of an organization, that organization may be deleted with your account.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">If you are the sole owner but other members remain, account deletion is blocked until another member is promoted to owner or the organization/membership situation is otherwise resolved. Krabiclaw does not automatically select or promote a successor.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">If another owner already exists, deleting your account does not delete the organization.</span>
+          </li>
+        </ul>
+        <p><span style="font-weight: 400">Organization deletion is subject to the following rules:</span></p>
+        <ul>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">An owner may schedule organization deletion even when other members exist.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">Organization deletion requires explicit destructive confirmation naming the organization and making clear that the organization and its data will be deleted and other members will lose access.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">Affected members are notified using Krabiclaw's existing notification and email infrastructure.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">Organization deletion is blocked when the canonical billing state shows an active or unresolved paid subscription or billing obligation.</span>
+          </li>
+        </ul>
+        <p><span style="font-weight: 400">Deletion timing and eligibility:</span></p>
+        <ul>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">Account and organization deletion use a 30-day grace period. During that period, the account or organization remains scheduled for deletion and the request can be cancelled.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">After the grace period, Krabiclaw re-checks destructive eligibility when deletion actually executes. Deletion relies on current state at execution time, not only on state captured 30 days earlier.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">If eligibility has changed (for example, an organization now has an active paid subscription or billing obligation), deletion is skipped.</span>
+          </li>
+          <li style="font-weight: 400">
+            <span style="font-weight: 400">Cancelling an account deletion request clears scheduled deletion on organizations the user belongs to. This does not cancel an independently requested organization deletion.</span>
           </li>
         </ul>
         <h3><strong>14.3 Suspension or Termination by Krabiclaw</strong></h3>
