@@ -646,8 +646,8 @@ export async function getPublishedBlogPost(
   env: CloudflareEnv,
   previewAuthorized = false,
 ) {
-  const site = await queryFirst<{ organization_id: string; vertical: string }>(db, `
-    SELECT organization_id, vertical FROM organization WHERE id = ? AND status = 'active' LIMIT 1
+  const site = await queryFirst<{ vertical: string }>(db, `
+    SELECT vertical FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
   if (!site) return null
   const prefix = normalizeVertical(site.vertical) === 'service' ? 'article' : 'blog'

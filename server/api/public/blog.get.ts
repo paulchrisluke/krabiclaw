@@ -27,13 +27,16 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  // Absent means every collection, which is what a tenant blog asked for when
-  // it had no collection concept at all. Naming one narrows to it.
+  // Absent means the blog, the same collection `listPublicPlatformBlogPosts`
+  // defaults to, because this route answers the blog index and that function
+  // renders it server-side; a route that answered every collection put the
+  // documentation in the platform's blog feed while its own SSR left it out.
+  // Every article carries a collection, so no caller loses rows to the filter.
   const requested = getQuery(event).collection
   if (requested !== undefined && !isArticleCollection(requested)) {
     return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
   }
-  const collection = requested === undefined ? null : requested
+  const collection = requested === undefined ? 'blog' : requested
 
   const sql = `
     SELECT
@@ -44,13 +47,13 @@ export default defineHandler(async (event) => {
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
       AND p.organization_id = ? AND p.visibility = 'listed'
-      ${collection === null ? '' : "AND (p.metadata_json ->> '$.collection') = ?"}
+      AND (p.metadata_json ->> '$.collection') = ?
     ORDER BY ${collection === 'docs' ? 'p.sort_order, p.title' : 'p.published_at IS NULL, p.published_at DESC, p.id DESC'}
     LIMIT 200
   `
 
   try {
-    const params = collection === null ? [organizationId] : [organizationId, collection]
+    const params = [organizationId, collection]
     const results = await queryAll<ApiRecord>(db, sql, params)
     return jsonResponse({ posts: (results ?? []).map(attachCover) })
   } catch (err) {
