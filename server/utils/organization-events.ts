@@ -43,17 +43,3 @@ export async function fireOrganizationEvent(params: FireOrganizationEventParams)
       beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),
     new Date().toISOString(), new Date().toISOString(), 'audit:' + id])
 }
-
-export async function fireOrganizationEventSafe(params: FireOrganizationEventParams): Promise<void> {
-  try {
-    await fireOrganizationEvent(params)
-  } catch (error) {
-    console.warn('organization_event_write_failed', {
-      eventType: params.eventType,
-      organizationId: params.organizationId,
-      entityType: params.entityType ?? null,
-      entityId: params.entityId ?? null,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}

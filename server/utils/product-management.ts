@@ -4,7 +4,7 @@ import { MAX_D1_BATCH_STATEMENTS } from '~/server/db/d1-limits'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   assertNoConflictingPrices,
@@ -956,7 +956,7 @@ export async function createProduct(db: DbClient, input: {
     writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
   await executeBatch(db, writes, { operation: 'Create product' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
+  await fireOrganizationEvent({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
   return getProduct(db, input.organizationId, planned.id)
 }
 
@@ -1033,7 +1033,7 @@ export async function createProductsBatch(db: DbClient, input: {
 }): Promise<Product[]> {
   const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
   await executeBatch(db, queries, { operation: 'Create products' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
+  await fireOrganizationEvent({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
   const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))`, [input.organizationId, d1JsonArray(ids)])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }

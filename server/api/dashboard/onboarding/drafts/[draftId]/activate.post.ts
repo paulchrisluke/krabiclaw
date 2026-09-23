@@ -16,7 +16,7 @@ import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onb
 import { activateOrganization } from '~/server/utils/organization-provisioning'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { refreshSocialCard } from '~/server/utils/social-card'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { resolveUserOrganization } from '~/server/utils/member-access'
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { isValidTimezone } from '~/utils/timezone'
@@ -148,9 +148,9 @@ export default defineHandler(async (event) => {
 
     const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
     if (typeof waitUntil === 'function') {
-      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, organizationId))
+      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheNow(env, organizationId))
     } else {
-      await purgePublicResourceCacheSafe(env, organizationId)
+      await purgePublicResourceCacheNow(env, organizationId)
     }
 
     const orgRow = await resolveUserOrganization(env, { userId: session.user.id, organizationId })

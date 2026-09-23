@@ -18,7 +18,7 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
@@ -377,7 +377,7 @@ export function createAuth(env: CloudflareEnv) {
         update: {
           after: async (member: MemberRow) => {
             await recordMemberChange(member.organizationId)
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: member.organizationId,
               eventType: 'member.role_changed',
@@ -390,7 +390,7 @@ export function createAuth(env: CloudflareEnv) {
         delete: {
           after: async (member: MemberRow) => {
             await recordMemberChange(member.organizationId)
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: member.organizationId,
               eventType: 'member.removed',
@@ -404,7 +404,7 @@ export function createAuth(env: CloudflareEnv) {
       invitation: {
         create: {
           after: async (invitation: InvitationRow) => {
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: invitation.organizationId,
               actorId: invitation.inviterId,

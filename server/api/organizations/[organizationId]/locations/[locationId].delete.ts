@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { assertRoleAllows } from '~/server/utils/member-access'
 import { deleteLocation } from '~/server/utils/location-management'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
-  await purgePublicResourceCacheSafe(env, organizationId)
+  await purgePublicResourceCacheNow(env, organizationId)
 
   return jsonResponse({
     success: true, message: 'Location deleted successfully', organizationId, locationId, }, { status: result.status })

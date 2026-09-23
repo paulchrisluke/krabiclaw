@@ -137,6 +137,12 @@ export default defineHandler(async (event) => {
 
   const isHeadRequest = event.req.method === 'HEAD'
 
+  // The self-heal runs on every oauth2 request, not only the stale ones, so a
+  // failed repair must not take down a sign-in that was going to work. It is kept
+  // instead of logged: if the request then fails, the error below names the repair
+  // that did not happen, which is the context that makes that failure readable.
+  let healFailure: unknown = null
+
   try {
     const request = await normalizedAuthRequest(event)
 
@@ -146,8 +152,7 @@ export default defineHandler(async (event) => {
         try {
           await healStaleCimdClient(await auth.$context, clientId)
         } catch (error) {
-          // Best-effort self-heal — never let it block the underlying OAuth request.
-          console.warn('[AUTH_HANDLER] healStaleCimdClient failed', errorChainForTelemetry(error))
+          healFailure = error
         }
       }
     }
@@ -200,6 +205,7 @@ export default defineHandler(async (event) => {
         statement_count: metrics.statementCount,
         d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
         error_chain: errorChainForTelemetry(error),
+        heal_failure: healFailure ? errorChainForTelemetry(healFailure) : null,
       }))
     } catch {
       // Telemetry must never replace the auth response.
@@ -209,7 +215,9 @@ export default defineHandler(async (event) => {
     
     throw new HTTPError({
       statusCode: 500,
-      statusMessage: `Auth error: ${errorMessage}`
+      statusMessage: healFailure
+        ? `Auth error: ${errorMessage} (the stale OAuth client repair had also failed: ${healFailure instanceof Error ? healFailure.message : String(healFailure)})`
+        : `Auth error: ${errorMessage}`
     })
   }
 })

@@ -4,7 +4,7 @@ import { instantDate } from '~/utils/timezone'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
-import { fireOrganizationEvent, fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
+import { fireOrganizationEvent, type OrganizationEventType } from '~/server/utils/organization-events'
 
 export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
@@ -648,7 +648,7 @@ async function persistCloudflareState(
     })
 
     if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
-      await fireOrganizationEventSafe({
+      await fireOrganizationEvent({
         db,
         organizationId: after.organization_id,
         actorId: options.actorId ?? null,
@@ -744,7 +744,7 @@ export async function createCustomDomainPair(
     // block below rolls back organization_domains rows on failure, so firing earlier
     // could record a domain.connected event for a domain that never existed.
     for (const entry of entries) {
-      await fireOrganizationEventSafe({
+      await fireOrganizationEvent({
         db,
         organizationId: opts.organizationId,
         actorId: opts.actorId ?? null,
@@ -955,16 +955,27 @@ async function deleteCustomDomainsWhere(
     SELECT id FROM organization_domains
     WHERE ${scope.column} = ? AND type = 'custom' AND status != 'deleted'
   `, [scope.value])
+  // Every domain is attempted before any failure is raised, because one that
+  // cannot be deleted must not strand the rest. But a sweep that left domains
+  // behind has not deleted them, and said so only to a console.
+  const undeleted: Array<{ domainId: string; cause: unknown }> = []
   for (const domain of domains || []) {
     try {
       await deleteCustomDomain(env, db, domain.id, 'system')
     } catch (error) {
+      undeleted.push({ domainId: domain.id, cause: error })
       console.error('deleteCustomDomains: failed to delete domain', {
         [scope.column]: scope.value,
         domainId: domain.id,
         error: error instanceof Error ? error.message : String(error),
       })
     }
+  }
+  if (undeleted.length) {
+    throw new AggregateError(
+      undeleted.map(({ cause }) => cause instanceof Error ? cause : new Error(String(cause))),
+      `${undeleted.length} custom domain(s) could not be deleted: ${undeleted.map(({ domainId }) => domainId).join(', ')}`,
+    )
   }
 }
 

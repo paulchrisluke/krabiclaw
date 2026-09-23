@@ -403,6 +403,12 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const startedAt = Date.now()
 
+  // One failed stats read does not end the wait — the documents are already
+  // uploaded and this loop only confirms completion. But the last failure is kept
+  // rather than logged, so that when the budget does run out the error says what
+  // actually went wrong instead of "timed out". A whole window of identical
+  // errors is our instance being unhealthy, and that is the thing worth naming.
+  let lastStatsError: unknown = null
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const stats = await instance.stats()
@@ -410,17 +416,19 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
       const running = Number(stats.running ?? 0)
       const outdated = Number(stats.outdated ?? 0)
       if (queued === 0 && running === 0 && outdated === 0) return
+      lastStatsError = null
     } catch (error) {
-      // A single transient stats-fetch error (e.g. DownstreamConfigApiError timeout,
-      // observed in production) must not abort the whole wait — the actual documents
-      // were already uploaded successfully by this point; this loop only confirms
-      // completion. Keep polling on the same budget rather than failing the deploy
-      // over a confirmation hiccup unrelated to whether indexing itself is healthy.
-      console.warn('[ai-search] transient error polling indexing status, continuing to poll', error)
+      lastStatsError = error
     }
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
+  if (lastStatsError) {
+    throw new Error(
+      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatsError instanceof Error ? lastStatsError.message : String(lastStatsError)}`,
+      { cause: lastStatsError },
+    )
+  }
   throw new Error('Timed out waiting for AI Search indexing to complete')
 }
 
@@ -1017,12 +1025,17 @@ export async function rebuildPlatformKnowledgeIndex(
   // safe courtesy window and return regardless of whether it confirms completion
   // within that window; a not-yet-confirmed result is not a failed rebuild.
   let indexingConfirmed = false
+  let indexingUnconfirmedReason: string | null = null
   if (options.confirmIndexing !== false) {
     try {
       await waitForIndexing(env, 45 * 1000)
       indexingConfirmed = true
     } catch (error) {
-      console.warn('[ai-search] indexing not confirmed complete within the courtesy window; it continues asynchronously on Cloudflare’s side', error)
+      // Returned rather than logged. The rebuild really can outlive this request,
+      // so not-yet-confirmed is not a failed rebuild — but the caller is the one
+      // entitled to decide that, and it cannot if the reason only ever reached a
+      // console. This is what the deploy step prints.
+      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
     }
   }
 
@@ -1031,6 +1044,7 @@ export async function rebuildPlatformKnowledgeIndex(
     ...result,
     sites: [...liveSites],
     indexingConfirmed,
+    indexingUnconfirmedReason,
   }
 }
 

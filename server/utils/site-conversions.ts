@@ -72,16 +72,3 @@ export async function recordSiteConversionEvent(db: DbClient, event: H3Event, in
   ])
   return { id }
 }
-
-export async function recordSubmissionConversionSafe(db: DbClient, event: H3Event, input: SiteConversionInput) {
-  try {
-    await recordSiteConversionEvent(db, event, input)
-  } catch (error) {
-    console.error('site_conversion_write_failed', {
-      organizationId: input.organizationId,
-      eventName: input.eventName,
-      entityId: input.entityId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}

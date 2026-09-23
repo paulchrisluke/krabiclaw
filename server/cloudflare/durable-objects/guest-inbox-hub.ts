@@ -137,6 +137,7 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
     const encoded = JSON.stringify(event)
     let eligible = 0
     let delivered = 0
+    const failures: string[] = []
     for (const socket of this.ctx.getWebSockets()) {
       const attachment: unknown = socket.deserializeAttachment()
       if (!isSocketAttachment(attachment) || !canReceive(attachment, event)) continue
@@ -145,11 +146,14 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
         socket.send(encoded)
         delivered += 1
       } catch (error) {
-        console.error('Dashboard invalidation delivery failed', error)
+        failures.push(error instanceof Error ? error.message : String(error))
       }
     }
     if (eligible > 0 && delivered === 0) {
-      return new Response(`Dashboard invalidation reached none of ${eligible} connected dashboards`, { status: 500 })
+      return new Response(
+        `Dashboard invalidation reached none of ${eligible} connected dashboards: ${failures.join('; ')}`,
+        { status: 500 },
+      )
     }
 
     return new Response(null, { status: 204 })

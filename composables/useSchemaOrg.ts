@@ -61,20 +61,16 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
   // tenant structured data on the tenant's canonical custom domain instead of
   // hardcoding the KrabiClaw platform origin.
   const requestURL = useRequestURL()
-  const itemListElement = validItems.reduce((acc: ApiRecord[], item) => {
-    try {
-      const itemUrl = new URL(item.url, requestURL.origin).toString()
-      acc.push({
-        '@type': 'ListItem',
-        position: acc.length + 1,
-        name: item.name,
-        item: itemUrl
-      })
-    } catch (error) {
-      console.warn('useBreadcrumbSchema: invalid breadcrumb URL, skipping item', item.url, error)
-    }
-    return acc
-  }, [])
+  // The breadcrumb urls are ours, built from the route. One that will not resolve
+  // against the request origin is a path this app constructed wrongly, and
+  // dropping it silently shipped a breadcrumb trail with a rung missing —
+  // exactly the kind of structured-data defect nothing here would ever notice.
+  const itemListElement = validItems.map((item, index): ApiRecord => ({
+    '@type': 'ListItem',
+    position: index + 1,
+    name: item.name,
+    item: new URL(item.url, requestURL.origin).toString(),
+  }))
 
   if (itemListElement.length === 0) return
 

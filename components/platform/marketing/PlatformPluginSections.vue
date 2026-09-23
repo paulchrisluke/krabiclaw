@@ -20,9 +20,10 @@
         <div v-if="stepUrl(step)" class="mt-4 flex items-center gap-2 rounded-xl border border-default bg-muted/50 px-3 py-2 font-mono text-xs">
           <span class="truncate">{{ stepUrl(step) }}</span>
           <button type="button" class="ml-auto cursor-pointer" aria-label="Copy MCP server URL" @click="copy(stepUrl(step)!)">
-            <PlatformIcon :name="copied ? 'check' : 'clipboard'" class="size-4" />
+            <PlatformIcon :name="copyFailed ? 'x' : copied ? 'check' : 'clipboard'" class="size-4" />
           </button>
         </div>
+        <p v-if="copyFailed" class="mt-1 text-xs text-error" role="status">Your browser blocked the clipboard — select the URL above and copy it.</p>
       </li>
     </ol>
     <slot />
@@ -66,13 +67,19 @@ function stepUrl(step: { text: string }): string | null {
 }
 
 const copied = ref(false)
+const copyFailed = ref(false)
 async function copy(url: string) {
+  copyFailed.value = false
   try {
     await navigator.clipboard.writeText(url)
     copied.value = true
     setTimeout(() => { copied.value = false }, 2000)
-  } catch (error) {
-    console.error('Failed to copy MCP server URL', error)
+  } catch {
+    // The clipboard is denied often enough that throwing here would be wrong,
+    // but the reader has to be told: the button previously did nothing at all
+    // and said nothing, so they pasted whatever was already on the clipboard.
+    copyFailed.value = true
+    setTimeout(() => { copyFailed.value = false }, 4000)
   }
 }
 void props

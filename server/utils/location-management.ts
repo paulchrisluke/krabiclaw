@@ -1,6 +1,6 @@
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
+import { fireOrganizationEvent } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import { parsePhone } from "~/utils/phone";
@@ -464,7 +464,7 @@ export async function createLocation(
         throw teamError;
       }
       const location = await loadLocation(db, organizationId, id);
-      await fireOrganizationEventSafe({
+      await fireOrganizationEvent({
         db,
         organizationId,
         
@@ -715,7 +715,7 @@ export async function updateLocation(
           organizationId,
           locationId,
         );
-        await fireOrganizationEventSafe({
+        await fireOrganizationEvent({
           db,
           organizationId,
           
@@ -750,7 +750,7 @@ export async function updateLocation(
   params.push(locationId, organizationId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, locationId);
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId,
     

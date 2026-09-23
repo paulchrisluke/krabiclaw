@@ -14,9 +14,9 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
 // Raised from 60s to 300s once every bootstrap-relevant write path was confirmed to call
-// purgePublicResourceCache/purgePublicResourceCacheSafe (dashboard editor routes + MCP were already
+// purgePublicResourceCache/purgePublicResourceCacheNow (dashboard editor routes + MCP were already
 // covered; location CRUD, onboarding setup/commit, and Google Places sync were a
-// gap closed alongside this change — see those call sites for purgePublicResourceCacheSafe).
+// gap closed alongside this change — see those call sites for purgePublicResourceCacheNow).
 export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
 const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
@@ -230,7 +230,7 @@ export async function purgePublicResourceCache(kv: KVNamespace, organizationId: 
  * When D1 is available it records a durable invalidation before attempting the
  * purge; a failed purge remains pending for the scheduled drain to retry.
  */
-export async function purgePublicResourceCacheSafe(
+export async function purgePublicResourceCacheNow(
   env: unknown,
   organizationId: string,
 ): Promise<void> {
@@ -240,8 +240,11 @@ export async function purgePublicResourceCacheSafe(
     NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
     ctx?: { waitUntil?: (_promise: Promise<unknown>) => void }
   } | null | undefined
+  // SITE_CACHE is bound in every environment in wrangler.toml. Returning quietly
+  // when it is missing meant a deployment that had lost the binding purged
+  // nothing and reported that it had, so every edit went on serving stale.
   const kv = maybeEnv?.SITE_CACHE
-  if (!kv) return
+  if (!kv) throw new Error('SITE_CACHE is not bound; the public resource cache cannot be purged')
 
   // This request clears its own site's entries, so nothing it wrote can be
   // read back stale. Everything else — the retention sweep, retry bookkeeping,

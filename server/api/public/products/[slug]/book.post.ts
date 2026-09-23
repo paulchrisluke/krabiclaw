@@ -3,7 +3,7 @@ import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/a
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyBookingCreated } from '~/server/utils/notifications'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
@@ -194,7 +194,7 @@ export default defineHandler(async (event) => {
     // no site or location policy merged underneath it.
     getProduct(db, site.id, product.id),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
+    recordSiteConversionEvent(db, event, {
       organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
       locationId: session.location_id, entityType: 'request', entityId: threadId,
       pageType: 'product', pagePath: `/products/${slug}`,

@@ -31,6 +31,20 @@ export default withNuxt(
       }],
       'import/first': 'off',
       'no-empty': 'error',
+      // A catch that ends on a console call and neither throws nor returns is a
+      // failure the caller is never told about. That is how a booking answered
+      // 200 with the owner's email never sent, how disconnecting Google
+      // Analytics reported success while the tracking script stayed live, and
+      // how a Durable Object broadcast that reached nobody looked delivered.
+      // There is no allowance for "transient" or "best effort": Cloudflare is not
+      // the thing that fails here, our code is, and a log is not a report. If the
+      // caller genuinely must continue, it has to say so in what it returns —
+      // an error status, a failed result, a recorded delivery outcome — not by
+      // writing the failure to a console nobody reads.
+      'no-restricted-syntax': ['error', {
+        selector: "CatchClause > BlockStatement[body.length=1]:not(:has(ThrowStatement)):not(:has(ReturnStatement)):has(ExpressionStatement > CallExpression[callee.object.name='console'])",
+        message: 'This catch logs the failure and continues, so nothing upstream learns of it. Throw, return an error status, or record the failure somewhere a caller reads.',
+      }],
       'no-useless-escape': 'off',
       // Off because @typescript-eslint/no-unused-vars above replaces it. The base
       // rule cannot read type positions, so it reports the parameter names in

@@ -1,6 +1,6 @@
 import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 
@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
-  await purgePublicResourceCacheSafe(env, organizationId)
+  await purgePublicResourceCacheNow(env, organizationId)
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({

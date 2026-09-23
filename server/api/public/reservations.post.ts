@@ -20,7 +20,7 @@ import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking }
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -181,7 +181,7 @@ export default defineHandler(async (event) => {
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
       : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
+    recordSiteConversionEvent(db, event, {
       organizationId: site.id,
       eventName: 'reservation_submit',
       stage: 'submitted',

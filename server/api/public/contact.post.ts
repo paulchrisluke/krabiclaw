@@ -6,7 +6,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyContactSubmitted } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -99,7 +99,7 @@ export default defineHandler(async (event) => {
   await notifyContactSubmitted(env, db, {
     organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
 
-  await recordSubmissionConversionSafe(db, event, {
+  await recordSiteConversionEvent(db, event, {
     organizationId: site.id,
     eventName: 'contact_submit',
     stage: 'submitted',

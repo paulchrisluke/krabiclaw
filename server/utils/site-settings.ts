@@ -5,7 +5,7 @@ import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
@@ -431,7 +431,7 @@ async function attemptSiteUpdate(
 
   // All settings callers use this mutation path; refresh both public resource
   // and HTML caches when typography changes, including a reset to Default.
-  if (updates.font_preset !== undefined) await purgePublicResourceCacheSafe(env, organizationId)
+  if (updates.font_preset !== undefined) await purgePublicResourceCacheNow(env, organizationId)
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))
