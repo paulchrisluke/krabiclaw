@@ -64,15 +64,36 @@
     data-parity-section="service-overview"
   >
     <BlawbyMediaGallery v-model="activeMedia" :media="gallery" :fallback-alt="page.title" />
+    <!--
+      The column beside the pictures: the rating, the name, the whole body copy
+      and the two ways to start. It held the name and a line of summary, and the
+      body copy sat in a band of its own below both columns.
+    -->
     <div class="flex-1">
       <div class="blawby-container pb-8 pt-8">
-        <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">{{ title }}</h1>
-        <p v-if="description" class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]">{{ description }}</p>
+        <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">
+          <span class="flex items-center" aria-hidden="true">
+            <BlawbyFeatureIcon v-for="star in 5" :key="star" name="StarIcon" class="size-5 shrink-0 text-yellow-400" />
+          </span>
+          {{ title }}
+        </h1>
+        <div v-if="overviewProse" class="mt-6">
+          <BlawbyRichText
+            :content="overviewProse"
+            unstyled
+            class="prose mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]"
+          />
+        </div>
+        <div v-if="overviewActions.length" class="mt-10 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+          <BlawbyButton v-for="action in overviewActions" :key="action.url" :to="action.url" class="gap-2">
+            {{ action.label }}
+          </BlawbyButton>
+        </div>
       </div>
     </div>
   </section>
 
-  <section v-else :class="backgroundClass" class="relative overflow-hidden" data-parity-section="page-hero">
+  <section v-else :class="backgroundClass" :style="backgroundStyle" class="relative overflow-hidden" data-parity-section="page-hero">
     <div class="blawby-container relative">
       <div class="px-6 pb-4 pt-16 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
@@ -102,7 +123,7 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
-import { blawbyShieldVariant, type BlawbyShieldVariant } from '~/types/blawby'
+import { blawbyHeroProseBlockId, blawbyShieldVariant, blawbySplitAccent, blawbySurface, type BlawbyShieldVariant } from '~/types/blawby'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
@@ -136,24 +157,41 @@ const ctaUrl = computed(() => {
   return url && url.startsWith('/') ? localePath(url) : url
 })
 
+/** The heading with the phrase the firm chose to emphasise cut out of it. */
+const splitTitle = computed(() => blawbySplitAccent(title.value, blockText(props.block.data.accent)))
+
 /**
- * The heading with its accent phrase cut out, so the phrase can carry colour.
- * `accent` is the phrase the firm chose to emphasise.
+ * The body copy this column draws: the page's own prose block, which the
+ * renderer leaves to us so it is not also drawn in a band below. A page with
+ * no prose block falls back to its summary, which is what the column used to
+ * show on its own.
  */
-const splitTitle = computed(() => {
-  const full = title.value
-  const accent = blockText(props.block.data.accent)
-  const index = accent ? full.indexOf(accent) : -1
-  return index >= 0
-    ? { before: full.slice(0, index), accent, after: full.slice(index + accent.length) }
-    : { before: full, accent: '', after: '' }
+const overviewProse = computed(() => {
+  const absorbedId = blawbyHeroProseBlockId(props.page)
+  const absorbed = absorbedId ? props.page.blocks.find(item => item.id === absorbedId) : null
+  return (absorbed ? blockTextOrNull(absorbed.data.markdown) : null) ?? description.value
 })
 
-const backgroundClass = computed(() => {
-  if (variant.value === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'
-  if (variant.value === 'about' || variant.value === 'contact') return 'bg-[var(--blawby-accent-200)]'
-  return 'bg-[var(--blawby-primary-100)]'
+/**
+ * The two ways to start, as the page writes them. The original held "Schedule
+ * Call" and "Contact Us" with their routes inside the template; the hero block
+ * already declares both button pairs, so the firm's own words are used and a
+ * pair it has not written simply does not appear.
+ */
+const overviewActions = computed(() => [
+  { label: ctaLabel.value, url: ctaUrl.value },
+  { label: blockTextOrNull(props.block.data.secondary_label), url: secondaryUrl.value },
+].filter((action): action is { label: string; url: string } => Boolean(action.label && action.url)))
+
+const secondaryUrl = computed(() => {
+  const url = blockTextOrNull(props.block.data.secondary_url)
+  return url && url.startsWith('/') ? localePath(url) : url
 })
+
+// The page's own colour, which the shield below cuts its shape out of, so the
+// two cannot drift apart. Only the dark one restates its text colours.
+const backgroundStyle = computed(() => ({ backgroundColor: blawbySurface(variant.value) }))
+const backgroundClass = computed(() => (variant.value === 'schedule' ? '[&_h1]:text-white [&_p]:text-gray-200' : undefined))
 const titleWords = computed(() => title.value.trim().split(/\s+/).filter(Boolean))
 const descriptionParts = computed(() => (description.value ?? '')
   .split(/\n\s*\n/)
