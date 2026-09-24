@@ -67,7 +67,18 @@
     <div class="flex-1">
       <div class="blawby-container pb-8 pt-8">
         <h1 v-if="title" class="mx-auto max-w-4xl blawby-display text-3xl font-bold text-[var(--blawby-primary)] sm:text-4xl md:mt-2">{{ title }}</h1>
-        <p v-if="description" class="mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]">{{ description }}</p>
+        <!--
+          The practice area's own words, beside its pictures, which is where
+          this layout puts them. It was one `<p>` of the summary line, so the
+          column ran out after eight words and the body copy sat in a band of
+          its own below the two columns.
+        -->
+        <BlawbyRichText
+          v-if="description"
+          :content="description"
+          unstyled
+          class="blawby-service-copy prose prose-lg mx-auto mt-6 max-w-2xl text-left text-lg text-[var(--blawby-primary)]"
+        />
       </div>
     </div>
   </section>
