@@ -112,10 +112,10 @@ Nuxt hot module replacement. It never resets D1. Run
 snapshot.
 
 Open tenant dashboards from the dashboard UI instead of guessing their URLs.
-When a route must be constructed manually, the segment named `organizationSlug` is the
-site's `subdomain`, not its `slug`. Kikuzuki therefore uses
-`/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`, not
-`/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki`.
+When a route must be constructed manually, the dashboard segment is the
+organization's `slug`, not its subdomain, and everything else sits directly
+under it: Kikuzuki's locations are
+`/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/locations`.
 
 For production-runtime browser verification, use the generated Worker locally.
 Wrangler reads the same `.env` as Nuxt. Playwright also loads it and supplies

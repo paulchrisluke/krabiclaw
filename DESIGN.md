@@ -222,7 +222,7 @@ sheet and then pressing Back reopened it.
 
 The parent is the nearest matched record above with fewer path segments and no
 `meta.passthrough`. Where the dashboard is walked differently from the way the
-URL nests — the links page lives under `/sites/:organizationSlug` but is reached from
+URL nests — the links page lives at `/:orgSlug/links` but is reached from
 Pages — the page names its own parent: `definePageMeta({ back: '<route name>' })`.
 `grep -rn "back: '" pages/` is the complete list of exceptions, and there is no
 other way to declare one.
@@ -230,7 +230,7 @@ other way to declare one.
 A tab root has nothing above it, so it renders no Back at all.
 
 **The lit tab is the one this walk ends at.** Matching a tab's path as a prefix
-of the URL cannot answer it: the links page lives at `/sites/:organizationSlug/links`,
+of the URL cannot answer it: the links page lives at `/:orgSlug/links`,
 so the URL said Locations while every way out of it led to Menu. Walking up
 asks the same question Back asks, and both records at the deepest URL are asked
 for a declared parent, because a directory's `index.vue` is the record

@@ -49,19 +49,9 @@ test.describe('stateless MCP server', () => {
     let createdPostId: string | undefined
 
     try {
-      const upload = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'upload_user_media',
-        args: {
-          organization_id: organizationId,
-          category: 'other',
-          file: {
-            download_url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
-            file_id: 'sediment://file_publication_cover',
-          },
-        },
-      })
-      expect(upload.status()).toBe(200)
-      const imageAssetId = mcpData<{ asset_id: string }>(await upload.json()).asset_id
+      // The cover is one of the demo's own images: this is about publishing,
+      // and uploading one would store a new image on every run.
+      const imageAssetId = 'media-demo-burrata'
 
       const now = Date.now()
       const create = await mcpRequest(request, baseURL!, {

@@ -45,7 +45,7 @@ import { formatPostalAddress } from '~/utils/postal-address'
 import type { LocationReservationConfig } from '~/server/utils/reservations'
 
 // A location is a tile on the Locations tab, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-sites' })
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-locations' })
 
 interface LocationOverview {
   id: string
