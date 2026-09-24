@@ -23,7 +23,13 @@
     </div>
   </div>
 
-  <div class="top-2 hidden h-min w-full flex-1 flex-col-reverse flex-wrap pt-8 md:sticky md:mb-36 md:flex">
+  <!--
+    The 9rem bottom margin came from a layout where the column beside this one
+    held the whole practice area's prose and ran far taller. Here that column is
+    a title and a line of summary, so the margin was only a void under the
+    pictures.
+  -->
+  <div class="top-2 hidden h-min w-full flex-1 flex-col-reverse flex-wrap pt-8 md:sticky md:flex">
     <div v-if="media.length > 1" class="mx-auto mt-3 w-full px-4 sm:p-0">
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-6" role="tablist" aria-label="Service media">
         <button
