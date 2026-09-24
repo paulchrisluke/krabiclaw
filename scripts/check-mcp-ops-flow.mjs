@@ -182,7 +182,7 @@ async function main() {
   const postPublish = await mcp(headers, 'publish_post', {
     organization_id: organizationId,
     post_id: postId,
-    channels: ['site'],
+    channels: ['organization'],
   })
   expectStatus('publish_post succeeds', postPublish)
   expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
@@ -190,7 +190,7 @@ async function main() {
   const combinedPublish = await mcp(headers, 'publish_post', {
     organization_id: organizationId,
     post_id: postId,
-    channels: ['site', 'facebook'],
+    channels: ['organization', 'facebook'],
   })
   expectStatus('publish_post keeps site success when facebook is disconnected', combinedPublish)
   const combinedOutcome = data(combinedPublish.body)?.channel_outcomes

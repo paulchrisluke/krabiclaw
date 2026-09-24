@@ -48,7 +48,7 @@ if (!secret) {
 // platform's corpus first, then every live business's slice, one at a time.
 async function reindex(organization?: string) {
   const url = new URL('/api/internal/search/reindex', baseUrl)
-  if (organization) url.searchParams.set('site', organization)
+  if (organization) url.searchParams.set('organization', organization)
   const response = await fetch(url, {
     method: 'POST',
     headers: {

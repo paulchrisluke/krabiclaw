@@ -226,8 +226,10 @@ WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map W
         CASE WHEN instr(payload_json ->> '$.deep_link', '/sites/') > 0
           THEN json_set(payload_json, '$.deep_link',
             substr(payload_json ->> '$.deep_link', 1, instr(payload_json ->> '$.deep_link', '/sites/') - 1)
-            || substr(substr(payload_json ->> '$.deep_link', instr(payload_json ->> '$.deep_link', '/sites/') + 7),
-                      instr(substr(payload_json ->> '$.deep_link', instr(payload_json ->> '$.deep_link', '/sites/') + 7), '/')))
+            || CASE WHEN instr(substr(payload_json ->> '$.deep_link', instr(payload_json ->> '$.deep_link', '/sites/') + 7), '/') > 0
+              THEN substr(substr(payload_json ->> '$.deep_link', instr(payload_json ->> '$.deep_link', '/sites/') + 7),
+                          instr(substr(payload_json ->> '$.deep_link', instr(payload_json ->> '$.deep_link', '/sites/') + 7), '/'))
+              ELSE '' END)
           ELSE payload_json END,
         '$.visibility_scope')
     WHERE json_type(payload_json, '$.visibility_scope') IS NOT NULL
@@ -235,6 +237,11 @@ WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map W
   // An organization's media lives under organizations/<organization id>/. The
   // objects are copied in R2 before the cutover; media_objects_are_served below
   // fails the transfer by name if one was not.
+  // Deleting an asset once left its placements behind (fixed: deletion now
+  // removes them in the same batch). A placement of a deleted asset renders a
+  // broken image, so the leftovers go with the asset they named.
+  { name: 'placements_of_deleted_assets_are_removed', sql: `DELETE FROM media_placements
+    WHERE asset_id IN (SELECT id FROM media_assets WHERE status = 'deleted')` },
   { name: 'media_keys_live_under_their_organization', sql: `UPDATE media_assets
       SET r2_key = 'organizations/' || substr(r2_key, 7),
           public_url = replace(public_url, '/sites/' || organization_id || '/', '/organizations/' || organization_id || '/')
@@ -261,6 +268,10 @@ const LOCALIZED_OWNER_TABLES = {
 export const TARGET_INVARIANT_QUERIES = {
   // Every media object is addressed by the organization that owns it; a key left
   // anywhere else is a row the rename did not reach.
+  // A placement renders its asset; one left pointing at a deleted asset is a
+  // broken image on a live page.
+  placements_show_live_assets: `SELECT p.id FROM media_placements p JOIN media_assets a ON a.id = p.asset_id
+    WHERE p.status = 'active' AND a.status = 'deleted'`,
   media_keys_live_under_their_organization: `SELECT id FROM media_assets
     WHERE r2_key IS NOT NULL AND r2_key NOT LIKE 'organizations/' || organization_id || '/%'`,
   retired_site_names_are_gone: `SELECT id FROM analytics_summaries WHERE kind = 'site_day'
@@ -336,11 +347,12 @@ export function auditTargetInvariants(target) {
   `).all().map(row => String(row.role))
   const undeclared = roles.filter(role => !DECLARED_ORGANIZATION_ROLES.has(role))
   results.push({ name: 'organization_roles_are_declared', violations: undeclared.length, undeclared })
-  // A key the rows name is only real if the object is there. The copy into
+  // A key an active row names is only real if the object is there (a deleted
+  // asset's object is gone on purpose). The copy into
   // organizations/<id>/ happens in R2, outside this file, so every public URL a
   // media row carries is fetched: one that does not answer 200 is an image
   // that would 404 after the cutover, and the transfer names it.
-  const media = target.prepare('SELECT id, public_url FROM media_assets WHERE public_url IS NOT NULL').all()
+  const media = target.prepare("SELECT id, public_url FROM media_assets WHERE status = 'active' AND public_url IS NOT NULL").all()
   const unserved = media.filter(row => {
     const probe = spawnSync('curl', ['-s', '-o', '/dev/null', '-I', '-w', '%{http_code}', '--max-time', '20', String(row.public_url)], { encoding: 'utf8' })
     if (probe.error) throw probe.error
