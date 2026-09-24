@@ -295,13 +295,18 @@ export async function getPublicBlawbyShellData(
   const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
-  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks] = await Promise.all([
+  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks, verification] = await Promise.all([
     getPublicBlawbyIdentity(db, organizationId),
     getPublicConsultationSettings(db, organizationId),
     getPublicCompliance(db, organizationId),
     getPublicThemeTokens(db, organizationId),
     listPublishedTenantPagePaths(db, organizationId, locale),
+    queryFirst<{ token: string | null }>(db, `
+      SELECT json_extract(integrations_json, '$.google_search_console.verification_token') AS token
+        FROM organization WHERE id = ? LIMIT 1
+    `, [organizationId]),
   ])
+  if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
   const localizedRepresentation = locale !== 'en'
   const identity = localizedRepresentation
     ? {
@@ -342,6 +347,7 @@ export async function getPublicBlawbyShellData(
     compliance,
     themeTokens,
     pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
+    searchConsoleVerification: verification.token,
   }
 }
 

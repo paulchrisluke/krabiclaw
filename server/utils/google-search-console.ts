@@ -188,8 +188,16 @@ export async function verifyAndAddProperty(
   const accessToken = await googleAccessToken(env, organizationId)
   const token = await requestVerificationToken(accessToken, siteUrl)
   await storeVerificationToken(env, organizationId, siteUrl, token)
-  await publish()
-  await verifySiteOwnership(accessToken, siteUrl)
-  await addSearchConsoleSite(accessToken, siteUrl)
+  try {
+    await publish()
+    await verifySiteOwnership(accessToken, siteUrl)
+    await addSearchConsoleSite(accessToken, siteUrl)
+  } catch (error) {
+    // A property Google would not verify is not connected: the pending record
+    // goes, and the tag stops being served, before the failure is reported.
+    await clearSearchConsoleIntegration(env, organizationId)
+    await publish()
+    throw error
+  }
   await storeSearchConsoleSelection(env, organizationId, siteUrl, token)
 }

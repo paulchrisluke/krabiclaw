@@ -22,9 +22,11 @@ import { releaseMetaUserIntegrations } from '~/server/utils/integration-release'
  */
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const appSecret = env.FACEBOOK_APP_SECRET
+  // Facebook Login and Instagram Login are separate Meta apps, and each signs
+  // its own callbacks with its own secret.
+  const appSecrets = [env.FACEBOOK_APP_SECRET, env.INSTAGRAM_APP_SECRET].filter((secret): secret is string => typeof secret === 'string' && secret.length > 0)
   const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
-  if (!appSecret || !hmacSecret) {
+  if (!appSecrets.length || !hmacSecret) {
     return jsonResponse({ error: 'Meta integration is not configured' }, { status: 500 })
   }
 
@@ -32,7 +34,7 @@ export default defineHandler(async (event) => {
   const signedRequest = body?.signed_request
   if (!signedRequest) return jsonResponse({ error: 'signed_request is required' }, { status: 400 })
 
-  const payload = await parseMetaSignedRequest(signedRequest, appSecret)
+  const payload = await parseMetaSignedRequest(signedRequest, appSecrets)
   if (!payload?.user_id) return jsonResponse({ error: 'Invalid signed request' }, { status: 401 })
 
   await releaseMetaUserIntegrations(env, payload.user_id, { eraseProviderData: true })

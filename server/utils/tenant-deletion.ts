@@ -198,13 +198,7 @@ export async function deleteOrganizationNow(env: CloudflareEnv, organizationId: 
   await releaseOrganizationIntegrations(env, organizationId)
 
   for (const imageId of await ownedImageIds(db, { column: 'organization_id', value: organizationId })) {
-    await deleteImage(env, imageId).catch((error: unknown) => {
-      console.error('tenant_deletion_image_release_failed', {
-        organizationId,
-        imageId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    })
+    await deleteImage(env, imageId)
   }
 
   // What the organization's guests hold goes with it, stated rather than left

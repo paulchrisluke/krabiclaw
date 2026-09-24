@@ -241,19 +241,12 @@ export async function releaseOrganizationIntegrations(
   organizationId: string,
   options: ReleaseIntegrationOptions = {},
 ): Promise<ReleaseIntegrationResult[]> {
+  // A product that will not release stops the deletion: the rows are what name
+  // the credential, so deleting them first would leave it unrevokable. The
+  // deletion sweep retries, and its failure is the cron run's.
   const results: ReleaseIntegrationResult[] = []
   for (const product of INTEGRATION_PRODUCTS) {
-    try {
-      results.push(await releaseIntegration(env, organizationId, product, options))
-    } catch (error) {
-      // As with Cloudflare Images: one product that will not release must not
-      // keep the customer's rows alive in D1, so the loop continues — but the
-      // failure travels back in the results rather than only into a log, so a
-      // caller can see the tenant was deleted with something left behind.
-      const message = error instanceof Error ? error.message : String(error)
-      console.error('tenant_deletion_integration_release_failed', { organizationId, product, error: message })
-      results.push({ product, released: false, erasedDocuments: 0, warnings: [`${product} could not be released: ${message}`] })
-    }
+    results.push(await releaseIntegration(env, organizationId, product, options))
   }
   return results
 }

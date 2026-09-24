@@ -249,6 +249,8 @@ export interface PublicBlawbyShellData {
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
   pageLinks: PublicBlawbyPageLink[]
+  /** The Search Console META token, served while Google needs to see it. */
+  searchConsoleVerification: string | null
 }
 
 export interface PublicBlawbyData {

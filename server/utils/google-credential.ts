@@ -39,7 +39,9 @@ export interface GoogleCredentialEnv {
 /** Which product a connect flow is for. Travels in the signed OAuth state. */
 export type GoogleProduct = 'analytics' | 'search-console'
 
-const IDENTITY_SCOPES = ['openid', 'email']
+// Written the way Google reports them back in a token's `scope`: a request for
+// `email` is granted as userinfo.email, and credentialGrants compares the two.
+const IDENTITY_SCOPES = ['openid', 'https://www.googleapis.com/auth/userinfo.email']
 
 /**
  * What each product needs, and nothing more. Analytics reads GA4 and does not

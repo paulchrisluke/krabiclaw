@@ -141,7 +141,6 @@ const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value
   : locations.value.filter(location => location.slug === scopedLocationSlug.value)))
 
-const searchConsoleVerification = computed(() => config.value?.search_console_verification || null)
 
 // Request-scoped URL state must be captured eagerly during setup. Tenant routing
 // already 301s alternate subdomains to the configured custom domain, so the
@@ -187,14 +186,6 @@ useSocialMetadata(() => ({
   // unlisted, and any preview render, says so over this.
   discoverability: isDemoHost ? 'private' : 'listed',
 }))
-
-useHead(() => {
-  return {
-    meta: searchConsoleVerification.value
-      ? [{ name: 'google-site-verification', content: searchConsoleVerification.value }]
-      : [],
-  }
-})
 </script>
 
 <style>

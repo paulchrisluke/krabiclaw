@@ -407,7 +407,7 @@ export const revokeFacebookAuthorization = async (
  */
 export const parseMetaSignedRequest = async (
   signedRequest: string,
-  appSecret: string,
+  appSecrets: readonly string[],
 ): Promise<{ user_id?: string; algorithm?: string; issued_at?: number } | null> => {
   const [encodedSignature, encodedPayload] = signedRequest.split('.')
   if (!encodedSignature || !encodedPayload) return null
@@ -430,10 +430,14 @@ export const parseMetaSignedRequest = async (
     return null
   }
 
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(appSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
-  )
-  if (!(await crypto.subtle.verify('HMAC', key, signature, payloadBytes))) return null
+  let verified = false
+  for (const appSecret of appSecrets) {
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(appSecret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify'],
+    )
+    if (await crypto.subtle.verify('HMAC', key, signature, payloadBytes)) { verified = true; break }
+  }
+  if (!verified) return null
 
   try {
     const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(encodedPayload))) as {
