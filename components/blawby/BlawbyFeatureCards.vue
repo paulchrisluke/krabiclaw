@@ -21,6 +21,9 @@
           </table>
         </div>
       </div>
+      <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+        <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
+      </div>
     </div>
   </section>
 
@@ -31,6 +34,9 @@
   <div v-else-if="isArticles && posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
     <BlawbySectionHeading v-if="heading" :title="heading" accent="" centered />
     <BlawbyArticleGrid :posts="posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+    <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+      <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
+    </div>
   </div>
 
   <!--
