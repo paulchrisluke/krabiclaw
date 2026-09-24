@@ -31,9 +31,9 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish', 'social-card-backfill', 'sessions-materialize', 'article-broadcast-send'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
-  '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep', 'social-card-cleanup'],
+  '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry'],
+  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {

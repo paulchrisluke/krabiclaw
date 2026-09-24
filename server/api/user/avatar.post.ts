@@ -58,9 +58,18 @@ export default defineHandler(async (event) => {
   // `user.image`, which an authenticated client can set to any string through
   // Better Auth — so it names a candidate, and Cloudflare's own record of the
   // filename decides whether it is ours to delete.
+  // The new avatar is already saved, so a failed delete of the old one is not a
+  // failed upload: the response says the avatar changed and names what was left.
   const previousImageId = previous?.split('/').at(-2)
   if (previousImageId && previousImageId !== uploaded.imageId) {
-    await deleteImageOwnedBy(env, previousImageId, avatarFilename)
+    try {
+      await deleteImageOwnedBy(env, previousImageId, avatarFilename)
+    } catch (cause) {
+      return jsonResponse({
+        image: uploaded.publicUrl,
+        previousImageCleanupError: `The previous avatar image ${previousImageId} was not deleted: ${cause instanceof Error ? cause.message : String(cause)}`,
+      })
+    }
   }
 
   return jsonResponse({ image: uploaded.publicUrl })

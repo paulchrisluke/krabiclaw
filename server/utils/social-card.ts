@@ -259,11 +259,14 @@ function socialTemplate(organization: OrganizationRecord): SocialTemplate {
 async function clearSocialCard(input: { db: DbClient; env: SocialCardEnv; owner: SocialCardOwner; actorId?: string | null }, reason: 'no_source' | 'owner_not_found' | 'missing_content') {
   // Unplaced, not deleted: the card may be production's, read from a copy of
   // its rows. social-card-cleanup removes unplaced generated cards.
-  const placed = await queryAll<{ organization_id: string }>(input.db, "SELECT DISTINCT organization_id FROM media_placements WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", [input.owner.owner_type, input.owner.owner_id])
+  const placed = await queryAll<{ organization_id: string; asset_id: string }>(input.db, "SELECT organization_id, asset_id FROM media_placements WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", [input.owner.owner_type, input.owner.owner_id])
   if (placed.length) {
+    const now = new Date().toISOString()
     await executeBatch(input.db, [
       { query: "DELETE FROM media_placements WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [input.owner.owner_type, input.owner.owner_id] },
-      ...placed.map(row => publicResourceCacheInvalidationQuery(row.organization_id, 'social-card-cleared')),
+      // Retention is counted from the moment the card lost its placement.
+      ...placed.map(row => ({ query: 'UPDATE media_assets SET updated_at = ? WHERE id = ? AND organization_id = ?', params: [now, row.asset_id, row.organization_id] })),
+      ...[...new Set(placed.map(row => row.organization_id))].map(organizationId => publicResourceCacheInvalidationQuery(organizationId, 'social-card-cleared')),
     ], { operation: 'clear social card placement' })
   }
   const result = { kind: 'skipped' as const, owner: input.owner, reason }
@@ -345,11 +348,18 @@ export async function refreshSocialCard(input: {
     // card is then production's. The superseded card is left unplaced for
     // social-card-cleanup, which runs where the Images credentials are.
     try {
-      await executeBatch(db, buildSingleMediaPlacementQueries({
-        organizationId: organization.id,
-        placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
-        media: [{ asset_id: uploaded.assetId }],
-      }), { operation: 'replace social card placement' })
+      await executeBatch(db, [
+        ...buildSingleMediaPlacementQueries({
+          organizationId: organization.id,
+          placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
+          media: [{ asset_id: uploaded.assetId }],
+        }),
+        // The replaced card's retention is counted from now, when it lost its
+        // placement, not from whenever the asset was last touched.
+        ...(current && current.asset_id !== uploaded.assetId
+          ? [{ query: 'UPDATE media_assets SET updated_at = ? WHERE id = ? AND organization_id = ?', params: [new Date().toISOString(), current.asset_id, organization.id] }]
+          : []),
+      ], { operation: 'replace social card placement' })
     } catch (placementError) {
       try {
         await deleteMediaAsset(db, env, uploaded.assetId, organization.id, input.actorId ?? null)
