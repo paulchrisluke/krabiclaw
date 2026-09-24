@@ -1,7 +1,6 @@
 name: CI
 
-# Drafts run the static Checks; the preview qualification starts at
-# ready_for_review.
+# Drafts run the static Checks; E2E starts at ready_for_review.
 
 on:
   pull_request:
@@ -20,7 +19,7 @@ concurrency:
 jobs:
   typecheck:
     name: Checks
-    # Drafts run Checks; only the preview qualification below waits for ready.
+    # Drafts run Checks; only E2E below waits for ready.
     if: >-
       github.event_name == 'push'
       || !(github.base_ref == 'main' && github.head_ref == 'staging')

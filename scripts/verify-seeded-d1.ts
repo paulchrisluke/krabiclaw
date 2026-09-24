@@ -7,15 +7,10 @@ import { E2E_AUTH_FIXTURES, LOCAL_DEVELOPER_AUTH_FIXTURE } from '../config/devel
 
 const { values } = parseArgs({
   options: {
-    preview: { type: 'boolean', default: false },
     'local-dev': { type: 'boolean', default: false },
   },
   strict: true,
 })
-
-if (values.preview && values['local-dev']) {
-  throw new Error('--local-dev is available only for local D1 fixture verification.')
-}
 
 const organizationIds = ['org-demo', 'org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', 'org-ncls-blawby'] as const
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`
@@ -32,8 +27,7 @@ SELECT
 `
 
 const args = [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'execute', 'DB']
-if (values.preview) args.push('--env', 'preview', '--remote')
-else args.push('--local')
+args.push('--local')
 args.push('--command', sql, '--json')
 
 const output = execFileSync(process.execPath, args, {
@@ -62,4 +56,4 @@ if (failures.length > 0) {
 }
 
 const localDeveloperSummary = values['local-dev'] ? ', the local developer credential' : ''
-console.log(`Verified ${values.preview ? 'preview' : 'local'} D1: ${organizationIds.length} curated businesses, ${E2E_AUTH_FIXTURES.length} E2E credentials${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)
+console.log(`Verified local D1: ${organizationIds.length} curated businesses, ${E2E_AUTH_FIXTURES.length} E2E credentials${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)

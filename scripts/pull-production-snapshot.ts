@@ -1,5 +1,5 @@
 /**
- * Preview and local start from a copy of production instead of hand-maintained
+ * Local and staging start from a copy of production instead of hand-maintained
  * seed definitions, so what they test against is what customers actually have.
  *
  * The row copy is transferred through scripts/transfer-database-export.mjs: every row is
@@ -14,7 +14,7 @@
  * credentials come from provision-development-auth.ts afterwards, as before.
  *
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --local
- *   node --experimental-strip-types scripts/pull-production-snapshot.ts --preview
+ *   node --experimental-strip-types scripts/pull-production-snapshot.ts --staging
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -29,18 +29,17 @@ import { transferDatabaseExport } from './transfer-database-export.mjs'
 // production's eight, three product sessions against production's 808. A gate
 // standing in front of `main` on data that does not resemble production is the
 // reason tenant rendering, booking and localisation defects kept reaching
-// production green. Staging is the same restore as preview with a different
-// `--env`; it is never a target while its schema is already released.
+// production green. Staging is the same restore as local with `--env staging`;
+// it is never a target while its schema is already released.
 const { values } = parseArgs({
   options: {
     local: { type: 'boolean', default: false },
-    preview: { type: 'boolean', default: false },
     staging: { type: 'boolean', default: false },
   },
   strict: true,
 })
-const targets = (['local', 'preview', 'staging'] as const).filter(name => values[name])
-if (targets.length !== 1) throw new Error('Choose exactly one of --local, --preview or --staging.')
+const targets = (['local', 'staging'] as const).filter(name => values[name])
+if (targets.length !== 1) throw new Error('Choose exactly one of --local or --staging.')
 const target = targets[0]!
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')

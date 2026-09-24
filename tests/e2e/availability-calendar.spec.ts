@@ -3,7 +3,7 @@ import { loginAs } from './helpers/auth'
 import { devLoginHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
 
 const baseURL = testBaseUrl()
-const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(new URL(baseURL).hostname)
+const writable = ['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)
 const availabilityUrl = `${baseURL}/api/editor/organizations/org-demo/locations/loc-demo/reservation-availability`
 const configUrl = `${baseURL}/api/editor/organizations/org-demo/locations/loc-demo/reservation-config`
 
