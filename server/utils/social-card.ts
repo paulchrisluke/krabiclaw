@@ -304,7 +304,13 @@ export async function refreshSocialCard(input: {
       logoUpdatedAt: logo?.updated_at ?? null,
       payload,
     })
-    if (current?.generation_key === generationKey && current.public_url) {
+    // A matching key says what the card would show, not that its image still
+    // exists: one deleted out from under its row served 404 forever while every
+    // reconcile reused it. The card is reused only while its image is served.
+    const currentServed = current?.generation_key === generationKey && current.public_url
+      ? (await fetch(current.public_url, { method: 'HEAD', signal: AbortSignal.timeout(10_000) })).ok
+      : false
+    if (currentServed && current?.public_url) {
       await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'active' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card' AND asset_id = ?", params: [owner.owner_type, owner.owner_id, current.asset_id] }])
       return { kind: 'reused', owner, assetId: current.asset_id, publicUrl: current.public_url, generationKey }
     }

@@ -347,12 +347,12 @@ export function auditTargetInvariants(target) {
   `).all().map(row => String(row.role))
   const undeclared = roles.filter(role => !DECLARED_ORGANIZATION_ROLES.has(role))
   results.push({ name: 'organization_roles_are_declared', violations: undeclared.length, undeclared })
-  // A key an active row names is only real if the object is there (a deleted
-  // asset's object is gone on purpose). The copy into
-  // organizations/<id>/ happens in R2, outside this file, so every public URL a
-  // media row carries is fetched: one that does not answer 200 is an image
-  // that would 404 after the cutover, and the transfer names it.
-  const media = target.prepare("SELECT id, public_url FROM media_assets WHERE status = 'active' AND public_url IS NOT NULL").all()
+  // The R2 keys are the ones this transfer rewrites, and the objects were
+  // copied to organizations/<id>/ in R2, outside this file. So every active
+  // R2 row's public URL is fetched: one that does not answer 200 is an image
+  // the rewrite would break, and the transfer names it. A deleted asset's
+  // object is gone on purpose.
+  const media = target.prepare("SELECT id, public_url FROM media_assets WHERE status = 'active' AND provider = 'cloudflare_r2' AND public_url IS NOT NULL").all()
   const unserved = media.filter(row => {
     const probe = spawnSync('curl', ['-s', '-o', '/dev/null', '-I', '-w', '%{http_code}', '--max-time', '20', String(row.public_url)], { encoding: 'utf8' })
     if (probe.error) throw probe.error
