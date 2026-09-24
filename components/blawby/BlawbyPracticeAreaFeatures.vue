@@ -27,7 +27,14 @@
               <span class="grow">
                 <span class="font-semibold" :class="index === selected ? 'text-[var(--blawby-primary)]' : 'text-gray-500'">{{ feature.title }}.</span>
                 {{ ' ' }}
-                <span>{{ feature.description }}</span>
+                <!--
+                  An item's words are its rich text when it has any, and its
+                  description otherwise — the same reading the cards make. This
+                  showed only the description, so an item written as `body`
+                  rendered its title followed by nothing.
+                -->
+                <BlawbyRichText v-if="feature.body" :content="feature.body" unstyled class="inline" />
+                <span v-else>{{ feature.description }}</span>
               </span>
             </button>
           </div>
@@ -72,7 +79,7 @@ import type { TenantPageMedia } from '~/utils/tenant-page-blocks'
 // the layout the firm's pages carried before the offering model was removed,
 // when these features went unrendered entirely.
 const props = defineProps<{
-  features: Array<{ title: string; description: string; icon: string; media: TenantPageMedia[] }>
+  features: Array<{ title: string; description: string; body: string; icon: string; media: TenantPageMedia[] }>
   ctaLabel?: string | null
   ctaUrl?: string | null
 }>()

@@ -54,6 +54,14 @@
           <p v-else-if="feature.description" class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
         </article>
       </div>
+      <!--
+        The block's button. It is declared on every feature_grid, so a grid that
+        is drawn as cards shows it too — it was read only by the practice-area
+        list, and a button written on the About page's grid went nowhere.
+      -->
+      <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+        <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
+      </div>
     </div>
   </section>
 </template>
