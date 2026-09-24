@@ -1299,7 +1299,7 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, migration_chain_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
  *   derived?: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
- *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} TransferManifest
+ *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number }, schema?: Array<{ name: string, sql: string }> }} TransferManifest
  */
 
 /**
@@ -1415,6 +1415,8 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     const broken = manifest.invariants.filter(result => result.violations > 0)
     assert(broken.length === 0, `Invariant violations: ${broken.map(result => `${result.name}=${result.violations}`).join(', ')}`)
     if (payloadPath) manifest.payload = writePayload(target, payloadPath, schemaSql, { withoutJwks })
+    // What a destination must already carry for the data-only payload to apply.
+    manifest.schema = target.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name").all()
     writeFileSync(`${targetPath}.manifest.json`, JSON.stringify(manifest, null, 2), { mode: 0o600 })
     return manifest
   } finally {

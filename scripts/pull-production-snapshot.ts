@@ -21,7 +21,6 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import Database from 'better-sqlite3'
 import { transferDatabaseExport } from './transfer-database-export.mjs'
 
 // Staging is a release gate, so it has to hold what production holds. It had no
@@ -153,9 +152,8 @@ try {
   // under the same name, so `migrations apply` sees nothing new — fails half
   // way through the import instead, on whichever column moved first.
   const schemaSql = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name"
-  const expected = new Database(join(directory, 'target.sqlite'), { readonly: true })
-  const expectedSchema = expected.prepare(schemaSql).all() as Array<{ name: string; sql: string }>
-  expected.close()
+  const expectedSchema = manifest.schema
+  if (!expectedSchema) throw new Error('The transfer did not report the schema it built')
   const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', schemaSql, '--json'], true)) as Array<{ results: Array<{ name: string; sql: string }> }>
   const actualSchema = new Map((actual?.results ?? []).map(table => [table.name, table.sql]))
   const drift = expectedSchema.filter(table => actualSchema.get(table.name) !== table.sql).map(table => table.name)
