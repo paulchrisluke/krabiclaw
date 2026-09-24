@@ -11,7 +11,7 @@
     -->
     <section v-for="block in renderedBlocks" :key="block.id" :data-block-type="block.type" :data-parity-section="presentationOf(block) ? undefined : sectionKey(block)"
       class="tenant-page-block"
-      :class="!presentationOf(block) && template === 'saya' ? 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8' : undefined"
+      :class="!presentationOf(block) ? 'mx-auto max-w-7xl px-4 sm:px-6 lg:px-8' : undefined"
     >
       <!--
         A template that draws this block its own way draws it; otherwise the

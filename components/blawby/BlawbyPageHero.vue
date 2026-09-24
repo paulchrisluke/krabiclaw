@@ -72,7 +72,7 @@
     </div>
   </section>
 
-  <section v-else :class="backgroundClass" class="relative overflow-hidden" data-parity-section="page-hero">
+  <section v-else :class="backgroundClass" :style="backgroundStyle" class="relative overflow-hidden" data-parity-section="page-hero">
     <div class="blawby-container relative">
       <div class="px-6 pb-4 pt-16 lg:px-8">
         <div class="mx-auto max-w-4xl text-center">
@@ -102,7 +102,7 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
-import { blawbyShieldVariant, blawbySplitAccent, type BlawbyShieldVariant } from '~/types/blawby'
+import { blawbyShieldVariant, blawbySplitAccent, blawbySurface, type BlawbyShieldVariant } from '~/types/blawby'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
@@ -139,11 +139,10 @@ const ctaUrl = computed(() => {
 /** The heading with the phrase the firm chose to emphasise cut out of it. */
 const splitTitle = computed(() => blawbySplitAccent(title.value, blockText(props.block.data.accent)))
 
-const backgroundClass = computed(() => {
-  if (variant.value === 'schedule') return 'bg-[var(--blawby-primary-800)] [&_h1]:text-white [&_p]:text-gray-200'
-  if (variant.value === 'about' || variant.value === 'contact') return 'bg-[var(--blawby-accent-200)]'
-  return 'bg-[var(--blawby-primary-100)]'
-})
+// The page's own colour, which the shield below cuts its shape out of, so the
+// two cannot drift apart. Only the dark one restates its text colours.
+const backgroundStyle = computed(() => ({ backgroundColor: blawbySurface(variant.value) }))
+const backgroundClass = computed(() => (variant.value === 'schedule' ? '[&_h1]:text-white [&_p]:text-gray-200' : undefined))
 const titleWords = computed(() => title.value.trim().split(/\s+/).filter(Boolean))
 const descriptionParts = computed(() => (description.value ?? '')
   .split(/\n\s*\n/)

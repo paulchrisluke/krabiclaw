@@ -23,6 +23,22 @@ export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
 }
 
 /**
+ * The colour a page opens on. The hero paints it and the shield beneath cuts
+ * its own shape out of it, so they are one answer: they were two switches on
+ * the same variant, in two components, and the shield's had no case for the
+ * legal pages at all.
+ *
+ * The legal pages open white. They are long documents, and the tint the other
+ * pages use behind a short hero ran the whole length of the terms.
+ */
+export function blawbySurface(variant: BlawbyShieldVariant): string {
+  if (variant === 'schedule') return 'var(--blawby-primary-800)'
+  if (variant === 'about' || variant === 'contact') return 'var(--blawby-accent-200)'
+  if (variant === 'privacy' || variant === 'terms' || variant === 'third-party-notices') return '#ffffff'
+  return 'var(--blawby-primary-100)'
+}
+
+/**
  * A heading cut into the part before its emphasised phrase, the phrase, and the
  * part after — so the phrase can carry colour where it actually sits rather
  * than being repeated at the end. The hero and every section heading ask the
