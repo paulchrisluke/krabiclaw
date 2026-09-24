@@ -6,6 +6,7 @@ import {
   type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore, type UploadResolvedMediaInput } from '~/server/utils/media-upload'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { renderOgImagePng } from '~/server/utils/og-image/render'
 import {
   hashSocialCardGenerationInput,
@@ -256,11 +257,15 @@ function socialTemplate(organization: OrganizationRecord): SocialTemplate {
 }
 
 async function clearSocialCard(input: { db: DbClient; env: SocialCardEnv; owner: SocialCardOwner; actorId?: string | null }, reason: 'no_source' | 'owner_not_found' | 'missing_content') {
-  const assets = await queryAll<{ id: string; organization_id: string }>(input.db, `SELECT ma.id, ma.organization_id FROM media_placements mp
-    JOIN media_assets ma ON ma.id = mp.asset_id AND ma.organization_id = mp.organization_id AND ma.organization_id = mp.organization_id
-    WHERE mp.owner_type = ? AND mp.owner_id = ? AND mp.slot = 'social_card' AND ma.source = 'generated'`, [input.owner.owner_type, input.owner.owner_id])
-  await executeBatch(input.db, [{ query: "UPDATE media_placements SET status = 'pending' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [input.owner.owner_type, input.owner.owner_id] }])
-  for (const asset of assets) await deleteMediaAsset(input.db, input.env, asset.id, asset.organization_id, input.actorId ?? null)
+  // Unplaced, not deleted: the card may be production's, read from a copy of
+  // its rows. social-card-cleanup removes unplaced generated cards.
+  const placed = await queryAll<{ organization_id: string }>(input.db, "SELECT DISTINCT organization_id FROM media_placements WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", [input.owner.owner_type, input.owner.owner_id])
+  if (placed.length) {
+    await executeBatch(input.db, [
+      { query: "DELETE FROM media_placements WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [input.owner.owner_type, input.owner.owner_id] },
+      ...placed.map(row => publicResourceCacheInvalidationQuery(row.organization_id, 'social-card-cleared')),
+    ], { operation: 'clear social card placement' })
+  }
   const result = { kind: 'skipped' as const, owner: input.owner, reason }
   console.info('[social-card]', result)
   return result
@@ -335,10 +340,11 @@ export async function refreshSocialCard(input: {
       generationKey,
     })
 
+    // The card this replaces is not deleted here: an environment regenerating
+    // a card may be running on a copy of production's rows, and the previous
+    // card is then production's. The superseded card is left unplaced for
+    // social-card-cleanup, which runs where the Images credentials are.
     try {
-      if (current?.source === 'generated' && current.asset_id !== uploaded.assetId) {
-        await deleteMediaAsset(db, env, current.asset_id, organization.id, input.actorId ?? null)
-      }
       await executeBatch(db, buildSingleMediaPlacementQueries({
         organizationId: organization.id,
         placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },

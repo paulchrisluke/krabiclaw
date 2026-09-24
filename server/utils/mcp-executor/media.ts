@@ -1,7 +1,7 @@
 import { memberAccessPrincipal } from '~/server/utils/member-access'
 import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
-import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
+import { assertCloudflareImagesConfigured } from '~/server/utils/cloudflare-images'
 import { MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import {
@@ -129,9 +129,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 
       let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
-        if (!hasCloudflareImagesConfig(organization.env)) {
-          throw new Error("Cloudflare Images not configured");
-        }
+        assertCloudflareImagesConfigured(organization.env)
         const posterResolved = await resolveUserUploadedMediaFile(posterReference, MAX_POSTER_BYTES);
         if (posterResolved.kind !== "image") {
           throw mcpProtocolError(

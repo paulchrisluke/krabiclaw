@@ -18,6 +18,7 @@ export type ScheduledTaskName =
   | 'instagram-sync-process'
   | 'review-request-automation'
   | 'social-card-backfill'
+  | 'social-card-cleanup'
   | 'sessions-materialize'
   | 'deletion-sweep'
   | 'stripe-webhook-retry'
@@ -30,7 +31,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish', 'social-card-backfill', 'sessions-materialize', 'article-broadcast-send'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
-  '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep'],
+  '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep', 'social-card-cleanup'],
   '0 0 * * SUN': ['google-places-sync'],
   '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry'],
 }
@@ -38,6 +39,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'blog-scheduled-publish': async () => import('./tasks/blog-scheduled-publish'),
   'social-card-backfill': async () => import('./tasks/social-card-backfill'),
+  'social-card-cleanup': async () => import('./tasks/social-card-cleanup'),
   'post-scheduled-publish': async () => import('./tasks/post-scheduled-publish'),
   'public-resource-cache-invalidation': async () => import('./tasks/public-resource-cache-invalidation'),
   'domain-reconciliation': async () => import('./tasks/domain-reconciliation'),

@@ -1,7 +1,7 @@
 import { execute, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { assertCloudflareImagesConfigured, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { sniffMediaMimeType, RESOLVED_MEDIA_IMAGE_TYPES } from '~/server/utils/media-mime'
 import { parseOnboardingDraftPayload, type DraftUploadedImage } from '~/server/utils/onboarding-drafts'
 
@@ -35,9 +35,7 @@ export default defineHandler(async (event) => {
     const session = await getAuthSession(event, env)
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-    if (!hasCloudflareImagesConfig(env)) {
-      return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
-    }
+    assertCloudflareImagesConfigured(env)
 
     const draft = await queryFirst<{ id: string; user_id: string; status: string; payload_json: string; updated_at: string }>(db, `
       SELECT id, user_id, status, payload_json, updated_at

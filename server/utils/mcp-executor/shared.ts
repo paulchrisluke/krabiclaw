@@ -14,7 +14,7 @@ import {
 } from "~/server/utils/mcp-context";
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES, R2_IMAGE_MIME_TYPES, RESOLVED_MEDIA_IMAGE_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
-import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
+import { assertCloudflareImagesConfigured } from "~/server/utils/cloudflare-images";
 import { findOrganizationById } from '~/server/utils/member-access'
 
 /**
@@ -24,9 +24,7 @@ import { findOrganizationById } from '~/server/utils/member-access'
  */
 export function resolveImageUploadProvider(contentType: string, env: ApiRecord): "cloudflare_r2" | "cloudflare_images" | undefined {
   const provider = R2_IMAGE_MIME_TYPES.has(contentType) ? "cloudflare_r2" : undefined;
-  if (!provider && !hasCloudflareImagesConfig(env)) {
-    throw new Error("Cloudflare Images not configured");
-  }
+  if (!provider) assertCloudflareImagesConfigured(env);
   return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
 }
 
