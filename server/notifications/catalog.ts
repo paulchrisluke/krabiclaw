@@ -155,7 +155,7 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
     message: domainUpdateMessage({
       headline: 'emberslice.com is live', message: 'Your custom domain is verified and serving traffic.',
       domain: 'emberslice.com', status: 'active',
-      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/domains',
+      dashboardUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/settings/website/domains',
     }),
   },
 

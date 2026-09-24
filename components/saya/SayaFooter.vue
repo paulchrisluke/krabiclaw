@@ -174,7 +174,7 @@ interface PublicLocation {
   address?: PostalAddress | null
   phone?: string | null
   email?: string | null
-  googleBusinessHours?: ApiValue
+  googleMapsHours?: ApiValue
   opening_hours?: OpeningHours
   special_hours?: SpecialHours
   timezone?: string | null

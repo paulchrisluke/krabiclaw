@@ -66,7 +66,6 @@ export interface TenantPageSnapshotMetadata {
   seoTitle: string | null
   seoDescription: string | null
   canonicalUrl: string | null
-  robots: string | null
   pageType: string
   recipe: string | null
 }
@@ -745,7 +744,6 @@ export function validateTenantPageSnapshot(value: unknown): TenantPageSnapshot {
     seoTitle: asString(metadata.seoTitle, 'snapshot.metadata.seoTitle'),
     seoDescription: asString(metadata.seoDescription, 'snapshot.metadata.seoDescription'),
     canonicalUrl: asString(metadata.canonicalUrl, 'snapshot.metadata.canonicalUrl'),
-    robots: asString(metadata.robots, 'snapshot.metadata.robots'),
     pageType: asString(metadata.pageType, 'snapshot.metadata.pageType', true)!,
     recipe: asString(metadata.recipe, 'snapshot.metadata.recipe'),
   }

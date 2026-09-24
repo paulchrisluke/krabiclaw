@@ -22,6 +22,7 @@ import {
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 import type {
   PublicBlawbyData,
   PublicBlawbyIdentity,
@@ -69,7 +70,7 @@ export async function getActiveBlawbySite(
   const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
     SELECT id, vertical, theme_id
       FROM organization
-     WHERE id = ? AND status = 'active'${options.previewAuthorized ? '' : " AND onboarding_status = 'active'"}
+     WHERE id = ? AND ${publicTenantVisibilitySql('organization', options.previewAuthorized)}
      LIMIT 1
   `, [organizationId])
 
@@ -119,7 +120,6 @@ export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, or
     seo_title: page.seo_title,
     seo_description: page.seo_description,
     canonical_url: page.canonical_url,
-    robots: page.robots,
     blocks: page.blocks,
     media: page.media,
     social_image: page.social_image,
@@ -153,7 +153,6 @@ export async function getPublicTenantPageByPath(
     seo_title: page.seo_title,
     seo_description: page.seo_description,
     canonical_url: page.canonical_url,
-    robots: page.robots,
     blocks: page.blocks,
     media: page.media,
     social_image: page.social_image,
@@ -296,13 +295,18 @@ export async function getPublicBlawbyShellData(
   const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
-  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks] = await Promise.all([
+  const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks, verification] = await Promise.all([
     getPublicBlawbyIdentity(db, organizationId),
     getPublicConsultationSettings(db, organizationId),
     getPublicCompliance(db, organizationId),
     getPublicThemeTokens(db, organizationId),
     listPublishedTenantPagePaths(db, organizationId, locale),
+    queryFirst<{ token: string | null }>(db, `
+      SELECT json_extract(integrations_json, '$.google_search_console.verification_token') AS token
+        FROM organization WHERE id = ? LIMIT 1
+    `, [organizationId]),
   ])
+  if (!verification) throw new Error(`Organization ${organizationId} was not found for its Blawby shell`)
   const localizedRepresentation = locale !== 'en'
   const identity = localizedRepresentation
     ? {
@@ -343,6 +347,7 @@ export async function getPublicBlawbyShellData(
     compliance,
     themeTokens,
     pageLinks: pageLinks.map(page => ({ id: page.id, path: page.path, title: page.title })),
+    searchConsoleVerification: verification.token,
   }
 }
 
@@ -454,7 +459,6 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
-    robots: typeof row.robots === 'string' ? row.robots : null,
     visibility: row.visibility === 'unlisted' ? 'unlisted' : 'listed',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,

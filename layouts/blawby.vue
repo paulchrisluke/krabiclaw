@@ -97,5 +97,9 @@ const themeStyles = computed(() => {
 
 useHead(() => ({
   htmlAttrs: { class: 'blawby-document', lang: publicLocale.value },
+  // Google fetches the site to verify Search Console ownership (server/utils/google-search-console.ts).
+  meta: document.value.shell.searchConsoleVerification
+    ? [{ name: 'google-site-verification', content: document.value.shell.searchConsoleVerification }]
+    : [],
 }))
 </script>

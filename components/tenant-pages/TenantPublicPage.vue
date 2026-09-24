@@ -16,7 +16,6 @@ import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
@@ -26,7 +25,7 @@ const { locale: i18nLocale } = useI18n()
 // Page ownership is a resolved site, not a tenant type. KrabiClaw's own site is
 // a site row with page documents like any other, and requiring `isTenant` here
 // is what forced its marketing pages to be hardcoded components (#903).
-if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Site context is unavailable' })
+if (!organizationId) throw showNotFound('Site context is unavailable')
 
 // Preview authorization belongs to the site, resolved once from the preview
 // cookie by tenant resolution; the client's API call carries the same cookie.
@@ -84,7 +83,13 @@ const { data, error, status, execute } = await useAsyncData(key, async () => {
 // Nuxt can defer a child request until mount while the previous route is
 // still hydrating. Await that same request before requiring its document.
 if (status.value === 'idle' || status.value === 'pending') await execute({ dedupe: 'defer' })
-if (error.value) throw error.value
+// A throw from setup only reaches the error page during the server render; on
+// a client navigation it leaves a blank screen (DESIGN.md), so the client
+// raises it with showError first.
+if (error.value) {
+  if (import.meta.server) throw error.value
+  throw showError(error.value)
+}
 // A client navigation can tear this instance down while its request is still in
 // flight: Nuxt drops the async data and the awaited call returns empty with no
 // error. That is not a page that failed to load, it is a page nobody is looking
@@ -180,7 +185,6 @@ useSocialMetadata(() => page.value && ({
   path: page.value.canonical_url || page.value.path,
   title: page.value.seo_title || `${page.value.title} | ${site?.name || ''}`,
   description: page.value.seo_description || page.value.summary || '',
-  robots: normalizeRobotsIntent(page.value.robots),
   // KrabiClaw's own brand name is the platform name, which useSocialMetadata
   // already states once for every platform surface; a tenant states its own.
   ...(isPlatform ? {} : { brand: { siteName: site?.name || '' } }),

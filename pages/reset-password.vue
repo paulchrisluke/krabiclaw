@@ -27,7 +27,6 @@
 </template>
 
 <script setup>
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'access', auth: false })
 
 import { authClient } from '~/lib/auth-client'
@@ -39,7 +38,7 @@ useSocialMetadata({
   path: '/reset-password',
   title: 'Choose a new password',
   description: 'Set a new password for your KrabiClaw account.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 
 const route = useRoute()

@@ -16,28 +16,15 @@
       <UFormField label="SEO description">
         <UTextarea v-model="editor.draft.value.seo_description" :rows="3" autoresize maxlength="500" class="w-full" />
       </UFormField>
-      <UFormField label="Robots" description="Whether search engines may index and follow this page.">
-        <USelect
-          :model-value="robotsValue"
-          :items="ROBOTS_OPTIONS"
-          value-key="value"
-          label-key="label"
-          size="xl"
-          class="w-full"
-          @update:model-value="editor.draft.value.robots = String($event)"
-        />
-      </UFormField>
     </div>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
-import { tenantPageEditorKey, ROBOTS_OPTIONS } from '~/components/dashboard/TenantPageEditorPage.vue'
-import { ROBOTS_INTENTS } from '~/shared/robots-directive'
+import { tenantPageEditorKey } from '~/components/dashboard/TenantPageEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 const editor = inject(tenantPageEditorKey)!
 /** The stored directive, or nothing: an unrecognised value is not shown as one of the known ones. */
-const robotsValue = computed(() => ROBOTS_INTENTS.find(intent => intent === editor.draft.value.robots))
 </script>

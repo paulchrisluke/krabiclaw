@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:51c2847a67386c07bb41f027cdb04aad52c5e49cf5cf5c418896f47c109897bc",
+  "fingerprint": "sha256:96db1db4af75d5e6be72c236f4b91aa82c56b1f563cdb82b5b6f614ee84d3476",
   "tools": [
     {
       "name": "append_content_block",
@@ -1550,12 +1550,6 @@
                 "type": "boolean"
               },
               "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
                 "type": [
                   "string",
                   "null"
@@ -3190,20 +3184,6 @@
               "null"
             ]
           },
-          "robots": {
-            "description": "Search engine indexing directive. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "seoDescription": {
             "type": [
               "string",
@@ -3868,12 +3848,6 @@
                   "null"
                 ]
               },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "scheduled_for": {
                 "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
                 "format": "date-time",
@@ -4320,12 +4294,6 @@
               "review_count": {
                 "type": [
                   "number",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
                   "null"
                 ]
               },
@@ -5124,12 +5092,6 @@
                   "null"
                 ]
               },
-              "google_site_verification": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "id": {
                 "type": "string"
               },
@@ -5191,12 +5153,6 @@
                 ]
               },
               "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
                 "type": [
                   "string",
                   "null"
@@ -7121,12 +7077,6 @@
                   "type": "boolean"
                 },
                 "published_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "robots": {
                   "type": [
                     "string",
                     "null"
@@ -9176,12 +9126,6 @@
                 "type": "boolean"
               },
               "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
                 "type": [
                   "string",
                   "null"
@@ -13716,12 +13660,6 @@
                   "null"
                 ]
               },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "scheduled_for": {
                 "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
                 "format": "date-time",
@@ -14106,20 +14044,6 @@
             "description": "Public phone number shown to guests on the website and in booking/reservation confirmation emails.",
             "type": "string"
           },
-          "robots": {
-            "description": "Search engine indexing directive. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "seo_description": {
             "description": "Optional SEO meta description override. Falls back to the computed default if unset.",
             "type": [
@@ -14403,12 +14327,6 @@
             ],
             "type": "string"
           },
-          "google_analytics_measurement_id": {
-            "type": "string"
-          },
-          "google_site_verification": {
-            "type": "string"
-          },
           "media": {
             "items": {
               "properties": {
@@ -14444,20 +14362,6 @@
           "press_email": {
             "type": "string"
           },
-          "robots": {
-            "description": "Search engine indexing directive for the homepage. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "seo_description": {
             "description": "Optional site-wide default SEO description override. Falls back to brand_description if unset.",
             "type": [
@@ -14471,6 +14375,14 @@
               "string",
               "null"
             ]
+          },
+          "status": {
+            "description": "Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "type": "string"
           }
         },
         "required": [],
@@ -15980,20 +15892,6 @@
               "type": "string"
             },
             "type": "array"
-          },
-          "robots": {
-            "description": "Search engine indexing directive. Leave unset for the default index,follow.",
-            "enum": [
-              "index,follow",
-              "noindex,follow",
-              "index,nofollow",
-              "noindex,nofollow",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "seoDescription": {
             "type": [

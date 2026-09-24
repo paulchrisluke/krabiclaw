@@ -38,9 +38,12 @@ export function isNotFoundError(error: unknown): boolean {
  * is what reaches the error page on the client, and on the server it only
  * reaches the payload — answering HTTP 200 with the error page drawn after
  * hydration. Each environment is given the one that answers.
+ *
+ * It returns the error it raised, so page setup — where nothing after a 404
+ * should run — can `throw showNotFound()`: the error page is already up by then.
  */
-export function showNotFound(statusMessage = 'Page not found'): void {
+export function showNotFound(statusMessage = 'Page not found'): ReturnType<typeof showError> {
   const error = createError({ statusCode: 404, statusMessage })
   if (import.meta.server) throw error
-  showError(error)
+  return showError(error)
 }

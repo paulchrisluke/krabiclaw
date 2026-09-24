@@ -14,7 +14,10 @@ import {
   projectLocalizedMediaAlt,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { hasSiteEntitlement } from '~/server/utils/billing'
+import { getFacebookPagesConnection, publishToPage } from '~/server/utils/facebook-pages'
+import { publishToInstagram, readInstagramConnection } from '~/server/utils/instagram'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export { normalizePostSlug, postPublicPath }
@@ -77,10 +80,6 @@ export type PostWithChannels = Post & {
 }
 
 export type PostPublishChannel = 'site' | 'instagram' | 'facebook'
-
-export type PostSocialPublish =
-  | { kind: 'connected'; pageToken: string; pageId: string }
-  | { kind: 'unavailable'; reason: string }
 
 type SqlBindValue = string | number | boolean | null
 
@@ -461,8 +460,9 @@ export async function publishPost(
   organizationId: string,
   postId: string,
   channels: PostPublishChannel[],
-  env: DomainEnv,
-  socialPublish: PostSocialPublish | null,
+  env: CloudflareEnv,
+  /** Why the calling surface will not publish to social channels at all, when it will not. */
+  socialDisabledReason: string | null = null,
 ): Promise<PostWithChannels | null> {
   if (!channels.length) {
     throw new Error('At least one publish channel is required')
@@ -470,9 +470,6 @@ export async function publishPost(
   const socialChannels = channels.filter((channel): channel is PostChannelState['channel'] =>
     channel === 'facebook' || channel === 'instagram',
   )
-  if (socialChannels.length > 0 && !socialPublish) {
-    throw new Error('Social publish capability is required for external channels')
-  }
 
   const existing = await queryFirst<PostRow>(
     db,
@@ -520,17 +517,19 @@ export async function publishPost(
 
   await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
 
-  const socialCapability = socialPublish
+  const skipReason = socialChannels.length === 0
+    ? null
+    : socialDisabledReason ?? (await hasSiteEntitlement(env, db, organizationId, 'managed_service')
+      ? null
+      : 'Publishing to Facebook and Instagram requires the Growth plan.')
   for (const channel of socialChannels) {
     if (!(await claimPostChannelState(db, postId, channel, now))) continue
 
-    if (socialCapability?.kind === 'unavailable') {
-      await settlePostChannelState(db, postId, channel, { kind: 'skipped', reason: socialCapability.reason })
+    if (skipReason) {
+      await settlePostChannelState(db, postId, channel, { kind: 'skipped', reason: skipReason })
       continue
     }
-
-    if (!socialCapability) throw new Error('Social publish capability is required for external channels')
-    await publishPostChannel(db, postId, channel, post, socialCapability)
+    await publishPostChannel(db, env, organizationId, postId, channel, post)
   }
 
   return await getPost(db, organizationId, postId)
@@ -566,69 +565,37 @@ async function settlePostChannelState(db: DbClient, postId: string, channel: Pos
 
 async function publishPostChannel(
   db: DbClient,
+  env: CloudflareEnv,
+  organizationId: string,
   postId: string,
   channel: PostChannelState['channel'],
   post: PostWithChannels,
-  socialPublish: Extract<PostSocialPublish, { kind: 'connected' }>,
 ) {
-  if (channel === 'facebook') {
-    let providerPostId: string
-    try {
-      const result = await publishToPage(socialPublish.pageToken, socialPublish.pageId, { message: post.body })
-      providerPostId = result.id
-    } catch (error) {
-      await settlePostChannelState(db, postId, channel, {
-        kind: 'failed',
-        reason: error instanceof Error ? error.message : 'facebook publish failed',
-      })
-      return
+  // Each channel is its own connection. A lookup that throws is a failure, not
+  // "not connected": reporting the second as the first told an author their
+  // post had no destination when the truth was that we never found out.
+  const publish = async (): Promise<PostChannelStateOutcome> => {
+    if (channel === 'facebook') {
+      const connection = await getFacebookPagesConnection(env, organizationId)
+      if (!connection?.encrypted_page_token) return { kind: 'skipped', reason: 'No Facebook Page connected.' }
+      const result = await publishToPage(connection.encrypted_page_token, connection.page_id, { message: post.body })
+      return { kind: 'published', providerPostId: result.id }
     }
-    await settlePostChannelState(db, postId, channel, { kind: 'published', providerPostId })
-    return
+    const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
+    if (!imageUrl) return { kind: 'skipped', reason: 'Instagram requires an image. Add a photo to this post.' }
+    const connection = await readInstagramConnection(env, organizationId)
+    if (!connection) return { kind: 'skipped', reason: 'No Instagram account connected.' }
+    const result = await publishToInstagram(connection, { caption: post.body, imageUrl })
+    return { kind: 'published', providerPostId: result.id }
   }
 
-  const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
-  if (!imageUrl) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'skipped',
-      reason: 'Instagram requires an image. Add a photo to this post.',
-    })
-    return
-  }
-
-  let instagramAccountId: string | null
+  let outcome: PostChannelStateOutcome
   try {
-    instagramAccountId = await getLinkedInstagramAccount(socialPublish.pageToken, socialPublish.pageId)
+    outcome = await publish()
   } catch (error) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'failed',
-      reason: error instanceof Error ? error.message : 'instagram account lookup failed',
-    })
-    return
+    outcome = { kind: 'failed', reason: error instanceof Error ? error.message : `${channel} publish failed` }
   }
-  if (!instagramAccountId) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'skipped',
-      reason: 'No Instagram Business account is linked to this Facebook Page.',
-    })
-    return
-  }
-
-  let providerPostId: string
-  try {
-    const result = await publishToInstagram(socialPublish.pageToken, instagramAccountId, {
-      caption: post.body,
-      imageUrl,
-    })
-    providerPostId = result.id
-  } catch (error) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'failed',
-      reason: error instanceof Error ? error.message : 'instagram publish failed',
-    })
-    return
-  }
-  await settlePostChannelState(db, postId, channel, { kind: 'published', providerPostId })
+  await settlePostChannelState(db, postId, channel, outcome)
 }
 
 interface DuePostRow {

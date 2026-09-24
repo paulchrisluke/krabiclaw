@@ -66,7 +66,7 @@ export interface BusinessLocation {
  * rest are the gear's.
  */
 export const HUB_KEYS = ['name', 'description', 'hours', 'address', 'contact', 'reservations'] as const
-export const SETTINGS_KEYS = ['status', 'slug', 'discovery', 'features'] as const
+export const SETTINGS_KEYS = ['status', 'slug', 'features'] as const
 export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[number]
 
 /**
@@ -97,7 +97,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   const loading = ref(true)
   const error = ref<string | null>(null)
   const location = ref<BusinessLocation | null>(null)
-  const syncingPlace = ref(false)
   const savingLocationFeatures = ref(false)
   const originalSignature = ref('')
   const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
@@ -204,7 +203,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       savingLocationFeatures.value = false
     }
   }
-  const placeSyncResult = ref('')
   const detailsSaving = ref(false)
 
   // The reservation policy is its own row (location_reservation_configs), not a
@@ -247,9 +245,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     slug: '',
     phone: '',
     email: '',
-    maps_url: '',
-    google_review_url: '',
-    google_place_id: '',
     price_level: '',
     addressLines: '',
     regionCode: '',
@@ -261,7 +256,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     description: '',
     status: 'active',
   })
-  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
   const locationLocalizationFields = computed(() => [
     { key: 'title', label: 'Name', source: location.value?.title },
     { key: 'short_description', label: 'Short description', source: location.value?.short_description },
@@ -287,9 +282,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     detailsForm.slug = loc.slug
     detailsForm.phone = loc.phone ?? ''
     detailsForm.email = loc.email ?? ''
-    detailsForm.maps_url = loc.maps_url ?? ''
-    detailsForm.google_review_url = loc.google_review_url ?? ''
-    detailsForm.google_place_id = loc.google_place_id ?? ''
     detailsForm.price_level = loc.price_level ?? ''
     detailsForm.addressLines = loc.address?.addressLines?.join('\n') ?? ''
     detailsForm.regionCode = loc.address?.regionCode ?? ''
@@ -310,7 +302,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
 
   const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
   const statusSummary = computed(() => location.value?.status === 'active' ? 'Active' : 'Hidden from the public site')
-  const discoverySummary = computed(() => location.value?.google_place_id ? 'Google Places connected' : 'Not connected')
   const featureSummary = computed(() => {
     const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
     return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
@@ -321,7 +312,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
       { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
       { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
-      { id: 'discovery', label: 'Google Business Profile', summary: discoverySummary.value, to: `${settingsBase.value}/discovery` },
       { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsBase.value}/features` },
     ],
   }])
@@ -340,19 +330,9 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       case 'status': return JSON.stringify(detailsForm.status)
       case 'hours': return JSON.stringify(hoursForm.value)
       case 'description': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
-      case 'discovery': return JSON.stringify([detailsForm.google_place_id, detailsForm.maps_url, detailsForm.google_review_url])
       case 'reservations': return JSON.stringify(reservationForm.value)
       case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
       default: return ''
-    }
-  }
-  function isValidUrl(value: string): boolean {
-    if (!value.trim()) return true
-    try {
-      const url = new URL(value)
-      return url.protocol === 'http:' || url.protocol === 'https:'
-    } catch {
-      return false
     }
   }
   const validationMessage = computed(() => {
@@ -367,9 +347,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
         parseOpeningHours(hoursForm.value.hours)
         parseSpecialHours(hoursForm.value.specialHours)
       } catch (error) { return error instanceof Error ? error.message : 'Invalid hours' }
-    }
-    if (key === 'discovery' && ![detailsForm.maps_url, detailsForm.google_review_url].every(isValidUrl)) {
-      return 'Enter complete Google Maps and review URLs.'
     }
     return null
   })
@@ -507,52 +484,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       })
       return
     }
-    if (key === 'discovery') {
-      await patchLocation({
-        google_place_id: detailsForm.google_place_id.trim() || null,
-        maps_url: detailsForm.maps_url.trim() || null,
-        google_review_url: detailsForm.google_review_url.trim() || null,
-      })
-      return
-    }
-    // The timezone belongs to Hours, which requires it. Editing it here as well
-    // let a Notifications save write null over the value Hours validates, and
-    // the location's opening times are read in that zone.
-    await patchLocation({
-    })
-  }
-
-  async function syncGooglePlace() {
-    if (!location.value?.google_place_id) return
-    const requestedLocationId = locationId.value
-    syncingPlace.value = true
-    editorError.value = null
-    try {
-      const res = await dashboardApi<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
-        '/api/integrations/google-places/sync',
-        {
-          method: 'POST',
-          body: { locationId: requestedLocationId },
-          validate: (value): value is { success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } } =>
-            isRecord(value)
-            && value.success === true
-            && typeof value.reviewsUpserted === 'number'
-            && isRecord(value.place)
-            && (value.place.rating === null || typeof value.place.rating === 'number')
-            && (value.place.ratingCount === null || typeof value.place.ratingCount === 'number'),
-        }
-      )
-      if (locationId.value !== requestedLocationId) return
-      const parts = ['Synced hours, address, and rating']
-      if (res.reviewsUpserted > 0) parts.push(`${res.reviewsUpserted} new review${res.reviewsUpserted > 1 ? 's' : ''}`)
-      if (res.place.rating) parts.push(`${res.place.rating} stars (${res.place.ratingCount?.toLocaleString()} reviews)`)
-      placeSyncResult.value = parts.join(', ')
-      await loadLocationWorkspace()
-    } catch (err) {
-      editorError.value = getErrorMessage(err, 'Google Places sync failed')
-    } finally {
-      syncingPlace.value = false
-    }
+    throw new Error(`The ${key ?? 'location'} setting has nothing to save.`)
   }
 
   interface LocationSettingsResource {
@@ -613,7 +545,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     loading, error, location, saving, saveDisabled, validationMessage, editorError, dirty,
     detailsForm, hoursForm, reservationForm, reservationConfigExists, closingReservations,
     locationToggleableFeatures, locationEnabledFeatureSet, locationFeatureLabel,
-    syncingPlace, placeSyncResult, syncGooglePlace, setDetailsActive,
+    setDetailsActive,
     navigationGroups, locationLocalizationFields, localizedLocationPath, siteLocalizationSettingsPath,
     revert: resetDraft, save: saveCurrentEditor, closeReservations, loadLocationWorkspace,
   }

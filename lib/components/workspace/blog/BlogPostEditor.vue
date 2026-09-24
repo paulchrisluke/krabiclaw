@@ -84,16 +84,16 @@
 <script lang="ts">
 import type { Component, ComputedRef, InjectionKey, Reactive, Ref } from 'vue'
 
-export type SettingsSection = 'category' | 'tags' | 'excerpt' | 'publishing' | 'search' | 'share' | 'url' | 'canonical' | 'robots'
-export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'tags', 'excerpt', 'publishing', 'search', 'share', 'url', 'canonical', 'robots']
+export type SettingsSection = 'category' | 'tags' | 'excerpt' | 'publishing' | 'search' | 'share' | 'url' | 'canonical'
+export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'tags', 'excerpt', 'publishing', 'search', 'share', 'url', 'canonical']
 export const SETTINGS_LABELS: Record<SettingsSection, string> = {
   category: 'Category', tags: 'Tags', excerpt: 'Excerpt', publishing: 'When it goes live', search: 'Search appearance',
-  share: 'Share preview', url: 'URL', canonical: 'Canonical URL', robots: 'Robots',
+  share: 'Share preview', url: 'URL', canonical: 'Canonical URL',
 }
 
 /** The post's draft and what its leaves show beside their one field. */
 export interface BlogEditor {
-  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; seo_title: string; seo_description: string; slug: string; canonical_url: string; robots: string; visibility: 'listed' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
+  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; seo_title: string; seo_description: string; slug: string; canonical_url: string; visibility: 'listed' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
   tagsText: Ref<string>
   publishTiming: Ref<'Now' | 'Scheduled'>
   post: Ref<BlogPost | null>
@@ -160,7 +160,7 @@ const section = computed<SettingsSection | null>(() => {
   return segment && (SETTINGS_SECTIONS as string[]).includes(segment) ? segment as SettingsSection : null
 })
 
-const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', robots: '', visibility: 'listed' as 'listed' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
+const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', seo_title: '', seo_description: '', slug: '', canonical_url: '', visibility: 'listed' as 'listed' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || 'saya')
@@ -206,7 +206,7 @@ const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || '')
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => tenantBlogPostPath({ themeId: publicTemplateRegistry[templateName.value].themeId }, slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, form.collection))
-const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
+const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value }))
 /**
  * The post's cover is its leading image block and nothing else. The post's
  * images are one set; the cover is the lead one; the share card derives from
@@ -272,14 +272,13 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
           placeholder: !resolvedPrimaryImageUrl.value && !resolvedPrimaryVideoUrl.value,
         },
         row('canonical', 'Canonical URL', form.canonical_url, resolvedSeo.value.canonicalUrl),
-        row('robots', 'Robots', form.robots, 'index, follow'),
       ],
     },
   ]
 })
 
 const publishingSummary = computed(() => {
-  const visibility = form.visibility === 'unlisted' ? 'Unlisted' : 'Public'
+  const visibility = form.visibility === 'unlisted' ? 'Unlisted' : 'Listed'
   if (post.value?.status === 'published') return `Published · ${visibility}`
   if (publishTiming.value === 'Scheduled') {
     return form.scheduled_for ? `Scheduled ${form.scheduled_for.replace('T', ' ')} UTC · ${visibility}` : `Scheduled · ${visibility}`
@@ -379,7 +378,7 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersion(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'listed', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', visibility: loaded.visibility || 'listed', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
     publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
@@ -420,7 +419,7 @@ function savedBlocks() {
   return cloneEditorBlocks(toRaw(blocks.value)).filter(block => block.type !== 'image' || block.media?.length)
 }
 function buildSavePayload(): BlogPostUpdateInput {
-  return { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: savedBlocks() }
+  return { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null || null, visibility: form.visibility, content_blocks: savedBlocks() }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -495,7 +494,6 @@ async function publish() {
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         canonical_url: form.canonical_url || null,
-        robots: form.robots || null,
         visibility: form.visibility,
         scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for, 'UTC'),
       })

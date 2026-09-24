@@ -83,7 +83,7 @@ export const useSiteShellState = () => {
   const locations = computed(() => data.value?.locations ?? []);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
   const shellSite = computed(() => data.value?.site ?? null);
-  const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
+  const googleMaps = computed(() => data.value?.googleMaps ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
   const hasBookableProducts = computed(() => data.value?.hasBookableProducts ?? false);
@@ -97,7 +97,7 @@ export const useSiteShellState = () => {
     locations,
     config,
     site: shellSite,
-    googleBusiness,
+    googleMaps,
     locales,
     hasProducts,
     hasBookableProducts,

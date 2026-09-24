@@ -4,7 +4,8 @@ import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { deleteConfig, getConfig, setConfig } from '../../server/utils/site-config.ts'
-import { storeGoogleAnalyticsConnection, getGoogleAnalyticsConnection } from '../../server/utils/google-analytics.ts'
+import { readAnalyticsIntegration } from '../../server/utils/google-analytics.ts'
+import { readGoogleCredential, storeGoogleCredential } from '../../server/utils/google-credential.ts'
 import { getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, getMcpWorkspacePreference, upsertMcpWorkspacePreference } from '../../server/utils/mcp-context.ts'
 
 test('organization settings and workspace patches preserve independent owners and exclude provider secrets', async () => {
@@ -28,28 +29,35 @@ test('organization settings and workspace patches preserve independent owners an
     assert.equal((await db.prepare("SELECT settings_json FROM organization WHERE id='org'").first<{ settings_json: string }>())?.settings_json.includes('social_facebook'), false)
     await deleteConfig(db, 'org', 'social_facebook')
     assert.equal((await getConfig(db, 'org')).social_facebook, undefined)
-    await setConfig(db, 'org', 'google_analytics_measurement_id', 'G-TEST')
-    assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-TEST')
-    // The credential and the product that uses it are separate keys: a manual
-    // measurement id is refused because google_credential is present.
+    // The measurement id is the Analytics integration's, and choosing a GA4
+    // property is the only thing that writes it — so it is readable here and
+    // there is no settings key that sets it.
     await db.prepare("UPDATE organization SET integrations_json=json_patch(integrations_json,json(?)) WHERE id='org'").bind(JSON.stringify({ google_credential: {"revision": "v1", "status": "active", "provider_account_email": "owner@example.test", "encrypted_access_token": "private-canary", "encrypted_refresh_token": "private-canary-refresh", "scopes": "analytics.readonly", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"}, google_analytics: {"revision": "v1", "status": "active", "measurement_id": "G-OAUTH", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"} })).run()
+    assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-OAUTH')
+    // Reading the settings must never carry the credential's secrets out.
     assert.equal(JSON.stringify(await getConfig(db, 'org')).includes('private-canary'), false)
-    await assert.rejects(setConfig(db, 'org', 'google_analytics_measurement_id', 'G-OTHER'))
-    await setConfig(db, 'org', 'google_analytics_measurement_id', 'G-OAUTH')
     await assert.rejects(db.prepare("UPDATE organization SET settings_json=json_set(settings_json,'$.consultation',json('{}')) WHERE id='org'").run())
     await assert.rejects(setConfig(db, 'other', 'brand_color', '#000000'))
     await db.prepare("UPDATE organization SET integrations_json='{}' WHERE id='org'").run()
     const providerEnv = { DB: db, CONNECTOR_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64') }
-    const connection = { organization_id: 'org', connected_by_user_id: 'user', provider_account_email: 'owner@example.test', encrypted_access_token: 'access-token', encrypted_refresh_token: 'refresh-token', scopes: 'analytics.readonly', status: 'active' as const }
-    const attempts = await Promise.allSettled([storeGoogleAnalyticsConnection(providerEnv, connection, { revision: null }), storeGoogleAnalyticsConnection(providerEnv, connection, { revision: null })])
+    const credential = { organization_id: 'org', connected_by_user_id: 'user', provider_account_email: 'owner@example.test', access_token: 'access-token', refresh_token: 'refresh-token', scopes: 'openid email https://www.googleapis.com/auth/analytics.readonly' }
+    // Two authorizations landing together: the revision guard means one wins.
+    const attempts = await Promise.allSettled([storeGoogleCredential(providerEnv, credential, { revision: null }), storeGoogleCredential(providerEnv, credential, { revision: null })])
     assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1)
-    const connected = await getGoogleAnalyticsConnection(providerEnv, 'org')
+    const connected = await readGoogleCredential(providerEnv, 'org')
     assert.ok(connected)
     assert.equal(connected.encrypted_access_token, 'access-token')
+    // Connecting the second product grows the granted scopes rather than
+    // replacing them, which is what keeps one disconnect from taking the
+    // other's access away.
+    await storeGoogleCredential(providerEnv, { ...credential, scopes: 'https://www.googleapis.com/auth/webmasters' }, connected)
+    const widened = await readGoogleCredential(providerEnv, 'org')
+    assert.ok(widened)
+    assert.ok(widened.scopes.includes('analytics.readonly'))
+    assert.ok(widened.scopes.includes('webmasters'))
+    // The credential says nothing about which product selected what.
+    assert.ok(!(await readAnalyticsIntegration(providerEnv, 'org')))
     await setConfig(db, 'org', 'brand_color', '#abcdef')
-    await storeGoogleAnalyticsConnection(providerEnv, connection, connected)
-    const currentConnection = await getGoogleAnalyticsConnection(providerEnv, 'org')
-    assert.ok(currentConnection)
 
     await patchWhatsAppWorkspaceState(db, { userId: 'user', pendingConfirmation: { intent: 'one' } })
     await Promise.all([patchWhatsAppWorkspaceState(db, { userId: 'user', lastInboundId: 'inbound' }), upsertMcpWorkspacePreference(db, { userId: 'user', organizationId: 'org', locationId: null })])

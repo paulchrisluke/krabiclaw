@@ -163,8 +163,8 @@ const editorKey = computed<SectionKey>(() => (detailKey.value ?? (isNew.value ? 
 // ── The post ────────────────────────────────────────────
 const isSinglePostResponse = (value: unknown): value is { post: ApiRecord } =>
   isRecord(value) && isRecord(value.post) && typeof value.post.id === 'string'
-const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
-  isRecord(value) && typeof value.connected === 'boolean'
+const isSocialConnections = (value: unknown): value is { facebook: { page_name: string } | null; instagram: { username: string } | null } =>
+  isRecord(value) && (value.facebook === null || isRecord(value.facebook)) && (value.instagram === null || isRecord(value.instagram))
 
 const { data, error } = await useAsyncData(
   computed(() => `dashboard-location-post:${organizationId}:${postId.value}`),
@@ -176,16 +176,16 @@ const { data, error } = await useAsyncData(
   { watch: [postId] },
 )
 
-// Whether Facebook is connected only decides which publish channels are
+// Which social channels are connected only decides which publish channels are
 // offered, so it is fetched apart from the post: an integrations outage must
-// not hide the editor.
-const { data: facebookData } = await useAsyncData(
-  computed(() => `facebook-connection:${currentLocationId.value ?? 'missing'}`),
-  () => dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+// not hide the editor. Until it answers, neither is offered.
+const { data: socialConnections } = await useAsyncData(
+  computed(() => `social-connections:${currentLocationId.value ?? 'missing'}`),
+  () => dashboardApi('/api/integrations/social-connections', {
     query: { locationId: currentLocationId.value ?? '' },
-    validate: isFacebookResponse,
+    validate: isSocialConnections,
   }),
-  { lazy: true, default: () => ({ connected: false }) },
+  { lazy: true },
 )
 
 // A post that is not there is not a page; a request that failed is a state.
@@ -194,7 +194,8 @@ watchEffect(() => {
 })
 const loadError = computed(() => (error.value && !isNotFoundError(error.value) ? getErrorMessage(error.value, 'Failed to load the post') : null))
 const post = computed(() => data.value?.post ?? null)
-const facebookConnected = computed(() => facebookData.value?.connected ?? false)
+const facebookConnected = computed(() => Boolean(socialConnections.value?.facebook))
+const instagramConnected = computed(() => Boolean(socialConnections.value?.instagram))
 
 watch(post, value => { if (value) editor.loadFrom(value) }, { immediate: true })
 
@@ -393,17 +394,15 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
  */
 const openSections = computed(() => navigationGroups.value.flatMap(group => group.items.map(item => item.id)))
 
-// An unsupported route 404s rather than silently showing the first section. A
-// watcher, not a setup-time check: moving between leaves reuses this component.
+// A section this post's type does not have 404s rather than silently showing
+// the first section. A watcher, not a setup-time check: moving between leaves
+// reuses this component.
 watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  // Nor before the record arrives: which sections a post has follows from its
+  // Not before the record arrives: which sections a post has follows from its
   // type, and until it loads the type is empty — so a cold load of an event's
   // `/schedule` would read as a section the post does not have.
   if (!isNew.value && !post.value) return
-  if (level.mode.value === 'yield' || (detailKey.value && !openSections.value.includes(detailKey.value))) {
+  if (detailKey.value && !openSections.value.includes(detailKey.value)) {
     showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
   }
 })
@@ -508,8 +507,8 @@ const channelOptions = computed(() => [
   {
     value: 'instagram',
     label: 'Instagram',
-    disabled: !facebookConnected.value || !hasPhotoCover.value,
-    hint: !facebookConnected.value
+    disabled: !instagramConnected.value || !hasPhotoCover.value,
+    hint: !instagramConnected.value
       ? 'Connect in Integrations'
       : hasPhotoCover.value ? '' : 'Needs a photo as the cover',
   },
@@ -541,7 +540,7 @@ const publicPath = computed(() => {
   return path ? String(path) : null
 })
 
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 const postLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: post.value?.title },
   { key: 'body', label: 'Body', source: post.value?.body, multiline: true, rows: 6 },

@@ -75,7 +75,10 @@ export interface InstagramIntegration {
   revision: string
   id: string
   connected_by_user_id: string
+  /** The professional account id publishing and sync address. */
   instagram_user_id: string
+  /** The Instagram-scoped id of who granted access, as Meta's callbacks name them. */
+  scoped_user_id?: string
   username: string
   encrypted_access_token: string
   token_expires_at?: string

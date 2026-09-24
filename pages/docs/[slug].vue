@@ -60,7 +60,6 @@ import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 interface DocsArticleDetail {
   id: string
@@ -176,7 +175,6 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   pageType: 'article' as const,
   path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
   socialImage: article.value?.social_image ?? null,
-  robots: normalizeRobotsIntent(article.value?.robots),
 }))
 
 useContentPageSchema(computed(() => {

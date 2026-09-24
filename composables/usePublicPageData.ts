@@ -120,11 +120,13 @@ export const usePublicPageData = async (options: {
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
   const { locations, config, site, locales } = shell;
-  const googleBusiness = computed(() => ({
-    ...(shell.googleBusiness.value ?? {}),
+  const googleMaps = computed(() => ({
+    ...(shell.googleMaps.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
-    posts: data.value?.globalPosts ?? [],
   }))
+  // The site's own published social posts. They were carried under the Google
+  // key, which described neither where they come from nor what they are.
+  const socialPosts = computed(() => data.value?.globalPosts ?? [])
   const products = computed(() => data.value?.products ?? []);
   const collections = computed(() => data.value?.collections ?? []);
   /**
@@ -294,7 +296,8 @@ export const usePublicPageData = async (options: {
     site,
     location,
     config,
-    googleBusiness,
+    googleMaps,
+    socialPosts,
     locationReviews,
     reviewsAggregate,
     reviewsList,

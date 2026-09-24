@@ -124,7 +124,6 @@ const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
   seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
   baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.name,
-  robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
 }))
 const { trackConsultationClick } = useSiteConversionTracking(consultation)
 
@@ -143,7 +142,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
     siteName: identity.value.name,
   },
   socialImage: post.value.social_image,
-  robots: resolvedSeo.value.robots,
+  discoverability: post.value.visibility === 'unlisted' ? 'unlisted' : 'listed',
 }))
 
 const blogUrl = useSeoUrl(() => localePath('/blog'))

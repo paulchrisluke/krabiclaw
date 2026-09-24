@@ -41,7 +41,6 @@
 <script setup lang="ts">
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
-import { NON_INDEXABLE_ROBOTS_INTENT, normalizeRobotsIntent, type RobotsIntent } from '~/shared/robots-directive'
 import { MALI_FONT_CSS, resolveSiteFontPreset, siteFontStyles } from '~/shared/site-fonts'
 
 const route = useRoute()
@@ -142,7 +141,6 @@ const footerLocations = computed(() => (scopedLocationSlug.value === null
   ? locations.value
   : locations.value.filter(location => location.slug === scopedLocationSlug.value)))
 
-const googleSiteVerification = computed(() => config.value?.google_site_verification || null)
 
 // Request-scoped URL state must be captured eagerly during setup. Tenant routing
 // already 301s alternate subdomains to the configured custom domain, so the
@@ -167,7 +165,7 @@ if (import.meta.client) {
 
 // Shared demo-host check: the synthetic "Ember & Slice" showcase site isn't a
 // real business collecting real visitor data, so it's excluded from search
-// (see siteRobots below) and skips the cookie-consent banner entirely rather
+// (see the discoverability below) and skips the cookie-consent banner rather
 // than asking demo visitors to accept/reject tracking that isn't happening.
 // Matches these exact hosts (see seed-definitions/demo.ts siteDomains) rather
 // than a "demo." prefix — a real tenant's own custom domain (e.g.
@@ -176,13 +174,6 @@ if (import.meta.client) {
 const DEMO_HOSTS = new Set(['demo.krabiclaw.com', 'demo.localhost'])
 const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
-// Site-wide default only — individual pages set their own robots directive
-// when they have one; this covers pages without a page-specific directive.
-const siteRobots = computed<RobotsIntent | null>(() => {
-  if (isDemoHost) return NON_INDEXABLE_ROBOTS_INTENT
-  return normalizeRobotsIntent(config.value?.robots)
-})
-
 useSocialMetadata(() => ({
   path: route.path,
   title: config.value?.seo_title || config.value?.name || resolvedSite.value?.name || '',
@@ -190,16 +181,11 @@ useSocialMetadata(() => ({
   brand: {
     siteName: config.value?.name || resolvedSite.value?.name || '',
   },
-  robots: siteRobots.value,
+  // Everything a live site serves is offered to discovery; the showcase site
+  // is not a real business and is offered to nobody. A page that is itself
+  // unlisted, and any preview render, says so over this.
+  discoverability: isDemoHost ? 'private' : 'listed',
 }))
-
-useHead(() => {
-  return {
-    meta: googleSiteVerification.value
-      ? [{ name: 'google-site-verification', content: googleSiteVerification.value }]
-      : [],
-  }
-})
 </script>
 
 <style>

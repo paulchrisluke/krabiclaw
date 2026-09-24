@@ -3,7 +3,7 @@ import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
 import {
-  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, } from '../../../utils/facebook-pages'
+  exchangeFacebookCode, getFacebookUserInfo, getFacebookPages, storeFacebookPagesConnection, storePendingPageSelection, } from '../../../utils/facebook-pages'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization } from '~/server/utils/member-access'
 
@@ -39,17 +39,11 @@ export default defineHandler(async (event) => {
   }
 
   const { organizationId, userId } = stateData
-  const settingsRedirect = async (status: string) => {
-    try {
-      const organization = await resolveUserOrganization(env, { userId, organizationId })
-      return organization
-        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings?fb=${status}`
-        : `/dashboard?fb=${status}`
-    } catch (e) {
-      console.error('Facebook Pages redirect organization query failed:', e)
-      return `/dashboard?fb=${status}`
-    }
-  }
+  const organization = await resolveUserOrganization(env, { userId, organizationId })
+  const leaf = organization
+    ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/integrations/facebook`
+    : '/dashboard'
+  const settingsRedirect = (status: string) => `${leaf}?fb=${status}`
 
   try {
     const db = env.DB
@@ -67,21 +61,39 @@ export default defineHandler(async (event) => {
     const pages = await getFacebookPages(systemUserToken)
 
     if (pages.length === 0) {
-      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
+      return new Response(null, { status: 302, headers: { Location: settingsRedirect('no_pages') } })
     }
 
-    const firstPage = pages[0]
-    if (!firstPage) {
-      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
+    // More than one Page is a question only the tenant can answer. Taking
+    // pages[0] connected whichever Page Facebook happened to list first, which
+    // for an agency account is rarely the one they meant.
+    if (pages.length > 1) {
+      const handle = await storePendingPageSelection(env, {
+        organizationId, userId,
+        facebookUserId: userInfo.id,
+        userToken: systemUserToken,
+        revision: stateData.revision,
+        pages,
+      })
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${settingsRedirect('select_page')}&handle=${encodeURIComponent(handle)}` },
+      })
     }
+
+    const onlyPage = pages[0]!
 
     await storeFacebookPagesConnection(env, {
-      organization_id: organizationId, connected_by_user_id: userId, facebook_user_id: userInfo.id, page_id: firstPage.id, page_name: firstPage.name, encrypted_user_token: systemUserToken, encrypted_page_token: firstPage?.access_token, user_token_expires_at: undefined, scopes: undefined, status: 'active', }, stateData)
+      organization_id: organizationId, connected_by_user_id: userId,
+      facebook_user_id: userInfo.id, page_id: onlyPage.id, page_name: onlyPage.name,
+      encrypted_user_token: systemUserToken, encrypted_page_token: onlyPage.access_token,
+      user_token_expires_at: undefined, scopes: undefined, status: 'active',
+    }, stateData)
 
     return new Response(null, {
-      status: 302, headers: { Location: await settingsRedirect('connected') }, })
+      status: 302, headers: { Location: settingsRedirect('connected') }, })
   } catch (err) {
     console.error('Facebook OAuth callback failed:', err)
-    return new Response(null, { status: 302, headers: { Location: await settingsRedirect('error') } })
+    return new Response(null, { status: 302, headers: { Location: settingsRedirect('error') } })
   }
 })

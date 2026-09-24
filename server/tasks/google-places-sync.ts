@@ -6,10 +6,10 @@ import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { filterEntitledRows } from '~/server/utils/billing-access'
 
-// NOTE: Google Business Profile API access was never provisioned.
-// All Google data for every location comes from the Places API (New, v1)
-// using GOOGLE_PLACES_API_KEY. This task syncs hours, ratings, and reviews
-// for every business_locations row that has google_place_id set.
+// The routine Google Maps sync: for every location connected to a place, what
+// Google owns about it — rating, review count, the Maps link and the review
+// snapshot. The tenant's own details (address, phone, hours, timezone) are
+// written only by connecting or by an explicit re-import.
 
 interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -41,7 +41,7 @@ interface TaskResult {
 export default defineScheduledTask({
   meta: {
     name: 'social:google-places-sync',
-    description: 'Hourly sync of Google Places hours, ratings, and reviews for all connected locations',
+    description: 'Weekly sync of Google Maps ratings and reviews for all connected locations',
   },
   async run({ context }): Promise<{ result: TaskResult }> {
     const taskContext = context as SyncTaskContext | undefined
@@ -56,10 +56,7 @@ export default defineScheduledTask({
     if (!db) throw new Error('DB is required')
 
     const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-    if (!apiKey) {
-      console.warn('[google-places-sync] GOOGLE_PLACES_API_KEY not configured — skipping')
-      return { result: emptyResult }
-    }
+    if (!apiKey) throw new Error('GOOGLE_PLACES_API_KEY is not configured')
 
     // Better Auth's subscription table is the authority for paid scheduled
     // integrations; candidates are selected here and filtered against it below.
@@ -106,11 +103,11 @@ export default defineScheduledTask({
           loc.organization_id,
           loc.id,
           loc.google_place_id,
+          'provider',
         )
         locResult.reviews_upserted = reviewsUpserted
       } catch (err) {
         locResult.error = err instanceof Error ? err.message : String(err)
-        console.error(`[google-places-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
       }
 
       if (!locResult.error) {
@@ -130,13 +127,10 @@ export default defineScheduledTask({
       syncResults.push(locResult)
     }
 
-    return {
-      result: {
-        locations: locations.length,
-        passed: syncResults.filter(r => !r.error).length,
-        failed: syncResults.filter(r => r.error).length,
-        details: syncResults,
-      },
+    const failed = syncResults.filter(r => r.error)
+    if (failed.length) {
+      throw new Error(`Google Maps sync failed for ${failed.length} of ${locations.length} locations: ${failed.map(r => `${r.location_id}: ${r.error}`).join('; ')}`)
     }
+    return { result: { locations: locations.length, passed: syncResults.length, failed: 0, details: syncResults } }
   },
 })

@@ -1,43 +1,36 @@
 import { queryFirst } from '~/server/db'
-import type { IntegrationVersion } from '~/shared/site-settings'
 import { jsonResponse } from '~/server/utils/api-response'
-import { getGoogleAnalyticsAuthUrl } from '~/server/utils/google-analytics'
+import { googleAuthUrl } from '~/server/utils/google-credential'
 import { signOAuthState } from '~/server/utils/encryption'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
+// Starts this product's authorization. The product travels in the signed
+// state so one callback and one registered redirect URI serve both, and the
+// scopes asked for are only this product's.
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
-  if (!organizationId) {
-    return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
-  }
+  if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
-  try {
-    const version = await queryFirst<IntegrationVersion>(db, `
-      SELECT json_extract(integrations_json, '$.google_credential.revision') AS revision
-        FROM organization WHERE id = ?
-    `, [organization.id])
-    if (!version) throw new Error('Organization no longer exists')
+  const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
+  if (!hmacSecret) return jsonResponse({ error: 'Server misconfiguration: encryption key not set' }, { status: 500 })
 
-    const statePayload = {
-      ...version, organizationId: organization.id, userId: session.user.id, timestamp: Date.now()
-    }
+  const current = await queryFirst<{ revision: string | null }>(db, `
+    SELECT json_extract(integrations_json, '$.google_credential.revision') AS revision
+      FROM organization WHERE id = ?
+  `, [organization.id])
+  if (!current) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
-    const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
-    if (!hmacSecret) {
-      return jsonResponse({ error: 'Server misconfiguration: encryption key not set' }, { status: 500 })
-    }
-    const state = await signOAuthState(hmacSecret, statePayload)
+  const state = await signOAuthState(hmacSecret, {
+    revision: current.revision,
+    product: 'analytics',
+    organizationId: organization.id,
+    userId: session.user.id,
+    timestamp: Date.now(),
+  })
 
-    const authUrl = getGoogleAnalyticsAuthUrl(env, state)
-
-    return jsonResponse({ success: true, authUrl })
-  } catch (error) {
-    console.error('Failed to start Google Analytics OAuth:', error)
-    const message = error instanceof Error ? error.message : 'Failed to start Google Analytics authorization'
-    return jsonResponse({ error: message }, { status: 500 })
-  }
+  return jsonResponse({ success: true, authUrl: googleAuthUrl(env, 'analytics', state) })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

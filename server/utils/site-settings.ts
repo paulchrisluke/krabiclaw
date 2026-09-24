@@ -3,10 +3,10 @@ import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
-import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
+import type { SiteIntegrations } from '~/shared/site-settings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
@@ -30,6 +30,7 @@ export class SiteSettingsNotFoundError extends Error {
 
 interface SiteSettingsRow {
   id: string
+  status: string
   subdomain: string | null
   name: string | null
   vertical: string
@@ -37,7 +38,6 @@ interface SiteSettingsRow {
 }
 
 interface FullSiteRow extends SiteSettingsRow {
-  status: string
   public_url: string | null
   custom_domain_status: string | null
   default_currency: string | null
@@ -58,7 +58,6 @@ interface FullSiteRow extends SiteSettingsRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   social_facebook_url: string | null
   social_instagram_url: string | null
   social_tiktok_url: string | null
@@ -85,7 +84,7 @@ export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
 ) {
-  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
+  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string; integrations_json: string; locations_json: string }>(db, `
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
@@ -99,7 +98,12 @@ export async function loadSettingsPayload(
            seo_title, seo_description, canonical_url,
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
-           vertical, theme_id
+           vertical, theme_id, integrations_json,
+           (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title,
+                     'google_place_id', google_place_id, 'rating', rating, 'review_count', review_count,
+                     'last_synced_at', last_synced_at))
+              FROM (SELECT * FROM business_locations
+                     WHERE organization_id = organization.id AND status = 'active' ORDER BY title, id)) AS locations_json
     FROM organization
     LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
       AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
@@ -167,7 +171,6 @@ export async function loadSettingsPayload(
     seo_title: updatedSite.seo_title,
     seo_description: updatedSite.seo_description,
     canonical_url: updatedSite.canonical_url,
-    robots: updatedSite.robots,
     social_facebook_url: updatedSite.social_facebook_url,
     social_instagram_url: updatedSite.social_instagram_url,
     social_tiktok_url: updatedSite.social_tiktok_url,
@@ -183,9 +186,43 @@ export async function loadSettingsPayload(
     catering_email: siteConfig.catering_email || '',
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
-    google_site_verification: siteConfig.google_site_verification || '',
+    integrations: integrationsSummary(JSON.parse(updatedSite.integrations_json) as SiteIntegrations, JSON.parse(updatedSite.locations_json) as IntegrationLocation[]),
     created_at: updatedSite.created_at,
     updated_at: updatedSite.updated_at,
+  }
+}
+
+interface IntegrationLocation {
+  id: string
+  slug: string
+  title: string
+  google_place_id: string | null
+  rating: number | null
+  review_count: number | null
+  last_synced_at: string | null
+}
+
+/**
+ * What each integration is connected to, for the Integrations list and its
+ * leaves — names and statuses, never a token. Google Maps is per location, so
+ * its answer is the locations and which of them name a place.
+ */
+function integrationsSummary(integrations: SiteIntegrations, locations: IntegrationLocation[]) {
+  return {
+    google_maps: locations,
+    google_analytics: integrations.google_analytics
+      ? { property_name: integrations.google_analytics.property_name ?? null, measurement_id: integrations.google_analytics.measurement_id, status: integrations.google_analytics.status }
+      : null,
+    google_search_console: integrations.google_search_console
+      ? { site_url: integrations.google_search_console.site_url, status: integrations.google_search_console.status }
+      : null,
+    google_account: integrations.google_credential?.provider_account_email ?? null,
+    facebook: integrations.facebook
+      ? { page_name: integrations.facebook.page_name, status: integrations.facebook.status }
+      : null,
+    instagram: integrations.instagram
+      ? { username: integrations.instagram.username, status: integrations.instagram.status }
+      : null,
   }
 }
 
@@ -215,7 +252,7 @@ async function updateNonSiteConfigFields(
     }
   }
 
-  for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
+  for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email'] as const) {
     if (updates[key] !== undefined) {
       const value = updates[key]
       if (value) {
@@ -229,19 +266,6 @@ async function updateNonSiteConfigFields(
   return null
 }
 
-async function syncAnalyticsSettingToZaraz(
-  db: D1Database,
-  env: SetupEnv,
-  organizationId: string,
-  measurementId: unknown
-) {
-  if (measurementId === undefined) return
-
-  // The setting is only in effect once the tracking configuration carries it, so
-  // this failure belongs to the save that asked for it.
-  await reconcileZarazAnalytics(env, db)
-}
-
 async function attemptSiteUpdate(
   db: D1Database,
   env: SetupEnv,
@@ -253,6 +277,8 @@ async function attemptSiteUpdate(
 ): Promise<SiteSettingsUpdateResult> {
   const setParts: string[] = []
   const params: Array<string | null> = []
+  // Extra WHERE terms the UPDATE must still satisfy at the moment it runs.
+  const guards: string[] = []
   const siteMedia = updates.media
 
   if (updates.font_preset !== undefined) {
@@ -297,6 +323,21 @@ async function attemptSiteUpdate(
     setParts.push('default_currency = ?')
     params.push(currency)
   }
+  if (updates.status !== undefined) {
+    // Draft and Live are the tenant's to move between. 'suspended' is the
+    // platform's hold, so the tenant neither sets it nor clears it. The read
+    // answers plainly; the guard on the UPDATE is what a suspension landing
+    // between the two cannot outrun.
+    if (updates.status !== 'active' && updates.status !== 'inactive') {
+      return { status: 400, data: { error: 'Website status must be active or inactive' } }
+    }
+    if (site.status === 'suspended') {
+      return { status: 409, data: { error: 'This website is suspended. Contact support to restore it.' } }
+    }
+    setParts.push('status = ?')
+    params.push(updates.status)
+    guards.push("status <> 'suspended'")
+  }
   if (updates.seo_title !== undefined) {
     setParts.push('seo_title = ?')
     params.push(updates.seo_title ?? null)
@@ -308,12 +349,6 @@ async function attemptSiteUpdate(
   if (updates.canonical_url !== undefined) {
     setParts.push('canonical_url = ?')
     params.push(updates.canonical_url ?? null)
-  }
-  if (updates.robots !== undefined) {
-    const parsed = parseRobotsIntent(updates.robots)
-    if (!parsed.ok) return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(', ')}` } }
-    setParts.push('robots = ?')
-    params.push(parsed.intent)
   }
   for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
     if (updates[key] === undefined) continue
@@ -414,9 +449,20 @@ async function attemptSiteUpdate(
     sql: `
     UPDATE organization
     SET ${setParts.join(', ')}
-    WHERE id = ?
+    WHERE id = ?${guards.map(guard => ` AND ${guard}`).join('')}
   `,
     values: [...params, organizationId],
+  }
+
+  // A guard that matched nothing means the row no longer answers to this
+  // write — a suspended tenant being told to go Live. Reporting success would
+  // leave the owner believing they published it.
+  if (guards.length > 0 && setParts.length > 0) {
+    const guarded = await queryFirst<{ status: string }>(db,
+      'SELECT status FROM organization WHERE id = ? LIMIT 1', [organizationId])
+    if (guarded?.status === 'suspended') {
+      return { status: 409, data: { error: 'This website is suspended. Contact support to restore it.' } }
+    }
   }
 
   const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
@@ -432,6 +478,11 @@ async function attemptSiteUpdate(
   // All settings callers use this mutation path; refresh both public resource
   // and HTML caches when typography changes, including a reset to Default.
   if (updates.font_preset !== undefined) await purgePublicResourceCacheNow(env, organizationId)
+
+  // Zaraz serves analytics only for tenants that are Live, so taking one to
+  // Draft has to withdraw its tag rather than leave it collecting from a
+  // website the owner believes is unpublished.
+  if (updates.status !== undefined) await reconcileZarazAnalytics(env, db)
 
   if (siteMedia !== undefined && siteMedia.length > 0) {
     const targetSlots = new Set(siteMedia.map(item => item.slot))
@@ -480,7 +531,7 @@ export async function updateSiteSettingsFields(
   }
 
   const site = await queryFirst<SiteSettingsRow>(db, `
-    SELECT id, subdomain, name, vertical, theme_id
+    SELECT id, status, subdomain, name, vertical, theme_id
     FROM organization
     WHERE id = ?
     LIMIT 1
@@ -522,13 +573,6 @@ export async function updateSiteSettingsFields(
 
   const configError = await updateNonSiteConfigFields(db, organizationId, updates)
   if (configError) return configError
-  await syncAnalyticsSettingToZaraz(
-    db,
-    env,
-    organizationId,
-    updates.google_analytics_measurement_id,
-  )
-
   if (updates.name !== undefined) {
     const baseSlug = buildSlug(updates.name)
     if (!baseSlug) {

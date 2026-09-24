@@ -16,6 +16,7 @@ import {
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
 interface PublicProductSiteRow {
   id: string
@@ -115,7 +116,7 @@ async function loadProductSite(db: DbClient, organizationId: string, routeKind: 
   const site = await queryFirst<PublicProductSiteRow>(db, `
     SELECT id, name, vertical, theme_id, feature_overrides, default_currency
       FROM organization
-     WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"}
+     WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)}
        AND name IS NOT NULL AND trim(name) <> ''
      LIMIT 1
   `, [organizationId])
@@ -322,7 +323,7 @@ export async function loadPublicProductApiCollection(
   previewAuthorized: boolean,
   locationSlug?: string | null,
 ): Promise<PublicProductCollection | null> {
-  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM organization WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ vertical: string }>(db, `SELECT vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!presentation) return null
   return loadPublicProductCollection(db, organizationId, presentation.locationCollectionSegment, previewAuthorized, locationSlug)
@@ -337,7 +338,7 @@ export async function loadPublicProductApiDetail(
   productSlug: string,
   locale = 'en',
 ): Promise<PublicProductDetail | null> {
-  const site = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active'${previewAuthorized ? '' : " AND onboarding_status = 'active'"} LIMIT 1`, [organizationId])
+  const site = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = site ? resolveProductPresentation(site.vertical) : null
   if (!site || !presentation) return null
   // The surface is the Product's own — an Experience answers here too, so its

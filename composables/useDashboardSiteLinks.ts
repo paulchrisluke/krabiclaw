@@ -40,7 +40,6 @@ export function useDashboardSiteLinks() {
       brand: `${site}/brand`,
       inbox: `${site}/messages`,
       domains: `${settings}/website/domains`,
-      settings,
     }
   })
 

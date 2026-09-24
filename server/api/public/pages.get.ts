@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   // preview token, exactly as tenant resolution serves the pages themselves.
   const preview = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(env))
   const site = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM organization WHERE id = ? AND status = 'active'${preview ? '' : " AND onboarding_status = 'active'"} LIMIT 1
+    SELECT id FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', preview)} LIMIT 1
   `, [organizationId])
   if (!site) return apiErrorResponse(event, 404, 'SITE_NOT_FOUND', 'Site not found')
 
@@ -35,3 +35,4 @@ export default defineHandler(async (event) => {
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';
 import { getRouterParam } from 'nitro/h3';
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'

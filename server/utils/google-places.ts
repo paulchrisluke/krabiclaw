@@ -170,7 +170,7 @@ export function staleGoogleReviewDeletes(scope: { organizationId: string; locati
       WHERE organization_id = ? AND location_id = ?
         AND source = 'google_places'
         AND (google_review_id IS NULL OR google_review_id NOT IN (SELECT value FROM json_each(?)))`
-  const params = [scope.organizationId, scope.organizationId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
+  const params = [scope.organizationId, scope.locationId, JSON.stringify(reviews.map(review => review.google_review_id))]
   // A review's media placements (author portrait) have no foreign key to the
   // review, so they go first, by the same predicate.
   return [
@@ -197,17 +197,30 @@ export function googleReviewUpserts(scope: { organizationId: string; locationId:
   })
 }
 
+/**
+ * Writes what Google Maps says about a location's connected place.
+ *
+ * `import` is the explicit act — connecting a place, or the tenant confirming a
+ * re-import — and replaces the business details the tenant otherwise owns:
+ * address, phone, website, hours, timezone. `provider` is the routine sync and
+ * writes only what Google owns: rating, review count, the Maps link and the
+ * review snapshot. A tenant who corrected their hours is never overwritten by
+ * an hourly job.
+ */
 export async function syncPlaceToLocation(
   db: D1Database,
   apiKey: string,
   organizationId: string,
   locationId: string,
-  placeId: string
+  placeId: string,
+  scope: 'import' | 'provider',
 ): Promise<{ place: PlaceDetails; reviewsUpserted: number }> {
   const place = await getPlaceDetails(apiKey, placeId)
+  if (!place.placeId) throw new Error(`Google Maps returned no place id for ${placeId}`)
   const now = new Date().toISOString()
 
-  const results = await executeBatch(db, [{ query: `
+  const location = scope === 'import'
+    ? { query: `
     UPDATE business_locations SET
       phone = COALESCE(?, phone),
       website_url = COALESCE(?, website_url),
@@ -217,30 +230,43 @@ export async function syncPlaceToLocation(
       maps_url = COALESCE(?, maps_url),
       opening_hours = ?,
       timezone = COALESCE(?, timezone),
-      rating = COALESCE(?, rating),
-      review_count = COALESCE(?, review_count),
-      google_place_id = COALESCE(?, google_place_id),
+      rating = ?,
+      review_count = ?,
+      google_place_id = ?,
       last_synced_at = ?,
       updated_at = ?
     WHERE id = ? AND organization_id = ?
   `, params: [
-    place.phone,
-    place.websiteUrl,
-    place.address ? JSON.stringify(place.address) : null,
-    place.lat,
-    place.lng,
-    place.mapsUrl,
-    serializeOpeningHours(place.openingHours),
-    place.timezone,
-    place.rating,
-    place.ratingCount,
-    place.placeId || null,
-    now,
-    now,
-    locationId,
-    organizationId,
-  ] }, ...staleGoogleReviewDeletes({ organizationId, locationId }, place.reviews),
-  ...googleReviewUpserts({ organizationId, locationId }, place.reviews, now)])
+      place.phone,
+      place.websiteUrl,
+      place.address ? JSON.stringify(place.address) : null,
+      place.lat,
+      place.lng,
+      place.mapsUrl,
+      serializeOpeningHours(place.openingHours),
+      place.timezone,
+      place.rating,
+      place.ratingCount,
+      place.placeId,
+      now,
+      now,
+      locationId,
+      organizationId,
+    ] }
+    : { query: `
+    UPDATE business_locations SET
+      maps_url = COALESCE(?, maps_url),
+      rating = ?,
+      review_count = ?,
+      last_synced_at = ?,
+      updated_at = ?
+    WHERE id = ? AND organization_id = ? AND google_place_id = ?
+  `, params: [place.mapsUrl, place.rating, place.ratingCount, now, now, locationId, organizationId, placeId] }
+
+  const results = await executeBatch(db, [location,
+    ...staleGoogleReviewDeletes({ organizationId, locationId }, place.reviews),
+    ...googleReviewUpserts({ organizationId, locationId }, place.reviews, now)])
+  if (Number(results[0]?.meta?.changes ?? 0) !== 1) throw new Error(`Location ${locationId} is not connected to ${placeId}`)
   const reviewsUpserted = results.slice(results.length - place.reviews.length).reduce((count, result) => count + Number(result.meta?.changes ?? 0), 0)
 
   return { place, reviewsUpserted }

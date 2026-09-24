@@ -137,7 +137,6 @@ export interface PublicBlogPost extends PublicBlogSummary {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string
-  robots: string | null
   visibility: 'listed' | 'unlisted'
   created_at: string | null
   updated_at: string | null
@@ -250,6 +249,8 @@ export interface PublicBlawbyShellData {
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
   pageLinks: PublicBlawbyPageLink[]
+  /** The Search Console META token, served while Google needs to see it. */
+  searchConsoleVerification: string | null
 }
 
 export interface PublicBlawbyData {

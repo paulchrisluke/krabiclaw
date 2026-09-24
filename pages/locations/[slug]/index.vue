@@ -283,7 +283,6 @@ import { productLocationCollectionPath, resolveProductPresentation } from '~/uti
 import { selectPrice, type Price } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
@@ -494,7 +493,6 @@ useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || location.value?.title || '',
   description: location.value?.seo_description || '',
-  robots: normalizeRobotsIntent(location.value?.robots),
   socialImage: locationSocialCard.value,
   brand: {
     siteName: siteName.value,

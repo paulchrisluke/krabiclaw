@@ -26,7 +26,7 @@ const { isBlawby } = usePublicTemplate()
 // own included: its marketing pages are ordinary documents now, and this is the
 // route that serves the ones no named route owns (#903). A path with no
 // published document still 404s here — there is nothing to fall back to.
-if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
+if (!organizationId) throw showNotFound()
 
 const segments = route.params.tenantPath
 const pagePath = computed(() => {
@@ -94,9 +94,9 @@ const localizedData = localeSegment.value
   : null
 if (localizedData?.error.value) throw localizedData.error.value
 const localizedRoute = computed(() => localizedData?.data.value?.route ?? null)
-if (localeSegment.value && !localizedRoute.value) throw createError({ statusCode: 404, statusMessage: 'Localized route not found' })
+if (localeSegment.value && !localizedRoute.value) throw showNotFound('Localized route not found')
 if (localizedRoute.value?.representation.kind === 'resource') {
-  throw createError({ statusCode: 404, statusMessage: 'Localized resource route is not handled by the tenant page catch-all' })
+  throw showNotFound('Localized resource route is not handled by the tenant page catch-all')
 }
 if (localizedRoute.value) {
   useState<string>('public-locale', () => 'en').value = localizedRoute.value.locale

@@ -70,11 +70,11 @@ const { organizationId, site } = useTenantSite()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, locations } = await usePublicPageData()
-const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const { googleMaps, locations } = await usePublicPageData()
+const allReviews = computed(() => googleMaps.value?.reviews ?? [])
 
 const googleReviewSummary = computed(() => {
-  const summary = googleBusiness.value?.business?.reviewSummary
+  const summary = googleMaps.value?.business?.reviewSummary
   if (!summary) {
     const ratings = allReviews.value.map(r => r.rating).filter(Boolean)
     if (!ratings.length) return null
@@ -93,7 +93,7 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const siteName = computed(() => site?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/reviews',

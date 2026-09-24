@@ -1125,3 +1125,22 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
   }
   return { checked, failed }
 }
+
+/**
+ * The site's canonical public origin, as a URL-prefix property: scheme, host,
+ * trailing slash. Search Console treats `https://example.com` and
+ * `https://example.com/` as different properties and only accepts the latter
+ * for a URL prefix, so the slash is part of the value rather than a caller's
+ * responsibility.
+ *
+ * Null when the site has no active canonical domain yet, which is a site that
+ * cannot be verified — the caller says so rather than guessing a host.
+ */
+export async function sitePublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
+  const row = await queryFirst<{ domain: string }>(db, `
+    SELECT domain FROM organization_domains
+    WHERE organization_id = ? AND role = 'canonical' AND status = 'active'
+    LIMIT 1
+  `, [organizationId])
+  return row ? `https://${row.domain}/` : null
+}

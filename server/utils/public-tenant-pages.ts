@@ -34,7 +34,6 @@ export interface PublicTenantPage {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   page_type: string
   recipe: string | null
   sort_order: number
@@ -203,8 +202,8 @@ async function hydrateBlocks(
   // CMS, which never writes that key, listed nothing.
   const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid')
   const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
-  // The site's social posts — Google Business updates and anything published
-  // beside them. They are `social_post` documents, a different record from the
+  // The site's social posts — its own updates and what Facebook and Instagram
+  // sync in. They are `social_post` documents, a different record from the
   // articles `site_posts` reads, and a Saya home shows both.
   const hasUpdateSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_updates')
   for (const block of blocks) {
@@ -446,7 +445,6 @@ function mapPage(
     seo_title: page.seo_title,
     seo_description: page.seo_description,
     canonical_url: page.canonical_url,
-    robots: page.robots,
     page_type: page.page_type,
     recipe: page.recipe,
     sort_order: page.sort_order,

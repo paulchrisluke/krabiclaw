@@ -23,11 +23,16 @@ const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
 const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
 useHead(() => {
+  const verification = config?.value.search_console_verification
   return {
     link: buildTenantHeadLinks({
       isPlatform,
       siteMedia: siteMedia.value,
-    })
+    }),
+    // Google fetches the site to verify Search Console ownership
+    // (server/utils/google-search-console.ts); every layout the site shell
+    // serves carries it. Blawby serves its own from its document shell.
+    meta: verification ? [{ name: 'google-site-verification', content: verification }] : [],
   }
 })
 

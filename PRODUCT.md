@@ -14,7 +14,7 @@ managed through it, KrabiClaw's own included.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook publishing, and analytics. Google Places lookup and domain setup are CMS-only.
+- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook and Instagram publishing, and analytics. Google Maps connection and domain setup are CMS-only.
 - Every public tool rejects unknown top-level arguments and declares explicit `readOnlyHint`, `openWorldHint`, and `destructiveHint` values. `server/utils/mcp-tools/shared.ts` contains the registry.
 - Location-scoped mutations require an explicit `location_id`. Product-by-ID mutations resolve the Product's stored owning location.
 - `chatgpt-app-submission.json` contains the review import data. Run `yarn chatgpt:submission:write` after changing the public tool catalog.

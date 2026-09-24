@@ -58,14 +58,13 @@
 </template>
 
 <script setup lang="ts">
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'saya' })
 useSocialMetadata({
   schema: false,
   path: '/tenant-setup-pending',
   title: 'Setting up your site',
   description: 'This site is still being set up and will be available shortly.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 
 const setupFailed = ref(false)
