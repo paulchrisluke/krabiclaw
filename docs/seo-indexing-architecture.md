@@ -43,7 +43,7 @@ Route classifications live in `server/utils/seo-policy.ts`.
 - `PRIVATE_ROUTE_PREFIXES` and `PRIVATE_EXACT_ROUTES` define non-content application surfaces.
 - `TENANT_ONLY_EXACT_ROUTES` and `TENANT_ONLY_ROUTE_PREFIXES` define routes that must return 404 on the platform host.
 - `isNonIndexableHost()` defines deployment hosts that must never be indexed.
-- `resolveRuntimeSeoSiteConfig()` defines the canonical Site Config for platform, tenant, and non-production SEO endpoint requests.
+- `resolveRuntimeSeoConfig()` defines the canonical Site Config for platform, tenant, and non-production SEO endpoint requests.
 
 The same classifications are consumed by runtime middleware, sitemap generation, route boundaries, and tests. Do not duplicate route lists in page components.
 
@@ -83,7 +83,7 @@ Every public page uses `useSocialMetadata()` for its canonical and social metada
 
 Tenant pages receive a canonical link from `layouts/saya.vue`. The canonical strips query parameters by using `route.path` and resolves against the current request origin.
 
-Do not use `runtimeConfig.public.siteUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
+Do not use `runtimeConfig.public.platformUrl` for tenant canonical, Open Graph, breadcrumb, structured-data, or sitemap URLs. That value is the platform origin.
 
 ## Generated-card consistency
 

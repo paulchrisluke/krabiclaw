@@ -1,9 +1,9 @@
-export const ROUTES_RENDERING_SITE_QA = new Set(['/', '/services', '/about', '/contact', '/schedule', '/pricing', '/donate'])
+export const ROUTES_RENDERING_ORGANIZATION_QA = new Set(['/', '/services', '/about', '/contact', '/schedule', '/pricing', '/donate'])
 
-export function createRequiredTypesForPath({ servicePathsWithFaqs, sitePagesWithQa, generalSiteQaExists }) {
+export function createRequiredTypesForPath({ servicePathsWithFaqs, organizationPagesWithQa, generalOrganizationQaExists }) {
   function withFaq(path, types) {
-    const hasPageQa = sitePagesWithQa.has(path)
-    const fallsBackToGeneralQa = ROUTES_RENDERING_SITE_QA.has(path) && generalSiteQaExists && !hasPageQa
+    const hasPageQa = organizationPagesWithQa.has(path)
+    const fallsBackToGeneralQa = ROUTES_RENDERING_ORGANIZATION_QA.has(path) && generalOrganizationQaExists && !hasPageQa
     return hasPageQa || fallsBackToGeneralQa ? [...types, 'FAQPage'] : types
   }
 

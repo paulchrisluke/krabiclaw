@@ -16,7 +16,7 @@ export interface MediaUploadResult {
   thumbnail_url?: string
 }
 
-export function useMediaUpload(siteApiBase: string) {
+export function useMediaUpload(organizationApiBase: string) {
   const dashboardApi = useDashboardApi()
   const uploading = ref(false)
   const error = ref<string | null>(null)
@@ -61,7 +61,7 @@ export function useMediaUpload(siteApiBase: string) {
         public_url: string
         thumbnail_url: string | null
         status: 'active'
-      }>(`${siteApiBase}/media/upload`, {
+      }>(`${organizationApiBase}/media/upload`, {
         method: 'POST',
         body: form,
         query: {

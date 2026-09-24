@@ -8,7 +8,7 @@ import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { localPartsAt } from '~/utils/timezone'
 
-export async function listSitesForUser(
+export async function listOrganizationsForUser(
   db: D1Database,
   env: CloudflareEnv,
   userId: string,
@@ -25,13 +25,13 @@ export async function listSitesForUser(
   `, [d1JsonStringSet(orgIds)]);
 }
 
-export async function getSiteForMcp(
+export async function getOrganizationForMcp(
   db: D1Database,
   env: CloudflareEnv,
   organizationId: string,
   userId: string,
 ) {
-  const site = await queryFirst<Record<string, unknown>>(db, `
+  const organization = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.name, s.theme_id, s.slug, s.subdomain,
              (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.updated_at, s.onboarding_status
       FROM organization s
@@ -40,8 +40,8 @@ export async function getSiteForMcp(
     `, [organizationId]);
 
   const membership = await resolveOrganizationMembership(env, { organizationId, userId })
-  if (!site || !membership) throw new Error("Organization not found or access denied");
-  return site;
+  if (!organization || !membership) throw new Error("Organization not found or access denied");
+  return organization;
 }
 
 
@@ -188,7 +188,7 @@ export async function listLocationReviews(
     ORDER BY r.created_at DESC
   `, [organizationId, locationId]);
 
-  const { attachReviewMedia } = await import('~/server/utils/site-reviews')
+  const { attachReviewMedia } = await import('~/server/utils/organization-reviews')
   return await attachReviewMedia(db, organizationId, rows)
 }
 export function buildTenantPageReplacementConfirmationToken(expectedUpdatedAt: string, removedBlockIds: readonly string[]) {

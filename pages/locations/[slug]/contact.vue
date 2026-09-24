@@ -179,8 +179,8 @@ definePageMeta({ layout: 'saya' })
 const { locale, localePath, t } = useI18n()
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
-const locationCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
+const { organizationId, organization } = useTenantOrganization()
+const locationCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -206,7 +206,7 @@ const extraNotes = computed(() => getContentField('extra.notes', '') ?? '')
 const sanitizedParkingInfo = computed(() => DOMPurify.sanitize(parkingInfo.value))
 const sanitizedExtraNotes = computed(() => DOMPurify.sanitize(extraNotes.value))
 
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/contact`,
@@ -214,7 +214,7 @@ useSocialMetadata(() => ({
   description: `Hours, address and directions for ${location.value?.title || slug.value}.`,
   socialImage: location.value?.social_image ?? null,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
@@ -223,8 +223,8 @@ useSchemaOrg([
     const loc = location.value
     if (!loc) return {}
     return {
-      '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
-      name: `${siteName.value} — ${loc.title}`,
+      '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
+      name: `${organizationName.value} — ${loc.title}`,
       address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
       email: loc.email,
@@ -236,7 +236,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: '/' },
       { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
       { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
       { '@type': 'ListItem', position: 4, name: 'Visit', item: `/locations/${slug.value}/contact` }

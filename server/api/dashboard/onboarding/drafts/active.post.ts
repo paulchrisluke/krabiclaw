@@ -11,7 +11,7 @@ import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onb
 import { isValidTimezone } from '~/utils/timezone'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { getPhoneCountry } from '~/utils/phone'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 type DraftSourceType = 'manual' | 'google_places'
 
@@ -135,11 +135,11 @@ export default defineHandler(async (event) => {
   const existingPayload = existingRow ? parseOnboardingDraftPayload(existingRow.payload_json) : null
 
   const rawVertical = typeof body?.vertical === 'string' ? body.vertical : existingPayload?.preview.vertical
-  if (!rawVertical || !VALID_VERTICALS.includes(rawVertical as SiteVertical)) {
+  if (!rawVertical || !VALID_VERTICALS.includes(rawVertical as OrganizationVertical)) {
     return jsonResponse({
       error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`, }, { status: 400 })
   }
-  const vertical = rawVertical as SiteVertical
+  const vertical = rawVertical as OrganizationVertical
 
   let place: Awaited<ReturnType<typeof getPlaceDetails>> | PlaceDetailsSnapshot | null = null
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
@@ -189,6 +189,13 @@ export default defineHandler(async (event) => {
   const products = parseProducts(body?.products, existingPayload)
   const payload = buildOnboardingDraftPayload({
     name, vertical, place, details, brandDraft, products, })
+
+  // The address is derived from the name, and a name with no Latin letter or
+  // digit derives nothing. Provisioning an empty subdomain would leave the
+  // tenant with no host, so the save stops here and says why.
+  if (!payload.preview.subdomainCandidate) {
+    return jsonResponse({ error: 'Your business name needs at least one Latin letter or number to create your address.' }, { status: 400 })
+  }
 
   const draft = await upsertActiveOnboardingDraft(db, {
     // /dashboard/onboarding is the "New Organization" entry point, so a draft

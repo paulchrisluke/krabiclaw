@@ -13,7 +13,7 @@ import { loadDashboardLocationOverview } from '~/server/utils/dashboard-editor-r
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!organizationId || !locationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Site ID and Location ID are required' })
+  if (!organizationId || !locationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Organization ID and Location ID are required' })
   const includeProducts = getQuery(event).includeProducts !== 'false'
   return jsonResponse(await loadDashboardLocationOverview(event, organizationId, locationId, { includeProducts }))
 })

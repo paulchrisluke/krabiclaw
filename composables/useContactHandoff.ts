@@ -3,7 +3,7 @@
 
 export interface ContactConfirmation {
   organizationId: string
-  siteName: string
+  organizationName: string
   guestName: string
   subject?: string | null
 }

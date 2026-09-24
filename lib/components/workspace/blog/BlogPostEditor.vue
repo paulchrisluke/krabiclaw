@@ -26,8 +26,8 @@
             :category="form.category || null"
             :published-at="post?.published_at || post?.created_at || null"
             :updated-at="post?.updated_at || null"
-            :author-name="resolvedSiteName"
-            :site-name="resolvedSiteName"
+            :author-name="resolvedOrganizationName"
+            :organization-name="resolvedOrganizationName"
             :read-minutes="readMinutes"
             :blocks="blocks"
             :template="templateName"
@@ -203,10 +203,10 @@ const statusLabel = computed(() => {
 const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
-const resolvedSiteName = computed(() => post.value?.editor_site_name || '')
+const resolvedOrganizationName = computed(() => post.value?.editor_organization_name || '')
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => tenantBlogPostPath({ themeId: publicTemplateRegistry[templateName.value].themeId }, slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, form.collection))
-const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value }))
+const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, organizationName: resolvedOrganizationName.value }))
 /**
  * The post's cover is its leading image block and nothing else. The post's
  * images are one set; the cover is the lead one; the share card derives from

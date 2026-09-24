@@ -5,7 +5,7 @@ import { loadDashboardEditorContext } from '~/server/utils/dashboard-editor-reso
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
-  if (!organizationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Site ID is required' })
+  if (!organizationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Organization ID is required' })
   return jsonResponse(await loadDashboardEditorContext(event, organizationId))
 })
 import { getRouterParam } from 'nitro/h3';

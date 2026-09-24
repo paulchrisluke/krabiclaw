@@ -74,8 +74,8 @@
           <ul class="space-y-3 text-sm">
             <li v-if="showProducts"><NuxtLink :to="localePath(productPresentation!.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ productCollectionLabel }}</NuxtLink></li>
             <li v-if="showExperiences"><NuxtLink :to="localePath(EXPERIENCE_PRESENTATION.collectionPath)" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.experiences') }}</NuxtLink></li>
-            <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
-            <li v-if="!isExperienceSite"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
+            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/reservations')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ copy.reservationPageKicker }}</NuxtLink></li>
+            <li v-if="!isExperienceOrganization"><NuxtLink :to="localePath('/photos')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.gallery') }}</NuxtLink></li>
             <li><NuxtLink :to="localePath('/about')" class="text-inverted/60 no-underline transition hover:text-inverted">{{ t('saya.footer.our_story') }}</NuxtLink></li>
           </ul>
         </div>
@@ -150,7 +150,7 @@ import { getVerticalCopy } from '~/utils/vertical-copy'
 import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
 import { formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
-interface Site {
+interface Organization {
   name?: string | null
   brand_description?: string | null
   media?: Array<{ slot?: string; public_url?: string | null }>
@@ -183,7 +183,7 @@ interface PublicLocation {
 // Data comes from layouts/saya.vue, which already owns the single shared
 // bootstrap/tenant-site fetch — footer is presentation-only, not a fetcher.
 const props = defineProps<{
-  site: Site | null
+  organization: Organization | null
   isPlatform: boolean
   locations: PublicLocation[]
   locales: { code: string; label: string; is_source: boolean }[]
@@ -202,11 +202,11 @@ function toggleColorMode() {
   setPreference(isDark.value ? 'light' : 'dark')
 }
 const { locale } = useI18n()
-const platformSiteUrl = useRuntimeConfig().public.siteUrl
-const platformPrivacyUrl = new URL('/privacy', platformSiteUrl).href
-const platformTermsUrl = new URL('/terms', platformSiteUrl).href
-const copy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
-const isExperienceSite = computed(() => props.site?.vertical === 'experience')
+const platformOrganizationUrl = useRuntimeConfig().public.platformUrl
+const platformPrivacyUrl = new URL('/privacy', platformOrganizationUrl).href
+const platformTermsUrl = new URL('/terms', platformOrganizationUrl).href
+const copy = computed(() => getVerticalCopy(props.organization?.vertical, locale.value))
+const isExperienceOrganization = computed(() => props.organization?.vertical === 'experience')
 
 const i18n = useI18n() as ApiValue as I18nComposable
 const { t, localePath } = i18n
@@ -227,7 +227,7 @@ const languageItems = computed(() =>
 )
 const locationsError = computed(() => props.error)
 
-const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
+const productPresentation = computed(() => resolveProductPresentation(props.organization?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 // Offered only when the site has something a guest can book.
 const showExperiences = computed(() => props.hasBookableProducts)
@@ -235,13 +235,13 @@ const productCollectionLabel = computed(() => productPresentation.value?.locatio
   ? t('saya.footer.menu')
   : t('saya.footer.products'))
 const year = new Date().getFullYear()
-const logoUrl = computed(() => Array.isArray(props.site?.media)
-  ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
+const logoUrl = computed(() => Array.isArray(props.organization?.media)
+  ? (props.organization.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
   : null)
-const restaurantName = computed(() => props.site?.name?.trim() || '')
-const tagline = computed(() => props.site?.brand_description?.trim() || '')
-const sitePlan = computed(() => props.site?.plan)
-const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')
+const restaurantName = computed(() => props.organization?.name?.trim() || '')
+const tagline = computed(() => props.organization?.brand_description?.trim() || '')
+const organizationPlan = computed(() => props.organization?.plan)
+const showBrandingCredit = computed(() => !props.isPlatform && organizationPlan.value === 'free')
 
 function safeHttpUrl(value: unknown): string | null {
   if (!value || typeof value !== 'string') return null

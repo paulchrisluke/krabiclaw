@@ -26,15 +26,15 @@ export default defineHandler(async (event) => {
   })
   if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
-  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+  if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
   const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: targetLocationId })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: targetLocationId })
 
   let post
   try {
-    post = await createPost(db, site.id, body, session.user.id, env)
+    post = await createPost(db, organization.id, body, session.user.id, env)
   } catch (error) {
     if (error instanceof PostValidationError) {
       return jsonResponse({ error: error.message }, { status: error.statusCode })

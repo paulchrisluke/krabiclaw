@@ -2,7 +2,7 @@
 // copy must be supplied by the owner or an approved import.
 // All records use source='template' so ChowBot can identify and reference them.
 
-import { getVerticalCopy, type SiteVertical } from "~/utils/vertical-copy";
+import { getVerticalCopy, type OrganizationVertical } from "~/utils/vertical-copy";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
 import { createTenantPagesBatch } from "~/server/utils/content/pages";
 
@@ -16,7 +16,7 @@ export async function seedNewOrganization(
     env: CloudflareEnv;
     organizationId: string;
     name: string;
-    vertical: SiteVertical;
+    vertical: OrganizationVertical;
   },
 ): Promise<string> {
   if (!db) throw new Error("Database not configured");

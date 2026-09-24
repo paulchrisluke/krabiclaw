@@ -13,7 +13,7 @@ test('locale query selection is limited to public data APIs', () => {
     /locale-prefixed path/i,
   )
   assert.equal(
-    localeQueryMiddleware(event('https://tenant.example/api/public/sites/site-1/page?locale=th')),
+    localeQueryMiddleware(event('https://tenant.example/api/public/page?locale=th')),
     undefined,
   )
 })

@@ -1,29 +1,29 @@
 import { HTTPError } from 'nitro';
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsCapabilityOverrides } from '~/config/cms-registry'
 import { publicTemplateRegistry, type PublicTemplateSlug } from '~/utils/template-registry'
-import { ALL_VERTICALS, normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { ALL_VERTICALS, normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 
-export interface SiteCmsCapabilityOverrideInput {
-  siteEnabledFeatures?: string | null
+export interface OrganizationCmsCapabilityOverrideInput {
+  organizationEnabledFeatures?: string | null
   locationEnabledFeatures?: string | null
 }
 
-export function resolveSiteCmsCapabilities(
+export function resolveOrganizationCmsCapabilities(
   verticalValue: string,
   themeId: string,
-  overrideInput: SiteCmsCapabilityOverrideInput = {},
+  overrideInput: OrganizationCmsCapabilityOverrideInput = {},
 ) {
   const normalizedVertical = normalizeVertical(verticalValue)
-  if (!ALL_VERTICALS.includes(normalizedVertical as SiteVertical)) {
-    throw new HTTPError({ statusCode: 422, statusMessage: `Unsupported site vertical: ${verticalValue}` })
+  if (!ALL_VERTICALS.includes(normalizedVertical as OrganizationVertical)) {
+    throw new HTTPError({ statusCode: 422, statusMessage: `Unsupported organization vertical: ${verticalValue}` })
   }
   const template = Object.values(publicTemplateRegistry).find(definition => definition.themeId === themeId)?.slug
   if (!template) {
     throw new HTTPError({ statusCode: 422, statusMessage: `Unsupported public template: ${themeId}` })
   }
-  const vertical = normalizedVertical as SiteVertical
+  const vertical = normalizedVertical as OrganizationVertical
   const overrides: CmsCapabilityOverrides = {
-    site: parseCmsFeatureOverrideDelta(overrideInput.siteEnabledFeatures),
+    organization: parseCmsFeatureOverrideDelta(overrideInput.organizationEnabledFeatures),
     location: parseCmsFeatureOverrideDelta(overrideInput.locationEnabledFeatures),
   }
   try {

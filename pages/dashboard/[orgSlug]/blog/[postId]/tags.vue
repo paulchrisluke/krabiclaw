@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-tags"
+    id="organization-blog-post-tags"
     title="Tags"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

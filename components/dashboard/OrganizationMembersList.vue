@@ -193,7 +193,7 @@ const isMembersResponse = (
 
 const route = useRoute()
 const dashboard = useDashboardOrganization()
-const { orgPaths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardOrganizationLinks()
 const membersPath = computed(() => `${orgPaths.value.settings}/members`)
 const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))
 

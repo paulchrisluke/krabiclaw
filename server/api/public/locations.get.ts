@@ -9,7 +9,7 @@ interface JsonObject {
   [key: string]: JsonValue
 }
 
-interface SiteRow {
+interface OrganizationRow {
   id: string
   status: 'active'
 }
@@ -53,15 +53,15 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<SiteRow>(db, `
+    const organization = await queryFirst<OrganizationRow>(db, `
       SELECT id, status FROM organization
       WHERE id = ? AND status = 'active'
       LIMIT 1
     `, [organizationId])
 
-    if (!site) {
+    if (!organization) {
       return jsonResponse({
-        error: 'Site not found or inactive'
+        error: 'Organization not found or inactive'
       }, { status: 404 })
     }
 

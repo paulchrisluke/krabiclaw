@@ -34,10 +34,12 @@ test('localized projection clears untranslated localizable fields', () => {
   )
 
   assert.equal(projected.name, 'บทเรียน')
-  assert.equal(projected.description, undefined)
-  // Tags are localizable, so an untranslated one is cleared rather than shown
-  // in the source language.
-  assert.equal(projected.tags, undefined)
+  // An untranslated field is cleared rather than shown in the source language,
+  // and cleared is its type's empty value: the Product contract requires a
+  // description string and a tag list, and a projection missing them failed
+  // every page that carried it.
+  assert.equal(projected.description, '')
+  assert.deepEqual(projected.tags, [])
   // Prices are not language, so they survive verbatim.
   assert.deepEqual(projected.variants, [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }])
 })

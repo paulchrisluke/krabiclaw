@@ -13,16 +13,16 @@ export default defineScheduledTask({
   meta: { name: 'social-card-backfill', description: 'Reconcile a bounded page of social cards' },
   async run({ context }) {
     const env = (context as { cloudflare?: { env?: CloudflareEnv } } | undefined)?.cloudflare?.env
-    if (!env?.DB || !env.SITE_CACHE) throw new Error('DB and SITE_CACHE are required')
-    const after = await env.SITE_CACHE.get(CURSOR_KEY)
+    if (!env?.DB || !env.ORGANIZATION_CACHE) throw new Error('DB and ORGANIZATION_CACHE are required')
+    const after = await env.ORGANIZATION_CACHE.get(CURSOR_KEY)
     const owners = await listSocialCardOwners(env.DB, { after, limit: OWNERS_PER_RUN + 1 })
     const results = []
     for (const owner of owners.slice(0, OWNERS_PER_RUN)) {
       results.push(await refreshSocialCard({ db: env.DB, env, owner: { owner_type: owner.owner_type, owner_id: owner.owner_id } }))
-      await env.SITE_CACHE.put(CURSOR_KEY, owner.cursor)
+      await env.ORGANIZATION_CACHE.put(CURSOR_KEY, owner.cursor)
     }
     const hasMore = owners.length > OWNERS_PER_RUN
-    if (!hasMore) await env.SITE_CACHE.delete(CURSOR_KEY)
+    if (!hasMore) await env.ORGANIZATION_CACHE.delete(CURSOR_KEY)
     return { result: { ...summarizeSocialCardRefreshResults(results), hasMore, outcomes: results } }
   },
 })

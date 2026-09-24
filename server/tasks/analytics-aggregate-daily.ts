@@ -1,4 +1,4 @@
-import { aggregatePreviousLocalDateForAllSites, cleanupTenantAnalytics } from '~/server/utils/site-analytics-report'
+import { aggregatePreviousLocalDateForAllOrganizations, cleanupTenantAnalytics } from '~/server/utils/analytics-report'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 export default defineScheduledTask({
@@ -26,7 +26,7 @@ export default defineScheduledTask({
     if (!db) throw new Error('DB is required')
 
     try {
-      const aggregated = await aggregatePreviousLocalDateForAllSites(db)
+      const aggregated = await aggregatePreviousLocalDateForAllOrganizations(db)
       const cleaned = await cleanupTenantAnalytics(db)
 
       return {

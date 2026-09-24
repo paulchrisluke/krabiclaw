@@ -1,7 +1,7 @@
 import { execute, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { purgeSiteKvCache } from '~/server/utils/edge-cache'
-import { syncSiteSearchIndex } from '~/server/utils/public-search'
+import { purgeOrganizationKvCache } from '~/server/utils/edge-cache'
+import { syncOrganizationSearchIndex } from '~/server/utils/public-search'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 
 // KV read-through cache for public shell and page resource queries.
@@ -42,16 +42,16 @@ export function publicResourceCacheInvalidationQuery(
   }
 }
 
-export type SiteChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_SITE_DOMAIN'>
+export type OrganizationChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN'>
 
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
-  env: SiteChangeDrainEnv,
+  env: OrganizationChangeDrainEnv,
   options: { limit?: number; now?: Date; organizationId?: string },
 ): Promise<number> {
-  const freeSiteDomain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-  if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+  const freeOrganizationDomain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
+  if (!freeOrganizationDomain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
   const now = options.now ?? new Date()
   const nowIso = now.toISOString()
   const staleClaimCutoff = new Date(now.getTime() - CACHE_INVALIDATION_RETRY_AFTER_MS).toISOString()
@@ -81,7 +81,7 @@ export async function drainPublicResourceCacheInvalidations(
   let processed = 0
   // Several rows for one site in one drain are one change to converge on: the
   // site's slice is listed and diffed once, and the rest of its rows ride along.
-  const syncedSites = new Set<string>()
+  const syncedOrganizations = new Set<string>()
   for (const row of rows) {
     const claim = await execute(db, `
       UPDATE public_resource_cache_invalidations
@@ -92,13 +92,13 @@ export async function drainPublicResourceCacheInvalidations(
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
     const claimedAttemptCount = row.attempt_count + 1
     try {
-      await purgeSiteCaches(db, kv, row.organization_id, freeSiteDomain)
+      await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
       // A process without the binding has no index to keep: `nuxt dev`, where
       // the binding is remote-only, and the test runtime. The served worker
       // (`wrangler dev`) and every deploy have it and keep it.
-      if (env.AI_SEARCH && !import.meta.dev && !syncedSites.has(row.organization_id)) {
-        const synced = await syncSiteSearchIndex(env as CloudflareEnv, db, row.organization_id)
-        syncedSites.add(row.organization_id)
+      if (env.AI_SEARCH && !import.meta.dev && !syncedOrganizations.has(row.organization_id)) {
+        const synced = await syncOrganizationSearchIndex(env as CloudflareEnv, db, row.organization_id)
+        syncedOrganizations.add(row.organization_id)
         // A bounded run that left uploads behind is not a failure to retry; it
         // is more of the same change, so it goes back on the queue as a new row.
         if (synced.pending > 0) {
@@ -199,16 +199,16 @@ export async function putPublicResourceCache(
  * the drainer wraps it in claiming and retries, and a write path calls it
  * directly so what it just wrote cannot be read back stale.
  */
-export async function purgeSiteCaches(db: DbClient, kv: KVNamespace, organizationId: string, freeSiteDomainInput?: string | null): Promise<void> {
-  const freeSiteDomain = normalizeHost(freeSiteDomainInput)
-  const [domains, sites] = await Promise.all([
+export async function purgeOrganizationCaches(db: DbClient, kv: KVNamespace, organizationId: string, freeOrganizationDomainInput?: string | null): Promise<void> {
+  const freeOrganizationDomain = normalizeHost(freeOrganizationDomainInput)
+  const [domains, organizations] = await Promise.all([
     queryAll<{ domain: string }>(db, "SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'", [organizationId]),
     queryAll<{ subdomain: string | null }>(db, 'SELECT subdomain FROM organization WHERE id = ? LIMIT 1', [organizationId]),
   ])
   const hostnames = new Set<string>(domains.map(domain => domain.domain))
-  const subdomain = sites[0]?.subdomain
-  if (subdomain && freeSiteDomain) hostnames.add(`${subdomain}.${freeSiteDomain}`)
-  await Promise.all([purgePublicResourceCache(kv, organizationId), purgeSiteKvCache(kv, [...hostnames])])
+  const subdomain = organizations[0]?.subdomain
+  if (subdomain && freeOrganizationDomain) hostnames.add(`${subdomain}.${freeOrganizationDomain}`)
+  await Promise.all([purgePublicResourceCache(kv, organizationId), purgeOrganizationKvCache(kv, [...hostnames])])
 }
 
 export async function purgePublicResourceCache(kv: KVNamespace, organizationId: string): Promise<void> {
@@ -236,15 +236,15 @@ export async function purgePublicResourceCacheNow(
 ): Promise<void> {
   const maybeEnv = env as {
     DB?: DbClient
-    SITE_CACHE?: KVNamespace
-    NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+    ORGANIZATION_CACHE?: KVNamespace
+    NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
     ctx?: { waitUntil?: (_promise: Promise<unknown>) => void }
   } | null | undefined
-  // SITE_CACHE is bound in every environment in wrangler.toml. Returning quietly
+  // ORGANIZATION_CACHE is bound in every environment in wrangler.toml. Returning quietly
   // when it is missing meant a deployment that had lost the binding purged
   // nothing and reported that it had, so every edit went on serving stale.
-  const kv = maybeEnv?.SITE_CACHE
-  if (!kv) throw new Error('SITE_CACHE is not bound; the public resource cache cannot be purged')
+  const kv = maybeEnv?.ORGANIZATION_CACHE
+  if (!kv) throw new Error('ORGANIZATION_CACHE is not bound; the public resource cache cannot be purged')
 
   // This request clears its own site's entries, so nothing it wrote can be
   // read back stale. Everything else — the retention sweep, retry bookkeeping,
@@ -256,7 +256,7 @@ export async function purgePublicResourceCacheNow(
         const invalidation = publicResourceCacheInvalidationQuery(organizationId, 'write-through-purge')
         await Promise.all([
           execute(maybeEnv.DB!, invalidation.query, invalidation.params),
-          purgeSiteCaches(maybeEnv.DB!, kv, organizationId, maybeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN),
+          purgeOrganizationCaches(maybeEnv.DB!, kv, organizationId, maybeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN),
         ])
       })()
     : purgePublicResourceCache(kv, organizationId)

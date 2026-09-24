@@ -53,11 +53,11 @@ export default defineHandler(async (event) => {
   const summary = await requestSummary(db, request)
   await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
 
-  const site = await queryFirst<{ name?: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  const organization = await queryFirst<{ name?: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
   if (record.kind === 'booking') {
     await notifyBookingCancelled(env, db, {
-      organizationId: request.organization_id, siteName: site?.name,
+      organizationId: request.organization_id, organizationName: organization?.name,
       locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
       email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
       productTitle: record.product_name ?? summary.productTitle ?? '',
@@ -72,7 +72,7 @@ export default defineHandler(async (event) => {
     const localDate = `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
     const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
     await notifyReservationCancelled(env, db, {
-      organizationId: request.organization_id, siteName: site?.name,
+      organizationId: request.organization_id, organizationName: organization?.name,
       locationId: record.location_id, locationName: summary.locationTitle, reservationId: request.id,
       guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
       date: localDate, time: localTime,

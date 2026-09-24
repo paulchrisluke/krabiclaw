@@ -39,13 +39,13 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { locale, localePath } = useI18n()
-const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const postsCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 
 const { googleMaps, socialPosts, locations } = await usePublicPageData()
-const siteName = computed(() => site?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
+const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 // Progressive reveal — 6 at a time
 const PAGE_SIZE = 6
@@ -57,10 +57,10 @@ function loadMore() { visibleCount.value += PAGE_SIZE }
 
 useSocialMetadata(() => ({
   path: '/posts',
-  title: `Updates | ${siteName.value}`,
-  description: `Latest news and updates from ${siteName.value}.`,
+  title: `Updates | ${organizationName.value}`,
+  description: `Latest news and updates from ${organizationName.value}.`,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

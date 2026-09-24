@@ -8,7 +8,7 @@ import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const domainId = getRouterParam(event, 'domainId')
-  if (!organizationId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
+  if (!organizationId || !domainId) return jsonResponse({ error: 'Organization ID and domain ID are required' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 

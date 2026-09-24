@@ -3,7 +3,7 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseSocialImageSource } from '~/utils/social-metadata'
-import { listSiteReviews } from '~/server/utils/site-reviews'
+import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import { getPublishedBlogPost } from '~/server/utils/content/publishing'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
@@ -12,7 +12,7 @@ import {
 } from '~/server/utils/public-localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { publicTemplateRegistry, siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { publicTemplateRegistry, organizationSupportsBlawbyTemplate } from '~/utils/template-registry'
 
 const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
@@ -33,8 +33,8 @@ import type {
   PublicCompliance,
   PublicComplianceContactPoint,
   PublicConsultationSettings,
-  PublicSiteQa,
-  PublicSiteReview,
+  PublicOrganizationQa,
+  PublicOrganizationReview,
   PublicTenantPage,
 } from '~/types/blawby'
 
@@ -62,20 +62,20 @@ export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown):
  * matter what token the frame carried. Legal-access callers pass nothing and so
  * keep requiring an active site, which is what an eligibility check wants.
  */
-export async function getActiveBlawbySite(
+export async function getActiveBlawbyOrganization(
   db: DbClient,
   organizationId: string,
   options: { previewAuthorized?: boolean } = {},
 ): Promise<{ id: string; vertical: string; theme_id: string } | null> {
-  const site = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
+  const organization = await queryFirst<{ id: string; vertical: string; theme_id: string }>(db, `
     SELECT id, vertical, theme_id
       FROM organization
      WHERE id = ? AND ${publicTenantVisibilitySql('organization', options.previewAuthorized)}
      LIMIT 1
   `, [organizationId])
 
-  return siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })
-    ? site
+  return organizationSupportsBlawbyTemplate({ vertical: organization?.vertical, themeId: organization?.theme_id })
+    ? organization
     : null
 }
 
@@ -275,7 +275,7 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
   const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'organization', [organizationId])).get(organizationId)
 
   return {
-    name: requiredText(row?.name, `site ${organizationId}.name`),
+    name: requiredText(row?.name, `organization ${organizationId}.name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     social_image: socialMedia?.social_image ?? null,
@@ -292,7 +292,7 @@ export async function getPublicBlawbyShellData(
 ): Promise<PublicBlawbyShellData> {
   const locale = options.locale?.trim() || 'en'
   const localizations = options.localizations ?? []
-  const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
+  const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId) ?? null
   // Navigation is the site's published pages. A practice area is one of them,
   // so there is no separate link list to keep in step with the page list.
   const [sourceIdentity, sourceConsultation, sourceCompliance, themeTokens, pageLinks, verification] = await Promise.all([
@@ -311,20 +311,20 @@ export async function getPublicBlawbyShellData(
   const identity = localizedRepresentation
     ? {
         ...sourceIdentity,
-        name: typeof siteLocalization?.values.name === 'string' ? siteLocalization.values.name : '',
-        brand_description: typeof siteLocalization?.values.brand_description === 'string' ? siteLocalization.values.brand_description : null,
+        name: typeof organizationLocalization?.values.name === 'string' ? organizationLocalization.values.name : '',
+        brand_description: typeof organizationLocalization?.values.brand_description === 'string' ? organizationLocalization.values.brand_description : null,
       }
     : sourceIdentity
   let consultation = sourceConsultation
   let compliance = sourceCompliance
   if (localizedRepresentation) {
-    const consultationValues = siteLocalization?.values.consultation as { cta_label?: unknown } | undefined
+    const consultationValues = organizationLocalization?.values.consultation as { cta_label?: unknown } | undefined
     consultation = {
       ...sourceConsultation,
       cta_label: typeof consultationValues?.cta_label === 'string' ? consultationValues.cta_label : '',
       metadata: { ...sourceConsultation.metadata, header_cta_label: null },
     }
-    const complianceValues = siteLocalization?.values.compliance as { service_area?: unknown; disclaimer?: unknown; footer_disclaimer?: unknown } | undefined
+    const complianceValues = organizationLocalization?.values.compliance as { service_area?: unknown; disclaimer?: unknown; footer_disclaimer?: unknown } | undefined
     compliance = sourceCompliance
       ? {
           ...sourceCompliance,
@@ -358,8 +358,8 @@ export async function getPublicBlawbyDocumentData(
   options: { previewAuthorized?: boolean; slug?: string | null; locale?: string | null } = {},
   env: CloudflareEnv,
 ): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
-  const site = await getActiveBlawbySite(db, organizationId, { previewAuthorized: options.previewAuthorized })
-  if (!site) return null
+  const organization = await getActiveBlawbyOrganization(db, organizationId, { previewAuthorized: options.previewAuthorized })
+  if (!organization) return null
   const locale = options.locale?.trim() || 'en'
   const localizations = locale === 'en'
     ? []
@@ -395,7 +395,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   if (!document) {
     throw new HTTPError({
       statusCode: 404,
-      statusMessage: 'Blawby is not enabled for this site',
+      statusMessage: 'Blawby is not enabled for this organization',
       data: { code: 'BLAWBY_NOT_ENABLED' },
     })
   }
@@ -409,7 +409,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
   return { success: true, ...document }
 }
 
-function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicSiteQa[] {
+function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } | null): PublicOrganizationQa[] {
   const block = page?.blocks.find(candidate => candidate.type === 'faq')
   if (!block || !Array.isArray(block.data.items)) return []
   return block.data.items.flatMap((item, index) => {
@@ -420,9 +420,9 @@ function faqBlockQa(page: { blocks: Array<{ type: string; data: Record<string, u
   })
 }
 
-type SiteReviewRow = Awaited<ReturnType<typeof listSiteReviews>>[number]
+type OrganizationReviewRow = Awaited<ReturnType<typeof listOrganizationReviews>>[number]
 
-function mapPublicReviews(rows: SiteReviewRow[]): PublicSiteReview[] {
+function mapPublicReviews(rows: OrganizationReviewRow[]): PublicOrganizationReview[] {
   return rows.map(row => ({
     id: String(row.id),
     author_name: requiredText(row.author_name, `review ${row.id}.author_name`),
@@ -498,7 +498,7 @@ export async function getPublicBlawbyRouteData(
           localizations: localized ? options.localizations ?? [] : null,
         })
       : Promise.resolve(null),
-    needsReviews ? listSiteReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
+    needsReviews ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
     postLimit ? listPublicBlogSummaries(db, organizationId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
       ? getPublishedBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)

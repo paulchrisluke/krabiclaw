@@ -134,9 +134,9 @@ export function isTenantPageListResponse(value: unknown): value is { pages: Tena
       && typeof page.removable === 'boolean')
 }
 
-function isEditorContextResponse(value: unknown): value is { context: { previewToken: string; site: { subdomain: string | null } } } {
+function isEditorContextResponse(value: unknown): value is { context: { previewToken: string; organization: { subdomain: string | null } } } {
   return isRecord(value) && isRecord(value.context) && typeof value.context.previewToken === 'string'
-    && isRecord(value.context.site)
+    && isRecord(value.context.organization)
 }
 
 function emptyDraft(): TenantPageDraft {
@@ -175,11 +175,11 @@ function toDraft(page: TenantPageResponse): TenantPageDraft {
   }
 }
 
-export function useTenantPageDraft(siteId: string, pageId: string) {
+export function useTenantPageDraft(organizationId: string, pageId: string) {
   const dashboardApi = useDashboardApi()
   const runtimeConfig = useRuntimeConfig()
   const isNew = computed(() => pageId === 'new')
-  const key = `tenant-page-${siteId}-${pageId}`
+  const key = `tenant-page-${organizationId}-${pageId}`
 
   // Every level calls this, and Nuxt shares one request and one state per key,
   // so opening a leaf four levels down costs no fetch the page has not made.
@@ -187,13 +187,13 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
     key,
     async () => {
       const [context, page] = await Promise.all([
-        dashboardApi<{ context: { previewToken: string; site: { subdomain: string | null } } }>(
-          `/api/editor/organizations/${siteId}/context`,
+        dashboardApi<{ context: { previewToken: string; organization: { subdomain: string | null } } }>(
+          `/api/editor/organizations/${organizationId}/context`,
           { validate: isEditorContextResponse },
         ),
         pageId === 'new'
           ? Promise.resolve(null)
-          : dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${pageId}`, { validate: isTenantPageResponse }),
+          : dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${organizationId}/pages/${pageId}`, { validate: isTenantPageResponse }),
       ])
       return { context: context.context, page: page?.page ?? null }
     },
@@ -269,13 +269,13 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
   const previewUrl = computed(() => {
     const page = data.value?.page
     const token = data.value?.context.previewToken
-    const subdomain = data.value?.context.site.subdomain
+    const subdomain = data.value?.context.organization.subdomain
     if (!page || !token || !subdomain) return ''
     const path = page.path === '/' ? '' : page.path
     const localizedPath = page.locale === 'en' ? path : `/${page.locale}${path}`
-    const origin = tenantSiteOrigin({
+    const origin = tenantOrganizationOrigin({
       platformDomain: String(runtimeConfig.public.platformDomain),
-      freeSiteDomain: String(runtimeConfig.public.freeSiteDomain),
+      freeOrganizationDomain: String(runtimeConfig.public.freeOrganizationDomain),
       subdomain,
     })
     if (!origin) return ''
@@ -319,8 +319,8 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
       expectedUpdatedAt: draft.value.id ? seededFrom.value : undefined,
     }
     const response = draft.value.id
-      ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages/${draft.value.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
-      : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${siteId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
+      ? await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${organizationId}/pages/${draft.value.id}`, { method: 'PATCH', body, validate: isTenantPageResponse })
+      : await dashboardApi<{ page: TenantPageResponse }>(`/api/editor/organizations/${organizationId}/pages`, { method: 'POST', body, validate: isTenantPageResponse })
     if (data.value) data.value = { ...data.value, page: response.page }
     seed(response.page)
     return response.page
@@ -336,8 +336,8 @@ export function useTenantPageDraft(siteId: string, pageId: string) {
  * choosing a type and filling in what the type needs are two levels, and the
  * level that owns the commit bar changes between them.
  */
-export function useTenantPageNewBlock(siteId: string, pageId: string) {
-  return useState<TenantPageBlock | null>(`tenant-page-new-block-${siteId}-${pageId}`, () => null)
+export function useTenantPageNewBlock(organizationId: string, pageId: string) {
+  return useState<TenantPageBlock | null>(`tenant-page-new-block-${organizationId}-${pageId}`, () => null)
 }
 
 /**
@@ -345,9 +345,9 @@ export function useTenantPageNewBlock(siteId: string, pageId: string) {
  * one. Every screen that edits a block resolves it here, so a control writes
  * the draft rather than a copy handed down as a prop.
  */
-export function useTenantPageBlock(siteId: string, pageId: string, blockId: MaybeRefOrGetter<string>) {
-  const { draft } = useTenantPageDraft(siteId, pageId)
-  const newBlock = useTenantPageNewBlock(siteId, pageId)
+export function useTenantPageBlock(organizationId: string, pageId: string, blockId: MaybeRefOrGetter<string>) {
+  const { draft } = useTenantPageDraft(organizationId, pageId)
+  const newBlock = useTenantPageNewBlock(organizationId, pageId)
   return computed<TenantPageBlock>(() => {
     const id = toValue(blockId)
     const existing = draft.value.blocks.find(item => item.id === id)

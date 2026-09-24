@@ -160,14 +160,13 @@ const breadcrumbs = computed(() => [
 ])
 
 const runtimeConfig = useRuntimeConfig()
-const requestURL = useRequestURL()
-const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const platformOrigin = computed(() => runtimeConfig.public.platformUrl)
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
   schema: false,
   title: seoTitle.value,
   description: seoDescription.value,
-  brand: { siteName: 'KrabiClaw' },
+  brand: { organizationName: 'KrabiClaw' },
   // A category index is one of the site's own index pages, so it carries the
   // site's social card the way /features and /pricing do. An article carries
   // its own generated card and nothing else — omitting the key would reach for

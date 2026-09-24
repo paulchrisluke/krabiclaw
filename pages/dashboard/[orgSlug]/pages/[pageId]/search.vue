@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-page-search"
+    id="organization-page-search"
     title="Search appearance"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

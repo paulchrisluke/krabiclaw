@@ -1,27 +1,27 @@
 import type { McpExecutorContext } from './shared'
 import { listLocationReviews } from '~/server/utils/mcp-workflows'
-import { listSiteReviews } from '~/server/utils/site-reviews'
+import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, requiredString } from './shared'
 
 export async function handleReviewsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "list_organization_reviews":
       {
-        const reviews = await listSiteReviews(site.db, site.organizationId);
-        const page = paginateMcpCollection(reviews, args, { resource: `site-reviews:${site.organizationId}` });
+        const reviews = await listOrganizationReviews(organization.db, organization.organizationId);
+        const page = paginateMcpCollection(reviews, args, { resource: `organization-reviews:${organization.organizationId}` });
         return { reviews: page.items, page_info: page.page_info };
       }
     case "list_location_reviews":
       {
         const locationId = requiredString(args, "location_id");
         const reviews = await listLocationReviews(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           locationId,
         );
-        const page = paginateMcpCollection(reviews, args, { resource: `location-reviews:${site.organizationId}:${locationId}` });
+        const page = paginateMcpCollection(reviews, args, { resource: `location-reviews:${organization.organizationId}:${locationId}` });
         return { reviews: page.items, page_info: page.page_info };
       }
     default:

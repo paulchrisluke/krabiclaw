@@ -1,4 +1,4 @@
-import type { IntegrationOAuthState } from '~/shared/site-settings'
+import type { IntegrationOAuthState } from '~/shared/organization-settings'
 import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '../../../utils/api-response'
 import { verifyOAuthState } from '../../../utils/encryption'
@@ -51,9 +51,9 @@ export default defineHandler(async (event) => {
     // `organizationId` arrives in the OAuth state, so it names an organization
     // rather than proving membership in one. The site row's own membership is
     // what authorizes: the state only has to agree with it.
-    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, userId)
-    if (!siteAccess || siteAccess.id !== organizationId) throw new Error('Access denied')
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
+    const organizationAccess = await loadMemberOrganizationRow(event, db, env, organizationId, userId)
+    if (!organizationAccess || organizationAccess.id !== organizationId) throw new Error('Access denied')
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(organizationAccess.membership, { env, event }))
 
     // System-user access tokens from FLB never expire — no long-lived exchange needed
     const systemUserToken = await exchangeFacebookCode(env, code)

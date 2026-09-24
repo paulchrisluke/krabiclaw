@@ -73,7 +73,7 @@
               <p class="text-sm leading-relaxed text-default">{{ q.answer }}</p>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
                 <span v-if="q.is_owner_answer" class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-semibold text-muted">
-                  {{ siteName }} · {{ t('saya.qa_page.owner') }}
+                  {{ organizationName }} · {{ t('saya.qa_page.owner') }}
                 </span>
                 <span v-else>{{ q.answer_author }}</span>
                 <span>·</span>
@@ -99,11 +99,11 @@ definePageMeta({ layout: 'saya' })
 const { localePath, t } = useI18n()
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 const { location, qaList } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page
@@ -128,16 +128,15 @@ function formatQaDate(ts: string | null) {
 }
 
 
-const runtimeConfig = useRuntimeConfig()
-const siteUrl = runtimeConfig.public.siteUrl
+const organizationUrl = useRequestURL().origin
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/qa`,
   title: `Questions and answers · ${location.value?.title || slug.value}`,
-  description: `Questions and answers for ${location.value?.title || slug.value} at ${siteName.value}.`,
+  description: `Questions and answers for ${location.value?.title || slug.value} at ${organizationName.value}.`,
   socialImage: location.value?.social_image ?? null,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
@@ -154,10 +153,10 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `${siteUrl}/locations/${slug.value}/qa` }
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${organizationUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${organizationUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${organizationUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Q&A', item: `${organizationUrl}/locations/${slug.value}/qa` }
     ]
   }))
 ])

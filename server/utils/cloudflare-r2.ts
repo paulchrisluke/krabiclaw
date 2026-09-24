@@ -107,9 +107,5 @@ export function buildR2Key(organizationId: string, assetId: string, filename: st
   const safeFilename = sanitizeSegment(filename, 'filename')
   const dotIndex = safeFilename.lastIndexOf('.')
   const ext = dotIndex > 0 ? safeFilename.slice(dotIndex + 1) : ''
-  // The `sites/` prefix is the stored object's address, not a name for the
-  // tenant: every object already in the bucket lives under it, and renaming the
-  // prefix would strand them all. The segment under it is the organization id,
-  // which is what it always held.
-  return `sites/${safeOrganizationId}/media/${safeAssetId}${ext ? '.' + ext : ''}`
+  return `organizations/${safeOrganizationId}/media/${safeAssetId}${ext ? '.' + ext : ''}`
 }

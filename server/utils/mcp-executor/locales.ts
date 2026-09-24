@@ -7,21 +7,21 @@ import {
   putLocalizationForAuthoring,
   replaceResourceLocalizations,
 } from '~/server/utils/localization'
-import { listSiteLocales } from '~/server/utils/site-locales'
+import { listOrganizationLocales } from '~/server/utils/organization-locales'
 import { NOT_HANDLED, mutationContextPayload, requiredString } from './shared'
 
 export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   if (toolName === 'list_organization_locales') {
-    return await listSiteLocales(site.db, site.organizationId)
+    return await listOrganizationLocales(organization.db, organization.organizationId)
   }
   if (toolName === 'get_resource_localization') {
-    const record = await getLocalizationForAuthoring(site.env as CloudflareEnv, site.db, site.organizationId, requiredString(args, 'resource_type'), requiredString(args, 'resource_id'), requiredString(args, 'locale'))
+    const record = await getLocalizationForAuthoring(organization.env as CloudflareEnv, organization.db, organization.organizationId, requiredString(args, 'resource_type'), requiredString(args, 'resource_id'), requiredString(args, 'locale'))
     return { localization: record }
   }
   if (toolName === 'put_resource_localization') {
-    const localization = await putLocalizationForAuthoring(site.env as CloudflareEnv, site.db, {
-      organizationId: site.organizationId,
+    const localization = await putLocalizationForAuthoring(organization.env as CloudflareEnv, organization.db, {
+      organizationId: organization.organizationId,
       resourceType: requiredString(args, 'resource_type'),
       resourceId: requiredString(args, 'resource_id'),
       locale: requiredString(args, 'locale'),
@@ -29,32 +29,32 @@ export async function handleLocalesTools(ctx: McpExecutorContext): Promise<unkno
       routePath: args.route_path,
       contentBlocks: args.content_blocks ?? undefined,
       expectedUpdatedAt: args.expected_updated_at ?? undefined,
-      userId: site.userId,
+      userId: organization.userId,
     })
-    return { localization: localization, context: await mutationContextPayload(site) }
+    return { localization: localization, context: await mutationContextPayload(organization) }
   }
   if (toolName === 'delete_resource_localization') {
-    const result = await deleteLocalization(site.env as CloudflareEnv, site.db, {
-      organizationId: site.organizationId,
+    const result = await deleteLocalization(organization.env as CloudflareEnv, organization.db, {
+      organizationId: organization.organizationId,
       resourceType: requiredString(args, 'resource_type'),
       resourceId: requiredString(args, 'resource_id'),
       locale: requiredString(args, 'locale'),
     })
-    return { ...result, context: await mutationContextPayload(site) }
+    return { ...result, context: await mutationContextPayload(organization) }
   }
   if (toolName === 'get_product_catalog_localization') {
-    const catalog = await getProductCatalogLocalization(site.env as CloudflareEnv, site.db, site.organizationId, requiredString(args, 'locale'))
+    const catalog = await getProductCatalogLocalization(organization.env as CloudflareEnv, organization.db, organization.organizationId, requiredString(args, 'locale'))
     return { locale: catalog.locale, products: catalog.products }
   }
   if (toolName === 'replace_resource_localizations') {
-    const result = await replaceResourceLocalizations(site.env as CloudflareEnv, site.db, {
-      organizationId: site.organizationId,
+    const result = await replaceResourceLocalizations(organization.env as CloudflareEnv, organization.db, {
+      organizationId: organization.organizationId,
       resourceType: requiredString(args, 'resource_type'),
       locale: requiredString(args, 'locale'),
       items: args.items,
-      userId: site.userId,
+      userId: organization.userId,
     })
-    return { ...result, context: await mutationContextPayload(site) }
+    return { ...result, context: await mutationContextPayload(organization) }
   }
   return NOT_HANDLED
 }

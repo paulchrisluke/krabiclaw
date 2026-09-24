@@ -60,7 +60,7 @@ export interface NotificationMessage {
   /** Whose preference governs delivery, and which unsubscribe link applies. */
   category: NotificationCategory
   /** The tenant this is sent on behalf of, for the footer. Null for platform mail. */
-  siteName?: string | null
+  organizationName?: string | null
 }
 
 export function leadFacts(message: NotificationMessage): NotificationFact[] {

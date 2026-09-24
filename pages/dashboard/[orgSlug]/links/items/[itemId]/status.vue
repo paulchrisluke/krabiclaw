@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-links-item-status"
+    id="organization-links-item-status"
     title="Status"
     :ready="editor.editorReady.value"
     :saving="editor.saving.value"

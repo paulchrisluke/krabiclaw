@@ -13,7 +13,7 @@ export interface DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
@@ -115,8 +115,8 @@ const reservedDomains = [
 ]
 
 export function platformHostname(env: DomainEnv): string {
-  const domain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
-  if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+  const domain = env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN
+  if (!domain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
   return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
@@ -128,13 +128,13 @@ export function platformDomain(env: DomainEnv): string {
 
 function platformDomainCandidates(env: DomainEnv): string[] {
   const values = [
-    env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+    env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
     env.NUXT_PUBLIC_PLATFORM_DOMAIN,
   ]
   const domains = values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
-  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   return domains
 }
 
@@ -1133,10 +1133,10 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
  * for a URL prefix, so the slash is part of the value rather than a caller's
  * responsibility.
  *
- * Null when the site has no active canonical domain yet, which is a site that
+ * Null when the organization has no active canonical domain yet, which is a organization that
  * cannot be verified — the caller says so rather than guessing a host.
  */
-export async function sitePublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
+export async function organizationPublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
   const row = await queryFirst<{ domain: string }>(db, `
     SELECT domain FROM organization_domains
     WHERE organization_id = ? AND role = 'canonical' AND status = 'active'

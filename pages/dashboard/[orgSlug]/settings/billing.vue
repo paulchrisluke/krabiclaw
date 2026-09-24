@@ -124,11 +124,10 @@ async function onRowAction(id: string) {
   }
 }
 
-// One business: the site the subscription is metadata on is the one this
-// dashboard is for.
+// The subscription belongs to the organization this dashboard is for.
 async function upgrade(plan: string) {
   const organizationId = dashboard.organization.value?.id
-  if (!organizationId) throw new Error('Site context is unavailable')
+  if (!organizationId) throw new Error('Organization context is unavailable')
   await startOrganizationCheckout(organizationId, plan)
 }
 

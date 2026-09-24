@@ -4,7 +4,7 @@
     field. Adding is the same screen at `links/items/new`, so there is nothing
     a sheet did that a URL does not.
   -->
-  <DashboardIndexPanel id="site-links-item" :title="isNew ? 'New link' : itemForm.label || 'Link'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-links-item" :title="isNew ? 'New link' : itemForm.label || 'Link'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="record" #right>
       <DashboardResourceLocalization
         :organization-id="editor.organizationId"
@@ -14,7 +14,7 @@
         :fields="localizationFields"
         :load-values="locale => editor.loadLinksLocalization(locale, itemId)"
         :save-values="(locale, values) => editor.saveLinksLocalization(locale, values, itemId)"
-        :language-settings-path="editor.siteLocalizationSettingsPath.value"
+        :language-settings-path="editor.organizationLocalizationSettingsPath.value"
       />
     </template>
 

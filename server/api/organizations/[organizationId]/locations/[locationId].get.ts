@@ -39,7 +39,7 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
 
   if (!organizationId || !locationId) {
-    return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   }
 
   try {

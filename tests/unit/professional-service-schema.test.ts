@@ -70,11 +70,11 @@ test('buildProfessionalServiceGraph emits a linked Organization/WebSite graph wi
   }
   const graph = buildProfessionalServiceGraph(input)
   const org = graphByType(graph, 'Organization')!
-  const site = graphByType(graph, 'WebSite')!
+  const organization = graphByType(graph, 'WebSite')!
 
   assert.equal(org['@id'], 'https://ncls.krabiclaw.com/#organization')
-  assert.equal(site['@id'], 'https://ncls.krabiclaw.com/#website')
-  assert.deepEqual((site as Record<string, unknown>).publisher, { '@id': 'https://ncls.krabiclaw.com/#organization' })
+  assert.equal(organization['@id'], 'https://ncls.krabiclaw.com/#website')
+  assert.deepEqual((organization as Record<string, unknown>).publisher, { '@id': 'https://ncls.krabiclaw.com/#organization' })
   // The org node must emit the canonical enum URL, never the raw "501(c)(3)" free text.
   assert.equal(org.nonprofitStatus, 'https://schema.org/Nonprofit501c3')
   assert.deepEqual(org['@type'], ['Organization', 'LegalService'])

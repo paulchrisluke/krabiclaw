@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { sitePublicUrl } from '~/server/utils/domains'
+import { organizationPublicUrl } from '~/server/utils/domains'
 import { googleAccessToken } from '~/server/utils/google-credential'
 import {
   listSearchConsoleSites, storeSearchConsoleSelection, verifyAndAddProperty,
@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
     }
 
     // Only a URL KrabiClaw actually serves can be verified by serving a tag.
-    const ownUrl = await sitePublicUrl(db, organization.id)
+    const ownUrl = await organizationPublicUrl(db, organization.id)
     if (!ownUrl || requested !== ownUrl) {
       return jsonResponse({
         error: 'KrabiClaw can only verify this website\'s own address. Add the property in Search Console first, then choose it here.',

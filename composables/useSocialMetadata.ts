@@ -76,7 +76,7 @@ function requireMetadata<T>(resolved: T | null): T {
 export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInput | null>) {
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
-  const tenant = useTenantSite()
+  const tenant = useTenantOrganization()
   const publicLocale = useState<string>('public-locale', () => 'en')
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
 
@@ -85,8 +85,8 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     if (!value) return null
     const template = value.template ?? resolvePublicTemplate({ themeId: tenant.themeId }).slug
     const origin = template === 'platform'
-      ? config.public.siteUrl || requestURL.origin
-      : requestURL.origin || config.public.siteUrl
+      ? config.public.platformUrl
+      : requestURL.origin
     const exactRepresentation = localeRepresentations.value.find(item => item.locale === publicLocale.value)
     if (publicLocale.value !== 'en' && !exactRepresentation) {
       throw createError({ statusCode: 404, statusMessage: 'Localized route representation was not found' })
@@ -94,9 +94,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const canonicalUrl = resolveSeoUrl(value.canonicalPath ?? exactRepresentation?.route_path ?? value.path, origin)
     const brand = value.brand ?? (template === 'platform'
       ? {
-          siteName: PLATFORM_NAME,
+          organizationName: PLATFORM_NAME,
         }
-      : { siteName: '' })
+      : { organizationName: '' })
     const socialInput: SocialPageMetadataInput = {
       ...value,
       template,
@@ -111,7 +111,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     }
     const sourceImage = Object.hasOwn(value, 'socialImage')
       ? value.socialImage ?? null
-      : tenant.site?.social_image ?? null
+      : tenant.organization?.social_image ?? null
     const resolvedImage = sourceImage
       ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
       : null
@@ -164,9 +164,9 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     if (!normalized.value) return null
     const { value, origin, template, tags } = normalized.value
     if (template !== 'platform' || value.schema === false) return null
-    const siteRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
-    const websiteId = `${siteRoot}/#website`
-    const organizationId = `${siteRoot}/#organization`
+    const organizationRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
+    const websiteId = `${organizationRoot}/#website`
+    const organizationId = `${organizationRoot}/#organization`
     const url = tags.canonicalUrl
     const webpageId = `${url}#webpage`
     const breadcrumbId = `${url}#breadcrumb`
@@ -176,14 +176,14 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       '@type': 'Organization',
       '@id': organizationId,
       name: PLATFORM_NAME,
-      url: siteRoot,
-      logo: `${siteRoot}/krabi-claw-logo.png`,
+      url: organizationRoot,
+      logo: `${organizationRoot}/krabi-claw-logo.png`,
       description: PLATFORM_DESCRIPTION,
     })
     graph.push({
       '@type': 'WebSite',
       '@id': websiteId,
-      url: siteRoot,
+      url: organizationRoot,
       name: PLATFORM_NAME,
       description: PLATFORM_DESCRIPTION,
       publisher: { '@id': organizationId },

@@ -33,11 +33,11 @@
         v-if="!isMobilePreviewViewport"
         class="hidden lg:flex"
         :iframe-src="iframeSrc"
-        :site-locations="previewLocations"
+        :organization-locations="previewLocations"
         :selected-location-id="selectedLocationId"
         selected-page="home"
-        :site-status="siteStatus"
-        :site-domain="siteDomain"
+        :organization-status="organizationStatus"
+        :organization-domain="organizationDomain"
         :vertical="state.vertical"
         :empty-visual-url="preDraftVisual.url"
         :empty-visual-alt="preDraftVisual.alt"
@@ -58,11 +58,11 @@
         <OnboardingPreviewPane
           class="min-h-0 flex-1"
           :iframe-src="iframeSrc"
-          :site-locations="previewLocations"
+          :organization-locations="previewLocations"
           :selected-location-id="selectedLocationId"
           selected-page="home"
-          :site-status="siteStatus"
-          :site-domain="siteDomain"
+          :organization-status="organizationStatus"
+          :organization-domain="organizationDomain"
           :vertical="state.vertical"
           :empty-visual-url="preDraftVisual.url"
           :empty-visual-alt="preDraftVisual.alt"
@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { tenantSiteOrigin } from '~/utils/tenant-site-origin'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 import { useDashboardTopNavAction } from '~/composables/useDashboardTopNavActions'
 import {
   onboardingStep,
@@ -171,9 +171,9 @@ const mobilePreviewOpen = ref(false)
 const hasAutoOpenedMobilePreview = ref(false)
 const isMobilePreviewViewport = ref(false)
 
-const siteOriginFor = (subdomain: string) => tenantSiteOrigin({
+const organizationOriginFor = (subdomain: string) => tenantOrganizationOrigin({
   platformDomain: String(config.public.platformDomain),
-  freeSiteDomain: String(config.public.freeSiteDomain),
+  freeOrganizationDomain: String(config.public.freeOrganizationDomain),
   subdomain,
 })
 
@@ -181,9 +181,9 @@ const previewLocations = computed(() => state.value.preview
   ? [{ id: state.value.preview.organizationId, slug: state.value.preview.subdomainCandidate, title: state.value.preview.draftName }]
   : [])
 
-const siteDomain = computed(() => {
-  const slug = state.value.created?.siteSlug ?? state.value.preview?.subdomainCandidate
-  return slug ? siteOriginFor(slug).replace(/^https?:\/\//, '') : ''
+const organizationDomain = computed(() => {
+  const slug = state.value.created?.organizationSlug ?? state.value.preview?.subdomainCandidate
+  return slug ? organizationOriginFor(slug).replace(/^https?:\/\//, '') : ''
 })
 
 // The preview is the site itself, on its own subdomain: the same host, the same
@@ -191,8 +191,8 @@ const siteDomain = computed(() => {
 // is pending, so the first load carries its preview token — the tenant host
 // turns that into a preview cookie for the rest of the visit.
 const iframeSrc = computed(() => {
-  const slug = state.value.created?.siteSlug ?? state.value.preview?.subdomainCandidate
-  const origin = slug ? siteOriginFor(slug) : ''
+  const slug = state.value.created?.organizationSlug ?? state.value.preview?.subdomainCandidate
+  const origin = slug ? organizationOriginFor(slug) : ''
   if (!origin) return ''
   const url = new URL(`${origin}/`)
   if (!state.value.created && state.value.preview) {
@@ -236,7 +236,7 @@ watchEffect(() => {
 })
 const preDraftVisual = computed(() => iframeSrc.value ? { url: '', alt: '' } : lastVisual.value)
 
-const siteStatus = computed((): 'setup' | 'progress' | 'live' => {
+const organizationStatus = computed((): 'setup' | 'progress' | 'live' => {
   if (state.value.created) return 'live'
   if (state.value.preview) return 'progress'
   return 'setup'

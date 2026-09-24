@@ -67,7 +67,7 @@ test('deleting a tenant page takes its translations, placements and redirects', 
     // a stale delete, which is what covers the window between reading the
     // timestamp and writing.
     await assert.rejects(executeBatch(db, prepareContentDocumentDeletion({
-      documentId: 'story', organizationId: 'org', siteId: 'site', expectedUpdatedAt: '1999-01-01T00:00:00.000Z',
+      documentId: 'story', organizationId: 'org', expectedUpdatedAt: '1999-01-01T00:00:00.000Z',
     })))
     assert.equal(
       await db.prepare("SELECT count(*) AS count FROM content_documents WHERE id IN ('story','story-th')").first('count'),
@@ -141,7 +141,7 @@ test('a translation deletes alone, and a page the template renders does not dele
 
     await assert.rejects(
       deleteTenantPage(db, 'about', { scope, expectedUpdatedAt: await stamp('about'), env }),
-      /site template renders/,
+      /organization's template renders/,
     )
   } finally {
     await runtime.dispose()
@@ -153,4 +153,4 @@ test('a translation deletes alone, and a page the template renders does not dele
 // honoured. A location deletion removes every document scoped to it, so one
 // document's timestamp says nothing about the set.
 // @ts-expect-error a location deletion takes no expectedUpdatedAt
-void (() => prepareContentDocumentDeletion({ locationId: 'x', organizationId: 'org', siteId: 'site', expectedUpdatedAt: 'x' }))
+void (() => prepareContentDocumentDeletion({ locationId: 'x', organizationId: 'org', expectedUpdatedAt: 'x' }))

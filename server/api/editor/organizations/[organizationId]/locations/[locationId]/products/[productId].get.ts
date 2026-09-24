@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
   const locationId = getRouterParam(event, 'locationId')
   const productId = getRouterParam(event, 'productId')
   if (!organizationId || !locationId || !productId) {
-    return jsonResponse({ error: 'Site ID, location ID and product ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID, location ID and product ID are required' }, { status: 400 })
   }
   try {
     return jsonResponse(await loadDashboardProduct(event, organizationId, locationId, productId))

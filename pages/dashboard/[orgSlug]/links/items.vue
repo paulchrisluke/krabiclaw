@@ -4,7 +4,7 @@
     the page's own Save. A link opened from it is a record of its own below
     here, and owns both columns while it is open.
   -->
-  <DashboardIndexPanel id="site-links-items" title="Links">
+  <DashboardIndexPanel id="organization-links-items" title="Links">
     <UAlert v-if="editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.errorMessage.value" />
     <div v-if="!editor.editorReady.value" class="space-y-3">
       <USkeleton v-for="index in 3" :key="index" class="h-20 rounded-2xl" />

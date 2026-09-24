@@ -14,7 +14,7 @@ const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
 const organizationId = await useDashboardOrganizationId()
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)

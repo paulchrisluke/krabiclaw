@@ -1,4 +1,4 @@
-import type { IntegrationVersion, FacebookIntegration } from '~/shared/site-settings'
+import type { IntegrationVersion, FacebookIntegration } from '~/shared/organization-settings'
 import type { D1Database } from '@cloudflare/workers-types'
 import { prepareContentDocumentWithBlocks } from './content/documents'
 import { parsePostInput } from '~/shared/posts'
@@ -12,7 +12,7 @@ const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
 export interface FacebookEnv {
   DB: D1Database
-  SITE_CACHE?: KVNamespace
+  ORGANIZATION_CACHE?: KVNamespace
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
   FACEBOOK_REDIRECT_URI?: string
@@ -480,10 +480,10 @@ export const storePendingPageSelection = async (
   env: FacebookEnv,
   selection: PendingPageSelection,
 ): Promise<string> => {
-  if (!env.SITE_CACHE) throw new Error('Cache namespace unavailable for Facebook page selection')
+  if (!env.ORGANIZATION_CACHE) throw new Error('Cache namespace unavailable for Facebook page selection')
   const handle = crypto.randomUUID()
   const sealed = await encryptSecret(JSON.stringify(selection), encryptionEnv(env))
-  await env.SITE_CACHE.put(pendingSelectionKey(handle), sealed, {
+  await env.ORGANIZATION_CACHE.put(pendingSelectionKey(handle), sealed, {
     expirationTtl: PENDING_SELECTION_TTL_SECONDS,
   })
   return handle
@@ -493,8 +493,8 @@ export const readPendingPageSelection = async (
   env: FacebookEnv,
   handle: string,
 ): Promise<PendingPageSelection | null> => {
-  if (!env.SITE_CACHE) return null
-  const sealed = await env.SITE_CACHE.get(pendingSelectionKey(handle))
+  if (!env.ORGANIZATION_CACHE) return null
+  const sealed = await env.ORGANIZATION_CACHE.get(pendingSelectionKey(handle))
   if (!sealed) return null
   try {
     return JSON.parse(await decryptSecret(sealed, encryptionEnv(env))) as PendingPageSelection
@@ -504,5 +504,5 @@ export const readPendingPageSelection = async (
 }
 
 export const clearPendingPageSelection = async (env: FacebookEnv, handle: string): Promise<void> => {
-  await env.SITE_CACHE?.delete(pendingSelectionKey(handle))
+  await env.ORGANIZATION_CACHE?.delete(pendingSelectionKey(handle))
 }

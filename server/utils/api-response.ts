@@ -116,7 +116,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const rawRuntimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   const runtimeEnv = (() => {
     const env = rawRuntimeEnv
-    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
+    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'ORGANIZATION_CACHE', 'AI'] as const
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
@@ -160,8 +160,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const publicConfig = (useRuntimeConfig().public ?? {}) as Record<string, unknown>
   const configuredEnv = {
     ...(typeof publicConfig.platformDomain === 'string' && { NUXT_PUBLIC_PLATFORM_DOMAIN: publicConfig.platformDomain }),
-    ...(typeof publicConfig.freeSiteDomain === 'string' && { NUXT_PUBLIC_FREE_SITE_DOMAIN: publicConfig.freeSiteDomain }),
-    ...(typeof publicConfig.siteUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.siteUrl }),
+    ...(typeof publicConfig.freeOrganizationDomain === 'string' && { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: publicConfig.freeOrganizationDomain }),
+    ...(typeof publicConfig.platformUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.platformUrl }),
   }
   const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
   const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined

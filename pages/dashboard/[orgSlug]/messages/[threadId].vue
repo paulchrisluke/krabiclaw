@@ -6,7 +6,7 @@
     is room for one and the sheet over it where there is not — the shells decide
     that, not this page.
   -->
-  <DashboardIndexPanel id="site-messages-thread" :title="thread?.guestName ?? 'Conversation'" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
+  <DashboardIndexPanel id="organization-messages-thread" :title="thread?.guestName ?? 'Conversation'" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
     <template v-if="recordTo" #right>
       <UButton :to="recordTo" color="neutral" variant="soft" class="h-10 rounded-full px-4" :aria-label="`Show ${recordTitle.toLowerCase()}`">
         Details

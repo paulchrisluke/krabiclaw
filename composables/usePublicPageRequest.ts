@@ -231,12 +231,12 @@ const encodeKeyField = (value: string | null | undefined): string =>
 
 export const usePublicResourceKey = (
   resourceKind: 'shell' | 'page',
-  siteId: string | null | undefined,
+  organizationId: string | null | undefined,
   params: PublicPageRequest,
 ) =>
   [
     resourceKind,
-    encodeKeyField(siteId ?? "none"),
+    encodeKeyField(organizationId ?? "none"),
     encodeKeyField(params.page),
     encodeKeyField(params.location),
     encodeKeyField([...params.datasets].sort().join(',')),
@@ -245,12 +245,12 @@ export const usePublicResourceKey = (
   ].join("~");
 
 export const usePublicPageKey = (
-  siteId: string | null | undefined,
+  organizationId: string | null | undefined,
   params: PublicPageRequest,
-) => usePublicResourceKey('page', siteId, params)
+) => usePublicResourceKey('page', organizationId, params)
 
 export const buildPublicPageUrl = (
-  siteId: string | null | undefined,
+  organizationId: string | null | undefined,
   params: PublicPageRequest,
   resourceKind: 'shell' | 'page' = 'page',
 ) => {

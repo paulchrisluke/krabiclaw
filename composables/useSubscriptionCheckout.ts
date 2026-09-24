@@ -4,7 +4,6 @@ import { assertNewSalePlan, normalizeBillingPlanId, STARTER_PLAN_ID } from '~/sh
 
 interface SubscriptionCheckoutInput {
   organizationId: string
-  siteId: string
   plan: string
   currentPlan: string
   subscriptionId?: string | null
@@ -50,7 +49,6 @@ export function useSubscriptionCheckout() {
     try {
       await recordBillingAnalyticsIntent(dashboardApi, {
         organizationId: input.organizationId,
-        siteId: input.siteId,
         subscriptionId: input.subscriptionId ?? null,
         action,
         ...analyticsContext,
@@ -68,7 +66,7 @@ export function useSubscriptionCheckout() {
     // imperative way Better Auth provides for exactly that.
     const currentUser = (await authClient.getSession()).data?.user
     const metadata = {
-      site_id: input.siteId,
+      organization_id: input.organizationId,
       ...buildStripeSubscriptionMetadata(
         action,
         analyticsContext,

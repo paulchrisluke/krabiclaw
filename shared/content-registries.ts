@@ -182,7 +182,7 @@ function describeStructuralFields(type: ContentBlockType): string {
       if (field.kind === 'enum' && field.options?.length) {
         return `${key} (one of ${field.options.map(option => option.value).join(', ')})`
       }
-      if (field.kind === 'enum') return `${key} (see the site's template)`
+      if (field.kind === 'enum') return `${key} (see the organization's template)`
       if (field.kind === 'reference') return `${key} (${field.reference} ids)`
       return `${key} (url)`
     })

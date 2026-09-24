@@ -4,7 +4,7 @@
     removing are edits to the page draft, committed once from this level's own
     footer — never a write per press. A section is a level below this one.
   -->
-  <DashboardIndexPanel id="site-page-sections" title="Sections">
+  <DashboardIndexPanel id="organization-page-sections" title="Sections">
     <UAlert v-if="errorMessage" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="errorMessage" />
     <DashboardListEditor
       v-model:editing="editing"

@@ -1,14 +1,14 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
-import { attachReviewMedia } from '~/server/utils/site-reviews'
+import { attachReviewMedia } from '~/server/utils/organization-reviews'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
 
   if (!organizationId || !locationId) {
-    return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   }
 
   const { db } = await requireLocationAccess(event, organizationId, locationId)

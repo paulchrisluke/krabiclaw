@@ -189,7 +189,7 @@ const TEMPLATES: Record<
       {
         type: 'header',
         parameters: [
-          { type: 'text', text: cleanTemplateText(v.site_name, '', 60) },
+          { type: 'text', text: cleanTemplateText(v.organization_name, '', 60) },
         ],
       },
       {

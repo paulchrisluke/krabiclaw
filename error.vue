@@ -33,7 +33,7 @@ const props = defineProps({
 const errorStatusCode = computed(() => props.error?.statusCode ?? props.error?.status ?? 500)
 const isNotFound = computed(() => errorStatusCode.value === 404)
 
-const { isPlatform, tenantType, themeId, site } = useTenantSite()
+const { isPlatform, tenantType, themeId, organization } = useTenantOrganization()
 const route = useRoute()
 
 // Nuxt renders this page outside the layout system, so the surface CSS a layout
@@ -47,7 +47,7 @@ const surfaceStylesheet = computed(() => {
       pathname: route.path,
       tenantType,
       themeId,
-      vertical: site?.vertical,
+      vertical: organization?.vertical,
     })
   } catch {
     // An unsupported template must not throw while already rendering an error.
@@ -64,7 +64,7 @@ useHead(() => ({
     ...(surfaceStylesheet.value ? [{ rel: 'stylesheet', href: surfaceStylesheet.value }] : []),
     ...buildTenantHeadLinks({
       isPlatform,
-      organizationMedia: site?.media,
+      organizationMedia: organization?.media,
     }),
   ],
 }))

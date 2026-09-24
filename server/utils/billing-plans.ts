@@ -41,8 +41,8 @@ export interface Plan {
   cta: { label: string; href: string }
 }
 
-export type EnvWithSiteCache = Record<string, string | undefined> & {
-  SITE_CACHE?: KVNamespace
+export type EnvWithOrganizationCache = Record<string, string | undefined> & {
+  ORGANIZATION_CACHE?: KVNamespace
 }
 
 export class BillingPlansError extends Error {
@@ -366,7 +366,7 @@ const PLANS_CACHE_TTL_SECONDS = 3600
 
 // The customer-facing catalog has one sales model. A versioned key prevents
 // stale flag-specific snapshots from the retired toggle from being served.
-function plansCacheKey(_env: EnvWithSiteCache): string {
+function plansCacheKey(_env: EnvWithOrganizationCache): string {
   return 'stripe-plans:v5'
 }
 
@@ -379,9 +379,9 @@ function plansCacheKey(_env: EnvWithSiteCache): string {
 // lock).
 let _inflight: Promise<Plan[]> | null = null
 
-export async function getCachedPlans(env: EnvWithSiteCache): Promise<Plan[]> {
+export async function getCachedPlans(env: EnvWithOrganizationCache): Promise<Plan[]> {
   try {
-    const kv = env.SITE_CACHE
+    const kv = env.ORGANIZATION_CACHE
     const cacheKey = plansCacheKey(env)
 
     if (kv) {

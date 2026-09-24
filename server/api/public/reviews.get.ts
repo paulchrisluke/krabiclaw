@@ -1,6 +1,6 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listSiteReviews } from '~/server/utils/site-reviews'
+import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
@@ -8,9 +8,9 @@ export default defineHandler(async (event) => {
 
   const db = cloudflareEnv(event).db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  const site = await queryFirst<{ id: string }>(db, "SELECT id FROM organization WHERE id = ? AND status = 'active'", [organizationId])
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  return jsonResponse({ reviews: await listSiteReviews(db, organizationId, { publishedOnly: true }) })
+  const organization = await queryFirst<{ id: string }>(db, "SELECT id FROM organization WHERE id = ? AND status = 'active'", [organizationId])
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  return jsonResponse({ reviews: await listOrganizationReviews(db, organizationId, { publishedOnly: true }) })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

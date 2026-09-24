@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { credentialGrants, googleAccessToken, readGoogleCredential } from '~/server/utils/google-credential'
 import { listSearchConsoleSites, readSearchConsoleIntegration } from '~/server/utils/google-search-console'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { sitePublicUrl } from '~/server/utils/domains'
+import { organizationPublicUrl } from '~/server/utils/domains'
 
 /**
  * What the Search Console leaf shows: the connected account, the property
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
   const { env, db, organization} = await requireOrganizationAccess(event, organizationId)
   const credential = await readGoogleCredential(env, organization.id)
   const searchConsole = await readSearchConsoleIntegration(env, organization.id)
-  const siteUrl = await sitePublicUrl(db, organization.id)
+  const siteUrl = await organizationPublicUrl(db, organization.id)
 
   if (!credential || !credentialGrants(credential, 'search-console')) {
     return jsonResponse({

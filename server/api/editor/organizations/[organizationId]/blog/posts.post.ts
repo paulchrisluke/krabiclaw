@@ -10,7 +10,7 @@ export default defineHandler(async (event) => {
 
   if (!organizationId || Array.isArray(organizationId)) {
     return jsonResponse(
-      { error: "Site ID is required" }, { status: 400 }, );
+      { error: "Organization ID is required" }, { status: 400 }, );
   }
 
   if (!body || typeof body !== "object" || Array.isArray(body)) {

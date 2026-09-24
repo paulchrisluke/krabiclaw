@@ -304,7 +304,7 @@ export function createLocationQa(
 
 export function deleteLocationQa(db: DbClient, organizationId: string, locationId: string, qaId: string) {
   return queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ?', [organizationId])
-    .then(site => site
+    .then(organization => organization
       ? deleteQa(db, { organizationId, locationId }, qaId)
       : { status: 404, data: { error: 'Q&A not found' } })
 }

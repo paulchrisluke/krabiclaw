@@ -77,6 +77,10 @@ jobs:
       PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # CIMD client metadata must be public HTTPS, which localhost cannot serve.
+      # Staging's test-client documents are the ones docs/testing-strategy.md names.
+      MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
+      MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_WORKERS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -127,7 +131,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw Staging
       NUXT_PUBLIC_SITE_URL: https://staging.krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://staging.krabiclaw.com/help
@@ -229,7 +233,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help
@@ -287,7 +291,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help

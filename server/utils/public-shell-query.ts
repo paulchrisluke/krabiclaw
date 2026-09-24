@@ -3,9 +3,9 @@ import type { BatchQuery } from '~/server/db'
 import type { PublicBase } from '~/server/utils/public-base'
 import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
-import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { isCurrencyCode } from '~/shared/currencies'
-import { resolveSiteFontPreset } from '~/shared/site-fonts'
+import { resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { parsePostalAddress } from '~/utils/postal-address'
 
 type BatchResult = { results?: unknown[] }
@@ -93,7 +93,7 @@ export function appendPublicShellQueries(
 }
 
 export function buildPublicShellPayload(
-  site: PublicBase['site'],
+  organization: PublicBase['organization'],
   results: BatchResult[],
   indexes: PublicShellQueryIndexes,
 ): PublicShellPayload {
@@ -141,32 +141,32 @@ export function buildPublicShellPayload(
   const config: Record<string, string> = Object.fromEntries(
     configRows.filter(({ key }) => !key.startsWith('__')).map(({ key, value }) => [key, value]),
   )
-  config.font_preset = resolveSiteFontPreset(config.font_preset)
-  if (!isCurrencyCode(site.default_currency)) throw new Error(`Unsupported site currency: ${site.default_currency}`)
-  config.default_currency = site.default_currency
-  if (site.contact_email) config.contact_email = site.contact_email
-  if (site.contact_phone) config.contact_phone = site.contact_phone
-  if (site.name) config.name = site.name
-  if (site.brand_description) config.brand_description = site.brand_description
-  if (site.seo_title) config.seo_title = site.seo_title
-  if (site.seo_description) config.seo_description = site.seo_description
-  if (site.canonical_url) config.canonical_url = site.canonical_url
-  if (site.search_console_verification) config.search_console_verification = site.search_console_verification
+  config.font_preset = resolveOrganizationFontPreset(config.font_preset)
+  if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
+  config.default_currency = organization.default_currency
+  if (organization.contact_email) config.contact_email = organization.contact_email
+  if (organization.contact_phone) config.contact_phone = organization.contact_phone
+  if (organization.name) config.name = organization.name
+  if (organization.brand_description) config.brand_description = organization.brand_description
+  if (organization.seo_title) config.seo_title = organization.seo_title
+  if (organization.seo_description) config.seo_description = organization.seo_description
+  if (organization.canonical_url) config.canonical_url = organization.canonical_url
+  if (organization.search_console_verification) config.search_console_verification = organization.search_console_verification
   // Real, writable site-scope columns — the single source for footer social icons. Never
-  // derived from site_link_items (a link's destination and a footer profile are unrelated).
-  if (site.social_facebook_url) config.social_facebook = site.social_facebook_url
-  if (site.social_instagram_url) config.social_instagram = site.social_instagram_url
-  if (site.social_tiktok_url) config.social_tiktok = site.social_tiktok_url
+  // derived from organization_link_items (a link's destination and a footer profile are unrelated).
+  if (organization.social_facebook_url) config.social_facebook = organization.social_facebook_url
+  if (organization.social_instagram_url) config.social_instagram = organization.social_instagram_url
+  if (organization.social_tiktok_url) config.social_tiktok = organization.social_tiktok_url
 
   return {
     platformMessages: null,
-    site: {
-      name: site.name,
-      brand_description: site.brand_description,
-      vertical: site.vertical,
-      media: site.media,
-      social_image: site.social_image,
-      config: { phone: site.contact_phone },
+    organization: {
+      name: organization.name,
+      brand_description: organization.brand_description,
+      vertical: organization.vertical,
+      media: organization.media,
+      social_image: organization.social_image,
+      config: { phone: organization.contact_phone },
     },
     locations,
     config,
@@ -189,8 +189,8 @@ export function buildPublicShellPayload(
       const carries = (pick: (_row: { bookable: number; unbookable: number }) => number) => rawLocations.some((location) => {
         const row = byLocation.get(String(location.id))
         if (!row || pick(row) !== 1) return false
-        const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
-          siteEnabledFeatures: site.feature_overrides,
+        const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id, {
+          organizationEnabledFeatures: organization.feature_overrides,
           locationEnabledFeatures: location.feature_overrides as string | null,
         })
         return capabilities.managers.some(manager => manager.key === 'location.products')

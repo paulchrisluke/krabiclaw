@@ -1,6 +1,5 @@
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro';
-import { queryFirst } from '~/server/db'
 import type { DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -21,7 +20,7 @@ export interface BillingEnv {
   STRIPE_WEBHOOK_SECRET?: string
 }
 
-export interface SiteBillingStatus {
+export interface OrganizationBillingStatus {
   plan: string
   stripeCustomerId?: string
   stripeSubscriptionId?: string
@@ -42,21 +41,11 @@ export function getStripe(env: BillingEnv): Stripe {
 }
 
 
-export async function getSiteBillingStatus(
-  env: CloudflareEnv,
-  db: DbClient,
-  organizationId: string,
-): Promise<SiteBillingStatus> {
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? LIMIT 1`, [organizationId])
-  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  return getOrganizationBillingStatus(env, db, site.id)
-}
-
 export async function getOrganizationBillingStatus(
   env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
-): Promise<SiteBillingStatus> {
+): Promise<OrganizationBillingStatus> {
   const authContext = await createAuth(env).$context
   const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
   // One read of the subscription rows answers both questions asked of them
@@ -91,18 +80,7 @@ export async function getOrganizationBillingStatus(
   }
 }
 
-// ── Per-site entitlements ─────────────────────────────────────────────────────
-
-export async function hasSiteEntitlement(
-  env: CloudflareEnv,
-  db: DbClient,
-  organizationId: string,
-  key: string,
-): Promise<boolean> {
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? LIMIT 1`, [organizationId])
-  if (!site) return false
-  return (await getOrganizationEntitlements(env, site.id))[key] === true
-}
+// ── Organization entitlements ─────────────────────────────────────────────────
 
 export async function hasOrganizationEntitlement(
   env: CloudflareEnv,

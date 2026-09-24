@@ -49,7 +49,7 @@ function resolvedMembershipOf<T extends { userId: string; organizationId: string
  * belongs to `organizationId` without reading the member row back.
  *
  * The tenant is the organization the membership resolved against. It used to
- * also carry a `siteId` the caller supplied separately, which is how a request
+ * also carry a `organizationId` the caller supplied separately, which is how a request
  * could authorize against one tenant and then read another.
  */
 export interface MemberAccessPrincipal {

@@ -75,7 +75,7 @@ export const TECHNICAL_ASSET_ROUTE_PREFIXES = [
   '/_next',
 ] as const
 
-export interface RuntimeSeoSiteConfig {
+export interface RuntimeSeoConfig {
   url: string
   indexable: boolean
   name?: string
@@ -104,12 +104,12 @@ export function isNonIndexableHost(hostname: string): boolean {
     || host.endsWith('.workers.dev')
 }
 
-export function resolveRuntimeSeoSiteConfig(input: {
+export function resolveRuntimeSeoConfig(input: {
   tenantType?: TenantType | null
   origin: string
   hostname: string
   tenantName?: string | null
-}): RuntimeSeoSiteConfig {
+}): RuntimeSeoConfig {
   const indexable = !isNonIndexableHost(input.hostname)
 
   if (input.tenantType === TENANT_TYPES.TENANT) {

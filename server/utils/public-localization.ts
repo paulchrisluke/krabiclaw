@@ -10,7 +10,7 @@ import {
 } from '~/server/utils/localization-registry'
 import { HTTPError } from 'nitro'
 import { queryAll, type DbClient } from '~/server/db'
-import { assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
+import { assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
 import { isRecord } from '~/server/utils/type-guards'
 
 export interface StoredPublicLocalizationRow {
@@ -35,7 +35,7 @@ export async function loadExactPublicLocalizations(
   organizationId: string,
   locale: string,
 ): Promise<ExactPublicLocalization[]> {
-  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, locale)
+  const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'Primary-language routes are unprefixed' })
   const rows = await queryAll<StoredPublicLocalizationRow>(db, `
     SELECT resource_type, resource_id, locale, values_json, route_path
@@ -91,8 +91,19 @@ export function projectExactLocalizedResource<T extends { id: string }>(
   // Clearing a field is the empty state of its declared type. A map of
   // translated attributes empties to a map with nothing in it: "this product
   // has no translated attributes" is a readable answer, an absent map is not.
+  // Text empties to '' (or stays null where the resource's own field is
+  // nullable) and a list to []: a Product with no translated description is
+  // a Product whose description is empty, not one missing the field its
+  // contract requires — which is how every /ja page carrying such a product 502'd.
+  // An address is not cleared: its translated parts sit on the location's own.
   const clearedValues = Object.fromEntries(
-    Object.entries(definition.fields).map(([field, shape]) => [fieldNames[field] ?? field, shape === 'metafields' ? {} : undefined]),
+    Object.entries(definition.fields).flatMap(([field, shape]): Array<[string, unknown]> => {
+      const name = fieldNames[field] ?? field
+      if (shape === 'metafields') return [[name, {}]]
+      if (shape === 'string_array') return [[name, []]]
+      if (shape === 'text') return [[name, (canonical as Record<string, unknown>)[name] === null ? null : '']]
+      return []
+    }),
   )
   const projectedValues = Object.fromEntries(Object.entries(localization.values).map(([field, value]) => [
     fieldNames[field] ?? field,

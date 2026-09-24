@@ -14,7 +14,7 @@ test('domain claims fence stale results and permanent subdomain reservations sur
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org'),('other','Other','other'),('audit','Audit','audit')").run()
-    const env = { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'example.test', CF_ZONE_ID: 'zone', CF_CUSTOM_HOSTNAMES_API_TOKEN: 'test', CF_SAAS_CNAME_TARGET: 'target.example.test' }
+    const env = { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'example.test', CF_ZONE_ID: 'zone', CF_CUSTOM_HOSTNAMES_API_TOKEN: 'test', CF_SAAS_CNAME_TARGET: 'target.example.test' }
     await createSystemSubdomain(env, db, 'org', 'first')
     await createSystemSubdomain(env, db, 'org', 'second')
     assert.equal(await isSystemSubdomainSpent(env, db, 'first'), true)

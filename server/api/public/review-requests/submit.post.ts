@@ -170,7 +170,7 @@ export default defineHandler(async (event) => {
   await executeBatch(db, batch)
 
   await notifyReviewReceived(env, db, {
-    organizationId: result.context.organization_id, siteName: result.context.site_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
+    organizationId: result.context.organization_id, organizationName: result.context.organization_name, locationId: result.context.location_id, reviewId, authorName, rating, content, })
 
   return jsonResponse({ success: true, reviewId, status: 'pending' }, { status: 201 })
 })

@@ -2,7 +2,7 @@
 //
 // This was two routes with two fetchers. `getPublishedBlogPost` looked the
 // platform site up and hardcoded it, and had no locale; the tenant route's
-// `getPublishedLocalizedSiteBlogPost` took a site id from the URL and did
+// `getPublishedLocalizedOrganizationBlogPost` took a site id from the URL and did
 // support locales. The platform is an ordinary tenant, so the localized fetcher
 // is the only one — the platform half was the same query missing a feature.
 //

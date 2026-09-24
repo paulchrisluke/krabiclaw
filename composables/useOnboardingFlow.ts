@@ -1,7 +1,7 @@
 import { currencyForCountry, type CurrencyCode } from '~/shared/currencies'
 import type { PostalAddress } from '~/utils/postal-address'
 import type { OpeningHours, SpecialHours } from '~/shared/reservation-hours'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 
 export type OnboardingStepId =
@@ -46,7 +46,7 @@ export interface OnboardingDraftPreview {
 
 export interface OnboardingFlowState {
   flow: OnboardingFlowId
-  vertical: SiteVertical
+  vertical: OrganizationVertical
   source: 'google_places' | 'manual' | null
   details: {
     name: string
@@ -67,7 +67,7 @@ export interface OnboardingFlowState {
   mapsUrl: string
   draftId: string | null
   preview: OnboardingDraftPreview | null
-  created: { orgSlug: string | null; siteSlug: string | null; locationSlug: string | null } | null
+  created: { orgSlug: string | null; organizationSlug: string | null; locationSlug: string | null } | null
 }
 
 /**

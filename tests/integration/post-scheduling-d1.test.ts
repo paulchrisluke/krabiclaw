@@ -60,7 +60,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     await updatePost(db, 'org-proof', post.id, { slug: 'draft-renamed', visibility: 'unlisted' }, 'user-proof', {})
     assert.equal(await db.prepare('SELECT count(*) FROM organization_redirects WHERE owner_id=?').bind(post.id).first('count(*)'), 0)
     assert.equal(await db.prepare('SELECT first_published_at FROM content_documents WHERE id=?').bind(post.id).first('first_published_at'), null)
-    const live = await publishPost(db, 'org-proof', post.id, ['site'], {}, null)
+    const live = await publishPost(db, 'org-proof', post.id, ['organization'], {}, null)
     assert(live)
     assert.equal(live.status, 'published')
     assert.equal(live.visibility, 'unlisted')
@@ -73,7 +73,7 @@ test('social drafts, unlisted publication and scheduled posts preserve lifecycle
     assert((await getPublishedPosts(db, 'org-proof')).some(row => row.id === post.id))
     await assert.rejects(updatePost(db, 'org-proof', post.id, { scheduled_for: '2099-02-01T00:00:00.000Z' }, 'user-proof', {}), /cannot be rescheduled/)
     await assert.rejects(updatePost(db, 'org-proof', post.id, { status: 'draft' }, 'user-proof', {}), /unknown field status/)
-    await publishPost(db, 'org-proof', post.id, ['site'], {}, null)
+    await publishPost(db, 'org-proof', post.id, ['organization'], {}, null)
     assert.equal(await db.prepare('SELECT first_published_at FROM content_documents WHERE id=?').bind(post.id).first('first_published_at'), firstPublished)
 
     const queued = await createPost(db, 'org-proof', { body: 'Queue this draft' }, 'user-proof', {})

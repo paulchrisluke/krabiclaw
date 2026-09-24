@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) {
-    return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   }
 
   const body = await readRequiredBody<Record<string, unknown>>(event)

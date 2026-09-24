@@ -1,12 +1,12 @@
 import { requestInsertQueries } from '~/server/domain/requests'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { organizationSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { executeBatch, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
-import { recordSiteConversionEvent } from '~/server/utils/site-conversions'
+import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -56,10 +56,10 @@ export default defineHandler(async (event) => {
   if (subject && !VALID_SUBJECTS.includes(subject))
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
+  const organization = await queryFirst<{ id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
     db, 'SELECT id, name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  const requiresConsent = organizationSupportsBlawbyTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
   const consentAcknowledged = body.consent === true
   if (requiresConsent && !consentAcknowledged) {
     return jsonResponse({ error: 'Please acknowledge the contact and privacy notice.' }, { status: 400 })
@@ -90,7 +90,7 @@ export default defineHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
-  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.id, location_id: assignedLocationId,
+  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: organization.id, location_id: assignedLocationId,
     customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
@@ -102,9 +102,9 @@ export default defineHandler(async (event) => {
   // record as well.
   const followUps = await Promise.allSettled([
     notifyContactSubmitted(env, db, {
-      organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
-    recordSiteConversionEvent(db, event, {
-    organizationId: site.id,
+      organizationId: organization.id, locationId: assignedLocationId, organizationName: organization.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
+    recordOrganizationConversionEvent(db, event, {
+    organizationId: organization.id,
     eventName: 'contact_submit',
     stage: 'submitted',
     locationId: assignedLocationId,
@@ -115,7 +115,7 @@ export default defineHandler(async (event) => {
     }),
   ])
   raiseSettledFailures('contact submission follow-up', `contactId ${id}`, followUps,
-    ['notifyContactSubmitted', 'recordSiteConversionEvent'])
+    ['notifyContactSubmitted', 'recordOrganizationConversionEvent'])
 
   return jsonResponse({
     success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })

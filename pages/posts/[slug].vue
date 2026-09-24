@@ -54,16 +54,16 @@ const isPublicPostResponse = (value: unknown): value is { post: PublicPost } =>
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
-const { site: publicSite } = useSiteShellState()
+const { organization: publicOrganization } = useOrganizationShellState()
 const { locale } = useI18n()
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => site?.name?.trim() ?? '')
+const organizationName = computed(() => organization?.name?.trim() ?? '')
 const postBrand = computed(() => ({
-  name: siteName.value,
-  logoUrl: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url || null,
+  name: organizationName.value,
+  logoUrl: publicOrganization.value?.media.find(item => item.slot === 'logo')?.public_url || null,
 }))
 
 const { data, error } = await useAsyncData(
@@ -97,14 +97,14 @@ useState<PublicPost['localeRepresentations']>('public-locale-representations', (
 
 const post = computed(() => data.value?.post ?? null)
 const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
-const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${siteName.value}`)
-const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${siteName.value}.`)
+const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${organizationName.value}`)
+const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${organizationName.value}.`)
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   path: post.value?.canonical_url || pagePath.value,
   title: seoTitle.value,
   description: seoDescription.value,
   pageType: 'article',
-  brand: { siteName: siteName.value },
+  brand: { organizationName: organizationName.value },
   socialImage: post.value?.social_image ?? null,
   publishedAt: post.value?.published_at || null,
 }))
@@ -117,12 +117,12 @@ useSchemaOrg([
     datePublished: post.value?.published_at,
     image: ogImageUrl.value,
     url: canonicalUrl.value,
-    author: { '@type': 'Organization', name: siteName.value },
+    author: { '@type': 'Organization', name: organizationName.value },
     publisher: {
       '@type': 'Organization',
-      name: siteName.value,
-      logo: publicSite.value?.media.find(item => item.slot === 'logo')?.public_url
-        ? { '@type': 'ImageObject', url: publicSite.value.media.find(item => item.slot === 'logo')!.public_url }
+      name: organizationName.value,
+      logo: publicOrganization.value?.media.find(item => item.slot === 'logo')?.public_url
+        ? { '@type': 'ImageObject', url: publicOrganization.value.media.find(item => item.slot === 'logo')!.public_url }
         : undefined,
     },
   })),

@@ -3,7 +3,7 @@ import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
   buildPublicReviewAggregate, normalizePublicReviewAggregateRows, } from '~/server/utils/public-review-aggregate'
-import { attachReviewMedia } from '~/server/utils/site-reviews'
+import { attachReviewMedia } from '~/server/utils/organization-reviews'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined

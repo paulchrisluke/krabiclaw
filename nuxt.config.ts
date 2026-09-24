@@ -175,9 +175,9 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
-      freeSiteDomain: process.env.NUXT_PUBLIC_FREE_SITE_DOMAIN || '',
+      freeOrganizationDomain: process.env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'https://krabiclaw.com',
+      platformUrl: process.env.NUXT_PUBLIC_SITE_URL || '',
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',

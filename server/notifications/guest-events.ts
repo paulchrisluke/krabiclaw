@@ -67,7 +67,7 @@ export function organizationInviteMessage(input: {
 
 export interface GuestBookingInput {
   guestName: string
-  siteName: string
+  organizationName: string
   productTitle?: string | null
   date: string
   time: string
@@ -93,33 +93,33 @@ function guestVisitFacts(input: GuestBookingInput): NotificationFact[] {
 function contactSection(input: GuestBookingInput) {
   const details = [input.contactPhone, input.contactEmail].filter(Boolean).join(' · ')
   return details
-    ? [{ title: `Questions for ${input.siteName}?`, body: details }]
-    : [{ title: `Questions for ${input.siteName}?`, body: `${input.siteName} will be in touch using the details you provided.` }]
+    ? [{ title: `Questions for ${input.organizationName}?`, body: details }]
+    : [{ title: `Questions for ${input.organizationName}?`, body: `${input.organizationName} will be in touch using the details you provided.` }]
 }
 
 export function guestReservationReceivedMessage(input: GuestBookingInput): NotificationMessage {
   return {
     title: 'Your reservation is confirmed',
-    preheader: `${input.siteName} · ${input.date} at ${input.time}`,
-    hero: input.heroImageUrl ? { imageUrl: input.heroImageUrl, alt: input.siteName } : null,
+    preheader: `${input.organizationName} · ${input.date} at ${input.time}`,
+    hero: input.heroImageUrl ? { imageUrl: input.heroImageUrl, alt: input.organizationName } : null,
     facts: guestVisitFacts(input),
     primaryAction: input.cancelUrl ? { url: input.cancelUrl, label: 'Manage your reservation' } : undefined,
     sections: contactSection(input),
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
 export function guestReservationCancelledMessage(input: GuestBookingInput & { wasConfirmed: boolean }): NotificationMessage {
   return {
     title: input.wasConfirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled',
-    preheader: `${input.siteName} · ${input.date} at ${input.time}`,
+    preheader: `${input.organizationName} · ${input.date} at ${input.time}`,
     hero: null,
     facts: guestVisitFacts(input),
     sections: contactSection(input),
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -128,13 +128,13 @@ export function guestBookingReceivedMessage(input: GuestBookingInput & { product
     title: `Your booking request was sent`,
     preheader: `${input.productTitle} · ${input.date} at ${input.time}`,
     hero: input.heroImageUrl ? { imageUrl: input.heroImageUrl, alt: input.productTitle ?? '' } : null,
-    intro: `Thanks, ${input.guestName}. ${input.siteName} will confirm availability shortly.`,
+    intro: `Thanks, ${input.guestName}. ${input.organizationName} will confirm availability shortly.`,
     facts: guestVisitFacts(input),
     primaryAction: input.cancelUrl ? { url: input.cancelUrl, label: 'Manage your booking' } : undefined,
     sections: contactSection(input),
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -146,13 +146,13 @@ export function guestBookingCancelledMessage(input: GuestBookingInput & { produc
     facts: guestVisitFacts(input),
     sections: contactSection(input),
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
 export function guestContactReceivedMessage(input: {
   guestName: string
-  siteName: string
+  organizationName: string
   subject: string | null
   productTitle: string | null
   message: string
@@ -160,9 +160,9 @@ export function guestContactReceivedMessage(input: {
 }): NotificationMessage {
   return {
     title: 'Your message was sent',
-    preheader: `Your message to ${input.siteName} was received.`,
+    preheader: `Your message to ${input.organizationName} was received.`,
     hero: null,
-    intro: `Thanks, ${input.guestName}. ${input.siteName} will reply using the contact details you provided.`,
+    intro: `Thanks, ${input.guestName}. ${input.organizationName} will reply using the contact details you provided.`,
     facts: facts(
       fact('subject', 'Subject', input.subject),
       fact('productTitle', 'Regarding', input.productTitle),
@@ -170,25 +170,25 @@ export function guestContactReceivedMessage(input: {
     ),
     sections: [{ title: 'Your message', body: input.message }],
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
-export function guestThreadReplyMessage(input: { siteName: string; body: string }): NotificationMessage {
+export function guestThreadReplyMessage(input: { organizationName: string; body: string }): NotificationMessage {
   return {
-    title: `Reply from ${input.siteName}`,
+    title: `Reply from ${input.organizationName}`,
     preheader: input.body.slice(0, 120),
     hero: null,
     facts: [],
     sections: [{ title: '', body: input.body }],
     finePrint: 'Reply to this email and your message goes straight back to the same conversation.',
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
 export function guestThreadStatusMessage(input: {
-  siteName: string
+  organizationName: string
   heading: string
   body: string
   actionUrl?: string | null
@@ -202,13 +202,13 @@ export function guestThreadStatusMessage(input: {
     facts: [],
     primaryAction: input.actionUrl && input.actionLabel ? { url: input.actionUrl, label: input.actionLabel } : undefined,
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
 export function bookingChangeProposalMessage(input: {
   guestName: string
-  siteName: string
+  organizationName: string
   heading: string
   intro: string
   rows: Array<[string, string]>
@@ -223,13 +223,13 @@ export function bookingChangeProposalMessage(input: {
     facts: input.rows.map(([label, value], index) => ({ key: `row-${index}`, label, value })),
     primaryAction: input.actionUrl && input.actionLabel ? { url: input.actionUrl, label: input.actionLabel } : undefined,
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
 export function reviewRequestMessage(input: {
   guestName: string
-  siteName: string
+  organizationName: string
   locationName: string | null
   visitAt: string
   partySize: string
@@ -238,10 +238,10 @@ export function reviewRequestMessage(input: {
   reminder: boolean
 }): NotificationMessage {
   return {
-    title: input.reminder ? `How was your visit to ${input.siteName}?` : `Thanks for visiting ${input.siteName}`,
+    title: input.reminder ? `How was your visit to ${input.organizationName}?` : `Thanks for visiting ${input.organizationName}`,
     preheader: input.reminder
-      ? `${input.siteName} is still hoping to hear how it went.`
-      : `${input.siteName} would love to hear how everything went.`,
+      ? `${input.organizationName} is still hoping to hear how it went.`
+      : `${input.organizationName} would love to hear how everything went.`,
     hero: null,
     intro: `Thanks for visiting, ${input.guestName}. A couple of lines helps other guests know what to expect.`,
     facts: facts(
@@ -252,7 +252,7 @@ export function reviewRequestMessage(input: {
     primaryAction: { url: input.reviewUrl, label: 'Leave a review' },
     finePrint: `Would rather not be asked? Opt out: ${input.optOutUrl}`,
     category: 'account_security',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 

@@ -1,4 +1,4 @@
-import type { GoogleAnalyticsIntegration } from '~/shared/site-settings'
+import type { GoogleAnalyticsIntegration } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
 import { googleAccessToken, type GoogleCredentialEnv } from './google-credential'
 
@@ -123,7 +123,7 @@ export async function clearAnalyticsIntegration(
     UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_analytics')
     WHERE id = ?
   `, [organizationId])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before disconnecting.')
+  if (result.meta?.changes !== 1) throw new Error('Organization ownership changed. Reload before disconnecting.')
 }
 
 /** Picks the property and resolves its measurement id in one step. */

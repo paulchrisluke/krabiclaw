@@ -5,11 +5,11 @@ import {
   OWNER_REVIEW_STATUSES,
   type OwnerReviewCollectionMethod as CollectionMethod,
   type OwnerReviewStatus as TestimonialStatus,
-} from '~/shared/site-reviews'
+} from '~/shared/organization-reviews'
 
 export type { CollectionMethod, TestimonialStatus }
 
-export interface SiteTestimonial {
+export interface OrganizationTestimonial {
   id: string
   author_name: string
   rating: number
@@ -26,7 +26,7 @@ export const COLLECTION_METHOD_LABELS = OWNER_REVIEW_COLLECTION_METHOD_LABELS
 
 const isStringOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string'
 
-export const isSiteTestimonial = (value: unknown): value is SiteTestimonial =>
+export const isOrganizationTestimonial = (value: unknown): value is OrganizationTestimonial =>
   isRecord(value)
   && typeof value.id === 'string'
   && typeof value.author_name === 'string'
@@ -39,5 +39,5 @@ export const isSiteTestimonial = (value: unknown): value is SiteTestimonial =>
   && typeof value.publication_authorized === 'boolean'
   && OWNER_REVIEW_STATUSES.some(status => status === value.status)
 
-export const isTestimonialsResponse = (value: unknown): value is { reviews: SiteTestimonial[] } =>
-  isRecord(value) && Array.isArray(value.reviews) && value.reviews.every(isSiteTestimonial)
+export const isTestimonialsResponse = (value: unknown): value is { reviews: OrganizationTestimonial[] } =>
+  isRecord(value) && Array.isArray(value.reviews) && value.reviews.every(isOrganizationTestimonial)

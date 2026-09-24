@@ -4,7 +4,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { recordTenantPageview, updateTenantPageviewDuration, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
-import { aggregateSiteAnalyticsDate, cleanupTenantAnalytics, getSiteAnalyticsReport } from '../../server/utils/site-analytics-report.ts'
+import { aggregateOrganizationAnalyticsDate, cleanupTenantAnalytics, getAnalyticsReport } from '../../server/utils/analytics-report.ts'
 
 test('analytics preserves duplicate, attribution, summary and retention semantics on D1', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -42,27 +42,27 @@ test('analytics preserves duplicate, attribution, summary and retention semantic
     assert.equal(await db.prepare("SELECT json_extract(payload_json, '$.duration_seconds') duration FROM analytics_summaries WHERE kind = 'session'").first('duration'), 20)
     await recordTenantPageview(db, { ...input, eventId: 'returning', sessionId: 'returning-session', now: '2026-09-06T02:00:00.000Z' })
     const period = { organizationId: 'org-proof', startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') }
-    const before = await getSiteAnalyticsReport(db, period)
+    const before = await getAnalyticsReport(db, period)
     assert.equal(before.metrics.pageViews, 4)
     assert.equal(before.metrics.uniqueSessions, 2)
     assert.equal(before.countries[0]?.countryCode, 'TH')
-    for (const date of ['2026-09-05', '2026-09-06']) await aggregateSiteAnalyticsDate(db, 'org-proof', date)
-    const after = await getSiteAnalyticsReport(db, period)
+    for (const date of ['2026-09-05', '2026-09-06']) await aggregateOrganizationAnalyticsDate(db, 'org-proof', date)
+    const after = await getAnalyticsReport(db, period)
     assert.deepEqual(after, before)
-    await aggregateSiteAnalyticsDate(db, 'org-proof', '2026-09-05')
-    assert.deepEqual(await getSiteAnalyticsReport(db, period), before)
+    await aggregateOrganizationAnalyticsDate(db, 'org-proof', '2026-09-05')
+    assert.deepEqual(await getAnalyticsReport(db, period), before)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_summaries WHERE kind = 'session'").first('count(*)'), 2)
     const conversion = JSON.stringify({ event_name: 'contact_submit', stage: 'submitted', entity_type: 'request', entity_id: 'request-proof',
       attributed_at: '2026-09-05T02:03:00.000Z', attribution: { source: 'google', medium: 'cpc', campaign: 'first' } })
     const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'session-first', 'visitor', ?, '2026-09-05T02:03:00.000Z')"
     await Promise.all(['conversion-first', 'conversion-duplicate'].map(id => db.prepare(insert).bind(id, conversion).run()))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
-    assert.equal((await getSiteAnalyticsReport(db, period)).conversions[0]?.count, 1)
+    assert.equal((await getAnalyticsReport(db, period)).conversions[0]?.count, 1)
     await cleanupTenantAnalytics(db, new Date('2027-01-06T12:00:00Z'))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'pageview'").first('count(*)'), 0)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_summaries WHERE kind = 'session'").first('count(*)'), 2)
-    assert.equal((await getSiteAnalyticsReport(db, { ...period, now: new Date('2027-01-06T12:00:00Z') })).metrics.pageViews, 4)
+    assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2027-01-06T12:00:00Z') })).metrics.pageViews, 4)
     await cleanupTenantAnalytics(db, new Date('2029-01-06T12:00:00Z'))
     assert.equal(await db.prepare('SELECT count(*) FROM analytics_summaries').first('count(*)'), 0)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)

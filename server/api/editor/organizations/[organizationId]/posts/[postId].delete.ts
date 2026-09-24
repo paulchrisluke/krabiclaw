@@ -8,7 +8,7 @@ import { assertResourceAccess, isOrganizationWideRole, memberAccessPrincipal } f
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const postId = getRouterParam(event, 'postId')
-  if (!organizationId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
+  if (!organizationId || !postId) return jsonResponse({ error: 'Organization ID and Post ID required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -17,10 +17,10 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-  if (!isOrganizationWideRole(site.member_role)) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+  if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
+  if (!isOrganizationWideRole(organization.member_role)) {
+    return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
   }
 
   const post = await queryFirst<{ location_id: string | null }>(db, `
@@ -29,9 +29,9 @@ export default defineHandler(async (event) => {
     LIMIT 1
   `, [postId, organizationId])
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: post.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: post.location_id })
 
-  await deletePost(db, site.id, postId)
+  await deletePost(db, organization.id, postId)
   return jsonResponse({ success: true })
 })
 import { defineHandler } from 'nitro';

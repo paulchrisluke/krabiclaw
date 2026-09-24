@@ -22,7 +22,7 @@ export default defineHandler(async (event) => {
   if (tenantType === TENANT_TYPES.TENANT_404) {
     throw new HTTPError({
       statusCode: 404,
-      statusMessage: "Site Not Found",
+      statusMessage: "Organization Not Found",
     });
   }
 
@@ -69,7 +69,7 @@ export default defineHandler(async (event) => {
       default:
         throw new HTTPError({
           statusCode: 404,
-          statusMessage: "Site Not Found",
+          statusMessage: "Organization Not Found",
         });
     }
   }

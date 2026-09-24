@@ -20,7 +20,7 @@
       :resource-id="c.collectionId.value"
       :resource-label="c.groupLabel.toLowerCase()"
       :fields="c.localizationFields.value"
-      :language-settings-path="c.siteLocalizationSettingsPath.value"
+      :language-settings-path="c.organizationLocalizationSettingsPath.value"
     />
   </DashboardLeafPanel>
 </template>

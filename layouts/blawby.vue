@@ -9,12 +9,12 @@
          source in document order during SSR. -->
     <div id="blawby-portal-root" />
 
-    <BlawbyHeader :site="identity" :consultation="consultation" :page-links="pageLinks" />
+    <BlawbyHeader :organization="identity" :consultation="consultation" :page-links="pageLinks" />
     <main>
       <slot />
     </main>
     <BlawbyFooter
-      :site="identity"
+      :organization="identity"
       :compliance="compliance"
       :page-links="pageLinks"
     />

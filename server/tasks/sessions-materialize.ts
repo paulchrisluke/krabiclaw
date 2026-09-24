@@ -29,8 +29,8 @@ export default defineScheduledTask({
   meta: { name: 'sessions-materialize', description: 'Materialize booking sessions inside the public window' },
   async run({ context }) {
     const env = (context as { cloudflare?: { env?: CloudflareEnv } } | undefined)?.cloudflare?.env
-    if (!env?.DB || !env.SITE_CACHE) throw new Error('DB and SITE_CACHE are required')
-    const after = await env.SITE_CACHE.get(CURSOR_KEY)
+    if (!env?.DB || !env.ORGANIZATION_CACHE) throw new Error('DB and ORGANIZATION_CACHE are required')
+    const after = await env.ORGANIZATION_CACHE.get(CURSOR_KEY)
     const products = await queryAll<BookableProduct>(env.DB, `
       SELECT product_id, organization_id FROM product_booking_configs
        WHERE product_id > ? ORDER BY product_id LIMIT ?
@@ -58,11 +58,11 @@ export default defineScheduledTask({
         // anchor — does not stop the others from being generated.
         failures.push({ product_id: product.product_id, error: error instanceof Error ? error.message : String(error) })
       }
-      await env.SITE_CACHE.put(CURSOR_KEY, product.product_id)
+      await env.ORGANIZATION_CACHE.put(CURSOR_KEY, product.product_id)
     }
 
     const hasMore = products.length > PRODUCTS_PER_RUN
-    if (!hasMore) await env.SITE_CACHE.delete(CURSOR_KEY)
+    if (!hasMore) await env.ORGANIZATION_CACHE.delete(CURSOR_KEY)
     return { result: { products: Math.min(products.length, PRODUCTS_PER_RUN), created, existing, skipped, failures, hasMore, through } }
   },
 })

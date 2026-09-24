@@ -115,7 +115,7 @@ const table = computed(() => (calculator.value.table && typeof calculator.value.
 const tableColumns = computed(() => (Array.isArray(table.value.columns) ? table.value.columns.map(String) : []))
 const tableRows = computed(() => (Array.isArray(table.value.rows) ? table.value.rows.filter(Array.isArray) as unknown[][] : []))
 
-const isArticles = computed(() => blockText(props.block.data.source) === 'site_posts')
+const isArticles = computed(() => blockText(props.block.data.source) === 'organization_posts')
 const heading = computed(() => blockText(props.block.data.title))
 const posts = computed<PublicBlogSummary[]>(() => blockRecords(props.block.data.items).map((item) => {
   const media = Array.isArray(item.media) ? item.media[0] as Record<string, unknown> | undefined : undefined

@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-currency"
+    id="organization-currency"
     title="Currency"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
@@ -16,9 +16,9 @@
 
 <script setup lang="ts">
 import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
-import { siteSettingsEditorKey } from '~/lib/components/workspace/settings/SiteSettingsPage.vue'
+import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-const editor = inject(siteSettingsEditorKey)!
+const editor = inject(organizationSettingsEditorKey)!
 </script>

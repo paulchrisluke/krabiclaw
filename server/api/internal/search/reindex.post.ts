@@ -1,5 +1,5 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { rebuildPlatformKnowledgeIndex, syncSiteSearchIndex } from '~/server/utils/public-search'
+import { rebuildPlatformKnowledgeIndex, syncOrganizationSearchIndex } from '~/server/utils/public-search'
 import { validateInternalRequest } from '~/server/utils/internal-secret'
 
 export default defineHandler(async (event) => {
@@ -13,10 +13,10 @@ export default defineHandler(async (event) => {
 
   // One request per pass keeps each under the Workers request ceiling: the
   // platform pass returns the live site ids, and the caller syncs each site.
-  const site = getQuery(event).site
+  const organization = getQuery(event).organization
   try {
-    const result = typeof site === 'string' && site
-      ? await syncSiteSearchIndex(env, env.db, site)
+    const result = typeof organization === 'string' && organization
+      ? await syncOrganizationSearchIndex(env, env.db, organization)
       : await rebuildPlatformKnowledgeIndex(env, env.db)
     return jsonResponse({ ok: true, ...result })
   } catch (error) {

@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-search"
+    id="organization-blog-post-search"
     title="Search appearance"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

@@ -171,17 +171,17 @@ export default {
       "remaining": "remaining",
       "empty_title": "Nothing posted yet.",
       "empty_desc": "Check back soon for updates, events, and announcements.",
-      "meta_description": "Stories, news, and updates from {site}."
+      "meta_description": "Stories, news, and updates from {organization}."
     },
     "products": {
-      "collection_title": "{site} Products",
+      "collection_title": "{organization} Products",
       "empty": "No products published.",
-      "meta_description": "Products from {site}."
+      "meta_description": "Products from {organization}."
     },
     "experiences": {
-      "collection_title": "{site} Experiences",
+      "collection_title": "{organization} Experiences",
       "empty": "No experiences available right now. Check back soon.",
-      "meta_description": "Experiences you can book at {site}."
+      "meta_description": "Experiences you can book at {organization}."
     },
     "product_detail": {
       "choose_option": "Choose an option",
@@ -202,7 +202,7 @@ export default {
       "category_menu": "Menu",
       "category_team": "Team",
       "category_other": "Other",
-      "meta_description": "{count} photos from {location} at {site}."
+      "meta_description": "{count} photos from {location} at {organization}."
     },
     "carousel": {
       "previous": "Previous",
@@ -280,7 +280,7 @@ export default {
       "not_found": "Location Not Found"
     },
     "locations": {
-      "collection_title": "Locations · {site}",
+      "collection_title": "Locations · {organization}",
       "meta_description": "Find all our locations."
     },
     "menu_page": {
@@ -315,7 +315,7 @@ export default {
       "lowest_rated": "Lowest rated",
       "with_photos": "With photos",
       "read_review": "Read review",
-      "meta_description": "Guest reviews for {site}."
+      "meta_description": "Guest reviews for {organization}."
     },
     "qa_page": {
       "back_to": "Back to {title}",
@@ -332,7 +332,7 @@ export default {
       "asked_by": "Asked by {author}",
       "owner": "Owner",
       "intro": "Questions from guests and answers from the team. Owner-answered questions are pinned to the top.",
-      "meta_description": "Frequently asked questions about {site}."
+      "meta_description": "Frequently asked questions about {organization}."
     },
     "contact_page": {
       "title": "Contact",

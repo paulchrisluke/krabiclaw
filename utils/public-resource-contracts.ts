@@ -3,7 +3,7 @@ import type { Collection, Product } from '~/server/types/products'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
-export interface PublicShellSite {
+export interface PublicShellOrganization {
   name: string | null
   brand_description: string | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
@@ -23,7 +23,7 @@ export interface PublicShellLocation {
 }
 
 export interface PublicShellPayload {
-  site: PublicShellSite
+  organization: PublicShellOrganization
   locations: PublicShellLocation[]
   config: Record<string, string>
   googleMaps: ApiRecord
@@ -39,16 +39,16 @@ const nullableString = (value: unknown): value is string | null =>
   value === null || typeof value === 'string'
 
 export const isPublicShellPayload = (value: unknown): value is PublicShellPayload => {
-  if (!isRecord(value) || !isRecord(value.site)) return false
-  if (!nullableString(value.site.name)) return false
-  if (!nullableString(value.site.brand_description)) return false
-  if (!Array.isArray(value.site.media) || !value.site.media.every(item => isRecord(item)
+  if (!isRecord(value) || !isRecord(value.organization)) return false
+  if (!nullableString(value.organization.name)) return false
+  if (!nullableString(value.organization.brand_description)) return false
+  if (!Array.isArray(value.organization.media) || !value.organization.media.every(item => isRecord(item)
     && typeof item.asset_id === 'string' && typeof item.slot === 'string'
     && nullableString(item.public_url) && nullableString(item.thumbnail_url) && nullableString(item.kind))) return false
-  if (value.site.social_image !== null && (!isRecord(value.site.social_image) || typeof value.site.social_image.url !== 'string')) return false
-  if (!nullableString(value.site.vertical)) return false
-  if (value.site.config !== null && !isRecord(value.site.config)) return false
-  if (isRecord(value.site.config) && !nullableString(value.site.config.phone)) return false
+  if (value.organization.social_image !== null && (!isRecord(value.organization.social_image) || typeof value.organization.social_image.url !== 'string')) return false
+  if (!nullableString(value.organization.vertical)) return false
+  if (value.organization.config !== null && !isRecord(value.organization.config)) return false
+  if (isRecord(value.organization.config) && !nullableString(value.organization.config.phone)) return false
   if (!Array.isArray(value.locations)
     || !value.locations.every(location =>
       isRecord(location)

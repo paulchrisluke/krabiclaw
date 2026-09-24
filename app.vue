@@ -10,7 +10,7 @@ import { calculateThemeColors } from '~/utils/color-utils'
 import { buildTenantHeadLinks } from '~/utils/tenant-head'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
-const { tenantType, isPlatform, site } = useTenantSite()
+const { tenantType, isPlatform, organization } = useTenantOrganization()
 if (tenantType === TENANT_TYPES.TENANT_404) {
   throw createError({
     statusCode: 404,
@@ -19,9 +19,9 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 }
 
 const { isBlawby } = usePublicTemplate()
-const siteShell = isBlawby.value ? null : useSiteShellState()
-const config = siteShell?.config
-const organizationMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
+const organizationShell = isBlawby.value ? null : useOrganizationShellState()
+const config = organizationShell?.config
+const organizationMedia = computed(() => organizationShell?.organization.value?.media ?? organization?.media ?? [])
 useHead(() => {
   const verification = config?.value.search_console_verification
   return {

@@ -1,0 +1,126 @@
+import { assertCalendarDate, localNow, MINUTE_TIME_PATTERN, isValidTimezone } from '~/utils/timezone'
+import { HTTPError } from 'nitro'
+import { execute, queryFirst, type DbClient } from '~/server/db'
+import { isOrganizationFontPreset, resolveOrganizationFontPreset, type OrganizationFontPreset } from '~/shared/organization-fonts'
+
+export interface OrganizationConfig {
+  brand_color?: string
+  font_preset?: OrganizationFontPreset
+  social_facebook?: string
+  social_instagram?: string
+  social_tiktok?: string
+  press_email?: string
+  partnerships_email?: string
+  catering_email?: string
+  careers_email?: string
+  /**
+   * Read-only here. It is the Google Analytics integration's measurement id,
+   * and choosing a GA4 property is the one thing that writes it — which is why
+   * it is absent from WritableOrganizationConfigKey below.
+   */
+  google_analytics_measurement_id?: string
+  default_timezone?: string
+}
+
+/** The settings a caller may set. `google_analytics_measurement_id` is not one. */
+export type WritableOrganizationConfigKey = Exclude<keyof OrganizationConfig, 'google_analytics_measurement_id'>
+
+export const getConfig = async (
+  db: DbClient,
+  organizationId: string,
+): Promise<OrganizationConfig> => {
+  const row = await queryFirst<Record<keyof OrganizationConfig | 'font_preset_type', unknown>>(db, `
+    SELECT json_extract(settings_json, '$.config.brand_color') AS brand_color,
+           json_extract(settings_json, '$.config.font_preset') AS font_preset,
+           json_type(settings_json, '$.config.font_preset') AS font_preset_type,
+           json_extract(settings_json, '$.config.press_email') AS press_email,
+           json_extract(settings_json, '$.config.partnerships_email') AS partnerships_email,
+           json_extract(settings_json, '$.config.catering_email') AS catering_email,
+           json_extract(settings_json, '$.config.careers_email') AS careers_email,
+           CASE WHEN json_extract(integrations_json, '$.google_analytics.status') = 'active' THEN json_extract(integrations_json, '$.google_analytics.measurement_id') END AS google_analytics_measurement_id,
+           json_extract(settings_json, '$.config.default_timezone') AS default_timezone,
+           social_facebook_url AS social_facebook,
+           social_instagram_url AS social_instagram,
+           social_tiktok_url AS social_tiktok
+      FROM organization WHERE id = ?
+  `, [organizationId])
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  const config: OrganizationConfig = {}
+  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
+    const value = row[key]
+    if (value == null) continue
+    if (typeof value !== 'string') throw new Error('Invalid stored site setting: ' + key)
+    config[key] = value
+  }
+  // A missing optional setting preserves the template. An explicit null or an
+  // unsupported stored value is not a valid preset.
+  config.font_preset = resolveOrganizationFontPreset(row.font_preset_type === null ? undefined : row.font_preset)
+  return config
+}
+
+export const resolveLocationTimezone = async (
+  db: DbClient,
+  organizationId: string,
+  locationId: string | null,
+): Promise<string> => {
+  const location = await queryFirst<{ timezone: string | null }>(db,
+    'SELECT timezone FROM business_locations WHERE id = ? AND organization_id = ?',
+    [locationId, organizationId])
+  if (!location?.timezone) throw new HTTPError({ statusCode: 409, statusMessage: 'Set the location timezone before offering bookings' })
+  return location.timezone
+}
+
+/**
+ * Returns true if `dateStr` (YYYY-MM-DD) is strictly before "today" as observed in `timezone`.
+ * Workers always run on a UTC clock, so the "today" check must use the venue's zone.
+ */
+export const isDateBeforeTimezoneToday = (date: string, timezone: string): boolean => {
+  assertCalendarDate(date)
+  return date < localNow(timezone).date
+}
+export const isTimeSlotInPast = (date: string, time: string, timezone: string, now = new Date()): boolean => {
+  assertCalendarDate(date)
+  if (!MINUTE_TIME_PATTERN.test(time)) throw new Error('Invalid booking time')
+  const current = localNow(timezone, now)
+  return date === current.date ? time <= current.time : date < current.date
+}
+
+export const setConfig = async (
+  db: DbClient,
+  organizationId: string,
+  key: WritableOrganizationConfigKey,
+  value: string
+) => {
+  if (key === 'font_preset' && !isOrganizationFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported organization font preset' })
+  if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
+  if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
+    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`, [value || null, organizationId])
+    if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization not found. Reload before saving.' })
+    return
+  }
+  const result = await execute(
+    db,
+    `UPDATE organization SET settings_json = json_set(settings_json, ?, ?),
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = ?`,
+    ['$.config.' + key, value, organizationId],
+  )
+  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization ownership changed. Reload before saving.' })
+}
+
+export const deleteConfig = async (
+  db: DbClient,
+  organizationId: string,
+  key: WritableOrganizationConfigKey
+) => {
+  if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
+  if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
+  const result = await execute(
+    db,
+    `UPDATE organization SET settings_json = json_remove(settings_json, ?),
+       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = ?`,
+    ['$.config.' + key, organizationId],
+  )
+  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization ownership changed. Reload before saving.' })
+}

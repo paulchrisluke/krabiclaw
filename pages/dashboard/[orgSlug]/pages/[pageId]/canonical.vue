@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-page-canonical"
+    id="organization-page-canonical"
     title="Canonical URL"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

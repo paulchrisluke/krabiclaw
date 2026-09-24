@@ -33,7 +33,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       // declares a `locale` param means what it says and still 404s.
       if (!catalog) {
         if (typeof to.params.locale === 'string' && to.params.locale) {
-          throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
+          throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this organization' })
         }
         return
       }
@@ -46,7 +46,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     // rendered this document in already stands.
     if (!representations.value.length) return
     const source = representations.value.find(item => item.source === 'source')
-    if (!source) throw createError({ statusCode: 500, statusMessage: 'Site primary language is unavailable' })
+    if (!source) throw createError({ statusCode: 500, statusMessage: 'Organization primary language is unavailable' })
     const catalog = platformLocale(source.locale)
     if (!catalog) throw createError({ statusCode: 500, statusMessage: 'Application language catalog is unavailable' })
     state.value = source.locale
@@ -57,9 +57,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const candidate = requested
 
   const event = useRequestEvent()
-  const siteId = event?.context.siteId as string | null | undefined
-  if (!event || !siteId) return
-  const [{ cloudflareEnv }, { queryFirst }, { assertPublicSiteLanguageEntitlement, getPersistedSourceLocale }] = await Promise.all([
+  const organizationId = event?.context.organizationId as string | null | undefined
+  if (!event || !organizationId) return
+  const [{ cloudflareEnv }, { queryFirst }, { assertPublicOrganizationLanguageEntitlement, getPersistedSourceLocale }] = await Promise.all([
     import('~/server/utils/api-response'),
     import('~/server/db'),
     import('~/server/utils/localization'),
@@ -67,27 +67,21 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const currentSite = await queryFirst<{ organization_id: string }>(db, `
-    SELECT organization_id FROM sites WHERE id = ? AND status = 'active' LIMIT 1
-  `, [siteId])
-  if (!currentSite) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-  const source = await getPersistedSourceLocale(db, currentSite.organization_id)
+  const source = await getPersistedSourceLocale(db, organizationId)
   const sourceCatalog = platformLocale(source.locale)
-  if (!sourceCatalog) throw createError({ statusCode: 500, statusMessage: 'Site primary language is unavailable' })
+  if (!sourceCatalog) throw createError({ statusCode: 500, statusMessage: 'Organization primary language is unavailable' })
   state.value = source.locale
   setAppLocale(source.locale, { ...sourceCatalog.messages })
   if (!candidate || !platformLocale(candidate)) return
   if (candidate === source.locale) throw createError({ statusCode: 404, statusMessage: 'Primary language routes are unprefixed' })
-  const locale = await queryFirst<{ locale: string; organization_id: string }>(db, `
-    SELECT sl.locale, s.organization_id
-      FROM site_locales sl
-      JOIN sites s ON s.id = sl.site_id AND s.organization_id = sl.organization_id
-     WHERE s.id = ? AND s.status = 'active'
-       AND sl.locale = ? AND sl.is_source = 0 AND sl.status = 'published'
+  const locale = await queryFirst<{ locale: string }>(db, `
+    SELECT locale
+      FROM organization_locales
+     WHERE organization_id = ? AND locale = ? AND is_source = 0 AND status = 'published'
      LIMIT 1
-  `, [siteId, candidate])
-  if (!locale) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this site' })
-  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, locale.organization_id, locale.locale)
+  `, [organizationId, candidate])
+  if (!locale) throw createError({ statusCode: 404, statusMessage: 'Language is not enabled for this organization' })
+  const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale.locale)
   if (!entitlement.platform_messages) {
     throw createError({ statusCode: 503, statusMessage: 'Published platform locale messages are unavailable' })
   }

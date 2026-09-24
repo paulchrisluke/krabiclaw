@@ -1,6 +1,6 @@
 import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
-import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, siteTool } from './shared'
+import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
 // A block's place is its index in the array; there is no position to state.
@@ -21,9 +21,9 @@ const blogContentBlockSchema = {
 } as const
 
 export const BLOG_TOOLS: McpToolDefinition[] = [
-  siteTool({
+  organizationTool({
       name: 'list_blog_posts',
-      description: 'List this site\'s draft, published and scheduled blog articles. This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
+      description: 'List this organization\'s draft, published and scheduled blog articles. This is the organization\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -35,7 +35,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         additionalProperties: false,
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'get_blog_post',
       description: 'Get a single blog post by id or slug. Returns the canonical top-level content_blocks array plus one updated_at concurrency token; there is no body, components, or content_document authoring shape.',
       domain: 'blog',
@@ -52,7 +52,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         additionalProperties: false,
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'create_blog_post',
       description: 'Create a long-form, evergreen, SEO-indexed article using content_blocks as the only authoring shape. Creation saves a draft by default. Set status to published to publish immediately, or provide a future scheduled_for to schedule it. Compose and review the complete article with the user before calling this tool. category is free text for tenant blogs.',
       domain: 'blog',
@@ -76,7 +76,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       required: ['title', 'content_blocks'],
       outputSchema: blogPostMutationResultObject,
     }),
-  siteTool({
+  organizationTool({
       name: 'update_blog_post',
       description: 'Save changes to an existing blog article: metadata, or the whole article body. Only provided fields are changed. content_blocks replaces every block and requires expected_updated_at; to change one block, use append_content_block, replace_content_block or delete_content_block instead. Changes to a live article are public immediately; compose and review them with the user first.',
       domain: 'blog',
@@ -103,7 +103,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       required: ['post_id'],
       outputSchema: blogPostMutationResultObject,
     }),
-  siteTool({
+  organizationTool({
       name: 'publish_blog_post',
       description: 'Publish a draft or scheduled tenant blog article immediately, or reschedule it with scheduled_for. Requires the current document concurrency token. Use only after the writer has approved the final article.',
       domain: 'blog', minimumRole: 'admin', confirmRequired: true,
@@ -115,7 +115,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       required: ['post_id', 'expected_updated_at'],
       outputSchema: blogPostMutationResultObject,
     }),
-  siteTool({
+  organizationTool({
       name: 'delete_blog_post',
       description: 'Delete a blog post.',
       domain: 'blog',

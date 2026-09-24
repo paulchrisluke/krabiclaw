@@ -165,7 +165,7 @@ function setResolvedTenantContext(
   setTenantType(event, resolvePublicTemplate({ themeId: metadata.themeId }).slug === 'platform' ? TENANT_TYPES.PLATFORM : TENANT_TYPES.TENANT)
   event.context.tenantHost = hostnameOf(host)
   event.context.canonicalDomain = canonicalDomain
-  event.context.site = {
+  event.context.organization = {
     name: metadata.name,
     ...socialMedia,
     vertical: metadata.vertical,

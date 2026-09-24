@@ -39,13 +39,13 @@ import EditorNavigationList, { type EditorNavigationGroup } from '~/components/d
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayHoursLabel, type OpeningHours } from '~/shared/reservation-hours'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 import { catalogLabel, catalogSummary, type CatalogCounts } from '~/utils/product-presentation'
 import { formatPostalAddress } from '~/utils/postal-address'
 import type { LocationReservationConfig } from '~/server/utils/reservations'
 
 // A location is a tile on the Locations tab, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-sites' })
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-locations' })
 
 interface LocationOverview {
   id: string
@@ -67,7 +67,7 @@ interface LocationContentCounts {
   posts: number
   qa: number
   reviews: number
-  siteQa: number
+  organizationQa: number
 }
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
@@ -91,7 +91,7 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const location = ref<LocationOverview | null>(null)
 const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
 const reservationConfig = ref<LocationReservationConfig | null>(null)
-const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0, siteQa: 0 })
+const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0, organizationQa: 0 })
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
@@ -101,12 +101,12 @@ const addressSummary = computed(() => formatPostalAddress(location.value?.addres
 
 const capabilities = computed(() => {
   const vertical = dashboard.organization.value?.vertical
-  if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+  if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
   // Deliberately unguarded: swallowing a capability error left the index with an
   // empty feature set, which removes every content and reservation row and
   // leaves a location that looks like it holds nothing.
-  return resolveCmsCapabilities(normalizeVertical(vertical) as SiteVertical, resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug, {
-    site: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug, {
+    organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
     location: parseCmsFeatureOverrideDelta(dashboardLocationRow.value?.feature_overrides),
   })
 })
@@ -138,11 +138,11 @@ function countSummary(total: number, noun: string, empty: string): string {
 }
 
 /** "5 questions · 18 reviews · 110 site-wide", or what to do when there are none. */
-function trustSummary(qa: number, reviews: number, siteQa: number): string {
+function trustSummary(qa: number, reviews: number, organizationQa: number): string {
   const parts = [
     qa ? countSummary(qa, 'question', '') : '',
     reviews ? countSummary(reviews, 'review', '') : '',
-    siteQa ? `${siteQa} site-wide` : '',
+    organizationQa ? `${organizationQa} organization-wide` : '',
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : 'Answer your first question'
 }
@@ -167,7 +167,7 @@ const cards = computed<HubCard[]>(() => {
       ? [{ id: 'products', title: catalogLabelText.value, description: catalogSummaryText.value, to: `${locationPath.value}/products`, visible: true }]
       : []),
     { id: 'posts', title: 'Posts', description: countSummary(counts.value.posts, 'published post', 'Write your first post'), to: `${locationPath.value}/posts`, visible: hasFeature('posts') },
-    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews, counts.value.siteQa), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
+    { id: 'qa', title: 'Reviews and Q&A', description: trustSummary(counts.value.qa, counts.value.reviews, counts.value.organizationQa), to: `${locationPath.value}/qa`, visible: hasFeature('qa') },
     {
       id: 'reservations',
       title: 'Reservations',

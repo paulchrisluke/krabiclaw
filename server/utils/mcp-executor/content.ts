@@ -117,9 +117,9 @@ function assertTenantPageReplacementConfirmed(
  * block id from another site is not found here rather than forbidden: the
  * caller learns nothing about what exists elsewhere.
  */
-async function requireSiteDocument(ctx: McpExecutorContext, documentId: string) {
-  const document = await getContentDocumentById(ctx.site.db, documentId)
-  if (!document || document.organization_id !== ctx.site.organizationId) {
+async function requireOrganizationDocument(ctx: McpExecutorContext, documentId: string) {
+  const document = await getContentDocumentById(ctx.organization.db, documentId)
+  if (!document || document.organization_id !== ctx.organization.organizationId) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Content document not found' })
   }
   return document
@@ -131,34 +131,34 @@ async function requireSiteDocument(ctx: McpExecutorContext, documentId: string) 
  * block's id and updated_at.
  */
 async function contentBlocksChanged(ctx: McpExecutorContext, document: { id: string; kind: string }, message: string) {
-  const { site } = ctx
-  await executeBatch(site.db, [publicResourceCacheInvalidationQuery(site.organizationId, `${document.kind}-block-write`)])
-  if (document.kind === 'article' && site.env) {
-    await refreshSocialCard({ db: site.db, env: site.env, owner: { owner_type: 'content_document', owner_id: document.id } })
+  const { organization } = ctx
+  await executeBatch(organization.db, [publicResourceCacheInvalidationQuery(organization.organizationId, `${document.kind}-block-write`)])
+  if (document.kind === 'article' && organization.env) {
+    await refreshSocialCard({ db: organization.db, env: organization.env, owner: { owner_type: 'content_document', owner_id: document.id } })
   }
-  const current = await getContentDocumentById(site.db, document.id)
+  const current = await getContentDocumentById(organization.db, document.id)
   if (!current) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after write' })
   return renderStructuredResponse(
-    { document_id: document.id, updated_at: current.updated_at, blocks: (await getContentOutline(site.db, document.id)).map(withoutPosition) },
+    { document_id: document.id, updated_at: current.updated_at, blocks: (await getContentOutline(organization.db, document.id)).map(withoutPosition) },
     message,
   )
 }
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "list_tenant_pages":
       try {
-        const pages = await listTenantPages(site.db, site.organizationId, { locale: optionalString(args, "locale") });
-        const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${site.organizationId}:${optionalString(args, 'locale') ?? ''}` });
+        const pages = await listTenantPages(organization.db, organization.organizationId, { locale: optionalString(args, "locale") });
+        const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${organization.organizationId}:${optionalString(args, 'locale') ?? ''}` });
         return { pages: page.items, page_info: page.page_info };
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
     case "get_tenant_page":
       try {
-        const page = await getTenantPageById(site.db, requiredString(args, "variant_id"), {
-          organizationId: site.organizationId,
+        const page = await getTenantPageById(organization.db, requiredString(args, "variant_id"), {
+          organizationId: organization.organizationId,
         })
         return tenantPageLifecycleResponse("Read", {
           page,
@@ -169,9 +169,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       }
     case "create_tenant_page":
       try {
-        const created = await createTenantPage(site.db, {
-          organizationId: site.organizationId,
-          userId: site.userId,
+        const created = await createTenantPage(organization.db, {
+          organizationId: organization.organizationId,
+          userId: organization.userId,
           data: {
             id: optionalString(args, "variant_id") ?? undefined,
             pageId: optionalString(args, "page_id") ?? undefined,
@@ -190,7 +190,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,
           },
-          env: site.env,
+          env: organization.env,
         });
         return tenantPageLifecycleResponse("Created", created);
       } catch (error) {
@@ -199,13 +199,13 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     case "update_tenant_page":
       try {
         const variantId = requiredString(args, "variant_id");
-        const page = await getTenantPageById(site.db, variantId, {
-          organizationId: site.organizationId,
+        const page = await getTenantPageById(organization.db, variantId, {
+          organizationId: organization.organizationId,
         });
         assertTenantPageReplacementConfirmed(page, args)
-        const updated = await updateTenantPage(site.db, variantId, {
-          userId: site.userId,
-          scope: { organizationId: site.organizationId},
+        const updated = await updateTenantPage(organization.db, variantId, {
+          userId: organization.userId,
+          scope: { organizationId: organization.organizationId},
           data: {
             path: requiredString(args, "path"),
             title: requiredString(args, "title"),
@@ -219,7 +219,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             blocks: args.blocks,
             expectedUpdatedAt: requiredString(args, "expected_updated_at"),
           },
-          env: site.env,
+          env: organization.env,
         });
         return tenantPageLifecycleResponse("Updated", updated);
       } catch (error) {
@@ -227,10 +227,10 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       }
     case "delete_tenant_page":
       try {
-        const deleted = await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
-          scope: { organizationId: site.organizationId},
+        const deleted = await deleteTenantPage(organization.db, requiredString(args, "variant_id"), {
+          scope: { organizationId: organization.organizationId},
           expectedUpdatedAt: requiredString(args, "expected_updated_at"),
-          env: site.env,
+          env: organization.env,
         });
         return tenantPageLifecycleResponse("Deleted", deleted);
       } catch (error) {
@@ -239,8 +239,8 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     case "get_reservation_policy": {
       const locationId = requiredString(args, "location_id");
       const locale = optionalString(args, "locale") ?? "en";
-      const config = await getLocationReservationConfig(site.db, {
-        organizationId: site.organizationId,
+      const config = await getLocationReservationConfig(organization.db, {
+        organizationId: organization.organizationId,
         locationId,
       });
       // No row means this location does not take reservations. That is the
@@ -256,13 +256,13 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       const patch = await validateLocationReservationConfigPatch(
         omit(args as Record<string, unknown>, ["location_id", "locale"]),
       );
-      const config = await upsertLocationReservationConfig(site.db, {
-        organizationId: site.organizationId,
+      const config = await upsertLocationReservationConfig(organization.db, {
+        organizationId: organization.organizationId,
         locationId,
         patch,
-        actorId: site.userId,
+        actorId: organization.userId,
       });
-      const policyContext = await mutationContextPayload(site, { locationId });
+      const policyContext = await mutationContextPayload(organization, { locationId });
       return renderStructuredResponse(
         {
           ok: true,
@@ -278,36 +278,36 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       );
     }
     case "append_content_block": {
-      const document = await requireSiteDocument(ctx, requiredString(args, "document_id"))
+      const document = await requireOrganizationDocument(ctx, requiredString(args, "document_id"))
       const afterBlockId = optionalString(args, "after_block_id")
       const id = crypto.randomUUID()
       // The same normalisation every whole-document write goes through: the
       // asset must be this site's, an image block must carry its picture.
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
-        site.db, [{ id, type: args.type as ContentBlockType, data: args.data as Record<string, unknown>, media: args.media as ContentBlockMedia[] | undefined, level: typeof args.level === 'number' ? args.level : null }],
-        site.organizationId,
+        organization.db, [{ id, type: args.type as ContentBlockType, data: args.data as Record<string, unknown>, media: args.media as ContentBlockMedia[] | undefined, level: typeof args.level === 'number' ? args.level : null }],
+        organization.organizationId,
       )
       const block = blocks[0]!
       // One batch: the block and its media land together or not at all.
-      await appendContentBlock(site.db, document.id, { id, type: block.type, data: block.data, level: block.level ?? null, after_block_id: afterBlockId ?? null }, { additionalQueriesAfter: placementQueries })
+      await appendContentBlock(organization.db, document.id, { id, type: block.type, data: block.data, level: block.level ?? null, after_block_id: afterBlockId ?? null }, { additionalQueriesAfter: placementQueries })
       return await contentBlocksChanged(ctx, document, `Added a ${block.type} block.`)
     }
     case "replace_content_block": {
       const blockId = requiredString(args, "block_id")
-      const existing = await getContentBlock(site.db, blockId)
-      const document = await requireSiteDocument(ctx, existing.document_id)
+      const existing = await getContentBlock(organization.db, blockId)
+      const document = await requireOrganizationDocument(ctx, existing.document_id)
       const { blocks, placementQueries } = await prepareTenantBlogContentBlocks(
-        site.db, [{ id: blockId, type: existing.type, data: args.data as Record<string, unknown>, media: (args.media ?? existing.media) as ContentBlockMedia[], level: existing.level }],
-        site.organizationId,
+        organization.db, [{ id: blockId, type: existing.type, data: args.data as Record<string, unknown>, media: (args.media ?? existing.media) as ContentBlockMedia[], level: existing.level }],
+        organization.organizationId,
       )
-      await replaceContentBlock(site.db, blockId, { data: blocks[0]!.data, expected_updated_at: requiredString(args, "expected_updated_at") }, { additionalQueriesAfter: placementQueries })
+      await replaceContentBlock(organization.db, blockId, { data: blocks[0]!.data, expected_updated_at: requiredString(args, "expected_updated_at") }, { additionalQueriesAfter: placementQueries })
       return await contentBlocksChanged(ctx, document, `Replaced the ${existing.type} block.`)
     }
     case "delete_content_block": {
       const blockId = requiredString(args, "block_id")
-      const existing = await getContentBlock(site.db, blockId)
-      const document = await requireSiteDocument(ctx, existing.document_id)
-      await deleteContentBlock(site.db, blockId, { expected_updated_at: requiredString(args, "expected_updated_at") })
+      const existing = await getContentBlock(organization.db, blockId)
+      const document = await requireOrganizationDocument(ctx, existing.document_id)
+      await deleteContentBlock(organization.db, blockId, { expected_updated_at: requiredString(args, "expected_updated_at") })
       return await contentBlocksChanged(ctx, document, `Deleted the ${existing.type} block.`)
     }
     default:

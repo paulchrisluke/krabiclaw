@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { executeBatch, queryFirst } from '~/server/db'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -17,10 +17,10 @@ import { getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
   try {
     const { db, organization } = await requireOrganizationAccess(event, organizationId)
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const booked = await queryFirst<{ n: number }>(db, `
       SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?
     `, [organization.id, productId])

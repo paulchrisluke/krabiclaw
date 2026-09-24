@@ -1,7 +1,7 @@
 import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, addLocalDays } from '~/utils/timezone'
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import type { ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
@@ -82,7 +82,7 @@ interface SourceRow {
   party_size: number | null
 }
 
-interface CapabilitySiteRow {
+interface CapabilityOrganizationRow {
   id: string
   name: string | null
   subdomain: string | null
@@ -151,16 +151,16 @@ export async function listAgenda(
   assertCalendarDate(query.to)
   if (query.from > query.to) throw new Error('from must not be after to')
 
-  const capabilitySites = await queryAll<CapabilitySiteRow>(db, `
+  const capabilityOrganizations = await queryAll<CapabilityOrganizationRow>(db, `
     SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM organization s
     WHERE s.id = ?
     ORDER BY s.id
   `, [organizationId])
   const available = new Set<AgendaKind>(['post'])
-  for (const site of capabilitySites) {
-    const { capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
+  for (const organization of capabilityOrganizations) {
+    const { capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+      organizationEnabledFeatures: organization.feature_overrides,
     })
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
     if (features.has('reservations')) available.add('reservation')
@@ -262,13 +262,13 @@ export async function listAgenda(
     const startsAt = instantDate(row.starts_at).toISOString()
     const dayKey = localDateAt(instantDate(startsAt), timeZone)
     if (dayKey < query.from || dayKey > query.to) return []
-    const siteBase = `/dashboard/${organizationSlug}`
+    const organizationBase = `/dashboard/${organizationSlug}`
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
     const to = row.kind === 'reservation' || row.kind === 'booking'
       ? `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
       : row.kind === 'session'
-        ? `${siteBase}${locationSegment}/products`
-        : `${siteBase}${locationSegment}/posts`
+        ? `${organizationBase}${locationSegment}/products`
+        : `${organizationBase}${locationSegment}/posts`
     return [{
       id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,
       endsAt: row.ends_at === null ? null : instantDate(row.ends_at).toISOString(),
@@ -280,8 +280,8 @@ export async function listAgenda(
     }]
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.id.localeCompare(right.id))
 
-  const locationParams: unknown[] = [organizationId, d1JsonStringSet(capabilitySites.map(site => site.id))]
-  const locations = capabilitySites.length === 0 ? [] : await queryAll<LocationRow>(db, `
+  const locationParams: unknown[] = [organizationId, d1JsonStringSet(capabilityOrganizations.map(organization => organization.id))]
+  const locations = capabilityOrganizations.length === 0 ? [] : await queryAll<LocationRow>(db, `
     SELECT l.id, l.organization_id, l.title FROM business_locations l
     WHERE l.organization_id = ? AND l.organization_id IN (SELECT value FROM json_each(?))
     ORDER BY l.title, l.id

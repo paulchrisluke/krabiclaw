@@ -1,4 +1,4 @@
-import type { SiteSettings, SiteIntegrations } from '../../shared/site-settings'
+import type { OrganizationSettings, OrganizationIntegrations } from '../../shared/organization-settings'
 import type { MediaCategory } from '~/shared/media-placement-contract'
 import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
@@ -181,7 +181,7 @@ export const activity_entries = sqliteTable("activity_entries", {
  uniqueIndex("activity_entries_notification_source_unique").on(table.parent_id).where(sql`kind = 'notification' AND parent_id IS NOT NULL`),
  index("activity_entries_request_occurred_idx").on(table.request_id, table.occurred_at),
  index("activity_entries_parent_actor_idx").on(table.parent_id, table.actor_user_id, table.occurred_at),
- index("activity_entries_context_site_created_idx").on(table.kind, table.organization_id, table.created_at),
+ index("activity_entries_context_organization_created_idx").on(table.kind, table.organization_id, table.created_at),
  index("activity_entries_kind_org_created_idx").on(table.kind, table.created_at),
  index("activity_entries_org_created_idx").on(table.kind, table.organization_id, table.created_at),
  index("activity_entries_target_created_idx").on(table.kind, table.target_user_id, table.created_at)
@@ -1373,10 +1373,10 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
  * The business. One record, one name, one handle, one mark.
  *
  * This used to be two: an `organization` holding identity and membership, and a
- * `sites` row beside it holding everything the business actually is. The two
+ * `organizations` row beside it holding everything the business actually is. The two
  * disagreed — `organization.name` read "Pottery House Owner" while the site
  * rendered "Pottery House Krabi" — and the handle lived in three columns across
- * them. `sites` is gone and its configuration is here, as Better Auth
+ * them. `organizations` is gone and its configuration is here, as Better Auth
  * `additionalFields` (see organizationOptions in server/utils/auth.ts), which is
  * the plugin's own extension point rather than a table bolted alongside it.
  *
@@ -1404,9 +1404,9 @@ export const organization = sqliteTable("organization", {
 	// placement, which is why this stays NULL.
 	logo: text(),
 
-	// ── Formerly `sites`. ────────────────────────────────────────────────────
-	settings_json: text({ mode: "json" }).$type<SiteSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
-	integrations_json: text({ mode: "json" }).$type<SiteIntegrations>().default({}).notNull(),
+	// ── Formerly `organizations`. ────────────────────────────────────────────────────
+	settings_json: text({ mode: "json" }).$type<OrganizationSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
+	integrations_json: text({ mode: "json" }).$type<OrganizationIntegrations>().default({}).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),
 	subdomain: text().unique(),
 	brand_description: text(),
@@ -2009,7 +2009,7 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 	foreignKey({
 		columns: [table.organization_id, table.locale],
 		foreignColumns: [organization_locales.organization_id, organization_locales.locale],
-		name: "resource_localizations_site_locale_fk",
+		name: "resource_localizations_organization_locale_fk",
 	}).onDelete("cascade"),
 	unique("resource_localizations_org_resource_locale_unique").on(
 		table.organization_id,
@@ -2090,9 +2090,9 @@ export const analytics_events = sqliteTable("analytics_events", {
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')
     AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
     AND json_type(payload_json, '$.attributed_at') IS 'text')`),
-  index("analytics_events_org_kind_created_idx").on(table.kind, table.created_at),
-  index("analytics_events_org_session_idx").on(table.kind, table.session_id),
-  index("analytics_events_org_visitor_idx").on(table.kind, table.visitor_id),
+  index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
+  index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),
+  index("analytics_events_org_visitor_idx").on(table.organization_id, table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
   index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
   uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
@@ -2100,7 +2100,7 @@ export const analytics_events = sqliteTable("analytics_events", {
 
 export const analytics_summaries = sqliteTable("analytics_summaries", {
   id: text().primaryKey(),
-  kind: text({ enum: ["session", "site_day", "page_day", "dimension_day"] }).notNull(),
+  kind: text({ enum: ["session", "organization_day", "page_day", "dimension_day"] }).notNull(),
   organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
   date: text().notNull(),
   key: text().notNull(),
@@ -2117,7 +2117,7 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
     AND json_type(payload_json, '$.duration_seconds') IS 'integer' AND (payload_json ->> '$.duration_seconds') >= 0)
     OR (kind != 'session' AND date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
       AND json_type(payload_json, '$.page_views') IS 'integer' AND (payload_json ->> '$.page_views') >= 0)`),
-  check("analytics_summaries_day_metrics_check", sql`kind != 'site_day' OR (key = ''
+  check("analytics_summaries_day_metrics_check", sql`kind != 'organization_day' OR (key = ''
     AND json_type(payload_json, '$.unique_sessions') IS 'integer' AND (payload_json ->> '$.unique_sessions') >= 0
     AND json_type(payload_json, '$.unique_visitors') IS 'integer' AND (payload_json ->> '$.unique_visitors') >= 0
     AND json_type(payload_json, '$.returning_visitors') IS 'integer' AND (payload_json ->> '$.returning_visitors') >= 0

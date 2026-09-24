@@ -2,7 +2,7 @@ import { SUBSCRIPTION_STATE_INVALID } from '~/server/utils/billing-access'
 import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, type DbClient } from '~/server/db'
-import { assertSiteLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
+import { assertOrganizationLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
 import { platformLocale } from '~/shared/platform-locales'
 import { RESOURCE_LOCALIZATION_REGISTRY, type LocalizedResourceType } from '~/server/utils/localization-registry'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
@@ -78,7 +78,7 @@ export async function listPublicLocaleRepresentations(
 ): Promise<PublicLocaleRepresentation[]> {
   const sourceLocale = await getPersistedSourceLocale(db, input.organizationId)
   const sourceCatalog = platformLocale(sourceLocale.locale)
-  if (!sourceCatalog) throw new HTTPError({ statusCode: 500, statusMessage: 'Site primary language catalog is unavailable' })
+  if (!sourceCatalog) throw new HTTPError({ statusCode: 500, statusMessage: 'Organization primary language catalog is unavailable' })
   const representations: PublicLocaleRepresentation[] = [{
     locale: sourceLocale.locale,
     label: sourceCatalog.label,
@@ -123,7 +123,7 @@ export async function listPublicLocaleRepresentations(
 
   for (const candidate of candidates) {
     try {
-      await assertSiteLanguageEntitlement(env, db, input.organizationId, candidate.locale)
+      await assertOrganizationLanguageEntitlement(env, db, input.organizationId, candidate.locale)
     } catch (error) {
       if (isUnavailableRepresentation(error)) continue
       throw error

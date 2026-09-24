@@ -119,7 +119,7 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
       node(
         'div',
         { display: 'flex', color: '#ffffff', fontSize: 26, fontWeight: 700 },
-        clip(payload.siteName, 60),
+        clip(payload.organizationName, 60),
       ),
     ],
   )

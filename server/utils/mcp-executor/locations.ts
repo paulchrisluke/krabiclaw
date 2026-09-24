@@ -5,16 +5,16 @@ import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, requiredString, workspaceLocationsPayload } from './shared'
 
 export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "list_locations": {
       const workspace = await resolveMcpWorkspace(
-        site.db,
-        site.env,
-        site.userId,
-        { organizationId: site.organizationId },
+        organization.db,
+        organization.env,
+        organization.userId,
+        { organizationId: organization.organizationId },
       );
-      const page = paginateMcpCollection(workspaceLocationsPayload(workspace), args, { resource: `locations:${site.organizationId}` });
+      const page = paginateMcpCollection(workspaceLocationsPayload(workspace), args, { resource: `locations:${organization.organizationId}` });
       return {
         context: workspaceContextPayload(workspace.organization, workspace.location),
         locations: page.items,
@@ -26,27 +26,27 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         const locationId = requiredString(args, "location_id");
         return {
           location: await getLocation(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
             locationId,
           ),
-          context: await mutationContextPayload(site, { locationId }),
+          context: await mutationContextPayload(organization, { locationId }),
         };
       }
     case "update_location": {
       const locationId = requiredString(args, "location_id");
       const updateFields = omit(args, ["location_id"]) as Record<string, unknown>;
       const result = await updateLocation(
-        site.db,
-        site.organizationId,
+        organization.db,
+        organization.organizationId,
         locationId,
         updateFields as never,
-        site.userId,
-        site.env,
+        organization.userId,
+        organization.env,
       );
       assertDomainSuccess(result);
       const updatedLocation = (result.data as { location: LocationRecord }).location;
-      const updateContext = await mutationContextPayload(site, { locationId });
+      const updateContext = await mutationContextPayload(organization, { locationId });
       return renderStructuredResponse(
         {
           ok: true,

@@ -3,7 +3,7 @@
     The site's social posts. The first tile is wide, videos start when they
     scroll into view, and each tile links to the post's own page.
   -->
-  <section v-if="source === 'site_updates' && items.length" class="bg-elevated">
+  <section v-if="source === 'organization_updates' && items.length" class="bg-elevated">
     <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
       <div class="mb-16 max-w-2xl">
         <p class="saya-kicker mb-6">{{ kicker }}</p>
@@ -49,7 +49,7 @@
   </section>
 
   <!-- The site's published articles. -->
-  <AppSection v-else-if="source === 'site_posts' && items.length" bg="black" padding="xl">
+  <AppSection v-else-if="source === 'organization_posts' && items.length" bg="black" padding="xl">
     <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
       <div class="max-w-2xl">
         <p class="saya-kicker mb-6 text-inverted/60">{{ kicker }}</p>
@@ -106,14 +106,14 @@ import { blockText, blockRecords, isInternalRoute } from '~/utils/tenant-page-bl
 // could neither reorder them nor leave one out.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath, locale, t } = useI18n()
-const { site } = useTenantSite()
+const { organization } = useTenantOrganization()
 
-const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const homeCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 const source = computed(() => blockText(props.block.data.source) || 'manual')
 const kicker = computed(() => blockText(props.block.data.description)
-  || (source.value === 'site_updates' ? homeCopy.value.latelyKicker : source.value === 'site_posts' ? t('saya.footer.blog') : ''))
+  || (source.value === 'organization_updates' ? homeCopy.value.latelyKicker : source.value === 'organization_posts' ? t('saya.footer.blog') : ''))
 const heading = computed(() => blockText(props.block.data.title)
-  || (source.value === 'site_updates' ? homeCopy.value.highlightsSectionHeading : source.value === 'site_posts' ? t('saya.posts.title') : ''))
+  || (source.value === 'organization_updates' ? homeCopy.value.highlightsSectionHeading : source.value === 'organization_posts' ? t('saya.posts.title') : ''))
 
 const items = computed(() => blockRecords(props.block.data.items).map((item, index) => {
   const media = blockRecords(item.media)[0] ?? null

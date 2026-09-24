@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-status"
+    id="organization-status"
     title="Status"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
@@ -20,11 +20,11 @@
 </template>
 
 <script setup lang="ts">
-import { siteSettingsEditorKey } from '~/lib/components/workspace/settings/SiteSettingsPage.vue'
+import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-const editor = inject(siteSettingsEditorKey)!
+const editor = inject(organizationSettingsEditorKey)!
 const suspended = computed(() => editor.form.status === 'suspended')
 const items = [
   { value: 'active', label: 'Live', description: 'Anyone can visit the website, and search engines can list it.' },

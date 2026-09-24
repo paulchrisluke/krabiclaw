@@ -27,7 +27,7 @@ import { getErrorMessage } from '~/utils/errors'
 import {
   COLLECTION_METHOD_LABELS,
   isTestimonialsResponse,
-  type SiteTestimonial,
+  type OrganizationTestimonial,
 } from '~/utils/testimonials'
 
 /** Set when this list is a location's reviews rather than the site's. */
@@ -37,8 +37,8 @@ const dashboardApi = useDashboardApi()
 const organizationId = await useDashboardOrganizationId()
 
 const { data, pending, error } = await useAsyncData(
-  () => props.locationId ? `dashboard-location-reviews-${organizationId}-${props.locationId}` : `dashboard-site-reviews-${organizationId}`,
-  () => dashboardApi<{ reviews: SiteTestimonial[] }>(
+  () => props.locationId ? `dashboard-location-reviews-${organizationId}-${props.locationId}` : `dashboard-organization-reviews-${organizationId}`,
+  () => dashboardApi<{ reviews: OrganizationTestimonial[] }>(
     `/api/editor/organizations/${organizationId}/reviews`,
     { query: props.locationId ? { location_id: props.locationId } : undefined, validate: isTestimonialsResponse },
   ),

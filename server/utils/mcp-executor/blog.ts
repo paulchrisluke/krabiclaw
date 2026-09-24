@@ -3,7 +3,7 @@ import { createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, updateBlogL
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { absolutizeSiteUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
+import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
 
 const ARTICLE_COLLECTIONS_SET = new Set(['blog', 'docs'])
@@ -128,8 +128,8 @@ function toContentBlockProjection(value: unknown, index: number) {
   }
 }
 
-function toBlogPostSummary(post: Record<string, unknown>, site: McpExecutorContext['site']) {
-  const publicUrl = absolutizeSiteUrl(site, responseNullableString(post.public_url, 'post.public_url'))
+function toBlogPostSummary(post: Record<string, unknown>, organization: McpExecutorContext['organization']) {
+  const publicUrl = absolutizeOrganizationUrl(organization, responseNullableString(post.public_url, 'post.public_url'))
   return {
     id: responseString(post.id, 'post.id'),
     title: responseString(post.title, 'post.title'),
@@ -154,70 +154,70 @@ function toBlogPostSummary(post: Record<string, unknown>, site: McpExecutorConte
     edit_url: responseNullableString(post.edit_url, 'post.edit_url'),
     public_path: responseNullableString(post.public_path, 'post.public_path'),
     public_url: publicUrl,
-    preview_url: absolutizeSiteUrl(site, responseNullableString(post.preview_url, 'post.preview_url')),
+    preview_url: absolutizeOrganizationUrl(organization, responseNullableString(post.preview_url, 'post.preview_url')),
     view_url: publicUrl,
   }
 }
 
-export function projectBlogPostForMcp(post: Record<string, unknown>, site: McpExecutorContext['site']) {
+export function projectBlogPostForMcp(post: Record<string, unknown>, organization: McpExecutorContext['organization']) {
   const contentDocument = responseRecord(post.content_document, 'post.content_document')
   if (!Array.isArray(contentDocument.blocks)) invalidBlogResponse('post.content_document.blocks', 'an array')
   return {
-    ...toBlogPostSummary(post, site),
+    ...toBlogPostSummary(post, organization),
     content_blocks: contentDocument.blocks.map((block, index) => toContentBlockProjection(block, index)),
   }
 }
 
 export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "list_blog_posts":
       {
         const posts = (await listBlogPosts(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           optionalString(args, "status"),
-          site.env,
-        )).map((post) => toBlogPostSummary(post, site));
-        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${site.organizationId}` });
+          organization.env,
+        )).map((post) => toBlogPostSummary(post, organization));
+        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${organization.organizationId}` });
         return { posts: items, page_info };
       }
     case "get_blog_post":
       {
         const post = await getBlogPost(
-          site.db,
+          organization.db,
           requiredString(args, "post_id"),
-          site.organizationId,
-          site.env,
+          organization.organizationId,
+          organization.env,
         );
         return {
-          post: projectBlogPostForMcp(post, site),
+          post: projectBlogPostForMcp(post, organization),
         };
       }
     case "create_blog_post": {
       const result = await createBlogPost(
-        site.db,
-        site.userId,
+        organization.db,
+        organization.userId,
         args as never,
-        { organization_id: site.organizationId, },
-        site.env,
+        { organization_id: organization.organizationId, },
+        organization.env,
       );
       return renderStructuredResponse(
-        { post: projectBlogPostForMcp(result.post, site) },
+        { post: projectBlogPostForMcp(result.post, organization) },
         `Created ${result.post.status} blog article "${result.post.title ?? result.post.id}".`,
       );
     }
     case "update_blog_post": {
       requireAtLeastOneField(args, UPDATE_BLOG_MUTATION_FIELDS, "At least one blog mutation field is required.")
       const result = await updateBlogPost(
-        site.db,
+        organization.db,
         requiredString(args, "post_id"),
         omit(args, ["post_id", "organization_id"]) as never,
-        site.organizationId,
-        site.env,
+        organization.organizationId,
+        organization.env,
       );
       return renderStructuredResponse(
-        { post: projectBlogPostForMcp(result.post, site) },
+        { post: projectBlogPostForMcp(result.post, organization) },
         `Saved changes to blog article "${result.post.title ?? result.post.id}".`,
       );
     }
@@ -230,21 +230,21 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invalid scheduled_for')
       }
       const normalizedScheduledFor = typeof scheduledFor === 'string' ? scheduledFor.trim() : scheduledFor
-      await updateBlogLifecycle(site.db, postId, {
+      await updateBlogLifecycle(organization.db, postId, {
         expected_updated_at: requiredString(args, 'expected_updated_at'),
         ...(Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
           ? { scheduled_for: normalizedScheduledFor as string | null }
           : {}),
-      }, site.organizationId)
-      const result = await getBlogPost(site.db, postId, site.organizationId, site.env)
+      }, organization.organizationId)
+      const result = await getBlogPost(organization.db, postId, organization.organizationId, organization.env)
       return renderStructuredResponse(
-        { post: projectBlogPostForMcp(result, site) },
+        { post: projectBlogPostForMcp(result, organization) },
         `${result.status === 'scheduled' ? 'Rescheduled' : 'Published'} blog article "${result.title}".`,
       )
     }
     case "delete_blog_post": {
       const postId = requiredString(args, "post_id");
-      await deleteBlogPost(site.db, postId, site.organizationId);
+      await deleteBlogPost(organization.db, postId, organization.organizationId);
       return { post_id: postId, deleted: true };
     }
     default:

@@ -62,12 +62,12 @@ interface NotificationEnv extends CloudflareEnv {
   GUEST_INBOX_HUBS?: DurableObjectNamespace
 }
 
-interface SiteContext {
+interface OrganizationContext {
   organizationId: string
-  siteName?: string | null
+  organizationName?: string | null
 }
 
-interface ReservationNotificationInput extends SiteContext {
+interface ReservationNotificationInput extends OrganizationContext {
   locationId?: string | null
   locationName?: string | null
   reservationId: string
@@ -86,7 +86,7 @@ interface ReservationNotificationInput extends SiteContext {
   ownerInboxUrl?: string | null
 }
 
-interface ContactNotificationInput extends SiteContext {
+interface ContactNotificationInput extends OrganizationContext {
   productTitle?: string | null
   locationId?: string | null
   contactId: string
@@ -97,7 +97,7 @@ interface ContactNotificationInput extends SiteContext {
   consentAcknowledged?: boolean
 }
 
-interface BookingNotificationInput extends SiteContext {
+interface BookingNotificationInput extends OrganizationContext {
   /** So the email can lead with the experience's own photo. */
   productId?: string | null
   locationId?: string | null
@@ -124,7 +124,7 @@ interface BookingNotificationInput extends SiteContext {
   ownerInboxUrl?: string | null
 }
 
-interface ReviewNotificationInput extends SiteContext {
+interface ReviewNotificationInput extends OrganizationContext {
   locationId?: string | null
   reviewId: string
   authorName: string
@@ -132,7 +132,7 @@ interface ReviewNotificationInput extends SiteContext {
   content?: string | null
 }
 
-interface ReviewRequestNotificationInput extends SiteContext {
+interface ReviewRequestNotificationInput extends OrganizationContext {
   locationId?: string | null
   requestId: string
   bookingType: 'reservation' | 'booking'
@@ -161,7 +161,7 @@ interface ThreadDeliveryContext {
   idempotencyKey: string
 }
 
-interface GuestThreadReplyNotificationInput extends SiteContext {
+interface GuestThreadReplyNotificationInput extends OrganizationContext {
   locationId?: string | null
   threadId: string
   sourceEntryId: string
@@ -174,8 +174,8 @@ interface GuestThreadReplyNotificationInput extends SiteContext {
   messagePreview: string
 }
 
-function siteName(opts: SiteContext): string {
-  const value = opts.siteName?.trim()
+function organizationName(opts: OrganizationContext): string {
+  const value = opts.organizationName?.trim()
   if (!value) throw new Error('Tenant site name is required for notifications')
   return value
 }
@@ -288,7 +288,7 @@ async function resolveOwnerRecipients(
 async function sendEmailNotification(
   env: NotificationEnv,
   db: DbClient,
-  opts: Omit<SiteContext, 'organizationId'> & { organizationId: string | null } & {
+  opts: Omit<OrganizationContext, 'organizationId'> & { organizationId: string | null } & {
     locationId?: string | null
     to: string
     replyTo?: string | null
@@ -500,7 +500,7 @@ export function raiseSettledFailures(
 async function notifyOwner(
   env: NotificationEnv,
   db: DbClient,
-  opts: SiteContext & {
+  opts: OrganizationContext & {
     locationId?: string | null
     template: string
     title: string
@@ -616,7 +616,7 @@ export async function notifyReservationCreated(
   db: DbClient,
   opts: ReservationNotificationInput
 ) {
-  const restaurant = siteName(opts)
+  const restaurant = organizationName(opts)
   const prettyDate = formatCalendarDate(opts.date, 'en')
   const prettyTime = formatTime(opts.time, 'en')
   const platformDomain = getPlatformDomain(env)
@@ -643,7 +643,7 @@ export async function notifyReservationCreated(
     guests: opts.guests,
     requests: opts.requests ?? '',
     location_name: opts.locationName ?? '',
-    site_name: restaurant,
+    organization_name: restaurant,
     deep_link: inboxUrl ?? '',
   }
 
@@ -651,11 +651,11 @@ export async function notifyReservationCreated(
   const ownerMessage = reservationCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
     date: prettyDate, time: prettyTime, partySize: opts.guests,
-    locationName: opts.locationName ?? null, siteName: restaurant,
+    locationName: opts.locationName ?? null, organizationName: restaurant,
     notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
-    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
     partySize: opts.guests, notes: opts.requests, locationName: opts.locationName,
     contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl,
     heroImageUrl: hero?.imageUrl ?? null,
@@ -693,7 +693,7 @@ export async function notifyReservationCancelled(
   opts: ReservationNotificationInput
 ) {
   const confirmed = Boolean(opts.wasConfirmed)
-  const restaurant = siteName(opts)
+  const restaurant = organizationName(opts)
   const prettyDate = formatCalendarDate(opts.date, 'en')
   const prettyTime = formatTime(opts.time, 'en')
   const platformDomain = getPlatformDomain(env)
@@ -717,19 +717,19 @@ export async function notifyReservationCancelled(
     guests: opts.guests,
     reservation_was_confirmed: confirmed ? 'true' : 'false',
     location_name: opts.locationName ?? '',
-    site_name: restaurant,
+    organization_name: restaurant,
     deep_link: inboxUrl ?? '',
   }
 
   const ownerMessage = reservationCancelledMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
     date: prettyDate, time: prettyTime, partySize: opts.guests,
-    locationName: opts.locationName ?? null, siteName: restaurant,
+    locationName: opts.locationName ?? null, organizationName: restaurant,
     notes: opts.requests ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
   const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
-    guestName: opts.guestName, siteName: restaurant, date: prettyDate, time: prettyTime,
+    guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
     partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
@@ -771,7 +771,7 @@ export async function notifyContactSubmitted(
   db: DbClient,
   opts: ContactNotificationInput
 ) {
-  const restaurant = siteName(opts)
+  const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
   const replyTo = await buildReplyToAddress(env, 'contact', opts.contactId)
   const inboxUrl = await buildOwnerInboxUrl(env, db, {
@@ -787,7 +787,7 @@ export async function notifyContactSubmitted(
     email: opts.email,
     subject: opts.subject ?? '',
     message_preview: opts.message.slice(0, 200),
-    site_name: restaurant,
+    organization_name: restaurant,
     experience_title: opts.productTitle ?? '',
     consent_acknowledged: opts.consentAcknowledged === true ? 'true' : 'false',
     deep_link: inboxUrl ?? '',
@@ -797,10 +797,10 @@ export async function notifyContactSubmitted(
     guestName: opts.guestName, guestEmail: opts.email,
     subject: SUBJECT_LABELS[opts.subject ?? 'general'] ?? opts.subject ?? 'General',
     message: opts.message, productTitle: opts.productTitle ?? null,
-    siteName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
+    organizationName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
-    guestName: opts.guestName, siteName: restaurant,
+    guestName: opts.guestName, organizationName: restaurant,
     subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
     productTitle: opts.productTitle ?? null, message: opts.message,
     consentAcknowledged: Boolean(opts.consentAcknowledged),
@@ -838,7 +838,7 @@ export async function notifyReviewReceived(
   db: DbClient,
   opts: ReviewNotificationInput
 ) {
-  const restaurant = siteName(opts)
+  const restaurant = organizationName(opts)
   const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
     organizationId: opts.organizationId,
     locationId: opts.locationId,
@@ -848,7 +848,7 @@ export async function notifyReviewReceived(
     authorName: opts.authorName,
     rating: opts.rating,
     content: opts.content ?? '',
-    siteName: restaurant,
+    organizationName: restaurant,
     reviewsUrl,
   })
 
@@ -861,7 +861,7 @@ export async function notifyReviewReceived(
       author_name: opts.authorName,
       rating: String(opts.rating),
       content_preview: (opts.content ?? '').slice(0, 200),
-      site_name: restaurant,
+      organization_name: restaurant,
       deep_link: reviewsUrl ?? '',
     },
     message: ownerMessage,
@@ -874,7 +874,7 @@ export async function notifyReviewRequest(
   db: DbClient,
   opts: ReviewRequestNotificationInput
 ): Promise<void> {
-  const restaurant = siteName(opts)
+  const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
   const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
   const title = opts.kind === 'reminder'
@@ -883,7 +883,7 @@ export async function notifyReviewRequest(
 
   const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
-    siteName: restaurant,
+    organizationName: restaurant,
     locationName: opts.locationName ?? null,
     visitAt: opts.visitAt,
     partySize: opts.partySize,
@@ -907,7 +907,7 @@ export async function notifyReviewRequest(
       party_size: opts.partySize,
       review_url: opts.reviewUrl,
       opt_out_url: opts.optOutUrl,
-      site_name: restaurant,
+      organization_name: restaurant,
     },
     email: {
       subject: opts.kind === 'reminder'
@@ -924,7 +924,7 @@ export async function notifyBookingCreated(
   db: DbClient,
   opts: BookingNotificationInput
 ) {
-  const studio = siteName(opts)
+  const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
   const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
@@ -950,7 +950,7 @@ export async function notifyBookingCreated(
     timezone: opts.timezone,
     party_size: String(opts.partySize),
     requests: opts.notes ?? '',
-    site_name: studio,
+    organization_name: studio,
     deep_link: inboxUrl ?? '',
   }
 
@@ -958,11 +958,11 @@ export async function notifyBookingCreated(
   const ownerMessage = bookingCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
-    locationName: null, siteName: studio, productTitle: opts.productTitle,
+    locationName: null, organizationName: studio, productTitle: opts.productTitle,
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
-    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes,
     contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null,
     heroImageUrl: hero?.imageUrl ?? null,
@@ -1003,7 +1003,7 @@ export async function notifyBookingCancelled(
   opts: BookingNotificationInput
 ) {
   const confirmed = Boolean(opts.wasConfirmed)
-  const studio = siteName(opts)
+  const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
   const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
@@ -1026,19 +1026,19 @@ export async function notifyBookingCancelled(
     timezone: opts.timezone,
     party_size: String(opts.partySize),
     booking_was_confirmed: confirmed ? 'true' : 'false',
-    site_name: studio,
+    organization_name: studio,
     deep_link: inboxUrl ?? '',
   }
 
   const ownerMessage = bookingCancelledMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
-    locationName: null, siteName: studio, productTitle: opts.productTitle,
+    locationName: null, organizationName: studio, productTitle: opts.productTitle,
     notes: opts.notes ?? null, heroImageUrl: null, replyUrl: inboxUrl,
     wasConfirmed: confirmed,
   })
   const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
-    guestName: opts.guestName, siteName: studio, productTitle: opts.productTitle,
+    guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
@@ -1079,7 +1079,7 @@ export async function notifyBookingCancelled(
 export async function notifyBookingChangeOwner(
   env: NotificationEnv,
   db: DbClient,
-  opts: SiteContext & {
+  opts: OrganizationContext & {
     locationId: string
     threadId: string
     submissionType: 'reservation' | 'booking'
@@ -1127,7 +1127,7 @@ export async function notifyBookingChangeOwner(
     partySize: String(opts.guests),
     summary: message,
     replyUrl,
-    siteName: siteName(opts),
+    organizationName: organizationName(opts),
   })
   await notifyOwner(env, db, {
     ...opts,
@@ -1206,7 +1206,7 @@ async function notifyGuestThreadReplyInner(
     guestEmail: opts.guestEmail ?? null,
     inboundChannel: opts.inboundChannel,
     messagePreview: opts.messagePreview,
-    siteName: opts.siteName ?? null,
+    organizationName: opts.organizationName ?? null,
     replyUrl,
   })
 
@@ -1222,7 +1222,7 @@ async function notifyGuestThreadReplyInner(
       sends.push((async () => {
         await sendEmailNotification(env, db, {
           organizationId: opts.organizationId,
-          siteName: opts.siteName ?? null,
+          organizationName: opts.organizationName ?? null,
           locationId: opts.locationId ?? null,
           to,
           template: 'guest_thread_reply_email',

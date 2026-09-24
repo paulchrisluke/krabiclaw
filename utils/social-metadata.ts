@@ -139,7 +139,7 @@ export function publicSocialMediaFromPlacements<T extends SocialMediaSource>(
 
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
-  siteName: string
+  organizationName: string
 }
 
 export interface SocialPageMetadataInput {
@@ -226,7 +226,7 @@ export function composeSocialMetadata(
     ogDescription: description,
     ogType: pageType,
     ogUrl: input.canonicalUrl,
-    ogSiteName: firstNonBlank(input.brand.siteName) ?? undefined,
+    ogSiteName: firstNonBlank(input.brand.organizationName) ?? undefined,
     ogImage: resolvedOgImage?.url,
     ogImageWidth: resolvedOgImage?.width,
     ogImageHeight: resolvedOgImage?.height,
@@ -250,7 +250,7 @@ export interface SocialCardRenderPayload {
   template: SocialTemplate
   title: string
   description?: string | null
-  siteName: string
+  organizationName: string
   label?: string | null
   location?: string | null
   logoUrl?: string | null

@@ -19,13 +19,13 @@ import type { PublicBlawbyIdentity, PublicCompliance } from '~/types/blawby'
 import { normalizeTenantPagePath } from '~/utils/tenant-page-blocks'
 
 const props = defineProps<{ path: string; locale?: string | null }>()
-const { organizationId, isPlatform, previewAuthorized, site } = useTenantSite()
+const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
 // Page ownership is a resolved site, not a tenant type. KrabiClaw's own site is
 // a site row with page documents like any other, and requiring `isTenant` here
 // is what forced its marketing pages to be hardcoded components (#903).
-if (!organizationId) throw showNotFound('Site context is unavailable')
+if (!organizationId) throw showNotFound('Organization context is unavailable')
 
 // Preview authorization belongs to the site, resolved once from the preview
 // cookie by tenant resolution; the client's API call carries the same cookie.
@@ -183,11 +183,11 @@ useProfessionalServiceSchema(() => {
 })
 useSocialMetadata(() => page.value && ({
   path: page.value.canonical_url || page.value.path,
-  title: page.value.seo_title || `${page.value.title} | ${site?.name || ''}`,
+  title: page.value.seo_title || `${page.value.title} | ${organization?.name || ''}`,
   description: page.value.seo_description || page.value.summary || '',
   // KrabiClaw's own brand name is the platform name, which useSocialMetadata
   // already states once for every platform surface; a tenant states its own.
-  ...(isPlatform ? {} : { brand: { siteName: site?.name || '' } }),
+  ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),
   socialImage: page.value.social_image,
 }))
 </script>

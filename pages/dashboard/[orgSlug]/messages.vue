@@ -7,12 +7,12 @@
     A list panel is not a form: its rows run to the edge of the column.
   -->
   <DashboardIndexPanel
-    id="site-messages"
+    id="organization-messages"
     :title="pastOnly ? 'Past conversations' : 'Messages'"
     :auto-open="firstThread"
     :ui="{ body: 'p-0 sm:p-0 gap-0' }"
   >
-    <GuestThreadList scope="site" @first="firstThread = $event" />
+    <GuestThreadList @first="firstThread = $event" />
   </DashboardIndexPanel>
 </template>
 

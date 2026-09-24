@@ -2,7 +2,7 @@ import { defineHandler } from 'nitro'
 import { readBody } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
@@ -23,7 +23,7 @@ export default defineHandler(async (event) => {
 
   const { env, db, organization } = await requireRequestedLocationAccess(event, locationId, body?.organizationId)
 
-  if (!await hasSiteEntitlement(env, db, organization.id, 'google_places')) {
+  if (!await hasOrganizationEntitlement(env, organization.id, 'google_places')) {
     return jsonResponse({ error: 'Google Maps requires a Growth plan or higher.' }, { status: 403 })
   }
 

@@ -9,7 +9,7 @@ export default defineHandler((event) => {
   const provider: PublicResourceProvider = async (options) => {
     options.signal?.throwIfAborted()
     if (!options.organizationId) {
-      throw new HTTPError({ statusCode: 500, statusMessage: 'Public site context unavailable' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Public organization context unavailable' })
     }
     if (options.resourceKind === 'shell') {
       const payload = await loadPublicShell(event, options.organizationId, {

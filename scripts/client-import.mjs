@@ -316,7 +316,7 @@ async function scanImages(dir) {
     const hash = createHash("sha256").update(contents).digest("hex");
 
     const assignedTo = files.length === 0 ? "hero" : `gallery-${files.length}`;
-    const r2Key = `sites/site-${SLUG}/media/${normalName}`;
+    const r2Key = `organizations/${ORGANIZATION_ID}/media/${normalName}`;
 
     files.push({
       source_file: fullPath,
@@ -493,7 +493,7 @@ INSERT INTO business_locations (
   const mediaAssets = mediaManifest.files
     .map((f, i) => {
       const assetId = `asset-${SLUG}-${i}`;
-      const r2Key = `sites/${orgId}/media/${f.normalized_name}`;
+      const r2Key = f.r2_key;
       const publicUrl = `https://media.krabiclaw.com/${r2Key}`;
       const ext = f.normalized_name.split(".").pop()?.toLowerCase() ?? "";
       const mimeType = MIME_MAP[ext] ?? "application/octet-stream";

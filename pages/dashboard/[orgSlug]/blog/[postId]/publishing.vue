@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-publishing"
+    id="organization-blog-post-publishing"
     title="When it goes live"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

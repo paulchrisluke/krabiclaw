@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-localization"
+    id="organization-localization"
     title="Languages"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
@@ -44,7 +44,7 @@
           <NuxtLink
             v-for="item in progress.opportunities"
             :key="item.id"
-            :to="`${editor.siteDashboardPath.value}/${item.path}`"
+            :to="`${editor.organizationDashboardPath.value}/${item.path}`"
             class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
           >
             <span class="font-medium text-highlighted">{{ item.label }}</span>
@@ -67,9 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import { siteSettingsEditorKey } from '~/lib/components/workspace/settings/SiteSettingsPage.vue'
+import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-const editor = inject(siteSettingsEditorKey)!
+const editor = inject(organizationSettingsEditorKey)!
 </script>

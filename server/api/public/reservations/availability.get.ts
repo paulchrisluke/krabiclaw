@@ -30,8 +30,8 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+  const organization = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
   const location = await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [locationId, organizationId])
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
@@ -42,7 +42,7 @@ export default defineHandler(async (event) => {
     // they closed it and is nobody else's business. The guest is told the slot
     // is closed; the reason stays in the dashboard.
     const calendar = await Promise.all(dates.map(async (day) => {
-      const { timezone, slots } = await listReservationSlots(db, { organizationId: site.id, locationId: location.id, date: day })
+      const { timezone, slots } = await listReservationSlots(db, { organizationId: organization.id, locationId: location.id, date: day })
       return {
         date: day,
         timezone,

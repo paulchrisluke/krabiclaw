@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-url"
+    id="organization-blog-post-url"
     title="URL"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

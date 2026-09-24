@@ -18,7 +18,7 @@ import { activateSessionOrganization } from '~/server/utils/session-organization
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { resolveUserOrganization } from '~/server/utils/member-access'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { isValidTimezone } from '~/utils/timezone'
 
 export default defineHandler(async (event) => {
@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
     user_id: string
     organization_id: string | null
     name: string
-    vertical: SiteVertical
+    vertical: OrganizationVertical
     subdomain_candidate: string
     status: string
     payload_json: string

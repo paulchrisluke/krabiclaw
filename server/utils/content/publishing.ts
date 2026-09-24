@@ -23,7 +23,7 @@ import {
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { getPlatformSite } from '~/server/utils/platform-site'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, parseScheduledFor, resolveSlugMutation } from '~/utils/blog-editor'
@@ -245,16 +245,16 @@ function assertValidCanonicalUrl(value: string | null | undefined) {
 }
 
 /** The tenant's template and identity, which decide article URLs and editor chrome. */
-export async function loadSiteTemplate(db: DbClient, organizationId: string) {
-  const site = await queryFirst<{ organization_id: string; theme_id: string | null; vertical: string | null; name: string; brand_color: string | null }>(db, `
+export async function loadOrganizationTemplate(db: DbClient, organizationId: string) {
+  const organization = await queryFirst<{ organization_id: string; theme_id: string | null; vertical: string | null; name: string; brand_color: string | null }>(db, `
     SELECT o.id AS organization_id, o.theme_id, o.vertical, o.name,
            json_extract(o.settings_json, '$.config.brand_color') AS brand_color
       FROM organization o
      WHERE o.id = ? LIMIT 1
   `, [organizationId])
-  if (!site) notFound('Organization not found')
-  const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
-  return { ...site, template, isPlatform: template.slug === 'platform' }
+  if (!organization) notFound('Organization not found')
+  const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
+  return { ...organization, template, isPlatform: template.slug === 'platform' }
 }
 
 type NormalizedEditorBlock = ContentBlockInput & { id: string; placement_media: Array<{ asset_id: string; slot: string }> }
@@ -493,7 +493,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
  * documentation reads in its editorial order (sort_order, then title).
  */
 export async function listPublicPlatformBlogPosts(db: DbClient, collection: ArticleCollection = 'blog') {
-  const platformSiteId = (await getPlatformSite(db)).id
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
   const sql = `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category,
@@ -506,7 +506,7 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
     LIMIT 200
   `
 
-  return (await queryAll<ApiRecord>(db, sql, [platformSiteId, collection])).map(attachCover)
+  return (await queryAll<ApiRecord>(db, sql, [platformOrganizationId, collection])).map(attachCover)
 }
 
 export async function listBlogPosts(db: DbClient, organizationId: string, status?: string | null, env?: CloudflareEnv) {
@@ -524,10 +524,10 @@ export async function listBlogPosts(db: DbClient, organizationId: string, status
   else if (status === 'draft') sql += " AND p.status = 'draft'"
   sql += ' ORDER BY p.published_at IS NULL, p.published_at DESC, p.created_at DESC'
   const results = await queryAll<ApiRecord>(db, sql, params)
-  const [context, site] = await Promise.all([resolveTenantContext(db, organizationId, env), loadSiteTemplate(db, organizationId)])
+  const [context, organization] = await Promise.all([resolveTenantContext(db, organizationId, env), loadOrganizationTemplate(db, organizationId)])
   return Promise.all((results ?? []).map((record) => {
     const slug = typeof record.slug === 'string' ? record.slug : ''
-    const publicPath = slug ? tenantBlogPostPath(site.template, slug, articleCollectionOf(record.collection)) : null
+    const publicPath = slug ? tenantBlogPostPath(organization.template, slug, articleCollectionOf(record.collection)) : null
     return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, organizationId, context, env)
   }))
 }
@@ -566,27 +566,27 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
     blocks: await attachContentBlockMedia(db, document.id, rawBlocks.map(formatBlockOutline)),
   }
   const slug = typeof postFields.slug === 'string' ? postFields.slug : ''
-  const [context, site] = await Promise.all([resolveTenantContext(db, organizationId, env), loadSiteTemplate(db, organizationId)])
-  const publicPath = slug ? tenantBlogPostPath(site.template, slug, articleCollectionOf(postFields.collection)) : null
+  const [context, organization] = await Promise.all([resolveTenantContext(db, organizationId, env), loadOrganizationTemplate(db, organizationId)])
+  const publicPath = slug ? tenantBlogPostPath(organization.template, slug, articleCollectionOf(postFields.collection)) : null
   const editorThemeTokenRow = await queryFirst<{ tokens_json: string | null } | null>(db, `
     SELECT json_extract(settings_json, ? || '.tokens') AS tokens_json FROM organization
      WHERE id = ? AND json_extract(settings_json, ? || '.status') = 'active'
      LIMIT 1
-  `, ['$.theme_by_template.' + site.template.slug, organizationId, '$.theme_by_template.' + site.template.slug])
+  `, ['$.theme_by_template.' + organization.template.slug, organizationId, '$.theme_by_template.' + organization.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
     ...await contentReviewUrls(attachCover(attachPublished(postFields, Boolean(postFields.published_at))), publicPath, organizationId, context, env),
     tags: parseStringArray(postFields.tags_metadata),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
-    editor_template: site.template.slug,
+    editor_template: organization.template.slug,
     editor_theme_tokens: editorThemeTokens,
-    editor_site_name: site.name,
-    editor_brand_color: site.brand_color ?? null,
+    editor_organization_name: organization.name,
+    editor_brand_color: organization.brand_color ?? null,
   }
 }
 
-export async function getPublicSiteBlogPost(db: DbClient, organizationId: string, slug: string, env: CloudflareEnv, previewAuthorized = false) {
+export async function getPublicOrganizationBlogPost(db: DbClient, organizationId: string, slug: string, env: CloudflareEnv, previewAuthorized = false) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_title, p.seo_description, p.seo_keywords,
@@ -605,12 +605,12 @@ export async function getPublicSiteBlogPost(db: DbClient, organizationId: string
 
   const contentDocument = await getContentDocumentById(db, String(post.id))
   if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-  const [loadedBlocks, rawBlocks, site] = await Promise.all([
+  const [loadedBlocks, rawBlocks, organization] = await Promise.all([
     getContentBlocksForDocument(db, String(post.id)),
     listBlocksForDocument(db, contentDocument.id),
-    loadSiteTemplate(db, organizationId),
+    loadOrganizationTemplate(db, organizationId),
   ])
-  const articlePath = tenantBlogPostPath(site.template, slug)
+  const articlePath = tenantBlogPostPath(organization.template, slug)
   const contentBlocks = loadedBlocks ? await attachPageQa(db, organizationId, articlePath, loadedBlocks) : loadedBlocks
   const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'content_document', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
@@ -633,13 +633,13 @@ export async function getPublishedBlogPost(
   env: CloudflareEnv,
   previewAuthorized = false,
 ) {
-  const site = await queryFirst<{ vertical: string }>(db, `
+  const organization = await queryFirst<{ vertical: string }>(db, `
     SELECT vertical FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
-  if (!site) return null
-  const prefix = normalizeVertical(site.vertical) === 'service' ? 'article' : 'blog'
+  if (!organization) return null
+  const prefix = normalizeVertical(organization.vertical) === 'service' ? 'article' : 'blog'
   if (locale === 'en') {
-    const post = await getPublicSiteBlogPost(db, organizationId, slug, env, previewAuthorized)
+    const post = await getPublicOrganizationBlogPost(db, organizationId, slug, env, previewAuthorized)
     if (!post || typeof post.id !== 'string') return post
     return {
       ...post,
@@ -663,7 +663,7 @@ export async function getPublishedBlogPost(
        ${previewAuthorized ? '' : "AND root.status = 'published'"} LIMIT 1
   `, [organizationId, locale, '/' + prefix + '/' + slug])
   if (!row) return null
-  const canonical = await getPublicSiteBlogPost(db, organizationId, row.source_slug, env, previewAuthorized)
+  const canonical = await getPublicOrganizationBlogPost(db, organizationId, row.source_slug, env, previewAuthorized)
   if (!canonical) return null
   const metadata = JSON.parse(row.metadata_json) as Record<string, unknown>
   const [outlineBlocks, rawBlocks, social] = await Promise.all([
@@ -693,8 +693,8 @@ export async function createBlogPost(
   if (!input.title?.trim()) badRequest('title is required')
   const organizationId = scope.organization_id
   if (!organizationId) badRequest('organization_id is required')
-  const site = await loadSiteTemplate(db, organizationId)
-  const isTenant = !site.isPlatform
+  const organization = await loadOrganizationTemplate(db, organizationId)
+  const isTenant = !organization.isPlatform
   validateBlogCommon(input, isTenant, 'create')
   const collection = articleCollectionOf(input.collection)
   const placementScope = { organizationId }
@@ -795,7 +795,7 @@ export async function updateBlogPost(
 ) {
   if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) badRequest('At least one blog mutation field is required')
   const postId = await resolvePlatformContentId(db, 'article', postIdOrSlug, 'Post not found', organizationId)
-  const isTenant = !(await loadSiteTemplate(db, organizationId)).isPlatform
+  const isTenant = !(await loadOrganizationTemplate(db, organizationId)).isPlatform
   validateBlogCommon(input, isTenant, 'update')
   const current = await queryFirst<{ organization_id: string; collection: string | null; category: string | null; title: string; slug: string;
     first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, `

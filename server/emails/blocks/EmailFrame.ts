@@ -18,7 +18,7 @@ export default defineComponent({
   props: {
     preheader: { type: String, required: true },
     /** The tenant this is sent for, named in the footer. Null for platform mail. */
-    siteName: { type: String as PropType<string | null>, default: null },
+    organizationName: { type: String as PropType<string | null>, default: null },
     /** Where someone chooses what they receive, rather than switching it all off. */
     preferencesUrl: { type: String as PropType<string | null>, default: null },
     unsubscribeUrl: { type: String as PropType<string | null>, default: null },
@@ -92,8 +92,8 @@ export default defineComponent({
                   `© ${year} KrabiClaw · `,
                   h(ELink, { href: origin, style: `color:${light.textMuted};text-decoration:underline` }, () => 'krabiclaw.com'),
                 ]),
-                props.siteName
-                  ? h(EText, { class: 'email-footer', style: `margin:6px 0 0;${type.footer};color:${light.textDimmed}` }, () => `Sent by ${props.siteName} via KrabiClaw.`)
+                props.organizationName
+                  ? h(EText, { class: 'email-footer', style: `margin:6px 0 0;${type.footer};color:${light.textDimmed}` }, () => `Sent by ${props.organizationName} via KrabiClaw.`)
                   : null,
                 // Preferences first: someone who only wants less of one thing
                 // should not have to switch the category off to get it.

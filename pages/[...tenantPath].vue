@@ -20,7 +20,7 @@ import { resolveTenantLocalePath } from '~/utils/tenant-locale-path'
 definePageMeta({ layout: false })
 
 const route = useRoute()
-const { isPlatform, organizationId } = useTenantSite()
+const { isPlatform, organizationId } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 // An unclaimed path is a page document on whichever site resolved, KrabiClaw's
 // own included: its marketing pages are ordinary documents now, and this is the

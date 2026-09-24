@@ -4,7 +4,6 @@ import type { StripeGa4IntentAction } from '~/shared/stripe-ga4'
 
 export interface BillingAnalyticsIntentInput extends BillingAnalyticsContext {
   organizationId: string
-  siteId: string
   subscriptionId?: string | null
   action: StripeGa4IntentAction
   previousPriceId?: string | null
@@ -21,7 +20,6 @@ export async function recordBillingAnalyticsIntent(
     method: 'POST',
     body: {
       organizationId: input.organizationId,
-      siteId: input.siteId,
       subscriptionId: input.subscriptionId ?? null,
       action: input.action,
       gaClientId: input.gaClientId ?? null,

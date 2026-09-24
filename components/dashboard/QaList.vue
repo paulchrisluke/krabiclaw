@@ -37,7 +37,7 @@
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/site-qa'
+import { isQaDeleted, isQaResponse, type QaRow } from '~/utils/organization-qa'
 /** Set when this list is a location's Q&A rather than the site's. */
 const props = defineProps<{ locationId?: string }>()
 
@@ -90,7 +90,7 @@ const existingQaScopesAsyncData = useAsyncData(
 
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const qaAsyncData = useAsyncData(
-  () => props.locationId ? `dashboard-location-qa-${organizationId}-${props.locationId}` : `dashboard-site-qa-${organizationId}-${selectedPagePath.value}`,
+  () => props.locationId ? `dashboard-location-qa-${organizationId}-${props.locationId}` : `dashboard-organization-qa-${organizationId}-${selectedPagePath.value}`,
   () => dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
     query: pagePath.value ? { page_path: pagePath.value } : undefined,
     validate: isQaResponse,

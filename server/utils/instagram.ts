@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type { InstagramIntegration } from '~/shared/site-settings'
+import type { InstagramIntegration } from '~/shared/organization-settings'
 import { parsePostInput } from '~/shared/posts'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 import { buildR2Key, uploadToR2 } from './cloudflare-r2'

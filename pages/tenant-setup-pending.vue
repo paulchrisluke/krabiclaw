@@ -77,7 +77,7 @@ const setupFailedMessage = ref('')
 onMounted(() => {
   const interval = setInterval(async () => {
     try {
-      await publicApiRequest<{ status: 'ready'; onboarding_status: string }>('/api/site-status', {
+      await publicApiRequest<{ status: 'ready'; onboarding_status: string }>('/api/organization-status', {
         validate: (value): value is { status: 'ready'; onboarding_status: string } =>
           isRecord(value)
           && value.status === 'ready'

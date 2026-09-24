@@ -168,6 +168,14 @@ yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
 
+Cloudflare Images credentials exist only in production, on purpose. Local, E2E,
+staging and preview run on copies of production's rows, so a token there stores
+into and deletes from production's images. Anything that stores an image outside
+production (an upload, a social card) answers 503 "Cloudflare Images is not
+configured in this environment, by design". That is the expected result, not a
+missing setup step: a spec asserts against images the data already holds, and
+never adds the token to pass.
+
 The CIMD OAuth cases need `MCP_CIMD_CLIENT_URL` and
 `MCP_PRIVATE_CIMD_CLIENT_URL` to name reachable public HTTPS metadata
 documents, which localhost cannot be. Point them at the deployed staging

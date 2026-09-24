@@ -1,6 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { replaceWeeklySchedule, type WeeklySlotInput } from '~/server/utils/availability'
 import { queryFirst } from '~/server/db'
 import { defineHandler } from 'nitro'
@@ -18,7 +18,7 @@ import { getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
   try {
     const body = await readStrictBody<{ location_id: unknown; slots: unknown }>(event, { location_id: 'unknown', slots: 'unknown' })
     if (typeof body.location_id !== 'string' || !body.location_id) return jsonResponse({ error: 'location_id is required' }, { status: 400 })
@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
     }
     const { db, session, organization } = await requireLocationAccess(event, organizationId, body.location_id)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND id = ?', [organization.id, body.location_id])
     if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
     if (!location.timezone) return jsonResponse({ error: 'Set the location\'s timezone before scheduling sessions' }, { status: 409 })

@@ -1,7 +1,7 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { articleAnnouncementMessage } from '~/server/notifications/guest-events'
-import { getPlatformSite } from '~/server/utils/platform-site'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { sendEmail, type EmailDeliveryMode } from '~/server/utils/email-delivery'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
@@ -51,7 +51,7 @@ export interface AnnounceableArticle {
  * signed up for.
  */
 export async function findAnnounceableArticle(db: DbClient, now = new Date()): Promise<AnnounceableArticle | null> {
-  const platformSiteId = (await getPlatformSite(db)).id
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
   const since = new Date(now.getTime() - ANNOUNCEABLE_WINDOW_MS).toISOString()
   // The leading image is joined through the shared helper rather than a second
   // hand-written join: the cover lives on a media_placement, and writing that
@@ -68,7 +68,7 @@ export async function findAnnounceableArticle(db: DbClient, now = new Date()): P
        AND NOT EXISTS (SELECT 1 FROM broadcasts b WHERE b.content_document_id = p.id)
      ORDER BY p.first_published_at ASC
      LIMIT 1
-  `, [platformSiteId, since])
+  `, [platformOrganizationId, since])
 }
 
 /**

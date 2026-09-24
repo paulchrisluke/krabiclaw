@@ -2,7 +2,7 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { signOAuthState } from '~/server/utils/encryption'
 import { getFacebookAuthUrl } from '~/server/utils/facebook-pages'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
@@ -14,7 +14,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
-  if (!await hasSiteEntitlement(env, db, organization.id, 'managed_service')) {
+  if (!await hasOrganizationEntitlement(env, organization.id, 'managed_service')) {
     return jsonResponse({ error: 'Facebook requires the Growth plan.' }, { status: 403 })
   }
 

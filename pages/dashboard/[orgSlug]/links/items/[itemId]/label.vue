@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-links-item-label"
+    id="organization-links-item-label"
     title="Label"
     :ready="editor.editorReady.value"
     :saving="editor.saving.value"

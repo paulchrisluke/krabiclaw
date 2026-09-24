@@ -77,14 +77,15 @@ const resending = ref(false)
 const resendNotice = ref<string | null>(null)
 const resendError = ref<string | null>(null)
 
-const session = authClient.useSession()
-const isAuthenticated = computed(() => Boolean(session.value.data?.user))
-// The session resolves on the client after mount. `isPending` is not "signed
-// out": only a resolved session with a user is sent on.
-watchEffect(() => {
-  if (session.value.isPending) return
-  if (isAuthenticated.value) navigateTo(postLoginUrl.value, { external: true })
+// The session is read through applicationFetch, which forwards the visitor's
+// cookie during SSR: Better Auth's client resolves an absolute base URL on the
+// server, and useFetch does not forward cookies to one, so the server never saw
+// the session and the redirect only ever happened after hydration.
+const session = await applicationFetch<{ user?: { id?: string } } | null>('/api/auth/get-session', {
+  validate: (value): value is { user?: { id?: string } } | null => value === null || typeof value === 'object',
 })
+const isAuthenticated = computed(() => Boolean(session?.user?.id))
+if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true, redirectCode: 302 })
 
 async function googleSignup() {
   await signInWithGoogle(postLoginUrl.value)
