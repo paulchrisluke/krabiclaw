@@ -79,9 +79,9 @@ CREATE TABLE `analytics_events` (
     AND json_type(payload_json, '$.attributed_at') IS 'text'))
 );
 --> statement-breakpoint
-CREATE INDEX `analytics_events_org_kind_created_idx` ON `analytics_events` (`kind`,`created_at`);--> statement-breakpoint
-CREATE INDEX `analytics_events_org_session_idx` ON `analytics_events` (`kind`,`session_id`);--> statement-breakpoint
-CREATE INDEX `analytics_events_org_visitor_idx` ON `analytics_events` (`kind`,`visitor_id`);--> statement-breakpoint
+CREATE INDEX `analytics_events_org_kind_created_idx` ON `analytics_events` (`organization_id`,`kind`,`created_at`);--> statement-breakpoint
+CREATE INDEX `analytics_events_org_session_idx` ON `analytics_events` (`organization_id`,`kind`,`session_id`);--> statement-breakpoint
+CREATE INDEX `analytics_events_org_visitor_idx` ON `analytics_events` (`organization_id`,`kind`,`visitor_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_name_idx` ON `analytics_events` (`kind`,(payload_json ->> '$.event_name'),`created_at`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`organization_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion';--> statement-breakpoint
 CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit');--> statement-breakpoint

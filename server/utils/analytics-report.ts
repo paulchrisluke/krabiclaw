@@ -70,8 +70,11 @@ const sessionFactsSql = `SELECT id, organization_id, key session_id,
   (payload_json ->> '$.attribution.campaign') campaign
   FROM analytics_summaries WHERE kind = 'session'`
 
+// `views` is materialized: inlined, the planner folded it into the
+// returning-visitor subquery and scanned every organization's pageviews on every
+// date for each session, 12M rows for one day of one tenant.
 const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ? ends_at),
-  views AS (
+  views AS MATERIALIZED (
     SELECT e.*, (payload_json ->> '$.country') country,
       (payload_json ->> '$.region') region, (payload_json ->> '$.city') city,
       (payload_json ->> '$.user_agent') user_agent, (payload_json ->> '$.referrer') referrer

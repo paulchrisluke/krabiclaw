@@ -2090,9 +2090,9 @@ export const analytics_events = sqliteTable("analytics_events", {
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')
     AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
     AND json_type(payload_json, '$.attributed_at') IS 'text')`),
-  index("analytics_events_org_kind_created_idx").on(table.kind, table.created_at),
-  index("analytics_events_org_session_idx").on(table.kind, table.session_id),
-  index("analytics_events_org_visitor_idx").on(table.kind, table.visitor_id),
+  index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
+  index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),
+  index("analytics_events_org_visitor_idx").on(table.organization_id, table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
   index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
   uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "175fe3c0-a37d-4db3-9f90-0b32f9f4066b",
+  "id": "4783da4d-63f9-4373-96b2-cb475db2f051",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -518,6 +518,7 @@
         "analytics_events_org_kind_created_idx": {
           "name": "analytics_events_org_kind_created_idx",
           "columns": [
+            "organization_id",
             "kind",
             "created_at"
           ],
@@ -526,6 +527,7 @@
         "analytics_events_org_session_idx": {
           "name": "analytics_events_org_session_idx",
           "columns": [
+            "organization_id",
             "kind",
             "session_id"
           ],
@@ -534,6 +536,7 @@
         "analytics_events_org_visitor_idx": {
           "name": "analytics_events_org_visitor_idx",
           "columns": [
+            "organization_id",
             "kind",
             "visitor_id"
           ],
