@@ -16,6 +16,7 @@ interface LocationRow {
   latitude: number | null
   longitude: number | null
   opening_hours: string | null
+  special_hours: string | null
   categories: string | null
   description: string | null
   short_description: string | null
@@ -45,7 +46,7 @@ export default defineHandler(async (event) => {
     const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
 
     const location = await queryFirst<LocationRow>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
       FROM business_locations bl
       WHERE bl.id = ? AND bl.organization_id = ?
       LIMIT 1
@@ -58,7 +59,7 @@ export default defineHandler(async (event) => {
     const placements = await getMediaPlacements(db, { organizationId, ownerType: 'business_location', ownerIds: [location.id] })
     return jsonResponse({
       success: true, location: {
-        ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, categories: location.categories ? JSON.parse(location.categories) : null, media: placements.get(location.id) ?? []
+        ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, special_hours: location.special_hours ? JSON.parse(location.special_hours) : null, categories: location.categories ? JSON.parse(location.categories) : null, media: placements.get(location.id) ?? []
       }
     })
   } catch (error) {

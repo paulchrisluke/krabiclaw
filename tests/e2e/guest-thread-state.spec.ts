@@ -85,10 +85,17 @@ async function loadLocationDay(request: APIRequestContext, date: string) {
  * thirty minutes from the opening until an hour before closing — so a period
  * exactly sixty minutes wide yields precisely the one minute asked for.
  */
-function setLocationSlot(request: APIRequestContext, slot: LocationSlot, directive: 'set' | 'inherit') {
-  if (directive === 'inherit') {
-    return request.patch('/api/organizations/org-demo/locations/loc-demo', { data: { special_hours: null } })
-  }
+async function readSpecialHours(request: APIRequestContext): Promise<unknown> {
+  const response = await request.get('/api/organizations/org-demo/locations/loc-demo')
+  await expectStatus(response, 200)
+  return (await response.json() as { location: { special_hours: unknown } }).location.special_hours ?? null
+}
+
+function restoreSpecialHours(request: APIRequestContext, special: unknown) {
+  return request.patch('/api/organizations/org-demo/locations/loc-demo', { data: { special_hours: special } })
+}
+
+function setLocationSlot(request: APIRequestContext, slot: LocationSlot) {
   const [hours, minutes] = slot.time.split(':').map(Number)
   const closeMinute = hours! * 60 + minutes! + 60
   const close = `${String(Math.floor(closeMinute / 60) % 24).padStart(2, '0')}:${String(closeMinute % 60).padStart(2, '0')}`
@@ -104,17 +111,18 @@ function setLocationSlot(request: APIRequestContext, slot: LocationSlot, directi
   })
 }
 
-// Set while the Today journey holds an opened slot, so the dated hours are taken back
-// even when the test fails partway and leaves loc-demo open at an hour it does not serve.
-let openedTodaySlot: LocationSlot | null = null
+// The location's own special hours, read before the Today journey replaces them, so
+// cleanup puts back what the tenant had rather than clearing the field. Null is a
+// value here: it means the location had none, which is not the same as "leave it".
+let priorSpecialHours: { value: unknown } | null = null
 
 test.afterEach(async ({ page }) => {
-  if (!openedTodaySlot) return
-  const slot = openedTodaySlot
-  openedTodaySlot = null
+  if (!priorSpecialHours) return
+  const previous = priorSpecialHours.value
+  priorSpecialHours = null
   // A cleanup that quietly 4xxs would leave loc-demo open at an hour it does not serve,
   // and PATCH resolves on any status, so the status is asserted rather than assumed.
-  await expectStatus(await setLocationSlot(page.request, slot, 'inherit'), 200)
+  await expectStatus(await restoreSpecialHours(page.request, previous), 200)
 })
 
 // The list has no search of its own any more (search is the dashboard's one
@@ -334,8 +342,8 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     !todaySlot,
     `${timezone} is within ${TODAY_SLOT_LEAD_MINUTES} minutes of midnight, so no reservation can still arrive today`,
   )
-  await expectStatus(await setLocationSlot(page.request, todaySlot!, 'set'), 200)
-  openedTodaySlot = todaySlot!
+  priorSpecialHours = { value: await readSpecialHours(page.request) }
+  await expectStatus(await setLocationSlot(page.request, todaySlot!), 200)
 
   const bookingIds: string[] = []
   for (const [name, email, plan] of [
