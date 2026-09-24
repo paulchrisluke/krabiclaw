@@ -217,6 +217,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { Component } from 'vue'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
+import { blawbyHeroProseBlockId } from '~/types/blawby'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
@@ -236,8 +237,15 @@ function presentationOf(block: TenantPageBlock): Component | null {
 }
 const sanitizer = useHtmlSanitizer()
 const { t } = useI18n()
-/** The page's blocks, in the order the page carries them. */
-const renderedBlocks = computed(() => props.page.blocks)
+/**
+ * The page's blocks, in the order the page carries them — less the one the
+ * service overview draws inside its own column, which would otherwise appear
+ * twice: once beside the pictures and once in a band below them.
+ */
+const renderedBlocks = computed(() => {
+  const absorbed = template.value === 'blawby' ? blawbyHeroProseBlockId(props.page) : null
+  return absorbed ? props.page.blocks.filter(block => block.id !== absorbed) : props.page.blocks
+})
 
 /**
  * A page this renderer draws by itself reads as one column of prose and needs

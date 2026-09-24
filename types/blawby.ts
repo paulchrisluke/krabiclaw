@@ -39,6 +39,28 @@ export function blawbySurface(variant: BlawbyShieldVariant): string {
 }
 
 /**
+ * The prose block the service overview draws inside its own column.
+ *
+ * This page is one two-column section: the pictures on the left, and on the
+ * right the name, the whole body copy and the buttons. The body is its own
+ * `markdown` block, so the hero draws it there and the renderer skips it —
+ * one answer read by both, rather than drawing the block twice or folding an
+ * article into `subtitle`, which is a one-line summary the cards also use.
+ */
+export function blawbyHeroProseBlockId(page: {
+  path: string
+  blocks: ReadonlyArray<{ id: string; type: string }>
+  media: ReadonlyArray<{ kind: string | null; slot: string }>
+}): string | null {
+  if (page.path === '/') return null
+  if (!page.media.some(item => item.kind === 'image' && (item.slot === 'cover' || item.slot === 'gallery'))) return null
+  const heroIndex = page.blocks.findIndex(block => block.type === 'hero')
+  if (heroIndex < 0) return null
+  const next = page.blocks[heroIndex + 1]
+  return next?.type === 'markdown' ? next.id : null
+}
+
+/**
  * A heading cut into the part before its emphasised phrase, the phrase, and the
  * part after — so the phrase can carry colour where it actually sits rather
  * than being repeated at the end. The hero and every section heading ask the
