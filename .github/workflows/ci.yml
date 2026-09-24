@@ -72,6 +72,9 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      # The onboarding draft endpoints sign their preview tokens with it and
+      # answer 503 without it, so the wizard never got past its first save.
+      PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PLAYWRIGHT_WORKERS: "1"
