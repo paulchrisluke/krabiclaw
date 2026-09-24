@@ -4,7 +4,7 @@
 // drizzle-kit generates for a constraint change on a parent (CREATE __new_x,
 // copy, DROP TABLE x, RENAME) cascade-deletes every child row. RENAME rewrites
 // the children's REFERENCES, so dropping the old table cascades just the same.
-// Measured on a throwaway D1 instance, 2026-09-09; see release-flow.md.
+// Measured on a throwaway D1 instance, 2026-09-09.
 //
 // SQLite replays the chain in the order wrangler applies it (the sorted .sql
 // files in migrations/) and its authorizer denies the DROP against the foreign

@@ -122,7 +122,6 @@ application source when the source is wrong.
 Authoritative operational contracts:
 
 - `docs/operations/release-and-outage-prevention.md`
-- `docs/operations/release-flow.md`
 
 ## Failure reporting
 

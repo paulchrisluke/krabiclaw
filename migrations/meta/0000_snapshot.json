@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6666747e-ef92-4c80-997d-9b562e9a3f2b",
+  "id": "da751029-35eb-406c-b359-5859ccd5fec9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -3463,176 +3463,6 @@
         }
       }
     },
-    "location_reservation_overrides": {
-      "name": "location_reservation_overrides",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "override_date": {
-          "name": "override_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "time_slot": {
-          "name": "time_slot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "capacity": {
-          "name": "capacity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "location_reservation_overrides_slot_unique": {
-          "name": "location_reservation_overrides_slot_unique",
-          "columns": [
-            "location_id",
-            "override_date",
-            "time_slot"
-          ],
-          "isUnique": true,
-          "where": "time_slot IS NOT NULL"
-        },
-        "location_reservation_overrides_date_unique": {
-          "name": "location_reservation_overrides_date_unique",
-          "columns": [
-            "location_id",
-            "override_date"
-          ],
-          "isUnique": true,
-          "where": "time_slot IS NULL"
-        },
-        "location_reservation_overrides_date_idx": {
-          "name": "location_reservation_overrides_date_idx",
-          "columns": [
-            "location_id",
-            "override_date"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "location_reservation_overrides_organization_id_organization_id_fk": {
-          "name": "location_reservation_overrides_organization_id_organization_id_fk",
-          "tableFrom": "location_reservation_overrides",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "location_reservation_overrides_config_scope_fk": {
-          "name": "location_reservation_overrides_config_scope_fk",
-          "tableFrom": "location_reservation_overrides",
-          "tableTo": "location_reservation_configs",
-          "columnsFrom": [
-            "organization_id",
-            "location_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "location_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "location_reservation_overrides_instants_check": {
-          "name": "location_reservation_overrides_instants_check",
-          "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
-        },
-        "location_reservation_overrides_date_check": {
-          "name": "location_reservation_overrides_date_check",
-          "value": "date(override_date, '+0 days') IS override_date"
-        },
-        "location_reservation_overrides_time_slot_check": {
-          "name": "location_reservation_overrides_time_slot_check",
-          "value": "time_slot IS NULL OR (time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00')"
-        },
-        "location_reservation_overrides_capacity_check": {
-          "name": "location_reservation_overrides_capacity_check",
-          "value": "capacity IS NULL OR capacity >= 0"
-        }
-      }
-    },
     "mcp_tool_call_events": {
       "name": "mcp_tool_call_events",
       "columns": {
@@ -4299,6 +4129,10 @@
         "media_placements_instants_check": {
           "name": "media_placements_instants_check",
           "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        },
+        "media_placements_owner_type_check": {
+          "name": "media_placements_owner_type_check",
+          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')"
         },
         "media_placements_sort_order_check": {
           "name": "media_placements_sort_order_check",
@@ -6935,6 +6769,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "end_time": {
+          "name": "end_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "interval_minutes": {
+          "name": "interval_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "interval_weeks": {
           "name": "interval_weeks",
           "type": "integer",
@@ -7103,6 +6951,10 @@
         "product_availability_rules_start_time_check": {
           "name": "product_availability_rules_start_time_check",
           "value": "start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'"
+        },
+        "product_availability_rules_repeat_check": {
+          "name": "product_availability_rules_repeat_check",
+          "value": "(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)"
         },
         "product_availability_rules_interval_check": {
           "name": "product_availability_rules_interval_check",
@@ -8169,6 +8021,10 @@
         "product_sessions_interval_check": {
           "name": "product_sessions_interval_check",
           "value": "ends_at > starts_at"
+        },
+        "product_sessions_status_check": {
+          "name": "product_sessions_status_check",
+          "value": "status IN ('scheduled', 'cancelled')"
         },
         "product_sessions_capacity_check": {
           "name": "product_sessions_capacity_check",

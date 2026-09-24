@@ -401,7 +401,6 @@ async function loadPublicPageSource(
          FROM media_placements mp
          JOIN media_assets ma ON ma.id = mp.asset_id
           AND ma.organization_id = mp.organization_id
-          AND ma.organization_id = mp.organization_id
           AND ma.status = 'active'
         WHERE mp.organization_id = ? 
           AND mp.owner_type = 'product' AND mp.slot IN ('image', 'gallery') AND mp.status = 'active'
