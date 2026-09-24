@@ -19,8 +19,6 @@ function clip(text: string | null | undefined, max: number): string {
 export interface RenderInputs extends SocialCardRenderPayload {
   backgroundImageDataUri: string
   logoDataUri?: string | null
-  /** Square icon, preferred over logoDataUri for the small brand mark below — logoDataUri
-   * is often a non-square wordmark that distorts when forced into a square slot. */
 }
 
 /**
@@ -108,20 +106,16 @@ export function buildOgImageCard(payload: RenderInputs, variant: OgImageCardVari
     'div',
     { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 36 },
     [
+      // No logo means no mark. An accent-coloured square here is not the
+      // business's mark; it shipped to social previews looking deliberate.
       payload.logoDataUri
         ? node(
             'img',
             { width: 44, height: 44, borderRadius: 8, objectFit: 'contain' },
             undefined,
-            { src: payload.logoDataUri!, width: 44, height: 44 },
+            { src: payload.logoDataUri, width: 44, height: 44 },
           )
-        : node('div', {
-            display: 'flex',
-            width: 44,
-            height: 44,
-            borderRadius: 8,
-            backgroundColor: variant.accentColor,
-          }),
+        : false,
       node(
         'div',
         { display: 'flex', color: '#ffffff', fontSize: 26, fontWeight: 700 },

@@ -21,17 +21,17 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 const { isBlawby } = usePublicTemplate()
 const siteShell = isBlawby.value ? null : useSiteShellState()
 const config = siteShell?.config
-const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
+const organizationMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
 useHead(() => {
   const verification = config?.value.search_console_verification
   return {
     link: buildTenantHeadLinks({
       isPlatform,
-      siteMedia: siteMedia.value,
+      organizationMedia: organizationMedia.value,
     }),
-    // Google fetches the site to verify Search Console ownership
-    // (server/utils/google-search-console.ts); every layout the site shell
-    // serves carries it. Blawby serves its own from its document shell.
+    // Google fetches the organization's domain to verify Search Console
+    // ownership (server/utils/google-search-console.ts); every public layout
+    // carries it. Blawby serves its own from its document shell.
     meta: verification ? [{ name: 'google-site-verification', content: verification }] : [],
   }
 })

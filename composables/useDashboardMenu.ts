@@ -51,7 +51,7 @@ export function useDashboardMenu() {
   const groups = computed<EditorNavigationGroup[]>(() => organizationSettings.groups.value)
   const activeItem = computed(() => organizationSettings.activeItem.value)
 
-  /** Organization/site switcher. */
+  /** Organization switcher. */
   const scopeModel = computed(() => scopeHeaderModel?.value ?? null)
 
   return { primaryNavItems, menuPageTo, notificationsTo, groups, activeItem, scopeModel, logOut }

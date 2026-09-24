@@ -20,6 +20,7 @@
       <UAvatar
         :src="item.guestImageUrl || undefined"
         alt=""
+        icon="i-lucide-user"
         class="size-14 sm:size-20"
         :ui="{ icon: 'size-7 sm:size-10' }"
       />
