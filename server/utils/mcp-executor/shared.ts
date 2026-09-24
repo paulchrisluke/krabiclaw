@@ -872,7 +872,7 @@ export function normalizeChannelArray(
   if (normalized.length !== value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "channels may only contain site, facebook, or instagram.",
+      "channels may only contain organization, facebook, or instagram.",
     );
   }
 

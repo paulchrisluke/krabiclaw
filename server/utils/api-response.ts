@@ -161,7 +161,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const configuredEnv = {
     ...(typeof publicConfig.platformDomain === 'string' && { NUXT_PUBLIC_PLATFORM_DOMAIN: publicConfig.platformDomain }),
     ...(typeof publicConfig.freeOrganizationDomain === 'string' && { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: publicConfig.freeOrganizationDomain }),
-    ...(typeof publicConfig.organizationUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.organizationUrl }),
+    ...(typeof publicConfig.platformUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.platformUrl }),
   }
   const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
   const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined

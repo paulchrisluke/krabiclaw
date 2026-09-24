@@ -190,6 +190,13 @@ export default defineHandler(async (event) => {
   const payload = buildOnboardingDraftPayload({
     name, vertical, place, details, brandDraft, products, })
 
+  // The address is derived from the name, and a name with no Latin letter or
+  // digit derives nothing. Provisioning an empty subdomain would leave the
+  // tenant with no host, so the save stops here and says why.
+  if (!payload.preview.subdomainCandidate) {
+    return jsonResponse({ error: 'Your business name needs at least one Latin letter or number to create your address.' }, { status: 400 })
+  }
+
   const draft = await upsertActiveOnboardingDraft(db, {
     // /dashboard/onboarding is the "New Organization" entry point, so a draft
     // never carries the session's active organization: the first save creates a

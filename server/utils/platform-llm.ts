@@ -596,7 +596,7 @@ export function resolvePublicOrigin(event: H3Event) {
   const runtimeConfig = useRuntimeConfig()
   const origin = runtimeConfig.public.platformUrl
   if (!origin) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'organizationUrl not configured' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'runtimeConfig.public.platformUrl is not configured' })
   }
   return origin.replace(/\/$/, '')
 }

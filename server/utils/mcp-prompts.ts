@@ -26,7 +26,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     arguments: [
       { name: "body", description: "The post body text.", required: true },
       { name: "post_type", description: "standard, offer, event, or alert. Event and offer require a complete event schedule. Defaults to standard.", required: false },
-      { name: "channels", description: "Comma-separated channels: site, facebook, instagram. Defaults to site.", required: false },
+      { name: "channels", description: "Comma-separated channels: organization, facebook, instagram. Defaults to organization.", required: false },
     ],
   },
   {
@@ -109,7 +109,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user has supplied or approved media for this post, create the post first, then use set_media with placement { owner_type: 'content_document', owner_id: <exact post id>, slot: 'cover' } for the selected cover asset.",
           channels
             ? `If media is supplied or approved, call publish_post with channels [${channels}] only after set_media succeeds; otherwise immediately after create_post succeeds. Do not stop to describe the publish step instead of executing it.`
-            : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the site channel. Do not stop to describe the publish step instead of executing it.",
+            : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the organization channel. Do not stop to describe the publish step instead of executing it.",
           "Report back the post id, the live view URL, and which channels it published to.",
         ].filter(Boolean).join(" "),
       };
