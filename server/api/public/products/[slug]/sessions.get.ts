@@ -67,6 +67,7 @@ export default defineHandler(async (event) => {
       .map(session => ({
         id: session.id, starts_at: session.starts_at, ends_at: session.ends_at, location_id: session.location_id,
         timezone: session.timezone, remaining: session.remaining, is_full: session.is_full,
+        created_at: session.created_at,
       })),
   })
 })

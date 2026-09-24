@@ -42,7 +42,7 @@
           </div>
 
           <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
-            <BlawbySectionHeading :title="t('blawby.article.from_the')" :accent="t('saya.footer.blog')" centered />
+            <BlawbySectionHeading :title="`${t('blawby.article.from_the')} ${t('saya.footer.blog')}`" :accent="t('saya.footer.blog')" centered />
             <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
           </div>
           <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">

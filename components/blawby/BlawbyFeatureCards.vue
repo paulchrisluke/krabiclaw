@@ -21,6 +21,9 @@
           </table>
         </div>
       </div>
+      <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+        <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
+      </div>
     </div>
   </section>
 
@@ -31,7 +34,19 @@
   <div v-else-if="isArticles && posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
     <BlawbySectionHeading v-if="heading" :title="heading" accent="" centered />
     <BlawbyArticleGrid :posts="posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+    <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+      <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
+    </div>
   </div>
+
+  <!--
+    A grid whose every item names an icon is a practice area's list of what the
+    firm does there, and it is drawn as one: the icons led a two-column list
+    beside the selected item's picture. The About page's grid names no icons and
+    stays cards, which is the same reading as `isPricing` and `isArticles` above
+    — the content says which it is, and no field in it names a component.
+  -->
+  <BlawbyPracticeAreaFeatures v-else-if="isPracticeArea" :features="features" :cta-label="ctaLabel" :cta-url="ctaUrl" />
 
   <section v-else-if="features.length" class="relative bg-[var(--blawby-accent-200)] pb-16 pt-4 sm:pb-16 sm:pt-4 lg:pb-16" data-parity-section="features">
     <div class="blawby-container">
@@ -44,6 +59,14 @@
           <BlawbyRichText v-if="feature.body" unstyled class="mt-4 text-sm text-[var(--blawby-primary)]" :content="feature.body" />
           <p v-else-if="feature.description" class="mt-4 text-sm text-[var(--blawby-primary)]">{{ feature.description }}</p>
         </article>
+      </div>
+      <!--
+        The block's button. It is declared on every feature_grid, so a grid that
+        is drawn as cards shows it too — it was read only by the practice-area
+        list, and a button written on the About page's grid went nowhere.
+      -->
+      <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
+        <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
       </div>
     </div>
   </section>
@@ -59,6 +82,7 @@ import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-bl
 // the practice-area version was deleted with the offering model and its
 // features went unrendered until this replaced it.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const { localePath } = useI18n()
 
 /** One slot spelling for every grid: `items.<index>.image`. */
 function itemMedia(index: number) {
@@ -123,6 +147,25 @@ const features = computed(() => blockRecords(props.block.data.items).map((item, 
   title: blockText(item.title),
   description: blockText(item.description),
   body: blockText(item.body),
+  icon: blockText(item.icon),
   media: itemMedia(index),
 })).filter(feature => feature.title || feature.body))
+
+/**
+ * Every item names an icon, so this is a practice area's feature list rather
+ * than the cards the About page shows. The icons were carried through the
+ * migration and read by nothing until now.
+ */
+const isPracticeArea = computed(() => features.value.length > 0 && features.value.every(feature => feature.icon))
+
+/**
+ * The button the block carries. An internal route is localized so a translated
+ * page keeps its own locale; an absolute URL belongs to someone else and is
+ * left as written — the same reading BlawbyPageHero gives a block's button.
+ */
+const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
+const ctaUrl = computed(() => {
+  const url = blockTextOrNull(props.block.data.cta_url)
+  return url && url.startsWith('/') ? localePath(url) : url
+})
 </script>
