@@ -44,7 +44,7 @@ export default defineHandler(async (event) => {
 
   try {
     if (body.role === 'canonical') {
-      const actorRole = organization.member_role as 'owner' | 'admin' | 'editor'
+      const actorRole = organization.member_role as 'owner' | 'admin'
       const domain = await setCanonicalDomain(db, organizationId, domainId, actorRole, session.user.id)
       return jsonResponse({ success: true, domain })
     }

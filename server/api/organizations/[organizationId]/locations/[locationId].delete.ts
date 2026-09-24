@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
   }
 
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   await assertRoleAllows({ organizationId: organization.id, role: organization.member_role, permissions: { locations: ['delete'] } })
   const result = await deleteLocation(env, db, organization.id, locationId)
   if (result.status >= 400) {

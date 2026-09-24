@@ -103,7 +103,6 @@ export const locationObject = {
     description: { type: ['string', 'null'] },
     short_description: { type: ['string', 'null'] },
     status: { type: 'string' },
-    notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Null means no location-specific recipient is configured. Site-wide recipients are configured independently.' },
     timezone: { ...timezoneSchema, type: ['string', 'null'] },
     max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
     facebook_url: { type: ['string', 'null'] },

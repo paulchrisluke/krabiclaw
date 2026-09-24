@@ -2,7 +2,6 @@
 // All messages use pre-approved templates (WhatsApp requires this for business-initiated messages).
 // Phone numbers stored and sent in E.164 format (+66946230215).
 
-import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 import { parsePhoneOrThrow } from '~/utils/phone'
 
@@ -393,17 +392,6 @@ export async function sendWhatsAppNotification(
  * Read the site's owner WhatsApp notification phone.
  * Returns null if not set — callers should skip sending rather than throw.
  */
-export async function getOrgWhatsAppPhone(
-  db: DbClient,
-  organizationId: string,
-): Promise<string | null> {
-  const row = await queryFirst<{ value: string }>(db, `
-    SELECT json_extract(settings_json, '$.config.whatsapp_phone') AS value FROM organization WHERE id = ?
-    LIMIT 1
-  `, [organizationId])
-  return row?.value ?? null
-}
-
 /**
  * Send a WhatsApp OTP code directly via Meta API.
  * Used by Better Auth phoneNumber plugin — no DB logging needed here
@@ -571,21 +559,3 @@ export async function fetchWhatsAppMedia(
   }
 }
 
-export async function setOrgWhatsAppPhone(
-  db: DbClient,
-  organizationId: string,
-  phone: string | null,
-): Promise<void> {
-  if (!phone) {
-    await execute(db, `
-      UPDATE organization SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone') WHERE id = ?
-    `, [organizationId])
-  } else {
-    const normalized = parsePhoneOrThrow(phone, { defaultCountry: 'TH' })
-    const now = new Date().toISOString()
-    await execute(db, `
-      UPDATE organization SET settings_json = json_set(settings_json, '$.config.whatsapp_phone', ?), updated_at = ?
-      WHERE id = ?
-    `, [normalized, now, organizationId])
-  }
-}

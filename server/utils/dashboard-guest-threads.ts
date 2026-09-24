@@ -99,7 +99,7 @@ export async function loadDashboardGuestThreads(
   organizationId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
   const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (query.locationId) {
     await assertMemberScope(db, { ...principal, locationId: query.locationId })
@@ -112,7 +112,7 @@ export async function loadDashboardGuestThread(
   organizationId: string,
   threadId: string,
 ) {
-  const { db, env, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { db, env, organization } = await requireOrganizationAccess(event, organizationId)
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })

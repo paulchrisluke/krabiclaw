@@ -36,7 +36,7 @@ destinations, keys, and signing secrets paired with their matching environment.
 
 ## Release order
 
-Follow [release-flow.md](release-flow.md) and
+Follow [release-and-outage-prevention.md](release-and-outage-prevention.md) and
 [release-and-outage-prevention.md](release-and-outage-prevention.md). The
 generated D1 migration must land before code that reads
 `stripe_connected_accounts` or `stripe_webhook_events.processor`. Never hand

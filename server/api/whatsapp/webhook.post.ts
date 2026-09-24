@@ -11,7 +11,7 @@ import { appendEntry, findEntryByDedupeKey } from '~/server/domain/guest-threads
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient, listAccessibleLocationIds, resolveMemberId, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
+import { isAuthorizedWhatsAppRecipient, resolveMemberId, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { findVerifiedAuthUserByPhone } from '~/server/utils/auth'
 import {
   PROMPT_QUOTE_NOTIFICATION_MESSAGE, REPLY_SENT_CONFIRMATION, buildCollectReplyPrompt, buildConfirmSendPrompt, buildDisambiguationPrompt, buildReplyFailedMessage, decideWhatsAppReplyRouting, maskEmailForDisplay, type DisambiguationCandidate, type PendingWhatsAppReplyState, } from '~/server/utils/whatsapp-reply-routing'
@@ -146,7 +146,7 @@ async function resolveQuotedDelivery(
 
   const authorized = await isAuthorizedWhatsAppRecipient(db, {
     env: env as CloudflareEnv,
-    phone, organizationId: thread.organization_id, locationId: thread.location_id, requireOrganizationWide: false, })
+    phone, organizationId: thread.organization_id })
   if (!authorized) return null
 
   return { threadId: thread.request_id, organizationId: thread.organization_id, locationId: thread.location_id, guestEmail: thread.guest_email }
@@ -178,9 +178,7 @@ async function listRecentGuestDeliveryCandidates(db: D1Database, env: ApiRecord,
       organizationId: row.organizationId,
       userId,
     })
-    if (!membership) return null
-    const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: env as CloudflareEnv}))
-    return locationIds === null || Boolean(row.locationId && locationIds.includes(row.locationId)) ? row : null
+    return membership ? row : null
   }))).filter((row): row is NonNullable<typeof row> => Boolean(row)).slice(0, 5)
   return authorizedRows.map((r) => ({
     threadId: r.threadId, organizationId: r.organizationId, locationId: r.locationId, label: `${submissionTypeLabel(r.submissionType)} from ${r.guestName}`, }))
@@ -325,7 +323,6 @@ async function routeManagerWhatsAppMessage(
         env: env as CloudflareEnv,
         phone: opts.toPhone,
         organizationId: pendingState.organizationId,
-        locationId: pendingState.locationId,
       })
       if (!authorized) {
         await clearPending()
@@ -377,7 +374,6 @@ async function routeManagerWhatsAppMessage(
         env: env as CloudflareEnv,
         phone: opts.toPhone,
         organizationId: chosen.organizationId,
-        locationId: chosen.locationId,
       })
       if (!authorized) {
         await clearPending()

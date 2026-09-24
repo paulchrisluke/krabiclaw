@@ -168,7 +168,7 @@ const isEventsResponse = (value: unknown): value is { events: SiteEvent[]; nextC
     isRecord(event)
     && typeof event.id === 'string'
     && typeof event.event_type === 'string'
-    && typeof event.site_id === 'string'
+    && (event.organization_id === null || typeof event.organization_id === 'string')
     && typeof event.created_at === 'string',
   )
   && (value.nextCursor === null || typeof value.nextCursor === 'string')

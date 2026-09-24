@@ -7,7 +7,7 @@
  * merchant's ordering already said; nothing at runtime picks a cover.
  *
  * Idempotent: a product that already names a cover is left alone. Used by the
- * rebaseline, which derives it.
+ * export transfer, which derives it.
  */
 export const PROMOTE_PRODUCT_COVERS_SQL = `UPDATE media_placements
    SET slot = 'image', sort_order = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')

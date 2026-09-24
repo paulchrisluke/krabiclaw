@@ -52,7 +52,6 @@ export function appendPublicShellQueries(
                 LEFT JOIN media_assets ma ON mp.asset_id = ma.id
                   AND ma.status = 'active'
                   AND ma.organization_id = bl.organization_id
-                  AND ma.organization_id = bl.organization_id
                 LEFT JOIN media_placements social_mp ON social_mp.organization_id = bl.organization_id
                   AND social_mp.owner_type = 'business_location' AND social_mp.owner_id = bl.id
                   AND social_mp.slot = 'social_card' AND social_mp.sort_order = 0 AND social_mp.status = 'active'

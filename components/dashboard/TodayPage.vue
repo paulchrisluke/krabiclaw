@@ -126,7 +126,7 @@ import { localDateAt } from '~/utils/timezone'
 import TodayAgendaCard from './TodayAgendaCard.vue'
 import { bookingCountLabel, resolveAggregateBookingPresentation, type BookingKind } from '~/utils/booking-presentation'
 import { getErrorMessage } from '~/utils/errors'
-import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite, TodayAgendaPayload } from '~/server/utils/dashboard-agenda'
+import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, TodayAgendaPayload } from '~/server/utils/dashboard-agenda'
 
 useSeoMeta({ title: 'Today | KrabiClaw', robots: 'noindex, nofollow' })
 
@@ -167,13 +167,6 @@ const isAgendaItem = (value: unknown): value is AgendaItem =>
   && (value.partySize === null || typeof value.partySize === 'number')
   && typeof value.to === 'string'
 
-const isSite = (value: unknown): value is AgendaSite =>
-  isRecord(value)
-  && typeof value.id === 'string'
-  && typeof value.label === 'string'
-  && typeof value.slug === 'string'
-  && typeof value.vertical === 'string'
-
 const isLocation = (value: unknown): value is AgendaLocation =>
   isRecord(value)
   && typeof value.id === 'string'
@@ -184,8 +177,7 @@ const isTodayResponse = (value: unknown): value is TodayAgendaPayload =>
   && Array.isArray(value.items)
   && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds)
-  && Array.isArray(value.sites)
-  && value.sites.every(isSite)
+  && typeof value.vertical === 'string'
   && Array.isArray(value.locations)
   && value.locations.every(isLocation)
   && typeof value.resolvedAt === 'string'
@@ -195,8 +187,7 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   && Array.isArray(value.items)
   && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds)
-  && Array.isArray(value.sites)
-  && value.sites.every(isSite)
+  && typeof value.vertical === 'string'
   && Array.isArray(value.locations)
   && value.locations.every(isLocation)
 
@@ -240,17 +231,17 @@ const activeLoading = computed(() => activeRange.value === 'today' ? pending.val
 const activeError = computed(() => activeRange.value === 'today' ? todayError.value : upcomingError.value)
 const activeLabel = computed(() => activeRange.value === 'today' ? 'Today' : 'Upcoming')
 const hasActiveFilters = computed(() => filters.locationId !== FILTER_ALL || filters.kind !== FILTER_ALL)
-// Derived from the sites and kinds in scope rather than from the loaded items,
+// Derived from the organization and kinds in scope rather than from the loaded items,
 // so the heading reads the same before anything has arrived and does not change
 // noun as a page of Upcoming loads.
 const presentation = computed(() => {
-  const sites = todayData.value?.sites ?? []
+  const vertical = todayData.value?.vertical ?? ''
   const scoped: AgendaKind[] = filters.kind === FILTER_ALL
     ? todayData.value?.availableKinds ?? BOOKING_KINDS
     : [filters.kind as AgendaKind]
   const kinds = scoped.filter(isBookingKind)
   return resolveAggregateBookingPresentation(
-    sites.flatMap(site => kinds.map(kind => ({ kind, vertical: site.vertical }))),
+    kinds.map(kind => ({ kind, vertical })),
   )
 })
 const heading = computed(() => {

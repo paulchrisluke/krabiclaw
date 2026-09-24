@@ -6,7 +6,6 @@ import { resolveLocationCapabilitySummary, updateLocation, type UpdateLocationIn
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { assertMemberScope, memberAccessPrincipal } from '~/server/utils/member-access'
-import { parsePhone } from '~/utils/phone'
 import type { ProductFeature } from '~/config/cms-registry'
 
 export default defineHandler(async (event) => {
@@ -24,17 +23,6 @@ export default defineHandler(async (event) => {
   const body = await readBody<Record<string, unknown>>(event)
   if (typeof body !== 'object' || body === null) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
-  }
-
-  let normalizedNotificationPhone: string | null | undefined
-  if (typeof body.notification_phone === 'string' && body.notification_phone.trim()) {
-    const parsed = parsePhone(body.notification_phone, { defaultCountry: 'TH' })
-    if (!parsed.valid || !parsed.e164) {
-      return jsonResponse({ error: 'Enter a valid notification phone number, including country code' }, { status: 400 })
-    }
-    normalizedNotificationPhone = parsed.e164
-  } else if (body.notification_phone === null) {
-    normalizedNotificationPhone = null
   }
 
   const rating = body.rating === undefined || body.rating === null || String(body.rating).trim() === ''
@@ -79,7 +67,11 @@ export default defineHandler(async (event) => {
         ? undefined
         : body.opening_hours === null
           ? null
-          : body.opening_hours as UpdateLocationInput['opening_hours'], description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined, short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined, price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined, facebook_url: typeof body.facebook_url === 'string' ? body.facebook_url : body.facebook_url === null ? null : undefined, instagram_url: typeof body.instagram_url === 'string' ? body.instagram_url : body.instagram_url === null ? null : undefined, tiktok_url: typeof body.tiktok_url === 'string' ? body.tiktok_url : body.tiktok_url === null ? null : undefined, google_place_id: typeof body.google_place_id === 'string' ? body.google_place_id : body.google_place_id === null ? null : undefined, notification_phone: normalizedNotificationPhone, timezone: typeof body.timezone === 'string' ? body.timezone.trim() || null : body.timezone === null ? null : undefined, rating, review_count: reviewCount, status: body.status === 'active' || body.status === 'inactive' || body.status === 'sync_error'
+          : body.opening_hours as UpdateLocationInput['opening_hours'], special_hours: body.special_hours === undefined
+        ? undefined
+        : body.special_hours === null
+          ? null
+          : body.special_hours as UpdateLocationInput['special_hours'], description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined, short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined, price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined, facebook_url: typeof body.facebook_url === 'string' ? body.facebook_url : body.facebook_url === null ? null : undefined, instagram_url: typeof body.instagram_url === 'string' ? body.instagram_url : body.instagram_url === null ? null : undefined, tiktok_url: typeof body.tiktok_url === 'string' ? body.tiktok_url : body.tiktok_url === null ? null : undefined, google_place_id: typeof body.google_place_id === 'string' ? body.google_place_id : body.google_place_id === null ? null : undefined, timezone: typeof body.timezone === 'string' ? body.timezone.trim() || null : body.timezone === null ? null : undefined, rating, review_count: reviewCount, status: body.status === 'active' || body.status === 'inactive' || body.status === 'sync_error'
         ? body.status
         : undefined, feature_overrides: featureOverrides as { enabled?: ProductFeature[]; disabled?: ProductFeature[] } | null | undefined, }, session.user.id, env, )
 
@@ -92,7 +84,10 @@ export default defineHandler(async (event) => {
   const location = (result.data as { location?: { feature_overrides?: string | null } }).location
   const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides ?? null) : null
   return jsonResponse({
-    success: true, location: location ? parseLocationPayload(location) : null, ...capabilitySummary, }, { status: result.status })
+    success: true,
+    location: location ? parseLocationPayload(location) : null,
+    ...capabilitySummary,
+  }, { status: result.status })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';

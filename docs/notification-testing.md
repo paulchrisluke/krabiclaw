@@ -37,6 +37,6 @@ contact either provider or prove their live webhook configuration.
 
 ## Production canary
 
-Production delivery checks are an authorized release operation. Follow [release-flow.md](operations/release-flow.md) and use `yarn canary:notifications` only with the documented production credentials and approval. The canary reads guest delivery outcomes and emits its result as structured command output. Retain that output with the release evidence outside application D1.
+Production delivery checks are an authorized release operation. Follow [release-and-outage-prevention.md](operations/release-and-outage-prevention.md) and use `yarn canary:notifications` only with the documented production credentials and approval. The canary reads guest delivery outcomes and emits its result as structured command output. Retain that output with the release evidence outside application D1.
 
 Never use a canary to provision resources, change delivery modes, or repair data.

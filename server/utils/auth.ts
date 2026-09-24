@@ -55,10 +55,6 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  teams: {
-    enabled: true,
-    defaultTeam: { enabled: false },
-  },
   // Deleting a tenant is a scheduled operation with a grace period and with
   // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
   // owns it and calls this plugin's adapter. The plugin's own route would delete

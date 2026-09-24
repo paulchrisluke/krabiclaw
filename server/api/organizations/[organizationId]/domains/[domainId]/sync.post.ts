@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const domain = await syncDomainWithCloudflare(env, db, domainId, organization.member_role as 'owner' | 'admin' | 'editor', session.user.id, undefined, { forceRevalidation: true })
+    const domain = await syncDomainWithCloudflare(env, db, domainId, organization.member_role as 'owner' | 'admin', session.user.id, undefined, { forceRevalidation: true })
     if (domain.organization_id !== organization.id) {
       return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
     }

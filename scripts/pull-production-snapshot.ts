@@ -2,7 +2,7 @@
  * Preview and local start from a copy of production instead of hand-maintained
  * seed definitions, so what they test against is what customers actually have.
  *
- * The row copy is transferred through scripts/rebaseline-data.mjs: every row is
+ * The row copy is transferred through scripts/transfer-database-export.mjs: every row is
  * copied into the current generated baseline, the catalog derivation and the
  * pending data transforms run, and the result is audited before anything is
  * written. Until production itself carries the baseline this is what makes a
@@ -21,7 +21,8 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { rebaseline } from './rebaseline-data.mjs'
+import Database from 'better-sqlite3'
+import { transferDatabaseExport } from './transfer-database-export.mjs'
 
 // Staging is a release gate, so it has to hold what production holds. It had no
 // target here, so it was never refreshed and drifted to whatever an older
@@ -86,7 +87,7 @@ const run = (args: string[], json = false) => {
 
 // Cloudflare's export operation rejects concurrent application queries for the
 // duration of the export. Copy rows with ordinary SELECTs instead; the existing
-// rebaseline audit still validates the copy before either target is written.
+// transfer audit still validates the copy before either target is written.
 // https://developers.cloudflare.com/d1/best-practices/import-export-data/
 function sourceRows<T>(sql: string): T[] {
   const output = run(['d1', 'execute', 'DB', '--remote', '--command', sql, '--json'], true)
@@ -144,9 +145,25 @@ try {
   copyProductionRows(dumpPath)
 
   const payloadPath = join(directory, 'payload.sql')
-  const manifest = rebaseline(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
+  const manifest = transferDatabaseExport(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
 
   const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
+  // The payload is data only, written for the schema the target was built
+  // from. A destination still on an earlier baseline — the file is regenerated
+  // under the same name, so `migrations apply` sees nothing new — fails half
+  // way through the import instead, on whichever column moved first.
+  const schemaSql = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name"
+  const expected = new Database(join(directory, 'target.sqlite'), { readonly: true })
+  const expectedSchema = expected.prepare(schemaSql).all() as Array<{ name: string; sql: string }>
+  expected.close()
+  const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', schemaSql, '--json'], true)) as Array<{ results: Array<{ name: string; sql: string }> }>
+  const actualSchema = new Map((actual?.results ?? []).map(table => [table.name, table.sql]))
+  const drift = expectedSchema.filter(table => actualSchema.get(table.name) !== table.sql).map(table => table.name)
+  if (drift.length || actualSchema.size !== expectedSchema.length) {
+    throw new Error(`${target} D1 does not carry the current baseline (${drift.length ? drift.slice(0, 5).join(', ') : 'extra tables'} differ); no data was written. ${target === 'local'
+      ? 'Delete .wrangler/state/v3/d1 and run `corepack yarn local:setup` again.'
+      : 'Replace the database through the schema replacement in docs/operations/release-and-outage-prevention.md first.'}`)
+  }
   run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
   console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from the production DB binding into ${target} D1.`)

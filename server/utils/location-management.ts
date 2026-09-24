@@ -3,23 +3,13 @@ import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHo
 import { fireOrganizationEvent } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
-import { parsePhone } from "~/utils/phone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
-import { ensureLocationTeam } from "~/server/utils/member-access";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { prepareContentDocumentDeletion } from '~/server/utils/content/documents'
-export function normalizeLocationNotificationPhone(raw: string | null | undefined): string | null {
-  if (raw === undefined || raw === null || !raw.trim()) return null;
-  const parsed = parsePhone(raw, { defaultCountry: "TH" });
-  if (!parsed.valid || !parsed.e164) {
-    throw new Error("notification_phone must be a valid phone number, including country code.");
-  }
-  return parsed.e164;
-}
 
 type SetupEnv = CloudflareEnv;
 
@@ -47,7 +37,6 @@ export interface CreateLocationInput {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
@@ -86,7 +75,6 @@ export interface LocationRecord {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
@@ -274,7 +262,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
            facebook_url, instagram_url, tiktok_url,
-           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url,
+           timezone, max_capacity, seo_title, seo_description, canonical_url,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
@@ -303,10 +291,6 @@ export async function createLocation(
   if (!title) {
     return { status: 400, data: { error: "Location title is required." } };
   }
-
-  // An unusable robots value is a bad request, like every other field checked
-  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
-  // caller as a 500 saying nothing about which field was wrong.
 
   if (
     input.rating !== undefined &&
@@ -362,17 +346,15 @@ export async function createLocation(
     };
   }
 
-  let normalizedNotificationPhone: string | null;
   let openingHours: string | null;
   let specialHours: string | null;
   try {
     openingHours = serializeOpeningHours(input.opening_hours);
     specialHours = serializeSpecialHours(input.special_hours);
-    normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
   } catch (error) {
     return {
       status: 400,
-      data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
+      data: { error: error instanceof Error ? error.message : "Invalid opening hours." },
     };
   }
 
@@ -392,10 +374,10 @@ export async function createLocation(
             id, organization_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url,
-            notification_phone, timezone, max_capacity, status,
+            timezone, max_capacity, status,
             seo_title, seo_description, canonical_url, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -419,7 +401,6 @@ export async function createLocation(
           input.facebook_url ?? null,
           input.instagram_url ?? null,
           input.tiktok_url ?? null,
-          normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
           input.seo_title ?? null,
@@ -432,24 +413,6 @@ export async function createLocation(
       });
 
       await executeBatch(db, statements);
-      try {
-        await ensureLocationTeam(db, {
-          env,
-          organizationId,
-          
-          locationId: id,
-          name: title,
-        });
-      } catch (teamError) {
-        const compensating = [{
-          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ?`,
-          params: [id, organizationId],
-        }];
-        await executeBatch(db, compensating).catch((cleanupError) => {
-          console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
-        });
-        throw teamError;
-      }
       created = { id, location: await loadLocation(db, organizationId, id) };
       break;
     } catch (error) {
@@ -516,9 +479,6 @@ export async function updateLocation(
     return { status: 400, data: { error: "title cannot be empty." } };
   }
 
-  // An unusable robots value is a bad request, like every other field checked
-  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
-  // caller as a 500 saying nothing about which field was wrong.
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
     return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
@@ -568,18 +528,6 @@ export async function updateLocation(
     };
   }
 
-  let normalizedNotificationPhone: string | null | undefined;
-  if (input.notification_phone !== undefined) {
-    try {
-      normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
-    } catch (error) {
-      return {
-        status: 400,
-        data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
-      };
-    }
-  }
-
   const now = new Date().toISOString();
   const sets: string[] = ["updated_at = ?"];
   const params: Array<string | number | null> = [now];
@@ -611,7 +559,6 @@ export async function updateLocation(
     "maps_url",
     "google_review_url",
     "google_place_id",
-    "notification_phone",
     "timezone",
     "max_capacity",
     "status",
@@ -626,9 +573,7 @@ export async function updateLocation(
       params.push(
         field === "timezone"
           ? normalizedTimezone ?? null
-          : field === "notification_phone"
-            ? normalizedNotificationPhone ?? null
-              : input[field] ?? null,
+          : input[field] ?? null,
       );
     }
   }

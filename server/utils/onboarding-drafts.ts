@@ -212,7 +212,6 @@ export interface DraftDetailsInput {
   websiteUrl: string | null
   openingHours: OpeningHours
   specialHours: SpecialHours
-  notificationPhone: string | null
   timezone: string | null
   currency: CurrencyCode | null
 }

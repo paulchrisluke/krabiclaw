@@ -88,7 +88,6 @@ export interface SiteSettingsEditor {
   nameCharactersRemaining: ComputedRef<number>
   descriptionCharactersRemaining: ComputedRef<number>
   supportsSiteFonts: ComputedRef<boolean>
-  whatsappPhone: Ref<string>
   localizationSettings: Ref<LocalizationSettings | null>
   localizationLoading: Ref<boolean>
   localizationBusy: Ref<boolean>
@@ -210,7 +209,6 @@ async function keepWorkspace() {
 
 interface SettingsPageResource {
   settings: { success: boolean; settings: SiteSettingsResponse }
-  notifications: { success: boolean; notifications: { whatsapp_phone: string | null } }
 }
 
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
@@ -219,9 +217,6 @@ const isSettingsResponse = (value: unknown): value is { success: boolean; settin
   && (value.settings.font_preset === undefined || isSiteFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
   && isWebsiteStatus(value.settings.status)
-const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null } } =>
-  isRecord(value) && typeof value.success === 'boolean' && isRecord(value.notifications)
-  && (value.notifications.whatsapp_phone === null || typeof value.notifications.whatsapp_phone === 'string')
 function isWebsiteStatus(value: unknown): value is WebsiteStatus {
   return value === 'active' || value === 'inactive' || value === 'suspended'
 }
@@ -232,7 +227,6 @@ const detailKey = computed(() => level.child.value)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
-const whatsappPhone = ref('')
 const localizationSettings = ref<LocalizationSettings | null>(null)
 const localizationLoading = ref(false)
 const localizationBusy = ref(false)
@@ -242,7 +236,6 @@ const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<SiteSettingsResponse | null>(null)
 const supportsSiteFonts = computed(() => loadedSettings.value?.theme === 'saya')
-const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
 const form = reactive<SiteSettingsForm>({
   name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
@@ -266,7 +259,6 @@ const nameCharactersRemaining = computed(() => 50 - form.name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
 function explicitSummary(value: string | null | undefined, empty = 'Not set') { return value?.trim() || empty }
-const notificationSummary = computed(() => explicitSummary(loadedNotifications.value?.whatsapp_phone, 'Not configured'))
 const socialSummary = computed(() => {
   const count = [loadedSettings.value?.social_facebook_url, loadedSettings.value?.social_instagram_url, loadedSettings.value?.social_tiktok_url].filter(Boolean).length
   return count ? `${count} ${count === 1 ? 'profile' : 'profiles'} connected` : 'Not configured'
@@ -295,7 +287,6 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
   { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
-  { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
   // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value
@@ -325,7 +316,6 @@ function editorSignature(key: string | null) {
     case 'contact': return JSON.stringify(form.contact_email)
     case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
-    case 'notifications': return whatsappPhone.value
     case 'status': return JSON.stringify(form.status)
     case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
@@ -344,7 +334,6 @@ const validationMessage = computed(() => {
     case 'font': return supportsSiteFonts.value && isSiteFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
-    case 'notifications': return null
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
@@ -371,14 +360,9 @@ function fillForm(settings: SiteSettingsResponse) {
   form.social_instagram_url = settings.social_instagram_url ?? ''
   form.social_tiktok_url = settings.social_tiktok_url ?? ''
 }
-function fillNotifications(notifications: { whatsapp_phone: string | null }) {
-  loadedNotifications.value = notifications
-  whatsappPhone.value = notifications.whatsapp_phone ?? ''
-}
 function resetDraft() {
   editorError.value = null
   if (loadedSettings.value) fillForm(loadedSettings.value)
-  if (loadedNotifications.value) fillNotifications(loadedNotifications.value)
   newLocale.value = ''
   originalSignature.value = editorSignature(detailKey.value)
 }
@@ -389,18 +373,16 @@ function errorMessage(error: unknown, fallback: string) {
 
 const settingsResourceKey = computed(() => `dashboard-organization-settings:${String(route.params.orgSlug)}`)
 const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
-  const [settings, notifications] = await Promise.all([
+  const [settings] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
-    dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { validate: isNotificationsResponse }),
   ])
-  return { settings, notifications }
+  return { settings }
 }, { lazy: true })
 watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
   loading.value = pending
   if (error) { loadError.value = errorMessage(error, 'Failed to load site settings'); return }
   if (!resource) return
   fillForm(resource.settings.settings)
-  fillNotifications(resource.notifications.notifications)
   originalSignature.value = editorSignature(detailKey.value)
   loadError.value = null
 }, { immediate: true })
@@ -432,12 +414,6 @@ async function saveCurrentEditor() {
         break
       }
       case 'status': await patchSettings({ status: form.status }); break
-      case 'notifications': {
-        const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
-        fillNotifications(response.notifications)
-        originalSignature.value = editorSignature(detailKey.value)
-        break
-      }
       case 'localization': {
         const success = await enableLanguage()
         if (success) originalSignature.value = editorSignature(detailKey.value)
@@ -516,7 +492,6 @@ provide(siteSettingsEditorKey, {
   nameCharactersRemaining,
   descriptionCharactersRemaining,
   supportsSiteFonts,
-  whatsappPhone,
   localizationSettings,
   localizationLoading,
   localizationBusy,

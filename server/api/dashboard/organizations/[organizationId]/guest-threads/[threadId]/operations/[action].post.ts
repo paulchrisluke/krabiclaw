@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
   if (!organizationId || !threadId || !action) return jsonResponse({ error: 'Missing params' }, { status: 400 })
   if (!GUEST_THREAD_ACTIONS.has(action)) return jsonResponse({ error: `Unknown action "${action}"` }, { status: 400 })
 
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })

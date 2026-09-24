@@ -2,7 +2,7 @@
 // Offline transfer of a database export into the current migrated schema.
 // Never imported by application runtime.
 //
-//   node scripts/rebaseline-data.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
+//   node scripts/transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
 //
 // The target is created from the complete ordered migration chain, every table
 // the source and the current schema share is copied column-for-column, the transforms
@@ -30,6 +30,10 @@ import { PROMOTE_PRODUCT_COVERS_SQL, RENUMBER_PRODUCT_GALLERIES_SQL } from './li
 import { serializeMetafieldValue } from '../shared/metafields.ts'
 import { occurrenceKey } from '../shared/bookings.ts'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
+import { organizationRoles } from '../utils/organization-access.ts'
+
+/** The roles the access matrix declares. Anything else evaluates to no permissions. */
+const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
 import { localDateTimeToInstant } from '../utils/timezone.ts'
 
 const MIGRATIONS_DIRECTORY = 'migrations'
@@ -156,6 +160,14 @@ export const TRANSFORMS = [
 )
 UPDATE content_blocks SET position = (SELECT new_position FROM map WHERE map.id = content_blocks.id)
 WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map WHERE map.id = content_blocks.id)` },
+  // The organization's WhatsApp number decided who heard about a booking, beside
+  // the Better Auth membership that already said so. Notifications resolve from
+  // the member to their own verified phone now, so the key is retired with the
+  // column its location-level twin lived in. Nothing reads it; left behind it is
+  // a setting a tenant could still see in an export and believe in.
+  { name: 'organization_whatsapp_phone_is_retired', sql: `UPDATE organization
+      SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone')
+    WHERE json_type(settings_json, '$.config.whatsapp_phone') IS NOT NULL` },
   { name: 'localized_brand_name_is_organization_name', sql: `UPDATE resource_localizations
       SET values_json = json_remove(json_set(values_json, '$.name', values_json ->> '$.brand_name'), '$.brand_name')
     WHERE resource_type IN ('site', 'organization')
@@ -255,6 +267,26 @@ export function auditTargetInvariants(target) {
   const placements = target.prepare('SELECT DISTINCT owner_type, slot FROM media_placements').all()
   const unsupported = placements.filter(row => !isSupportedMediaPlacement(row))
   results.push({ name: 'media_placement_slots_are_declared', violations: unsupported.length, unsupported: unsupported.map(row => `${row.owner_type}:${row.slot}`) })
+  // Roles are declared in TypeScript (utils/organization-access.ts), not in SQL.
+  // A role the matrix does not know evaluates to no permissions at all, so a row
+  // carrying a retired one is a person who quietly cannot reach their own tenant.
+  //
+  // This fails rather than rewriting the row. Mapping a retired role onto a
+  // surviving one is a privilege decision: `member` granted nothing and
+  // `editor` was scoped to a single location, so rewriting either to `admin`
+  // hands out settings, billing and member management that nobody approved —
+  // and an audit that accepts the resulting `admin` cannot see it happened.
+  // Whoever runs the transfer resolves the row first.
+  //
+  // Only live authorization counts. A member row authorizes; an invitation
+  // authorizes while it is pending. An accepted or revoked one is a record of
+  // what happened and grants nothing.
+  const roles = target.prepare(`
+    SELECT DISTINCT role FROM member WHERE role IS NOT NULL
+    UNION SELECT DISTINCT role FROM invitation WHERE role IS NOT NULL AND status = 'pending'
+  `).all().map(row => String(row.role))
+  const undeclared = roles.filter(role => !DECLARED_ORGANIZATION_ROLES.has(role))
+  results.push({ name: 'organization_roles_are_declared', violations: undeclared.length, undeclared })
   return results
 }
 
@@ -872,7 +904,7 @@ function deriveMetafields(stage, now, record) {
   const insertDefinition = stage.prepare(`INSERT INTO metafield_definitions (id, organization_id, namespace, key, name, description, value_type, validations, localizable, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', 1, ?, ?, ?, ?)`)
   for (const definition of definitions.values()) {
-    insertDefinition.run(definition.id, definition.organization_id, definition.namespace, definition.key, definition.name, definition.value_type, now, now, 'rebaseline', 'rebaseline')
+    insertDefinition.run(definition.id, definition.organization_id, definition.namespace, definition.key, definition.name, definition.value_type, now, now, 'transfer', 'transfer')
   }
   const insertValue = stage.prepare(`INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (product_id, definition_id) DO NOTHING`)
@@ -1088,7 +1120,7 @@ function deriveGuestRecords(stage, record) {
   const insertReservation = stage.prepare(`INSERT INTO reservations (id, organization_id, location_id, customer_id, request_id, timezone, starts_at, ends_at, party_size, status, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
   const insertSession = stage.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, location_id, availability_rule_id, source_occurrence_key, timezone, starts_at, ends_at, capacity, status, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'rebaseline', 'rebaseline') ON CONFLICT (id) DO NOTHING`)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'transfer', 'transfer') ON CONFLICT (id) DO NOTHING`)
   const insertBooking = stage.prepare(`INSERT INTO bookings (id, organization_id, product_id, product_session_id, product_variant_id, customer_id, request_id, party_size, status, hold_expires_at, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`)
   let reservations = 0
@@ -1142,7 +1174,7 @@ function deriveGuestRecords(stage, record) {
       json_extract(l.booking_json, '$.reservation.policy.additional_notes_html'),
       coalesce(json_extract(l.booking_json, '$.reservation.policy.created_at'), l.created_at),
       coalesce(json_extract(l.booking_json, '$.reservation.policy.updated_at'), l.updated_at),
-      'rebaseline', 'rebaseline'
+      'transfer', 'transfer'
     FROM old.business_locations l WHERE json_type(l.booking_json, '$.reservation.policy') = 'object'`).run().changes)
   record('reservations', reservations)
   record('bookings', bookings)
@@ -1204,7 +1236,7 @@ function deriveSlugRedirects(stage, now, record) {
       (SELECT s.vertical FROM old.sites s WHERE s.organization_id = p.organization_id) AS vertical
     FROM temp.product_map m JOIN products p ON p.id = m.new_id WHERE m.redirect_from IS NOT NULL`).all()
   const insert = stage.prepare(`INSERT INTO organization_redirects (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'rebaseline', ?, ?)`)
+    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'transfer', ?, ?)`)
   for (const row of rows) {
     const segment = row.vertical === 'restaurant' ? 'menu' : 'products'
     const from = `/locations/${row.location_slug}/${segment}/${row.redirect_from}`
@@ -1267,16 +1299,16 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, migration_chain_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
  *   derived?: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
- *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} RebaselineManifest
+ *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number } }} TransferManifest
  */
 
 /**
  * @param {string} sourcePath
  * @param {string} targetPath
  * @param {{ payloadPath?: string | null, withoutJwks?: boolean }} [options]
- * @returns {RebaselineManifest}
+ * @returns {TransferManifest}
  */
-export function rebaseline(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
+export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
   assert(!existsSync(targetPath), `Target already exists: ${targetPath}`)
   const schemaSql = migrationChainSql()
   const source = openDatabase(resolve(sourcePath))
@@ -1292,7 +1324,7 @@ export function rebaseline(sourcePath, targetPath, { payloadPath = null, without
   const stage = new Database(':memory:')
   const target = new Database(targetPath)
   const now = new Date().toISOString()
-  /** @type {RebaselineManifest} */
+  /** @type {TransferManifest} */
   const manifest = {
     baseline_sha256: hash(readFileSync(resolve(MIGRATIONS_DIRECTORY, '0000_baseline.sql'), 'utf8')),
     migration_chain_sha256: hash(schemaSql),
@@ -1402,10 +1434,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const withoutJwks = flag('--without-jwks')
   const payloadPath = option('--payload')
   const [sourcePath, targetPath] = args
-  if (!sourcePath || !targetPath) throw new Error('Usage: rebaseline-data.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]')
-  const manifest = rebaseline(sourcePath, targetPath, { payloadPath, withoutJwks })
+  if (!sourcePath || !targetPath) throw new Error('Usage: transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]')
+  const manifest = transferDatabaseExport(sourcePath, targetPath, { payloadPath, withoutJwks })
   const rows = manifest.tables.reduce((total, entry) => total + entry.target_rows, 0)
-  console.log(`Rebaseline passed: ${manifest.tables.length} tables, ${rows} rows`)
+  console.log(`Transfer passed: ${manifest.tables.length} tables, ${rows} rows`)
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, count]) => `${name}=${count}`).join(', ')}`)
   console.log(`Transforms: ${manifest.transforms.map(transform => `${transform.name}=${transform.changes}`).join(', ')}`)
 }

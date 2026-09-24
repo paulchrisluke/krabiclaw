@@ -10,7 +10,7 @@ import { addLocalDays, localDateAt } from '~/utils/timezone'
  * A rule is a repeating intention; a session is the occurrence a guest claims a
  * seat on. Only a person pressing "generate" in the CMS ever materialized them,
  * so a product's calendar ran dry as the generated horizon passed — and after a
- * database rebaseline, which carries rules but materializes nothing, every
+ * transferred database export, which carries rules but materializes nothing, every
  * bookable product read "no sessions scheduled" until someone noticed.
  *
  * Generation is idempotent: it inserts the occurrences the rules name inside

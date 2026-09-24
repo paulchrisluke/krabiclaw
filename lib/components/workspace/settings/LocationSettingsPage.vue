@@ -57,7 +57,6 @@ export interface BusinessLocation {
   review_count: number | null
   status: string
   last_synced_at: string | null
-  notification_phone?: string | null
   timezone?: string | null
 }
 
@@ -67,7 +66,7 @@ export interface BusinessLocation {
  * rest are the gear's.
  */
 export const HUB_KEYS = ['name', 'description', 'hours', 'address', 'contact', 'reservations'] as const
-export const SETTINGS_KEYS = ['status', 'slug', 'notifications', 'features'] as const
+export const SETTINGS_KEYS = ['status', 'slug', 'features'] as const
 export type LocationEditorKey = typeof HUB_KEYS[number] | typeof SETTINGS_KEYS[number]
 
 /**
@@ -256,7 +255,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     short_description: '',
     description: '',
     status: 'active',
-    notification_phone: '',
   })
   const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
   const locationLocalizationFields = computed(() => [
@@ -295,7 +293,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     detailsForm.description = loc.description ?? ''
     hoursForm.value = { timezone: loc.timezone ?? '', hours: parseOpeningHours(loc.opening_hours), specialHours: parseSpecialHours(loc.special_hours) }
     detailsForm.status = loc.status
-    detailsForm.notification_phone = loc.notification_phone ?? ''
     }
 
   const setDetailsActive = (v: boolean | 'indeterminate') => {
@@ -305,7 +302,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
 
   const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
   const statusSummary = computed(() => location.value?.status === 'active' ? 'Active' : 'Hidden from the public site')
-  const notificationSummary = computed(() => location.value?.notification_phone || 'Not configured')
   const featureSummary = computed(() => {
     const count = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature]).length
     return count ? `${count} ${count === 1 ? 'module' : 'modules'} available` : 'No location modules'
@@ -316,7 +312,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       { id: 'status', label: 'Status', summary: statusSummary.value, to: `${settingsBase.value}/status` },
       { id: 'slug', label: 'Link', summary: slugSummary.value, to: `${settingsBase.value}/slug` },
       { id: 'languages', label: 'Languages', summary: 'Translate the name, description and address', action: { label: 'Localize' } },
-      { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, to: `${settingsBase.value}/notifications` },
       { id: 'features', label: 'Features', summary: featureSummary.value, to: `${settingsBase.value}/features` },
     ],
   }])
@@ -335,7 +330,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       case 'status': return JSON.stringify(detailsForm.status)
       case 'hours': return JSON.stringify(hoursForm.value)
       case 'description': return JSON.stringify([detailsForm.short_description, detailsForm.description, detailsForm.price_level])
-      case 'notifications': return JSON.stringify([detailsForm.notification_phone])
       case 'reservations': return JSON.stringify(reservationForm.value)
       case 'features': return JSON.stringify(locationToggleableFeatures.value.map(feature => [feature, Boolean(locationEnabledFeatureSet[feature])]))
       default: return ''
@@ -490,12 +484,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       })
       return
     }
-    // The timezone belongs to Hours, which requires it. Editing it here as well
-    // let a Notifications save write null over the value Hours validates, and
-    // the location's opening times are read in that zone.
-    await patchLocation({
-      notification_phone: detailsForm.notification_phone.trim() || null,
-    })
+    throw new Error(`The ${key ?? 'location'} setting has nothing to save.`)
   }
 
   interface LocationSettingsResource {

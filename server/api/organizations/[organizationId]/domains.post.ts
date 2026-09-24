@@ -24,7 +24,7 @@ export default defineHandler(async (event) => {
   if (!requestedDomain) return jsonResponse({ error: 'Domain is required' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
-  const actorType = organization.member_role as 'owner' | 'admin' | 'editor'
+  const actorType = organization.member_role as 'owner' | 'admin'
 
 
   if (!(await hasSiteEntitlement(env, db, organizationId, 'custom_domains'))) {
