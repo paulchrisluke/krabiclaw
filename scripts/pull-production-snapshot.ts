@@ -98,7 +98,7 @@ function sourceRows<T>(sql: string): T[] {
 function copyProductionRows(path: string) {
   const identifier = (value: string) => '"' + value.replaceAll('"', '""') + '"'
   const literal = (value: string) => "'" + value.replaceAll("'", "''") + "'"
-  const catalog = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT IN ('d1_migrations', '__drizzle_migrations', 'jwks')"
+  const catalog = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations', 'jwks')"
   const tables = sourceRows<{ name: string; sql: string; column_names: string }>(
     `SELECT name, sql, (SELECT json_group_array(name) FROM pragma_table_xinfo(catalog.name) WHERE hidden = 0) AS column_names FROM (${catalog}) catalog ORDER BY name`,
   )
@@ -151,7 +151,7 @@ try {
   // from. A destination still on an earlier baseline — the file is regenerated
   // under the same name, so `migrations apply` sees nothing new — fails half
   // way through the import instead, on whichever column moved first.
-  const schemaSql = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name"
+  const schemaSql = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name"
   const expectedSchema = manifest.schema
   if (!expectedSchema) throw new Error('The transfer did not report the schema it built')
   const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', schemaSql, '--json'], true)) as Array<{ results: Array<{ name: string; sql: string }> }>
