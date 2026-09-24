@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-excerpt"
+    id="organization-blog-post-excerpt"
     title="Excerpt"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

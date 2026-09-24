@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-qa-visibility"
+    id="organization-qa-visibility"
     title="Visibility"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"

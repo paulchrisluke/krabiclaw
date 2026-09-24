@@ -40,7 +40,7 @@
 definePageMeta({ layout: false })
 
 const { t } = useI18n()
-const { themeId } = useTenantSite()
+const { themeId } = useTenantOrganization()
 const isBlawby = themeId === 'blawby-theme-v1'
 
 // Always shows a generic success state rather than gating on the sessionStorage

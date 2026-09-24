@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-category"
+    id="organization-blog-post-category"
     title="Category"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

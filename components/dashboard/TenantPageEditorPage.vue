@@ -3,7 +3,7 @@
     The page: its rows are its sections list and the fields a page has of its
     own. Each is a level below this one; the shell reads which is open.
   -->
-  <DashboardIndexPanel id="site-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert
       v-if="loadError"
       color="error"
@@ -37,7 +37,7 @@
           :fields="localizationFields"
           :load-values="loadPageLocalization"
           :save-values="savePageLocalization"
-          :language-settings-path="siteLocalizationSettingsPath"
+          :language-settings-path="organizationLocalizationSettingsPath"
           :disabled="dirty"
         />
       </div>
@@ -130,7 +130,7 @@ const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty

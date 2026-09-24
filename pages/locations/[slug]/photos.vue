@@ -74,11 +74,11 @@ const { localePath, t } = useI18n()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 const { location, media: photos } = await usePublicPageData({ lazy: false })
 // A slug naming no location is a URL that does not exist. Rendering the page
@@ -139,13 +139,12 @@ const lightboxItems = computed(() =>
 )
 
 
-const runtimeConfig = useRuntimeConfig()
-const siteUrl = runtimeConfig.public.siteUrl
+const organizationUrl = useRequestURL().origin
 
 function toAbsoluteUrl(value?: string | null): string | null {
   if (!value) return null
   try {
-    return new URL(value, siteUrl).toString()
+    return new URL(value, organizationUrl).toString()
   } catch {
     return null
   }
@@ -157,11 +156,11 @@ useSocialMetadata(() => ({
   description: t('saya.photos.meta_description', {
     count: photos.value.length,
     location: location.value?.title || slug.value,
-    site: siteName.value,
+    organization: organizationName.value,
   }),
   socialImage: location.value?.social_image ?? null,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
@@ -185,10 +184,10 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${siteUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: t('saya.subnav.photos'), item: `${siteUrl}/locations/${slug.value}/photos` }
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${organizationUrl}/` },
+      { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${organizationUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${organizationUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: t('saya.subnav.photos'), item: `${organizationUrl}/locations/${slug.value}/photos` }
     ]
   }))
 ])

@@ -25,7 +25,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 // questions above it or its practice areas below.
 defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
-const { organizationId } = useTenantSite()
+const { organizationId } = useTenantOrganization()
 const { localePath } = useI18n()
 // The same keyed request the page already made; the shell carries the firm's
 // name for the confirmation and its consultation settings for the tracking.
@@ -35,7 +35,7 @@ const consultation = computed(() => shell.value.consultation)
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })
-const { mirrorSubmission } = useSiteConversionTracking(consultation)
+const { mirrorSubmission } = useOrganizationConversionTracking(consultation)
 
 async function submitContact() {
   if (!organizationId || submitting.value) return
@@ -50,7 +50,7 @@ async function submitContact() {
     mirrorSubmission('contact_submit')
     setContactConfirmation({
       organizationId,
-      siteName: identity.value.name,
+      organizationName: identity.value.name,
       guestName: form.name,
       subject: form.subject,
     })

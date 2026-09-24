@@ -406,7 +406,7 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const { trackProductOrder } = useSiteConversionTracking()
+const { trackProductOrder } = useOrganizationConversionTracking()
 const { locale, localePath, t } = useI18n()
 const collectionLabel = computed(() => {
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
@@ -767,7 +767,7 @@ async function submitBooking(contact: ContactFormState) {
     setBookingConfirmation({
       type: 'booking',
       organizationId: props.organizationId,
-      siteName: props.location.title,
+      organizationName: props.location.title,
       guestName: contact.name,
       startsAt: session.starts_at,
       timezone: session.timezone,

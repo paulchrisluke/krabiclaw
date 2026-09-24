@@ -59,7 +59,7 @@
         </div>
 
         <!-- Lightbox -->
-        <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="siteName" />
+        <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="organizationName" />
       </template>
     </template>
   </div>
@@ -69,11 +69,11 @@
 definePageMeta({ layout: 'saya' })
 
 const { localePath, t } = useI18n()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const { locations, media: photos, pending } = await usePublicPageData()
-const siteName = computed(() => site?.name?.trim() ?? '')
+const organizationName = computed(() => organization?.name?.trim() ?? '')
 
 const locationsById = computed(() => Object.fromEntries(locations.value.map(l => [l.id, l])))
 function locationTitle(photo) {
@@ -138,14 +138,14 @@ const lightboxItems = computed(() =>
 
 useSocialMetadata(() => ({
   path: '/photos',
-  title: `${t('saya.subnav.photos')} | ${siteName.value}`,
+  title: `${t('saya.subnav.photos')} | ${organizationName.value}`,
   description: t('saya.photos.meta_description', {
     count: photos.value.length,
-    location: siteName.value,
-    site: siteName.value,
+    location: organizationName.value,
+    organization: organizationName.value,
   }),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

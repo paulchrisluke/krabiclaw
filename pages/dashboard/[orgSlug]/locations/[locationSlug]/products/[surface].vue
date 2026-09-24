@@ -14,7 +14,7 @@ const route = useRoute()
 const dashboard = useDashboardOrganization()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
 // A segment that names no surface of this vertical is not a page. A location
 // sells its own goods and, where it takes bookings, experiences; anything else

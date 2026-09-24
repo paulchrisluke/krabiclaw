@@ -43,7 +43,7 @@ import { isPublicLinksPayload, isPublicLinksResponse, type PublicLinksItem, type
 
 definePageMeta({ layout: false })
 
-const tenantState = useTenantSite()
+const tenantState = useTenantOrganization()
 const route = useRoute()
 const { localePath } = useI18n()
 const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
@@ -90,11 +90,11 @@ if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Links page
 useState<PublicLinksPayload['localeRepresentations']>('public-locale-representations', () => []).value = data.value.localeRepresentations
 
 const linksPage = computed(() => data.value)
-const isBlawby = computed(() => linksPage.value?.site.template === 'blawby')
+const isBlawby = computed(() => linksPage.value?.organization.template === 'blawby')
 const layoutName = computed(() => isBlawby.value ? 'blawby' : 'saya')
-const brandName = computed(() => linksPage.value?.site.name || linksPage.value?.page.title || '')
-const profileImageUrl = computed(() => linksPage.value?.site.media.find(item => item.slot === 'logo')?.public_url || null)
-const { trackLinkClick: recordLinkClick } = useSiteConversionTracking()
+const brandName = computed(() => linksPage.value?.organization.name || linksPage.value?.page.title || '')
+const profileImageUrl = computed(() => linksPage.value?.organization.media.find(item => item.slot === 'logo')?.public_url || null)
+const { trackLinkClick: recordLinkClick } = useOrganizationConversionTracking()
 
 const templateClass = computed(() => isBlawby.value
   ? 'min-h-[calc(100vh-8rem)] bg-[color:var(--blawby-token-bg)] px-4 py-10 sm:px-6 sm:py-14'
@@ -142,8 +142,8 @@ function trackLinkClick(item: PublicLinksItem) {
 useSocialMetadata(() => ({
   path: '/links',
   title: linksPage.value?.page.seo_title || linksPage.value?.page.title || brandName.value,
-  description: linksPage.value?.page.seo_description || linksPage.value?.site.brand_description || '',
+  description: linksPage.value?.page.seo_description || linksPage.value?.organization.brand_description || '',
   discoverability: 'unlisted',
-  brand: { siteName: brandName.value },
+  brand: { organizationName: brandName.value },
 }))
 </script>

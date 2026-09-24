@@ -9,7 +9,7 @@
         resource-label="post"
         :fields="postLocalizationFields"
         :route-path="localizedPostPath"
-        :language-settings-path="siteLocalizationSettingsPath"
+        :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
 
@@ -497,7 +497,7 @@ function setTiming(value: string) {
 const hasPhotoCover = computed(() => editor.form.media.some(item => item.slot === 'cover' && item.kind !== 'video'))
 
 const channelOptions = computed(() => [
-  { value: 'site', label: 'This website', disabled: false, hint: '' },
+  { value: 'organization', label: 'This website', disabled: false, hint: '' },
   {
     value: 'facebook',
     label: 'Facebook Page',
@@ -540,7 +540,7 @@ const publicPath = computed(() => {
   return path ? String(path) : null
 })
 
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 const postLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: post.value?.title },
   { key: 'body', label: 'Body', source: post.value?.body, multiline: true, rows: 6 },

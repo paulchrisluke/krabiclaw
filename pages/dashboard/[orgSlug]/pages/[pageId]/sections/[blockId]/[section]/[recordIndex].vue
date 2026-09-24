@@ -3,14 +3,14 @@
     One record. A record with several concerns is an index whose rows are those
     concerns; a record with one is the leaf itself.
   -->
-  <DashboardIndexPanel v-if="records.recordSections.value.length" id="site-page-block-record" :title="records.recordTitle.value" :auto-open="groups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel v-if="records.recordSections.value.length" id="organization-page-block-record" :title="records.recordTitle.value" :auto-open="groups[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert v-if="editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.errorMessage.value" />
     <EditorNavigationList :groups="groups" :active-item="level.child.value" />
   </DashboardIndexPanel>
 
   <DashboardLeafPanel
     v-else
-    id="site-page-block-record"
+    id="organization-page-block-record"
     :title="records.recordTitle.value"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

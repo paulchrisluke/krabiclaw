@@ -2,10 +2,10 @@
   <header data-blawby-critical-header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
     <BlawbyBanner
       data-blawby-critical-banner
-      :content="site.banner_content"
-      :phone="site.phone"
-      :dismissible="site.banner_dismissible"
-      :storage-key="`blawby-banner:${site.name}:${site.banner_content}`"
+      :content="organization.banner_content"
+      :phone="organization.phone"
+      :dismissible="organization.banner_dismissible"
+      :storage-key="`blawby-banner:${organization.name}:${organization.banner_content}`"
     />
     <div class="blawby-container">
       <nav class="relative z-50 flex items-center justify-between gap-4 py-2" :aria-label="t('blawby.navigation.main')">
@@ -82,17 +82,17 @@
 import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicConsultationSettings } from '~/types/blawby'
 
 const props = defineProps<{
-  site: PublicBlawbyIdentity
+  organization: PublicBlawbyIdentity
   consultation: PublicConsultationSettings
   pageLinks: PublicBlawbyPageLink[]
 }>()
 
 const { localePath, t } = useI18n()
 
-const { trackConsultationClick } = useSiteConversionTracking(() => props.consultation)
+const { trackConsultationClick } = useOrganizationConversionTracking(() => props.consultation)
 const route = useRoute()
-const brandName = computed(() => props.site.name || '')
-const logoUrl = computed(() => props.site.media.find(item => item.slot === 'logo')?.public_url || null)
+const brandName = computed(() => props.organization.name || '')
+const logoUrl = computed(() => props.organization.media.find(item => item.slot === 'logo')?.public_url || null)
 const headerCtaLabel = computed(() => props.consultation.cta_label)
 const headerOrder = ['/services', '/pricing', '/about', '/contact', '/blog', '/donate']
 const headerItems = computed(() => {

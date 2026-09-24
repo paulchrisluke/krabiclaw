@@ -10,7 +10,7 @@
       :fields="productLocalizationFields"
       :load-values="loadProductLocalization"
       :save-values="saveProductLocalization"
-      :language-settings-path="siteLocalizationSettingsPath"
+      :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
 
@@ -159,14 +159,14 @@ const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 // The words follow the product: a class is an experience whatever the site
 // sells otherwise. Until the row has loaded, and for a product being created,
 // the screen speaks the vertical's own surface — it is not yet known to be
 // anything else.
 const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
 const rawCurrency = dashboard.organization.value?.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
@@ -858,7 +858,7 @@ const productLocalizationFields = computed(() => {
   return fields
 })
 
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 
 function isProductLocalizationResponse(value: unknown): value is { localization: { values: Record<string, unknown> } } {
   return isRecord(value) && isRecord(value.localization) && isRecord(value.localization.values)

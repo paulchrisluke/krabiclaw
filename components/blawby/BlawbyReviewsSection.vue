@@ -40,9 +40,9 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockRecords } from '~/utils/tenant-page-block-data'
-import type { PublicSiteReview } from '~/types/blawby'
+import type { PublicOrganizationReview } from '~/types/blawby'
 
-const portrait = (review: PublicSiteReview) => review.media.find(asset => asset.slot === 'portrait') ?? null
+const portrait = (review: PublicOrganizationReview) => review.media.find(asset => asset.slot === 'portrait') ?? null
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 

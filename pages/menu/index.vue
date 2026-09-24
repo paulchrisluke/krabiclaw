@@ -10,18 +10,18 @@ import { isExperience, requireProductPresentation } from '~/utils/product-presen
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, collections, locations, config, site } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, config, organization } = await usePublicPageData({ lazy: false })
 // What the merchant sells over the counter. Anything a guest books a seat on
 // is an Experience and has its own surface, so it is not listed twice.
 const goods = computed(() => products.value.filter(product => !isExperience(product)))
-const vertical = String(site.value?.vertical ?? '')
+const vertical = String(organization.value?.vertical ?? '')
 const presentation = requireProductPresentation(vertical)
 if (presentation.locationCollectionSegment !== 'menu') throw createError({ statusCode: 404 })
 const rawCurrency = config.value.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
-const brandName = site.value?.name
-if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
+const brandName = organization.value?.name
+if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Organization brand is unavailable' })
 const productLocations = computed(() => locations.value.map(location => ({ id: location.id, slug: location.slug, title: location.title })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { siteName: brandName } }))
+useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { organizationName: brandName } }))
 </script>

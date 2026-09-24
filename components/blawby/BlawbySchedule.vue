@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicSiteQa } from '~/types/blawby'
+import type { PublicOrganizationQa } from '~/types/blawby'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { data, error, shell } = await useBlawbyRoute('schedule')
@@ -87,11 +87,11 @@ const scheduleCtaDestination = computed(() => consultation.value.external_url ||
  */
 const priceLine = computed(() => optionalString(scheduleCta.value?.price_line))
 const notice = computed(() => optionalString(scheduleCta.value?.notice))
-const scheduleQa = computed<PublicSiteQa[]>(() => {
+const scheduleQa = computed<PublicOrganizationQa[]>(() => {
   return routeData.value.qa
 })
 
-const { trackConsultationClick } = useSiteConversionTracking(consultation)
+const { trackConsultationClick } = useOrganizationConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/schedule', destination)
 }
@@ -101,7 +101,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: page.value.seo_title || `Consultation | ${identity.value.name}`,
   description: page.value.seo_description || page.value.summary || '',
   brand: {
-    siteName: identity.value.name,
+    organizationName: identity.value.name,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

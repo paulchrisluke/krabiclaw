@@ -12,7 +12,7 @@
       <TenantBlogIndex
         v-else
         variant="saya"
-        :title="locale === 'en' ? `Stories from ${siteName}` : t('saya.posts.title')"
+        :title="locale === 'en' ? `Stories from ${organizationName}` : t('saya.posts.title')"
         :posts="posts"
         base-path="/blog"
       />
@@ -33,21 +33,21 @@ interface TenantBlogPost {
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; kind: string | null }>
 }
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 const { locale, t } = useI18n()
 if (!organizationId) throw createError({ statusCode: 404 })
 
-const siteName = computed(() => site?.name?.trim() ?? '')
+const organizationName = computed(() => organization?.name?.trim() ?? '')
 
 const { blogList, error, pending } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
 useSocialMetadata(() => ({
   path: '/blog',
-  title: locale.value === 'en' ? `Blog | ${siteName.value}` : t('saya.footer.blog'),
-  description: t('saya.posts.meta_description', { site: siteName.value }),
+  title: locale.value === 'en' ? `Blog | ${organizationName.value}` : t('saya.footer.blog'),
+  description: t('saya.posts.meta_description', { organization: organizationName.value }),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

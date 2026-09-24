@@ -49,8 +49,7 @@ const variant = computed<'home' | 'pricing'>(() => (props.page.path === '/pricin
 
 const { plans, monthlyPrice } = usePlans()
 const config = useRuntimeConfig()
-const requestURL = useRequestURL()
-const pageUrl = resolveSeoUrl('/pricing', config.public.siteUrl || requestURL.origin)
+const pageUrl = resolveSeoUrl('/pricing', config.public.platformUrl)
 
 const OFFER_DESCRIPTIONS: Record<string, string> = {
   free: 'Free business website with offerings and basic SEO',

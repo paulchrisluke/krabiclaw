@@ -29,7 +29,7 @@ export interface CollectionEditor {
   saveLabel: Ref<string | undefined>
   saveDisabled: Ref<boolean>
   localizationFields: ComputedRef<Array<{ key: string; label: string; source: string | null | undefined }>>
-  siteLocalizationSettingsPath: ComputedRef<string>
+  organizationLocalizationSettingsPath: ComputedRef<string>
   revert: () => void
   save: () => Promise<void>
 }
@@ -53,7 +53,7 @@ const dashboardLocation = useDashboardLocation()
 const collectionId = computed(() => String(route.params.collectionId ?? ''))
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 // `[surface].vue` renders nothing below it for a segment that names no surface
 // of this vertical, so this level is only ever reached through a real one.
 const surface = String(route.params.surface ?? '') as ProductSurface
@@ -101,7 +101,7 @@ const collectionNavigation = computed<EditorNavigationGroup[]>(() => [{
   items: [{ id: 'name', label: 'Name', summary: form.name.trim() || 'Not named yet', placeholder: !form.name.trim(), to: `${collectionPath.value}/name` }],
 }])
 const collectionLocalizationFields = computed(() => [{ key: 'name', label: 'Name', source: collection.value?.name }])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 
 const { createActionLabel, saveLabel, saveDisabled, save: saveLeaf, startOrCreate } = useCreateWalk({
   recordPath: collectionPath,
@@ -172,7 +172,7 @@ provide(collectionEditorKey, {
   saveLabel,
   saveDisabled,
   localizationFields: collectionLocalizationFields,
-  siteLocalizationSettingsPath,
+  organizationLocalizationSettingsPath,
   revert,
   save: saveLeaf,
 })

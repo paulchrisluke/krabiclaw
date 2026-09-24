@@ -104,9 +104,8 @@ definePageMeta({ layout: 'platform' })
 
 const templates = listPublishedTemplateMarketing()
 
-const requestURL = useRequestURL()
 const config = useRuntimeConfig()
-const siteUrl = config.public.siteUrl || requestURL.origin
+const organizationUrl = config.public.platformUrl
 
 useSocialMetadata({
   template: 'platform',
@@ -121,7 +120,7 @@ useSocialMetadata({
   schemaNodes: [
     {
       '@type': 'ItemList',
-      '@id': `${siteUrl}/templates#themes`,
+      '@id': `${organizationUrl}/templates#themes`,
       name: 'KrabiClaw Templates',
       itemListElement: templates.map((template, index) => ({
         '@type': 'ListItem',
@@ -130,7 +129,7 @@ useSocialMetadata({
           '@type': 'Product',
           name: template.displayName,
           description: template.description,
-          url: `${siteUrl}/templates/${template.slug}`,
+          url: `${organizationUrl}/templates/${template.slug}`,
           offers: template.schemaOffer ? {
             '@type': 'Offer',
             price: template.schemaOffer.price,

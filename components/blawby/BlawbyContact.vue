@@ -24,7 +24,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: page.value?.seo_title || `Contact | ${identity.value.name}`,
   description: page.value?.seo_description || page.value?.summary || '',
   brand: {
-    siteName: identity.value.name,
+    organizationName: identity.value.name,
   },
 }))
 const homeUrl = useSeoUrl(() => '/')

@@ -74,8 +74,8 @@ const props = defineProps<{ kind: 'reservation' | 'booking' }>()
 
 const { locale, t } = useI18n()
 const route = useRoute()
-const { site } = useTenantSite()
-const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
+const { organization } = useTenantOrganization()
+const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 
 const keyPrefix = computed(() => props.kind === 'booking' ? 'experience_cancel' : 'reservation_cancel')
 const copy = (key: string) => t(`saya.${keyPrefix.value}.${key}`)

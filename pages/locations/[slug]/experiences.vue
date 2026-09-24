@@ -10,17 +10,17 @@ import { EXPERIENCE_PRESENTATION, isExperience, resolveProductPresentation } fro
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
-const { products, collections, locations, location, config, site, data: pagePayload } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, location, config, organization, data: pagePayload } = await usePublicPageData({ lazy: false })
 const currentLocation = location.value
 if (!currentLocation) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-const vertical = String(site.value?.vertical ?? '')
-if (site.value && !resolveProductPresentation(vertical)) throw createError({ statusCode: 404 })
+const vertical = String(organization.value?.vertical ?? '')
+if (organization.value && !resolveProductPresentation(vertical)) throw createError({ statusCode: 404 })
 const presentation = EXPERIENCE_PRESENTATION
 const rawCurrency = config.value.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
-const brandName = String(site.value?.name ?? '').trim()
-if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Site brand is unavailable' })
+const brandName = String(organization.value?.name ?? '').trim()
+if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Organization brand is unavailable' })
 const { t } = useI18n()
 const experiences = computed(() => products.value.filter(isExperience))
 // A site with nothing to book has no experiences page, rather than an
@@ -30,13 +30,13 @@ const experiences = computed(() => products.value.filter(isExperience))
 // a 404 put an uncaught error on every guest who clicked twice quickly.
 if (pagePayload.value && experiences.value.length === 0) throw createError({ statusCode: 404 })
 const locationId = currentLocation.id
-const collectionTitle = computed(() => t('saya.experiences.collection_title', { site: currentLocation.title }))
+const collectionTitle = computed(() => t('saya.experiences.collection_title', { organization: currentLocation.title }))
 const productLocations = computed(() => locations.value.map(item => ({ id: String(item.id), slug: String(item.slug), title: String(item.title) })))
 useSocialMetadata(() => ({
   path: `/locations/${encodeURIComponent(currentLocation.slug)}/experiences`,
   title: collectionTitle.value,
-  description: t('saya.experiences.meta_description', { site: currentLocation.title }),
+  description: t('saya.experiences.meta_description', { organization: currentLocation.title }),
   socialImage: currentLocation.social_image ?? null,
-  brand: { siteName: brandName },
+  brand: { organizationName: brandName },
 }))
 </script>

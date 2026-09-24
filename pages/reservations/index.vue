@@ -175,7 +175,7 @@ definePageMeta({ layout: 'saya' })
 
 // The tenant is the organization; `site` is only the shape this composable
 // still returns it under.
-const { site: organization, organizationId } = useTenantSite()
+const { organization: organization, organizationId } = useTenantOrganization()
 const route = useRoute()
 const { locale, t } = useI18n()
 const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
@@ -187,14 +187,14 @@ useHeroLcpPreload(computed(() => {
   return first ? getLocationPoster(first) : null
 }))
 
-const isExperienceSite = computed(() => (organization as { vertical?: string | null } | null)?.vertical === 'experience')
+const isExperienceOrganization = computed(() => (organization as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Experience-vertical sites book each Product on its own page. The
 // /reservations page has no meaning for them. Redirect as soon as the site
 // vertical is known — do NOT gate on having products, because a freshly seeded
 // site with vertical='experience' and no products yet should still not show
 // this page.
-watch(isExperienceSite, (isExp) => {
+watch(isExperienceOrganization, (isExp) => {
   if (isExp) {
     navigateTo({ path: requireProductPresentation(String((organization as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
   }
@@ -363,7 +363,7 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
-const { mirrorSubmission } = useSiteConversionTracking()
+const { mirrorSubmission } = useOrganizationConversionTracking()
 const submitError = ref<string | null>(null)
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
@@ -397,7 +397,7 @@ async function handleReservation() {
     setBookingConfirmation({
       type: 'reservation',
       organizationId,
-      siteName: brandName.value,
+      organizationName: brandName.value,
       guestName: reservationForm.value.name,
       // The guest picked a wall-clock slot at this location; the instant it
       // means was resolved once, above, in that location's zone.
@@ -446,12 +446,12 @@ useSocialMetadata(() => ({
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,
   description: resCopy.value.seoReservationDescription(brandName.value),
   brand: {
-    siteName: brandName.value,
+    organizationName: brandName.value,
   },
   // An experience site has no reservations page: the server redirects to
   // /experiences, but a client-side navigation can render this briefly during
   // hydration, so the intent says noindex rather than relying on the redirect.
-  robots: isExperienceSite.value ? 'noindex,follow' : 'index,follow',
+  robots: isExperienceOrganization.value ? 'noindex,follow' : 'index,follow',
 }))
 
 /**

@@ -128,11 +128,11 @@ definePageMeta({ layout: 'saya' })
 const { localePath, t } = useI18n()
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending } = await usePublicPageData()
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
@@ -184,17 +184,17 @@ function distCount(star: number) {
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/reviews`,
   title: `Reviews · ${location.value?.title ?? ''}`,
-  description: `Guest reviews for ${location.value?.title ?? ''} at ${siteName.value}.`,
+  description: `Guest reviews for ${location.value?.title ?? ''} at ${organizationName.value}.`,
   socialImage: location.value?.social_image ?? null,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
 useSchemaOrg([
   computed(() => ({
-    '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
-    name: `${siteName.value} — ${location.value?.title ?? ''}`,
+    '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
+    name: `${organizationName.value} — ${location.value?.title ?? ''}`,
     ...(aggregate.value?.rating ? {
       aggregateRating: {
         '@type': 'AggregateRating',
@@ -213,7 +213,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: '/' },
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: '/' },
       { '@type': 'ListItem', position: 2, name: 'Locations', item: '/locations' },
       { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `/locations/${slug.value}` },
       { '@type': 'ListItem', position: 4, name: 'Reviews', item: `/locations/${slug.value}/reviews` }

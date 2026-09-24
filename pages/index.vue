@@ -14,7 +14,7 @@
 import { authClient } from '~/lib/auth-client'
 definePageMeta({ layout: false })
 
-const { isPlatform, organizationId } = useTenantSite()
+const { isPlatform, organizationId } = useTenantOrganization()
 const { template } = usePublicTemplate()
 // Where this template keeps its home document. KrabiClaw's own homepage is an
 // ordinary published page on the platform site, read by the same loader every
@@ -30,15 +30,12 @@ if (!isPlatform && !organizationId) {
 // it to them is how a returning owner ends up clicking "Start free" and opening
 // a second account. The marketing homepage is for people who do not have an
 // account yet; everyone else goes to their dashboard. Anonymous visitors and
-// crawlers are untouched, so the cached public page is unchanged.
-if (isPlatform && import.meta.client) {
-  const session = authClient.useSession()
-  watchEffect(() => {
-    // `isPending` is not "signed out": redirecting on an unresolved session
-    // would bounce every anonymous visitor, and treating it as signed-in would
-    // bounce nobody. Only a resolved session with a user redirects.
-    if (session.value.isPending) return
-    if (session.value.data?.user) navigateTo('/api/post-login', { external: true, redirectCode: 302 })
-  })
+// crawlers are untouched, so the cached public page is unchanged: a request
+// carrying a session cookie bypasses the edge cache (00.edge-cache.ts).
+// Better Auth's Nuxt session read runs through useFetch, so the server answers
+// a hard load with the 302 and the client covers in-app navigation to `/`.
+if (isPlatform) {
+  const { data: session } = await authClient.useSession(useFetch)
+  if (session.value?.user) await navigateTo('/api/post-login', { external: true, redirectCode: 302 })
 }
 </script>

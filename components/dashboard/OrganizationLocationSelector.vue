@@ -59,7 +59,7 @@
                  between the two unconditionally, so a card with one line does not
                  render a leading dot. -->
             <p class="mt-1 text-sm text-muted">
-              <template v-if="item.parentSiteName">{{ item.parentSiteName }}<span aria-hidden="true"> · </span></template>
+              <template v-if="item.parentOrganizationName">{{ item.parentOrganizationName }}<span aria-hidden="true"> · </span></template>
               <template v-if="item.eyebrow">{{ item.eyebrow }}<span aria-hidden="true"> · </span></template>{{ item.summary }}
             </p>
           </div>
@@ -101,7 +101,7 @@
 <script setup lang="ts">
 import type { BadgeProps, DropdownMenuItem } from '@nuxt/ui'
 
-export interface SiteLocationSelectorItem {
+export interface OrganizationLocationSelectorItem {
   id: string
   label: string
   imageUrl: string | null
@@ -115,11 +115,11 @@ export interface SiteLocationSelectorItem {
   /** The tile's overflow menu. Omitted when the viewer has no action on the record. */
   actions?: DropdownMenuItem[]
   /** Parent site name for organization-scoped location display */
-  parentSiteName?: string
+  parentOrganizationName?: string
 }
 
 withDefaults(defineProps<{
-  items: SiteLocationSelectorItem[]
+  items: OrganizationLocationSelectorItem[]
   /** Names what is missing, e.g. "No social image" or "No photo". */
   missingImageLabel?: string
   /** Says why it is missing and what fixes it. */

@@ -7,7 +7,7 @@
 </template>
 
 <script setup lang="ts">
-const { isPlatform } = useTenantSite()
+const { isPlatform } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 definePageMeta({ layout: false })
 </script>

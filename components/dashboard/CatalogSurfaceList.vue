@@ -44,7 +44,7 @@ const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 // The path comes from the route this screen is mounted on, not from the

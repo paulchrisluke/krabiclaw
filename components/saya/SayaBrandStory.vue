@@ -41,7 +41,7 @@ import { blockText, blockMedia, isInternalRoute } from '~/utils/tenant-page-bloc
 // and the words under it are the block's own, not the vertical's copy table.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath, locale } = useI18n()
-const { site } = useTenantSite()
+const { organization } = useTenantOrganization()
 
 const title = computed(() => blockText(props.block.data.title))
 const body = computed(() => blockText(props.block.data.body))
@@ -52,7 +52,7 @@ const linkLabel = computed(() => blockText(props.block.data.label))
 const linkUrl = computed(() => blockText(props.block.data.url))
 // The eyebrow above the story. It is the one word here the block does not
 // carry, because it names the section rather than the site's own story.
-const kicker = computed(() => getVerticalCopy(site?.vertical, locale.value).ourStoryKicker)
+const kicker = computed(() => getVerticalCopy(organization?.vertical, locale.value).ourStoryKicker)
 
 /** An internal route takes the visitor's locale; an absolute URL is left alone. */
 function route(url: string) {

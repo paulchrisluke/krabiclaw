@@ -34,6 +34,6 @@ useSocialMetadata(() => ({
     priceSelection: priceSelection.value,
   }, t),
   socialImage: detail.value.product.social_image,
-  brand: { siteName: detail.value.brandName },
+  brand: { organizationName: detail.value.brandName },
 }))
 </script>

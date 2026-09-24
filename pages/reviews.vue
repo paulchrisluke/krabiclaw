@@ -66,7 +66,7 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
@@ -93,22 +93,22 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const siteName = computed(() => site?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
+const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/reviews',
-  title: `${t('saya.footer.reviews')} | ${siteName.value}`,
-  description: t('saya.reviews_page.meta_description', { site: siteName.value }),
+  title: `${t('saya.footer.reviews')} | ${organizationName.value}`,
+  description: t('saya.reviews_page.meta_description', { organization: organizationName.value }),
   label: t('saya.footer.reviews'),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
 useSchemaOrg([
   computed(() => ({
-    '@type': getBusinessSchemaTypes(site?.vertical),
-    name: siteName.value,
+    '@type': getBusinessSchemaTypes(organization?.vertical),
+    name: organizationName.value,
     review: allReviews.value.map(r => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.author_name || t('saya.qa.guest') },

@@ -4,7 +4,7 @@
     column once a leaf is, and it yields both columns to a link record below
     `items`. The shell reads that from the route tree.
   -->
-  <DashboardIndexPanel id="site-links" title="Links page" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-links" title="Links page" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template #right>
       <UButton
         color="neutral"
@@ -35,7 +35,7 @@
         :load-values="loadLinksLocalization"
         :save-values="saveLinksLocalization"
         :route-path="localizedLinksPath"
-        :language-settings-path="siteLocalizationSettingsPath"
+        :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
 
@@ -86,7 +86,7 @@ export interface LinksEditor {
   revert: () => void
   loadLinksLocalization: (locale: string, linkItemId?: string) => Promise<Record<string, unknown>>
   saveLinksLocalization: (locale: string, values: Record<string, unknown>, linkItemId?: string) => Promise<void>
-  siteLocalizationSettingsPath: Ref<string>
+  organizationLocalizationSettingsPath: Ref<string>
 }
 
 export const linksEditorKey = Symbol('links-editor') as InjectionKey<LinksEditor>
@@ -154,7 +154,7 @@ const linksPageLocalizationFields = computed(() => [
   { key: 'seo_title', label: 'SEO title', source: data.value?.page.seo_title },
   { key: 'seo_description', label: 'SEO description', source: data.value?.page.seo_description, multiline: true },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }
@@ -366,7 +366,7 @@ provide(linksEditorKey, {
   revert,
   loadLinksLocalization,
   saveLinksLocalization,
-  siteLocalizationSettingsPath,
+  organizationLocalizationSettingsPath,
 })
 
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

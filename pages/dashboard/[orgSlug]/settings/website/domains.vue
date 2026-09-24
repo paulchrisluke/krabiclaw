@@ -1,6 +1,6 @@
 <template>
   <!-- A row of Website settings, so it closes back to it like its siblings; adding a domain is its own action, not a Save. -->
-  <DashboardLeafPanel id="site-domains" title="Domains" :footer="false">
+  <DashboardLeafPanel id="organization-domains" title="Domains" :footer="false">
     <template #right>
       <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
     </template>
@@ -248,7 +248,7 @@ const dashboard = useDashboardOrganization()
 
 const organizationId = computed(() => dashboard.organization.value?.id ?? null)
 if (!organizationId.value) {
-  throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+  throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
 }
 
 const { trackDomainConnected } = useAnalytics()
@@ -458,7 +458,7 @@ async function makePrimary(group: DomainGroup) {
 
 async function deleteGroup(group: DomainGroup) {
   if (!organizationId.value || !group.primary_domain_id || deletingGroupId.value) return
-  if (!confirm(`Remove ${group.domain} from this site?`)) return
+  if (!confirm(`Remove ${group.domain} from this organization?`)) return
   deletingGroupId.value = group.id
   actionError.value = null
   try {

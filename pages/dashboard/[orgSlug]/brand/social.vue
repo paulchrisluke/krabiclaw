@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-social"
+    id="organization-social"
     title="Social profiles"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
@@ -19,9 +19,9 @@
 </template>
 
 <script setup lang="ts">
-import { siteSettingsEditorKey } from '~/lib/components/workspace/settings/SiteSettingsPage.vue'
+import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-const editor = inject(siteSettingsEditorKey)!
+const editor = inject(organizationSettingsEditorKey)!
 </script>

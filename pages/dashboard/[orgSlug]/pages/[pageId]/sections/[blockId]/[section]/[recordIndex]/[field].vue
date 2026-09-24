@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-page-block-record-field"
+    id="organization-page-block-record-field"
     :title="title"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

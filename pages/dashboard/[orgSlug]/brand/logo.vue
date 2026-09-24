@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-logo"
+    id="organization-logo"
     title="Logo"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
@@ -16,9 +16,9 @@
 
 <script setup lang="ts">
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import { siteSettingsEditorKey } from '~/lib/components/workspace/settings/SiteSettingsPage.vue'
+import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-const editor = inject(siteSettingsEditorKey)!
+const editor = inject(organizationSettingsEditorKey)!
 </script>

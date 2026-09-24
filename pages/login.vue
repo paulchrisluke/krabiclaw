@@ -64,14 +64,12 @@ watch(googleError, value => { operationError.value = value })
 if (route.query.verified === '1') notice.value = 'Your email is verified. You can sign in now.'
 else if (route.query.reset === 'success') notice.value = 'Your password was updated. Sign in with your new password.'
 
-const session = authClient.useSession()
-const isAuthenticated = computed(() => Boolean(session.value.data?.user))
-// The session resolves on the client after mount. `isPending` is not "signed
-// out": only a resolved session with a user is sent on.
-watchEffect(() => {
-  if (session.value.isPending) return
-  if (isAuthenticated.value) navigateTo(postLoginUrl.value, { external: true })
-})
+// Better Auth's Nuxt session read: through useFetch it runs on the server with
+// the request's cookie, so a signed-in visitor gets the 302 before any page is
+// rendered, and on the client for in-app navigation.
+const { data: session } = await authClient.useSession(useFetch)
+const isAuthenticated = computed(() => Boolean(session.value?.user))
+if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true, redirectCode: 302 })
 
 function finishPhoneSignIn() {
   window.location.href = postLoginUrl.value

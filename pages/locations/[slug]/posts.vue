@@ -47,11 +47,11 @@ const { localePath, t } = useI18n()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 const { location, postsList } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page
@@ -61,16 +61,15 @@ if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Locati
 
 const posts = postsList
 
-const runtimeConfig = useRuntimeConfig()
-const siteUrl = runtimeConfig.public.siteUrl
+const organizationUrl = useRequestURL().origin
 
 useSocialMetadata(() => ({
   path: `/locations/${slug.value}/posts`,
   title: `Updates · ${location.value?.title || slug.value}`,
-  description: `Latest news and updates from ${location.value?.title || slug.value} at ${siteName.value}.`,
+  description: `Latest news and updates from ${location.value?.title || slug.value} at ${organizationName.value}.`,
   socialImage: location.value?.social_image ?? null,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
@@ -78,10 +77,10 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${siteUrl}/` },
-      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${siteUrl}/locations` },
-      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${siteUrl}/locations/${slug.value}` },
-      { '@type': 'ListItem', position: 4, name: 'Updates', item: `${siteUrl}/locations/${slug.value}/posts` }
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${organizationUrl}/` },
+      { '@type': 'ListItem', position: 2, name: 'Locations', item: `${organizationUrl}/locations` },
+      { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${organizationUrl}/locations/${slug.value}` },
+      { '@type': 'ListItem', position: 4, name: 'Updates', item: `${organizationUrl}/locations/${slug.value}/posts` }
     ]
   }))
 ])

@@ -16,7 +16,7 @@
     :organization-id="organizationId"
     :back-url="blogPath"
     back-label="Blog"
-    panel-id="site-blog-post"
+    panel-id="organization-blog-post"
     :is-edit="true"
     :media-picker-component="MediaPicker"
   >
@@ -29,7 +29,7 @@
         :fields="blogLocalizationFields"
         :load-values="loadBlogLocalization"
         :save-values="saveBlogLocalization"
-        :language-settings-path="siteLocalizationSettingsPath"
+        :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
   </BlogPostEditor>
@@ -56,7 +56,7 @@ const postId = String(route.params.postId || '')
 if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID is required' })
 
 const blogPath = `/dashboard/${orgSlug}/blog`
-const siteLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/website/localization`
+const organizationLocalizationSettingsPath = `/dashboard/${orgSlug}/settings/website/localization`
 
 const { data: postResource, error: postError } = await useAsyncData(
   `dashboard-blog-post:${organizationId}:${postId}`,
