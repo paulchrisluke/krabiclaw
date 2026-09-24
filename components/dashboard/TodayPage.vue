@@ -145,6 +145,7 @@ const ranges: Array<{ label: string; value: TodayRange }> = [
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
+const dashboardOrganization = useDashboardOrganization()
 const realtime = useDashboardInvalidations()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
 const todayKey = computed(() => `dashboard-today-${orgSlug.value}`)
@@ -177,7 +178,6 @@ const isTodayResponse = (value: unknown): value is TodayAgendaPayload =>
   && Array.isArray(value.items)
   && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds)
-  && typeof value.vertical === 'string'
   && Array.isArray(value.locations)
   && value.locations.every(isLocation)
   && typeof value.resolvedAt === 'string'
@@ -187,7 +187,6 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   && Array.isArray(value.items)
   && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds)
-  && typeof value.vertical === 'string'
   && Array.isArray(value.locations)
   && value.locations.every(isLocation)
 
@@ -233,9 +232,10 @@ const activeLabel = computed(() => activeRange.value === 'today' ? 'Today' : 'Up
 const hasActiveFilters = computed(() => filters.locationId !== FILTER_ALL || filters.kind !== FILTER_ALL)
 // Derived from the organization and kinds in scope rather than from the loaded items,
 // so the heading reads the same before anything has arrived and does not change
-// noun as a page of Upcoming loads.
+// noun as a page of Upcoming loads. The vertical is the organization's own,
+// which the layout has loaded before this page renders.
 const presentation = computed(() => {
-  const vertical = todayData.value?.vertical ?? ''
+  const vertical = dashboardOrganization.organization.value?.vertical
   const scoped: AgendaKind[] = filters.kind === FILTER_ALL
     ? todayData.value?.availableKinds ?? BOOKING_KINDS
     : [filters.kind as AgendaKind]

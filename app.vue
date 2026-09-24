@@ -29,9 +29,9 @@ useHead(() => {
       isPlatform,
       organizationMedia: organizationMedia.value,
     }),
-    // Google fetches the site to verify Search Console ownership
-    // (server/utils/google-search-console.ts); every layout the site shell
-    // serves carries it. Blawby serves its own from its document shell.
+    // Google fetches the organization's domain to verify Search Console
+    // ownership (server/utils/google-search-console.ts); every public layout
+    // carries it. Blawby serves its own from its document shell.
     meta: verification ? [{ name: 'google-site-verification', content: verification }] : [],
   }
 })

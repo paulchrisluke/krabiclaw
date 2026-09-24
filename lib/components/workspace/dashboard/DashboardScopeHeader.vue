@@ -8,7 +8,6 @@
     >
       <UButton
         :avatar="currentAvatar"
-        :icon="currentIcon"
         :label="model.current.label"
         color="neutral"
         variant="ghost"
@@ -25,8 +24,6 @@ export interface DashboardScopeHeaderPeer {
   label: string
   to?: string
   active: boolean
-  icon?: string
-  avatar?: string
   onSelect?: () => void
 }
 
@@ -37,8 +34,7 @@ export interface DashboardScopeHeaderPeer {
 // pattern of a back-row sized like every other nav item, not custom chrome
 // inside the switcher header. Do not add parent-rendering back here.
 export interface DashboardScopeHeaderModel {
-  scope: 'organization' | 'location'
-  current: { label: string; icon?: string; avatar?: string }
+  current: { label: string; avatar?: string }
   parent: { label: string; to: string } | null
   peers: DashboardScopeHeaderPeer[]
   createAction?: { label: string; to: string }
@@ -46,13 +42,14 @@ export interface DashboardScopeHeaderModel {
 
 const props = defineProps<{ model: DashboardScopeHeaderModel; collapsed?: boolean }>()
 
+// No glyph stands in for a missing mark. A business without a `logo`
+// placement shows its name and nothing else, so it is distinguishable from one
+// that has a mark.
 const currentAvatar = computed(() => props.model.current.avatar ? { src: props.model.current.avatar } : undefined)
-const currentIcon = computed(() => !props.model.current.avatar ? (props.model.current.icon ?? 'i-lucide-building-2') : undefined)
 
 interface ScopeMenuItem {
   label: string
   icon?: string
-  avatar?: { src: string }
   to?: string
   onSelect?: () => void
 }
@@ -60,8 +57,7 @@ interface ScopeMenuItem {
 const menuItems = computed(() => {
   const peerItems: ScopeMenuItem[] = props.model.peers.map((peer) => ({
     label: peer.label,
-    icon: peer.active ? 'i-lucide-check' : peer.icon,
-    avatar: !peer.active && peer.avatar ? { src: peer.avatar } : undefined,
+    icon: peer.active ? 'i-lucide-check' : undefined,
     to: peer.to,
     onSelect: peer.onSelect
   }))
