@@ -30,12 +30,12 @@ export function isConversationalToolGroupEnabled(
 
 function stripExternalChannelsFromProperties(properties: Record<string, unknown>) {
   const next = { ...properties }
-  const siteOnlyArray = {
+  const organizationOnlyArray = {
     type: 'array',
-    items: { type: 'string', enum: ['site'] },
-    description: 'Channels to publish to. Defaults to ["site"]. Social publishing is currently managed from the dashboard.',
+    items: { type: 'string', enum: ['organization'] },
+    description: 'Channels to publish to. Defaults to ["organization"]. Social publishing is currently managed from the dashboard.',
   }
-  if ('channels' in next) next.channels = siteOnlyArray
+  if ('channels' in next) next.channels = organizationOnlyArray
   return next
 }
 

@@ -29,7 +29,7 @@ export interface ReservationEventInput {
   time: string
   partySize: string
   locationName: string | null
-  siteName: string
+  organizationName: string
   notes: string | null
   heroImageUrl: string | null
   replyUrl: string | null
@@ -52,7 +52,7 @@ export function reservationCreatedMessage(input: ReservationEventInput): Notific
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Reply in dashboard' } : undefined,
     category: 'reservations_bookings',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -78,7 +78,7 @@ export function reservationCancelledMessage(input: ReservationEventInput & { was
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Open in dashboard' } : undefined,
     category: 'reservations_bookings',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -103,7 +103,7 @@ export function bookingCreatedMessage(input: BookingEventInput): NotificationMes
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Reply in dashboard' } : undefined,
     category: 'reservations_bookings',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -125,7 +125,7 @@ export function bookingCancelledMessage(input: BookingEventInput & { wasConfirme
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Open in dashboard' } : undefined,
     category: 'reservations_bookings',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -135,7 +135,7 @@ export interface ContactEventInput {
   subject: string
   message: string
   productTitle: string | null
-  siteName: string
+  organizationName: string
   consentAcknowledged: boolean
   replyUrl: string | null
 }
@@ -158,7 +158,7 @@ export function contactReceivedMessage(input: ContactEventInput): NotificationMe
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Reply in dashboard' } : undefined,
     category: 'guest_messages',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -167,14 +167,14 @@ export interface GuestReplyEventInput {
   guestEmail: string | null
   inboundChannel: 'email' | 'whatsapp'
   messagePreview: string
-  siteName: string | null
+  organizationName: string | null
   replyUrl: string | null
 }
 
 export function guestReplyMessage(input: GuestReplyEventInput): NotificationMessage {
   // The site name has no slot of its own, so it rides in the subject alongside
   // how the guest wrote in. An owner with several sites needs to know which.
-  const subject = [input.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply', input.siteName].filter(Boolean).join(' · ')
+  const subject = [input.inboundChannel === 'whatsapp' ? 'WhatsApp reply' : 'Email reply', input.organizationName].filter(Boolean).join(' · ')
   return {
     title: `New guest reply from ${input.guestName}`,
     preheader: input.messagePreview.slice(0, 120),
@@ -187,7 +187,7 @@ export function guestReplyMessage(input: GuestReplyEventInput): NotificationMess
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'Open thread in dashboard' } : undefined,
     category: 'guest_messages',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -195,7 +195,7 @@ export interface ReviewEventInput {
   authorName: string
   rating: number
   content: string
-  siteName: string
+  organizationName: string
   reviewsUrl: string | null
 }
 
@@ -214,7 +214,7 @@ export function reviewReceivedMessage(input: ReviewEventInput): NotificationMess
     ),
     primaryAction: input.reviewsUrl ? { url: input.reviewsUrl, label: 'View review' } : undefined,
     category: 'reviews',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -229,7 +229,7 @@ export interface BookingChangeEventInput {
   partySize: string
   summary: string
   replyUrl: string | null
-  siteName: string
+  organizationName: string
 }
 
 export function bookingChangeMessage(input: BookingChangeEventInput): NotificationMessage {
@@ -254,7 +254,7 @@ export function bookingChangeMessage(input: BookingChangeEventInput): Notificati
     ),
     primaryAction: input.replyUrl ? { url: input.replyUrl, label: 'View in dashboard' } : undefined,
     category: 'reservations_bookings',
-    siteName: input.siteName,
+    organizationName: input.organizationName,
   }
 }
 
@@ -278,6 +278,6 @@ export function domainUpdateMessage(input: DomainEventInput): NotificationMessag
       fact('headline', 'Update', input.headline),
     ),
     primaryAction: { url: input.dashboardUrl, label: 'Open domain settings' },
-    category: 'site_and_billing',
+    category: 'organization_and_billing',
   }
 }

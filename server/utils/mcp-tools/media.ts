@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { chatgptFileInput, mediaAssetObject, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, siteTool } from './shared'
+import { chatgptFileInput, mediaAssetObject, pageInfoObject, paginationInputSchema, resolvedMediaAssetObject, organizationTool } from './shared'
 import { EDITABLE_MEDIA_PLACEMENT_OWNERS, WRITABLE_MEDIA_CATEGORIES } from '~/server/utils/media-placement'
 
 const mediaPlacementObject = {
@@ -29,7 +29,7 @@ const mediaMutationOutputSchema = {
 } as const
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
-  siteTool({
+  organizationTool({
       name: 'set_media',
       description: 'Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:"content_document", owner_id:<post.id>, slot:"cover"}; for a location hero use {owner_type:"business_location", owner_id:<location.id>, slot:"hero"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata.',
       domain: 'media',
@@ -42,7 +42,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       required: ['placement', 'asset_id'],
       outputSchema: mediaMutationOutputSchema,
     }),
-  siteTool({
+  organizationTool({
       name: 'attach_media',
       description: 'Attach one existing media asset to an ordered collection placement (a gallery or a compliance document list), appending it after the current last item. Rejects if the asset is already attached, or if the collection is full. For a single-valued placement (a cover, hero, or logo) use set_media instead.',
       domain: 'media',
@@ -55,7 +55,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       required: ['placement', 'asset_id'],
       outputSchema: mediaMutationOutputSchema,
     }),
-  siteTool({
+  organizationTool({
       name: 'remove_media',
       description: 'Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not currently attached is a harmless no-op — it does not change any other attached asset or its order.',
       domain: 'media',
@@ -68,7 +68,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       required: ['placement', 'asset_id'],
       outputSchema: mediaMutationOutputSchema,
     }),
-  siteTool({
+  organizationTool({
       name: 'reorder_media',
       description: 'Reorder assets already attached to an ordered collection placement (a gallery or a compliance document list) without changing which assets are attached. Each move names one already-attached asset_id and, optionally, a before_asset_id or after_asset_id (also already attached) to move it next to; omit both to move it to the end. Moves apply in the order given. Rejects the entire call if any named asset or anchor is not currently attached — it never attaches, restores, or detaches anything.',
       domain: 'media',
@@ -94,7 +94,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       required: ['placement', 'moves'],
       outputSchema: mediaMutationOutputSchema,
     }),
-  siteTool({
+  organizationTool({
       name: 'get_organization_media_assets',
       description: 'List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
       domain: 'media',
@@ -107,7 +107,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         required: ['assets', 'page_info'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'upload_user_media',
       description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. Stores the attachment in Cloudflare media storage with a public URL, even before assignment to a page. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
       domain: 'media',
@@ -134,7 +134,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         required: ['asset_id', 'status', 'public_url', 'kind'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'update_media_asset',
       description: 'Update media metadata. Provide at least one of alt_text or category.',
       domain: 'media',
@@ -153,7 +153,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         required: ['updated'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'delete_media_asset',
       description: 'Delete a media asset.',
       domain: 'media',

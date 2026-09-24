@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type { GoogleCredential } from '~/shared/site-settings'
+import type { GoogleCredential } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
 import { decryptSecret, encryptSecret, encryptionEnv } from './encryption'
 
@@ -234,7 +234,7 @@ export async function googleAccessToken(
   organizationId: string,
 ): Promise<string> {
   const credential = await readGoogleCredential(env, organizationId)
-  if (!credential) throw new Error('No Google account is connected to this site.')
+  if (!credential) throw new Error('No Google account is connected to this organization.')
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new Error('Missing Google OAuth client configuration.')
 
   const response = await fetch('https://oauth2.googleapis.com/token', {

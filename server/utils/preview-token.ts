@@ -41,7 +41,7 @@ async function signPreviewPayload(secret: string, payload: string) {
 }
 
 export async function createPreviewToken(secret: string, organizationId: string, expiresAt: number) {
-  const signature = await signPreviewPayload(secret, `site:${organizationId}.${expiresAt}`)
+  const signature = await signPreviewPayload(secret, `organization:${organizationId}.${expiresAt}`)
   return `${expiresAt}.${signature}`
 }
 

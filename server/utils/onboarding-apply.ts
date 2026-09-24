@@ -20,7 +20,7 @@ import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from
 import { applyOnboardingTenantPages } from '~/server/utils/content/pages'
 import { createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
 
 type ProvisioningEnv = Parameters<typeof provisionOrganization>[0]
@@ -37,7 +37,7 @@ export interface OnboardingDraftRow {
   id: string
   organization_id: string | null
   name: string
-  vertical: SiteVertical
+  vertical: OrganizationVertical
   subdomain_candidate: string
 }
 

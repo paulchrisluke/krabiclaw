@@ -9,7 +9,7 @@ import { findAuthUsersByIds, type CloudflareEnv } from './auth.ts'
 import { collectionArticlePath } from '../../utils/article-collections.ts'
 import { tenantBlogPostPath } from '../../utils/tenant-blog-route.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
-import { getPlatformSite } from './platform-site.ts'
+import { getPlatformOrganization } from './platform-organization.ts'
 
 /** A documentation page: an ordinary site page whose path starts with /docs. */
 interface PlatformLlmDocSummary {
@@ -269,14 +269,14 @@ function withDocPath<T extends { slug: string }>(row: T): T & { path: string } {
 /** Documentation is KrabiClaw's `docs` article collection, in editorial order. */
 export async function listPublishedPlatformDocsForLlm(db: DbClient): Promise<PlatformLlmDocSummary[]> {
   const rows = await queryAll<Omit<PlatformLlmDocSummary, 'path'>>(
-    db, `${DOC_SUMMARY_SELECT} ORDER BY sort_order, title`, [(await getPlatformSite(db)).id],
+    db, `${DOC_SUMMARY_SELECT} ORDER BY sort_order, title`, [(await getPlatformOrganization(db)).id],
   )
   return rows.map(withDocPath)
 }
 
 /** KrabiClaw's blog collection only; documentation has its own readers above. */
 export async function listPublishedPlatformBlogPostsForLlm(db: DbClient, env: CloudflareEnv) {
-  return listPublishedTenantBlogPostsForLlm(db, (await getPlatformSite(db)).id, env, 'blog')
+  return listPublishedTenantBlogPostsForLlm(db, (await getPlatformOrganization(db)).id, env, 'blog')
 }
 
 export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizationId: string, env: CloudflareEnv, collection?: 'blog' | 'docs') {
@@ -299,7 +299,7 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizat
 
 export async function getPublishedPlatformDocBySlug(db: DbClient, slug: string): Promise<PlatformLlmDocDetail | null> {
   const row = await queryFirst<Omit<PlatformLlmDocSummary, 'path'>>(
-    db, `${DOC_SUMMARY_SELECT} AND slug = ?`, [(await getPlatformSite(db)).id, slug],
+    db, `${DOC_SUMMARY_SELECT} AND slug = ?`, [(await getPlatformOrganization(db)).id, slug],
   )
   if (!row) return null
   const detail = withDocPath(row)
@@ -449,7 +449,7 @@ export function buildLlmsFullTxt(
     '',
     `> ${options.intro || 'Full machine-readable export of KrabiClaw\'s published platform docs and platform blog.'}`,
     '',
-    `Source site: ${origin}`,
+    `Source organization: ${origin}`,
   ]
 
   if (includeDocs) {
@@ -594,9 +594,9 @@ export function resolvePublicOrigin(event: H3Event) {
   }
 
   const runtimeConfig = useRuntimeConfig()
-  const origin = runtimeConfig.public.siteUrl
+  const origin = runtimeConfig.public.platformUrl
   if (!origin) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'siteUrl not configured' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'organizationUrl not configured' })
   }
   return origin.replace(/\/$/, '')
 }

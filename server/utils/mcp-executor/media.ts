@@ -26,17 +26,17 @@ import {
 } from './shared'
 
 export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "set_media": {
       const placement = parseMediaPlacementKey(args.placement);
       if (args.asset_id !== null && (typeof args.asset_id !== 'string' || !args.asset_id.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_id must be a non-empty string or null.");
       }
-      const result = await setSingleMediaPlacement(site.db, {
-        env: site.env,
-        organizationId: site.organizationId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env }),
+      const result = await setSingleMediaPlacement(organization.db, {
+        env: organization.env,
+        organizationId: organization.organizationId,
+        principal: memberAccessPrincipal(organization.membership, { env: organization.env }),
         placement,
         assetId: typeof args.asset_id === 'string' ? args.asset_id.trim() : null,
       });
@@ -44,7 +44,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         {
           ok: true,
           ...result,
-          context: await mutationContextPayload(site),
+          context: await mutationContextPayload(organization),
         },
         result.cleared ? "Cleared media placement." : "Updated media placement.",
       );
@@ -52,53 +52,53 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
     case "attach_media": {
       const placement = parseMediaPlacementKey(args.placement);
       const assetId = requiredString(args, "asset_id");
-      const result = await attachMediaPlacement(site.db, {
-        env: site.env,
-        organizationId: site.organizationId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env }),
+      const result = await attachMediaPlacement(organization.db, {
+        env: organization.env,
+        organizationId: organization.organizationId,
+        principal: memberAccessPrincipal(organization.membership, { env: organization.env }),
         placement,
         assetId,
       });
       return renderStructuredResponse(
-        { ok: true, ...result, context: await mutationContextPayload(site) },
+        { ok: true, ...result, context: await mutationContextPayload(organization) },
         "Attached media.",
       );
     }
     case "remove_media": {
       const placement = parseMediaPlacementKey(args.placement);
       const assetId = requiredString(args, "asset_id");
-      const result = await removeMediaPlacement(site.db, {
-        env: site.env,
-        organizationId: site.organizationId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env }),
+      const result = await removeMediaPlacement(organization.db, {
+        env: organization.env,
+        organizationId: organization.organizationId,
+        principal: memberAccessPrincipal(organization.membership, { env: organization.env }),
         placement,
         assetId,
       });
       return renderStructuredResponse(
-        { ok: true, ...result, context: await mutationContextPayload(site) },
+        { ok: true, ...result, context: await mutationContextPayload(organization) },
         "Removed media.",
       );
     }
     case "reorder_media": {
       const placement = parseMediaPlacementKey(args.placement);
       const moves = parseMediaPlacementMoves(args.moves);
-      const result = await reorderMediaPlacements(site.db, {
-        env: site.env,
-        organizationId: site.organizationId,
-        principal: memberAccessPrincipal(site.membership, { env: site.env }),
+      const result = await reorderMediaPlacements(organization.db, {
+        env: organization.env,
+        organizationId: organization.organizationId,
+        principal: memberAccessPrincipal(organization.membership, { env: organization.env }),
         placement,
         moves,
       });
       return renderStructuredResponse(
-        { ok: true, ...result, context: await mutationContextPayload(site) },
+        { ok: true, ...result, context: await mutationContextPayload(organization) },
         "Reordered media.",
       );
     }
     case "get_organization_media_assets": {
-      const assets = await listMediaAssets(site.db, site.organizationId, {
+      const assets = await listMediaAssets(organization.db, organization.organizationId, {
           kind: optionalString(args, "kind") ?? undefined,
         });
-      const page = paginateMcpCollection(assets, args, { resource: `media-assets:${site.organizationId}:${optionalString(args, 'kind') ?? ''}` });
+      const page = paginateMcpCollection(assets, args, { resource: `media-assets:${organization.organizationId}:${optionalString(args, 'kind') ?? ''}` });
       return {
         assets: page.items.map(({ id, ...asset }) => ({ asset_id: id, ...asset })),
         page_info: page.page_info,
@@ -129,7 +129,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 
       let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
-        if (!hasCloudflareImagesConfig(site.env)) {
+        if (!hasCloudflareImagesConfig(organization.env)) {
           throw new Error("Cloudflare Images not configured");
         }
         const posterResolved = await resolveUserUploadedMediaFile(posterReference, MAX_POSTER_BYTES);
@@ -142,12 +142,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         poster = posterResolved;
       }
 
-      const context = await mutationContextPayload(site);
+      const context = await mutationContextPayload(organization);
       const uploadInput = {
-        db: site.db,
-        env: site.env as never,
-        organizationId: site.organizationId,
-        userId: site.userId,
+        db: organization.db,
+        env: organization.env as never,
+        organizationId: organization.organizationId,
+        userId: organization.userId,
         buffer: resolved.buffer,
         contentType: resolved.contentType,
         filename: resolved.filename,
@@ -168,7 +168,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         uploaded = await uploadResolvedMediaToAssetStore({
           ...uploadInput,
           kind: 'image',
-          provider: resolveImageUploadProvider(resolved.contentType, site.env),
+          provider: resolveImageUploadProvider(resolved.contentType, organization.env),
         })
       } else {
         uploaded = await uploadResolvedMediaToAssetStore({
@@ -192,9 +192,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
     }
     case "update_media_asset": {
       const updated = await updateMediaAssetMetadata(
-        site.db,
+        organization.db,
         requiredString(args, "asset_id"),
-        site.organizationId,
+        organization.organizationId,
         {
           alt_text: optionalString(args, "alt_text"),
           category: (optionalString(args, "category") as never),
@@ -205,17 +205,17 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       }
       return {
         updated,
-        context: await mutationContextPayload(site),
+        context: await mutationContextPayload(organization),
       };
     }
     case "delete_media_asset": {
-      const context = await mutationContextPayload(site);
+      const context = await mutationContextPayload(organization);
       await deleteMediaAsset(
-        site.db,
-        site.env,
+        organization.db,
+        organization.env,
         requiredString(args, "asset_id"),
-        site.organizationId,
-        site.userId,
+        organization.organizationId,
+        organization.userId,
       );
       return { deleted: true, context };
     }

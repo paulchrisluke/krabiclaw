@@ -148,7 +148,7 @@ async function countUnreadThreadIds(
 type GuestThreadListRow = GuestThreadRow & {
   guest_name: string
   location_title: string | null
-  site_name?: string | null
+  organization_name?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
   source_preview: string | null
@@ -319,7 +319,7 @@ export async function listOrganizationGuestThreads(
       gt.*,
       ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
-      s.name AS site_name,
+      s.name AS organization_name,
       (
         SELECT body FROM activity_entries
         WHERE request_id = gt.id AND kind = 'message'
@@ -349,9 +349,9 @@ export async function listOrganizationGuestThreads(
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
     const unread = unreadIds.has(row.id)
-    const contextLabel = row.site_name && row.location_title
-      ? `${row.site_name} · ${row.location_title}`
-      : row.site_name || row.location_title || ''
+    const contextLabel = row.organization_name && row.location_title
+      ? `${row.organization_name} · ${row.location_title}`
+      : row.organization_name || row.location_title || ''
     const preview = sourcePreviewText(row)
     items.push({
       id: row.id,

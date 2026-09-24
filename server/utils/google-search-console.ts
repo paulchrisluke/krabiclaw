@@ -1,4 +1,4 @@
-import type { GoogleSearchConsoleIntegration } from '~/shared/site-settings'
+import type { GoogleSearchConsoleIntegration } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
 import { googleAccessToken, type GoogleCredentialEnv } from './google-credential'
 

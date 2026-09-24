@@ -23,7 +23,7 @@ import {
   type TenantPageSnapshotMetadata,
   type TenantPageType,
 } from '~/utils/tenant-page-blocks'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { normalizeDomain } from '~/server/utils/domain-shared'
@@ -32,7 +32,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { isSingleMediaPlacement } from '~/shared/media-placement-contract'
 import { getMediaPlacements } from '~/server/utils/media-placement'
-import { loadSiteTemplate } from '~/server/utils/content/publishing'
+import { loadOrganizationTemplate } from '~/server/utils/content/publishing'
 import { templateAllowsPageDocumentAt, templateRendersPageDocumentAt } from '~/shared/tenant-page-paths'
 import type { PublicTemplateDefinition } from '~/utils/template-registry'
 import { CLAIMED_PUBLIC_ROUTES } from '#claimed-public-routes'
@@ -142,16 +142,16 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
  * subscription and never will, so asking `custom_pages` of it refused every
  * page KrabiClaw publishes about itself (#903).
  */
-async function siteMayHoldCustomPages(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<boolean> {
-  const { template } = await loadSiteTemplate(db, organizationId)
+async function organizationMayHoldCustomPages(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<boolean> {
+  const { template } = await loadOrganizationTemplate(db, organizationId)
   if (template.slug === 'platform') return true
-  return await hasSiteEntitlement(env, db, organizationId, 'custom_pages')
+  return await hasOrganizationEntitlement(env, organizationId, 'custom_pages')
 }
 
 async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organizationId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
-  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await siteMayHoldCustomPages(env, db, organizationId))) {
+  if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await organizationMayHoldCustomPages(env, db, organizationId))) {
     throw new HTTPError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
   }
   const recipe = input.recipe?.trim() || null
@@ -183,7 +183,7 @@ async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organiz
       SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'
     `, [organizationId])
     if (!allowedHosts.some(row => normalizeDomain(row.domain) === normalizeDomain(parsed.hostname))) {
-      badRequest('canonicalUrl must use an approved domain for this site')
+      badRequest('canonicalUrl must use an approved domain for this organization')
     }
   }
 }
@@ -322,7 +322,7 @@ async function resolveLocale(db: DbClient, organizationId: string, locale?: stri
       'SELECT locale FROM organization_locales WHERE organization_id = ? AND locale = ? LIMIT 1',
       [organizationId, exactLocale],
     )
-    if (!row) notFound('Locale is not configured for this site')
+    if (!row) notFound('Locale is not configured for this organization')
     return row.locale
   }
   const row = await queryFirst<{ locale: string | null }>(
@@ -330,7 +330,7 @@ async function resolveLocale(db: DbClient, organizationId: string, locale?: stri
     'SELECT locale FROM organization_locales WHERE organization_id = ? AND locale = \'en\' AND is_source = 1 AND status = \'published\' LIMIT 1',
     [organizationId],
   )
-  if (!row?.locale) throw new HTTPError({ statusCode: 500, statusMessage: 'Source locale is not configured for this site' })
+  if (!row?.locale) throw new HTTPError({ statusCode: 500, statusMessage: 'Source locale is not configured for this organization' })
   return row.locale
 }
 
@@ -482,7 +482,7 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
   // Whether each page may be removed is decided here, by the same rule
   // deleteTenantPage enforces, so the list and the endpoint cannot disagree and
   // the dashboard never offers a remove control the server would refuse.
-  const { template } = await loadSiteTemplate(db, organizationId)
+  const { template } = await loadOrganizationTemplate(db, organizationId)
   return rows.map(row => ({
     id: row.id,
     page_id: row.page_id,
@@ -568,7 +568,7 @@ export async function createTenantPagesBatch(
   },
 ) {
   const locale = await resolveLocale(db, input.organizationId, 'en')
-  const { template } = await loadSiteTemplate(db, input.organizationId)
+  const { template } = await loadOrganizationTemplate(db, input.organizationId)
   const localeRow = await queryFirst<{ is_source: number } | null>(db, `
     SELECT is_source FROM organization_locales WHERE organization_id = ? AND locale = ? LIMIT 1
   `, [input.organizationId, locale])
@@ -800,7 +800,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   }
   const existingSystemPage = existingPage?.page_type === 'system'
   if (effectiveData.pageType === 'system' && !input.trustedSystemPage && !existingSystemPage) badRequest('System pages are managed by the site template')
-  const { template } = await loadSiteTemplate(db, input.organizationId)
+  const { template } = await loadOrganizationTemplate(db, input.organizationId)
   const path = await assertTenantPagePathAvailable(db, {
     organizationId: input.organizationId,
     locale,
@@ -860,9 +860,9 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedUpdatedAt) conflict('Tenant page content was updated by another writer')
 
-  const { template } = await loadSiteTemplate(db, row.organization_id)
+  const { template } = await loadOrganizationTemplate(db, row.organization_id)
   if (templateRendersPageDocumentAt(template, normalizeTenantPagePath(row.path))) {
-    conflict('This page is one the site template renders, so it cannot be deleted')
+    conflict("This page is one the organization's template renders, so it cannot be deleted")
   }
 
   // A page another page links to cannot simply go. `page_grid` renders its
@@ -975,7 +975,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   // a path the caller never named. pageType and recipe are the page's identity,
   // resolved above against the source-locale rule, not content the caller omits.
   const effectiveInput = { ...input.data, pageType, recipe: identity.recipe }
-  const { template } = await loadSiteTemplate(db, row.organization_id)
+  const { template } = await loadOrganizationTemplate(db, row.organization_id)
   const path = await assertTenantPagePathAvailable(db, { organizationId: row.organization_id, locale: row.locale, path: input.data.path, excludeVariantId: variantId, template })
   const metadata = metadataForInput(effectiveInput, row.locale, path)
   const blocks = normalizeTenantPageBlocks(preserveOmittedBlockMedia(input.data.blocks, currentBlocks))

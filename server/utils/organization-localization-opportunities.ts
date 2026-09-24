@@ -10,7 +10,7 @@ interface LocalizableRow {
   [field: string]: unknown
 }
 
-export interface SiteLocalizationOpportunity {
+export interface OrganizationLocalizationOpportunity {
   id: string
   label: string
   completed: number
@@ -18,11 +18,11 @@ export interface SiteLocalizationOpportunity {
   path: string
 }
 
-export interface SiteLocalizationProgress {
+export interface OrganizationLocalizationProgress {
   locale: string
   completed: number
   total: number
-  opportunities: SiteLocalizationOpportunity[]
+  opportunities: OrganizationLocalizationOpportunity[]
 }
 
 function meaningful(value: unknown): boolean {
@@ -77,21 +77,21 @@ function opportunity(
   resourceType: string | ((first: LocalizableRow) => string),
   resourceId: (first: LocalizableRow) => string,
   locale: string,
-): SiteLocalizationOpportunity | null {
+): OrganizationLocalizationOpportunity | null {
   if (!result.first || result.completed === result.total) return null
   const type = typeof resourceType === 'string' ? resourceType : resourceType(result.first)
   const query = new URLSearchParams({ localize: `${type}:${resourceId(result.first)}`, locale })
   return { id, label, completed: result.completed, total: result.total, path: `${path(result.first)}?${query}` }
 }
 
-export async function getSiteLocalizationProgress(
+export async function getOrganizationLocalizationProgress(
   db: DbClient,
   input: { organizationId: string; locale: string },
-): Promise<SiteLocalizationProgress> {
+): Promise<OrganizationLocalizationProgress> {
   const source = await getPersistedSourceLocale(db, input.organizationId)
   if (input.locale === source.locale) throw new Error('Localization progress requires an additional language')
   const params = [input.locale, input.organizationId]
-  const [site, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
+  const [organization, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
     queryAll<LocalizableRow>(db, `SELECT s.id, s.name, s.brand_description, rl.values_json
       FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'organization' AND rl.resource_id = s.id AND rl.locale = ?
         AND rl.organization_id = s.id
@@ -168,7 +168,7 @@ export async function getSiteLocalizationProgress(
   ])
 
   const groups = [
-    { id: 'brand', label: 'Brand', result: progress(site, ['name', 'brand_description']), path: () => 'brand/name', resourceType: 'site', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'brand', label: 'Brand', result: progress(organization, ['name', 'brand_description']), path: () => 'brand/name', resourceType: 'organization', resourceId: (row: LocalizableRow) => row.id },
     { id: 'locations', label: 'Locations', result: progress(locations, ['title', 'address', 'description', 'short_description']), path: (row: LocalizableRow) => `locations/${row.location_slug}/settings`, resourceType: 'business_location', resourceId: (row: LocalizableRow) => row.id },
     // Which product attributes are translatable is the definition's own
     // declaration, so the field list is the columns plus whatever the tenant
@@ -184,7 +184,7 @@ export async function getSiteLocalizationProgress(
   ]
   const results = groups
     .map(group => opportunity(group.id, group.label, group.result, group.path, group.resourceType, group.resourceId, input.locale))
-    .filter((item): item is SiteLocalizationOpportunity => item !== null)
+    .filter((item): item is OrganizationLocalizationOpportunity => item !== null)
   return {
     locale: input.locale,
     completed: groups.reduce((sum, group) => sum + group.result.completed, 0),

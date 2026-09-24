@@ -110,7 +110,7 @@ export interface CloudflareEnv {
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
   WHATSAPP_ACCESS_TOKEN?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
@@ -127,7 +127,7 @@ export interface CloudflareEnv {
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
   MEDIA_BUCKET?: R2Bucket
-  SITE_CACHE?: KVNamespace
+  ORGANIZATION_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
@@ -178,8 +178,8 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   const origins = new Set<string>()
   const authOrigin = normalizeOrigin(env.BETTER_AUTH_URL)
   const platformOrigin = normalizeOrigin(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
-  const freeSiteOrigin = normalizeOrigin(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-  for (const origin of [authOrigin, platformOrigin, freeSiteOrigin, wildcardOrigin(freeSiteOrigin)]) {
+  const freeOrganizationOrigin = normalizeOrigin(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
+  for (const origin of [authOrigin, platformOrigin, freeOrganizationOrigin, wildcardOrigin(freeOrganizationOrigin)]) {
     if (origin) origins.add(origin)
   }
   if (import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true') {

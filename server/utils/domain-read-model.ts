@@ -2,7 +2,7 @@ import { queryAll } from '~/server/db'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
 import type { DomainRecord, DomainRole, DomainStatus } from '~/server/utils/domains'
 
-export async function getSiteDomains(db: D1Database, organizationId: string): Promise<DomainRecord[]> {
+export async function getOrganizationDomains(db: D1Database, organizationId: string): Promise<DomainRecord[]> {
   const domains = await queryAll<DomainRecord>(db, `
     SELECT *
     FROM organization_domains
@@ -197,8 +197,8 @@ export async function getDomainEvents(db: D1Database, domainId: string) {
   return events || []
 }
 
-export async function getSiteDomainsDashboardPayload(db: D1Database, organizationId: string) {
-  const domains = await getSiteDomains(db, organizationId)
+export async function getOrganizationDomainsDashboardPayload(db: D1Database, organizationId: string) {
+  const domains = await getOrganizationDomains(db, organizationId)
   const enriched = []
   for (const domain of domains) {
     enriched.push({

@@ -1,17 +1,17 @@
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
+import { deleteConfig, getConfig, setConfig } from '~/server/utils/organization-config'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
-import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
+import { isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
-import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import type { SiteIntegrations } from '~/shared/site-settings'
+import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
+import type { OrganizationIntegrations } from '~/shared/organization-settings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
-import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { organizationAdapter } from '~/server/utils/member-access'
@@ -21,14 +21,14 @@ type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
 
 const MAX_SLUG_ATTEMPTS = 10
 
-export class SiteSettingsNotFoundError extends Error {
+export class OrganizationSettingsNotFoundError extends Error {
   constructor() {
-    super('Site not found')
-    this.name = 'SiteSettingsNotFoundError'
+    super('Organization not found')
+    this.name = 'OrganizationSettingsNotFoundError'
   }
 }
 
-interface SiteSettingsRow {
+interface OrganizationSettingsRow {
   id: string
   status: string
   subdomain: string | null
@@ -37,7 +37,7 @@ interface SiteSettingsRow {
   theme_id: string
 }
 
-interface FullSiteRow extends SiteSettingsRow {
+interface FullOrganizationRow extends OrganizationSettingsRow {
   public_url: string | null
   custom_domain_status: string | null
   default_currency: string | null
@@ -66,7 +66,7 @@ interface FullSiteRow extends SiteSettingsRow {
   updated_at: string
 }
 
-export interface SiteSettingsUpdateResult {
+export interface OrganizationSettingsUpdateResult {
   status: number
   data: Record<string, unknown>
 }
@@ -84,7 +84,7 @@ export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
 ) {
-  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string; integrations_json: string; locations_json: string }>(db, `
+  const updatedOrganization = await queryFirst<FullOrganizationRow & { vertical: string; theme_id: string; integrations_json: string; locations_json: string }>(db, `
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
@@ -118,8 +118,8 @@ export async function loadSettingsPayload(
     LIMIT 1
   `, [organizationId])
 
-  if (!updatedSite) {
-    throw new SiteSettingsNotFoundError()
+  if (!updatedOrganization) {
+    throw new OrganizationSettingsNotFoundError()
   }
 
   const siteConfig = await getConfig(db, organizationId)
@@ -127,68 +127,68 @@ export async function loadSettingsPayload(
   // An empty toggle list is what a tenant with no modules looks like, so serving
   // one on an unsupported vertical/template pair showed them a settings page that
   // said their features were off rather than that we could not resolve them.
-  const { template, capabilities } = resolveSiteCmsCapabilities(updatedSite.vertical, updatedSite.theme_id, {
-    siteEnabledFeatures: updatedSite.feature_overrides,
+  const { template, capabilities } = resolveOrganizationCmsCapabilities(updatedOrganization.vertical, updatedOrganization.theme_id, {
+    organizationEnabledFeatures: updatedOrganization.feature_overrides,
   })
-  const toggleableFeatures: readonly ProductFeature[] = toggleableModulesForScope(template, 'site')
+  const toggleableFeatures: readonly ProductFeature[] = toggleableModulesForScope(template, 'organization')
   const effectiveFeatures: readonly ProductFeature[] = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
-  const defaultFeatures: readonly ProductFeature[] = defaultModuleFeaturesForVertical(updatedSite.vertical as SiteVertical)
+  const defaultFeatures: readonly ProductFeature[] = defaultModuleFeaturesForVertical(updatedOrganization.vertical as OrganizationVertical)
 
   return {
-    id: updatedSite.id,
-    subdomain: updatedSite.subdomain,
-    theme: resolvePublicTemplate({ themeId: updatedSite.theme_id }).slug,
-    status: updatedSite.status,
+    id: updatedOrganization.id,
+    subdomain: updatedOrganization.subdomain,
+    theme: resolvePublicTemplate({ themeId: updatedOrganization.theme_id }).slug,
+    status: updatedOrganization.status,
 
-    public_url: updatedSite.public_url,
-    custom_domain_status: updatedSite.custom_domain_status,
-    name: updatedSite.name,
-    brand_description: updatedSite.brand_description,
+    public_url: updatedOrganization.public_url,
+    custom_domain_status: updatedOrganization.custom_domain_status,
+    name: updatedOrganization.name,
+    brand_description: updatedOrganization.brand_description,
     media: [
-      ...(updatedSite.logo_media_id ? [{
-        asset_id: updatedSite.logo_media_id,
+      ...(updatedOrganization.logo_media_id ? [{
+        asset_id: updatedOrganization.logo_media_id,
         slot: 'logo',
-        public_url: updatedSite.logo_public_url,
-        thumbnail_url: updatedSite.logo_thumbnail_url,
-        kind: updatedSite.logo_kind,
+        public_url: updatedOrganization.logo_public_url,
+        thumbnail_url: updatedOrganization.logo_thumbnail_url,
+        kind: updatedOrganization.logo_kind,
       }] : []),
-      ...(updatedSite.favicon_media_id ? [{
-        asset_id: updatedSite.favicon_media_id,
+      ...(updatedOrganization.favicon_media_id ? [{
+        asset_id: updatedOrganization.favicon_media_id,
         slot: 'favicon',
-        public_url: updatedSite.favicon_public_url,
-        thumbnail_url: updatedSite.favicon_thumbnail_url,
-        kind: updatedSite.favicon_kind,
+        public_url: updatedOrganization.favicon_public_url,
+        thumbnail_url: updatedOrganization.favicon_thumbnail_url,
+        kind: updatedOrganization.favicon_kind,
       }] : []),
-      ...(updatedSite.social_share_media_id ? [{
-        asset_id: updatedSite.social_share_media_id,
+      ...(updatedOrganization.social_share_media_id ? [{
+        asset_id: updatedOrganization.social_share_media_id,
         slot: 'social_share',
-        public_url: updatedSite.social_share_public_url,
-        thumbnail_url: updatedSite.social_share_thumbnail_url,
-        kind: updatedSite.social_share_kind,
+        public_url: updatedOrganization.social_share_public_url,
+        thumbnail_url: updatedOrganization.social_share_thumbnail_url,
+        kind: updatedOrganization.social_share_kind,
       }] : []),
     ],
-    contact_email: updatedSite.contact_email,
-    seo_title: updatedSite.seo_title,
-    seo_description: updatedSite.seo_description,
-    canonical_url: updatedSite.canonical_url,
-    social_facebook_url: updatedSite.social_facebook_url,
-    social_instagram_url: updatedSite.social_instagram_url,
-    social_tiktok_url: updatedSite.social_tiktok_url,
-    feature_overrides: parseCmsFeatureOverrideDelta(updatedSite.feature_overrides),
+    contact_email: updatedOrganization.contact_email,
+    seo_title: updatedOrganization.seo_title,
+    seo_description: updatedOrganization.seo_description,
+    canonical_url: updatedOrganization.canonical_url,
+    social_facebook_url: updatedOrganization.social_facebook_url,
+    social_instagram_url: updatedOrganization.social_instagram_url,
+    social_tiktok_url: updatedOrganization.social_tiktok_url,
+    feature_overrides: parseCmsFeatureOverrideDelta(updatedOrganization.feature_overrides),
     toggleable_features: toggleableFeatures,
     effective_features: effectiveFeatures,
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
-    font_preset: resolveSiteFontPreset(siteConfig.font_preset),
-    default_currency: updatedSite.default_currency,
+    font_preset: resolveOrganizationFontPreset(siteConfig.font_preset),
+    default_currency: updatedOrganization.default_currency,
     press_email: siteConfig.press_email || '',
     partnerships_email: siteConfig.partnerships_email || '',
     catering_email: siteConfig.catering_email || '',
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
-    integrations: integrationsSummary(JSON.parse(updatedSite.integrations_json) as SiteIntegrations, JSON.parse(updatedSite.locations_json) as IntegrationLocation[]),
-    created_at: updatedSite.created_at,
-    updated_at: updatedSite.updated_at,
+    integrations: integrationsSummary(JSON.parse(updatedOrganization.integrations_json) as OrganizationIntegrations, JSON.parse(updatedOrganization.locations_json) as IntegrationLocation[]),
+    created_at: updatedOrganization.created_at,
+    updated_at: updatedOrganization.updated_at,
   }
 }
 
@@ -207,7 +207,7 @@ interface IntegrationLocation {
  * leaves — names and statuses, never a token. Google Maps is per location, so
  * its answer is the locations and which of them name a place.
  */
-function integrationsSummary(integrations: SiteIntegrations, locations: IntegrationLocation[]) {
+function integrationsSummary(integrations: OrganizationIntegrations, locations: IntegrationLocation[]) {
   return {
     google_maps: locations,
     google_analytics: integrations.google_analytics
@@ -226,11 +226,11 @@ function integrationsSummary(integrations: SiteIntegrations, locations: Integrat
   }
 }
 
-async function updateNonSiteConfigFields(
+async function updateNonOrganizationConfigFields(
   db: D1Database,
   organizationId: string,
-  updates: UpdateSiteSettingsRequest
-): Promise<SiteSettingsUpdateResult | null> {
+  updates: UpdateOrganizationSettingsRequest
+): Promise<OrganizationSettingsUpdateResult | null> {
   if (updates.brand_color !== undefined) {
     if (updates.brand_color) {
       await setConfig(db, organizationId, 'brand_color', updates.brand_color)
@@ -266,20 +266,20 @@ async function updateNonSiteConfigFields(
   return null
 }
 
-async function attemptSiteUpdate(
+async function attemptOrganizationUpdate(
   db: D1Database,
   env: SetupEnv,
-  site: SiteSettingsRow,
+  organization: OrganizationSettingsRow,
   organizationId: string,
-  updates: UpdateSiteSettingsRequest,
+  updates: UpdateOrganizationSettingsRequest,
   userId: string,
   subdomain: string | null
-): Promise<SiteSettingsUpdateResult> {
+): Promise<OrganizationSettingsUpdateResult> {
   const setParts: string[] = []
   const params: Array<string | null> = []
   // Extra WHERE terms the UPDATE must still satisfy at the moment it runs.
   const guards: string[] = []
-  const siteMedia = updates.media
+  const organizationMedia = updates.media
 
   if (updates.font_preset !== undefined) {
     setParts.push("settings_json = json_set(settings_json, '$.config.font_preset', ?)")
@@ -331,7 +331,7 @@ async function attemptSiteUpdate(
     if (updates.status !== 'active' && updates.status !== 'inactive') {
       return { status: 400, data: { error: 'Website status must be active or inactive' } }
     }
-    if (site.status === 'suspended') {
+    if (organization.status === 'suspended') {
       return { status: 409, data: { error: 'This website is suspended. Contact support to restore it.' } }
     }
     setParts.push('status = ?')
@@ -377,20 +377,20 @@ async function attemptSiteUpdate(
     let allowedModules: readonly ProductFeature[] = []
     let newEffectiveFeatures: readonly ProductFeature[]
     try {
-      const { template, capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-        siteEnabledFeatures: newDelta ? JSON.stringify(newDelta) : null,
+      const { template, capabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+        organizationEnabledFeatures: newDelta ? JSON.stringify(newDelta) : null,
       })
-      allowedModules = toggleableModulesForScope(template, 'site')
+      allowedModules = toggleableModulesForScope(template, 'organization')
       newEffectiveFeatures = [...new Set([...capabilities.pages.map(p => p.feature), ...capabilities.managers.map(m => m.id)])]
     } catch {
-      return { status: 422, data: { error: 'Unsupported site vertical/template — cannot resolve feature catalog' } }
+      return { status: 422, data: { error: 'Unsupported organization vertical/template — cannot resolve feature catalog' } }
     }
 
     if (newDelta) {
       const submitted = [...(newDelta.enabled ?? []), ...(newDelta.disabled ?? [])]
       const invalid = submitted.filter(feature => !allowedModules.includes(feature as ProductFeature))
       if (invalid.length > 0) {
-        return { status: 400, data: { error: `Unsupported module(s) for this site's template: ${invalid.join(', ')}` } }
+        return { status: 400, data: { error: `Unsupported module(s) for this organization's template: ${invalid.join(', ')}` } }
       }
 
       // Disabling a module that still has live content/bookings must not silently hide it.
@@ -427,14 +427,14 @@ async function attemptSiteUpdate(
     params.push(newDelta ? JSON.stringify(newDelta) : null)
   }
 
-  if (setParts.length === 0 && siteMedia === undefined) {
+  if (setParts.length === 0 && organizationMedia === undefined) {
     const settings = await loadSettingsPayload(db, organizationId)
     return {
       status: 200,
       data: {
         success: true,
         settings,
-        message: 'Site settings updated successfully',
+        message: 'Organization settings updated successfully',
       },
     }
   }
@@ -465,13 +465,13 @@ async function attemptSiteUpdate(
     }
   }
 
-  const isRename = updates.name !== undefined && subdomain && subdomain !== site.subdomain
+  const isRename = updates.name !== undefined && subdomain && subdomain !== organization.subdomain
   if (isRename && setParts.length > 0) {
     await createSystemSubdomain(env, db, organizationId, subdomain, { organizationUpdate })
   } else if (setParts.length > 0) {
     const result = await execute(db, organizationUpdate.sql, organizationUpdate.values)
     if (!result.success) {
-      throw new Error('Failed to update site settings')
+      throw new Error('Failed to update organization settings')
     }
   }
 
@@ -484,13 +484,13 @@ async function attemptSiteUpdate(
   // website the owner believes is unpublished.
   if (updates.status !== undefined) await reconcileZarazAnalytics(env, db)
 
-  if (siteMedia !== undefined && siteMedia.length > 0) {
-    const targetSlots = new Set(siteMedia.map(item => item.slot))
+  if (organizationMedia !== undefined && organizationMedia.length > 0) {
+    const targetSlots = new Set(organizationMedia.map(item => item.slot))
     const queries = [...targetSlots].flatMap(slot => buildSingleMediaPlacementQueries({
       organizationId,
       
       placement: { owner_type: 'organization', owner_id: organizationId, slot },
-      media: siteMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
+      media: organizationMedia.filter(item => item.slot === slot && item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
       now,
     }))
     await executeBatch(db, queries)
@@ -500,7 +500,7 @@ async function attemptSiteUpdate(
     || updates.brand_description !== undefined
     || updates.seo_title !== undefined
     || updates.seo_description !== undefined
-    || siteMedia?.some(item => item.slot === 'logo' || item.slot === 'social_share') === true
+    || organizationMedia?.some(item => item.slot === 'logo' || item.slot === 'social_share') === true
   if (cardInputChanged) {
     await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: userId })
   }
@@ -511,18 +511,18 @@ async function attemptSiteUpdate(
     data: {
       success: true,
       settings,
-      message: 'Site settings updated successfully',
+      message: 'Organization settings updated successfully',
     },
   }
 }
 
-export async function updateSiteSettingsFields(
+export async function updateOrganizationSettingsFields(
   db: D1Database,
   env: SetupEnv & CloudflareEnv,
   organizationId: string,
-  updates: UpdateSiteSettingsRequest,
+  updates: UpdateOrganizationSettingsRequest,
   userId: string
-): Promise<SiteSettingsUpdateResult> {
+): Promise<OrganizationSettingsUpdateResult> {
   if (Object.keys(updates).length === 0) {
     return {
       status: 400,
@@ -530,40 +530,40 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  const site = await queryFirst<SiteSettingsRow>(db, `
+  const organization = await queryFirst<OrganizationSettingsRow>(db, `
     SELECT id, status, subdomain, name, vertical, theme_id
     FROM organization
     WHERE id = ?
     LIMIT 1
   `, [organizationId])
 
-  if (!site) {
+  if (!organization) {
     return {
       status: 404,
-      data: { error: 'Site not found or access denied' },
+      data: { error: 'Organization not found or access denied' },
     }
   }
 
   // Validate before any settings writes. Preset IDs are not CSS or font URLs.
   if (updates.font_preset !== undefined) {
-    if (!isSiteFontPreset(updates.font_preset)) {
+    if (!isOrganizationFontPreset(updates.font_preset)) {
       return { status: 400, data: { error: 'font_preset must be default or mali' } }
     }
-    if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: site.theme_id }).slug !== 'saya') {
+    if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'saya') {
       return { status: 400, data: { error: 'Mali is available for the Saya template only' } }
     }
   }
 
-  const siteMedia = updates.media
-  if (siteMedia !== undefined) {
-    if (!Array.isArray(siteMedia) || siteMedia.some(item => !item || !['logo', 'favicon', 'social_share'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
+  const organizationMedia = updates.media
+  if (organizationMedia !== undefined) {
+    if (!Array.isArray(organizationMedia) || organizationMedia.some(item => !item || !['logo', 'favicon', 'social_share'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
       return { status: 400, data: { error: 'media must contain an asset_id and a logo, favicon, or social_share slot' } }
     }
     try {
       await hydrateMediaAssetRefs(db, {
         organizationId,
         
-        refs: siteMedia.filter(item => item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
+        refs: organizationMedia.filter(item => item.asset_id).map(item => ({ asset_id: String(item.asset_id) })),
         allowedKinds: ['image'],
       })
     } catch {
@@ -571,7 +571,7 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  const configError = await updateNonSiteConfigFields(db, organizationId, updates)
+  const configError = await updateNonOrganizationConfigFields(db, organizationId, updates)
   if (configError) return configError
   if (updates.name !== undefined) {
     const baseSlug = buildSlug(updates.name)
@@ -594,12 +594,12 @@ export async function updateSiteSettingsFields(
       if (existing) continue
       if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
-      let result: SiteSettingsUpdateResult
+      let result: OrganizationSettingsUpdateResult
       try {
-        result = await attemptSiteUpdate(
+        result = await attemptOrganizationUpdate(
           db,
           env,
-          site,
+          organization,
           organizationId,
           updates,
           userId,
@@ -627,10 +627,10 @@ export async function updateSiteSettingsFields(
     }
   }
 
-  return attemptSiteUpdate(
+  return attemptOrganizationUpdate(
     db,
     env,
-    site,
+    organization,
     organizationId,
     updates,
     userId,

@@ -4,7 +4,7 @@ import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
 import { addLocalDays, localDateAt, isValidTimezone } from '~/utils/timezone'
 
-export interface SiteAnalyticsReport {
+export interface AnalyticsReport {
   period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
   metrics: {
     pageViews: number
@@ -25,7 +25,7 @@ export interface SiteAnalyticsReport {
   devices: Array<{ type: string; views: number; percentOfTotal: number }>
 }
 
-interface SiteContext {
+interface OrganizationContext {
   organizationId: string
   timezone: string
   analyticsDataStartAt: string | null
@@ -45,14 +45,14 @@ interface DailySlice {
 
 const n = (value: unknown) => Number(value || 0)
 
-export async function resolveSiteAnalyticsContext(db: DbClient, organizationId: string): Promise<SiteContext> {
+export async function resolveOrganizationAnalyticsContext(db: DbClient, organizationId: string): Promise<OrganizationContext> {
   const row = await queryFirst<{ organization_id: string; analytics_data_start_at: string | null; timezone: string | null }>(db, `
     SELECT s.id AS organization_id, s.analytics_data_start_at, json_extract(s.settings_json, '$.config.default_timezone') AS timezone
     FROM organization s
     WHERE s.id = ? LIMIT 1
   `, [organizationId])
-  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  if (!isValidTimezone(row.timezone)) throw new HTTPError({ statusCode: 422, statusMessage: 'Site default_timezone is missing or invalid' })
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  if (!isValidTimezone(row.timezone)) throw new HTTPError({ statusCode: 422, statusMessage: 'Organization default_timezone is missing or invalid' })
   return {
     organizationId: row.organization_id,
     timezone: row.timezone,
@@ -93,7 +93,7 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
       WHEN EXISTS (SELECT 1 FROM organization_domains d WHERE d.organization_id = v.organization_id AND d.status = 'active' AND lower(d.domain) = lower(v.referrer)) THEN 'Internal'
       ELSE lower(v.referrer) END, '' FROM views v
   )
-  SELECT 'site_day' kind, '' key, json_object(
+  SELECT 'organization_day' kind, '' key, json_object(
     'page_views', page_views, 'unique_sessions', unique_sessions, 'unique_visitors', unique_visitors,
     'returning_visitors', (SELECT COUNT(DISTINCT current.visitor_id) FROM views current WHERE EXISTS (
       SELECT 1 FROM sessions previous WHERE previous.visitor_id = current.visitor_id
@@ -107,7 +107,7 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
     FROM dimensions GROUP BY dimension, value, subvalue`
 
 interface AnalyticsSummaryRow {
-  kind: 'site_day' | 'page_day' | 'dimension_day'
+  kind: 'organization_day' | 'page_day' | 'dimension_day'
   date: string
   key: string
   payload_json: string
@@ -122,7 +122,7 @@ const viewCountSchema = z.object({ page_views: z.number().nonnegative() })
 const dimensionKeySchema = z.tuple([z.enum(['country', 'city', 'device', 'referrer']), z.string(), z.string()])
 
 function dailySlice(date: string, rows: Omit<AnalyticsSummaryRow, 'date'>[]): DailySlice {
-  const summary = rows.find(row => row.kind === 'site_day')
+  const summary = rows.find(row => row.kind === 'organization_day')
   if (!summary) throw new Error(`Analytics day summary missing: ${date}`)
   const metrics = dayMetricsSchema.parse(JSON.parse(summary.payload_json))
   return {
@@ -136,8 +136,8 @@ function dailySlice(date: string, rows: Omit<AnalyticsSummaryRow, 'date'>[]): Da
   }
 }
 
-export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: string, date: string): Promise<void> {
-  const context = await resolveSiteAnalyticsContext(db, organizationId)
+export async function aggregateOrganizationAnalyticsDate(db: DbClient, organizationId: string, date: string): Promise<void> {
+  const context = await resolveOrganizationAnalyticsContext(db, organizationId)
   const { start, end } = localDateBounds(date, context.timezone)
   const now = new Date().toISOString()
   await executeBatch(db, [
@@ -155,12 +155,12 @@ export async function aggregateSiteAnalyticsDate(db: DbClient, organizationId: s
 async function loadSlices(db: DbClient, organizationId: string, dates: string[], timezone: string, now: Date, cutoffDate: string | null): Promise<DailySlice[]> {
   if (dates.length === 0) return []
   const rows = await queryAll<AnalyticsSummaryRow>(db, `SELECT kind, date, key, payload_json FROM analytics_summaries
-    WHERE organization_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [organizationId, dates[0]!, dates.at(-1)!])
+    WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [organizationId, dates[0]!, dates.at(-1)!])
   const rawRetentionCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
   const result: DailySlice[] = []
   for (const date of dates) {
     const dayRows = rows.filter(row => row.date === date)
-    if (dayRows.some(row => row.kind === 'site_day')) {
+    if (dayRows.some(row => row.kind === 'organization_day')) {
       result.push(dailySlice(date, dayRows))
       continue
     }
@@ -175,11 +175,11 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
   return result
 }
 
-export async function getSiteAnalyticsReport(db: DbClient, input: {
+export async function getAnalyticsReport(db: DbClient, input: {
   organizationId: string; startDate?: string; endDate?: string; now?: Date
-}): Promise<SiteAnalyticsReport> {
+}): Promise<AnalyticsReport> {
   const now = input.now ?? new Date()
-  const context = await resolveSiteAnalyticsContext(db, input.organizationId)
+  const context = await resolveOrganizationAnalyticsContext(db, input.organizationId)
   const range = parseAnalyticsRange({ startDate: input.startDate, endDate: input.endDate, timeZone: context.timezone, now })
   const { start } = localDateBounds(range.startDate, context.timezone)
   const { end } = localDateBounds(range.endDate, context.timezone)
@@ -261,15 +261,15 @@ export async function getSiteAnalyticsReport(db: DbClient, input: {
   }
 }
 
-export async function aggregatePreviousLocalDateForAllSites(db: DbClient, now = new Date()): Promise<string[]> {
-  const sites = await queryAll<{ id: string; timezone: string | null }>(db, `SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s WHERE s.status = 'active'`)
+export async function aggregatePreviousLocalDateForAllOrganizations(db: DbClient, now = new Date()): Promise<string[]> {
+  const organizations = await queryAll<{ id: string; timezone: string | null }>(db, `SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s WHERE s.status = 'active'`)
   const aggregated: string[] = []
-  for (const site of sites) {
-    if (!isValidTimezone(site.timezone)) throw new Error(`Site ${site.id} default_timezone is missing or invalid`)
-    const timezone = site.timezone
+  for (const organization of organizations) {
+    if (!isValidTimezone(organization.timezone)) throw new Error(`Organization ${organization.id} default_timezone is missing or invalid`)
+    const timezone = organization.timezone
     const date = addLocalDays(localDateAt(now, timezone), -1)
-    await aggregateSiteAnalyticsDate(db, site.id, date)
-    aggregated.push(`${site.id}:${date}`)
+    await aggregateOrganizationAnalyticsDate(db, organization.id, date)
+    aggregated.push(`${organization.id}:${date}`)
   }
   return aggregated
 }
@@ -277,7 +277,7 @@ export async function aggregatePreviousLocalDateForAllSites(db: DbClient, now = 
 export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Promise<number> {
   const rawCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
   const retainedCutoff = new Date(now.getTime() - 740 * 86_400_000).toISOString()
-  const sites = await queryAll<{ id: string; timezone: string | null }>(db, `
+  const organizations = await queryAll<{ id: string; timezone: string | null }>(db, `
     SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s
   `)
   const initialResults = await executeBatch(db, [
@@ -285,13 +285,13 @@ export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Pr
     { query: "DELETE FROM analytics_summaries WHERE kind = 'session' AND (payload_json ->> '$.last_seen_at') < ?", params: [retainedCutoff] },
   ], { operation: 'clean retained tenant analytics events and sessions' })
   let changes = initialResults.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0)
-  for (const site of sites) {
-    if (!isValidTimezone(site.timezone)) throw new Error(`Site ${site.id} default_timezone is missing or invalid`)
-    const timezone = site.timezone
+  for (const organization of organizations) {
+    if (!isValidTimezone(organization.timezone)) throw new Error(`Organization ${organization.id} default_timezone is missing or invalid`)
+    const timezone = organization.timezone
     const retainedDate = addLocalDays(localDateAt(now, timezone), -739)
     const results = await executeBatch(db, [
-      { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND kind IN ('site_day', 'page_day', 'dimension_day') AND date < ?", params: [site.id, retainedDate] },
-    ], { operation: `clean retained tenant analytics aggregates for ${site.id}` })
+      { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date < ?", params: [organization.id, retainedDate] },
+    ], { operation: `clean retained tenant analytics aggregates for ${organization.id}` })
     changes += results.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0)
   }
   return changes

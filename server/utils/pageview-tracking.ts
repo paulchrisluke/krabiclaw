@@ -82,7 +82,7 @@ export function isKnownTenantPublicPath(
   )
 }
 
-export async function getSiteInternalHosts(db: AppDb, organizationId: string, currentHost: string): Promise<string[]> {
+export async function getOrganizationInternalHosts(db: AppDb, organizationId: string, currentHost: string): Promise<string[]> {
   const rows = await queryAll<{ domain: string }>(db, `SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'`, [organizationId])
   return [currentHost.toLowerCase(), ...rows.map(row => String(row.domain || '').toLowerCase())]
 }

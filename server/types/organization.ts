@@ -2,11 +2,11 @@
 
 import type { DomainStatus } from '~/server/utils/domains'
 import type { CurrencyCode } from '~/shared/currencies'
-import type { SiteFontPreset } from '~/shared/site-fonts'
+import type { OrganizationFontPreset } from '~/shared/organization-fonts'
 
 export type { CurrencyCode }
 
-export interface SiteSettings {
+export interface OrganizationSettings {
   id: string
   organization_id: string
   subdomain: string
@@ -19,7 +19,7 @@ export interface SiteSettings {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
-  font_preset: SiteFontPreset
+  font_preset: OrganizationFontPreset
   // null until the owner has chosen one. Surfaces that quote a price refuse to
   // render rather than showing an amount in a currency nobody picked.
   default_currency: CurrencyCode | null
@@ -28,18 +28,18 @@ export interface SiteSettings {
   updated_at: string
 }
 
-export interface UpdateSiteSettingsRequest {
+export interface UpdateOrganizationSettingsRequest {
   name?: string
   /**
    * The website's publication state, and the only one there is. A tenant moves
    * between 'active' (Live) and 'inactive' (Draft); 'suspended' is KrabiClaw's
-   * and is rejected here. server/utils/site-settings.ts enforces it.
+   * and is rejected here. server/utils/organization-settings.ts enforces it.
    */
   status?: 'active' | 'inactive'
   brand_description?: string
   contact_email?: string
   brand_color?: string
-  font_preset?: SiteFontPreset
+  font_preset?: OrganizationFontPreset
   default_currency?: CurrencyCode
   press_email?: string
   partnerships_email?: string
@@ -64,7 +64,7 @@ export interface LaunchReadiness {
   missing_critical: number
   missing_optional: number
   sections: {
-    site_identity: {
+    organization_identity: {
       ready: boolean
       items: {
         name: boolean
@@ -85,7 +85,7 @@ export interface LaunchReadiness {
     publishing_status: {
       ready: boolean
       items: {
-        site_active: boolean
+        organization_active: boolean
         public_url: boolean
         last_published: boolean
       }

@@ -1,11 +1,11 @@
 import { assertCalendarDate, localNow, MINUTE_TIME_PATTERN, isValidTimezone } from '~/utils/timezone'
 import { HTTPError } from 'nitro'
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { isSiteFontPreset, resolveSiteFontPreset, type SiteFontPreset } from '~/shared/site-fonts'
+import { isOrganizationFontPreset, resolveOrganizationFontPreset, type OrganizationFontPreset } from '~/shared/organization-fonts'
 
-export interface SiteConfig {
+export interface OrganizationConfig {
   brand_color?: string
-  font_preset?: SiteFontPreset
+  font_preset?: OrganizationFontPreset
   social_facebook?: string
   social_instagram?: string
   social_tiktok?: string
@@ -16,20 +16,20 @@ export interface SiteConfig {
   /**
    * Read-only here. It is the Google Analytics integration's measurement id,
    * and choosing a GA4 property is the one thing that writes it — which is why
-   * it is absent from WritableSiteConfigKey below.
+   * it is absent from WritableOrganizationConfigKey below.
    */
   google_analytics_measurement_id?: string
   default_timezone?: string
 }
 
 /** The settings a caller may set. `google_analytics_measurement_id` is not one. */
-export type WritableSiteConfigKey = Exclude<keyof SiteConfig, 'google_analytics_measurement_id'>
+export type WritableOrganizationConfigKey = Exclude<keyof OrganizationConfig, 'google_analytics_measurement_id'>
 
 export const getConfig = async (
   db: DbClient,
   organizationId: string,
-): Promise<SiteConfig> => {
-  const row = await queryFirst<Record<keyof SiteConfig | 'font_preset_type', unknown>>(db, `
+): Promise<OrganizationConfig> => {
+  const row = await queryFirst<Record<keyof OrganizationConfig | 'font_preset_type', unknown>>(db, `
     SELECT json_extract(settings_json, '$.config.brand_color') AS brand_color,
            json_extract(settings_json, '$.config.font_preset') AS font_preset,
            json_type(settings_json, '$.config.font_preset') AS font_preset_type,
@@ -44,8 +44,8 @@ export const getConfig = async (
            social_tiktok_url AS social_tiktok
       FROM organization WHERE id = ?
   `, [organizationId])
-  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-  const config: SiteConfig = {}
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+  const config: OrganizationConfig = {}
   for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
     const value = row[key]
     if (value == null) continue
@@ -54,7 +54,7 @@ export const getConfig = async (
   }
   // A missing optional setting preserves the template. An explicit null or an
   // unsupported stored value is not a valid preset.
-  config.font_preset = resolveSiteFontPreset(row.font_preset_type === null ? undefined : row.font_preset)
+  config.font_preset = resolveOrganizationFontPreset(row.font_preset_type === null ? undefined : row.font_preset)
   return config
 }
 
@@ -88,10 +88,10 @@ export const isTimeSlotInPast = (date: string, time: string, timezone: string, n
 export const setConfig = async (
   db: DbClient,
   organizationId: string,
-  key: WritableSiteConfigKey,
+  key: WritableOrganizationConfigKey,
   value: string
 ) => {
-  if (key === 'font_preset' && !isSiteFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported site font preset' })
+  if (key === 'font_preset' && !isOrganizationFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported organization font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
     const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`, [value || null, organizationId])
@@ -105,13 +105,13 @@ export const setConfig = async (
      WHERE id = ?`,
     ['$.config.' + key, value, organizationId],
   )
-  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
+  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization ownership changed. Reload before saving.' })
 }
 
 export const deleteConfig = async (
   db: DbClient,
   organizationId: string,
-  key: WritableSiteConfigKey
+  key: WritableOrganizationConfigKey
 ) => {
   if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
   if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
@@ -122,5 +122,5 @@ export const deleteConfig = async (
      WHERE id = ?`,
     ['$.config.' + key, organizationId],
   )
-  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Site ownership changed. Reload before saving.' })
+  if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization ownership changed. Reload before saving.' })
 }

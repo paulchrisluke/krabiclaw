@@ -9,7 +9,7 @@ import { collectionArticlePath, isArticleCollection } from '~/utils/article-coll
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { presentationForSurface, resolveProductPresentation } from '~/utils/product-presentation'
-import { assertSiteLanguageEntitlement } from '~/server/utils/localization'
+import { assertOrganizationLanguageEntitlement } from '~/server/utils/localization'
 
 interface SitemapEntry {
   loc: string
@@ -61,12 +61,12 @@ export default definePlugin((nitroApp) => {
     const entries: SitemapEntry[] = []
 
     if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
-      const platformSiteId = event.context.organizationId as string
+      const platformOrganizationId = event.context.organizationId as string
       entries.push(...PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc })))
 
       // KrabiClaw's marketing pages are page documents on its own organization,
       // listed from the same table as every customer's pages.
-      for (const page of await listPublishedTenantSitemapPages(db, platformSiteId)) {
+      for (const page of await listPublishedTenantSitemapPages(db, platformOrganizationId)) {
         if (!page.path) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
@@ -78,7 +78,7 @@ export default definePlugin((nitroApp) => {
          WHERE kind = 'article' AND row_role = 'root' AND status = 'published'
            AND organization_id = ?
            AND visibility = 'listed'`,
-        [platformSiteId],
+        [platformOrganizationId],
       )
 
       // Blog posts and documentation are both article collections, each at its
@@ -111,19 +111,19 @@ export default definePlugin((nitroApp) => {
       return
     }
 
-    const site = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
+    const organization = await queryFirst<{ vertical: string | null; theme_id: string | null }>(
       db,
       `SELECT vertical, theme_id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`,
       [organizationId],
     )
 
-    if (!site) {
+    if (!organization) {
       ctx.urls.length = 0
       return
     }
 
-    const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical })
-    const productPresentation = resolveProductPresentation(site.vertical)
+    const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
+    const productPresentation = resolveProductPresentation(organization.vertical)
 
     const localizedLocales = await queryAll<{ locale: string; organization_id: string }>(db, `
       SELECT l.locale, l.organization_id
@@ -133,7 +133,7 @@ export default definePlugin((nitroApp) => {
     `, [organizationId])
     for (const candidate of localizedLocales) {
       try {
-        await assertSiteLanguageEntitlement(env, db, candidate.organization_id, candidate.locale)
+        await assertOrganizationLanguageEntitlement(env, db, candidate.organization_id, candidate.locale)
       } catch (error) {
         if (error instanceof HTTPError && (error.data?.code === 'LANGUAGE_ENTITLEMENT_REQUIRED' || error.data?.code === 'PLATFORM_LOCALE_UNAVAILABLE')) continue
         if (isSubscriptionStateInvalid(error)) {
@@ -186,7 +186,7 @@ export default definePlugin((nitroApp) => {
         }
         for (const product of localizedProducts) {
           if (product.bookable > 0 && (localizedLocationCount.get(product.slug)?.size ?? 0) !== 1) continue
-          const presentation = product.bookable > 0 ? presentationForSurface(site.vertical, 'experiences') : productPresentation
+          const presentation = product.bookable > 0 ? presentationForSurface(organization.vertical, 'experiences') : productPresentation
           entries.push({ loc: `/${candidate.locale}${presentation.productPath(product.location_slug, product.slug)}`, lastmod: product.updated_at })
         }
       }
@@ -277,7 +277,7 @@ export default definePlugin((nitroApp) => {
 
     if (locations.length > 0) {
       entries.push({ loc: '/locations' })
-      if (site.vertical !== 'experience') entries.push({ loc: '/reservations' })
+      if (organization.vertical !== 'experience') entries.push({ loc: '/reservations' })
     }
     // A Product takes bookings, so it is an Experience, or it belongs to the
     // vertical's own surface. Both surfaces exist side by side: a restaurant
@@ -286,7 +286,7 @@ export default definePlugin((nitroApp) => {
     const bookableProducts = products.filter(isBookable)
     const surfaceProducts = products.filter(product => !isBookable(product))
     if (productPresentation && surfaceProducts.length > 0) entries.push({ loc: productPresentation.collectionPath })
-    if (productPresentation && bookableProducts.length > 0) entries.push({ loc: presentationForSurface(site.vertical, 'experiences').collectionPath })
+    if (productPresentation && bookableProducts.length > 0) entries.push({ loc: presentationForSurface(organization.vertical, 'experiences').collectionPath })
     if (posts.length > 0) entries.push({ loc: '/blog' })
 
     const countByLocation = (rows: ApiRecord[]) => {
@@ -329,7 +329,7 @@ export default definePlugin((nitroApp) => {
         ? locations
             .filter(location => location.slug && typeof location.id === 'string' && (bookableCountsByLocation.get(location.id) ?? 0) > 0)
             .map(location => ({
-              loc: `/locations/${location.slug}/${presentationForSurface(site.vertical, 'experiences').locationCollectionSegment}`,
+              loc: `/locations/${location.slug}/${presentationForSurface(organization.vertical, 'experiences').locationCollectionSegment}`,
               lastmod: location.updated_at as string | undefined,
             }))
         : []),
@@ -338,7 +338,7 @@ export default definePlugin((nitroApp) => {
             .filter(product => product.slug && product.location_slug)
             .filter(product => !isBookable(product) || (branchesOfferingProduct.get(String(product.slug))?.size ?? 0) === 1)
             .map(product => ({
-              loc: (isBookable(product) ? presentationForSurface(site.vertical, 'experiences') : productPresentation)
+              loc: (isBookable(product) ? presentationForSurface(organization.vertical, 'experiences') : productPresentation)
                 .productPath(String(product.location_slug), String(product.slug)),
               lastmod: product.updated_at as string | undefined,
             }))

@@ -1,8 +1,8 @@
 import type { McpToolDefinition } from './shared'
-import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, postalAddressSchema, seoOverrideFieldsSchema, siteTool, specialHoursInputSchema } from './shared'
+import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, postalAddressSchema, seoOverrideFieldsSchema, organizationTool, specialHoursInputSchema } from './shared'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
-  siteTool({
+  organizationTool({
       name: 'list_locations',
       description: 'List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.',
       domain: 'locations',
@@ -18,7 +18,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         required: ['locations', 'page_info'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'get_location',
       description: 'Get one location.',
       domain: 'locations',
@@ -32,7 +32,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         required: ['location'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'update_location',
       description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. To change its hero media, call set_media with { owner_type: "business_location", owner_id: <location.id>, slot: "hero" }. Only provided fields are changed.',
       domain: 'locations',

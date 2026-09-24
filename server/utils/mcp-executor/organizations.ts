@@ -1,38 +1,38 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { getSiteForMcp } from '~/server/utils/mcp-workflows'
+import { getOrganizationForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
-import { loadSettingsPayload, updateSiteSettingsFields } from '~/server/utils/site-settings'
+import { loadSettingsPayload, updateOrganizationSettingsFields } from '~/server/utils/organization-settings'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredString, workspaceContextPayload } from './shared'
 
-export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise<unknown> {
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "get_organization":
       {
-        const siteRecord = await getSiteForMcp(
-          site.db,
-          site.env,
-          site.organizationId,
-          site.userId,
+        const organizationRecord = await getOrganizationForMcp(
+          organization.db,
+          organization.env,
+          organization.organizationId,
+          organization.userId,
         );
         const workspace = await resolveMcpWorkspace(
-          site.db,
-          site.env,
-          site.userId,
-          { organizationId: site.organizationId },
+          organization.db,
+          organization.env,
+          organization.userId,
+          { organizationId: organization.organizationId },
         );
         return {
-          site: siteRecord,
+          organization: organizationRecord,
           context: workspaceContextPayload(workspace.organization, workspace.location),
         };
       }
     case "get_organization_settings":
       return {
         settings: await loadSettingsPayload(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           
         ),
       };
@@ -41,26 +41,26 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         string,
         unknown
       >;
-      const result = await updateSiteSettingsFields(
-        site.db,
-        site.env,
-        site.organizationId,
+      const result = await updateOrganizationSettingsFields(
+        organization.db,
+        organization.env,
+        organization.organizationId,
         updates,
-        site.userId
+        organization.userId
       );
       assertDomainSuccess(result);
       const settingsResult = result.data as { updated_at: string };
-      const updateSettingsContext = await mutationContextPayload(site);
+      const updateSettingsContext = await mutationContextPayload(organization);
       return renderStructuredResponse(
         {
           ok: true,
-          entity: "site_settings",
-          id: site.organizationId,
+          entity: "organization_settings",
+          id: organization.organizationId,
           changed_fields: Object.keys(updates),
           updated_at: settingsResult.updated_at,
           context: updateSettingsContext,
         },
-        "Updated site settings.",
+        "Updated organization settings.",
         { settings: settingsResult },
       );
     }
@@ -70,18 +70,18 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       if (!isCurrencyCode(currency)) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported currency: ${currency}`);
       }
-      const result = await updateSiteSettingsFields(
-        site.db,
-        site.env,
-        site.organizationId,
+      const result = await updateOrganizationSettingsFields(
+        organization.db,
+        organization.env,
+        organization.organizationId,
         { default_currency: currency },
-        site.userId,
+        organization.userId,
       );
       assertDomainSuccess(result);
       return {
         default_currency: currency,
         updated: true,
-        context: await mutationContextPayload(site),
+        context: await mutationContextPayload(organization),
       };
     }
     case "set_brand_color": {
@@ -91,19 +91,19 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       if (!resolvedColor) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported color: ${colorInput}`);
       }
-      const result = await updateSiteSettingsFields(
-        site.db,
-        site.env,
-        site.organizationId,
+      const result = await updateOrganizationSettingsFields(
+        organization.db,
+        organization.env,
+        organization.organizationId,
         { brand_color: resolvedColor },
-        site.userId,
+        organization.userId,
       );
       assertDomainSuccess(result);
       return {
         brand_color: resolvedColor,
         updated: true,
         description: `Set brand color to ${resolvedColor} from "${colorInput}"`,
-        context: await mutationContextPayload(site),
+        context: await mutationContextPayload(organization),
       };
     }
     default:

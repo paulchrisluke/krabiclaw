@@ -4,7 +4,7 @@ import { fireOrganizationEvent } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
-import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
+import { resolveOrganizationCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { refreshSocialCard } from '~/server/utils/social-card'
@@ -144,30 +144,30 @@ async function resolveValidatedLocationFeatures(
   if (!Array.isArray(enabled) || !enabled.every((value) => typeof value === "string") || !Array.isArray(disabled) || !disabled.every((value) => typeof value === "string")) {
     return { ok: false, status: 400, data: { error: "feature_overrides.enabled/disabled must be arrays of feature ids or null." } };
   }
-  const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+  const parentOrganization = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
-  if (!parentSite) {
-    return { ok: false, status: 404, data: { error: "Site not found." } };
+  if (!parentOrganization) {
+    return { ok: false, status: 404, data: { error: "Organization not found." } };
   }
-  let siteEffectiveFeatures: readonly ProductFeature[] = [];
+  let organizationEffectiveFeatures: readonly ProductFeature[] = [];
   let toggleableAtLocation: readonly ProductFeature[] = [];
   try {
-    const { template, capabilities } = resolveSiteCmsCapabilities(parentSite.vertical, parentSite.theme_id, { siteEnabledFeatures: parentSite.feature_overrides });
-    siteEffectiveFeatures = [...new Set([...capabilities.pages.map((p) => p.feature), ...capabilities.managers.map((m) => m.id)])];
+    const { template, capabilities } = resolveOrganizationCmsCapabilities(parentOrganization.vertical, parentOrganization.theme_id, { organizationEnabledFeatures: parentOrganization.feature_overrides });
+    organizationEffectiveFeatures = [...new Set([...capabilities.pages.map((p) => p.feature), ...capabilities.managers.map((m) => m.id)])];
     const { toggleableModulesForScope } = await import("~/config/cms-registry");
     toggleableAtLocation = toggleableModulesForScope(template, "location");
   } catch {
-    return { ok: false, status: 422, data: { error: "Unsupported site vertical/template — cannot resolve feature catalog." } };
+    return { ok: false, status: 422, data: { error: "Unsupported organization vertical/template — cannot resolve feature catalog." } };
   }
   const submitted = [...enabled, ...disabled];
   const notConfigurable = submitted.filter((feature) => !toggleableAtLocation.includes(feature as ProductFeature));
   if (notConfigurable.length > 0) {
     return { ok: false, status: 400, data: { error: `Module(s) not location-configurable: ${notConfigurable.join(", ")}` } };
   }
-  const unsupported = enabled.filter((feature) => !siteEffectiveFeatures.includes(feature as ProductFeature));
+  const unsupported = enabled.filter((feature) => !organizationEffectiveFeatures.includes(feature as ProductFeature));
   if (unsupported.length > 0) {
-    return { ok: false, status: 400, data: { error: `Location features require parent site support: ${unsupported.join(", ")}` } };
+    return { ok: false, status: 400, data: { error: `Location features require parent organization support: ${unsupported.join(", ")}` } };
   }
   if (locationId) {
     for (const feature of disabled) {
@@ -181,7 +181,7 @@ async function resolveValidatedLocationFeatures(
 }
 
 export interface LocationCapabilitySummary {
-  site_effective_features: ProductFeature[];
+  organization_effective_features: ProductFeature[];
   location_effective_features: ProductFeature[];
   location_feature_overrides: CmsCapabilityOverrideDelta | null;
 }
@@ -196,25 +196,25 @@ export async function resolveLocationCapabilitySummary(
   organizationId: string,
   locationFeatureOverridesRaw: string | null,
 ): Promise<LocationCapabilitySummary | null> {
-  const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+  const organization = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
-  if (!site) return null;
+  if (!organization) return null;
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
   try {
-    const { capabilities: siteCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
+    const { capabilities: organizationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+      organizationEnabledFeatures: organization.feature_overrides,
     });
-    const siteEffectiveFeatures = [...new Set([...siteCapabilities.pages.map((p) => p.feature), ...siteCapabilities.managers.map((m) => m.id)])];
+    const organizationEffectiveFeatures = [...new Set([...organizationCapabilities.pages.map((p) => p.feature), ...organizationCapabilities.managers.map((m) => m.id)])];
 
-    const { capabilities: locationCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
+    const { capabilities: locationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+      organizationEnabledFeatures: organization.feature_overrides,
       locationEnabledFeatures: locationFeatureOverridesRaw,
     });
     const locationEffectiveFeatures = [...new Set([...locationCapabilities.pages.map((p) => p.feature), ...locationCapabilities.managers.map((m) => m.id)])];
 
     return {
-      site_effective_features: siteEffectiveFeatures,
+      organization_effective_features: organizationEffectiveFeatures,
       location_effective_features: locationEffectiveFeatures,
       location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
     };

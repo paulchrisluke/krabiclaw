@@ -5,7 +5,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 import { queryAll, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { getPlatformSite } from '~/server/utils/platform-site'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import {
   PLATFORM_KNOWLEDGE_FAQ_ENTRIES,
   PLATFORM_KNOWLEDGE_PAGE_ENTRIES,
@@ -103,7 +103,7 @@ interface TenantBlogDocRow {
 
 interface ContentBlockBodyRow { id: string; type: string; position: number; level: number | null; data_json: string }
 
-async function loadContentBodies(db: DbClient, platformSiteId: string, platform: boolean, organizationId?: string | null) {
+async function loadContentBodies(db: DbClient, platformOrganizationId: string, platform: boolean, organizationId?: string | null) {
   const rows = await queryAll<ContentBlockBodyRow>(db, `
     SELECT cd.id, cb.type, cb.position, cb.level, cb.data_json
     FROM content_documents cd
@@ -112,7 +112,7 @@ async function loadContentBodies(db: DbClient, platformSiteId: string, platform:
       AND cd.kind = 'article' AND cd.status = 'published' AND cd.visibility = 'listed'
       AND (cd.organization_id = ?) = ?${organizationId ? ' AND cd.organization_id = ?' : ''}
     ORDER BY cd.id, cb.position
-  `, [platformSiteId, platform ? 1 : 0, ...(organizationId ? [organizationId] : [])])
+  `, [platformOrganizationId, platform ? 1 : 0, ...(organizationId ? [organizationId] : [])])
   return renderBodiesByDocument(rows)
 }
 
@@ -432,8 +432,8 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   throw new Error('Timed out waiting for AI Search indexing to complete')
 }
 
-export async function buildTenantBlogDocuments(db: DbClient, platformSiteId?: string, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
-  const platformId = platformSiteId ?? (await getPlatformSite(db)).id
+export async function buildTenantBlogDocuments(db: DbClient, platformOrganizationId?: string, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
+  const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
     SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
       d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_description, d.seo_keywords, s.theme_id, s.vertical
@@ -487,7 +487,7 @@ interface WorkspaceOrganizationRow {
   first_location_slug: string | null
 }
 
-const WORKSPACE_SITE_SQL = `JOIN organization s ON s.status = 'active' AND s.subdomain IS NOT NULL`
+const WORKSPACE_ORGANIZATION_SQL = `JOIN organization s ON s.status = 'active' AND s.subdomain IS NOT NULL`
 
 // An absent column is an empty list; a stored value that will not parse is a
 // corrupt row, and reading both as [] dropped documents out of the index with
@@ -511,25 +511,25 @@ function joinWords(...parts: Array<string | null | undefined>) {
  * member's own search over their own things, not a public surface.
  */
 export async function buildWorkspaceDocuments(db: DbClient, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
-  const siteWhere = organizationId ? ' AND s.id = ?' : ''
-  const siteParams = organizationId ? [organizationId] : []
-  const sites = await queryAll<WorkspaceOrganizationRow>(db, `
+  const organizationWhere = organizationId ? ' AND s.id = ?' : ''
+  const organizationParams = organizationId ? [organizationId] : []
+  const organizations = await queryAll<WorkspaceOrganizationRow>(db, `
     SELECT s.id, s.slug, s.subdomain, s.vertical,
       (SELECT bl.slug FROM business_locations bl WHERE bl.organization_id = s.id ORDER BY bl.title LIMIT 1) AS first_location_slug
     FROM organization s
-    WHERE s.status = 'active' AND s.subdomain IS NOT NULL${siteWhere}
-  `, siteParams)
-  if (!sites?.length) return []
-  const bySite = new Map(sites.map(site => [site.id, site]))
-  const base = (site: WorkspaceOrganizationRow) => `/dashboard/${site.slug}`
-  const locationPath = (site: WorkspaceOrganizationRow, slug: string | null) => {
-    const location = slug ?? site.first_location_slug
-    return location ? `${base(site)}/locations/${location}` : null
+    WHERE s.status = 'active' AND s.subdomain IS NOT NULL${organizationWhere}
+  `, organizationParams)
+  if (!organizations?.length) return []
+  const byOrganization = new Map(organizations.map(organization => [organization.id, organization]))
+  const base = (organization: WorkspaceOrganizationRow) => `/dashboard/${organization.slug}`
+  const locationPath = (organization: WorkspaceOrganizationRow, slug: string | null) => {
+    const location = slug ?? organization.first_location_slug
+    return location ? `${base(organization)}/locations/${location}` : null
   }
-  const segment = (site: WorkspaceOrganizationRow) => resolveProductPresentation(site.vertical)?.locationCollectionSegment ?? 'products'
-  const doc = (site: WorkspaceOrganizationRow, type: PlatformKnowledgeResultType, id: string, fields: { title: string; path: string; snippet: string; section: string; icon: string; body: string }): PlatformKnowledgeDocument => ({
-    id: `dashboard:${type}:${site.id}:${id}`,
-    key: `workspace/${type}/${site.id}/${id}`,
+  const segment = (organization: WorkspaceOrganizationRow) => resolveProductPresentation(organization.vertical)?.locationCollectionSegment ?? 'products'
+  const doc = (organization: WorkspaceOrganizationRow, type: PlatformKnowledgeResultType, id: string, fields: { title: string; path: string; snippet: string; section: string; icon: string; body: string }): PlatformKnowledgeDocument => ({
+    id: `dashboard:${type}:${organization.id}:${id}`,
+    key: `workspace/${type}/${organization.id}/${id}`,
     type,
     title: fields.title,
     path: fields.path,
@@ -538,15 +538,15 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
     icon: fields.icon,
     body: fields.body,
     surfaces: ['dashboard'],
-    organizationId: site.id,
+    organizationId: organization.id,
   })
 
   const [locations, products, collections, documents, blockRows, threads, members, media] = await Promise.all([
     queryAll<{ id: string; organization_id: string; slug: string; title: string; description: string | null; short_description: string | null; address: string | null }>(db, `
       SELECT bl.id, bl.organization_id, bl.slug, bl.title, bl.description, bl.short_description, bl.address
-      FROM business_locations bl ${WORKSPACE_SITE_SQL} AND s.id = bl.organization_id
-      WHERE 1 = 1${siteWhere}
-    `, siteParams),
+      FROM business_locations bl ${WORKSPACE_ORGANIZATION_SQL} AND s.id = bl.organization_id
+      WHERE 1 = 1${organizationWhere}
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; name: string; description: string | null; tags: string | null; location_slug: string | null; bookable: number; collection_id: string | null }>(db, `
       SELECT p.id, pub.organization_id, p.name, p.description, p.tags,
         (SELECT bl.slug FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id
@@ -556,73 +556,73 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
           WHERE cp.product_id = p.id AND cp.organization_id = p.organization_id AND c.organization_id = pub.organization_id ORDER BY c.sort_order, c.name LIMIT 1) AS collection_id
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      ${WORKSPACE_SITE_SQL} AND s.id = pub.organization_id
-      WHERE 1 = 1${siteWhere}
-    `, siteParams),
+      ${WORKSPACE_ORGANIZATION_SQL} AND s.id = pub.organization_id
+      WHERE 1 = 1${organizationWhere}
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; name: string; description: string | null; location_slug: string | null; member_count: number; bookable_count: number }>(db, `
       SELECT c.id, c.organization_id, c.name, c.description, bl.slug AS location_slug,
         (SELECT COUNT(*) FROM collection_products cp WHERE cp.collection_id = c.id) AS member_count,
         (SELECT COUNT(*) FROM collection_products cp JOIN product_booking_configs b ON b.product_id = cp.product_id AND b.organization_id = cp.organization_id
           WHERE cp.collection_id = c.id) AS bookable_count
-      FROM collections c ${WORKSPACE_SITE_SQL} AND s.id = c.organization_id
+      FROM collections c ${WORKSPACE_ORGANIZATION_SQL} AND s.id = c.organization_id
       LEFT JOIN business_locations bl ON bl.id = c.location_id
-      WHERE 1 = 1${siteWhere}
-    `, siteParams),
+      WHERE 1 = 1${organizationWhere}
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; kind: string; title: string | null; summary: string | null; status: string | null; category: string | null; location_slug: string | null }>(db, `
       SELECT d.id, d.organization_id, d.kind, d.title, d.summary, d.status, d.metadata_json ->> '$.category' AS category, bl.slug AS location_slug
-      FROM content_documents d ${WORKSPACE_SITE_SQL} AND s.id = d.organization_id
+      FROM content_documents d ${WORKSPACE_ORGANIZATION_SQL} AND s.id = d.organization_id
       LEFT JOIN business_locations bl ON bl.id = d.location_id
-      WHERE d.row_role = 'root' AND d.kind IN ('qa', 'social_post', 'page', 'article')${siteWhere}
-    `, siteParams),
+      WHERE d.row_role = 'root' AND d.kind IN ('qa', 'social_post', 'page', 'article')${organizationWhere}
+    `, organizationParams),
     queryAll<ContentBlockBodyRow>(db, `
       SELECT cb.document_id AS id, cb.type, cb.position, cb.level, cb.data_json
       FROM content_blocks cb
-      JOIN content_documents d ON d.id = cb.document_id ${WORKSPACE_SITE_SQL} AND s.id = d.organization_id
-      WHERE d.row_role = 'root' AND d.kind IN ('social_post', 'page', 'article')${siteWhere}
+      JOIN content_documents d ON d.id = cb.document_id ${WORKSPACE_ORGANIZATION_SQL} AND s.id = d.organization_id
+      WHERE d.row_role = 'root' AND d.kind IN ('social_post', 'page', 'article')${organizationWhere}
       ORDER BY cb.document_id, cb.position
-    `, siteParams),
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; kind: string; payload_json: string; location_title: string | null; product_name: string | null }>(db, `
       SELECT r.id, r.organization_id, r.kind, r.payload_json, bl.title AS location_title,
         (SELECT p.name FROM bookings b JOIN products p ON p.id = b.product_id WHERE b.request_id = r.id LIMIT 1) AS product_name
-      FROM requests r ${WORKSPACE_SITE_SQL} AND s.id = r.organization_id
+      FROM requests r ${WORKSPACE_ORGANIZATION_SQL} AND s.id = r.organization_id
       LEFT JOIN business_locations bl ON bl.id = r.location_id
-      WHERE 1 = 1${siteWhere}
-    `, siteParams),
+      WHERE 1 = 1${organizationWhere}
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; role: string; name: string | null; email: string }>(db, `
       SELECT m.id, m."organizationId" AS organization_id, m.role, u.name, u.email
       FROM member m JOIN "user" u ON u.id = m."userId"
-      WHERE m."organizationId" IN (SELECT s.id FROM organization s WHERE s.status = 'active' AND s.subdomain IS NOT NULL${siteWhere})
-    `, siteParams),
+      WHERE m."organizationId" IN (SELECT s.id FROM organization s WHERE s.status = 'active' AND s.subdomain IS NOT NULL${organizationWhere})
+    `, organizationParams),
     queryAll<{ id: string; organization_id: string; file_name: string | null; category: string | null; kind: string; location_slug: string | null }>(db, `
       SELECT ma.id, ma.organization_id, ma.file_name, ma.category, ma.kind,
         (SELECT bl.slug FROM media_placements mp JOIN business_locations bl ON bl.id = mp.owner_id
           WHERE mp.asset_id = ma.id AND mp.owner_type = 'business_location' AND mp.status = 'active' LIMIT 1) AS location_slug
-      FROM media_assets ma ${WORKSPACE_SITE_SQL} AND s.id = ma.organization_id
-      WHERE ma.status = 'active'${siteWhere}
-    `, siteParams),
+      FROM media_assets ma ${WORKSPACE_ORGANIZATION_SQL} AND s.id = ma.organization_id
+      WHERE ma.status = 'active'${organizationWhere}
+    `, organizationParams),
   ])
   const bodies = renderBodiesByDocument(blockRows)
   const records: PlatformKnowledgeDocument[] = []
 
   for (const row of locations ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
-    records.push(doc(site, 'location', row.id, {
-      title: row.title, path: `${base(site)}/locations/${row.slug}`, snippet: row.short_description || row.address || row.description || '',
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
+    records.push(doc(organization, 'location', row.id, {
+      title: row.title, path: `${base(organization)}/locations/${row.slug}`, snippet: row.short_description || row.address || row.description || '',
       section: 'Locations', icon: 'map-pin', body: joinWords(row.title, row.short_description, row.description, row.address),
     }))
   }
 
   for (const row of products ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
-    const surface = row.bookable ? 'experiences' : segment(site)
-    const presentation = surface === 'experiences' ? null : resolveProductPresentation(site.vertical)
-    const catalog = locationPath(site, row.location_slug)
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
+    const surface = row.bookable ? 'experiences' : segment(organization)
+    const presentation = surface === 'experiences' ? null : resolveProductPresentation(organization.vertical)
+    const catalog = locationPath(organization, row.location_slug)
     const path = catalog
       ? `${catalog}/products/${surface}${row.collection_id ? `/${row.collection_id}/${row.id}` : ''}`
-      : base(site)
-    records.push(doc(site, 'product', row.id, {
+      : base(organization)
+    records.push(doc(organization, 'product', row.id, {
       title: row.name, path, snippet: row.description || '',
       section: surface === 'experiences' ? 'Experiences' : presentation?.collectionLabel ?? 'Products', icon: 'utensils',
       body: joinWords(row.name, row.description, parseStringList(row.tags).join(' ')),
@@ -630,65 +630,65 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
   }
 
   for (const row of collections ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
-    const surface = row.member_count > 0 && row.bookable_count === row.member_count ? 'experiences' : segment(site)
-    const catalog = locationPath(site, row.location_slug)
-    records.push(doc(site, 'collection', row.id, {
-      title: row.name, path: catalog ? `${catalog}/products/${surface}/${row.id}` : base(site), snippet: row.description || '',
-      section: surface === 'experiences' ? 'Experiences' : resolveProductPresentation(site.vertical)?.collectionLabel ?? 'Products', icon: 'layout-list',
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
+    const surface = row.member_count > 0 && row.bookable_count === row.member_count ? 'experiences' : segment(organization)
+    const catalog = locationPath(organization, row.location_slug)
+    records.push(doc(organization, 'collection', row.id, {
+      title: row.name, path: catalog ? `${catalog}/products/${surface}/${row.id}` : base(organization), snippet: row.description || '',
+      section: surface === 'experiences' ? 'Experiences' : resolveProductPresentation(organization.vertical)?.collectionLabel ?? 'Products', icon: 'layout-list',
       body: joinWords(row.name, row.description),
     }))
   }
 
   for (const row of documents ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
     const title = row.title?.trim() || row.summary?.trim() || 'Untitled'
     const body = joinWords(row.title, row.summary, row.category, bodies.get(row.id))
     if (row.kind === 'qa') {
-      const scope = row.location_slug ? `${base(site)}/locations/${row.location_slug}` : base(site)
-      records.push(doc(site, 'qa', row.id, { title, path: `${scope}/qa/${row.id}`, snippet: row.summary || '', section: 'Q&A', icon: 'circle-help', body }))
+      const scope = row.location_slug ? `${base(organization)}/locations/${row.location_slug}` : base(organization)
+      records.push(doc(organization, 'qa', row.id, { title, path: `${scope}/qa/${row.id}`, snippet: row.summary || '', section: 'Q&A', icon: 'circle-help', body }))
     } else if (row.kind === 'social_post') {
-      const scope = locationPath(site, row.location_slug)
-      records.push(doc(site, 'post', row.id, { title, path: scope ? `${scope}/posts/${row.id}` : base(site), snippet: row.summary || '', section: 'Posts', icon: 'megaphone', body }))
+      const scope = locationPath(organization, row.location_slug)
+      records.push(doc(organization, 'post', row.id, { title, path: scope ? `${scope}/posts/${row.id}` : base(organization), snippet: row.summary || '', section: 'Posts', icon: 'megaphone', body }))
     } else if (row.kind === 'page') {
-      records.push(doc(site, 'page', row.id, { title, path: `${base(site)}/pages/${row.id}`, snippet: row.summary || '', section: 'Pages', icon: 'file-text', body }))
+      records.push(doc(organization, 'page', row.id, { title, path: `${base(organization)}/pages/${row.id}`, snippet: row.summary || '', section: 'Pages', icon: 'file-text', body }))
     } else {
-      records.push(doc(site, 'blog', row.id, { title, path: `${base(site)}/blog/${row.id}`, snippet: row.summary || '', section: row.category || 'Blog', icon: 'newspaper', body }))
+      records.push(doc(organization, 'blog', row.id, { title, path: `${base(organization)}/blog/${row.id}`, snippet: row.summary || '', section: row.category || 'Blog', icon: 'newspaper', body }))
     }
   }
 
   for (const row of threads ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
     const payload = JSON.parse(row.payload_json) as { guest?: { name?: string; email?: string }; message?: string; notes?: string | null }
     const guest = payload.guest ?? {}
     const words = row.kind === 'contact' ? payload.message ?? '' : payload.notes ?? ''
     const about = row.product_name ?? row.location_title ?? ''
-    records.push(doc(site, 'thread', row.id, {
-      title: guest.name?.trim() || guest.email || 'Guest', path: `${base(site)}/messages/${row.id}`, snippet: words || about,
+    records.push(doc(organization, 'thread', row.id, {
+      title: guest.name?.trim() || guest.email || 'Guest', path: `${base(organization)}/messages/${row.id}`, snippet: words || about,
       // Name and email find the thread; the phone number stays out of the index.
       section: 'Messages', icon: 'message-circle', body: joinWords(guest.name, guest.email, row.kind, about, words),
     }))
   }
 
   for (const row of members ?? []) {
-    for (const site of sites) {
-      if (site.id !== row.organization_id) continue
-      records.push(doc(site, 'member', row.id, {
-        title: row.name?.trim() || row.email, path: `${base(site)}/settings/members`, snippet: `${row.email} · ${row.role}`,
+    for (const organization of organizations) {
+      if (organization.id !== row.organization_id) continue
+      records.push(doc(organization, 'member', row.id, {
+        title: row.name?.trim() || row.email, path: `${base(organization)}/settings/members`, snippet: `${row.email} · ${row.role}`,
         section: 'Team', icon: 'users', body: joinWords(row.name, row.email, row.role),
       }))
     }
   }
 
   for (const row of media ?? []) {
-    const site = bySite.get(row.organization_id)
-    if (!site) continue
-    const scope = locationPath(site, row.location_slug)
-    records.push(doc(site, 'media', row.id, {
-      title: row.file_name?.trim() || `${row.kind} ${row.id.slice(0, 8)}`, path: scope ? `${scope}/photos` : `${base(site)}/brand`, snippet: row.category || row.kind,
+    const organization = byOrganization.get(row.organization_id)
+    if (!organization) continue
+    const scope = locationPath(organization, row.location_slug)
+    records.push(doc(organization, 'media', row.id, {
+      title: row.file_name?.trim() || `${row.kind} ${row.id.slice(0, 8)}`, path: scope ? `${scope}/photos` : `${base(organization)}/brand`, snippet: row.category || row.kind,
       section: 'Photos', icon: 'image', body: joinWords(row.file_name, row.category, row.kind),
     }))
   }
@@ -697,14 +697,14 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
 }
 
 /** Everything indexed under one business's `organization_id`: its public blog and its dashboard's records. */
-export async function buildSiteDocuments(db: DbClient, organizationId: string): Promise<PlatformKnowledgeDocument[]> {
-  const platformSiteId = (await getPlatformSite(db)).id
-  const [blog, workspace] = await Promise.all([buildTenantBlogDocuments(db, platformSiteId, organizationId), buildWorkspaceDocuments(db, organizationId)])
+export async function buildOrganizationDocuments(db: DbClient, organizationId: string): Promise<PlatformKnowledgeDocument[]> {
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
+  const [blog, workspace] = await Promise.all([buildTenantBlogDocuments(db, platformOrganizationId, organizationId), buildWorkspaceDocuments(db, organizationId)])
   return [...blog, ...workspace]
 }
 
 export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<PlatformKnowledgeDocument[]> {
-  const platformSiteId = (await getPlatformSite(db)).id
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
   const [docs, posts, tenantBlogRecords, contentBodies] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
       SELECT id, title, slug, metadata_json ->> '$.category' AS category, summary AS excerpt, seo_description, seo_keywords
@@ -712,16 +712,16 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?
       ORDER BY sort_order, title
-    `, [platformSiteId]),
+    `, [platformOrganizationId]),
     queryAll<PlatformBlogSearchRow>(db, `
       SELECT id, title, slug, summary AS excerpt, metadata_json ->> '$.category' AS category, seo_description, seo_keywords
       FROM content_documents
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND organization_id = ? AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'blog'
       ORDER BY category, published_at DESC, updated_at DESC
-    `, [platformSiteId]),
-    buildTenantBlogDocuments(db, platformSiteId),
-    loadContentBodies(db, platformSiteId, true),
+    `, [platformOrganizationId]),
+    buildTenantBlogDocuments(db, platformOrganizationId),
+    loadContentBodies(db, platformOrganizationId, true),
   ])
 
   const docRecords: PlatformKnowledgeDocument[] = (docs ?? []).flatMap((doc) => {
@@ -848,7 +848,7 @@ function shortItemKeyHash(value: string): string {
  * key, and metadata is not on an item until Cloudflare has processed it, so
  * ownership lives in the key where it is readable from the first second.
  */
-export function siteKeySegment(organizationId: string) {
+export function organizationKeySegment(organizationId: string) {
   return shortItemKeyHash(organizationId).slice(0, 12)
 }
 
@@ -857,7 +857,7 @@ export function expandDocumentsForSurfaces(records: PlatformKnowledgeDocument[])
     record.surfaces.map((surface): ExpandedPlatformKnowledgeDocument => ({
       ...record,
       key: record.organizationId
-        ? `${surface}/${siteKeySegment(record.organizationId)}/${record.type}/${shortItemKeyHash(record.key)}.md`
+        ? `${surface}/${organizationKeySegment(record.organizationId)}/${record.type}/${shortItemKeyHash(record.key)}.md`
         : `${surface}/${record.type}/${shortItemKeyHash(record.key)}.md`,
       metadata: {
         ...recordMetadata(record),
@@ -952,9 +952,9 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
 export const SYNC_UPLOADS_PER_RUN = 120
 
 /** One business's items and nothing else's, named by the site segment of their key. */
-export async function listSiteItems(env: CloudflareEnv, organizationId: string) {
+export async function listOrganizationItems(env: CloudflareEnv, organizationId: string) {
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
-  const segment = siteKeySegment(organizationId)
+  const segment = organizationKeySegment(organizationId)
   const items: AiSearchItemInfo[] = []
   let page = 1
   while (true) {
@@ -975,18 +975,18 @@ export async function listSiteItems(env: CloudflareEnv, organizationId: string) 
  * same durable queue that clears the site's caches, so every write path that
  * records a change — dashboard, MCP, intake, Better Auth — converges here.
  */
-export async function syncSiteSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
+export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
   const startedAt = Date.now()
-  const [existingItems, baseRecords] = await Promise.all([listSiteItems(env, organizationId), buildSiteDocuments(db, organizationId)])
+  const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
   const result = await reconcileIndexItems(env, existingItems, expandDocumentsForSurfaces(baseRecords), { maxUploads: SYNC_UPLOADS_PER_RUN })
-  console.warn(`[ai-search] site ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
+  console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
   return result
 }
 
 /**
  * The platform's own corpus — docs, articles, FAQ, static pages — and the
  * cleanup of anything in the instance that belongs to no business. Each
- * business's slice is a request of its own (`syncSiteSearchIndex`), which is
+ * business's slice is a request of its own (`syncOrganizationSearchIndex`), which is
  * how a full rebuild stays under the Workers request ceiling: the caller
  * takes the site ids returned here and syncs them one at a time.
  */
@@ -1000,17 +1000,17 @@ export async function rebuildPlatformKnowledgeIndex(
 
   await ensurePlatformKnowledgeInstance(env)
 
-  const [existingItems, baseRecords, sites] = await Promise.all([
+  const [existingItems, baseRecords, organizations] = await Promise.all([
     listAllItems(env),
     buildPlatformKnowledgeDocuments(db),
     queryAll<{ id: string }>(db, "SELECT id FROM organization WHERE status = 'active' AND subdomain IS NOT NULL ORDER BY id"),
   ])
   // Items a live business owns are its own sync's to keep; everything else — the
   // platform's items and any orphan from an earlier key format — is reconciled here.
-  const liveSites = new Set((sites ?? []).map(site => site.id))
-  const liveSegments = new Set([...liveSites].map(siteKeySegment))
+  const liveOrganizations = new Set((organizations ?? []).map(organization => organization.id))
+  const liveSegments = new Set([...liveOrganizations].map(organizationKeySegment))
   const platformItems = existingItems.filter(item => !liveSegments.has(item.key.split('/')[1] ?? ''))
-  const platformRecords = expandDocumentsForSurfaces(baseRecords).filter(record => !liveSites.has(record.organizationId ?? ''))
+  const platformRecords = expandDocumentsForSurfaces(baseRecords).filter(record => !liveOrganizations.has(record.organizationId ?? ''))
 
   const result = await reconcileIndexItems(env, platformItems, platformRecords, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] rebuild uploaded ${result.indexed}/${platformRecords.length} records, pending ${result.pending}, deleted ${result.deleted} stale items in ${elapsed()}`)
@@ -1042,7 +1042,7 @@ export async function rebuildPlatformKnowledgeIndex(
   return {
     instanceId: platformKnowledgeInstanceId(env),
     ...result,
-    sites: [...liveSites],
+    organizations: [...liveOrganizations],
     indexingConfirmed,
     indexingUnconfirmedReason,
   }

@@ -75,8 +75,8 @@ export async function notifyDomainLifecycle(
   // they are always copied and carry no unsubscribe link.
   const members = await listOrganizationNotificationMembers(env, opts.organizationId)
   const memberRecipients = (await Promise.all(members.map(async (member) => {
-    if (!await wantsNotification(db, member.userId, 'site_and_billing', 'email')) return null
-    const unsubscribe = await buildUnsubscribeUrls(env, { userId: member.userId, category: 'site_and_billing' })
+    if (!await wantsNotification(db, member.userId, 'organization_and_billing', 'email')) return null
+    const unsubscribe = await buildUnsubscribeUrls(env, { userId: member.userId, category: 'organization_and_billing' })
     return { to: member.email, unsubscribeUrl: unsubscribe?.pageUrl ?? null, unsubscribeOneClickUrl: unsubscribe?.oneClickUrl ?? null }
   }))).filter((recipient): recipient is { to: string; unsubscribeUrl: string | null; unsubscribeOneClickUrl: string | null } => recipient !== null)
   const memberAddresses = new Set(memberRecipients.map(recipient => recipient.to))
@@ -103,7 +103,7 @@ export async function notifyDomainLifecycle(
   // nor whether that person wanted site-and-billing messages.
   const whatsappResults = await Promise.all(members.map(async (member) => {
     if (!member.phone) return null
-    if (!await wantsNotification(db, member.userId, 'site_and_billing', 'whatsapp')) return null
+    if (!await wantsNotification(db, member.userId, 'organization_and_billing', 'whatsapp')) return null
     return await sendWhatsAppNotification(env, {
       organizationId: opts.organizationId,
       toPhone: member.phone,

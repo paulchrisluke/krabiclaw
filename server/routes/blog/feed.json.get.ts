@@ -12,8 +12,8 @@ export default defineHandler(async (event) => {
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
   const organizationId = isTenant ? String(event.context.organizationId || '') : ''
-  const siteName = (event.context.site as { name?: string | null } | undefined)?.name?.trim() || ''
-  if (isTenant && organizationId && !siteName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
+  const organizationName = (event.context.organization as { name?: string | null } | undefined)?.name?.trim() || ''
+  if (isTenant && organizationId && !organizationName) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
   const posts = isTenant && organizationId
     ? await listPublishedTenantBlogPostsForLlm(db, organizationId, env)
     : await listPublishedPlatformBlogPostsForLlm(db, env)
@@ -21,5 +21,5 @@ export default defineHandler(async (event) => {
     ? buildTenantBlogLinkEntries(posts ?? [], origin, { themeId: String(event.context.themeId ?? '') })
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildNamedBlogJsonFeed(origin, entries, isTenant ? {
-    title: `${siteName} Blog`, description: `Published blog feed for ${siteName}.`, } : {}))
+    title: `${organizationName} Blog`, description: `Published blog feed for ${organizationName}.`, } : {}))
 })

@@ -189,8 +189,8 @@ export const blogComponentInputSchema = {
         properties: {
           data: {
             type: 'object',
-            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `site_qa` the site-wide set.
-            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'site_qa'] } },
+            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `organization_qa` the site-wide set.
+            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'organization_qa'] } },
             required: ['source'],
           },
         },
@@ -756,7 +756,7 @@ export const organizationIdSchema = {
   organization_id: { type: 'string', description: 'Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.' },
 }
 
-export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
+export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>

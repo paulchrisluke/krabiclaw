@@ -26,9 +26,9 @@ import type { GuestThreadRow } from './types'
  * every screen their host saw said consultation.
  */
 async function bookingNoun(db: DbClient, thread: Pick<GuestThreadRow, 'organization_id' | 'kind'>): Promise<string> {
-	const site = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM organization WHERE id = ? LIMIT 1', [thread.organization_id])
+	const organization = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM organization WHERE id = ? LIMIT 1', [thread.organization_id])
 	const kind: BookingKind = thread.kind === 'reservation' ? 'reservation' : 'booking'
-	return resolveBookingPresentation(kind, site?.vertical).noun
+	return resolveBookingPresentation(kind, organization?.vertical).noun
 }
 
 /**
@@ -174,7 +174,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
   const location = await queryFirst<{ id: string; title: string; timezone: string | null }>(db,
     'SELECT id, title, timezone FROM business_locations WHERE id = ? AND organization_id = ?',
     [after.locationId, thread.organization_id])
-  if (!location) throw new HTTPError({ statusCode: 400, message: 'Choose a location belonging to this site' })
+  if (!location) throw new HTTPError({ statusCode: 400, message: 'Choose a location belonging to this organization' })
   if (!location.timezone) throw new HTTPError({ statusCode: 409, message: 'Set the location timezone before changing reservations' })
   const startsAt = localDateTimeToInstant(after.bookingDate, after.bookingTime, location.timezone, 'reject').toISOString()
   const capacity = await queryFirst<{ slot_capacity: number | null }>(db,
@@ -208,8 +208,8 @@ interface ChangeEmailContent {
 async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow, entryId: string, content: ChangeEmailContent, status: 'requested' | 'accepted' | 'declined', proposal: z.infer<typeof proposalSchema>, noun: string) {
   const summary = await sourceSummary(db, thread)
   if (!summary.guestEmail) throw new HTTPError({ statusCode: 400, message: 'Guest email is required' })
-  const site = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [thread.organization_id])
-  if (!site?.name) throw new HTTPError({ statusCode: 409, message: 'Site name is not configured' })
+  const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [thread.organization_id])
+  if (!organization?.name) throw new HTTPError({ statusCode: 409, message: 'Organization name is not configured' })
   const delivery = await createDeliveryReceipt(db, {
     entryId,
     channel: 'email',
@@ -221,11 +221,11 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     delivery,
     env,
     to: summary.guestEmail,
-    fromName: site.name,
+    fromName: organization.name,
     subject: content.subject,
     email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
-      siteName: site.name,
+      organizationName: organization.name,
       heading: content.subject,
       intro: content.intro,
       rows: content.rows ?? [],
@@ -238,7 +238,7 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
   if (sent.status === 'failed') throw new HTTPError({ statusCode: 502, message: sent.error || 'Guest email could not be sent' })
   if (sent.status === 'unknown') throw new HTTPError({ statusCode: 504, message: sent.error || 'Guest email outcome is unknown' })
   await notifyBookingChangeOwner(env, db, {
-    organizationId: thread.organization_id, siteName: site.name,
+    organizationId: thread.organization_id, organizationName: organization.name,
     locationId: (status === 'accepted' && proposal.after.kind === 'reservation' ? proposal.after.locationId : proposal.before.locationId) ?? '',
     threadId: thread.id, submissionType: thread.kind === 'reservation' ? 'reservation' : 'booking', submissionId: thread.id, sourceEntryId: entryId,
     guestName: summary.guestName, guestEmail: summary.guestEmail, status, noun,

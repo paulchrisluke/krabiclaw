@@ -33,7 +33,7 @@ export async function resolveContactSubmissionAssignment(
     return {
       selectedLocation: null,
       assignedLocationId: null,
-      error: 'location_id must reference a location on this site',
+      error: 'location_id must reference a location on this organization',
     }
   }
   return { selectedLocation, assignedLocationId: selectedLocation.id, error: null }

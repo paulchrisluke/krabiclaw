@@ -6,7 +6,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { canonicalizeLocale } from '~/server/utils/localization'
 import { localizationError } from '~/server/utils/localization-errors'
 
-interface SiteLanguageRow {
+interface OrganizationLanguageRow {
   id: string
   locale: string
   status: 'published' | 'disabled'
@@ -15,7 +15,7 @@ interface SiteLanguageRow {
 }
 
 async function loadLanguage(db: DbClient, organizationId: string, locale: string) {
-  return await queryFirst<SiteLanguageRow>(db, `
+  return await queryFirst<OrganizationLanguageRow>(db, `
     SELECT id, locale, status, activated_at, disabled_at FROM organization_locales
      WHERE organization_id = ?  AND locale = ?
   `, [organizationId, locale])
@@ -30,7 +30,7 @@ async function loadLanguage(db: DbClient, organizationId: string, locale: string
  * translated into it, so those routes 404. Translating first was impossible
  * because writes required `published`. Add, translate, then publish.
  */
-export async function addSiteLanguage(
+export async function addOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
@@ -58,7 +58,7 @@ export async function addSiteLanguage(
  * the English source, so how much is translated is the owner's call to read off
  * the progress report, not a condition of going public.
  */
-export async function publishSiteLanguage(
+export async function publishOrganizationLanguage(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string; locale: unknown },
 ) {
@@ -86,7 +86,7 @@ export async function publishSiteLanguage(
   return await loadLanguage(db, input.organizationId, locale)
 }
 
-export async function disableSiteLanguage(
+export async function disableOrganizationLanguage(
   db: DbClient,
   input: { organizationId: string; locale: unknown },
 ) {
@@ -98,7 +98,7 @@ export async function disableSiteLanguage(
   return await loadLanguage(db, input.organizationId, locale)
 }
 
-export async function deleteDisabledSiteLanguageContent(
+export async function deleteDisabledOrganizationLanguageContent(
   db: DbClient,
   input: { organizationId: string; locale: unknown },
 ): Promise<{ deleted: true; locale: string }> {
@@ -120,7 +120,7 @@ export async function deleteDisabledSiteLanguageContent(
 }
 
 
-export async function getSiteLanguageSettings(
+export async function getOrganizationLanguageSettings(
   db: DbClient, env: CloudflareEnv,
   input: { organizationId: string },
 ) {

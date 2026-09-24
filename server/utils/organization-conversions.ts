@@ -3,12 +3,12 @@ import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { getOrCreateSessionId, getOrCreateVisitorId, hashIp } from '~/server/utils/pageview-tracking'
-import type { SiteConversionEventName } from '~/utils/site-conversion-events'
+import type { OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 
 export type ConversionStage = 'schedule_navigation' | 'external_booking_handoff' | 'submitted' | 'external_handoff'
 export type ConversionEntityType = 'request' | 'product' | 'content_block' | 'content_document'
 
-const TAXONOMY: Record<SiteConversionEventName, { stages: ConversionStage[]; entityType: ConversionEntityType | null }> = {
+const TAXONOMY: Record<OrganizationConversionEventName, { stages: ConversionStage[]; entityType: ConversionEntityType | null }> = {
   consultation_cta_click: { stages: ['schedule_navigation', 'external_booking_handoff'], entityType: null },
   contact_submit: { stages: ['submitted'], entityType: 'request' },
   reservation_submit: { stages: ['submitted'], entityType: 'request' },
@@ -18,9 +18,9 @@ const TAXONOMY: Record<SiteConversionEventName, { stages: ConversionStage[]; ent
   donation_click: { stages: ['external_handoff'], entityType: 'content_document' },
 }
 
-export interface SiteConversionInput {
+export interface OrganizationConversionInput {
   organizationId: string
-  eventName: SiteConversionEventName
+  eventName: OrganizationConversionEventName
   stage: ConversionStage
   locationId?: string | null
   entityType?: ConversionEntityType | null
@@ -31,7 +31,7 @@ export interface SiteConversionInput {
   metadata?: ApiRecord | null
 }
 
-export async function recordSiteConversionEvent(db: DbClient, event: H3Event, input: SiteConversionInput) {
+export async function recordOrganizationConversionEvent(db: DbClient, event: H3Event, input: OrganizationConversionInput) {
   const rule = TAXONOMY[input.eventName]
   if (!rule.stages.includes(input.stage)) throw new Error(`Invalid stage for ${input.eventName}`)
   if (rule.entityType !== null && input.entityType !== rule.entityType) throw new Error(`Invalid entity type for ${input.eventName}`)

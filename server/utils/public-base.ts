@@ -10,7 +10,7 @@ import { publicSocialMediaFromJson, type PublicMediaPlacement } from '~/server/u
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicBase {
-  site: {
+  organization: {
     id: string
     organization_id: string
     default_currency: CurrencyCode | null
@@ -61,7 +61,7 @@ export function loadPublicBase(
     const db = cloudflareEnv(event).DB
     if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     try {
-      const row = await queryFirst<Omit<PublicBase['site'], 'media'> & { media_json: string }>(
+      const row = await queryFirst<Omit<PublicBase['organization'], 'media'> & { media_json: string }>(
         db,
         `SELECT s.id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
                 s.theme_id, s.feature_overrides,
@@ -80,10 +80,10 @@ export function loadPublicBase(
           LIMIT 1`,
         [organizationId],
       )
-      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-      const { media_json: mediaJson, ...site } = row
-      return { site: {
-        ...site,
+      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+      const { media_json: mediaJson, ...organization } = row
+      return { organization: {
+        ...organization,
         ...publicSocialMediaFromJson(mediaJson),
       } }
     } finally {

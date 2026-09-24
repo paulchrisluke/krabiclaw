@@ -28,7 +28,7 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 
-export interface SiteLocaleRecord {
+export interface OrganizationLocaleRecord {
   id: string
   organization_id: string
   locale: string
@@ -63,7 +63,7 @@ export interface LocalizedPublicRoute {
     | { kind: 'resource'; resource_type: LocalizedResourceType; resource_id: string; localization: ResourceLocalizationRecord }
 }
 
-interface SiteLocaleRow extends Omit<SiteLocaleRecord, 'is_source'> {
+interface OrganizationLocaleRow extends Omit<OrganizationLocaleRecord, 'is_source'> {
   is_source: number | boolean
 }
 
@@ -102,8 +102,8 @@ export function assertExactCanonicalLocale(value: unknown): string {
 export async function getPersistedSourceLocale(
   db: DbClient,
   organizationId: string,
-): Promise<SiteLocaleRecord> {
-  const rows = await queryAll<SiteLocaleRow>(db, `
+): Promise<OrganizationLocaleRecord> {
+  const rows = await queryAll<OrganizationLocaleRow>(db, `
     SELECT id, organization_id, locale, label, is_source, status, created_at, updated_at
       FROM organization_locales
      WHERE organization_id = ?  AND is_source = 1
@@ -113,19 +113,19 @@ export async function getPersistedSourceLocale(
   if (!source || source.locale !== 'en' || source.status !== 'published' || !platformLocale(source.locale)) {
     throw new HTTPError({
       statusCode: 500,
-      statusMessage: 'Site source locale integrity check failed',
-      data: { code: 'SITE_SOURCE_LOCALE_INTEGRITY', organization_id: organizationId },
+      statusMessage: 'Organization source locale integrity check failed',
+      data: { code: 'ORGANIZATION_SOURCE_LOCALE_INTEGRITY', organization_id: organizationId },
     })
   }
   return { ...source, is_source: Boolean(source.is_source) }
 }
 
-export async function listSiteLocaleRecords(
+export async function listOrganizationLocaleRecords(
   db: DbClient,
   organizationId: string,
-): Promise<SiteLocaleRecord[]> {
+): Promise<OrganizationLocaleRecord[]> {
   await getPersistedSourceLocale(db, organizationId)
-  const rows = await queryAll<SiteLocaleRow>(db, `
+  const rows = await queryAll<OrganizationLocaleRow>(db, `
     SELECT id, organization_id, locale, label, is_source, status, created_at, updated_at
       FROM organization_locales
      WHERE organization_id = ? 
@@ -140,7 +140,7 @@ function billingUrl(organizationSlug: string | null): string | null {
   return `/dashboard/${encodeURIComponent(organizationSlug)}/settings/website/localization`
 }
 
-export async function assertSiteLanguageEntitlement(
+export async function assertOrganizationLanguageEntitlement(
   env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
@@ -178,14 +178,14 @@ export async function assertSiteLanguageEntitlement(
   return { locale, source: false, platform_messages: { ...catalog.messages } }
 }
 
-export async function assertPublicSiteLanguageEntitlement(
+export async function assertPublicOrganizationLanguageEntitlement(
   env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   locale: string,
 ) {
   try {
-    return await assertSiteLanguageEntitlement(env, db, organizationId, locale, 'published')
+    return await assertOrganizationLanguageEntitlement(env, db, organizationId, locale, 'published')
   } catch (error) {
     const status = error && typeof error === 'object' && 'status' in error
       ? error.status
@@ -235,10 +235,10 @@ function parseProductRouteSegments(path: string, vertical: string): { locationSl
   return { locationSlug, productSlug, sourcePath: `/locations/${locationSlug}/${family}/${productSlug}` }
 }
 
-async function getSiteVertical(db: DbClient, organizationId: string): Promise<string> {
-  const site = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM organization WHERE id = ? LIMIT 1', [organizationId])
-  if (!site) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Organization was not found', { organization_id: organizationId })
-  return site.vertical
+async function getOrganizationVertical(db: DbClient, organizationId: string): Promise<string> {
+  const organization = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM organization WHERE id = ? LIMIT 1', [organizationId])
+  if (!organization) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Organization was not found', { organization_id: organizationId })
+  return organization.vertical
 }
 
 /**
@@ -295,7 +295,7 @@ export async function getResourceLocalization(
   localeInput: unknown,
 ): Promise<ResourceLocalizationRecord> {
   const resourceType = parseLocalizedResourceType(resourceTypeInput)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, organizationId, localeInput)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, organizationId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Primary-language content is not stored as a resource localization')
   const row = await queryFirst<ResourceLocalizationRow>(db, `
     SELECT id, organization_id, resource_type, resource_id, locale, values_json, route_path,
@@ -312,7 +312,7 @@ export async function getLocalizationForAuthoring(
   env: CloudflareEnv, db: DbClient, organizationId: string, resourceType: unknown, resourceId: string, localeInput: unknown,
 ) {
   if (resourceType !== 'content_document') return getResourceLocalization(env, db, organizationId, resourceType, resourceId, localeInput)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, organizationId, localeInput)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, organizationId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content is edited through its document')
   const document = await getContentRepresentation(db, { rootId: resourceId, locale })
   if (!document || document.organization_id !== organizationId || document.organization_id !== organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
@@ -337,7 +337,7 @@ export async function resolveLocalizedPublicRoute(
   const routePath = routePathInput.length > 1 ? routePathInput.replace(/\/+$/, '') : routePathInput
   const firstSegment = routePath.split('/')[1]
   const locale = assertExactCanonicalLocale(firstSegment)
-  const entitlement = await assertPublicSiteLanguageEntitlement(env, db, organizationId, locale)
+  const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   if (entitlement.source) {
     localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Primary-language routes are unprefixed', { locale, route_path: routePath })
   }
@@ -351,7 +351,7 @@ export async function resolveLocalizedPublicRoute(
   // stored to match against, which is what lets one Product answer at every
   // location it is offered at.
   const productRoute = parseProductRouteSegments(routePath.slice(locale.length + 1),
-    await getSiteVertical(db, organizationId))
+    await getOrganizationVertical(db, organizationId))
   if (productRoute) {
     const product = await queryFirst<{ id: string }>(db, `
       SELECT p.id FROM products p
@@ -496,7 +496,7 @@ export async function putResourceLocalization(
   },
 ): Promise<ResourceLocalizationRecord> {
   const resourceType = parseLocalizedResourceType(input.resourceType)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.locale)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content must be edited through its canonical resource')
   await assertCanonicalResourceExists(db, input.organizationId, resourceType, input.resourceId)
   // Which product attributes may be translated is declared by the tenant's
@@ -521,7 +521,7 @@ export async function putResourceLocalization(
   try {
     await executeBatch(db, statements, { operation: 'replace resource localization' })
   } catch (error) {
-    if (error instanceof Error && /resource_localizations_site_locale_route_unique|UNIQUE constraint failed: resource_localizations\.organization_id/.test(error.message)) {
+    if (error instanceof Error && /resource_localizations_organization_locale_route_unique|UNIQUE constraint failed: resource_localizations\.organization_id/.test(error.message)) {
       localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'Localized route path is already owned by another resource', { route_path: routePath })
     }
     throw error
@@ -550,7 +550,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   input: Parameters<typeof putResourceLocalization>[2] & { contentBlocks?: unknown; expectedUpdatedAt?: unknown },
 ) {
   if (input.resourceType !== 'content_document') return putResourceLocalization(env, db, input)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.locale)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content is edited through its document')
   const root = await getContentDocumentById(db, input.resourceId)
   if (!root || root.row_role !== 'root' || root.organization_id !== input.organizationId || root.organization_id !== input.organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Source document was not found')
@@ -630,7 +630,7 @@ export async function deleteLocalization(
   input: { organizationId: string; resourceType: unknown; resourceId: string; locale: unknown },
 ): Promise<{ deleted: true; resource_type: LocalizedResourceType | 'content_document'; resource_id: string; locale: string }> {
   if (input.resourceType === 'content_document') {
-    const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.locale)
+    const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
     if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted through localization')
     const document = await getContentRepresentation(db, { rootId: input.resourceId, locale })
     if (!document || document.organization_id !== input.organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
@@ -639,7 +639,7 @@ export async function deleteLocalization(
     return { deleted: true, resource_type: 'content_document', resource_id: input.resourceId, locale }
   }
   const resourceType = parseLocalizedResourceType(input.resourceType)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.locale)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'English source content cannot be deleted through localization')
   const row = await queryFirst<{ id: string }>(db, `
     SELECT id FROM resource_localizations
@@ -667,7 +667,7 @@ export async function getProductCatalogLocalization(
   organizationId: string,
   localeInput: unknown,
 ) {
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, organizationId, localeInput)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, organizationId, localeInput)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Product catalog localization requires a secondary locale')
   // Products belong to the organization and reach this site through a
   // publication; collections are the site's own merchandising. Both are listed
@@ -735,7 +735,7 @@ export async function replaceResourceLocalizations(
   },
 ) {
   const resourceType = parseLocalizedResourceType(input.resourceType)
-  const { locale, source } = await assertSiteLanguageEntitlement(env, db, input.organizationId, input.locale)
+  const { locale, source } = await assertOrganizationLanguageEntitlement(env, db, input.organizationId, input.locale)
   if (source) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Localization requires a secondary locale')
   if (!Array.isArray(input.items) || input.items.length < 1 || input.items.length > 250) {
     localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'items must contain 1 to 250 localizations')
@@ -785,7 +785,7 @@ export async function replaceResourceLocalizations(
   try {
     await executeBatch(db, statements, { operation: 'replace resource localizations' })
   } catch (error) {
-    if (error instanceof Error && /resource_localizations_site_locale_route_unique|UNIQUE constraint failed: resource_localizations\.organization_id/.test(error.message)) {
+    if (error instanceof Error && /resource_localizations_organization_locale_route_unique|UNIQUE constraint failed: resource_localizations\.organization_id/.test(error.message)) {
       localizationError(409, 'LOCALIZED_ROUTE_CONFLICT', 'A localized route path is already owned by another resource')
     }
     throw error

@@ -62,7 +62,7 @@ interface OwnerRecord {
   location: string | null
 }
 
-interface SiteRecord {
+interface OrganizationRecord {
   organization_id: string
   id: string
   name: string | null
@@ -154,8 +154,8 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
   }
 }
 
-async function loadOrganization(db: DbClient, organizationId: string): Promise<SiteRecord | null> {
-  return await queryFirst<SiteRecord>(db, `SELECT s.id, s.name, s.brand_description,
+async function loadOrganization(db: DbClient, organizationId: string): Promise<OrganizationRecord | null> {
+  return await queryFirst<OrganizationRecord>(db, `SELECT s.id, s.name, s.brand_description,
     s.theme_id, s.vertical
     FROM organization s WHERE s.id = ? LIMIT 1`, [organizationId]) ?? null
 }
@@ -251,8 +251,8 @@ export function buildSocialCardGenerationKey(input: {
   return hashSocialCardGenerationInput(JSON.stringify({ renderer: SOCIAL_CARD_RENDERER_VERSION, ...input }))
 }
 
-function socialTemplate(site: SiteRecord): SocialTemplate {
-  return resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).slug
+function socialTemplate(organization: OrganizationRecord): SocialTemplate {
+  return resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).slug
 }
 
 async function clearSocialCard(input: { db: DbClient; env: SocialCardEnv; owner: SocialCardOwner; actorId?: string | null }, reason: 'no_source' | 'owner_not_found' | 'missing_content') {
@@ -275,23 +275,23 @@ export async function refreshSocialCard(input: {
   try {
     const ownerRecord = await loadOwner(db, owner)
     if (!ownerRecord) return await clearSocialCard(input, 'owner_not_found')
-    const site = await loadOrganization(db, ownerRecord.organization_id)
-    if (!site) return await clearSocialCard(input, 'owner_not_found')
+    const organization = await loadOrganization(db, ownerRecord.organization_id)
+    if (!organization) return await clearSocialCard(input, 'owner_not_found')
     const title = ownerRecord.title?.trim()
-    const siteName = site.name?.trim() || null
-    if (!title || !siteName) return await clearSocialCard(input, 'missing_content')
+    const organizationName = organization.name?.trim() || null
+    if (!title || !organizationName) return await clearSocialCard(input, 'missing_content')
 
     const coverBlockId = await loadCoverBlockId(db, owner)
-    const assets = await loadPlacedAssets(db, site.id, owner, coverBlockId)
-    const { logo, current, source } = selectSocialCardPlacements(assets, owner, site.id, coverBlockId)
+    const assets = await loadPlacedAssets(db, organization.id, owner, coverBlockId)
+    const { logo, current, source } = selectSocialCardPlacements(assets, owner, organization.id, coverBlockId)
     const backgroundImageUrl = mediaStillUrl(source)
     if (!source || !backgroundImageUrl) return await clearSocialCard(input, 'no_source')
 
     const payload: SocialCardRenderPayload = {
-      template: socialTemplate(site),
+      template: socialTemplate(organization),
       title,
       description: truncateForSeo(ownerRecord.description, 160),
-      siteName,
+      organizationName,
       label: ownerRecord.label,
       location: ownerRecord.location,
       logoUrl: mediaStillUrl(logo),
@@ -315,7 +315,7 @@ export async function refreshSocialCard(input: {
     const uploaded = await uploadResolvedMediaToAssetStore({
       db,
       env,
-      organizationId: site.id,
+      organizationId: organization.id,
       userId: input.actorId ?? null,
       buffer: Uint8Array.from(png),
       contentType: 'image/png',
@@ -331,16 +331,16 @@ export async function refreshSocialCard(input: {
 
     try {
       if (current?.source === 'generated' && current.asset_id !== uploaded.assetId) {
-        await deleteMediaAsset(db, env, current.asset_id, site.id, input.actorId ?? null)
+        await deleteMediaAsset(db, env, current.asset_id, organization.id, input.actorId ?? null)
       }
       await executeBatch(db, buildSingleMediaPlacementQueries({
-        organizationId: site.id,
+        organizationId: organization.id,
         placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
         media: [{ asset_id: uploaded.assetId }],
       }), { operation: 'replace social card placement' })
     } catch (placementError) {
       try {
-        await deleteMediaAsset(db, env, uploaded.assetId, site.id, input.actorId ?? null)
+        await deleteMediaAsset(db, env, uploaded.assetId, organization.id, input.actorId ?? null)
       } catch (cleanupError) {
         throw new AggregateError([placementError, cleanupError], 'Social card placement and cleanup failed', { cause: cleanupError })
       }
@@ -359,7 +359,7 @@ export async function refreshSocialCard(input: {
   }
 }
 
-export async function regenerateSiteSocialCards(input: {
+export async function regenerateOrganizationSocialCards(input: {
   db: DbClient
   env: SocialCardEnv
   organizationId: string

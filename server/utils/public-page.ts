@@ -24,7 +24,7 @@ import {
 } from "~/server/utils/media-asset-manager";
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { Collection, Product } from '~/server/types/products'
-import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { attachCover } from "~/server/utils/content/publishing";
 import { COVER_SELECT, coverJoinSql } from "~/server/utils/content/cover";
 import { getContentBlocksForDocument } from '~/server/utils/content/documents'
@@ -55,7 +55,7 @@ import {
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
 
-interface SiteContent {
+interface OrganizationContent {
   id: string
   organization_id: string
   location_id?: string
@@ -71,14 +71,14 @@ interface SiteContent {
   updated_at: string
 }
 
-function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
-  const groups = Object.create(null) as Record<string, SiteContent & { _section: string }>
+function groupContentBlocks(rows: OrganizationContent[]): Array<OrganizationContent & { _section: string }> {
+  const groups = Object.create(null) as Record<string, OrganizationContent & { _section: string }>
   for (const row of rows) {
     const section = row.field?.split('.')[0] || 'unknown'
     if (!groups[section]) {
       groups[section] = { ...row, field: section, _section: section }
     } else {
-      for (const key of Object.keys(row) as Array<keyof SiteContent>) {
+      for (const key of Object.keys(row) as Array<keyof OrganizationContent>) {
         if (groups[section][key] == null) (groups[section] as unknown as Record<string, unknown>)[key] = row[key]
       }
     }
@@ -140,8 +140,8 @@ function routeSourcePath(page: string | null): string | null {
   return null
 }
 
-function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
-  const rows: SiteContent[] = []
+function tenantPageToContentRows(page: PublicTenantPage): OrganizationContent[] {
+  const rows: OrganizationContent[] = []
   for (const block of page.blocks) {
     const data = block.data
     const field = typeof data.field === 'string' && data.field.trim()
@@ -156,7 +156,7 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
       source: 'tenant-pages',
       updated_at: page.updated_at,
       media: block.media,
-    } satisfies SiteContent
+    } satisfies OrganizationContent
     if (block.type === 'hero') {
       rows.push({
         ...base,
@@ -270,7 +270,7 @@ async function loadPublicPageSource(
   });
   if (usePageCache) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+    const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
     if (kv) {
       const cacheStartedAt = performance.now();
       const cached = await getPublicResourceCache(kv, cacheKey);
@@ -306,10 +306,10 @@ async function loadPublicPageSource(
     if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
-  const { site } = await loadPublicBase(event, organizationId, { previewAuthorized: isPreviewAuthorized });
+  const { organization } = await loadPublicBase(event, organizationId, { previewAuthorized: isPreviewAuthorized });
   options.signal?.throwIfAborted();
 
-  const orgId = site.id;
+  const orgId = organization.id;
   const localizedLocale = locale && locale !== 'en' ? locale : null
   let publicLocalizations: ExactPublicLocalization[] = []
   if (localizedLocale) {
@@ -333,7 +333,7 @@ async function loadPublicPageSource(
     : null
   const locationId = locationRow?.id;
 
-  const normalizedVertical = normalizeVertical(site.vertical)
+  const normalizedVertical = normalizeVertical(organization.vertical)
   const localizedBlogPost = localizedLocale && blogSlug ? await queryFirst<{ id: string }>(db,
     `SELECT id FROM content_documents WHERE organization_id = ? AND kind = 'article' AND row_role = 'representation'
       AND locale = ? AND path = ? LIMIT 1`, [organizationId, localizedLocale, '/' + (normalizedVertical === 'service' ? 'article' : 'blog') + '/' + blogSlug]) : null
@@ -515,13 +515,13 @@ async function loadPublicPageSource(
     : [];
   options.signal?.throwIfAborted();
 
-  const sourceShell = buildPublicShellPayload(site, batchResults, shellIndexes)
+  const sourceShell = buildPublicShellPayload(organization, batchResults, shellIndexes)
   const shell = (() => {
     if (!localizedLocale) return sourceShell
-    const siteLocalization = publicLocalizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
-    const localizedSite = siteLocalization
-      ? projectExactLocalizedResource('organization', site, siteLocalization)
-      : { ...site, name: null, brand_description: null, seo_title: null, seo_description: null }
+    const organizationLocalization = publicLocalizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
+    const localizedOrganization = organizationLocalization
+      ? projectExactLocalizedResource('organization', organization, organizationLocalization)
+      : { ...organization, name: null, brand_description: null, seo_title: null, seo_description: null }
     const locations = projectExactLocalizedCollection('business_location', sourceShell.locations, publicLocalizations)
     const {
       name: _sourceBrandName,
@@ -530,20 +530,20 @@ async function loadPublicPageSource(
       seo_description: _sourceSeoDescription,
       ...config
     } = sourceShell.config
-    if (localizedSite.name) {
-      config.name = localizedSite.name
-      config.seo_title = localizedSite.name
+    if (localizedOrganization.name) {
+      config.name = localizedOrganization.name
+      config.seo_title = localizedOrganization.name
     }
-    if (localizedSite.brand_description) {
-      config.brand_description = localizedSite.brand_description
-      config.seo_description = localizedSite.brand_description
+    if (localizedOrganization.brand_description) {
+      config.brand_description = localizedOrganization.brand_description
+      config.seo_description = localizedOrganization.brand_description
     }
     return {
       ...sourceShell,
-      site: {
-        ...sourceShell.site,
-        name: localizedSite.name,
-        brand_description: localizedSite.brand_description,
+      organization: {
+        ...sourceShell.organization,
+        name: localizedOrganization.name,
+        brand_description: localizedOrganization.brand_description,
       },
       locations,
       config,
@@ -586,7 +586,7 @@ async function loadPublicPageSource(
   const routePagePath = routeSourcePath(page)
   // Which paths carry a tenant page document is declared once, per template.
   const documentPath = page
-    ? resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).pageDocuments.recipes[page] ?? null
+    ? resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).pageDocuments.recipes[page] ?? null
     : null
   const contentPagePath = requestedDatasets.has('content') ? documentPath : null
   const tenantPageOptions = {
@@ -608,15 +608,15 @@ async function loadPublicPageSource(
   if (contentPagePath && !tenantPage && locale && locale !== sourceLocale && !isPreviewAuthorized && !allowsMissingLocalizedTenantPage) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Localized page was not found' })
   }
-  const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
+  const contentRows: OrganizationContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
 
   let products: Product[] = []
   let collections: Collection[] = []
   if (includeProducts) {
     const locationCapabilityRows = (batchResults[shellIndexes.locations] as { results: Record<string, unknown>[] })?.results ?? []
     const enabledLocationIds = new Set(locationCapabilityRows.filter((location) => {
-      const { capabilities } = resolveSiteCmsCapabilities(String(site.vertical), site.theme_id, {
-        siteEnabledFeatures: site.feature_overrides,
+      const { capabilities } = resolveOrganizationCmsCapabilities(String(organization.vertical), organization.theme_id, {
+        organizationEnabledFeatures: organization.feature_overrides,
         locationEnabledFeatures: location.feature_overrides as string | null,
       })
       return capabilities.managers.some(manager => manager.key === 'location.products')
@@ -729,7 +729,7 @@ async function loadPublicPageSource(
   if (needsReservationPolicies && !locale && !sourceLocale) {
     throw new HTTPError({
       statusCode: 500,
-      statusMessage: 'Site source locale is not configured',
+      statusMessage: 'Organization source locale is not configured',
     });
   }
   options.signal?.throwIfAborted();
@@ -826,7 +826,7 @@ async function loadPublicPageSource(
       options.signal?.throwIfAborted();
       const loadedBlocks = await getContentBlocksForDocument(db, postRow.id);
       const contentBlocks = loadedBlocks
-        ? await attachPageQa(db, organizationId, tenantBlogPostPath({ themeId: site.theme_id, vertical: site.vertical }, String(postRow.source_slug)), loadedBlocks, localizedLocale ?? 'en')
+        ? await attachPageQa(db, organizationId, tenantBlogPostPath({ themeId: organization.theme_id, vertical: organization.vertical }, String(postRow.source_slug)), loadedBlocks, localizedLocale ?? 'en')
         : loadedBlocks
       blogPost = attachCover({ ...postRow, content_blocks: contentBlocks });
     }
@@ -898,7 +898,7 @@ async function loadPublicPageSource(
 
   if (usePageCache && resolvedSlugsValid) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+    const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
     if (kv) {
       const putAsync = putPublicResourceCache(kv, cacheKey, JSON.stringify(payload)).catch(
         (err: unknown) => {

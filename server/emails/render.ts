@@ -27,7 +27,7 @@ export const NotificationEmail = defineComponent({
       const hero = message.hero
       return h(EmailFrame, {
         preheader: message.preheader,
-        siteName: message.siteName ?? null,
+        organizationName: message.organizationName ?? null,
         preferencesUrl: props.preferencesUrl,
         unsubscribeUrl: props.unsubscribeUrl,
         platformDomain: props.platformDomain,

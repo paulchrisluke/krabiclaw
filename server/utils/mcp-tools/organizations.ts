@@ -1,7 +1,7 @@
 import type { McpToolDefinition } from './shared'
-import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, siteTool, withToolAnnotations } from './shared'
+import { SUPPORTED_CURRENCIES, currentUserObject, globalTool, pageInfoObject, paginationInputSchema, organizationSummaryItem, organizationTool, withToolAnnotations } from './shared'
 
-const SITE_MEDIA_ITEM_SCHEMA = {
+const ORGANIZATION_MEDIA_ITEM_SCHEMA = {
   type: 'object',
   properties: {
     asset_id: { type: 'string' },
@@ -13,11 +13,11 @@ const SITE_MEDIA_ITEM_SCHEMA = {
   required: ['asset_id', 'slot', 'public_url', 'thumbnail_url', 'kind'],
 } as const
 
-export const SITES_TOOLS: McpToolDefinition[] = [
+export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_organizations',
       description: 'List the organizations the caller can reach and the current authenticated account identity. Use this to choose the internal organization id for organization_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or business name, match it against the returned organizations and pass the matching id as organization_id; never pass the URL/domain/name itself as organization_id.',
-      domain: 'sites',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { type: 'object', properties: { ...paginationInputSchema }, additionalProperties: true },
@@ -34,16 +34,16 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         required: ['organizations', 'currentUser', 'page_info'],
       },
     })),
-  siteTool({
+  organizationTool({
       name: 'get_organization',
       description: 'Get site details for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
-      domain: 'sites',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       outputSchema: {
         type: 'object',
         properties: {
-          site: {
+          organization: {
             type: 'object',
             properties: {
               id: { type: 'string' },
@@ -53,7 +53,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               status: { type: 'string' },
               name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
-              media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
+              media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               public_url: { type: ['string', 'null'] },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
@@ -61,13 +61,13 @@ export const SITES_TOOLS: McpToolDefinition[] = [
             required: ['id', 'subdomain', 'status'],
           },
         },
-        required: ['site'],
+        required: ['organization'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'get_organization_settings',
-      description: 'Get editable site settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
-      domain: 'sites',
+      description: 'Get editable organization settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       outputSchema: {
@@ -85,7 +85,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
               custom_domain_status: { type: ['string', 'null'] },
               name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
-              media: { type: 'array', items: SITE_MEDIA_ITEM_SCHEMA },
+              media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
               default_currency: { type: ['string', 'null'] },
               press_email: { type: ['string', 'null'] },
@@ -105,10 +105,10 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         required: ['settings'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'update_organization_settings',
-      description: 'Update editable site settings such as brand name, description, logo, contact email, currency, and website status (Live or Draft). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
-      domain: 'sites',
+      description: 'Update editable organization settings such as brand name, description, logo, contact email, currency, and website status (Live or Draft). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
@@ -137,7 +137,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           ok: { type: 'boolean' },
-          entity: { type: 'string', enum: ['site_settings'] },
+          entity: { type: 'string', enum: ['organization_settings'] },
           id: { type: 'string' },
           changed_fields: { type: 'array', items: { type: 'string' } },
           updated_at: { type: 'string' },
@@ -146,10 +146,10 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         required: ['ok', 'entity', 'id'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'set_default_currency',
-      description: 'Set the default currency for this site. Affects how Product and experience prices are displayed.',
-      domain: 'sites',
+      description: 'Set the default currency for this organization. Affects how Product and experience prices are displayed.',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
@@ -165,10 +165,10 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         required: ['default_currency', 'updated'],
       },
     }),
-  siteTool({
+  organizationTool({
       name: 'set_brand_color',
       description: 'Set the brand color theme for the site. Use this tool for any accent-color or theme-color change. Accepts natural language color descriptions like "earthy", "warm terracotta", "ocean blue", "sage green", or hex codes like #8F1D21. The brand color controls the primary accent color across the Saya template (buttons, links, highlights).',
-      domain: 'sites',
+      domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {

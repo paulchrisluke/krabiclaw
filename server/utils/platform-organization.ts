@@ -11,7 +11,7 @@ export interface PlatformTenantIdentity {
  * platform host has resolved; this lookup is for work that runs outside a
  * request for that host (search corpus, llms.txt, analytics roll-ups).
  */
-export async function getPlatformSite(db: DbClient): Promise<PlatformTenantIdentity> {
+export async function getPlatformOrganization(db: DbClient): Promise<PlatformTenantIdentity> {
   const tenant = await queryFirst<PlatformTenantIdentity>(
     db,
     "SELECT id FROM organization WHERE theme_id = ? AND status = 'active' LIMIT 1",

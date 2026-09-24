@@ -3,7 +3,7 @@ import type { H3Event } from 'nitro/h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertRoleAllows } from '~/server/utils/member-access'
-import { getSiteAnalyticsReport, type SiteAnalyticsReport } from '~/server/utils/site-analytics-report'
+import { getAnalyticsReport, type AnalyticsReport } from '~/server/utils/analytics-report'
 import { loadOnboardingChecklist } from '~/server/utils/onboarding-checklist'
 import { queryAll, type DbClient } from '~/server/db'
 
@@ -27,7 +27,7 @@ export interface OrganizationSetupProgress {
 
 export interface OrganizationAnalyticsReport {
   organizationId: string
-  report: SiteAnalyticsReport
+  report: AnalyticsReport
   reviews: OrganizationReviewsSummary
   setup: OrganizationSetupProgress
 }
@@ -49,16 +49,16 @@ const SETUP_ITEM_LABELS: Record<string, string> = {
  * per-star distribution and the most recent few. There are no per-category
  * scores to break down; the schema has one `rating` column.
  */
-async function loadReviewsSummary(db: DbClient, siteIds: readonly string[]): Promise<OrganizationReviewsSummary> {
-  if (!siteIds.length) return { total: 0, average: null, distribution: [], recent: [] }
-  const placeholders = siteIds.map(() => '?').join(', ')
+async function loadReviewsSummary(db: DbClient, organizationIds: readonly string[]): Promise<OrganizationReviewsSummary> {
+  if (!organizationIds.length) return { total: 0, average: null, distribution: [], recent: [] }
+  const placeholders = organizationIds.map(() => '?').join(', ')
   const rows = await queryAll<{ id: string; author_name: string | null; rating: number; title: string | null; content: string | null; created_at: string }>(
     db,
     `SELECT id, author_name, rating, title, content, created_at
        FROM reviews
       WHERE organization_id IN (${placeholders}) AND status = 'approved'
       ORDER BY created_at DESC`,
-    [...siteIds],
+    [...organizationIds],
   )
 
   const distribution = [5, 4, 3, 2, 1].map(rating => ({
@@ -127,7 +127,7 @@ export async function loadDashboardOrganizationAnalytics(
   await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { analytics: ['read'] } })
 
   const [report, reviews, setup] = await Promise.all([
-    getSiteAnalyticsReport(db, {
+    getAnalyticsReport(db, {
       organizationId: organization.id,
       startDate: query.startDate,
       endDate: query.endDate,

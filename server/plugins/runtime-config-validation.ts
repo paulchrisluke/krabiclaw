@@ -7,8 +7,9 @@ export default definePlugin(() => {
   // Required public environment variables
   const requiredPublicVars = [
     { key: 'public.platformDomain', env: 'NUXT_PUBLIC_PLATFORM_DOMAIN' },
-    { key: 'public.freeSiteDomain', env: 'NUXT_PUBLIC_FREE_SITE_DOMAIN' },
-    { key: 'public.appName', env: 'NUXT_PUBLIC_APP_NAME' }
+    { key: 'public.freeOrganizationDomain', env: 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN' },
+    { key: 'public.appName', env: 'NUXT_PUBLIC_APP_NAME' },
+    { key: 'public.platformUrl', env: 'NUXT_PUBLIC_SITE_URL' },
   ]
 
 

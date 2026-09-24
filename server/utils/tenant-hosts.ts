@@ -3,7 +3,7 @@
 // independently of the H3 event/D1 plumbing in tenant-resolution.ts.
 
 export interface TenantHostEnv {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
@@ -34,7 +34,7 @@ export function getPlatformHosts(env: TenantHostEnv): string[] {
   return Array.from(new Set([
     'localhost',
     '127.0.0.1',
-    normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN),
+    normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN),
     normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN),
   ].filter((value): value is string => Boolean(value))))
 }
@@ -121,8 +121,8 @@ export function isNonProductionHost(host: string): boolean {
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
-export function getFreeSiteDomain(env: TenantHostEnv): string {
-  const domain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-  if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+export function getFreeOrganizationDomain(env: TenantHostEnv): string {
+  const domain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
+  if (!domain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
   return domain
 }

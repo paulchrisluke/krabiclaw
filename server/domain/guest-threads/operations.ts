@@ -260,9 +260,9 @@ function deliveryReceiptQuery(
   }
 }
 
-async function getSiteBrandName(db: DbClient, organizationId: string): Promise<string> {
+async function getOrganizationBrandName(db: DbClient, organizationId: string): Promise<string> {
   const row = await queryFirst<{ name: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
-  if (!row?.name?.trim()) throw new Error(`Site ${organizationId} has no configured brand name`)
+  if (!row?.name?.trim()) throw new Error(`Organization ${organizationId} has no configured brand name`)
   return row.name.trim()
 }
 
@@ -297,12 +297,12 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
  * outbound message. A member's reply leads with their own words; a status
  * update leads with what changed.
  */
-function renderMemberReply(env: ReplyEmailEnv, siteName: string, body: string) {
-  return renderNotificationEmail(guestThreadReplyMessage({ siteName, body }), { platformDomain: getPlatformDomain(env) })
+function renderMemberReply(env: ReplyEmailEnv, organizationName: string, body: string) {
+  return renderNotificationEmail(guestThreadReplyMessage({ organizationName, body }), { platformDomain: getPlatformDomain(env) })
 }
 
-function renderStatusUpdate(env: ReplyEmailEnv, siteName: string, heading: string, body: string) {
-  return renderNotificationEmail(guestThreadStatusMessage({ siteName, heading, body }), { platformDomain: getPlatformDomain(env) })
+function renderStatusUpdate(env: ReplyEmailEnv, organizationName: string, heading: string, body: string) {
+  return renderNotificationEmail(guestThreadStatusMessage({ organizationName, heading, body }), { platformDomain: getPlatformDomain(env) })
 }
 
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
@@ -330,7 +330,7 @@ async function sendStatusUpdate(
   )) return conflict('Status update was superseded by a booking change')
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getSiteBrandName(db, context.thread.organization_id)
+  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
   return await deliverGuestThreadEmail(db, {
     delivery,
     env: input.env,
@@ -371,7 +371,7 @@ async function executeSourceMutation(
   const deliveryId = deliveryDedupeKey(input)
   const now = new Date().toISOString()
   const subject = plan.requiresNotification
-    ? operationSubject(plan.action, await getSiteBrandName(db, context.thread.organization_id))
+    ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
     : null
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
@@ -452,7 +452,7 @@ async function executeReply(
   const delivery = await getDeliveryById(db, deliveryKey)
   if (!delivery || delivery.entry_id !== entry.id) throw new Error('Reply delivery receipt does not match its ledger entry')
 
-  const fromName = await getSiteBrandName(db, context.thread.organization_id)
+  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
   const outcome = await deliverGuestThreadEmail(db, {
     delivery,
     env: input.env,
@@ -498,7 +498,7 @@ async function retryDelivery(
 
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
-  const fromName = await getSiteBrandName(db, context.thread.organization_id)
+  const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
   if (!entry.body) return conflict('Delivery entry has no email body')
   const retried = delivery.purpose === 'status_update'
     ? await sendStatusUpdate(db, context, input, entry, delivery)

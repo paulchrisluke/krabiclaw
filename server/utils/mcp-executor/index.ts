@@ -9,7 +9,7 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
@@ -21,13 +21,13 @@ import { handleOnboardingTools } from './onboarding'
 import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
 import { handleReviewsTools } from './reviews'
-import { handleSitesTools } from './sites'
+import { handleOrganizationsTools } from './organizations'
 import { handleSubmissionsTools } from './submissions'
 import {
   NOT_HANDLED,
   humanizeEntitlement,
   normalizeWorkspaceArguments,
-  resolveSitePublicOrigin,
+  resolveOrganizationPublicOrigin,
   validateRequiredArguments,
   workspaceContextPayload,
   workspaceLocationsPayload,
@@ -50,7 +50,7 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   posts: handlePostsTools,
   qa: handleQaTools,
   reviews: handleReviewsTools,
-  sites: handleSitesTools,
+  organizations: handleOrganizationsTools,
   submissions: handleSubmissionsTools,
 }
 
@@ -94,7 +94,7 @@ export async function executeMcpToolCall(
       name: entry.name ?? entry.slug,
       subdomain: entry.subdomain,
       orgSlug: entry.slug,
-      publicUrl: resolveSitePublicOrigin({ public_url: entry.public_url }),
+      publicUrl: resolveOrganizationPublicOrigin({ public_url: entry.public_url }),
       status: entry.status,
       active: entry.id === workspace.organization?.id,
     }));
@@ -174,39 +174,36 @@ export async function executeMcpToolCall(
   }
 
   const organizationId = requiredString(normalizedArguments, "organization_id");
-  const site = await requireMcpOrganization(event, organizationId, tool.minimumRole, authenticatedUser);
+  const organization = await requireMcpOrganization(event, organizationId, tool.minimumRole, authenticatedUser);
   const args = omit(normalizedArguments, ["organization_id"]);
   const explicitLocationId = optionalString(rawArguments, "location_id");
   if (explicitLocationId) {
-    const location = await queryFirst<{ id: string }>(site.db, `
+    const location = await queryFirst<{ id: string }>(organization.db, `
       SELECT id
       FROM business_locations
       WHERE id = ? AND organization_id = ? 
       LIMIT 1
-    `, [explicitLocationId, site.organizationId]);
+    `, [explicitLocationId, organization.organizationId]);
     if (!location) {
-      throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this site.");
+      throw mcpProtocolError(MCP_ERROR.invalidParams, "Location not found for this organization.");
     }
   }
 
   if (
     tool.requiredEntitlement &&
-    !(await hasSiteEntitlement(
-      site.env as CloudflareEnv,
-      site.db,
-      site.organizationId,
+    !(await hasOrganizationEntitlement(organization.env as CloudflareEnv, organization.organizationId,
       tool.requiredEntitlement,
     ))
   ) {
     throw new HTTPError({
       statusCode: 403,
-      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.`,
+      statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this organization.`,
     });
   }
 
   const domainHandler = tool.domain ? DOMAIN_HANDLERS[tool.domain] : undefined;
   if (domainHandler) {
-    const result = await domainHandler({ event, toolName, rawArguments, normalizedArguments, tool, organizationId, site, args });
+    const result = await domainHandler({ event, toolName, rawArguments, normalizedArguments, tool, organizationId, organization, args });
     if (result !== NOT_HANDLED) return result;
   }
   throw mcpProtocolError(
