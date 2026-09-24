@@ -13,7 +13,7 @@ import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/pre
 import { isNonProductionHost } from '~/server/utils/tenant-hosts'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import { isPublicShellPayload } from '~/utils/public-resource-contracts'
-import { assertExactCanonicalLocale, assertPublicSiteLanguageEntitlement } from '~/server/utils/localization'
+import { assertExactCanonicalLocale, assertPublicOrganizationLanguageEntitlement } from '~/server/utils/localization'
 import {
   indexStoredPublicLocalizations,
   projectExactLocalizedCollection,
@@ -51,7 +51,7 @@ export async function loadPublicShellSource(
     blogSlug: null,
     locale,
   })
-  const cache = env.SITE_CACHE
+  const cache = env.ORGANIZATION_CACHE
   if (mutateHeaders) {
     setHeader(event, 'cache-control', previewAuthorized
       ? 'private, no-store'
@@ -87,20 +87,20 @@ export async function loadPublicShellSource(
     setHeader(event, 'x-bootstrap-cache', useCache ? 'NO-KV' : 'SKIP')
   }
 
-  const { site } = await loadPublicBase(event, organizationId, { previewAuthorized })
+  const { organization } = await loadPublicBase(event, organizationId, { previewAuthorized })
   options.signal?.throwIfAborted()
   const shellQueries: BatchQuery[] = []
-  const shellIndexes = appendPublicShellQueries(shellQueries, site.id)
+  const shellIndexes = appendPublicShellQueries(shellQueries, organization.id)
   const shellResults = await executeBatch(db, shellQueries)
   options.signal?.throwIfAborted()
   const payload = {
     success: true,
-    ...buildPublicShellPayload(site, shellResults, shellIndexes),
+    ...buildPublicShellPayload(organization, shellResults, shellIndexes),
     count: shellResults[shellIndexes.locations]?.results?.length ?? 0,
     platformMessages: null as Record<string, string> | null,
   }
   if (locale && locale !== 'en') {
-    const entitlement = await assertPublicSiteLanguageEntitlement(env, db, site.id, locale)
+    const entitlement = await assertPublicOrganizationLanguageEntitlement(env, db, organization.id, locale)
     if (entitlement.source) throw new HTTPError({ statusCode: 404, statusMessage: 'English source routes are unprefixed' })
     if (!entitlement.platform_messages) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'Published platform locale messages are unavailable' })
@@ -111,17 +111,17 @@ export async function loadPublicShellSource(
        FROM resource_localizations
        WHERE organization_id = ?  AND locale = ?
          AND resource_type IN ('organization', 'business_location')
-    `, [site.id, locale])
+    `, [organization.id, locale])
     // The shell reads the site and its locations; neither carries metafields,
     // so no definition is in scope here.
     const localizations = indexStoredPublicLocalizations(localizedRows, new Map())
-    const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
+    const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
     payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
-    const localizedSite = siteLocalization
-      ? projectExactLocalizedResource('organization', { ...payload.site, id: organizationId }, siteLocalization)
-      : { ...payload.site, id: organizationId, name: null, brand_description: null }
-    const { id: _localizedSiteId, ...localizedSiteValues } = localizedSite
-    payload.site = localizedSiteValues
+    const localizedOrganization = organizationLocalization
+      ? projectExactLocalizedResource('organization', { ...payload.organization, id: organizationId }, organizationLocalization)
+      : { ...payload.organization, id: organizationId, name: null, brand_description: null }
+    const { id: _localizedOrganizationId, ...localizedOrganizationValues } = localizedOrganization
+    payload.organization = localizedOrganizationValues
     const {
       name: _sourceBrandName,
       brand_description: _sourceBrandDescription,
@@ -131,13 +131,13 @@ export async function loadPublicShellSource(
     } = payload.config
     payload.config = {
       ...nonLocalizedConfig,
-      ...(typeof localizedSite.name === 'string' ? {
-        name: localizedSite.name,
-        seo_title: localizedSite.name,
+      ...(typeof localizedOrganization.name === 'string' ? {
+        name: localizedOrganization.name,
+        seo_title: localizedOrganization.name,
       } : {}),
-      ...(typeof localizedSite.brand_description === 'string' ? {
-        brand_description: localizedSite.brand_description,
-        seo_description: localizedSite.brand_description,
+      ...(typeof localizedOrganization.brand_description === 'string' ? {
+        brand_description: localizedOrganization.brand_description,
+        seo_description: localizedOrganization.brand_description,
       } : {}),
     }
     payload.count = payload.locations.length

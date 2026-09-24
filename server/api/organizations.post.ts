@@ -6,7 +6,7 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { provisionOrganization, VALID_VERTICALS } from '~/server/utils/organization-provisioning'
 import { isCurrencyCode, SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 // Provisions an organization the caller already belongs to: gives it its
 // address, its template and its seeded structure. The organization is explicit:
@@ -22,7 +22,7 @@ export default defineHandler(async (event) => {
   if (!name || !subdomain) {
     return jsonResponse({ error: 'name and subdomain are required' }, { status: 400 })
   }
-  if (!vertical || !VALID_VERTICALS.includes(vertical as SiteVertical)) {
+  if (!vertical || !VALID_VERTICALS.includes(vertical as OrganizationVertical)) {
     return jsonResponse({
       error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`
     }, { status: 400 })
@@ -55,17 +55,13 @@ export default defineHandler(async (event) => {
     organizationId: organization.id,
     name,
     subdomain,
-    vertical: vertical as SiteVertical,
+    vertical: vertical as OrganizationVertical,
     defaultCurrency,
   })
-  if (result.status === 200) {
-    // The tenant is live at this point; a failed activation must not turn that
-    // into a 500. It is logged loudly and the caller still gets the result.
-    try {
-      await activateSessionOrganization(event, env, organization.id)
-    } catch (error) {
-      console.error('organization_provisioning_activate_session_failed', { organizationId: organization.id, error: error instanceof Error ? error.message : String(error) })
-    }
-  }
+  // Provisioning is not finished until the caller's session is on the new
+  // organization; without it they are returned to a dashboard that cannot see
+  // the tenant they just created. Swallowing this reported a completed
+  // provisioning that had half happened, which is worse to debug than a 500.
+  if (result.status === 200) await activateSessionOrganization(event, env, organization.id)
   return jsonResponse(result.data, { status: result.status })
 })

@@ -259,7 +259,7 @@ async function loadLanguages(): Promise<void> {
       { validate: isLanguagesResponse },
     )
     const sources = response.languages.filter(item => Boolean(item.is_source) && item.status === 'published')
-    if (sources.length !== 1) throw new Error('The site source language is not configured correctly.')
+    if (sources.length !== 1) throw new Error('The organization source language is not configured correctly.')
     sourceLocale.value = sources[0]!.locale
     const secondaryLanguages = response.languages.filter(item => !item.is_source && item.status === 'published')
     if (secondaryLanguages.some(item => !item.label)) throw new Error('An enabled language is missing its display name.')
@@ -267,12 +267,12 @@ async function loadLanguages(): Promise<void> {
     const requestedLocale = typeof route.query.locale === 'string' ? route.query.locale : ''
     if (route.query.localize === `${props.resourceType}:${props.resourceId}` && requestedLocale) {
       if (!localeOptions.value.some(option => option.value === requestedLocale)) {
-        throw new Error(`The requested ${requestedLocale} language is not enabled for this site.`)
+        throw new Error(`The requested ${requestedLocale} language is not enabled for this organization.`)
       }
       locale.value = requestedLocale
     }
   } catch (cause) {
-    languageError.value = getErrorMessage(cause, 'Failed to load site languages')
+    languageError.value = getErrorMessage(cause, 'Failed to load organization languages')
   } finally {
     loadingLanguages.value = false
   }

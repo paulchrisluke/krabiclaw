@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { expect, type APIRequestContext, type APIResponse } from '@playwright/test'
-import { authRequestHeaders, loginAs } from './auth'
+import type { APIRequestContext, APIResponse } from '@playwright/test'
+import { loginAs } from './auth'
 
 // The Streamable HTTP transport requires clients to accept both
 // application/json and text/event-stream (see the Accept header below), and
@@ -35,10 +35,9 @@ function withMcpJson(response: APIResponse): APIResponse {
 }
 
 export const MCP_VERSION = '2025-06-18'
-// Fixed fixture sites retained in the production snapshot with the matching plan already
-// active. Entitlement checks are site-scoped (hasSiteEntitlement), so a plan-gated tool
-// call needs the org's actual paid organization, not a brand-new one from
-// ensureOrganization() (which always starts on `free`).
+// Ember & Slice, the demo organization the production snapshot carries with the
+// Growth plan active. Every MCP spec drives this tenant and its loc-demo
+// location; a spec never provisions an organization or location of its own.
 export const MCP_GROWTH_ORGANIZATION_ID = 'org-demo'
 
 export async function mcpRequest(
@@ -143,81 +142,6 @@ export function mcpData<T>(body: { error?: unknown; result?: { isError?: boolean
     return body.result.structuredContent as T
   }
   throw new Error('MCP tool response contained no result.structuredContent')
-}
-
-export async function ensureOrganization(request: APIRequestContext, baseURL: string) {
-  const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-  // POST /api/organizations requires the target organization explicitly. loginAs() made the
-  // fixture's membership the active organization; a fixture with no organization
-  // (user-e2e-growth-service-owner) gets one through Better Auth's organization
-  // API, which also makes it the session's active organization.
-  const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
-  expect(sessionRes.ok(), await sessionRes.text()).toBe(true)
-  const body = await sessionRes.json() as { session?: { activeOrganizationId?: string | null } } | null
-  expect(body?.session, 'ensureOrganization requires an authenticated session').toBeTruthy()
-  let organizationId = body!.session!.activeOrganizationId ?? null
-  if (!organizationId) {
-    const created = await request.post(`${baseURL}/api/auth/organization/create`, {
-      headers: authRequestHeaders(baseURL),
-      data: { name: `MCP E2E Org ${suffix}`, slug: `e2e-mcp-org-${suffix}` },
-    })
-    expect(created.ok(), await created.text()).toBe(true)
-    organizationId = (await created.json() as { id: string }).id
-  }
-  const res = await request.post(`${baseURL}/api/organizations`, {
-    // A tenant created here is live immediately, so it states the currency its
-    // prices are quoted in rather than inheriting one nobody chose.
-    data: { name: `MCP E2E ${suffix}`, subdomain: `e2e-mcp-${suffix}`, vertical: 'restaurant', organizationId, defaultCurrency: 'THB' },
-  })
-  expect(res.ok(), await res.text()).toBe(true)
-  const created = await res.json() as { organizationId: string }
-  expect(created.organizationId).toEqual(expect.any(String))
-  return created.organizationId
-}
-
-export async function ensureLocation(request: APIRequestContext, baseURL: string, organizationId: string) {
-  const locations = await mcpRequest(request, baseURL, {
-    method: 'tools/call',
-    toolName: 'list_locations',
-    args: { organization_id: organizationId },
-  })
-  expect(locations.status()).toBe(200)
-  const locationsBody = await locations.json()
-  const data = mcpData<{ locations: Array<{ id: string }> }>(locationsBody)
-  expect(data.locations, 'A newly provisioned tenant has one seeded location').toHaveLength(1)
-  return data.locations[0]!.id
-}
-
-// Create disposable locations through the same API the CMS uses. That endpoint
-// is route-scoped: it reads the organization from the `org` query the dashboard
-// transport sends and refuses the request without it, so the helper resolves
-// the same slug the dashboard URL would carry.
-async function dashboardScope(request: APIRequestContext, baseURL: string, organizationId: string) {
-  const orgRes = await request.get(`${baseURL}/api/auth/organization/get-full-organization`)
-  expect(orgRes.ok(), await orgRes.text()).toBe(true)
-  const { id, slug: org } = await orgRes.json() as { id: string; slug: string }
-  expect(org, 'The session has no active organization to scope the request to').toEqual(expect.any(String))
-  expect(id, `Organization ${organizationId} is not the session's active organization`).toBe(organizationId)
-  return `org=${encodeURIComponent(org)}`
-}
-
-// The endpoint answers with the new location's slug; the id comes from the same
-// list the dashboard reads.
-export async function createScratchLocation(request: APIRequestContext, baseURL: string, organizationId: string) {
-  const scope = await dashboardScope(request, baseURL, organizationId)
-  const response = await request.post(`${baseURL}/api/dashboard/locations?${scope}`, {
-    data: { name: `MCP Scratch Location ${Date.now()}`, details: { city: 'Krabi' } },
-  })
-  expect(response.status(), await response.text()).toBe(200)
-  const { locationSlug } = await response.json() as { locationSlug: string }
-  expect(locationSlug).toEqual(expect.any(String))
-
-  const listed = await request.get(`${baseURL}/api/dashboard/locations?${scope}`)
-  expect(listed.ok(), await listed.text()).toBe(true)
-  const { locations } = await listed.json() as { locations: Array<{ id: string; slug: string }> }
-  const created = locations.find(location => location.slug === locationSlug)
-  expect(created, `The location created as ${locationSlug} is missing from the dashboard list`).toBeTruthy()
-  return created!.id
 }
 
 export async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string, label: string) {

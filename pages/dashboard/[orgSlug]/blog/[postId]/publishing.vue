@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-publishing"
+    id="organization-blog-post-publishing"
     title="When it goes live"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"
@@ -22,8 +22,8 @@
       <UFormField v-if="(!editor.post.value || editor.post.value.status === 'scheduled') && editor.publishTiming.value === 'Scheduled'" label="Scheduled for (UTC)">
         <UInput v-model="editor.form.scheduled_for" type="datetime-local" step="any" class="w-full" />
       </UFormField>
-      <UFormField label="Visibility">
-        <USelect v-model="editor.form.visibility" :items="['listed', 'unlisted']" class="w-full" />
+      <UFormField label="Visibility" :description="editor.form.visibility === 'unlisted' ? 'Anyone with the link can read it. It stays out of the blog, search, feeds and the sitemap.' : 'Appears in the blog, search, feeds and the sitemap.'">
+        <USelect v-model="editor.form.visibility" :items="[{ label: 'Listed', value: 'listed' }, { label: 'Unlisted', value: 'unlisted' }]" class="w-full" />
       </UFormField>
     </div>
   </DashboardLeafPanel>

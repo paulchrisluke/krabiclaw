@@ -2,22 +2,22 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { assertRoleAllows } from '~/server/utils/member-access'
 import { deleteLocation } from '~/server/utils/location-management'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
   if (!organizationId || !locationId) {
-    return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   }
 
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   await assertRoleAllows({ organizationId: organization.id, role: organization.member_role, permissions: { locations: ['delete'] } })
   const result = await deleteLocation(env, db, organization.id, locationId)
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
-  await purgePublicResourceCacheSafe(env, organizationId)
+  await purgePublicResourceCacheNow(env, organizationId)
 
   return jsonResponse({
     success: true, message: 'Location deleted successfully', organizationId, locationId, }, { status: result.status })

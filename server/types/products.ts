@@ -215,5 +215,9 @@ export interface ProductPresentation {
   itemLabelPlural: 'Dishes' | 'Products' | 'Experiences'
   collectionGroupLabel: 'Section' | 'Collection'
   collectionGroupLabelPlural: 'Sections' | 'Collections'
-  structuredDataType: 'MenuItem' | 'Product'
+  /**
+   * What this surface's items are, in schema.org's vocabulary: dishes are
+   * MenuItems, goods are Products, and a bookable experience is an Event.
+   */
+  structuredDataType: 'MenuItem' | 'Product' | 'Event'
 }

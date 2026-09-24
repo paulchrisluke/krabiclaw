@@ -32,7 +32,6 @@
         :disabled="Boolean(entering)"
         @click="enter(organization)"
       >
-        <UAvatar :src="organization.logo ?? undefined" :alt="organization.name" icon="i-lucide-building-2" size="md" />
         <span class="min-w-0 flex-1 font-semibold text-highlighted">{{ organization.name }}</span>
         <UIcon
           v-if="entering === organization.id"

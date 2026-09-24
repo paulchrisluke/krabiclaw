@@ -11,7 +11,7 @@ definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 const { t } = useI18n()
-const { products, collections, locations, config, site, data: pagePayload } = await usePublicPageData({ lazy: false })
+const { products, collections, locations, config, organization, data: pagePayload } = await usePublicPageData({ lazy: false })
 // What the merchant sells over the counter. Anything a guest books a seat on
 // is an Experience and has its own surface, so it is not listed twice.
 const goods = computed(() => products.value.filter(product => !isExperience(product)))
@@ -22,16 +22,16 @@ const goods = computed(() => products.value.filter(product => !isExperience(prod
 // has already left behind resolves with none at all, and answering that with
 // a 404 put an uncaught error on every guest who clicked twice quickly.
 if (pagePayload.value && goods.value.length === 0) throw createError({ statusCode: 404 })
-const vertical = String(site.value?.vertical ?? '')
+const vertical = String(organization.value?.vertical ?? '')
 // Same rule for the vertical: only a loaded site can say how it presents its
 // catalog, and `requireProductPresentation` throws outright without one.
-const presentation = site.value ? requireProductPresentation(vertical) : null
+const presentation = organization.value ? requireProductPresentation(vertical) : null
 if (presentation && presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })
 const rawCurrency = config.value.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
-const brandName = String(site.value?.name ?? '').trim()
-const collectionTitle = computed(() => t('saya.products.collection_title', { site: brandName }))
+const brandName = String(organization.value?.name ?? '').trim()
+const collectionTitle = computed(() => t('saya.products.collection_title', { organization: brandName }))
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => presentation && ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { site: brandName }), brand: { siteName: brandName } }))
+useSocialMetadata(() => presentation && ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { organization: brandName }), brand: { organizationName: brandName } }))
 </script>

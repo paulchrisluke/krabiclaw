@@ -25,20 +25,20 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, qaList, locations } = await usePublicPageData()
-const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const { googleMaps, qaList, locations } = await usePublicPageData()
+const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/qa',
-  title: `${t('saya.qa.title')} | ${siteName.value}`,
-  description: t('saya.qa_page.meta_description', { site: siteName.value }),
+  title: `${t('saya.qa.title')} | ${organizationName.value}`,
+  description: t('saya.qa_page.meta_description', { organization: organizationName.value }),
   label: t('saya.qa.title'),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

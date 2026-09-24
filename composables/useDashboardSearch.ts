@@ -88,8 +88,8 @@ export function useDashboardSearch() {
     const normalized = searchTerm.value.trim()
     // The business's site: the route's where the route has one, otherwise the
     // organization's own — the Menu and Messages are organization screens.
-    const site = dashboard.organization.value
-    if (!normalized || !site?.subdomain) {
+    const organization = dashboard.organization.value
+    if (!normalized || !organization?.subdomain) {
       requestSequence += 1
       results.value = []
       loading.value = false
@@ -104,7 +104,7 @@ export function useDashboardSearch() {
       const response = await dashboardApi<SearchResponse>('/api/dashboard/search', {
         signal: controller.signal,
         validate: validateApiShape({ results: 'array' }),
-        query: { q: normalized, site: site.subdomain },
+        query: { q: normalized, organization: organization.subdomain },
       })
       if (requestId !== requestSequence) return
       results.value = groupResults(response.results ?? [])

@@ -2,7 +2,7 @@ import { HTTPError, defineHandler  } from 'nitro';
 
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getRequestDataMetrics } from '../../utils/request-metrics'
-import { BillingPlansError, getCachedPlans, type Plan, type PlanPrice, type PlanLimits, type EnvWithSiteCache } from '../../utils/billing-plans'
+import { BillingPlansError, getCachedPlans, type Plan, type PlanPrice, type PlanLimits, type EnvWithOrganizationCache } from '../../utils/billing-plans'
 
 // Re-export types so existing imports from this route path continue to work.
 export type { Plan, PlanPrice, PlanLimits }
@@ -16,7 +16,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const plans = await getCachedPlans(env as EnvWithSiteCache)
+    const plans = await getCachedPlans(env as EnvWithOrganizationCache)
     return jsonResponse(plans)
   } catch (error) {
     const planError = error instanceof BillingPlansError

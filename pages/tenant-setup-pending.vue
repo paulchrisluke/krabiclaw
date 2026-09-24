@@ -58,14 +58,13 @@
 </template>
 
 <script setup lang="ts">
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'saya' })
 useSocialMetadata({
   schema: false,
   path: '/tenant-setup-pending',
   title: 'Setting up your site',
   description: 'This site is still being set up and will be available shortly.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 
 const setupFailed = ref(false)
@@ -78,7 +77,7 @@ const setupFailedMessage = ref('')
 onMounted(() => {
   const interval = setInterval(async () => {
     try {
-      await publicApiRequest<{ status: 'ready'; onboarding_status: string }>('/api/site-status', {
+      await publicApiRequest<{ status: 'ready'; onboarding_status: string }>('/api/organization-status', {
         validate: (value): value is { status: 'ready'; onboarding_status: string } =>
           isRecord(value)
           && value.status === 'ready'

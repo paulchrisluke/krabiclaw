@@ -61,10 +61,10 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservatio
 
 definePageMeta({ layout: 'saya' })
 
-const { site, organizationId } = useTenantSite()
+const { organization, organizationId } = useTenantOrganization()
 const { reservationPolicyByLocation } = await usePublicPageData()
 const { locale } = useI18n()
-const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
+const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const route = useRoute()
 const justCopied = ref(false)
 
@@ -109,7 +109,7 @@ const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).ma
 
 // Back to the catalogue the guest reserved against: this location's own when
 // the reservation names one, otherwise the site's.
-const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
+const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 const menuCtaTo = computed(() => {
   const slug = confirmation.value?.locationSlug
   if (slug && presentation.value) return `/locations/${slug}/${presentation.value.locationCollectionSegment}`
@@ -142,7 +142,7 @@ onMounted(async () => {
       confirmation.value = {
         type: 'reservation',
         organizationId,
-        siteName: String((site as ApiValue)?.name ?? ''),
+        organizationName: String((organization as ApiValue)?.name ?? ''),
         guestName: res.booking.name,
         startsAt: res.booking.starts_at,
         timezone: res.booking.timezone,
@@ -159,7 +159,7 @@ onMounted(async () => {
 
 async function share() {
   if (!confirmation.value) return
-  const text = `My reservation at ${confirmation.value.siteName} is confirmed for ${readableDate.value} at ${readableTime.value}.`
+  const text = `My reservation at ${confirmation.value.organizationName} is confirmed for ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Reservation confirmed', text, url: window.location.origin })

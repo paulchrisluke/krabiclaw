@@ -22,6 +22,7 @@ interface TenantRow {
   id: string;
   theme_id: string | null;
   subdomain: string;
+  status: string;
   onboarding_status: string;
   canonical_domain: string | null;
   name: string;
@@ -39,7 +40,7 @@ const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   ORDER BY mp.slot, mp.sort_order, mp.id
 ) ordered)`
 
-const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.onboarding_status,
+const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onboarding_status,
              o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical`
 
 // KrabiClaw's own tenant is the one active organization running the platform
@@ -116,7 +117,7 @@ async function resolveRegisteredSubdomainTenant(
         ON canonical.organization_id = o.id
        AND canonical.role = 'canonical'
        AND canonical.status = 'active'
-      WHERE o.subdomain = ? AND o.status = 'active'
+      WHERE o.subdomain = ?
       LIMIT 1
     `,
     [tenantSlug],
@@ -124,21 +125,30 @@ async function resolveRegisteredSubdomainTenant(
 }
 
 /**
- * A tenant that has not finished onboarding is not public. It is served only to
- * a holder of a valid preview token for it — which is what "preview" means
- * everywhere in this product: the real site, on its real host, rendered by the
- * real templates, with unpublished content and no caching.
+ * The one place `organization.status` decides anything. A tenant is served
+ * publicly only when it is Live and provisioning has finished; a Draft tenant,
+ * or one still provisioning, is served to a holder of a valid preview token for
+ * it — which is what "preview" means everywhere in this product: the real site,
+ * on its real host, rendered by the real templates, with unpublished content
+ * and no caching.
+ *
+ * `suspended` is KrabiClaw's own hold and is nobody's to look past, the owner's
+ * preview token included.
  *
  * Returns false when the request may not see this tenant at all.
  */
 async function authorizeTenant(event: H3Event, tenant: TenantRow): Promise<boolean> {
+  if (tenant.status === 'suspended') {
+    event.context.previewAuthorized = false
+    return false
+  }
   const previewSecret = previewSecretOf(cloudflareEnv(event))
   const authorized = await resolvePreviewAuthorization(event, tenant.id, previewSecret)
   event.context.previewAuthorized = authorized
   // A live site is public either way; the flag still travels, because preview
   // also means "show me the drafts" — an unpublished article on a site that is
   // already live is previewed the same way.
-  return tenant.onboarding_status === 'active' || authorized
+  return (tenant.status === 'active' && tenant.onboarding_status === 'active') || authorized
 }
 
 function setResolvedTenantContext(
@@ -155,7 +165,7 @@ function setResolvedTenantContext(
   setTenantType(event, resolvePublicTemplate({ themeId: metadata.themeId }).slug === 'platform' ? TENANT_TYPES.PLATFORM : TENANT_TYPES.TENANT)
   event.context.tenantHost = hostnameOf(host)
   event.context.canonicalDomain = canonicalDomain
-  event.context.site = {
+  event.context.organization = {
     name: metadata.name,
     ...socialMedia,
     vertical: metadata.vertical,
@@ -269,7 +279,7 @@ export async function resolveTenant(
       ${TENANT_SELECT_SQL},
              o.subdomain || '.localhost' AS canonical_domain
       FROM organization o
-      WHERE o.subdomain = ? AND o.status = 'active'
+      WHERE o.subdomain = ?
       LIMIT 1
     `,
       [subdomain],
@@ -286,7 +296,6 @@ export async function resolveTenant(
     LEFT JOIN organization_domains canonical
       ON canonical.organization_id = o.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     WHERE sd.domain = ? AND sd.type IN ('custom', 'subdomain') AND sd.status = 'active'
-      AND o.status = 'active'
     LIMIT 1
   `,
     [hostname],

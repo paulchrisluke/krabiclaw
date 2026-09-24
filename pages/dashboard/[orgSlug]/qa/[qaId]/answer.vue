@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-qa-answer"
+    id="organization-qa-answer"
     title="Answer"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"

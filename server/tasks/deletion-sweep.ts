@@ -28,11 +28,9 @@ export default defineScheduledTask({
     if (result.organizations || result.users || result.skipped.length) {
       console.log('tenant_deletion_sweep', result)
     }
-    try {
-      await expireStripeGa4Intents(env.DB)
-    } catch (error) {
-      console.error('stripe_ga4_intent_retention_failed', { error: error instanceof Error ? error.message : String(error) })
-    }
+    // A retention pass that did not run is a retention pass that did not run, and
+    // the scheduler is the only thing positioned to notice.
+    await expireStripeGa4Intents(env.DB)
     return { result }
   },
 })

@@ -206,19 +206,17 @@ export default defineHandler(async (event) => {
   }
 
   if (event.req.method === 'GET') {
-    const platformSiteId = event.context.tenantType === TENANT_TYPES.PLATFORM ? event.context.organizationId as string | null : null
-    if (platformSiteId) {
+    const platformOrganizationId = event.context.tenantType === TENANT_TYPES.PLATFORM ? event.context.organizationId as string | null : null
+    if (platformOrganizationId) {
       const db = cloudflareEnv(event).db
       if (db) {
-        try {
-          const redirected = await queryFirst<{ to_path: string } | null>(db, `
-            SELECT to_path FROM organization_redirects
-             WHERE organization_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
-          `, [platformSiteId, normalizedPathname])
-          if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)
-        } catch (error) {
-          console.error('Platform blog redirect lookup failed', error)
-        }
+        // A lookup that failed is not "no redirect configured": swallowing it
+        // served a 404 for a path the tenant had already pointed somewhere.
+        const redirected = await queryFirst<{ to_path: string } | null>(db, `
+          SELECT to_path FROM organization_redirects
+           WHERE organization_id = ? AND locale = 'en' AND from_path = ? AND behavior = 'redirect' LIMIT 1
+        `, [platformOrganizationId, normalizedPathname])
+        if (redirected) return redirect(`${redirected.to_path}${url.search}${url.hash}`, 301)
       }
     }
   }

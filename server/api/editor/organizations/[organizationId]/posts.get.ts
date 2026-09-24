@@ -15,8 +15,8 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+  if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)
   const status = typeof query.status === 'string' ? query.status : undefined
@@ -26,8 +26,8 @@ export default defineHandler(async (event) => {
   // No location_id filter means "every post across the whole site" — only a
   // site-wide-scoped member may see that; a location-scoped editor must
   // filter to their own location.
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: locationId ?? null })
-  const posts = await listPosts(db, site.id, status, locationId)
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: locationId ?? null })
+  const posts = await listPosts(db, organization.id, status, locationId)
   return jsonResponse({ success: true, posts })
 })
 import { defineHandler } from 'nitro';

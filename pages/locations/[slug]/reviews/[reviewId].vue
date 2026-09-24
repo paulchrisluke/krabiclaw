@@ -48,7 +48,7 @@ definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { organizationId } = useTenantSite()
+const { organizationId } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
@@ -136,7 +136,7 @@ useSocialMetadata(() => ({
   description: String(review.value?.content || '').slice(0, 150),
   socialImage: review.value?.social_image ?? null,
   brand: {
-    siteName: String(review.value?.site_name || ''),
+    organizationName: String(review.value?.organization_name || ''),
   },
 }))
 
@@ -149,7 +149,7 @@ useHead(() => review.value ? {
       author: { '@type': 'Person', name: review.value.author_name || 'Guest' },
       reviewRating: { '@type': 'Rating', ratingValue: review.value.rating, bestRating: 5 },
       reviewBody: review.value.content,
-      itemReviewed: { '@type': 'LocalBusiness', name: review.value.site_name },
+      itemReviewed: { '@type': 'LocalBusiness', name: review.value.organization_name },
     }),
   }],
 } : {})

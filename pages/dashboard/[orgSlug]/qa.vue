@@ -1,5 +1,5 @@
 <template>
-  <DashboardIndexPanel id="site-qa" title="Reviews and Q&A">
+  <DashboardIndexPanel id="organization-qa" title="Reviews and Q&A">
     <UTabs v-model="tab" :items="tabs" class="w-full">
       <template #qa>
         <QaList class="mt-4" />

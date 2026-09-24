@@ -3,10 +3,10 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { notifyReservationCreated } from '~/server/utils/notifications'
+import { notifyReservationCreated, raiseSettledFailures } from '~/server/utils/notifications'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
-import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/site-config'
+import { resolveLocationTimezone, isDateBeforeTimezoneToday } from '~/server/utils/organization-config'
 import {
   claimReservation,
   listReservationSlots,
@@ -15,12 +15,12 @@ import {
   reservationPolicySummarySource,
   ReservationUnavailableError,
 } from '~/server/utils/reservations'
-import { getSourceLocale } from '~/server/utils/site-locales'
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -70,11 +70,11 @@ export default defineHandler(async (event) => {
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; name?: string | null; public_url?: string | null }>(
+  const organization = await queryFirst<{ id: string; name?: string | null; public_url?: string | null }>(
     db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = ? LIMIT 1`, [organizationId, 'active'], )
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
-  if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  const organizationBaseUrl = organization.public_url?.trim().replace(/\/$/, '')
+  if (!organizationBaseUrl) return jsonResponse({ error: 'Organization public URL is not configured' }, { status: 500 })
 
   // Location is always required — there is no site shape where a reservation isn't tied to a
   // specific room/location, so this never silently falls back to a "primary" or first location.
@@ -83,13 +83,13 @@ export default defineHandler(async (event) => {
 
   const location = await queryFirst<{ title: string | null; opening_hours: string | null; max_capacity: number | null }>(
     db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1', [resolvedLocationId, organizationId], )
-  if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
+  if (!location) return jsonResponse({ error: 'location_id must reference a location on this organization' }, { status: 400 })
 
-  const reservationTimezone = await resolveLocationTimezone(db, site.id, resolvedLocationId)
+  const reservationTimezone = await resolveLocationTimezone(db, organization.id, resolvedLocationId)
   if (isDateBeforeTimezoneToday(date, reservationTimezone))
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
-  const availability = await listReservationSlots(db, { organizationId: site.id, locationId: resolvedLocationId, date })
+  const availability = await listReservationSlots(db, { organizationId: organization.id, locationId: resolvedLocationId, date })
   const slot = availability.slots.find(entry => entry.time_slot === time)
   if (!slot) return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
   if (slot.is_closed) return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
@@ -125,7 +125,7 @@ export default defineHandler(async (event) => {
   const userId = session?.user?.id || null
 
   const customerInput = {
-    organizationId: site.id, name, email, phone, source: 'reservation', userId, } as const
+    organizationId: organization.id, name, email, phone, source: 'reservation', userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const now = new Date().toISOString()
@@ -138,14 +138,14 @@ export default defineHandler(async (event) => {
   const durationMinutes = 120
   try {
     await claimReservation(db, {
-      organizationId: site.id, locationId: resolvedLocationId,
+      organizationId: organization.id, locationId: resolvedLocationId,
       reservationId, requestId: id, customerId: customer.id,
       timezone: availability.timezone, startsAt: slot.starts_at,
       date, timeSlot: slot.time_slot,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize,
       thread: requestInsertQueries({
-        id, kind: 'reservation', organization_id: site.id,
+        id, kind: 'reservation', organization_id: organization.id,
         location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
       }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
@@ -160,44 +160,43 @@ export default defineHandler(async (event) => {
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
   // Build absolute cancel URL for the confirmation email
-  const cancelUrl = `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
+  const cancelUrl = `${organizationBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
 
   // Resolve contact info — location-specific when available, site-level fallback
   const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     resolveLocationContact(db, organizationId, resolvedLocationId),
     buildOwnerThreadInboxUrl(env, db, {
-      organizationId: site.id,
+      organizationId: organization.id,
       locationId: resolvedLocationId,
       threadId: id,
     }),
   ])
 
-  try {
-    await notifyReservationCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, })
-  } catch (error) {
-    console.error('reservation_notification_failed', {
-      organizationId: site.id, reservationId: id, error: error instanceof Error ? error.message : String(error)
-    })
-  }
-
+  // Telling the owner and recording the conversion are independent, so both are
+  // attempted before either failure is raised.
   const requestedLocale = cleanString(body.locale, 10)
-  const [policy, locale] = await Promise.all([
-    requireLocationReservationConfig(db, { organizationId: site.id, locationId: resolvedLocationId }),
+  const [policy, locale, ...followUps] = await Promise.all([
+    requireLocationReservationConfig(db, { organizationId: organization.id, locationId: resolvedLocationId }),
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
       ? requestedLocale
-      : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
-      organizationId: site.id,
-      eventName: 'reservation_submit',
-      stage: 'submitted',
-      locationId: resolvedLocationId,
-      entityType: 'request',
-      entityId: id,
-      pageType: 'reservations',
-      pagePath: '/reservations',
-    }),
+      : getSourceLocale(db, organization.id),
+    ...await Promise.allSettled([
+      notifyReservationCreated(env, db, {
+        organizationId: organization.id, organizationName: organization.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, }),
+      recordOrganizationConversionEvent(db, event, {
+        organizationId: organization.id,
+        eventName: 'reservation_submit',
+        stage: 'submitted',
+        locationId: resolvedLocationId,
+        entityType: 'request',
+        entityId: id,
+        pageType: 'reservations',
+        pagePath: '/reservations',
+      }),
+    ]),
   ])
+  raiseSettledFailures('reservation follow-up', `reservationId ${id}`, followUps,
+    ['notifyReservationCreated', 'recordOrganizationConversionEvent'])
 
   return jsonResponse({
     success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })

@@ -25,12 +25,12 @@ function addStylesheetPreload(response: Response, event: HTTPEvent) {
   if (!request.headers.get('accept')?.includes('text/html')) return
 
   const context = (request.context ?? {}) as Record<string, unknown>
-  const site = context.site as { vertical?: string | null } | undefined
+  const organization = context.organization as { vertical?: string | null } | undefined
   const href = publicSurfaceStylesheetForRequest({
     pathname: path,
     tenantType: context.tenantType as string | undefined,
     themeId: context.themeId as string | undefined,
-    vertical: site?.vertical,
+    vertical: organization?.vertical,
   })
   if (!href) return
 

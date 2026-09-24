@@ -4,7 +4,7 @@ import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
-import { getSubmissionOrgSite, verifyReplyToken, type SubmissionType } from '~/server/utils/submission-messages'
+import { getSubmissionOrganization, verifyReplyToken, type SubmissionType } from '~/server/utils/submission-messages'
 
 export interface InboundGuestEmail {
   submissionType: SubmissionType
@@ -24,8 +24,8 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
   if (!tokenIsValid) throw new Error('Invalid reply token')
 
   const db = env.DB
-  const orgSite = await getSubmissionOrgSite(db, email.submissionType, email.submissionId)
-  if (!orgSite) throw new Error('Submission not found')
+  const organization = await getSubmissionOrganization(db, email.submissionType, email.submissionId)
+  if (!organization) throw new Error('Submission not found')
 
   const thread = await getGuestRequest(db, email.submissionId, undefined, email.submissionType)
   if (!thread) throw new Error('Submission not found')
@@ -45,7 +45,7 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
     if (source) {
       const summary = await requestSummary(db, source)
       await notifyGuestThreadReply(env, db, {
-        organizationId: orgSite.organizationId,
+        organizationId: organization.organizationId,
         locationId: summary.locationId,
         threadId: thread.id,
         sourceEntryId: entry.id,

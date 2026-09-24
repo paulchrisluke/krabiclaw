@@ -34,10 +34,10 @@ const props = defineProps<{
 }>()
 
 const { products, location } = await usePublicPageData({ lazy: false })
-const { site } = useTenantSite()
+const { organization } = useTenantOrganization()
 const { localePath, t } = useI18n()
 
-const productPresentation = computed(() => resolveProductPresentation((site as ApiRecord | null)?.vertical as string | null | undefined))
+const productPresentation = computed(() => resolveProductPresentation((organization as ApiRecord | null)?.vertical as string | null | undefined))
 
 const items = computed(() => {
   const list = [
@@ -54,7 +54,7 @@ const items = computed(() => {
       label: productPresentation.value.locationCollectionSegment === 'menu'
         ? t('saya.subnav.menu')
         : t('saya.footer.products'),
-      href: productLocationCollectionPath((site as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
+      href: productLocationCollectionPath((organization as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
     })
   }
   if (here.some(isExperience)) {

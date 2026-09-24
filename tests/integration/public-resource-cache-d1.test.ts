@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
-import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheSafe } from '../../server/utils/public-resource-cache.ts'
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from '../../server/utils/public-resource-cache.ts'
 
 async function migratedCacheD1(context: TestContext) {
   const miniflare = new Miniflare({
@@ -23,14 +23,14 @@ async function migratedCacheD1(context: TestContext) {
         },
         env: {
           DB: { type: 'd1' },
-          SITE_CACHE: { type: 'kv' },
+          ORGANIZATION_CACHE: { type: 'kv' },
         },
       },
     }],
   })
   context.after(() => miniflare.dispose())
   const db = await miniflare.getD1Database('DB')
-  const kv = await miniflare.getKVNamespace('SITE_CACHE')
+  const kv = await miniflare.getKVNamespace('ORGANIZATION_CACHE')
   for (const filename of readdirSync('migrations').filter(name => /^\d+.*\.sql$/.test(name)).sort()) {
     const migration = readFileSync(`migrations/${filename}`, 'utf8')
     for (const statement of migration.split('--> statement-breakpoint').map(value => value.trim()).filter(Boolean)) {
@@ -67,8 +67,8 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
     })
 
     await assert.rejects(
-      drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: undefined }, {}),
-      /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/,
+      drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: undefined }, {}),
+      /NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required/,
     )
     const row = await db.prepare(`
       SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'pending'
@@ -77,7 +77,7 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
 
     await kv.put('public~org~v4~page', 'public resource')
     await kv.put('html:org.krabiclaw.com:/', 'html')
-    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 1)
+    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, {}), 1)
     assert.equal(await kv.get('public~org~v4~page'), null)
     assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
     const processed = await db.prepare(`
@@ -110,7 +110,7 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       })
     }
 
-    assert.equal(await drainPublicResourceCacheInvalidations(db, failingKv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, { now }), 0)
+    assert.equal(await drainPublicResourceCacheInvalidations(db, failingKv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, { now }), 0)
 
     const terminal = await db.prepare(`
       SELECT id, status, attempt_count, claimed_at, processed_at, last_error
@@ -143,11 +143,11 @@ test('an organization write purges that organization despite an older invalidati
   await insertInvalidation(db, {
     id: 'older-other-org', status: 'pending', attemptCount: 0, createdAt: '2026-01-01T00:00:00.000Z',
   })
-  for (const site of ['org', 'changed']) {
-    await kv.put(`public~${site}~v4~page`, 'cached public resource')
-    await kv.put(`html:${site}.krabiclaw.com:/`, 'cached HTML')
+  for (const organization of ['org', 'changed']) {
+    await kv.put(`public~${organization}~v4~page`, 'cached public resource')
+    await kv.put(`html:${organization}.krabiclaw.com:/`, 'cached HTML')
   }
-  await purgePublicResourceCacheSafe({ DB: db, SITE_CACHE: kv, NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, 'changed')
+  await purgePublicResourceCacheNow({ DB: db, ORGANIZATION_CACHE: kv, NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, 'changed')
   assert.equal(await kv.get('public~changed~v4~page'), null)
   assert.equal(await kv.get('html:changed.krabiclaw.com:/'), null)
   assert.equal(await kv.get('public~org~v4~page'), 'cached public resource')
@@ -161,7 +161,7 @@ test('an organization write purges that organization despite an older invalidati
     { organization_id: 'changed', status: 'pending', attempt_count: 0 },
     { organization_id: 'org', status: 'pending', attempt_count: 0 },
   ])
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com' }, {}), 2)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, {}), 2)
   assert.equal(await kv.get('public~org~v4~page'), null)
   assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
 })

@@ -6,7 +6,7 @@
 import { seedNewOrganization } from '~/server/utils/organization-seed'
 import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { execute, executeBatch, queryFirst } from '~/server/db'
-import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
+import { ALL_VERTICALS, type OrganizationVertical } from '~/utils/vertical-copy'
 import type { CurrencyCode } from '~/shared/currencies'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
@@ -37,7 +37,7 @@ interface CreateOrganizationApi {
 // canonical list itself lives in utils/vertical-copy.ts (ALL_VERTICALS) so a
 // third supported vertical only needs one array to update, not a duplicate
 // here plus one in every UI vertical picker.
-export const VALID_VERTICALS: SiteVertical[] = ALL_VERTICALS
+export const VALID_VERTICALS: OrganizationVertical[] = ALL_VERTICALS
 
 export interface OrganizationProvisioningResult {
   status: number
@@ -66,7 +66,7 @@ async function markProvisioningFailed(db: D1Database, organizationId: string, ca
 // routing/rendering (utils/template-registry.ts) — this is the only place
 // provisioning decides a theme_id, so a future third template only needs a new
 // registry entry, not a second hardcoded vertical-to-theme switch here.
-function resolveThemeId(vertical: SiteVertical): string {
+function resolveThemeId(vertical: OrganizationVertical): string {
   return resolvePublicTemplate({ vertical }).themeId
 }
 
@@ -77,7 +77,7 @@ export async function provisionOrganization(
   // `defaultCurrency` is the owner's answer or null. A tenant that goes live on
   // creation has to carry one; onboarding's first save has not asked yet, and
   // stores null until the currency step answers it.
-  params: { organizationId: string; name: string; subdomain: string; vertical: SiteVertical; defaultCurrency: CurrencyCode | null; activate?: boolean },
+  params: { organizationId: string; name: string; subdomain: string; vertical: OrganizationVertical; defaultCurrency: CurrencyCode | null; activate?: boolean },
 ): Promise<OrganizationProvisioningResult> {
   const { organizationId, name, vertical, defaultCurrency } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
@@ -110,7 +110,7 @@ export async function provisionOrganization(
       return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
     }
     // The guard above answers "is this subdomain taken", which was the only
-    // question while provisioning inserted a `sites` row: a second run made a
+    // question while provisioning inserted a `organizations` row: a second run made a
     // second row and the organization was untouched. Provisioning now writes
     // the organization itself, so a run naming a different subdomain rewrites a
     // live tenant's address, status and vertical in place. An organization that
@@ -276,7 +276,7 @@ async function performSeeding(
   db: D1Database,
   organizationId: string,
   name: string,
-  vertical: SiteVertical,
+  vertical: OrganizationVertical,
   subdomain: string,
   // Onboarding provisions the tenant before the owner has finished answering,
   // so it stays pending: the address is reserved and the tenant is previewable

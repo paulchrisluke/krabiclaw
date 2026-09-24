@@ -4,7 +4,6 @@ import { assertNewSalePlan, normalizeBillingPlanId, STARTER_PLAN_ID } from '~/sh
 
 interface SubscriptionCheckoutInput {
   organizationId: string
-  siteId: string
   plan: string
   currentPlan: string
   subscriptionId?: string | null
@@ -28,6 +27,9 @@ function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUr
 export function useSubscriptionCheckout() {
   const dashboardApi = useDashboardApi()
   const { getBillingAnalyticsContext } = useAnalytics()
+  // Null until an intent fails to record. Checkout does not stop for it, but the
+  // caller can see that this checkout will be missing from billing analytics.
+  const analyticsIntentError = ref<string | null>(null)
 
   async function startSubscriptionCheckout(input: SubscriptionCheckoutInput): Promise<StripeGa4IntentAction> {
     // Validate the requested plan before touching analytics, browser state, or
@@ -43,10 +45,10 @@ export function useSubscriptionCheckout() {
     input.onAction?.(action)
 
     const analyticsContext = getBillingAnalyticsContext()
+    analyticsIntentError.value = null
     try {
       await recordBillingAnalyticsIntent(dashboardApi, {
         organizationId: input.organizationId,
-        siteId: input.siteId,
         subscriptionId: input.subscriptionId ?? null,
         action,
         ...analyticsContext,
@@ -55,14 +57,16 @@ export function useSubscriptionCheckout() {
         effectiveTiming: action === 'downgrade' ? 'period_end' : 'immediate',
       })
     } catch (error) {
-      console.warn('Billing analytics intent was not recorded; continuing checkout', error)
+      // Checkout continues — a missing analytics intent must never cost a sale —
+      // but it is the caller's to know about, not a console's.
+      analyticsIntentError.value = error instanceof Error ? error.message : String(error)
     }
 
     // Checkout runs from a click, not a render, so the session is read the
     // imperative way Better Auth provides for exactly that.
     const currentUser = (await authClient.getSession()).data?.user
     const metadata = {
-      site_id: input.siteId,
+      organization_id: input.organizationId,
       ...buildStripeSubscriptionMetadata(
         action,
         analyticsContext,
@@ -108,5 +112,5 @@ export function useSubscriptionCheckout() {
     return action
   }
 
-  return { startSubscriptionCheckout }
+  return { startSubscriptionCheckout, analyticsIntentError }
 }

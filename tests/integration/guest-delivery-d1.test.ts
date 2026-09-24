@@ -41,7 +41,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     const now = new Date().toISOString()
     const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', location_id: null, customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
-    await notifyContactSubmitted(env, db, { organizationId: 'org-proof', siteName: 'Proof', locationId: null,
+    await notifyContactSubmitted(env, db, { organizationId: 'org-proof', organizationName: 'Proof', locationId: null,
       contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })
     assert.equal((await listGuestThreads(db, 'org-proof', { userId: 'user-proof', unreadOnly: true }))[0]?.id, 'contact-proof')
     assert.deepEqual((await db.prepare("SELECT d.purpose,d.status FROM guest_thread_deliveries d JOIN activity_entries e ON e.id=d.entry_id WHERE e.request_id='contact-proof' ORDER BY d.purpose").all()).results,
@@ -491,7 +491,7 @@ test('a review request reads the visit from the record that holds it', async () 
     // message carries no such phrase at all now, so the check is that the real
     // visit is what the facts show.
     const { html } = await renderNotificationEmail(reviewRequestMessage({
-      guestName: 'Sivan', siteName: 'Kikuzuki', locationName: 'Main Room',
+      guestName: 'Sivan', organizationName: 'Kikuzuki', locationName: 'Main Room',
       visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone), partySize: '6 guests',
       reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1', reminder: false,
     }), { platformDomain: 'proof.example' })

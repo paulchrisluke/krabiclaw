@@ -47,15 +47,15 @@ interface ChecklistRow {
 
 export async function loadOnboardingChecklist(
   event: H3Event,
-  querySiteId?: string,
+  queryOrganizationId?: string,
 ): Promise<OnboardingChecklist> {
   const db = cloudflareEnv(event).DB
   if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
 
   let organizationId: string
   let brandName: string | null
-  if (querySiteId) {
-    const { organization } = await requireOrganizationAccess(event, querySiteId)
+  if (queryOrganizationId) {
+    const { organization } = await requireOrganizationAccess(event, queryOrganizationId)
     organizationId = organization.id
     brandName = organization.name
   } else {
@@ -103,7 +103,7 @@ export async function loadOnboardingChecklist(
     LIMIT 1
   `, [organizationId])
 
-  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   const vertical = normalizeVertical(row.vertical)
   const heroIsReal = Boolean(row.has_hero)
 

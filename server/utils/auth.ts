@@ -18,7 +18,7 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
@@ -55,10 +55,6 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  teams: {
-    enabled: true,
-    defaultTeam: { enabled: false },
-  },
   // Deleting a tenant is a scheduled operation with a grace period and with
   // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
   // owns it and calls this plugin's adapter. The plugin's own route would delete
@@ -92,58 +88,6 @@ async function configureCimdTenantScopes(event: {
 // The generic @better-auth/core AuthContext type doesn't line up with this
 // app's concrete plugin/options shape (each plugin narrows it further), so
 // derive the type actually produced by this file's own createAuth() instead.
-export type AppAuthContext = Awaited<ReturnType<typeof createAuth>['$context']>
-
-// Client IDs that must always be CIMD-discovered, never manually managed.
-// getClient() (in @better-auth/oauth-provider) treats any oauthClient row
-// without clientDiscoveryId as permanently "managed" and never re-enters CIMD
-// discovery for it, even when the clientId is a CIMD-shaped URL — see
-// healStaleCimdClient below. Both of these vendors only ever authenticate
-// through CIMD, so a stale non-discovery row for either is always the bug,
-// never a legitimate managed client.
-const KNOWN_CIMD_VENDOR_CLIENT_IDS = new Set<string>([
-  'https://chatgpt.com/oauth/client.json',
-  'https://claude.ai/oauth/mcp-oauth-client-metadata',
-])
-
-/**
- * Self-heals the exact failure mode from incident #953: a Better Auth 1.7.4
- * upgrade (or any other path) can leave an oauthClient row for a known CIMD
- * vendor without clientDiscoveryId set. getClient() then returns that row
- * as-is forever, CIMD discovery never runs again for it, and token exchange
- * fails with "client jwks_uri is not trusted" — because validateJwksUri only
- * allows the same-origin fast path when clientDiscoveryId is set.
- *
- * Deleting the stale row here, before the request reaches Better Auth's
- * handler, makes getClient() see no existing client and fall through to CIMD
- * discovery in the same request — the same path any brand-new CIMD client
- * takes. This only ever touches the two hardcoded vendor client IDs above, so
- * it can't be used to reclassify an arbitrary client_id an attacker supplies.
- *
- * Takes an already-resolved `auth.$context` rather than `CloudflareEnv` so
- * callers that already hold an auth instance (the route handler) don't pay
- * for a second one, and so this stays testable against a bare adapter
- * context without standing up all of createAuth()'s plugin dependencies.
- */
-export async function healStaleCimdClient(context: AppAuthContext, clientId: string): Promise<void> {
-  if (!KNOWN_CIMD_VENDOR_CLIENT_IDS.has(clientId)) return
-  const existing = await context.adapter.findOne<{ clientDiscoveryId: string | null }>({
-    model: 'oauthClient',
-    where: [{ field: 'clientId', value: clientId }],
-  })
-  if (!existing || existing.clientDiscoveryId) return
-  // Re-assert clientDiscoveryId IS NULL in the delete's own where clause, not
-  // just the read above — a concurrent request can heal this same client_id
-  // between the findOne and this delete, and without this the delete would
-  // otherwise remove the row CIMD just (re)created correctly.
-  await context.adapter.delete({
-    model: 'oauthClient',
-    where: [
-      { field: 'clientId', value: clientId },
-      { field: 'clientDiscoveryId', value: null },
-    ],
-  })
-}
 
 export interface CloudflareEnv {
   DB: D1Database
@@ -166,7 +110,7 @@ export interface CloudflareEnv {
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
   WHATSAPP_ACCESS_TOKEN?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
@@ -183,7 +127,7 @@ export interface CloudflareEnv {
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
   MEDIA_BUCKET?: R2Bucket
-  SITE_CACHE?: KVNamespace
+  ORGANIZATION_CACHE?: KVNamespace
   GUEST_INBOX_HUBS?: DurableObjectNamespace
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
@@ -234,8 +178,8 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   const origins = new Set<string>()
   const authOrigin = normalizeOrigin(env.BETTER_AUTH_URL)
   const platformOrigin = normalizeOrigin(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
-  const freeSiteOrigin = normalizeOrigin(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-  for (const origin of [authOrigin, platformOrigin, freeSiteOrigin, wildcardOrigin(freeSiteOrigin)]) {
+  const freeOrganizationOrigin = normalizeOrigin(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
+  for (const origin of [authOrigin, platformOrigin, freeOrganizationOrigin, wildcardOrigin(freeOrganizationOrigin)]) {
     if (origin) origins.add(origin)
   }
   if (import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true') {
@@ -377,7 +321,7 @@ export function createAuth(env: CloudflareEnv) {
         update: {
           after: async (member: MemberRow) => {
             await recordMemberChange(member.organizationId)
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: member.organizationId,
               eventType: 'member.role_changed',
@@ -390,7 +334,7 @@ export function createAuth(env: CloudflareEnv) {
         delete: {
           after: async (member: MemberRow) => {
             await recordMemberChange(member.organizationId)
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: member.organizationId,
               eventType: 'member.removed',
@@ -404,7 +348,7 @@ export function createAuth(env: CloudflareEnv) {
       invitation: {
         create: {
           after: async (invitation: InvitationRow) => {
-            await fireOrganizationEventSafe({
+            await fireOrganizationEvent({
               db,
               organizationId: invitation.organizationId,
               actorId: invitation.inviterId,
@@ -615,21 +559,14 @@ export function createAuth(env: CloudflareEnv) {
             return false
           }
         },
+        // phoneNumberValidator above has already rejected anything unparseable, so
+        // these cannot fail on a real sign-up. They are left to throw because the
+        // fallbacks were worse than an error: every unparseable number produced
+        // the same phone-unknown@phone.krabiclaw.local, which is an account key,
+        // so two people signing in by WhatsApp would have shared one account.
         signUpOnVerification: {
-          getTempEmail: (phone) => {
-            try {
-              return `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`
-            } catch {
-              return 'phone-unknown@phone.krabiclaw.local'
-            }
-          },
-          getTempName: (phone) => {
-            try {
-              return `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`
-            } catch {
-              return 'WhatsApp Unknown'
-            }
-          },
+          getTempEmail: (phone) => `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`,
+          getTempName: (phone) => `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`,
         },
       }),
     ],

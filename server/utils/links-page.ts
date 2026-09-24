@@ -1,4 +1,4 @@
-import { assertPublicSiteLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
+import { assertPublicOrganizationLanguageEntitlement, getPersistedSourceLocale } from '~/server/utils/localization'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { createContentDocumentWithBlocks, updateContentDocument } from '~/server/utils/content/documents'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -14,7 +14,7 @@ const LINK_ITEM_STATUSES = ['active', 'hidden'] as const
 
 export type LinkItemStatus = typeof LINK_ITEM_STATUSES[number]
 
-export interface SiteLinksPage {
+export interface OrganizationLinksPage {
   id: string
   organization_id: string
   path: string
@@ -26,7 +26,7 @@ export interface SiteLinksPage {
   updated_by: string | null
 }
 
-export interface SiteLinkItem {
+export interface OrganizationLinkItem {
   id: string
   organization_id: string
   link_page_id: string
@@ -39,8 +39,8 @@ export interface SiteLinkItem {
   updated_by: string | null
 }
 
-export interface PublicSiteLinksPayload {
-  site: {
+export interface PublicOrganizationLinksPayload {
+  organization: {
     id: string
     name: string
     brand_description: string | null
@@ -50,8 +50,8 @@ export interface PublicSiteLinksPayload {
     vertical: string | null
     template: PublicTemplateSlug
   }
-  page: SiteLinksPage
-  items: SiteLinkItem[]
+  page: OrganizationLinksPage
+  items: OrganizationLinkItem[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -69,10 +69,10 @@ export interface LinkItemUpdateInput {
   status?: unknown
 }
 
-export class SiteLinksValidationError extends Error {
+export class OrganizationLinksValidationError extends Error {
   constructor(message: string) {
     super(message)
-    this.name = 'SiteLinksValidationError'
+    this.name = 'OrganizationLinksValidationError'
   }
 }
 
@@ -87,15 +87,15 @@ function nullableString(value: unknown, maxLength: number) {
 
 function requiredString(value: unknown, maxLength: number, field: string) {
   const cleaned = cleanString(value as ApiValue, maxLength)
-  if (!cleaned) throw new SiteLinksValidationError(`${field} is required.`)
+  if (!cleaned) throw new OrganizationLinksValidationError(`${field} is required.`)
   return cleaned
 }
 
 function normalizeItemStatus(value: unknown): LinkItemStatus {
   const status = cleanString(value as ApiValue, 30)
-  if (!status) throw new SiteLinksValidationError('Link status is required.')
+  if (!status) throw new OrganizationLinksValidationError('Link status is required.')
   if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) {
-    throw new SiteLinksValidationError('Link status must be active or hidden.')
+    throw new OrganizationLinksValidationError('Link status must be active or hidden.')
   }
   return status as LinkItemStatus
 }
@@ -104,7 +104,7 @@ export function validateLinkDestination(value: unknown): string {
   const destination = requiredString(value, 2048, 'Destination')
 
   if (destination.startsWith('//') || destination.includes('\\')) {
-    throw new SiteLinksValidationError('Destination must be a rooted path or a valid http(s), mailto, or tel URL.')
+    throw new OrganizationLinksValidationError('Destination must be a rooted path or a valid http(s), mailto, or tel URL.')
   }
 
   if (destination.startsWith('/')) {
@@ -115,19 +115,19 @@ export function validateLinkDestination(value: unknown): string {
   try {
     parsed = new URL(destination)
   } catch {
-    throw new SiteLinksValidationError('Destination must be a rooted path or a valid http(s), mailto, or tel URL.')
+    throw new OrganizationLinksValidationError('Destination must be a rooted path or a valid http(s), mailto, or tel URL.')
   }
 
   if (!['http:', 'https:', 'mailto:', 'tel:'].includes(parsed.protocol)) {
-    throw new SiteLinksValidationError('Destination scheme is not supported.')
+    throw new OrganizationLinksValidationError('Destination scheme is not supported.')
   }
 
   return parsed.toString()
 }
 
-function mapPage(row: ApiRecord): SiteLinksPage {
+function mapPage(row: ApiRecord): OrganizationLinksPage {
   const required = (value: unknown, field: string) => {
-    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored links page ${field} is invalid.`)
+    if (typeof value !== 'string' || !value.trim()) throw new OrganizationLinksValidationError(`Stored links page ${field} is invalid.`)
     return value
   }
   return {
@@ -143,15 +143,15 @@ function mapPage(row: ApiRecord): SiteLinksPage {
   }
 }
 
-function mapItem(row: ApiRecord): SiteLinkItem {
+function mapItem(row: ApiRecord): OrganizationLinkItem {
   const required = (value: unknown, field: string) => {
-    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored link ${field} is invalid.`)
+    if (typeof value !== 'string' || !value.trim()) throw new OrganizationLinksValidationError(`Stored link ${field} is invalid.`)
     return value
   }
   const status = required(row.status, 'status')
-  if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) throw new SiteLinksValidationError('Stored link status is invalid.')
+  if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) throw new OrganizationLinksValidationError('Stored link status is invalid.')
   const sortOrder = Number(row.sort_order)
-  if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Stored link sort order is invalid.')
+  if (!Number.isInteger(sortOrder)) throw new OrganizationLinksValidationError('Stored link sort order is invalid.')
   return {
     id: required(row.id, 'id'),
     organization_id: required(row.organization_id, 'organization_id'),
@@ -166,7 +166,7 @@ function mapItem(row: ApiRecord): SiteLinkItem {
   }
 }
 
-export function defaultLinksPage(input: { organizationId: string; name?: string | null }): SiteLinksPage {
+export function defaultLinksPage(input: { organizationId: string; name?: string | null }): OrganizationLinksPage {
   const now = new Date().toISOString()
   return {
     id: '',
@@ -181,7 +181,7 @@ export function defaultLinksPage(input: { organizationId: string; name?: string 
   }
 }
 
-export async function getLinksPage(db: DbClient, organizationId: string, locale = 'en'): Promise<{ page: SiteLinksPage | null; items: SiteLinkItem[] }> {
+export async function getLinksPage(db: DbClient, organizationId: string, locale = 'en'): Promise<{ page: OrganizationLinksPage | null; items: OrganizationLinkItem[] }> {
   const pageRow = await queryFirst<ApiRecord>(db, `
     SELECT d.id, d.organization_id, d.path, d.title, d.seo_title,
            d.seo_description, d.created_at, d.updated_at, d.updated_by
@@ -205,8 +205,8 @@ export async function getLinksPage(db: DbClient, organizationId: string, locale 
   return { page: mapPage(pageRow), items: items.map(mapItem) }
 }
 
-export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organizationId: string, locale = 'en'): Promise<PublicSiteLinksPayload | null> {
-  const site = await queryFirst<ApiRecord>(db, `
+export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organizationId: string, locale = 'en'): Promise<PublicOrganizationLinksPayload | null> {
+  const organization = await queryFirst<ApiRecord>(db, `
     SELECT o.id, o.name, o.brand_description,
            o.theme_id, o.vertical,
            (o.settings_json ->> '$.config.brand_color') AS brand_color
@@ -214,10 +214,10 @@ export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organ
      WHERE o.id = ? AND o.status = 'active' AND o.onboarding_status = 'active'
      LIMIT 1
   `, [organizationId])
-  if (!site) return null
+  if (!organization) return null
   const media = await getMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId] })
 
-  await assertPublicSiteLanguageEntitlement(env, db, organizationId, locale)
+  await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const { page: sourcePage } = await getLinksPage(db, organizationId)
   const { page, items } = await getLinksPage(db, organizationId, locale)
   const publicItems = items.filter(item => item.status === 'active')
@@ -227,25 +227,25 @@ export async function getPublicLinksPage(env: CloudflareEnv, db: DbClient, organ
   const localizations = isSourceLocale
     ? []
     : await loadExactPublicLocalizations(env, db, organizationId, locale)
-  const siteLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
-  const localizedSite = siteLocalization
-    ? projectExactLocalizedResource('organization', { ...site, id: organizationId }, siteLocalization)
-    : isSourceLocale ? site : { ...site, name: null, brand_description: null }
+  const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
+  const localizedOrganization = organizationLocalization
+    ? projectExactLocalizedResource('organization', { ...organization, id: organizationId }, organizationLocalization)
+    : isSourceLocale ? organization : { ...organization, name: null, brand_description: null }
 
   const template = resolvePublicTemplate({
-    themeId: typeof site.theme_id === 'string' ? site.theme_id : null,
-    vertical: typeof site.vertical === 'string' ? site.vertical : null,
+    themeId: typeof organization.theme_id === 'string' ? organization.theme_id : null,
+    vertical: typeof organization.vertical === 'string' ? organization.vertical : null,
   })
 
   return {
-    site: {
+    organization: {
       id: organizationId,
-      name: typeof localizedSite.name === 'string' ? localizedSite.name : String(site.name),
-      brand_description: typeof localizedSite.brand_description === 'string' ? localizedSite.brand_description : null,
+      name: typeof localizedOrganization.name === 'string' ? localizedOrganization.name : String(organization.name),
+      brand_description: typeof localizedOrganization.brand_description === 'string' ? localizedOrganization.brand_description : null,
       media: (media.get(organizationId) ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
-      brand_color: typeof site.brand_color === 'string' ? site.brand_color : null,
-      theme_id: typeof site.theme_id === 'string' ? site.theme_id : null,
-      vertical: typeof site.vertical === 'string' ? site.vertical : null,
+      brand_color: typeof organization.brand_color === 'string' ? organization.brand_color : null,
+      theme_id: typeof organization.theme_id === 'string' ? organization.theme_id : null,
+      vertical: typeof organization.vertical === 'string' ? organization.vertical : null,
       template: template.slug,
     },
     page,
@@ -277,7 +277,7 @@ export async function upsertLinksPage(db: DbClient, input: {
     if (id !== existingId) createdItemIds.push(id)
     const status = normalizeItemStatus(item.status)
     const sortOrder = Number(item.sort_order ?? index)
-    if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Link sort order must be an integer.')
+    if (!Number.isInteger(sortOrder)) throw new OrganizationLinksValidationError('Link sort order must be an integer.')
     return {
       id,
       label: requiredString(item.label, 120, 'Link label'),
@@ -288,7 +288,7 @@ export async function upsertLinksPage(db: DbClient, input: {
   })
 
   const itemIds = normalizedItems.map(item => item.id)
-  if (new Set(itemIds).size !== itemIds.length) throw new SiteLinksValidationError('Link item IDs must be unique.')
+  if (new Set(itemIds).size !== itemIds.length) throw new OrganizationLinksValidationError('Link item IDs must be unique.')
 
   const foreignIds = itemIds.length
     ? await queryAll<{ id: string }>(db, `
@@ -297,7 +297,7 @@ export async function upsertLinksPage(db: DbClient, input: {
          AND (d.organization_id <> ? OR b.document_id <> ?)
     `, [d1JsonStringSet(itemIds), input.organizationId, pageId])
     : []
-  if (foreignIds.length) throw new SiteLinksValidationError('Link item IDs must belong to this organization.')
+  if (foreignIds.length) throw new OrganizationLinksValidationError('Link item IDs must belong to this organization.')
 
   const blocks = normalizedItems.sort((a, b) => a.sortOrder - b.sortOrder).map(item => ({
     id: item.id, type: 'cta' as const, data: { label: item.label, url: item.destination,
@@ -324,7 +324,7 @@ export async function createLinkItem(db: DbClient, input: {
   updatedBy?: string | null
 }) {
   const current = await getLinksPage(db, input.organizationId)
-  if (!current.page || current.page.id !== input.linkPageId) throw new SiteLinksValidationError('Links page not found.')
+  if (!current.page || current.page.id !== input.linkPageId) throw new OrganizationLinksValidationError('Links page not found.')
   const nextItems = [...current.items, { ...input.item, sort_order: current.items.length }]
   return await upsertLinksPage(db, { organizationId: input.organizationId, page: current.page, items: nextItems, updatedBy: input.updatedBy, expectedUpdatedAt: current.page.updated_at })
 }
@@ -336,9 +336,9 @@ export async function updateLinkItem(db: DbClient, input: {
   updatedBy?: string | null
 }) {
   const current = await getLinksPage(db, input.organizationId)
-  if (!current.page) throw new SiteLinksValidationError('Links page not found.')
+  if (!current.page) throw new OrganizationLinksValidationError('Links page not found.')
   const nextItems = current.items.map(item => item.id === input.itemId ? { ...item, ...input.updates, id: item.id } : item)
-  if (!nextItems.some(item => item.id === input.itemId)) throw new SiteLinksValidationError('Link item not found.')
+  if (!nextItems.some(item => item.id === input.itemId)) throw new OrganizationLinksValidationError('Link item not found.')
   return await upsertLinksPage(db, { organizationId: input.organizationId, page: current.page, items: nextItems, updatedBy: input.updatedBy, expectedUpdatedAt: current.page.updated_at })
 }
 
@@ -348,7 +348,7 @@ export async function deleteLinkItem(db: DbClient, input: {
   updatedBy?: string | null
 }) {
   const current = await getLinksPage(db, input.organizationId)
-  if (!current.page) throw new SiteLinksValidationError('Links page not found.')
+  if (!current.page) throw new OrganizationLinksValidationError('Links page not found.')
   return await upsertLinksPage(db, {
     organizationId: input.organizationId,
     page: current.page,

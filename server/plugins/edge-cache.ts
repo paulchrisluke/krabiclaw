@@ -19,7 +19,7 @@ type CloudflareRequestContext = {
 }
 
 type CloudflareEnvContext = {
-  SITE_CACHE?: KVNamespace
+  ORGANIZATION_CACHE?: KVNamespace
 }
 
 export default definePlugin((nitroApp) => {
@@ -59,16 +59,12 @@ export default definePlugin((nitroApp) => {
     const key = buildHtmlCacheKey(event)
     if (!key) return
 
-    const kv = (request.runtime?.cloudflare?.env as CloudflareEnvContext | undefined)?.SITE_CACHE
+    const kv = (request.runtime?.cloudflare?.env as CloudflareEnvContext | undefined)?.ORGANIZATION_CACHE
     if (!kv) {
-      console.warn('[edge-cache] SITE_CACHE KV not available')
+      console.warn('[edge-cache] ORGANIZATION_CACHE KV not available')
       return
     }
 
-    try {
-      await kv.put(key, body, { expirationTtl: CACHE_TTL_SECONDS })
-    } catch (err) {
-      console.error('[edge-cache] KV put failed:', key, String(err))
-    }
+    await kv.put(key, body, { expirationTtl: CACHE_TTL_SECONDS })
   })
 })

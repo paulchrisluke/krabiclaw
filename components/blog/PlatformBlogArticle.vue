@@ -13,7 +13,7 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" site-name="KrabiClaw" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" organization-name="KrabiClaw" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -64,7 +64,6 @@ interface BlogPost {
   seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   created_at?: string | null
@@ -191,13 +190,11 @@ const breadcrumbs = computed(() => [
 
 // This page emits its content-specific schema.org graph separately.
 const runtimeConfig = useRuntimeConfig()
-const requestURL = useRequestURL()
-const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const platformOrigin = computed(() => runtimeConfig.public.platformUrl)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
   seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
-  baseUrl: platformOrigin.value, publicPath: postPath.value, siteName: 'KrabiClaw',
-  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+  baseUrl: platformOrigin.value, publicPath: postPath.value, organizationName: 'KrabiClaw',
 }))
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
@@ -206,10 +203,10 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   path: resolvedSeo.value.canonicalUrl,
-  brand: { siteName: 'KrabiClaw' },
+  brand: { organizationName: 'KrabiClaw' },
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: resolvedSeo.value.robots,
+  discoverability: post.value?.visibility === 'unlisted' ? 'unlisted' : 'listed',
   socialImage: post.value?.social_image ?? null,
 }))
 

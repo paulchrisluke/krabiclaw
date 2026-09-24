@@ -14,7 +14,7 @@ managed through it, KrabiClaw's own included.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook publishing, and analytics. Google Places lookup and domain setup are CMS-only.
+- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook and Instagram publishing, and analytics. Google Maps connection and domain setup are CMS-only.
 - Every public tool rejects unknown top-level arguments and declares explicit `readOnlyHint`, `openWorldHint`, and `destructiveHint` values. `server/utils/mcp-tools/shared.ts` contains the registry.
 - Location-scoped mutations require an explicit `location_id`. Product-by-ID mutations resolve the Product's stored owning location.
 - `chatgpt-app-submission.json` contains the review import data. Run `yarn chatgpt:submission:write` after changing the public tool catalog.
@@ -216,16 +216,16 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
 - One Better Auth organization subscription covers every site in the organization. A new site inherits the organization's effective plan without another checkout. Better Auth's Stripe plugin `subscription` table (`referenceId` = organization id) is the only store of that authority; every reader goes through `server/utils/billing-access.ts`.
 - Capabilities are computed only from `getPlanEntitlements(effectivePlan)`. There are no site plan, site billing, site entitlement, or organization entitlement projections.
-- **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's practice areas are site-level and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
+- **The organization** is the primary day-to-day dashboard context and selector. A location becomes the working context only inside that location's workspace. For Saya (restaurant/experience) tenants this is a physical location; Blawby's practice areas are organization-level and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
 - Public tenant routes are template-specific: Saya remains location-centric under `/locations/[slug]`, with each Product's page beneath the location that offers it; Blawby is page-centric under `/services/[slug]` (see "Public Templates" above).
-- Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
-  - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
-  - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
-  - `/dashboard/{orgSlug}/sites/{siteSlug}/locations/{locationSlug}` — location workspace
-  - `/dashboard/{orgSlug}/sites/new` — create another site under this org
+- Dashboard routes sit directly under the organization (`orgSlug` is the organization's slug):
+  - `/dashboard/{orgSlug}` — the organization's Today
+  - `/dashboard/{orgSlug}/locations/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/locations/new` — add a location
+  - `/dashboard/onboarding` — create another organization
   - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
-- App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`siteSlug`), not by guessing the org's oldest site.
+- App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`organizationSlug`), not by guessing the org's oldest site.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.
 
 ## Language
@@ -236,7 +236,7 @@ A tenant whose public site sells expertise, consultation, representation, care, 
 **Tenant vertical (canonical contract)**:
 The business category that controls public copy, route expectations, schema defaults, onboarding language, and verification rules for a tenant. A vertical is broader than a template and must not be used to hardcode one client.
 
-`SiteVertical` in `utils/vertical-copy.ts` defines the supported values `restaurant`, `experience`, and `service`. The dashboard, onboarding, import pipeline, template registry, and database use these values directly. `service` covers legal and other professional services; it is not a separate template. Do not introduce storage aliases or a client-specific vertical. Readers must preserve all supported verticals rather than narrowing to restaurant and experience.
+`OrganizationVertical` in `utils/vertical-copy.ts` defines the supported values `restaurant`, `experience`, and `service`. The dashboard, onboarding, import pipeline, template registry, and database use these values directly. `service` covers legal and other professional services; it is not a separate template. Do not introduce storage aliases or a client-specific vertical. Readers must preserve all supported verticals rather than narrowing to restaurant and experience.
 
 **Professional-service empty state**:
 Fallback or edit-mode copy shown when professional-service tenant content is missing. It may use neutral professional examples in owner-facing edit mode, but public production pages must not leak restaurant, hospitality, retail, or experience wording.
@@ -315,7 +315,7 @@ The plan of the one Better Auth `subscription` row for the organization that is 
 _Avoid_: an application projection of subscription state, site billing, site entitlement, mutable capability projection, direct runtime SQL against Better Auth tables
 
 **Organization activity event**:
-An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `site_id` and `location_id` are nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
+An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `location_id` is nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
 _Avoid_: site event for organization-only work, arbitrary primary-site resolution, conversion click duplicated into activity
 
 **KrabiClaw's own site**:

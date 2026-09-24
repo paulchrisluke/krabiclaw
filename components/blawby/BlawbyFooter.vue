@@ -46,7 +46,7 @@
 import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicCompliance } from '~/types/blawby'
 
 const props = defineProps<{
-  site: PublicBlawbyIdentity
+  organization: PublicBlawbyIdentity
   compliance: PublicCompliance | null
   pageLinks: PublicBlawbyPageLink[]
 }>()
@@ -54,11 +54,11 @@ const props = defineProps<{
 const { localePath, t } = useI18n()
 
 const year = new Date().getFullYear()
-const brandName = computed(() => props.site.name || props.compliance?.entity_name || '')
-const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
+const brandName = computed(() => props.organization.name || props.compliance?.entity_name || '')
+const description = computed(() => props.compliance?.footer_disclaimer || props.organization.brand_description || '')
 const documents = computed(() => props.compliance?.media.filter(item => item.slot === 'document' && item.public_url) ?? [])
-const footerLogo = computed(() => props.site.media.find(item => item.slot === 'logo_dark')?.public_url
-  || props.site.media.find(item => item.slot === 'logo')?.public_url
+const footerLogo = computed(() => props.organization.media.find(item => item.slot === 'logo_dark')?.public_url
+  || props.organization.media.find(item => item.slot === 'logo')?.public_url
   || null)
 function linksFor(paths: string[]) {
   const byPath = new Map(props.pageLinks.map(item => [item.path, item]))

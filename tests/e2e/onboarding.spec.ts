@@ -1,8 +1,9 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext } from '@playwright/test'
 import { dismissPreviewToolbar } from './helpers'
 import { loginAs } from './helpers/auth'
 import { tenantHostIsAddressable, testBaseUrl } from './test-env'
 import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
+import { formatMinorAmount } from '../../shared/prices'
 
 /**
  * The subdomain the site is stored under, from the host this environment frames
@@ -12,7 +13,7 @@ import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
  * so the first label of that hostname carries the environment suffix and is not
  * the stored value. Everywhere else the first label IS the subdomain.
  */
-function siteSubdomain(origin: string): string {
+function organizationSubdomain(origin: string): string {
   const hostname = new URL(origin).hostname
   const alias = environmentTenantAliasSlug(hostname, { NUXT_PUBLIC_PLATFORM_DOMAIN: testBaseUrl() })
   return alias ? alias : hostname.split('.')[0]!
@@ -25,8 +26,33 @@ function siteSubdomain(origin: string): string {
 // that becomes the session's active one. The fixture user owns one more
 // organization per run; reset-e2e-artifacts sweeps non-fixture organizations
 // older than two hours.
-test('a new owner builds a draft and creates a site through the routed flow', async ({ page, request, baseURL }) => {
+//
+// Another tenant already holds an organization-wide collection with the slug
+// this owner's menu section takes. A collection slug is unique within its
+// organization, so the new site gets the same slug for its own section rather
+// than failing to save it.
+const otherTenantId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
+let otherTenant: { owner: APIRequestContext; collectionId: string } | null = null
+
+test.afterEach(async () => {
+  if (!otherTenant) return
+  const { owner, collectionId } = otherTenant
+  otherTenant = null
+  const removed = await owner.delete(`/api/editor/organizations/${otherTenantId}/collections/${collectionId}`)
+  expect(removed.status(), await removed.text()).toBe(200)
+  await owner.dispose()
+})
+
+test('a new owner builds a draft and creates a site through the routed flow', async ({ page, request, baseURL, browser, playwright }) => {
   test.setTimeout(180_000)
+  const owner = await playwright.request.newContext({ baseURL })
+  await loginAs(owner, baseURL!, 'user-e2e-kikuzuki-owner')
+  const held = await owner.post(`/api/editor/organizations/${otherTenantId}/collections`, { data: { name: 'Small plates' } })
+  expect(held.status(), await held.text()).toBe(201)
+  const heldCollection = (await held.json() as { collection: { id: string; slug: string; location_id: string | null } }).collection
+  otherTenant = { owner, collectionId: heldCollection.id }
+  expect(heldCollection).toMatchObject({ slug: 'small-plates', location_id: null })
+
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
 
@@ -72,7 +98,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
 
   const previewFrame = page.locator('iframe[title="Site preview"]')
   await expect(previewFrame).toHaveAttribute('src', /preview_token=/)
-  const siteOrigin = new URL((await previewFrame.getAttribute('src'))!).origin
+  const organizationOrigin = new URL((await previewFrame.getAttribute('src'))!).origin
   if (tenantHostIsAddressable()) {
     const preview = page.frameLocator('iframe[title="Site preview"]')
     await expect(preview.locator('body')).toContainText(name, { timeout: firstSaveTimeout })
@@ -94,8 +120,8 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // addressable tenant host the run carries tenant identity in a header, the way
   // every other tenant spec here does.
   const asAnyone = tenantHostIsAddressable()
-    ? { url: `${siteOrigin}/`, headers: {} }
-    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': siteSubdomain(siteOrigin) } }
+    ? { url: `${organizationOrigin}/`, headers: {} }
+    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': organizationSubdomain(organizationOrigin) } }
   expect(await (await request.get(asAnyone.url, { headers: asAnyone.headers })).text()).not.toContain(name)
 
   await page.getByRole('button', { name: 'Enter the details myself' }).click()
@@ -128,10 +154,17 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await expect(step('currency')).toContainText('Thai Baht (THB)')
   await advance('Next', 'products')
 
-  // The menu is optional and the footer says so. The front of house is not:
-  // colour, logo and photo are, but the headline becomes the home page's only
-  // h1, so Next stays disabled until it is answered.
-  await advance('Skip for now', 'look')
+  // The menu is optional, but a dish the owner names lands in the section they
+  // name, and this save writes that section's collection.
+  await page.getByPlaceholder('Grilled squid').fill('Grilled squid')
+  await page.getByPlaceholder('THB').fill('180')
+  await page.getByPlaceholder('Small plates, Skewers, Drinks…').fill('Small plates')
+  await page.getByRole('button', { name: 'Add dish' }).click()
+  await expect(step('products')).toContainText(formatMinorAmount(18000, 'THB'))
+  // The front of house is not optional: colour, logo and photo are, but the
+  // headline becomes the home page's only h1, so Next stays disabled until it
+  // is answered.
+  await advance('Next', 'look')
   const next = page.getByRole('button', { name: 'Next', exact: true })
   await expect(next).toBeDisabled()
   await page.getByPlaceholder('A clear promise guests remember').fill('Fresh from the Andaman, every morning')
@@ -141,7 +174,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // Review: the answers, and the address the next press claims.
   await expect(step('review')).toContainText(name)
   const liveHost = (await step('review').getByText('Your site goes live at').locator('strong').textContent())!.trim()
-  expect(liveHost).toBe(new URL(siteOrigin).host)
+  expect(liveHost).toBe(new URL(organizationOrigin).host)
 
   // There is no done screen. Activation lands the owner in their new
   // organization's dashboard, so leaving the flow is how the press reports it
@@ -163,15 +196,31 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   expect(postLogin.headers().location).toBe(`/dashboard/${created!.slug}`)
 
   // The site subdomain and the organization slug are derived separately, so the
-  // host the pane framed names the subdomain, not the slug. A new organization
-  // owns exactly one site.
-  const context = await (await page.request.get('/api/dashboard/context', { params: { org: created!.slug } })).json() as { sites: Array<{ subdomain: string | null }> }
-  expect(context.sites).toHaveLength(1)
-  expect(context.sites[0]!.subdomain).toBe(siteSubdomain(siteOrigin))
+  // host the pane framed names the subdomain, not the slug. The organization is
+  // the site, so the subdomain is the organization's own.
+  const context = await (await page.request.get('/api/dashboard/context', { params: { org: created!.slug } })).json() as { organization: { subdomain: string | null } }
+  expect(context.organization.subdomain).toBe(organizationSubdomain(organizationOrigin))
 
   // And the request that a moment ago did not get the site now does, with no
   // preview token anywhere: that is what activation means.
   const live = await request.get(asAnyone.url, { headers: asAnyone.headers })
   expect(live.status()).toBe(200)
   expect(await live.text()).toContain(name)
+
+  // The new site's section holds the slug the other tenant's collection holds.
+  const own = await page.request.get(`/api/editor/organizations/${organizationId}/collections`)
+  expect(own.status(), await own.text()).toBe(200)
+  const ownCollections = (await own.json() as { collections: Array<{ name: string; slug: string; location_id: string | null }> }).collections
+  expect(ownCollections).toEqual([expect.objectContaining({ name: 'Small plates', slug: heldCollection.slug, location_id: null })])
+
+  // An anonymous visitor's menu shows the dish, priced, under that section.
+  const visitor = await browser.newContext({ extraHTTPHeaders: asAnyone.headers })
+  const menu = await visitor.newPage()
+  const menuResponse = await menu.goto(new URL('menu', asAnyone.url).href)
+  expect(menuResponse?.status()).toBe(200)
+  const section = menu.locator('section').filter({ has: menu.getByRole('heading', { level: 2, name: 'Small plates', exact: true }) })
+  await expect(section).toHaveCount(1)
+  await expect(section).toContainText('Grilled squid')
+  await expect(section).toContainText(formatMinorAmount(18000, 'THB'))
+  await visitor.close()
 })

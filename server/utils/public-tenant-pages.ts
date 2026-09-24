@@ -3,7 +3,7 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { faqBlockSource, faqItems, listFaqBlockQa } from '~/server/utils/location-qa'
 import type { FaqBlockSource } from '~/shared/faq-block'
-import { listSiteReviews } from '~/server/utils/site-reviews'
+import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/content/pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { MediaPlacementItem } from '~/server/utils/media-placement'
@@ -34,7 +34,6 @@ export interface PublicTenantPage {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  robots: string | null
   page_type: string
   recipe: string | null
   sort_order: number
@@ -202,11 +201,11 @@ async function hydrateBlocks(
   // The gate outlived the `source` field it read, so a grid authored in the
   // CMS, which never writes that key, listed nothing.
   const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid')
-  const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
-  // The site's social posts — Google Business updates and anything published
-  // beside them. They are `social_post` documents, a different record from the
-  // articles `site_posts` reads, and a Saya home shows both.
-  const hasUpdateSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_updates')
+  const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'organization_posts')
+  // The site's social posts — its own updates and what Facebook and Instagram
+  // sync in. They are `social_post` documents, a different record from the
+  // articles `organization_posts` reads, and a Saya home shows both.
+  const hasUpdateSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'organization_updates')
   for (const block of blocks) {
     if (block.type === 'page_grid' && Array.isArray(block.data.page_ids)) {
       for (const value of block.data.page_ids) if (typeof value === 'string' && value.trim()) pageIds.add(value)
@@ -224,10 +223,10 @@ async function hydrateBlocks(
   // The site this page belongs to. Its template decides where an article
   // lives, its vertical decides where a product lives, and its currency
   // decides which offers apply.
-  const siteRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
+  const organizationRow = await queryFirst<{ theme_id: string | null; vertical: string | null; default_currency: string | null }>(
     db, 'SELECT theme_id, vertical, default_currency FROM organization WHERE id = ? LIMIT 1', [organizationId])
-  if (!siteRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
-  const template = resolvePublicTemplate({ themeId: siteRow.theme_id, vertical: siteRow.vertical })
+  if (!organizationRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site is unavailable' })
+  const template = resolvePublicTemplate({ themeId: organizationRow.theme_id, vertical: organizationRow.vertical })
   const articlePrefix = template.serviceRoutes.articleDetailPrefix
   const sourcePages = pageIds.size
     ? resources.pages
@@ -237,9 +236,9 @@ async function hydrateBlocks(
   // Each grid gets the products it named, and only those. Keyed by collection
   // rather than flattened into one list: two grids on a page name two different
   // collections, and a flat union rendered both collections in both grids.
-  const currency = siteRow.default_currency
+  const currency = organizationRow.default_currency
   // Null on a template that sells nothing; its pages carry no product grid.
-  const productPresentation = resolveProductPresentation(siteRow.vertical)
+  const productPresentation = resolveProductPresentation(organizationRow.vertical)
   if ((collectionIds.size || productIds.size) && !currency) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page site has no currency' })
   }
@@ -274,7 +273,7 @@ async function hydrateBlocks(
     : parsedLocations
   const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
     Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, organizationId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
-    hasReviewSource ? listSiteReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
+    hasReviewSource ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
     hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
       SELECT p.id, p.title, p.slug, p.summary AS excerpt, p.canonical_url, ${COVER_SELECT}
         FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
@@ -422,8 +421,8 @@ async function hydrateBlocks(
     const faqSource = faqBlockSource(block)
     if (faqSource) data.items = qaItemsBySource.get(faqSource)
     if (block.type === 'testimonial_grid') data.items = reviewItems
-    if (block.type === 'feature_grid' && (data.source === 'site_posts' || data.source === 'site_updates')) {
-      const items = data.source === 'site_posts' ? postItems : updateItems
+    if (block.type === 'feature_grid' && (data.source === 'organization_posts' || data.source === 'organization_updates')) {
+      const items = data.source === 'organization_posts' ? postItems : updateItems
       const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : items.length
       data.items = items.slice(0, limit)
     }
@@ -446,7 +445,6 @@ function mapPage(
     seo_title: page.seo_title,
     seo_description: page.seo_description,
     canonical_url: page.canonical_url,
-    robots: page.robots,
     page_type: page.page_type,
     recipe: page.recipe,
     sort_order: page.sort_order,
@@ -501,7 +499,7 @@ export async function getPublicTenantPageForPath(
     }
   }
   if (!sourceLocale) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Site primary language is missing' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Organization primary language is missing' })
   }
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
     organizationId: page.organization_id,

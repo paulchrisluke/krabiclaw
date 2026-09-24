@@ -24,7 +24,7 @@
       />
     </div>
 
-    <DashboardSiteLocationSelector
+    <DashboardOrganizationLocationSelector
       v-else
       :items="tiles"
       missing-image-label="No hero photo"
@@ -34,19 +34,19 @@
 </template>
 
 <script setup lang="ts">
-import DashboardSiteLocationSelector, { type SiteLocationSelectorItem } from '~/components/dashboard/SiteLocationSelector.vue'
+import DashboardOrganizationLocationSelector, { type OrganizationLocationSelectorItem } from '~/components/dashboard/OrganizationLocationSelector.vue'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 
 const route = useRoute()
 const dashboard = useDashboardOrganization()
-const { businessPaths } = useDashboardSiteLinks()
+const { businessPaths } = useDashboardOrganizationLinks()
 
-const site = computed(() => dashboard.organization.value)
+const organization = computed(() => dashboard.organization.value)
 
 // This tab stands outside any site route, so the context carries no
 // locations; they are read for the whole organization.
@@ -63,9 +63,9 @@ const locations = computed(() => locationsData.value?.locations ?? [])
 // the same capabilities the rest of the dashboard reads; it depends on the
 // vertical alone, so the site summary is enough.
 const capabilities = computed(() => {
-  const vertical = site.value?.vertical
+  const vertical = organization.value?.vertical
   if (!vertical) return null
-  return resolveCmsCapabilities(normalizeVertical(vertical) as SiteVertical, resolvePublicTemplate({ vertical }).slug, {})
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, resolvePublicTemplate({ vertical }).slug, {})
 })
 const usesServiceAreaVocabulary = computed(() => capabilities.value?.locationVocabulary === 'office/service area')
 const locationsLabel = computed(() => (usesServiceAreaVocabulary.value ? 'Offices / Service Areas' : 'Locations'))
@@ -75,7 +75,7 @@ const locationNoun = computed(() => (usesServiceAreaVocabulary.value ? 'office' 
  * A location is identified by where it is, so the tile carries its address
  * and its own hero photograph. The name belongs under the tile, in text.
  */
-const tiles = computed<SiteLocationSelectorItem[]>(() => locations.value.map((location) => {
+const tiles = computed<OrganizationLocationSelectorItem[]>(() => locations.value.map((location) => {
   const hero = location.media.find(item => item.slot === 'hero')
   const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
   return {

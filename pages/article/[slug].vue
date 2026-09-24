@@ -37,12 +37,12 @@
                 <NuxtLink :to="localePath(`/blog?tags[]=${encodeURIComponent(tag)}`)" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :site-name="identity.name" :blocks="post.content_blocks" template="blawby" />
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :organization-name="identity.name" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
           <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
-            <BlawbySectionHeading :title="t('blawby.article.from_the')" :accent="t('saya.footer.blog')" centered />
+            <BlawbySectionHeading :title="`${t('blawby.article.from_the')} ${t('saya.footer.blog')}`" :accent="t('saya.footer.blog')" centered />
             <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
           </div>
           <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">
@@ -81,7 +81,7 @@ import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
-const { isTenant } = useTenantSite()
+const { isTenant } = useTenantOrganization()
 if (!isTenant) throw createError({ statusCode: 404 })
 definePageMeta({ layout: false })
 
@@ -123,10 +123,9 @@ const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
   seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
-  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.name,
-  robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
+  baseUrl: requestURL.origin, publicPath: articlePath.value, organizationName: identity.value.name,
 }))
-const { trackConsultationClick } = useSiteConversionTracking(consultation)
+const { trackConsultationClick } = useOrganizationConversionTracking(consultation)
 
 function trackConsultation() {
   trackConsultationClick('article', `/article/${slug}`, consultation.value.external_url || consultation.value.schedule_path)
@@ -140,10 +139,10 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   author: post.value.author?.name || null,
   publishedAt: post.value.published_at || null,
   brand: {
-    siteName: identity.value.name,
+    organizationName: identity.value.name,
   },
   socialImage: post.value.social_image,
-  robots: resolvedSeo.value.robots,
+  discoverability: post.value.visibility === 'unlisted' ? 'unlisted' : 'listed',
 }))
 
 const blogUrl = useSeoUrl(() => localePath('/blog'))

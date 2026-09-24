@@ -1,6 +1,6 @@
 <template>
   <!-- A question: its rows are the three things it holds, each a leaf below. -->
-  <DashboardIndexPanel id="site-qa-record" :title="isNew ? 'New question' : form.question || 'Question'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-qa-record" :title="isNew ? 'New question' : form.question || 'Question'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template v-if="!isNew" #right>
       <DashboardResourceLocalization
         :organization-id="organizationId"
@@ -8,7 +8,7 @@
         :resource-id="qaId"
         resource-label="question"
         :fields="qaLocalizationFields"
-        :language-settings-path="siteLocalizationSettingsPath"
+        :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
 
@@ -51,7 +51,7 @@ export const qaEditorKey = Symbol('qa-editor') as InjectionKey<QaEditor>
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import { getErrorMessage } from '~/utils/errors'
-import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } from '~/utils/site-qa'
+import { isQaResponse, isQaCreated, isQaUpdated, qaCreateBlockers, type QaRow } from '~/utils/organization-qa'
 
 /** Set when this is a location's question rather than the site's. */
 const props = defineProps<{ locationId?: string }>()
@@ -76,21 +76,12 @@ const detailKey = computed(() => level.child.value)
 /** With nothing open the pane still shows the first section rather than empty space. */
 const openKey = computed<SectionKey>(() => (detailKey.value ?? 'question') as SectionKey)
 
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  if (level.mode.value === 'yield' || (detailKey.value && !(detailKey.value in SECTION_LABELS))) {
-    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  }
-})
-
 function emptyDraft() {
   return { question: '', answer: '', published: true }
 }
 
 // Keyed to the record so the draft survives the remount between sections.
-const form = useState(`qa-draft-${organizationId}-${props.locationId ?? 'site'}-${qaId.value}`, emptyDraft).value
+const form = useState(`qa-draft-${organizationId}-${props.locationId ?? 'organization'}-${qaId.value}`, emptyDraft).value
 
 const saving = ref(false)
 const errorMessage = ref('')
@@ -101,7 +92,7 @@ const errorMessage = ref('')
  * is not scoped, so its record is found in the list.
  */
 const { data, refresh } = await useAsyncData(
-  () => `dashboard-qa-record-${organizationId}-${props.locationId ?? 'site'}-${qaId.value}`,
+  () => `dashboard-qa-record-${organizationId}-${props.locationId ?? 'organization'}-${qaId.value}`,
   async () => isNew.value
     ? null
     : await dashboardApi<{ qa: QaRow[] }>(qaEndpoint.value, {
@@ -130,7 +121,7 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {

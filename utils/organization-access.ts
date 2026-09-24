@@ -1,12 +1,12 @@
 import { createAccessControl } from 'better-auth/plugins/access'
-import { adminAc, defaultStatements, memberAc, ownerAc } from 'better-auth/plugins/organization/access'
+import { adminAc, defaultStatements, ownerAc } from 'better-auth/plugins/organization/access'
 
 const statements = {
   ...defaultStatements,
   organization: ['read', 'update', 'delete'],
   members: ['read', 'invite', 'update', 'remove'],
   invitations: ['read', 'create', 'cancel'],
-  sites: ['read', 'create', 'update', 'delete'],
+  organizations: ['read', 'create', 'update', 'delete'],
   locations: ['read', 'create', 'update', 'delete'],
   content: ['read', 'create', 'update', 'delete', 'publish'],
   media: ['read', 'create', 'update', 'delete'],
@@ -38,32 +38,13 @@ export const organizationAccessControl = createAccessControl(statements)
 export type OrganizationPermissions = {
   [Resource in keyof typeof statements]?: Array<(typeof statements)[Resource][number]>
 }
-const tenantEditorStatements = {
-  ...memberAc.statements,
-  sites: ['read'],
-  locations: ['read', 'update'],
-  content: ['read', 'create', 'update', 'delete', 'publish'],
-  media: ['read', 'create', 'update', 'delete'],
-  blog: ['read', 'create', 'update', 'delete', 'publish'],
-  products: ['read', 'create', 'update', 'delete'],
-  experiences: ['read', 'create', 'update', 'delete'],
-  reservations: ['read', 'reply', 'update', 'cancel'],
-  orders: ['read', 'reply', 'update', 'cancel'],
-  reviews: ['read', 'reply', 'update', 'delete'],
-  qa: ['read', 'reply', 'update', 'delete'],
-  submissions: ['read', 'reply', 'update'],
-  notifications: ['read', 'update', 'send'],
-  analytics: ['read'],
-  operations: ['read', 'reply', 'update'],
-} as const
-
 export const organizationRoles = {
   owner: organizationAccessControl.newRole({
     ...ownerAc.statements,
     organization: ['read', 'update', 'delete'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],
-    sites: ['read', 'create', 'update', 'delete'],
+    organizations: ['read', 'create', 'update', 'delete'],
     locations: ['read', 'create', 'update', 'delete'],
     content: ['read', 'create', 'update', 'delete', 'publish'],
     media: ['read', 'create', 'update', 'delete'],
@@ -88,7 +69,7 @@ export const organizationRoles = {
     organization: ['read', 'update'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],
-    sites: ['read', 'create', 'update', 'delete'],
+    organizations: ['read', 'create', 'update', 'delete'],
     locations: ['read', 'create', 'update', 'delete'],
     content: ['read', 'create', 'update', 'delete', 'publish'],
     media: ['read', 'create', 'update', 'delete'],
@@ -108,6 +89,4 @@ export const organizationRoles = {
     integrations: ['read', 'create', 'update', 'delete'],
     operations: ['read', 'reply', 'update'],
   }),
-  member: organizationAccessControl.newRole({ ...memberAc.statements, operations: [] }),
-  editor: organizationAccessControl.newRole(tenantEditorStatements),
 }

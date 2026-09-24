@@ -1,7 +1,7 @@
 <template>
   <article class="flex flex-col rounded-2xl border border-default bg-elevated p-8">
     <div class="flex items-center gap-3">
-      <UAvatar :src="portrait || undefined" :alt="author" size="md" loading="lazy" />
+      <UAvatar :src="portrait || undefined" :alt="author" icon="i-lucide-user" size="md" loading="lazy" />
       <div class="min-w-0">
         <component :is="authorHref ? 'a' : 'span'" :href="authorHref || undefined" :target="authorHref ? '_blank' : undefined" :rel="authorHref ? 'noopener noreferrer' : undefined" class="block truncate text-sm font-medium text-default no-underline hover:underline">
           {{ author }}
@@ -54,13 +54,13 @@ const props = defineProps<{
     google_review_metadata?: GoogleReviewMetadata | null
     /** When an imported review was written; a Google review is dated by this. */
     original_review_date?: string | null
-    /** When the row was written here; a review written on this site is dated by this. */
+    /** When the row was written here; a review written on the organization's own pages is dated by this. */
     created_at?: string | null
     owner_reply?: string | null
     owner_reply_at?: string | null
     media?: Array<{ slot: string; public_url?: string | null }>
   }
-  /** Named when a site has several locations and the reader needs to know which one this is about. */
+  /** Named when the organization has several locations and the reader needs to know which one this is about. */
   locationTitle?: string | null
 }>()
 

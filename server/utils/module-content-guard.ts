@@ -85,6 +85,6 @@ export async function checkModuleHasLiveData(
   if (!hasLiveData) return { blocked: false }
   return {
     blocked: true,
-    reason: `Cannot disable ${feature} — this ${scope.locationId ? 'location' : 'site'} has ${MODULE_LABELS[feature] ?? 'existing content'} for it.`,
+    reason: `Cannot disable ${feature} — this ${scope.locationId ? 'location' : 'organization'} has ${MODULE_LABELS[feature] ?? 'existing content'} for it.`,
   }
 }

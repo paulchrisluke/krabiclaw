@@ -50,14 +50,14 @@ import { blockText } from '~/utils/tenant-page-block-data'
 // beside them is the Google profile's, which is site chrome.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath, locale, t } = useI18n()
-const { site } = useTenantSite()
-const { locations, googleBusiness } = useSiteShellState()
+const { organization } = useTenantOrganization()
+const { locations, googleMaps } = useOrganizationShellState()
 
 // The Google profile is carried on the shell as an open record; these are the
 // two shapes this band reads out of it.
 interface ShellReview { id: string; author_name: string | null; content: string | null; rating: number | null; location_title: string | null }
 const profile = computed(() => {
-  const record = googleBusiness.value as { reviews?: unknown; business?: { reviewSummary?: { averageRating?: unknown; totalReviewCount?: number } | null } } | null
+  const record = googleMaps.value as { reviews?: unknown; business?: { reviewSummary?: { averageRating?: unknown; totalReviewCount?: number } | null } } | null
   // Each row is checked before it is trusted: the band reads `author_name` off
   // every entry, so one null in the shell's list took the page down.
   const rows = Array.isArray(record?.reviews) ? record.reviews : []
@@ -67,7 +67,7 @@ const profile = computed(() => {
   }
 })
 
-const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const homeCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 const kicker = computed(() => blockText(props.block.data.description) || homeCopy.value.reviewsKicker)
 const heading = computed(() => blockText(props.block.data.title) || homeCopy.value.whatGuestsSayLabel)
 

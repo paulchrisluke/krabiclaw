@@ -36,11 +36,11 @@ let generated = 0
 let reused = 0
 let skipped = 0
 let failed = 0
-for (const site of tenants) {
+for (const organization of tenants) {
   let after = null
   try {
     do {
-      const response = await fetch(new URL(site.endpoint, baseURL), { method: 'POST', headers, body: JSON.stringify({ after }) })
+      const response = await fetch(new URL(organization.endpoint, baseURL), { method: 'POST', headers, body: JSON.stringify({ after }) })
       if (!response.ok) throw new Error(`Regeneration returned ${response.status}: ${await response.text()}`)
       const page = await response.json()
       if (!Array.isArray(page.results) || !(page.next_cursor === null || typeof page.next_cursor === 'string')) throw new Error('Invalid regeneration response')
@@ -52,13 +52,13 @@ for (const site of tenants) {
           if (bytes.length < 24 || bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || bytes.readUInt32BE(16) !== 1200 || bytes.readUInt32BE(20) !== 630) throw new Error(`${result.publicUrl}: expected a 1200x630 PNG`)
           if (result.kind === 'generated') generated++
           else reused++
-          console.log(`[local:cards] ${site.id} ${result.owner.owner_type}/${result.owner.owner_id}: ${result.kind} ${result.publicUrl}`)
+          console.log(`[local:cards] ${organization.id} ${result.owner.owner_type}/${result.owner.owner_id}: ${result.kind} ${result.publicUrl}`)
         } else if (result.kind === 'skipped') {
           skipped++
-          console.warn(`[local:cards] ${site.id} ${result.owner.owner_type}/${result.owner.owner_id}: skipped (${result.reason})`)
+          console.warn(`[local:cards] ${organization.id} ${result.owner.owner_type}/${result.owner.owner_id}: skipped (${result.reason})`)
         } else if (result.kind === 'failed') {
           failed++
-          console.error(`[local:cards] ${site.id} ${result.owner.owner_type}/${result.owner.owner_id}: failed (${result.error})`)
+          console.error(`[local:cards] ${organization.id} ${result.owner.owner_type}/${result.owner.owner_id}: failed (${result.error})`)
         } else throw new Error('Unknown social-card outcome')
       }
       if (page.next_cursor && page.next_cursor === after) throw new Error('Regeneration cursor did not advance')
@@ -66,7 +66,7 @@ for (const site of tenants) {
     } while (after)
   } catch (error) {
     failed++
-    console.error(`[local:cards] ${site.id}: ${error instanceof Error ? error.message : String(error)}`)
+    console.error(`[local:cards] ${organization.id}: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 console.log(`[local:cards] ${generated} generated, ${reused} reused, ${skipped} skipped, ${failed} failed.`)

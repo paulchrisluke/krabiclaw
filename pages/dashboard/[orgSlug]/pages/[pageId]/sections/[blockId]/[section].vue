@@ -3,7 +3,7 @@
     One concern of a section. A concern that is a list of records is an index
     of them; anything else is the leaf that edits it.
   -->
-  <DashboardIndexPanel v-if="collection" id="site-page-block-records" :title="records.noun.value.plural">
+  <DashboardIndexPanel v-if="collection" id="organization-page-block-records" :title="records.noun.value.plural">
     <UAlert v-if="editor.errorMessage.value" class="mb-6" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.errorMessage.value" />
     <DashboardListEditor
       v-model:editing="editing"
@@ -26,7 +26,7 @@
 
   <DashboardLeafPanel
     v-else
-    id="site-page-block-section"
+    id="organization-page-block-section"
     :title="section?.label ?? 'Section'"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

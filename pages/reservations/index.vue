@@ -159,11 +159,11 @@ import BookingModal from '@/components/booking/BookingModal.vue'
 import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
-import { getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
+import { getTodayHoursLabel, isOpenNow, schemaOpeningHours } from '~/shared/reservation-hours'
 import { formatTime, localDateTimeToInstant } from '~/utils/timezone'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { requireProductPresentation } from '~/utils/product-presentation'
-import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { mediaStillUrl, type MediaPresentation } from '~/shared/media-placement-contract'
 
 function formatTitleItalics(text: string | null | undefined): string {
@@ -173,10 +173,12 @@ function formatTitleItalics(text: string | null | undefined): string {
 
 definePageMeta({ layout: 'saya' })
 
-const { site, organizationId } = useTenantSite()
+// The tenant is the organization; `site` is only the shape this composable
+// still returns it under.
+const { organization: organization, organizationId } = useTenantOrganization()
 const route = useRoute()
 const { locale, t } = useI18n()
-const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
+const resCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 
 // The first location card's hero is this route's LCP element.
@@ -185,16 +187,16 @@ useHeroLcpPreload(computed(() => {
   return first ? getLocationPoster(first) : null
 }))
 
-const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
+const isExperienceOrganization = computed(() => (organization as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Experience-vertical sites book each Product on its own page. The
 // /reservations page has no meaning for them. Redirect as soon as the site
 // vertical is known — do NOT gate on having products, because a freshly seeded
 // site with vertical='experience' and no products yet should still not show
 // this page.
-watch(isExperienceSite, (isExp) => {
+watch(isExperienceOrganization, (isExp) => {
   if (isExp) {
-    navigateTo({ path: requireProductPresentation(String((site as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
+    navigateTo({ path: requireProductPresentation(String((organization as { vertical?: string | null } | null)?.vertical)).collectionPath, query: route.query }, { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
@@ -361,7 +363,7 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
-const { mirrorSubmission } = useSiteConversionTracking()
+const { mirrorSubmission } = useOrganizationConversionTracking()
 const submitError = ref<string | null>(null)
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
@@ -395,7 +397,7 @@ async function handleReservation() {
     setBookingConfirmation({
       type: 'reservation',
       organizationId,
-      siteName: brandName.value,
+      organizationName: brandName.value,
       guestName: reservationForm.value.name,
       // The guest picked a wall-clock slot at this location; the instant it
       // means was resolved once, above, in that location's zone.
@@ -438,32 +440,58 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const brandName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 useSocialMetadata(() => ({
   path: '/reservations',
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,
   description: resCopy.value.seoReservationDescription(brandName.value),
   brand: {
-    siteName: brandName.value,
+    organizationName: brandName.value,
   },
   // An experience site has no reservations page: the server redirects to
   // /experiences, but a client-side navigation can render this briefly during
   // hydration, so the intent says noindex rather than relying on the redirect.
-  robots: isExperienceSite.value ? 'noindex,follow' : 'index,follow',
+  robots: isExperienceOrganization.value ? 'noindex,follow' : 'index,follow',
 }))
 
-useSchemaOrg([
-  ({
+/**
+ * The business, and the places it takes reservations at.
+ *
+ * `acceptsReservations` is the machine-readable form of what this whole page
+ * is: without it a parser reads a reservation form and a ReserveAction and
+ * still has nowhere to learn that the restaurant takes bookings.
+ *
+ * Hours and addresses belong to a branch, not to the brand — two branches keep
+ * two of each — so each one states its own rather than one node averaging them
+ * into a claim that is true of neither.
+ */
+useSchemaOrg(computed(() => [
+  {
     '@context': 'https://schema.org',
-    '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
+    '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
     name: brandName.value,
     url: requestUrl.origin,
+    acceptsReservations: true,
     reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {
       '@type': 'ReserveAction',
       target: { '@type': 'EntryPoint', urlTemplate: `${requestUrl.origin}/reservations` },
       result: { '@type': 'Reservation' }
     }
-  })
-])
+  },
+  ...locations.value.map(location => ({
+    '@context': 'https://schema.org',
+    '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
+    name: `${brandName.value} — ${String(location.title ?? '')}`,
+    address: schemaPostalAddress((location.address ?? null) as PostalAddress | null),
+    telephone: location.phone,
+    hasMap: location.maps_url,
+    acceptsReservations: true,
+    reservationUrl: `${requestUrl.origin}/reservations`,
+    openingHoursSpecification: schemaOpeningHours(location.opening_hours ?? null),
+    ...(location.latitude && location.longitude
+      ? { geo: { '@type': 'GeoCoordinates', latitude: location.latitude, longitude: location.longitude } }
+      : {}),
+  })),
+]))
 </script>

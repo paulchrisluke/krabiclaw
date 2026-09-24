@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { listSessions } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
 import { defineHandler } from 'nitro'
@@ -9,11 +9,11 @@ import { getQuery, getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
   try {
     const { db, organization } = await requireOrganizationAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const query = getQuery(event)
     const from = typeof query.from === 'string' ? query.from : new Date().toISOString()
     const to = typeof query.to === 'string' ? query.to : new Date(Date.now() + 90 * 86_400_000).toISOString()

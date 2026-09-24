@@ -95,7 +95,7 @@ export const WHATSAPP_MAPPINGS: Partial<Record<WhatsAppTemplate, WhatsAppMapping
       rating: 'rating',
       excerpt: 'review',
     },
-    derive: message => ({ site_name: message.siteName ?? '' }),
+    derive: message => ({ organization_name: message.organizationName ?? '' }),
   },
   booking_change_update: {
     button: { key: 'reply_path', dashboardPath: true },

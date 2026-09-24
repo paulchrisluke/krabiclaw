@@ -1,14 +1,14 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireLocationAccess } from '~/server/utils/location-access'
 import { getLocationReservationConfig, renderBookingPolicySummary, reservationPolicySummarySource } from '~/server/utils/reservations'
-import { getSourceLocale } from '~/server/utils/site-locales'
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   try {
     const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
     const config = await getLocationReservationConfig(db, { organizationId: organization.id, locationId })

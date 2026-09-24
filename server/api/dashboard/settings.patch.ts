@@ -3,15 +3,15 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isDemoOrg } from '~/server/utils/demo'
-import { updateSiteSettingsFields } from '~/server/utils/site-settings'
-import type { UpdateSiteSettingsRequest } from '~/server/types/site'
+import { updateOrganizationSettingsFields } from '~/server/utils/organization-settings'
+import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
 import { defineHandler } from 'nitro'
 import {  readBody } from 'nitro/h3';
 import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineHandler(async (event) => {
-  const body = await readBody(event) as UpdateSiteSettingsRequest
+  const body = await readBody(event) as UpdateOrganizationSettingsRequest
 
   if (typeof body !== 'object' || body === null || Object.keys(body).length === 0) {
     return jsonResponse(
@@ -26,16 +26,16 @@ export default defineHandler(async (event) => {
   try {
     const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
     if (isDemoOrg(organization.id) && !isPlatformAdmin) {
-      return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
+      return jsonResponse({ error: 'Demo organization is read-only' }, { status: 403 })
     }
 
-    const result = await updateSiteSettingsFields(
+    const result = await updateOrganizationSettingsFields(
       db, env, organization.id, body, session.user.id, )
 
     return jsonResponse(result.data, { status: result.status })
   } catch (error) {
-    console.error('Failed to update site settings:', error)
+    console.error('Failed to update organization settings:', error)
     return jsonResponse(
-      { error: 'Failed to update site settings' }, { status: 500 }, )
+      { error: 'Failed to update organization settings' }, { status: 500 }, )
   }
 })

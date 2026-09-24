@@ -30,6 +30,68 @@ local migrations and fixtures, a production Nuxt/Nitro build, and
 `.output/server/index.mjs` through local Wrangler. Do not substitute
 `nuxt dev`, component mocks, or a mock server and call it runtime proof.
 
+## What an assertion has to be
+
+A status code is not an outcome. Every one of these passed a green suite:
+
+- `updateTenantPage` answered 200 while `canonical_url = ? = ?` aborted the batch
+  on a binding count, so every tenant page edit was a silent no-op.
+- `update_location` answered 200 and no test read the row back.
+- `/policies/terms` rendered a hero, a divider and no body, and matched
+  `/terms/i` — the word is in the footer of every page on the site.
+- The shield divider rendered the wrong fill and leaked `block="[object Object]"`
+  into the DOM for seven weeks.
+- A booking answered 201 with the owner's email and WhatsApp both undelivered.
+
+So:
+
+1. **Assert the outcome a customer or tenant would notice.** A dish has a price
+   and a photo. A class has a bookable time. A legal page has a body, not just a
+   heading. A page renders a section that is not its hero and not the shared CTA.
+2. **Read a write back through a different path than the one that made it.** A
+   200 from the route that wrote is the route agreeing with itself.
+3. **Assert the exact status.** `toBeLessThan(400)` passes on a redirect and on a
+   304. Write `toBe(200)`.
+4. **Make empty a failure unless the emptiness is the tenant's own data.** Pass
+   the expected count in. "No availability in the next 31 days" is a valid 200
+   and was wrong for a product with twelve scheduled sessions.
+5. **Never assert only that a shape exists.** `toEqual(expect.any(Array))` passes
+   on `[]`, which is what a tool that returned nothing produces.
+6. **A test must not create the state it then asserts.** `ensureOrganization`
+   re-provisioned the fixture tenant on every run, moving a live tenant's
+   subdomain, and the assertion that followed only held because of it. Anything
+   named `ensure*`, `getOrCreate*` or `*OrDefault` in a test is a prompt to check
+   whether it is manufacturing its own premise.
+7. **When a spec fails after a contract change, decide whether the spec or the
+   app is wrong, and say which, before touching either.** Never loosen an
+   assertion to get green. If the assertion's premise has genuinely become false,
+   replace the premise and write down why — do not widen the tolerance.
+
+## Failures are reported, never logged
+
+A caught error that is written to a console and nothing else is invisible. There
+is no "best effort" and no "transient" exemption: Cloudflare is not what fails
+here, our code is, and a log is not a report.
+
+`eslint.config.mjs` enforces the floor mechanically — a catch whose entire body
+is a console call and which neither throws nor returns is an error. The rule is
+narrow on purpose, so passing it is not evidence. A catch must do one of:
+
+- throw, or
+- return an error status, a failed result, or a recorded delivery outcome, or
+- put the reason in state the caller reads — a returned field, a ref the UI
+  renders, the structured line that already reports that operation.
+
+Two corollaries, both learned the hard way:
+
+- **A name ending in `Safe` is usually a swallow with a reassuring label.**
+  `fireOrganizationEventSafe` dropped audit rows. `recordSubmissionConversionSafe`
+  dropped a conversion written right after a booking. Both were deleted rather
+  than fixed.
+- **Missing required state fails; it is never defaulted.** A phone that would not
+  parse became `phone-unknown@phone.krabiclaw.local`, which is an account key, so
+  every such sign-up would have shared one account.
+
 ## Unit-test admission rule
 
 A new unit test must name the invariant it proves and must fail only when that
@@ -105,6 +167,14 @@ yarn test:e2e:tenant-rendering
 yarn test:e2e:guest-journeys
 yarn test:e2e:mcp
 ```
+
+Cloudflare Images credentials exist only in production, on purpose. Local, E2E,
+staging and preview run on copies of production's rows, so a token there stores
+into and deletes from production's images. Anything that stores an image outside
+production (an upload, a social card) answers 503 "Cloudflare Images is not
+configured in this environment, by design". That is the expected result, not a
+missing setup step: a spec asserts against images the data already holds, and
+never adds the token to pass.
 
 The CIMD OAuth cases need `MCP_CIMD_CLIENT_URL` and
 `MCP_PRIVATE_CIMD_CLIENT_URL` to name reachable public HTTPS metadata

@@ -26,7 +26,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     arguments: [
       { name: "body", description: "The post body text.", required: true },
       { name: "post_type", description: "standard, offer, event, or alert. Event and offer require a complete event schedule. Defaults to standard.", required: false },
-      { name: "channels", description: "Comma-separated channels: site, facebook, instagram. Defaults to site.", required: false },
+      { name: "channels", description: "Comma-separated channels: organization, facebook, instagram. Defaults to organization.", required: false },
     ],
   },
   {
@@ -47,22 +47,22 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     arguments: [],
   },
   {
-    name: "add_photos_to_site",
+    name: "add_photos_to_organization",
     description: "Add the user's own photos to the right places on the site (homepage, location, Products, or posts).",
     arguments: [],
   },
   {
-    name: "finish_my_site_setup",
+    name: "finish_my_organization_setup",
     description: "Check what's still missing from the site and guide the user through finishing setup, one step at a time.",
     arguments: [],
   },
   {
-    name: "make_site_more_bookable",
+    name: "make_organization_more_bookable",
     description: "Review calls-to-action, contact info, and reservation/booking setup, and suggest changes to get more bookings.",
     arguments: [],
   },
   {
-    name: "make_my_site_look_better",
+    name: "make_my_organization_look_better",
     description: "General visual/content review of the site with concrete suggestions the user can approve one at a time.",
     arguments: [],
   },
@@ -109,7 +109,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user has supplied or approved media for this post, create the post first, then use set_media with placement { owner_type: 'content_document', owner_id: <exact post id>, slot: 'cover' } for the selected cover asset.",
           channels
             ? `If media is supplied or approved, call publish_post with channels [${channels}] only after set_media succeeds; otherwise immediately after create_post succeeds. Do not stop to describe the publish step instead of executing it.`
-            : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the site channel. Do not stop to describe the publish step instead of executing it.",
+            : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the organization channel. Do not stop to describe the publish step instead of executing it.",
           "Report back the post id, the live view URL, and which channels it published to.",
         ].filter(Boolean).join(" "),
       };
@@ -151,7 +151,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         ].join(" "),
       };
     }
-    case "add_photos_to_site": {
+    case "add_photos_to_organization": {
       return {
         description: "Add the user's own photos to the right places on the site",
         text: [
@@ -163,7 +163,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         ].join(" "),
       };
     }
-    case "finish_my_site_setup": {
+    case "finish_my_organization_setup": {
       return {
         description: "Check what's missing and guide the user through finishing setup",
         text: [
@@ -174,7 +174,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         ].join(" "),
       };
     }
-    case "make_site_more_bookable": {
+    case "make_organization_more_bookable": {
       return {
         description: "Review CTAs, contact info, and booking setup, and suggest changes to get more bookings",
         text: [
@@ -185,7 +185,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         ].join(" "),
       };
     }
-    case "make_my_site_look_better": {
+    case "make_my_organization_look_better": {
       return {
         description: "General visual and content review with concrete suggestions",
         text: [

@@ -14,7 +14,7 @@ import {
 } from "~/server/utils/mcp-context";
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES, MAX_IMAGE_BYTES, R2_IMAGE_MIME_TYPES, RESOLVED_MEDIA_IMAGE_TYPES } from "~/server/utils/media-mime";
 import { assertMarkdownSize, decodeMarkdownText, resolveMarkdownMimeType } from "~/server/utils/markdown-document";
-import { hasCloudflareImagesConfig } from "~/server/utils/cloudflare-images";
+import { assertCloudflareImagesConfigured } from "~/server/utils/cloudflare-images";
 import { findOrganizationById } from '~/server/utils/member-access'
 
 /**
@@ -24,9 +24,7 @@ import { findOrganizationById } from '~/server/utils/member-access'
  */
 export function resolveImageUploadProvider(contentType: string, env: ApiRecord): "cloudflare_r2" | "cloudflare_images" | undefined {
   const provider = R2_IMAGE_MIME_TYPES.has(contentType) ? "cloudflare_r2" : undefined;
-  if (!provider && !hasCloudflareImagesConfig(env)) {
-    throw new Error("Cloudflare Images not configured");
-  }
+  if (!provider) assertCloudflareImagesConfigured(env);
   return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
 }
 
@@ -113,7 +111,7 @@ export async function requireActiveImageAsset(
   if (!asset || asset.status !== "active" || asset.kind !== "image") {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      `${fieldName} must reference an active image asset from this site.`,
+      `${fieldName} must reference an active image asset from this organization.`,
     );
   }
   return asset;
@@ -129,7 +127,7 @@ export async function requireActiveVideoAsset(
   if (!asset || asset.status !== "active" || asset.kind !== "video") {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      `${fieldName} must reference an active video asset from this site. Upload the video via the dashboard media library first, then call get_organization_media_assets to find its asset id.`,
+      `${fieldName} must reference an active video asset from this organization. Upload the video via the dashboard media library first, then call get_organization_media_assets to find its asset id.`,
     );
   }
   return asset;
@@ -433,7 +431,7 @@ export function workspaceContextPayload(
     organization_name: organization?.name ?? null,
     organization_slug: organization?.slug ?? null,
     organization_subdomain: organization?.subdomain ?? null,
-    organization_public_url: resolveSitePublicOrigin(organization),
+    organization_public_url: resolveOrganizationPublicOrigin(organization),
     location_id: location?.id ?? null,
     location_slug: location?.slug ?? null,
     location_title: location?.title ?? null,
@@ -447,22 +445,22 @@ function normalizeAbsoluteUrl(value: string | null | undefined): string | null {
   return trimmed.replace(/\/$/, "");
 }
 
-export function resolveSitePublicOrigin(
-  site: Pick<McpOrganizationSummary, 'public_url'> | { publicUrl?: string | null } | null | undefined,
+export function resolveOrganizationPublicOrigin(
+  organization: Pick<McpOrganizationSummary, 'public_url'> | { publicUrl?: string | null } | null | undefined,
 ): string | null {
-  if (!site) return null
-  return normalizeAbsoluteUrl('public_url' in site ? site.public_url : site.publicUrl)
+  if (!organization) return null
+  return normalizeAbsoluteUrl('public_url' in organization ? organization.public_url : organization.publicUrl)
 }
 
-export function absolutizeSiteUrl(
-  site: Parameters<typeof resolveSitePublicOrigin>[0],
+export function absolutizeOrganizationUrl(
+  organization: Parameters<typeof resolveOrganizationPublicOrigin>[0],
   value: string | null | undefined,
 ): string | null {
   const trimmed = typeof value === "string" ? value.trim() : "";
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
 
-  const origin = resolveSitePublicOrigin(site);
+  const origin = resolveOrganizationPublicOrigin(organization);
   if (!origin) return null;
 
   if (trimmed.startsWith("/")) return `${origin}${trimmed}`;
@@ -471,7 +469,7 @@ export function absolutizeSiteUrl(
 
 export function attachViewUrlToRecord<T extends object>(
   record: T,
-  site: Parameters<typeof resolveSitePublicOrigin>[0],
+  organization: Parameters<typeof resolveOrganizationPublicOrigin>[0],
   options: {
     publicPath?: string | null;
   } = {},
@@ -488,7 +486,7 @@ export function attachViewUrlToRecord<T extends object>(
   const viewUrl =
     canonicalUrl && /^https?:\/\//i.test(canonicalUrl)
       ? canonicalUrl
-      : absolutizeSiteUrl(site, explicitPublicPath ?? existingPublicUrl);
+      : absolutizeOrganizationUrl(organization, explicitPublicPath ?? existingPublicUrl);
 
   return {
     ...record,
@@ -517,7 +515,7 @@ export function workspaceLocationsPayload(
 }
 
 export async function mutationContextPayload(
-  site: McpOrganizationContext,
+  mcpContext: McpOrganizationContext,
   options: {
     organizationId?: string | null;
     locationId?: string | null;
@@ -532,7 +530,7 @@ export async function mutationContextPayload(
     location_id: string | null;
     location_slug: string | null;
     location_title: string | null;
-  }>(site.db, `
+  }>(mcpContext.db, `
     SELECT o.id AS organization_id,
            o.name,
            o.subdomain,
@@ -549,18 +547,17 @@ export async function mutationContextPayload(
     LIMIT 1
   `, [
     options.locationId ?? null,
-    options.organizationId ?? site.organizationId,
+    options.organizationId ?? mcpContext.organizationId,
   ]);
   if (!context) throw new Error('MCP organization context is unavailable.');
-  const organization = await findOrganizationById(site.env, context.organization_id)
+  const organization = await findOrganizationById(mcpContext.env, context.organization_id)
   if (!organization) throw new Error('MCP organization context is unavailable.')
   return {
     organization_id: context.organization_id,
     organization_name: organization.name,
     organization_slug: organization.slug,
-    site_name: context.name,
-    site_subdomain: context.subdomain,
-    site_public_url: resolveSitePublicOrigin(context),
+    organization_subdomain: context.subdomain,
+    organization_public_url: resolveOrganizationPublicOrigin(context),
     location_id: context.location_id,
     location_slug: context.location_slug,
     location_title: context.location_title,
@@ -598,17 +595,17 @@ export async function normalizeWorkspaceArguments(
     schema.properties && typeof schema.properties === "object"
       ? (schema.properties as Record<string, unknown>)
       : {};
-  const supportsSite = "organization_id" in properties;
+  const supportsOrganization = "organization_id" in properties;
   const supportsLocation = "location_id" in properties;
   const needsLocation = toolRequiresArgument(schema, "location_id");
-  const hasSite = typeof args.organization_id === "string" && args.organization_id.trim();
+  const hasOrganization = typeof args.organization_id === "string" && args.organization_id.trim();
   const hasLocation = typeof args.location_id === "string" && args.location_id.trim();
 
-  if (!supportsSite && !needsLocation) {
+  if (!supportsOrganization && !needsLocation) {
     return args;
   }
 
-  if ((!supportsSite || hasSite) && (!needsLocation || hasLocation)) {
+  if ((!supportsOrganization || hasOrganization) && (!needsLocation || hasLocation)) {
     return args;
   }
 
@@ -620,9 +617,9 @@ export async function normalizeWorkspaceArguments(
       user.env,
       user.userId,
       {
-        organizationId: hasSite ? String(args.organization_id) : null,
+        organizationId: hasOrganization ? String(args.organization_id) : null,
         locationId: hasLocation ? String(args.location_id) : null,
-        requireOrganization: supportsSite || needsLocation,
+        requireOrganization: supportsOrganization || needsLocation,
         requireLocation: needsLocation,
       },
     );
@@ -630,7 +627,7 @@ export async function normalizeWorkspaceArguments(
     rethrowWorkspaceError(error);
   }
 
-  if (!hasSite && supportsSite && workspace.organization) {
+  if (!hasOrganization && supportsOrganization && workspace.organization) {
     args.organization_id = workspace.organization.id;
   }
   if (!hasLocation && supportsLocation && workspace.location && needsLocation) {
@@ -847,15 +844,15 @@ export function extensionForContentType(contentType: string) {
 
 export function normalizeChannelsInput(
   args: Record<string, unknown>,
-): Array<"site" | "instagram" | "facebook"> {
+): Array<"organization" | "instagram" | "facebook"> {
   const rawChannels = args.channels;
   if (rawChannels !== undefined) return normalizeChannelArray(rawChannels);
-  return ["site"];
+  return ["organization"];
 }
 
 export function normalizeChannelArray(
   value: unknown,
-): Array<"site" | "instagram" | "facebook"> {
+): Array<"organization" | "instagram" | "facebook"> {
   if (!Array.isArray(value) || !value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -864,8 +861,8 @@ export function normalizeChannelArray(
   }
 
   const normalized = value.filter(
-    (item): item is "site" | "instagram" | "facebook" =>
-      item === "site" ||
+    (item): item is "organization" | "instagram" | "facebook" =>
+      item === "organization" ||
       item === "instagram" ||
       item === "facebook",
   );
@@ -873,7 +870,7 @@ export function normalizeChannelArray(
   if (normalized.length !== value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "channels may only contain site, facebook, or instagram.",
+      "channels may only contain organization, facebook, or instagram.",
     );
   }
 
@@ -893,7 +890,7 @@ export function assertDomainSuccess(result: {
   });
 }
 
-export function normalizeSiteCreationData(data: Record<string, unknown>) {
+export function normalizeOrganizationCreationData(data: Record<string, unknown>) {
   const organizationId = typeof data.organizationId === "string" ? data.organizationId : "";
   if (!organizationId.trim()) {
     throw mcpProtocolError(
@@ -922,7 +919,7 @@ export interface McpExecutorContext {
   normalizedArguments?: Record<string, unknown>
   tool?: ReturnType<typeof getMcpTool>
   organizationId?: string
-  site: McpOrganizationContext
+  organization: McpOrganizationContext
   args: Record<string, unknown>
 }
 

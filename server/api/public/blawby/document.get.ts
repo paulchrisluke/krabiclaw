@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const slug = typeof query.slug === 'string' ? query.slug : null
   const locale = query.locale === undefined ? 'en' : query.locale
   if (!organizationId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
-    return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid site ID and Blawby route recipe required')
+    return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid organization ID and Blawby route recipe required')
   }
   if (recipe === 'article' && !slug) {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_SLUG_REQUIRED', 'Route slug required')

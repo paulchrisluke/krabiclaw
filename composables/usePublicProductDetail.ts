@@ -1,5 +1,5 @@
 import type { Product, ProductSurface } from '~/server/types/products'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
@@ -15,6 +15,12 @@ export interface PublicProductDetailPayload {
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
+  /**
+   * The occurrences on sale at this branch, loaded with the page so they reach
+   * the server-rendered HTML. Empty is an answer — nothing scheduled — not an
+   * unfinished load.
+   */
+  sessions: PublicProductSession[]
   /** The collection this page was reached through, and its other members. */
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
@@ -42,6 +48,15 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && (value.booking === null || (isRecord(value.booking)
       && (value.booking.duration_minutes === null || typeof value.booking.duration_minutes === 'number')
       && (value.booking.default_capacity === null || typeof value.booking.default_capacity === 'number')))
+    && Array.isArray(value.sessions)
+    && value.sessions.every(session => isRecord(session)
+      && typeof session.id === 'string'
+      && typeof session.starts_at === 'string'
+      && typeof session.ends_at === 'string'
+      && typeof session.timezone === 'string'
+      && (session.remaining === null || typeof session.remaining === 'number')
+      && typeof session.is_full === 'boolean'
+      && typeof session.created_at === 'string')
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'
@@ -77,25 +92,25 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
 export async function usePublicProductDetail(routeKind: ProductSurface) {
   const route = useRoute()
   const requestEvent = useRequestEvent()
-  const { organizationId } = useTenantSite()
+  const { organizationId } = useTenantOrganization()
   // An Experience's page is site-wide: /experiences/<product-slug> names the
   // Product in its only slug segment, where a vertical's product page names the
   // branch first. Same payload either way, so one composable serves both.
   const routeSlug = String(route.params.slug ?? '')
   const productSlugParam = String(route.params.productSlug ?? '')
-  const siteWideExperience = routeKind === 'experiences' && productSlugParam === ''
-  const locationSlug = siteWideExperience ? '' : routeSlug
-  const productSlug = siteWideExperience ? routeSlug : productSlugParam
+  const organizationWideExperience = routeKind === 'experiences' && productSlugParam === ''
+  const locationSlug = organizationWideExperience ? '' : routeSlug
+  const productSlug = organizationWideExperience ? routeSlug : productSlugParam
   const locale = typeof route.params.locale === 'string' ? route.params.locale : 'en'
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
-  if (!organizationId || !productSlug || (!siteWideExperience && !locationSlug)) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
+  if (!organizationId || !productSlug || (!organizationWideExperience && !locationSlug)) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
 
   const { data, error } = await useAsyncData<PublicProductDetailPayload | null>(
     `public-product-${organizationId}-${locale}-${locationSlug}-${productSlug}`,
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
@@ -105,7 +120,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         const db = env.DB
         if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
         const previewAuthorized = Boolean(requestEvent.context.previewAuthorized)
-        const detail = siteWideExperience
+        const detail = organizationWideExperience
           ? await loadPublicExperienceDetail(env, db, organizationId, previewAuthorized, productSlug, locale)
           : await loadPublicProductDetail(env, db, organizationId, routeKind, previewAuthorized, locationSlug, productSlug, locale)
         if (!detail) return null
@@ -118,10 +133,13 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           product: detail.product,
           location: publicLocationPayload(detail.location),
           currency: detail.currency,
-          vertical: detail.site.vertical,
-          brandName: detail.site.name,
+          vertical: detail.organization.vertical,
+          brandName: detail.organization.name,
           reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
           booking: detail.booking,
+          // The calendar travels with the page, so the dates are in the bytes
+          // a crawler reads rather than appearing only after hydration.
+          sessions: await loadPublicProductSessions(db, detail),
           // Siblings come from the collection this product actually belongs
           // to on this site. With none, there are no siblings to show — the
           // page does not fall back to "everything at this location".
@@ -131,11 +149,11 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
                 currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
               })
             : [],
-          metafieldDefinitions: await listMetafieldDefinitions(db, detail.site.id),
+          metafieldDefinitions: await listMetafieldDefinitions(db, detail.organization.id),
           localeRepresentations: detail.localeRepresentations,
         }
       }
-      const path = siteWideExperience
+      const path = organizationWideExperience
         ? `/api/public/experiences/${encodeURIComponent(productSlug)}`
         : `/api/public/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`
       return publicApiRequest(`${path}?locale=${encodeURIComponent(locale)}`, {

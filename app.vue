@@ -10,7 +10,7 @@ import { calculateThemeColors } from '~/utils/color-utils'
 import { buildTenantHeadLinks } from '~/utils/tenant-head'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
-const { tenantType, isPlatform, site } = useTenantSite()
+const { tenantType, isPlatform, organization } = useTenantOrganization()
 if (tenantType === TENANT_TYPES.TENANT_404) {
   throw createError({
     statusCode: 404,
@@ -19,15 +19,20 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 }
 
 const { isBlawby } = usePublicTemplate()
-const siteShell = isBlawby.value ? null : useSiteShellState()
-const config = siteShell?.config
-const siteMedia = computed(() => siteShell?.site.value?.media ?? site?.media ?? [])
+const organizationShell = isBlawby.value ? null : useOrganizationShellState()
+const config = organizationShell?.config
+const organizationMedia = computed(() => organizationShell?.organization.value?.media ?? organization?.media ?? [])
 useHead(() => {
+  const verification = config?.value.search_console_verification
   return {
     link: buildTenantHeadLinks({
       isPlatform,
-      siteMedia: siteMedia.value,
-    })
+      organizationMedia: organizationMedia.value,
+    }),
+    // Google fetches the organization's domain to verify Search Console
+    // ownership (server/utils/google-search-console.ts); every public layout
+    // carries it. Blawby serves its own from its document shell.
+    meta: verification ? [{ name: 'google-site-verification', content: verification }] : [],
   }
 })
 
@@ -43,16 +48,15 @@ if (import.meta.client) {
   watchEffect(() => {
     const brandColor = config?.value.brand_color
     if (!brandColor) return
-    try {
-      const themeColors = calculateThemeColors(brandColor)
-      const root = document.documentElement
-      root.style.setProperty('--brand-color', themeColors.brandColor)
-      root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
-      root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
-      root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
-    } catch (error) {
-      console.error('Failed to apply brand color theme:', error)
-    }
+    // A brand colour the tenant saved that cannot be turned into a theme is a
+    // stored value that is wrong, and swallowing it painted every page in the
+    // platform default while the dashboard showed their colour set.
+    const themeColors = calculateThemeColors(brandColor)
+    const root = document.documentElement
+    root.style.setProperty('--brand-color', themeColors.brandColor)
+    root.style.setProperty('--brand-color-foreground', themeColors.brandColorForeground)
+    root.style.setProperty('--brand-color-dark', themeColors.brandColorDark)
+    root.style.setProperty('--brand-color-foreground-dark', themeColors.brandColorForegroundDark)
   })
 }
 </script>

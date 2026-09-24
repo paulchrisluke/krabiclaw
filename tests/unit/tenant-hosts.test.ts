@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   environmentTenantAliasHostname,
   environmentTenantAliasSlug,
-  getFreeSiteDomain,
+  getFreeOrganizationDomain,
   getPlatformHtmlCacheHosts,
   getPlatformHosts,
   hostnameOf,
@@ -15,22 +15,22 @@ import {
 } from '../../server/utils/tenant-hosts.ts'
 
 const prodEnv: TenantHostEnv = {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'krabiclaw.com',
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'krabiclaw.com',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
 }
 
 const localEnv: TenantHostEnv = {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'http://localhost:3000',
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'http://localhost:3000',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
 }
 
 const stagingEnv: TenantHostEnv = {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com',
 }
 
 const portedCustomEnv: TenantHostEnv = {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'http://myapp.example.com:3000',
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'http://myapp.example.com:3000',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
 }
 
@@ -56,7 +56,7 @@ test('getPlatformHosts includes loopback and only explicitly configured domains'
     const hosts = getPlatformHosts(env)
     assert.ok(hosts.includes('localhost'))
     assert.ok(hosts.includes('127.0.0.1'))
-    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)))
+    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)))
     assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN)))
     assert.equal(hosts.includes('www.krabiclaw.com'), false)
   }
@@ -120,14 +120,14 @@ test('isPlatformHost', async (t) => {
   })
 })
 
-test('getFreeSiteDomain normalizes the configured domain and strips its port', () => {
-  assert.equal(getFreeSiteDomain(prodEnv), 'krabiclaw.com')
-  assert.equal(getFreeSiteDomain(localEnv), 'localhost')
-  assert.equal(getFreeSiteDomain(portedCustomEnv), 'myapp.example.com')
+test('getFreeOrganizationDomain normalizes the configured domain and strips its port', () => {
+  assert.equal(getFreeOrganizationDomain(prodEnv), 'krabiclaw.com')
+  assert.equal(getFreeOrganizationDomain(localEnv), 'localhost')
+  assert.equal(getFreeOrganizationDomain(portedCustomEnv), 'myapp.example.com')
 })
 
-test('getFreeSiteDomain rejects an unconfigured domain', () => {
-  assert.throws(() => getFreeSiteDomain({}), /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/)
+test('getFreeOrganizationDomain rejects an unconfigured domain', () => {
+  assert.throws(() => getFreeOrganizationDomain({}), /NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required/)
 })
 
 test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {

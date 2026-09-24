@@ -35,7 +35,7 @@
           </NuxtLink>
 
           <NuxtLink
-            v-if="!isExperienceSite"
+            v-if="!isExperienceOrganization"
             :to="localePath('/reservations')"
             class="rounded-full px-3 py-2 text-sm text-muted transition hover:bg-muted hover:text-default"
           >
@@ -82,7 +82,7 @@
                   {{ t('saya.header.locations') }}
                 </NuxtLink>
                 <div class="my-1 border-t border-default" />
-                <NuxtLink v-if="!isExperienceSite" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                <NuxtLink v-if="!isExperienceOrganization" :to="localePath('/reservations')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
                   {{ t('saya.header.reservations') }}
                 </NuxtLink>
                 <NuxtLink :to="localePath('/contact')" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
@@ -100,7 +100,7 @@
 
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-interface Site {
+interface Organization {
   name?: string | null
   media?: Array<{ slot?: string; public_url?: string | null }>
   plan?: string
@@ -122,7 +122,7 @@ import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/pro
 // Data comes from layouts/saya.vue, which already owns the single shared
 // bootstrap/tenant-site fetch — header is presentation-only, not a fetcher.
 const props = defineProps<{
-  site: Site | null
+  organization: Organization | null
   locations: ApiRecord[]
   hasProducts: boolean
   hasBookableProducts: boolean
@@ -130,7 +130,7 @@ const props = defineProps<{
 
 const i18n = useI18n() as ApiValue as I18nComposable
 const { locale, localePath, t } = i18n
-const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
+const verticalCopy = computed(() => getVerticalCopy(props.organization?.vertical, locale.value))
 const mobileMenuOpen = ref(false)
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
 const headerRef = shallowRef<Element | null>(null)
@@ -163,13 +163,13 @@ onUnmounted(() => {
   window.removeEventListener('resize', syncHeaderHeight)
 })
 
-const restaurantName = computed(() => props.site?.name?.trim() || '')
-const logoUrl = computed(() => Array.isArray(props.site?.media)
-  ? (props.site.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
+const restaurantName = computed(() => props.organization?.name?.trim() || '')
+const logoUrl = computed(() => Array.isArray(props.organization?.media)
+  ? (props.organization.media as ApiRecord[]).find(item => item.slot === 'logo')?.public_url || null
   : null)
-const isExperienceSite = computed(() => props.site?.vertical === 'experience')
+const isExperienceOrganization = computed(() => props.organization?.vertical === 'experience')
 
-const productPresentation = computed(() => resolveProductPresentation(props.site?.vertical))
+const productPresentation = computed(() => resolveProductPresentation(props.organization?.vertical))
 const showProducts = computed(() => props.hasProducts && productPresentation.value !== null)
 // Two surfaces, each offered only when the site has something on it: what the
 // merchant sells, and what a guest books a seat on.

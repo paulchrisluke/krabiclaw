@@ -1,5 +1,5 @@
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { queryFirst } from '~/server/db'
 import type { PlaceDetails, PlaceReview } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
@@ -120,7 +120,7 @@ export interface OnboardingDraftPayload {
   }
   preview: {
     brandName: string
-    vertical: SiteVertical
+    vertical: OrganizationVertical
     subdomainCandidate: string
     config: Record<string, string | null>
     media: Array<{ slot: 'logo' | 'hero'; asset: DraftUploadedImage }>
@@ -134,7 +134,7 @@ export interface OnboardingDraftPayload {
   }
 }
 
-function defaultProductCategory(vertical: SiteVertical): string {
+function defaultProductCategory(vertical: OrganizationVertical): string {
   if (vertical === 'experience') return 'Experiences'
   if (vertical === 'service') return 'Services'
   return 'Menu'
@@ -212,7 +212,6 @@ export interface DraftDetailsInput {
   websiteUrl: string | null
   openingHours: OpeningHours
   specialHours: SpecialHours
-  notificationPhone: string | null
   timezone: string | null
   currency: CurrencyCode | null
 }
@@ -232,7 +231,7 @@ export interface PlaceDetailsSnapshot {
 }
 
 export function slugify(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
 function nowIso() {
@@ -259,7 +258,7 @@ function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
 
 function buildDraftContent(
   _brandName: string,
-  _vertical: SiteVertical,
+  _vertical: OrganizationVertical,
   heroHeadline: string | null,
   heroSubtitle: string | null,
 ): DraftContentRecord[] {
@@ -286,7 +285,7 @@ export interface DraftProductInput {
 
 export function buildOnboardingDraftPayload(input: {
   name: string
-  vertical: SiteVertical
+  vertical: OrganizationVertical
   details: DraftDetailsInput
   place: DraftPlaceSource | null
   brandDraft?: DraftBrandInput | null
@@ -412,7 +411,7 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   userId: string
   organizationId?: string | null
   name: string
-  vertical: SiteVertical
+  vertical: OrganizationVertical
   sourceType: DraftSourceType
   payload: OnboardingDraftPayload
 }): Promise<OnboardingDraftUpsertResult> {

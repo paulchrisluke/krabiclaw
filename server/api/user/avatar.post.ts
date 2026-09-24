@@ -8,7 +8,7 @@
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { deleteImage, deleteImageOwnedBy, hasCloudflareImagesConfig, uploadImageBuffer } from '~/server/utils/cloudflare-images'
+import { assertCloudflareImagesConfigured, deleteImage, deleteImageOwnedBy, uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { sniffMediaMimeType, POSTER_IMAGE_MIME_TYPES } from '~/server/utils/media-mime'
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -17,7 +17,7 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!hasCloudflareImagesConfig(env)) return jsonResponse({ error: 'Image uploads are not configured' }, { status: 503 })
+  assertCloudflareImagesConfigured(env)
 
   const form = await readFormData(event)
   const file = form.get('file')
@@ -45,7 +45,11 @@ export default defineHandler(async (event) => {
   } catch (cause) {
     // The image exists before the account points at it, so a failed update
     // would otherwise leave it orphaned in Cloudflare Images forever.
-    await deleteImage(env, uploaded.imageId).catch(() => undefined)
+    try {
+      await deleteImage(env, uploaded.imageId)
+    } catch (cleanupError) {
+      throw new AggregateError([cause, cleanupError], 'Avatar update and cleanup failed', { cause: cleanupError })
+    }
     throw cause
   }
 
@@ -54,12 +58,18 @@ export default defineHandler(async (event) => {
   // `user.image`, which an authenticated client can set to any string through
   // Better Auth — so it names a candidate, and Cloudflare's own record of the
   // filename decides whether it is ours to delete.
+  // The new avatar is already saved, so a failed delete of the old one is not a
+  // failed upload: the response says the avatar changed and names what was left.
   const previousImageId = previous?.split('/').at(-2)
   if (previousImageId && previousImageId !== uploaded.imageId) {
-    await deleteImageOwnedBy(env, previousImageId, avatarFilename).catch((cause: unknown) => {
-      console.error('avatar_previous_image_delete_failed', { error: cause instanceof Error ? cause.message : String(cause) })
-      return false
-    })
+    try {
+      await deleteImageOwnedBy(env, previousImageId, avatarFilename)
+    } catch (cause) {
+      return jsonResponse({
+        image: uploaded.publicUrl,
+        previousImageCleanupError: `The previous avatar image ${previousImageId} was not deleted: ${cause instanceof Error ? cause.message : String(cause)}`,
+      })
+    }
   }
 
   return jsonResponse({ image: uploaded.publicUrl })

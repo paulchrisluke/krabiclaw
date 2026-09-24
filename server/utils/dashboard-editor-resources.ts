@@ -8,7 +8,6 @@ import { requireLocationAccess, requireOrganizationAccess } from '~/server/utils
 import {
   assertLocationAccess,
   assertResourceAccess,
-  listAccessibleLocationIds,
   memberAccessPrincipal,
 } from '~/server/utils/member-access'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
@@ -20,7 +19,7 @@ import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
-import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
 
@@ -33,14 +32,12 @@ interface EditorLocationRow {
 }
 
 export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   if (!organization.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
-  const principal = memberAccessPrincipal(organization.membership, { env, event })
-  // requireOrganizationAccess(event, organizationId, 'context') has already run
-  // assertOrganizationContextAccess with this exact principal (location-access.ts), so
-  // asserting it again here only bought a second read of the same member row.
-  const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
+  // requireOrganizationAccess(event, organizationId) has already
+  // authorized this caller (location-access.ts), so asserting again here only
+  // bought a second read of the same member row.
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
@@ -51,18 +48,17 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
     getOrganizationEntitlements(env, organization.id),
   ])
   const locations = locationRows
-    .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
   const previewToken = await createPreviewToken(env.PREVIEW_SECRET, organizationId, Date.now() + PREVIEW_TOKEN_TTL_MS)
-  const { vertical, template } = resolveSiteCmsCapabilities(organization.vertical, organization.theme_id, {
-    siteEnabledFeatures: organization.feature_overrides,
+  const { vertical, template } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+    organizationEnabledFeatures: organization.feature_overrides,
   })
   return {
     success: true as const,
     context: {
-      site: {
+      organization: {
         id: organization.id,
         name: organization.name,
         subdomain: organization.subdomain,
@@ -73,15 +69,14 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
         feature_overrides: organization.feature_overrides,
         entitlements,
       },
-      organization: { id: organization.id, name: organization.name },
       locations,
       scopes: [
-        ...(accessibleLocationIds === null ? [{ id: null, label: 'Brand-wide', type: 'brand' as const }] : []),
+        { id: null, label: 'Brand-wide', type: 'brand' as const },
         ...locations.map(location => ({ id: location.id, label: location.title, type: 'location' as const })),
       ],
       previewToken,
       editablePages: getEditablePages(vertical, template, {
-        site: parseCmsFeatureOverrideDelta(organization.feature_overrides),
+        organization: parseCmsFeatureOverrideDelta(organization.feature_overrides),
       }),
     },
   }
@@ -112,7 +107,7 @@ export async function loadDashboardMedia(
   organizationId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, organizationId)
@@ -150,7 +145,7 @@ export interface LocationContentCounts {
   qa: number
   reviews: number
   /** The site's own questions, which this location's page also answers from. */
-  siteQa: number
+  organizationQa: number
 }
 
 /**
@@ -182,14 +177,14 @@ async function loadLocationContentCounts(
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND organization_id = ? AND location_id = ? AND status = 'published') AS posts,
       (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id = ?) AS qa,
       (SELECT COUNT(*) FROM reviews WHERE organization_id = ? AND location_id = ?) AS reviews,
-      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id IS NULL) AS site_qa
+      (SELECT COUNT(*) FROM content_documents WHERE kind = 'qa' AND row_role = 'root' AND organization_id = ? AND location_id IS NULL) AS organization_qa
   `, [...Array.from({ length: 4 }, () => [organizationId, locationId]).flat(), organizationId])
   return {
     photos: row?.photos ?? 0,
     posts: row?.posts ?? 0,
     qa: row?.qa ?? 0,
     reviews: row?.reviews ?? 0,
-    siteQa: row?.site_qa ?? 0,
+    organizationQa: row?.organization_qa ?? 0,
   }
 }
 

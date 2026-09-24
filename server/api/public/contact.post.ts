@@ -1,12 +1,12 @@
 import { requestInsertQueries } from '~/server/domain/requests'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { organizationSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { executeBatch, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { notifyContactSubmitted } from '~/server/utils/notifications'
+import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -34,9 +34,17 @@ export default defineHandler(async (event) => {
   const source = cleanString(body.source, 100)
   const routeContext = cleanString(body.route_context, 500)
   const suggestedSummary = cleanString(body.suggested_summary, 1000)
-  const agentMetadata = body.agent_metadata_json !== undefined && body.agent_metadata_json !== null
-    ? (() => { try { return JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue } catch { return null } })()
-    : null
+  // Metadata the caller sent but that cannot round-trip is the caller's error,
+  // so it is refused. Discarding it silently meant an escalation arrived stripped
+  // of the context the agent attached, with nothing anywhere saying so.
+  let agentMetadata: ApiValue = null
+  if (body.agent_metadata_json !== undefined && body.agent_metadata_json !== null) {
+    try {
+      agentMetadata = JSON.parse(JSON.stringify(body.agent_metadata_json)) as ApiValue
+    } catch {
+      return jsonResponse({ error: 'agent_metadata_json must be JSON-serialisable.' }, { status: 400 })
+    }
+  }
   if (agentMetadata !== null && JSON.stringify(agentMetadata).length > 10_000) return jsonResponse({ error: 'agent_metadata_json is too large.' }, { status: 400 })
   const locationIdInput = cleanString(body.location_id, 100) || cleanString(body.locationId, 100)
 
@@ -48,10 +56,10 @@ export default defineHandler(async (event) => {
   if (subject && !VALID_SUBJECTS.includes(subject))
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
+  const organization = await queryFirst<{ id: string; name?: string | null; vertical?: string | null; theme_id?: string | null }>(
     db, 'SELECT id, name, vertical, theme_id FROM organization WHERE id = ? AND status = ? LIMIT 1', [organizationId, 'active'], )
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  const requiresConsent = siteSupportsBlawbyTemplate({ themeId: site.theme_id, vertical: site.vertical })
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+  const requiresConsent = organizationSupportsBlawbyTemplate({ themeId: organization.theme_id, vertical: organization.vertical })
   const consentAcknowledged = body.consent === true
   if (requiresConsent && !consentAcknowledged) {
     return jsonResponse({ error: 'Please acknowledge the contact and privacy notice.' }, { status: 400 })
@@ -82,23 +90,21 @@ export default defineHandler(async (event) => {
 
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
-  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: site.id, location_id: assignedLocationId,
+  await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: organization.id, location_id: assignedLocationId,
     customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
-  try {
-    await notifyContactSubmitted(env, db, {
-      organizationId: site.id, locationId: assignedLocationId, siteName: site.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, })
-  } catch (error) {
-    console.error('contact_notification_failed', {
-      organizationId: site.id, contactId: id, error: error instanceof Error ? error.message : String(error)
-    })
-  }
-
-  await recordSubmissionConversionSafe(db, event, {
-    organizationId: site.id,
+  // Both are attempted before either failure is raised. Telling the owner and
+  // recording the conversion are independent of each other, and running them in
+  // sequence meant a failed notification silently cost the tenant the conversion
+  // record as well.
+  const followUps = await Promise.allSettled([
+    notifyContactSubmitted(env, db, {
+      organizationId: organization.id, locationId: assignedLocationId, organizationName: organization.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
+    recordOrganizationConversionEvent(db, event, {
+    organizationId: organization.id,
     eventName: 'contact_submit',
     stage: 'submitted',
     locationId: assignedLocationId,
@@ -106,7 +112,10 @@ export default defineHandler(async (event) => {
     entityId: id,
     pageType: 'contact',
     pagePath: '/contact',
-  })
+    }),
+  ])
+  raiseSettledFailures('contact submission follow-up', `contactId ${id}`, followUps,
+    ['notifyContactSubmitted', 'recordOrganizationConversionEvent'])
 
   return jsonResponse({
     success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })

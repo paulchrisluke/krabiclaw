@@ -54,7 +54,7 @@ const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 // The words are the surface's own: a collection of classes is read as
 // experiences, a section of a menu as dishes.
 const presentation = computed(() => presentationForSurface(vertical, props.surface))

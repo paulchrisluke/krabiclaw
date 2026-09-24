@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-page-title"
+    id="organization-page-title"
     title="Title"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

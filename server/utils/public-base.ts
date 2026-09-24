@@ -10,7 +10,7 @@ import { publicSocialMediaFromJson, type PublicMediaPlacement } from '~/server/u
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicBase {
-  site: {
+  organization: {
     id: string
     organization_id: string
     default_currency: CurrencyCode | null
@@ -26,12 +26,28 @@ export interface PublicBase {
     seo_title: string | null
     seo_description: string | null
     canonical_url: string | null
-    robots: string | null
+    search_console_verification: string | null
     default_timezone: string | null
     social_facebook_url: string | null
     social_instagram_url: string | null
     social_tiktok_url: string | null
   }
+}
+
+/**
+ * What a public request may see of a tenant, as a SQL predicate on an aliased
+ * `organization` row — the query half of the rule
+ * server/middleware/tenant-resolution.ts applies at the host, so a surface
+ * reached by id answers the same way as one reached by hostname.
+ *
+ * Live and provisioned is public. Draft, and still-provisioning, belong to the
+ * holder of the tenant's preview token. `suspended` is KrabiClaw's own hold and
+ * is nobody's to look past.
+ */
+export function publicTenantVisibilitySql(alias: string, previewAuthorized: boolean | undefined): string {
+  return previewAuthorized
+    ? `${alias}.status <> 'suspended'`
+    : `${alias}.status = 'active' AND ${alias}.onboarding_status = 'active'`
 }
 
 export function loadPublicBase(
@@ -45,7 +61,7 @@ export function loadPublicBase(
     const db = cloudflareEnv(event).DB
     if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     try {
-      const row = await queryFirst<Omit<PublicBase['site'], 'media'> & { media_json: string }>(
+      const row = await queryFirst<Omit<PublicBase['organization'], 'media'> & { media_json: string }>(
         db,
         `SELECT s.id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
                 s.theme_id, s.feature_overrides,
@@ -56,17 +72,18 @@ export function loadPublicBase(
                 )) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
                   WHERE mp.organization_id = s.id AND mp.owner_type = 'organization' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
                 s.seo_title, s.seo_description, s.canonical_url,
+                json_extract(s.integrations_json, '$.google_search_console.verification_token') AS search_console_verification,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 json_extract(s.settings_json, '$.config.default_timezone') AS default_timezone
            FROM organization s
-          WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? '' : " AND s.onboarding_status = 'active'"}
+          WHERE s.id = ? AND ${publicTenantVisibilitySql('s', options.previewAuthorized)}
           LIMIT 1`,
         [organizationId],
       )
-      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
-      const { media_json: mediaJson, ...site } = row
-      return { site: {
-        ...site,
+      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+      const { media_json: mediaJson, ...organization } = row
+      return { organization: {
+        ...organization,
         ...publicSocialMediaFromJson(mediaJson),
       } }
     } finally {

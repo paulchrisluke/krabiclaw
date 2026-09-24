@@ -60,29 +60,6 @@
               </div>
             </div>
 
-            <div v-if="editingRoleMemberId === member.id" class="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <UFormField label="Location" description="Which location can this editor access?" class="flex-1">
-                <USelect
-                  v-model="memberRoleForm.locationId"
-                  :items="locationOptions"
-                  :loading="locationsPending"
-                  placeholder="Select a location"
-                  class="w-full"
-                />
-              </UFormField>
-              <div class="flex gap-2">
-                <UButton
-                  label="Save"
-                  color="primary"
-                  size="sm"
-                  :loading="roleUpdatingId === member.id"
-                  :disabled="!memberRoleForm.locationId"
-                  @click="submitEditorRoleChange(member)"
-                />
-                <UButton label="Cancel" color="neutral" variant="ghost" size="sm" @click="cancelRoleEdit" />
-              </div>
-            </div>
-
             <UAlert
               v-if="roleUpdateError && roleUpdateErrorMemberId === member.id"
               color="error"
@@ -216,7 +193,7 @@ const isMembersResponse = (
 
 const route = useRoute()
 const dashboard = useDashboardOrganization()
-const { orgPaths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardOrganizationLinks()
 const membersPath = computed(() => `${orgPaths.value.settings}/members`)
 const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))
 
@@ -244,9 +221,7 @@ const currentUserRole = computed(() => {
 const isOwner = computed(() => currentUserRole.value === 'owner')
 
 const BASE_ROLE_OPTIONS = [
-  { label: 'Member', value: 'member' },
   { label: 'Admin', value: 'admin' },
-  { label: 'Editor', value: 'editor' },
 ]
 // Owner is only offered as a choice to an existing owner — mirrors Better
 // Auth's own creatorRole rule (only an owner can grant/touch the owner role),
@@ -271,53 +246,27 @@ const cancellingInviteId = ref<string | null>(null)
 const memberError = ref<string | null>(null)
 const pendingInvitationError = ref<string | null>(null)
 
-const editingRoleMemberId = ref<string | null>(null)
-const memberRoleForm = reactive({ locationId: '' })
-const scope = useOrganizationLocationOptions()
-const { options: locationOptions, pending: locationsPending } = scope
-watch(scope.error, (message) => {
-  if (!message || !editingRoleMemberId.value) return
-  roleUpdateError.value = message
-  roleUpdateErrorMemberId.value = editingRoleMemberId.value
-})
 const roleUpdatingId = ref<string | null>(null)
 const roleUpdateError = ref<string | null>(null)
 const roleUpdateErrorMemberId = ref<string | null>(null)
-
-function cancelRoleEdit() {
-  editingRoleMemberId.value = null
-  memberRoleForm.locationId = ''
-}
 
 function onRoleSelected(member: MemberRow, role: string) {
   roleUpdateError.value = null
   roleUpdateErrorMemberId.value = null
   if (role === member.role) return
-  if (role === 'editor') {
-    editingRoleMemberId.value = member.id
-    memberRoleForm.locationId = ''
-    void scope.load()
-    return
-  }
   void submitRoleChange(member, role)
 }
 
-async function submitEditorRoleChange(member: MemberRow) {
-  if (!memberRoleForm.locationId) return
-  await submitRoleChange(member, 'editor', { locationId: memberRoleForm.locationId })
-}
-
-async function submitRoleChange(member: MemberRow, role: string, scope?: { locationId: string }) {
+async function submitRoleChange(member: MemberRow, role: string) {
   roleUpdatingId.value = member.id
   roleUpdateError.value = null
   roleUpdateErrorMemberId.value = null
   try {
     await dashboardApi(`/api/dashboard/organizations/members/${member.id}/role`, {
       method: 'POST',
-      body: { role, locationId: scope?.locationId },
+      body: { role },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
-    cancelRoleEdit()
     await refresh()
   } catch (err: unknown) {
     roleUpdateError.value = err instanceof ApiClientError && typeof err.data.error === 'string'

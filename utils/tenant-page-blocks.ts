@@ -66,7 +66,6 @@ export interface TenantPageSnapshotMetadata {
   seoTitle: string | null
   seoDescription: string | null
   canonicalUrl: string | null
-  robots: string | null
   pageType: string
   recipe: string | null
 }
@@ -211,7 +210,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     title: text('Title', { section: 'settings' }),
     source: {
       kind: 'enum', label: 'Questions', required: true, translatable: false, section: 'settings', default: 'page_qa',
-      options: [{ value: 'page_qa', label: "This page's questions" }, { value: 'site_qa', label: "The site's questions" }],
+      options: [{ value: 'page_qa', label: "This page's questions" }, { value: 'organization_qa', label: "The site's questions" }],
     },
   }, { accessibility: 'required', seo: 'structured' }),
 
@@ -286,14 +285,20 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
       options: [
         { value: 'manual', label: 'Items I write' },
-        { value: 'site_posts', label: 'Published articles' },
-        { value: 'site_updates', label: 'Social posts' },
+        { value: 'organization_posts', label: 'Published articles' },
+        { value: 'organization_updates', label: 'Social posts' },
         { value: 'calculator', label: 'Pricing calculator' },
         { value: 'billing_plans', label: 'KrabiClaw plans', platformOnly: true },
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
     calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
+    // The one button a practice area's feature list carries over its picture.
+    // Declared here so the firm writes its words and its destination, the way
+    // every other button on a page is written, rather than a template holding
+    // an English label and a route no one can change.
+    cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
+    cta_url: link('Button URL', { section: 'button', pairedWith: 'cta_label' }),
   }),
 
   // A comparison is one editorial thing — this without us, this with us — held
@@ -561,7 +566,7 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
   // for it, which the writer refused: an editing surface for data it rejected.
   if (type === 'faq' || type === 'testimonial_grid') {
     if (data.items !== undefined) throw new Error(`${type}.items is not stored; Q&A and reviews are read-only records.`)
-    if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or site_qa.')
+    if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or organization_qa.')
   }
   if (type === 'how_to' && Array.isArray(data.steps)) {
     for (const [index, step] of data.steps.entries()) {
@@ -739,7 +744,6 @@ export function validateTenantPageSnapshot(value: unknown): TenantPageSnapshot {
     seoTitle: asString(metadata.seoTitle, 'snapshot.metadata.seoTitle'),
     seoDescription: asString(metadata.seoDescription, 'snapshot.metadata.seoDescription'),
     canonicalUrl: asString(metadata.canonicalUrl, 'snapshot.metadata.canonicalUrl'),
-    robots: asString(metadata.robots, 'snapshot.metadata.robots'),
     pageType: asString(metadata.pageType, 'snapshot.metadata.pageType', true)!,
     recipe: asString(metadata.recipe, 'snapshot.metadata.recipe'),
   }

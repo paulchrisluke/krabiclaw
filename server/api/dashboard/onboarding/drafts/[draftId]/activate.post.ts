@@ -16,9 +16,9 @@ import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onb
 import { activateOrganization } from '~/server/utils/organization-provisioning'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { refreshSocialCard } from '~/server/utils/social-card'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { resolveUserOrganization } from '~/server/utils/member-access'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { isValidTimezone } from '~/utils/timezone'
 
 export default defineHandler(async (event) => {
@@ -37,7 +37,7 @@ export default defineHandler(async (event) => {
     user_id: string
     organization_id: string | null
     name: string
-    vertical: SiteVertical
+    vertical: OrganizationVertical
     subdomain_candidate: string
     status: string
     payload_json: string
@@ -133,28 +133,18 @@ export default defineHandler(async (event) => {
     `, [now, now, draftId])
     committed = true
 
-    // Activation must not fail the launch: the tenant is live either way, and the
-    // dashboard resolves an organization for the session on its next request.
-    await activateSessionOrganization(event, env, organizationId).catch((error: unknown) => {
-      console.error('onboarding_activate_session_organization_failed', {
-        organizationId, error: error instanceof Error ? error.message : String(error),
-      })
-    })
-
-    // The homepage and its media are live now: generate the social card once so
-    // its first real card uses the homepage hero. Deliberately one owner —
-    // everything else is picked up by the social-card-backfill task.
+    // The tenant is live from here, so its public cache is purged whichever of
+    // the steps before it fails, and a failed purge fails the response rather
+    // than a background promise nobody reads.
     try {
-      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
-    } catch (cardError) {
-      console.error('onboarding_activate_social_card_failed', { organizationId, error: cardError instanceof Error ? cardError.message : String(cardError) })
-    }
+      await activateSessionOrganization(event, env, organizationId)
 
-    const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
-    if (typeof waitUntil === 'function') {
-      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheSafe(env, organizationId))
-    } else {
-      await purgePublicResourceCacheSafe(env, organizationId)
+      // The homepage and its media are live now: generate the social card once so
+      // its first real card uses the homepage hero. Deliberately one owner —
+      // everything else is picked up by the social-card-backfill task.
+      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
+    } finally {
+      await purgePublicResourceCacheNow(env, organizationId)
     }
 
     const orgRow = await resolveUserOrganization(env, { userId: session.user.id, organizationId })

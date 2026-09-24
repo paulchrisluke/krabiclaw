@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { ensureLocation, ensureOrganization, mcpData, mcpRequest } from './helpers/mcp'
+import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 
 interface PriceRow {
@@ -38,8 +38,8 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
       })]),
     },
   })
-  const organizationId = await ensureOrganization(request, baseURL!)
-  const locationId = await ensureLocation(request, baseURL!, organizationId)
+  const organizationId = MCP_GROWTH_ORGANIZATION_ID
+  const locationId = 'loc-demo'
 
   const create = await mcpRequest(request, baseURL!, {
     method: 'tools/call',

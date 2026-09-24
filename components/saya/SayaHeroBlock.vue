@@ -14,8 +14,8 @@ import { blockText, blockMedia } from '~/utils/tenant-page-block-data'
 // whether ordering exists. The buttons used to be substituted from the
 // vertical's copy table, so no owner could change the words on them.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
-const { site } = useTenantSite()
-const { locations, config } = useSiteShellState()
+const { organization } = useTenantOrganization()
+const { locations, config } = useOrganizationShellState()
 
 const asset = computed(() => blockMedia(props.block, 'media')[0] ?? null)
 const heroData = computed(() => {
@@ -38,7 +38,7 @@ const heroData = computed(() => {
     viewMenuRoute: blockText(props.block.data.secondary_url),
     viewMenuCta: blockText(props.block.data.secondary_label),
     brandColor: config.value.brand_color,
-    vertical: site?.vertical ?? undefined,
+    vertical: organization?.vertical ?? undefined,
   }
 })
 </script>

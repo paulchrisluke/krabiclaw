@@ -45,7 +45,7 @@ export async function getOrganizationMembersData(env: CloudflareEnv, organizatio
     })(),
     adapter.listInvitations({ organizationId }),
   ])
-  const roleOrder = new Map([['owner', 0], ['admin', 1], ['editor', 2]])
+  const roleOrder = new Map([['owner', 0], ['admin', 1]])
   const members = memberRows.filter(member => member.user).map(member => ({
     id: member.id,
     role: String(member.role),

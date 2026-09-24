@@ -63,7 +63,7 @@ export async function loadPublicBlawbyDocument(
   if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
   const host = event.req.headers.get('host') ?? ''
-  const cache = env.SITE_CACHE
+  const cache = env.ORGANIZATION_CACHE
   const useCache = !options.previewAuthorized && !isNonProductionHost(host) && Boolean(cache)
   const cacheKey = buildPublicBlawbyDocumentCacheKey(organizationId, recipe, slug, locale)
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true

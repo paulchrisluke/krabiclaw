@@ -55,9 +55,6 @@ export function useRouteLevel() {
     return route.matched.findIndex(candidate => candidate === record)
   })
 
-  /** True once this level's record has left the matched chain. Nothing it answers is about the current route. */
-  const stale = computed(() => index.value === -1)
-
   const depth = computed(() => segments(route.matched[index.value]?.path ?? route.path))
 
   /**
@@ -67,7 +64,8 @@ export function useRouteLevel() {
    * columns appearing and squeezing the leaf into a third of the width.
    */
   const mode = computed<RouteLevelMode>(() => {
-    if (stale.value) return 'yield'
+    // A level whose record has left the matched chain is on its way out and renders nothing.
+    if (index.value === -1) return 'yield'
     const below = segments(route.path) - depth.value
     if (below <= 0) return 'index'
     if (below === 1) return 'pair'
@@ -77,7 +75,7 @@ export function useRouteLevel() {
   /**
    * The nearest screen above this one. A record at the same URL is the same
    * level — a directory's `index.vue` — and a record that only carries a path
-   * segment, as `sites/[siteSlug].vue` does with nothing but `<NuxtPage>`, is
+   * segment, as `sites/[organizationSlug].vue` does with nothing but `<NuxtPage>`, is
    * not somewhere Back can land. Both are stepped over.
    */
   const parent = computed(() => {
@@ -100,7 +98,6 @@ export function useRouteLevel() {
    * page names its own with `definePageMeta({ back: '<route name>' })`.
    */
   const to = computed<string | null>(() => {
-    if (stale.value) return null
     const declared = route.matched[index.value]?.meta?.back
     if (typeof declared === 'string') return resolveNamed(declared)
     const record = parent.value
@@ -109,7 +106,7 @@ export function useRouteLevel() {
 
   /**
    * A declared parent is resolved with only the params its own path names.
-   * The current route carries more — a leaf under a site has `siteSlug`, `qaId`
+   * The current route carries more — a leaf under a site has `organizationSlug`, `qaId`
    * — and the router refuses a named target handed params it has no place for.
    */
   function resolveNamed(name: string): string | null {
@@ -137,5 +134,5 @@ export function useRouteLevel() {
     return navigateTo({ path: path.value, query: route.query })
   }
 
-  return { mode, to, path, child, close, stale }
+  return { mode, to, path, child, close }
 }

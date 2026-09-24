@@ -50,7 +50,7 @@ export const useOrganizationSubscription = () => {
   const dashboard = useDashboardOrganization()
   const dashboardApi = useDashboardApi()
   const { trackSubscriptionUpgrade, trackSubscriptionDowngrade } = useAnalytics()
-  const { startSubscriptionCheckout } = useSubscriptionCheckout()
+  const { startSubscriptionCheckout, analyticsIntentError } = useSubscriptionCheckout()
 
   // Stripe's hosted portal: card, invoices, receipts, cancelling. The plugin
   // exposes nothing else for those, so nothing here draws them.
@@ -70,12 +70,9 @@ export const useOrganizationSubscription = () => {
     await navigateTo(portalUrl, { external: true })
   }
 
-  // The organization owns one recurring subscription. A site is only
-  // metadata on the upgrade request and receives derived entitlements after
-  // Better Auth confirms the subscription through Stripe.
-  async function startOrganizationCheckout(siteId: string, plan: string) {
-    const organizationId = dashboard.organization.value?.id
-    if (!organizationId) throw new Error('Organization context is unavailable')
+  // The organization owns one recurring subscription; its entitlements follow
+  // once Better Auth confirms the subscription through Stripe.
+  async function startOrganizationCheckout(organizationId: string, plan: string) {
     const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
     if (subscription.status === 'past_due') {
       await openBillingPortal()
@@ -84,7 +81,6 @@ export const useOrganizationSubscription = () => {
     const currentPlan = subscription.plan
     await startSubscriptionCheckout({
       organizationId,
-      siteId,
       plan,
       currentPlan,
       subscriptionId: subscription.id,
@@ -95,5 +91,8 @@ export const useOrganizationSubscription = () => {
     })
   }
 
-  return { startOrganizationCheckout, openBillingPortal }
+  // Forwarded so a checkout that went through with its billing analytics intent
+  // unrecorded is visible to whatever renders this, rather than ending in a ref
+  // nobody reads — which is the same silence in a newer place.
+  return { startOrganizationCheckout, openBillingPortal, analyticsIntentError }
 }

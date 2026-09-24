@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-blog-post-canonical"
+    id="organization-blog-post-canonical"
     title="Canonical URL"
     :ready="!editor.loadPending.value && !editor.loadError.value"
     :saving="editor.saving.value"

@@ -25,8 +25,8 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+  if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
   // The table held is its own row: it carries the location and the status this
   // endpoint is about, and the thread carries the conversation.
@@ -36,7 +36,7 @@ export default defineHandler(async (event) => {
      WHERE r.kind = 'reservation' AND r.id = ? AND r.organization_id = ? LIMIT 1`, [submissionId, organizationId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
-  await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: submission.location_id })
+  await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: submission.location_id })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)

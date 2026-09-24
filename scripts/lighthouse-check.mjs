@@ -111,6 +111,7 @@ async function main() {
 
   console.log(`[lighthouse-check] ${url} (${formFactor}, ${runs} runs)`);
   const results = [];
+  const failedRuns = [];
   for (let i = 0; i < runs; i += 1) {
     process.stdout.write(`  run ${i + 1}/${runs}... `);
     try {
@@ -118,8 +119,13 @@ async function main() {
       console.log(`score=${result.score} LCP=${formatMs(result["largest-contentful-paint"])} TTFB=${formatMs(result["server-response-time"])}`);
       results.push(result);
     } catch (runErr) {
+      failedRuns.push(runErr instanceof Error ? runErr.message : String(runErr));
       console.error(`  run ${i + 1}/${runs} FAILED:`, runErr instanceof Error ? runErr.message : String(runErr));
     }
+  }
+  if (failedRuns.length) {
+    console.error(`[lighthouse-check] ${failedRuns.length}/${runs} runs failed; the reported figures are an average of the rest.`);
+    process.exitCode = 1;
   }
   if (results.length === 0) {
     console.error('[lighthouse-check] All runs failed — exiting.');

@@ -1,5 +1,5 @@
 <template>
-  <DashboardIndexPanel id="site-pages" title="Pages">
+  <DashboardIndexPanel id="organization-pages" title="Pages">
     <TenantPageList />
   </DashboardIndexPanel>
 </template>

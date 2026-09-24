@@ -1,6 +1,6 @@
 import { CONTENT_DOCUMENT_KINDS, LOCALIZED_RESOURCE_TYPES } from '~/shared/content-registries'
 import type { McpToolDefinition } from './shared'
-import { siteTool } from './shared'
+import { organizationTool } from './shared'
 
 const localizedValuesSchema = {
   type: 'object',
@@ -24,11 +24,11 @@ const localizationObject = { oneOf: [
 ] } as const
 
 export const LOCALES_TOOLS: McpToolDefinition[] = [
-  siteTool({
+  organizationTool({
     name: 'list_organization_locales',
-    description: 'List the immutable English source locale and exact authored secondary locales for this site. Billing is managed only in the dashboard.',
+    description: 'List the immutable English source locale and exact authored secondary locales for this organization. Billing is managed only in the dashboard.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {},
     outputSchema: {
@@ -40,11 +40,11 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
       additionalProperties: false,
     },
   }),
-  siteTool({
+  organizationTool({
     name: 'get_resource_localization',
     description: 'Read one exact resource or content document representation. Returns not found when that exact representation does not exist; never returns English fallback content.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -54,11 +54,11 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     required: ['resource_type', 'resource_id', 'locale'],
     outputSchema: { type: 'object', properties: { localization: localizationObject }, required: ['localization'], additionalProperties: false },
   }),
-  siteTool({
+  organizationTool({
     name: 'put_resource_localization',
     description: 'Fully replace one exact resource or content document representation. Q&A is read-only and cannot be changed. Resource values replace the exact localization; document fields and blocks update the exact representation with expected_updated_at.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -72,11 +72,11 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     required: ['resource_type', 'resource_id', 'locale', 'values'],
     outputSchema: { type: 'object', properties: { localization: localizationObject, context: { type: 'object' } }, required: ['localization'], additionalProperties: false },
   }),
-  siteTool({
+  organizationTool({
     name: 'delete_resource_localization',
     description: 'Permanently delete one localized resource representation and its owned document and redirect state. Q&A is read-only and cannot be deleted. This does not change billing.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -86,21 +86,21 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     required: ['resource_type', 'resource_id', 'locale'],
     outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' }, resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] }, resource_id: { type: 'string' }, locale: { type: 'string' }, context: { type: 'object' } }, required: ['deleted', 'resource_type', 'resource_id', 'locale'], additionalProperties: false },
   }),
-  siteTool({
+  organizationTool({
     name: 'get_product_catalog_localization',
     description: 'List canonical Product IDs, source Product fields, and existing Product localizations for one published secondary locale. Localize collection names separately with get_resource_localization and put_resource_localization using resource_type collection, resource_id collection_id, and values { name }.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: { locale: { type: 'string' } },
     required: ['locale'],
     outputSchema: { type: 'object', properties: { locale: { type: 'string' }, products: { type: 'array', items: { type: 'object', additionalProperties: true } } }, required: ['locale', 'products'], additionalProperties: false },
   }),
-  siteTool({
+  organizationTool({
     name: 'replace_resource_localizations',
     description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] },

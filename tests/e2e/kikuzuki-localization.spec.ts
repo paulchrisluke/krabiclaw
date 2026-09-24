@@ -157,7 +157,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     const cms = await dashboardContext.newPage()
     try {
       // Languages is a row on the location's settings list; its control opens the sheet.
-      await openTenantPage(cms, `${baseURL}/dashboard/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
+      await openTenantPage(cms, `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
       await cms.getByRole('button', { name: 'Localize' }).click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()

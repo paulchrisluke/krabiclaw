@@ -1,34 +1,15 @@
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import { fireOrganizationEventSafe } from "~/server/utils/organization-events";
+import { fireOrganizationEvent } from "~/server/utils/organization-events";
 import { executeBatch, queryFirst } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
-import { parsePhone } from "~/utils/phone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
-import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
+import { resolveOrganizationCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
-import { ensureLocationTeam } from "~/server/utils/member-access";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { prepareContentDocumentDeletion } from '~/server/utils/content/documents'
-import { parseRobotsIntent, ROBOTS_INTENTS } from '~/shared/robots-directive'
-
-/** A location stores an indexing intent, never a rendered directive. */
-function normalizeLocationRobots(value: unknown) {
-  const parsed = parseRobotsIntent(value)
-  if (!parsed.ok) throw new Error(`robots must be one of: ${ROBOTS_INTENTS.join(', ')}`)
-  return parsed.intent
-}
-
-export function normalizeLocationNotificationPhone(raw: string | null | undefined): string | null {
-  if (raw === undefined || raw === null || !raw.trim()) return null;
-  const parsed = parsePhone(raw, { defaultCountry: "TH" });
-  if (!parsed.valid || !parsed.e164) {
-    throw new Error("notification_phone must be a valid phone number, including country code.");
-  }
-  return parsed.e164;
-}
 
 type SetupEnv = CloudflareEnv;
 
@@ -56,13 +37,11 @@ export interface CreateLocationInput {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
   seo_description?: string | null;
   canonical_url?: string | null;
-  robots?: string | null;
   // Additive/subtractive delta layered on top of the parent site's effective feature set
   // (config/cms-registry.ts) — null clears the override back to pure inheritance. `enabled`
   // entries must be a subset of the site's effective feature set; validated below.
@@ -96,13 +75,11 @@ export interface LocationRecord {
   facebook_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
-  notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
   seo_description?: string | null;
   canonical_url?: string | null;
-  robots?: string | null;
   feature_overrides?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -167,30 +144,30 @@ async function resolveValidatedLocationFeatures(
   if (!Array.isArray(enabled) || !enabled.every((value) => typeof value === "string") || !Array.isArray(disabled) || !disabled.every((value) => typeof value === "string")) {
     return { ok: false, status: 400, data: { error: "feature_overrides.enabled/disabled must be arrays of feature ids or null." } };
   }
-  const parentSite = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+  const parentOrganization = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
-  if (!parentSite) {
-    return { ok: false, status: 404, data: { error: "Site not found." } };
+  if (!parentOrganization) {
+    return { ok: false, status: 404, data: { error: "Organization not found." } };
   }
-  let siteEffectiveFeatures: readonly ProductFeature[] = [];
+  let organizationEffectiveFeatures: readonly ProductFeature[] = [];
   let toggleableAtLocation: readonly ProductFeature[] = [];
   try {
-    const { template, capabilities } = resolveSiteCmsCapabilities(parentSite.vertical, parentSite.theme_id, { siteEnabledFeatures: parentSite.feature_overrides });
-    siteEffectiveFeatures = [...new Set([...capabilities.pages.map((p) => p.feature), ...capabilities.managers.map((m) => m.id)])];
+    const { template, capabilities } = resolveOrganizationCmsCapabilities(parentOrganization.vertical, parentOrganization.theme_id, { organizationEnabledFeatures: parentOrganization.feature_overrides });
+    organizationEffectiveFeatures = [...new Set([...capabilities.pages.map((p) => p.feature), ...capabilities.managers.map((m) => m.id)])];
     const { toggleableModulesForScope } = await import("~/config/cms-registry");
     toggleableAtLocation = toggleableModulesForScope(template, "location");
   } catch {
-    return { ok: false, status: 422, data: { error: "Unsupported site vertical/template — cannot resolve feature catalog." } };
+    return { ok: false, status: 422, data: { error: "Unsupported organization vertical/template — cannot resolve feature catalog." } };
   }
   const submitted = [...enabled, ...disabled];
   const notConfigurable = submitted.filter((feature) => !toggleableAtLocation.includes(feature as ProductFeature));
   if (notConfigurable.length > 0) {
     return { ok: false, status: 400, data: { error: `Module(s) not location-configurable: ${notConfigurable.join(", ")}` } };
   }
-  const unsupported = enabled.filter((feature) => !siteEffectiveFeatures.includes(feature as ProductFeature));
+  const unsupported = enabled.filter((feature) => !organizationEffectiveFeatures.includes(feature as ProductFeature));
   if (unsupported.length > 0) {
-    return { ok: false, status: 400, data: { error: `Location features require parent site support: ${unsupported.join(", ")}` } };
+    return { ok: false, status: 400, data: { error: `Location features require parent organization support: ${unsupported.join(", ")}` } };
   }
   if (locationId) {
     for (const feature of disabled) {
@@ -204,7 +181,7 @@ async function resolveValidatedLocationFeatures(
 }
 
 export interface LocationCapabilitySummary {
-  site_effective_features: ProductFeature[];
+  organization_effective_features: ProductFeature[];
   location_effective_features: ProductFeature[];
   location_feature_overrides: CmsCapabilityOverrideDelta | null;
 }
@@ -219,25 +196,25 @@ export async function resolveLocationCapabilitySummary(
   organizationId: string,
   locationFeatureOverridesRaw: string | null,
 ): Promise<LocationCapabilitySummary | null> {
-  const site = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
+  const organization = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
-  if (!site) return null;
+  if (!organization) return null;
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
   try {
-    const { capabilities: siteCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
+    const { capabilities: organizationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+      organizationEnabledFeatures: organization.feature_overrides,
     });
-    const siteEffectiveFeatures = [...new Set([...siteCapabilities.pages.map((p) => p.feature), ...siteCapabilities.managers.map((m) => m.id)])];
+    const organizationEffectiveFeatures = [...new Set([...organizationCapabilities.pages.map((p) => p.feature), ...organizationCapabilities.managers.map((m) => m.id)])];
 
-    const { capabilities: locationCapabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
+    const { capabilities: locationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+      organizationEnabledFeatures: organization.feature_overrides,
       locationEnabledFeatures: locationFeatureOverridesRaw,
     });
     const locationEffectiveFeatures = [...new Set([...locationCapabilities.pages.map((p) => p.feature), ...locationCapabilities.managers.map((m) => m.id)])];
 
     return {
-      site_effective_features: siteEffectiveFeatures,
+      organization_effective_features: organizationEffectiveFeatures,
       location_effective_features: locationEffectiveFeatures,
       location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
     };
@@ -285,7 +262,7 @@ async function loadLocation(
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
            facebook_url, instagram_url, tiktok_url,
-           notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url,
+           timezone, max_capacity, seo_title, seo_description, canonical_url,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
@@ -313,13 +290,6 @@ export async function createLocation(
   const title = input.title.trim();
   if (!title) {
     return { status: 400, data: { error: "Location title is required." } };
-  }
-
-  // An unusable robots value is a bad request, like every other field checked
-  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
-  // caller as a 500 saying nothing about which field was wrong.
-  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
-    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
   }
 
   if (
@@ -376,17 +346,15 @@ export async function createLocation(
     };
   }
 
-  let normalizedNotificationPhone: string | null;
   let openingHours: string | null;
   let specialHours: string | null;
   try {
     openingHours = serializeOpeningHours(input.opening_hours);
     specialHours = serializeSpecialHours(input.special_hours);
-    normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
   } catch (error) {
     return {
       status: 400,
-      data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
+      data: { error: error instanceof Error ? error.message : "Invalid opening hours." },
     };
   }
 
@@ -394,6 +362,7 @@ export async function createLocation(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  let created: { id: string; location: Awaited<ReturnType<typeof loadLocation>> } | null = null;
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
@@ -405,10 +374,10 @@ export async function createLocation(
             id, organization_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url,
-            notification_phone, timezone, max_capacity, status,
+            timezone, max_capacity, status,
             seo_title, seo_description, canonical_url, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -432,7 +401,6 @@ export async function createLocation(
           input.facebook_url ?? null,
           input.instagram_url ?? null,
           input.tiktok_url ?? null,
-          normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
           input.seo_title ?? null,
@@ -445,42 +413,8 @@ export async function createLocation(
       });
 
       await executeBatch(db, statements);
-      try {
-        await ensureLocationTeam(db, {
-          env,
-          organizationId,
-          
-          locationId: id,
-          name: title,
-        });
-      } catch (teamError) {
-        const compensating = [{
-          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ?`,
-          params: [id, organizationId],
-        }];
-        await executeBatch(db, compensating).catch((cleanupError) => {
-          console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
-        });
-        throw teamError;
-      }
-      const location = await loadLocation(db, organizationId, id);
-      await fireOrganizationEventSafe({
-        db,
-        organizationId,
-        
-        locationId: id,
-        actorId: userId,
-        eventType: "location.created",
-        entityType: "business_location",
-        entityId: id,
-        metadata: {
-          title,
-        },
-      })
-      if (options.refreshSocialCardAfterCreate !== false) {
-        await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: id }, actorId: userId })
-      }
-      return { status: 201, data: { success: true, location } };
+      created = { id, location: await loadLocation(db, organizationId, id) };
+      break;
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;
       if (error instanceof Error) {
@@ -488,6 +422,31 @@ export async function createLocation(
       }
       throw error;
     }
+  }
+
+  // Outside the retry, because the location is committed by the time these run
+  // and neither is a slug conflict. Inside it, a failed audit write was returned
+  // to the caller as a 400 — a client error for a server failure, on a location
+  // that exists — and, worse, activity_entries.dedupe_key is unique, so a
+  // duplicate audit key matched isUniqueConstraintError and sent the loop round
+  // again to create a second location.
+  if (created) {
+    await fireOrganizationEvent({
+      db,
+      organizationId,
+      locationId: created.id,
+      actorId: userId,
+      eventType: "location.created",
+      entityType: "business_location",
+      entityId: created.id,
+      metadata: {
+        title,
+      },
+    })
+    if (options.refreshSocialCardAfterCreate !== false) {
+      await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: created.id }, actorId: userId })
+    }
+    return { status: 201, data: { success: true, location: created.location } };
   }
 
   return {
@@ -520,12 +479,6 @@ export async function updateLocation(
     return { status: 400, data: { error: "title cannot be empty." } };
   }
 
-  // An unusable robots value is a bad request, like every other field checked
-  // here. Left to `normalizeLocationRobots`, it threw mid-write and reached the
-  // caller as a 500 saying nothing about which field was wrong.
-  if (input.robots !== undefined && !parseRobotsIntent(input.robots).ok) {
-    return { status: 400, data: { error: `robots must be one of: ${ROBOTS_INTENTS.join(", ")}` } };
-  }
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
     return { status: updateFeaturesResult.status, data: updateFeaturesResult.data };
@@ -575,18 +528,6 @@ export async function updateLocation(
     };
   }
 
-  let normalizedNotificationPhone: string | null | undefined;
-  if (input.notification_phone !== undefined) {
-    try {
-      normalizedNotificationPhone = normalizeLocationNotificationPhone(input.notification_phone);
-    } catch (error) {
-      return {
-        status: 400,
-        data: { error: error instanceof Error ? error.message : "Invalid notification_phone." },
-      };
-    }
-  }
-
   const now = new Date().toISOString();
   const sets: string[] = ["updated_at = ?"];
   const params: Array<string | number | null> = [now];
@@ -618,14 +559,12 @@ export async function updateLocation(
     "maps_url",
     "google_review_url",
     "google_place_id",
-    "notification_phone",
     "timezone",
     "max_capacity",
     "status",
     "seo_title",
     "seo_description",
     "canonical_url",
-    "robots",
   ] as const;
 
   for (const field of simpleFields) {
@@ -634,11 +573,7 @@ export async function updateLocation(
       params.push(
         field === "timezone"
           ? normalizedTimezone ?? null
-          : field === "notification_phone"
-            ? normalizedNotificationPhone ?? null
-            : field === "robots"
-              ? normalizeLocationRobots(input.robots)
-              : input[field] ?? null,
+          : input[field] ?? null,
       );
     }
   }
@@ -703,6 +638,7 @@ export async function updateLocation(
   };
 
   if (slugBase && slugParamIndex !== null) {
+    let updated: { location: Awaited<ReturnType<typeof loadLocation>> } | null = null;
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
       const slug = attempt === 0 ? slugBase : `${slugBase}-${attempt + 1}`;
       const boundParams = [...params];
@@ -715,21 +651,8 @@ export async function updateLocation(
           organizationId,
           locationId,
         );
-        await fireOrganizationEventSafe({
-          db,
-          organizationId,
-          
-          locationId,
-          actorId: userId,
-          eventType: "location.updated",
-          entityType: "business_location",
-          entityId: locationId,
-          metadata: {
-            title: location?.title ?? null,
-          },
-        })
-        if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
-        return { status: 200, data: { success: true, location } };
+        updated = { location };
+        break;
       } catch (error) {
         if (isUniqueConstraintError(error)) continue;
         if (error instanceof Error) {
@@ -737,6 +660,27 @@ export async function updateLocation(
         }
         throw error;
       }
+    }
+
+    // Outside the retry, for the same reason as createLocation: the row is
+    // already written, neither of these is a slug conflict, and the unique
+    // dedupe_key on an audit row matched isUniqueConstraintError and sent the
+    // loop round again.
+    if (updated) {
+      await fireOrganizationEvent({
+        db,
+        organizationId,
+        locationId,
+        actorId: userId,
+        eventType: "location.updated",
+        entityType: "business_location",
+        entityId: locationId,
+        metadata: {
+          title: updated.location?.title ?? null,
+        },
+      })
+      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
+      return { status: 200, data: { success: true, location: updated.location } };
     }
 
     return {
@@ -750,7 +694,7 @@ export async function updateLocation(
   params.push(locationId, organizationId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, locationId);
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId,
     

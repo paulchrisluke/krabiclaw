@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro';
 
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { oncePerRequest } from '~/server/utils/request-scope'
@@ -8,20 +8,15 @@ import type { H3Event } from 'nitro'
 import type { CloudflareEnv, organizationOptions } from '~/server/utils/auth'
 import type { OrganizationPermissions } from '~/utils/organization-access'
 
-// Tenant-scoped authorization is Better Auth organization role plus Better
-// Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
-// by membership in one or more location teams.
+// Authorization is the Better Auth organization role. Owner and admin are the
+// roles, both organization-wide, and there is no second way to answer whether
+// someone may reach a location.
 //
-// There is no team standing for the whole tenant. A site team existed only
-// because a site row did, and an editor in it reached everything the owner
-// reached — a second way to be organization-wide, beside the organization role
-// Better Auth already stores. Organization-wide is now the role, and a team is
-// only ever a location.
-
-export interface ResourceTeamAccess {
-  organizationId: string
-  locationId: string
-}
+// There used to be one: a `location:<id>` Better Auth team, which scoped an
+// `editor`. That role existed so a phone number configured on a location could
+// be a notification target without being an owner. Notifications now resolve
+// from the member to their own verified phone, so the number needs no role, the
+// role needed no team, and none of it had a single user.
 
 /**
  * A membership this request actually resolved: one lookup keyed by
@@ -54,7 +49,7 @@ function resolvedMembershipOf<T extends { userId: string; organizationId: string
  * belongs to `organizationId` without reading the member row back.
  *
  * The tenant is the organization the membership resolved against. It used to
- * also carry a `siteId` the caller supplied separately, which is how a request
+ * also carry a `organizationId` the caller supplied separately, which is how a request
  * could authorize against one tenant and then read another.
  */
 export interface MemberAccessPrincipal {
@@ -81,8 +76,6 @@ export function memberAccessPrincipal(
     event: input.event,
   } as MemberAccessPrincipal
 }
-
-export type DashboardAccess = 'organization' | 'location'
 
 export async function resolveMemberId(
   input: { organizationId: string; userId: string; env: CloudflareEnv },
@@ -116,23 +109,10 @@ export function isOrganizationWideRole(role: string): boolean {
   return role === 'owner' || role === 'admin'
 }
 
-export function isScopedRole(role: string): boolean {
-  return role === 'editor'
-}
-
-// "Does this role participate in dashboard/notification/operational flows at
-// all" — distinct from isOrganizationWideRole/isScopedRole, which describe
-// how (unrestricted vs. scope-checked), not whether. Used to reject roles
-// outside {owner, admin, editor} entirely (e.g. a future non-operational
-// Better Auth role) before any scope check is even attempted.
-export function isOperationalRole(role: string): boolean {
-  return isOrganizationWideRole(role) || isScopedRole(role)
-}
-
 /**
  * What a role may do, answered by Better Auth.
  *
- * `utils/organization-access.ts` declares the statements and the four roles,
+ * `utils/organization-access.ts` declares the statements and the two roles,
  * and the plugin is configured with them (`organizationOptions.ac/roles`), so
  * this is the repository's one description of what each role can reach. It used
  * to be reached only by billing; everything else re-decided the same question
@@ -144,10 +124,8 @@ export function isOperationalRole(role: string): boolean {
  * database only under `dynamicAccessControl`, which is off here, so this costs
  * no round trip.
  *
- * This answers "may this role do X at all". It does not answer "which
- * locations" — that is team membership against `business_locations.team_id`,
- * which Better Auth does not model, and which
- * assertOrganizationWideAccess/assertLocationAccess below own.
+ * This answers "may this role do X at all". Which tenant is the membership the
+ * principal was minted from; there is no narrower scope than the organization.
  */
 export type { OrganizationPermissions }
 
@@ -168,10 +146,6 @@ export async function assertRoleAllows(
 ): Promise<void> {
   if (await roleAllows(input)) return
   throw new HTTPError({ statusCode: 403, message: input.message ?? 'Access denied' })
-}
-
-export function locationTeamId(locationId: string): string {
-  return `location:${locationId}`
 }
 
 // The adapter has to be built with the same organization options the plugin
@@ -308,44 +282,72 @@ async function listAllOrganizationMembers(adapter: OrganizationAdapter, organiza
  * per person (user_notification_preferences), so the sender needs to know whose
  * preference applies, not only where to post the message.
  */
-export async function getOrganizationOwnerRecipient(
+/**
+ * Everyone this tenant's internal alerts may go to, as identities.
+ *
+ * One list for both channels. This used to pick a single owner/admin for email
+ * — sorted so that an `@example.test` address lost a tie, a test concern
+ * deciding who a real tenant hears from — while WhatsApp went to whatever
+ * number was typed into a settings field. Two sources, two answers, and a
+ * location's own people could be in neither.
+ *
+ * Who is the membership; whether, and over which channel, is each person's own
+ * `user_notification_preferences`; where is their account email and their
+ * verified phone. A member with no verified phone simply has no WhatsApp
+ * address, which is not a failure and nothing to report.
+ */
+export interface OrganizationNotificationMember {
+  userId: string
+  email: string
+  phone: string | null
+}
+
+export async function listOrganizationNotificationMembers(
   env: CloudflareEnv,
   organizationId: string,
-): Promise<{ userId: string; email: string } | null> {
+): Promise<OrganizationNotificationMember[]> {
   const adapter = await organizationAdapter(env)
   const members = await listAllOrganizationMembers(adapter, organizationId)
-  const owner = members
-    .filter(member => member.user && (member.role === 'owner' || member.role === 'admin'))
-    .sort((left, right) => {
-      const roleOrder = Number(right.role === 'owner') - Number(left.role === 'owner')
-      if (roleOrder) return roleOrder
-      return Number(left.user.email.endsWith('@example.test')) - Number(right.user.email.endsWith('@example.test'))
-    })[0]
-  return owner ? { userId: owner.user.id, email: owner.user.email } : null
-}
+  // Keyed by user, not by member row: a duplicated membership must not become
+  // a duplicated alert.
+  const byUserId = new Map<string, { id: string; email: string }>()
+  for (const member of members) {
+    if (!member.user || !isOrganizationWideRole(String(member.role))) continue
+    byUserId.set(member.user.id, { id: member.user.id, email: member.user.email })
+  }
+  if (byUserId.size === 0) return []
 
-/**
- * The caller's Better Auth teams, memoized for the life of one request.
- *
- * Every scope check for a scoped role reads this same list, and a dashboard
- * render makes several, so without the memo an editor paid one read per
- * assertion. Keyed on the user alone because that is what the adapter query
- * takes; callers filter by organization themselves. Not used by the mutation
- * sweep below, which must see the rows it is deleting.
- */
-function teamsByUser(env: CloudflareEnv, userId: string, event?: H3Event) {
-  const read = async () => (await organizationAdapter(env)).listTeamsByUser({ userId })
-  return event ? oncePerRequest(event, `teams:${userId}`, read) : read()
-}
+  // listMembers carries only the identity columns Better Auth shows next to a
+  // member, so the verified phone is read from the user model through the same
+  // adapter that owns it. Reading `member.user.phoneNumber` silently produced
+  // undefined for everyone, which is a tenant hearing nothing on WhatsApp.
+  const { createAuth } = await import('~/server/utils/auth')
+  const context = await createAuth(env).$context
+  const userAdapter = context.adapter as unknown as {
+    findMany<T>(_input: {
+      model: string
+      where: Array<{ field: string; operator: string; value: string[] }>
+      select?: string[]
+      limit?: number
+    }): Promise<T[]>
+  }
+  const ids = [...byUserId.keys()]
+  const rows = await userAdapter.findMany<{ id: string; phoneNumber: string | null; phoneNumberVerified: boolean | number | null }>({
+    model: 'user',
+    where: [{ field: 'id', operator: 'in', value: ids }],
+    select: ['id', 'phoneNumber', 'phoneNumberVerified'],
+    limit: ids.length,
+  })
+  const verifiedPhone = new Map(rows.map(row => [
+    row.id,
+    row.phoneNumber && row.phoneNumberVerified ? row.phoneNumber : null,
+  ]))
 
-export async function listUserOrganizationTeamIds(input: {
-  env: CloudflareEnv
-  organizationId: string
-  userId: string
-  event?: H3Event
-}): Promise<string[]> {
-  const teams = await teamsByUser(input.env, input.userId, input.event)
-  return teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)
+  return ids.map(id => ({
+    userId: id,
+    email: byUserId.get(id)!.email,
+    phone: verifiedPhone.get(id) ?? null,
+  }))
 }
 
 export async function listUserOrganizations(env: CloudflareEnv, userId: string) {
@@ -381,214 +383,25 @@ export async function deleteOrganization(env: CloudflareEnv, organizationId: str
   await organizationAdapter(env).then(adapter => adapter.deleteOrganization(organizationId))
 }
 
-async function ensureTeam(
-  env: CloudflareEnv,
-  input: { organizationId: string; teamId: string; name: string },
-): Promise<void> {
-  const adapter = await organizationAdapter(env)
-  const existing = await adapter.findTeamById({
-    teamId: input.teamId,
-    organizationId: input.organizationId,
-  })
-  if (existing) return
-
-  // A deterministic team id makes this operation idempotent. Check the
-  // unscoped id before creating so a collision can never attach a resource to
-  // another organization.
-  const conflicting = await adapter.findTeamById({ teamId: input.teamId })
-  if (conflicting && conflicting.organizationId !== input.organizationId) {
-    throw new Error(`Team ${input.teamId} belongs to another organization`)
-  }
-  if (conflicting) return
-
-  try {
-    await adapter.createTeam({
-      id: input.teamId,
-      name: input.name,
-      organizationId: input.organizationId,
-      createdAt: new Date(),
-    })
-  } catch (error) {
-    // Another request may have won the create race. Re-read through Better
-    // Auth before surfacing a real provisioning failure.
-    const raced = await adapter.findTeamById({
-      teamId: input.teamId,
-      organizationId: input.organizationId,
-    })
-    if (!raced) throw error
-  }
-}
-
-export async function ensureLocationTeam(
-  db: DbClient,
-  input: { env: CloudflareEnv; organizationId: string; locationId: string; name?: string | null },
-): Promise<string> {
-  const teamId = locationTeamId(input.locationId)
-  await ensureTeam(input.env, {
-    teamId,
-    organizationId: input.organizationId,
-    name: input.name?.trim() || `Location ${input.locationId}`,
-  })
-  await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
-    teamId,
-    new Date().toISOString(),
-    input.locationId,
-    input.organizationId,
-    teamId])
-  return teamId
-}
-
-export async function addUserToResourceTeam(
-  _db: DbClient,
-  input: { env: CloudflareEnv; userId: string; teamId: string },
-): Promise<void> {
-  const adapter = await organizationAdapter(input.env)
-  await adapter.findOrCreateTeamMember({ teamId: input.teamId, userId: input.userId })
-}
-
-export async function removeUserFromResourceTeam(
-  _db: DbClient,
-  input: { env: CloudflareEnv; userId: string; teamId: string },
-): Promise<boolean> {
-  const adapter = await organizationAdapter(input.env)
-  const existing = await adapter.findTeamMember({ teamId: input.teamId, userId: input.userId })
-  if (!existing) return false
-  await adapter.removeTeamMember({ teamId: input.teamId, userId: input.userId })
-  return true
-}
-
-export async function addMemberResourceAccess(
-  db: DbClient,
-  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
-): Promise<void> {
-  const teamId = await ensureLocationTeam(db, {
-    env: input.env,
-    organizationId: input.organizationId,
-    locationId: input.locationId,
-  })
-  await addUserToResourceTeam(db, { env: input.env, userId: input.userId, teamId })
-}
-
-export async function removeMemberResourceAccess(
-  db: DbClient,
-  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
-): Promise<boolean> {
-  const row = await queryFirst<{ team_id: string | null }>(db, `
-    SELECT team_id
-    FROM business_locations
-    WHERE id = ? AND organization_id = ?
-    LIMIT 1
-  `, [input.locationId, input.organizationId])
-  if (!row?.team_id) return false
-  return await removeUserFromResourceTeam(db, { env: input.env, userId: input.userId, teamId: row.team_id })
-}
-
-// Called when a member's role changes away from 'editor' — an editor can
-// accumulate location team memberships over time (each accepted or re-scoped
-// invitation adds one via addMemberResourceAccess), so demoting or promoting
-// them to a non-scoped role has to sweep all of them, not just one.
-export async function removeAllMemberResourceAccess(
-  _db: DbClient,
-  input: { env: CloudflareEnv; organizationId: string; userId: string },
-): Promise<void> {
-  const adapter = await organizationAdapter(input.env)
-  const teams = await adapter.listTeamsByUser({ userId: input.userId })
-  for (const team of teams) {
-    if (team.organizationId !== input.organizationId) continue
-    await adapter.removeTeamMember({ teamId: team.id, userId: input.userId })
-  }
-}
-
-export async function memberHasTeamAccess(_db: DbClient, input: { env: CloudflareEnv; userId: string; teamId: string | null }): Promise<boolean> {
-  if (!input.teamId) return false
-  const adapter = await organizationAdapter(input.env)
-  return Boolean(await adapter.findTeamMember({ userId: input.userId, teamId: input.teamId }))
-}
-
-// Deny-by-default boundary for dashboard handlers that resolve through
-// getDashboardContext. Each permitted route below is classified in the #341
-// authorization audit and applies its authoritative resource guard or filtered
-// query. Editor and AI actions use their explicit canonical
-// /api/editor/organizations/[organizationId]/** and /api/ai/[organizationId]/**
-// routes instead of hiding the tenant through /api/dashboard aliases.
-const NO_TEAMS: ReadonlySet<string> = new Set<string>()
-
 /**
- * The caller's role and the teams that role is scoped by.
+ * Organization-wide management access, which is now the only kind.
  *
- * `role` comes straight from the principal: it was read from the member row
- * that resolveOrganizationMembership/resolveUserOrganization looked up by
- * (organizationId, userId) for this request, so re-reading the member here
- * would return the same value at the cost of two more D1 round trips (Better
- * Auth's findMemberById reads the member and then its user).
- *
- * Only a scoped role needs anything from the database, and only its teams.
- */
-async function canonicalMemberAccess(input: MemberAccessPrincipal): Promise<{
-  role: string
-  teamIds: ReadonlySet<string>
-}> {
-  const role = input.role
-  if (!isScopedRole(role)) return { role, teamIds: NO_TEAMS }
-  const teams = await teamsByUser(input.env, input.userId, input.event)
-  return {
-    role,
-    teamIds: new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id)),
-  }
-}
-
-export async function listResourceTeamAccess(
-  db: DbClient,
-  input: { env: CloudflareEnv; userId: string; organizationId: string; event?: H3Event },
-): Promise<ResourceTeamAccess[]> {
-  const teams = await teamsByUser(input.env, input.userId, input.event)
-  const teamIds = new Set(teams.filter(team => team.organizationId === input.organizationId).map(team => team.id))
-  if (teamIds.size === 0) return []
-  const locations = await queryAll<ResourceTeamAccess & { team_id: string | null }>(db, `
-    SELECT organization_id AS organizationId, id AS locationId, team_id
-    FROM business_locations WHERE organization_id = ?
-  `, [input.organizationId])
-  return locations
-    .filter(row => row.team_id && teamIds.has(row.team_id))
-    .map(({ organizationId, locationId }) => ({ organizationId, locationId }))
-}
-
-export async function resolveDashboardAccess(db: DbClient, input: MemberAccessPrincipal): Promise<DashboardAccess> {
-  const access = await canonicalMemberAccess(input)
-  if (isOrganizationWideRole(access.role)) return 'organization'
-  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  return 'location'
-}
-
-/**
- * Organization-wide management access: settings, blog, localized content,
- * professional-services, analytics, domains, the contact-submissions inbox, and
- * any review/QA row whose own location_id is null.
- *
- * This is the organization role and nothing else. An editor used to reach all
- * of it by sitting in the site team, which made "organization-wide" answerable
- * two ways — by role, and by a team row. The team row is gone; an editor is
- * scoped to locations, and reaching tenant configuration means owner or admin.
+ * Authorization is the Better Auth organization role and nothing else. There
+ * used to be a second answer — membership in a `location:<id>` Better Auth
+ * team — so "may this person reach this location" could be decided two ways.
+ * That existed to scope the `editor` role, `editor` existed to receive WhatsApp
+ * at a configured number, and neither has any user.
  */
 export async function assertOrganizationWideAccess(_db: DbClient, input: MemberAccessPrincipal): Promise<void> {
-  const access = await canonicalMemberAccess(input)
-  if (isOrganizationWideRole(access.role)) return
+  if (isOrganizationWideRole(input.role)) return
   throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
 }
 
-/** Location management access: org-wide roles, or an editor scoped to this exact location. */
+/** The location must belong to the tenant the caller authorized against; reaching it is the organization role. */
 export async function assertLocationAccess(db: DbClient, input: MemberAccessPrincipal & { locationId: string }): Promise<void> {
-  const access = await canonicalMemberAccess(input)
-  if (isOrganizationWideRole(access.role)) return
-  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const scope = await queryFirst<{ team_id: string | null }>(db, `
-    SELECT team_id FROM business_locations
-    WHERE id = ? AND organization_id = ?
-    LIMIT 1
-  `, [input.locationId, input.organizationId])
-  if (!scope?.team_id || !access.teamIds.has(scope.team_id)) {
-    throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
-  }
+  await assertOrganizationWideAccess(db, input)
+  const location = await findLocation(db, { organizationId: input.organizationId, locationId: input.locationId })
+  if (!location) throw new HTTPError({ statusCode: 404, message: 'Resource not found' })
 }
 
 /** A resource that may or may not belong to one location (e.g. a review row) — dispatches to assertOrganizationWideAccess when the row's own location_id is null, assertLocationAccess otherwise. Check the target row's location_id, never a caller-supplied param. Media authorization uses its placement owner instead. */
@@ -597,31 +410,6 @@ export async function assertResourceAccess(db: DbClient, input: MemberAccessPrin
     return assertOrganizationWideAccess(db, input)
   }
   return assertLocationAccess(db, { ...input, locationId: input.resourceLocationId })
-}
-
-/** Minimal tenant-context/discovery access: org-wide roles, or an editor holding ANY location team in this organization — enough to resolve tenant metadata and navigate to the caller's own location(s). Never grants access to organization settings or other locations' data; callers must still trim their response to what the caller's own scope allows. */
-export async function assertOrganizationContextAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
-  const access = await canonicalMemberAccess(input)
-  if (isOrganizationWideRole(access.role)) return
-  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const rows = await queryAll<{ team_id: string | null }>(db, `
-    SELECT team_id FROM business_locations WHERE organization_id = ?
-  `, [input.organizationId])
-  if (!rows.some(row => row.team_id && access.teamIds.has(row.team_id))) {
-    throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
-  }
-}
-
-/** Returns null for org-wide roles (unrestricted), or the list of location ids a location-team editor may reach. */
-export async function listAccessibleLocationIds(db: DbClient, input: MemberAccessPrincipal): Promise<string[] | null> {
-  const access = await canonicalMemberAccess(input)
-  if (isOrganizationWideRole(access.role)) return null
-  if (!isScopedRole(access.role)) throw new HTTPError({ statusCode: 403, message: 'Access denied' })
-  const rows = await queryAll<{ location_id: string; team_id: string | null }>(db, `
-    SELECT id AS location_id, team_id FROM business_locations
-    WHERE organization_id = ?
-  `, [input.organizationId])
-  return rows.filter(row => row.team_id && access.teamIds.has(row.team_id)).map(row => row.location_id)
 }
 
 export async function assertMemberScope(db: DbClient, input: MemberAccessPrincipal & { locationId?: string | null }): Promise<void> {
@@ -633,27 +421,26 @@ export async function assertMemberScope(db: DbClient, input: MemberAccessPrincip
 }
 
 /**
- * Who, if anyone, may receive a WhatsApp message at this number for this scope.
+ * Who, if anyone, may act on this tenant from this WhatsApp number.
  *
- * Returns the user id rather than a bare boolean because a notification also
- * has to honour that person's own preference
- * (user_notification_preferences), and resolving the number to an account
- * twice — once to authorize, once to look up the preference — would be two
- * implementations of the same lookup.
+ * The number here is the one Meta reports as the sender of an inbound message,
+ * never a number a tenant typed into a settings field. Outbound alerts resolve
+ * the other way round — from the member to their own verified phone — so there
+ * is no configured number left to authorize.
+ *
+ * Returns the user id rather than a bare boolean because the caller also has to
+ * honour that person's own preferences, and resolving the number to an account
+ * twice would be two implementations of one lookup.
  */
-export interface WhatsAppRecipientScope {
+export interface WhatsAppSenderScope {
   organizationId: string
-  locationId?: string | null
   env: CloudflareEnv
   phone: string
-  // The message is about the tenant as a whole, not one location. Only an
-  // organization-wide role may receive it.
-  requireOrganizationWide?: boolean
 }
 
 export async function resolveAuthorizedWhatsAppRecipient(
-  db: DbClient,
-  input: WhatsAppRecipientScope,
+  _db: DbClient,
+  input: WhatsAppSenderScope,
 ): Promise<{ userId: string } | null> {
   const { findVerifiedAuthUserByPhone } = await import('~/server/utils/auth')
   const user = await findVerifiedAuthUserByPhone(
@@ -665,19 +452,13 @@ export async function resolveAuthorizedWhatsAppRecipient(
     organizationId: input.organizationId,
     userId: user.id,
   })
-  if (!membership || !isOperationalRole(membership.role)) return null
-  const recipient = { userId: user.id }
-  if (isOrganizationWideRole(membership.role)) return recipient
-  // A scoped editor from here down: organization-wide messages are not theirs,
-  // and a message about no particular location has no scope to check them against.
-  if (input.requireOrganizationWide || !input.locationId) return null
-  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(membership, { env: input.env }))
-  return locationIds === null || locationIds.includes(input.locationId) ? recipient : null
+  if (!membership || !isOrganizationWideRole(membership.role)) return null
+  return { userId: user.id }
 }
 
 export async function isAuthorizedWhatsAppRecipient(
   db: DbClient,
-  input: WhatsAppRecipientScope,
+  input: WhatsAppSenderScope,
 ): Promise<boolean> {
   return (await resolveAuthorizedWhatsAppRecipient(db, input)) !== null
 }

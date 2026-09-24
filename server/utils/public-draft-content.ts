@@ -1,6 +1,6 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 
-export interface PublicDraftSiteContent {
+export interface PublicDraftOrganizationContent {
   id: string
   organization_id: string
   location_id?: string
@@ -16,14 +16,14 @@ export interface PublicDraftSiteContent {
   updated_at: string
 }
 
-export function groupContentBlocks(rows: PublicDraftSiteContent[]): Array<PublicDraftSiteContent & { _section: string }> {
-  const groups = Object.create(null) as Record<string, PublicDraftSiteContent & { _section: string }>
+export function groupContentBlocks(rows: PublicDraftOrganizationContent[]): Array<PublicDraftOrganizationContent & { _section: string }> {
+  const groups = Object.create(null) as Record<string, PublicDraftOrganizationContent & { _section: string }>
   for (const row of rows) {
     const section = row.field?.split('.')[0] || 'unknown'
     if (!groups[section]) {
       groups[section] = { ...row, field: section, _section: section }
     } else {
-      for (const key of Object.keys(row) as Array<keyof PublicDraftSiteContent>) {
+      for (const key of Object.keys(row) as Array<keyof PublicDraftOrganizationContent>) {
         if (groups[section][key] == null) (groups[section] as unknown as Record<string, unknown>)[key] = row[key]
       }
     }
@@ -31,8 +31,8 @@ export function groupContentBlocks(rows: PublicDraftSiteContent[]): Array<Public
   return Object.values(groups)
 }
 
-export function tenantPageToContentRows(page: PublicTenantPage): PublicDraftSiteContent[] {
-  const rows: PublicDraftSiteContent[] = []
+export function tenantPageToContentRows(page: PublicTenantPage): PublicDraftOrganizationContent[] {
+  const rows: PublicDraftOrganizationContent[] = []
   for (const block of page.blocks) {
     const data = block.data
     const field = typeof data.field === 'string' && data.field.trim()
@@ -48,7 +48,7 @@ export function tenantPageToContentRows(page: PublicTenantPage): PublicDraftSite
       source: 'tenant-pages',
       updated_at: page.updated_at,
       media: block.media,
-    } satisfies PublicDraftSiteContent
+    } satisfies PublicDraftOrganizationContent
     if (block.type === 'hero') {
       rows.push({
         ...base,

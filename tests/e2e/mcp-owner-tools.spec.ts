@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
-import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData, createScratchLocation, ensureOrganization, ensureLocation } from './helpers/mcp'
+import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
+import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
@@ -12,24 +12,24 @@ test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
-    const sitesList = await mcpRequest(request, baseURL!, {
+    const organizationsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'list_organizations',
       args: {},
     })
-    expect(sitesList.status()).toBe(200)
-    const sitesListBody = await sitesList.json()
-    const sitesListText = sitesListBody?.result?.content?.[0]?.text as string | undefined
-    expect(sitesListText).toContain('You have')
+    expect(organizationsList.status()).toBe(200)
+    const organizationsListBody = await organizationsList.json()
+    const organizationsListText = organizationsListBody?.result?.content?.[0]?.text as string | undefined
+    expect(organizationsListText).toContain('You have')
 
-    const siteRead = await mcpRequest(request, baseURL!, {
+    const organizationRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'get_organization',
       args: { organization_id: organizationId },
     })
-    expect(siteRead.status()).toBe(200)
+    expect(organizationRead.status()).toBe(200)
 
     const pageList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -126,9 +126,9 @@ test.describe('stateless MCP server', () => {
   test('owner can use submission inquiry tools', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
-    const locationId = await ensureLocation(request, baseURL!, organizationId)
+    const locationId = 'loc-demo'
     const locationSetup = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'update_location',
       args: {
@@ -149,11 +149,19 @@ test.describe('stateless MCP server', () => {
     })
     expect(policySetup.status(), await policySetup.text()).toBe(200)
 
+    // The public routes resolve their tenant from the host, and baseURL is the
+    // platform's. This used to land on the right tenant only because
+    // ensureOrganization re-provisioned the fixture organization on every run and
+    // moved its subdomain; naming the tenant is what the other guest journeys
+    // already do, and it does not depend on rewriting a live tenant to work.
+    const asTenant = { 'x-preview-tenant': 'demo' }
     const publicContact = await request.post(`${baseURL}/api/public/contact`, {
+      headers: asTenant,
       data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
     })
     expect(publicContact.status()).toBe(201)
     const publicReservation = await request.post(`${baseURL}/api/public/reservations`, {
+      headers: asTenant,
       data: {
         name: 'MCP Reservation',
         email: `mcp-res-${Date.now()}@example.test`,
@@ -215,7 +223,7 @@ test.describe('stateless MCP server', () => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
-    const locationId = await createScratchLocation(request, baseURL!, organizationId)
+    const locationId = 'loc-demo'
 
     const locationRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -224,12 +232,27 @@ test.describe('stateless MCP server', () => {
     })
     expect(locationRead.status()).toBe(200)
 
+    // Unique per run. A constant would pass on a value a previous run had left
+    // on the row, which is the exact failure this read-back exists to catch.
+    const updatedPhone = `+1 555 555 ${String(Date.now() % 10000).padStart(4, '0')}`
     const locationUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_location',
-      args: { organization_id: organizationId, location_id: locationId, phone: '+1 555 555 0111', city: 'Ao Nang' },
+      args: { organization_id: organizationId, location_id: locationId, phone: updatedPhone },
     })
     expect(locationUpdate.status()).toBe(200)
+    // A 200 is the tool answering, not the row changing. updateTenantPage
+    // carried `canonical_url = ? = ?` for weeks: the batch aborted on a binding
+    // count and the route still replied 200, because nothing read the write back
+    // through a different path than the one that made it.
+    const locationAfter = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_location',
+      args: { organization_id: organizationId, location_id: locationId },
+    })
+    expect(locationAfter.status()).toBe(200)
+    expect(mcpData<{ location: { phone: string } }>(await locationAfter.json()).location)
+      .toMatchObject({ phone: updatedPhone })
 
     const reviewsList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -244,19 +267,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(qaList.status()).toBe(200)
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
-
-    const requestId = crypto.randomUUID()
-    const cleanupStarted = Date.now()
-    const cleanupLog = { requestId, method: 'DELETE', path: `/api/organizations/${organizationId}/locations/${locationId}` }
-    console.log('[e2e-cleanup]', JSON.stringify({ ...cleanupLog, event: 'started', testTimeoutMs: test.info().timeout }))
-    try {
-      const deleteLocationRes = await request.delete(`${baseURL}${cleanupLog.path}`, { headers: { 'x-request-id': requestId } })
-      console.log('[e2e-cleanup]', JSON.stringify({ ...cleanupLog, event: 'finished', durationMs: Date.now() - cleanupStarted, status: deleteLocationRes.status(), rayId: deleteLocationRes.headers()['cf-ray'] }))
-      expect(deleteLocationRes.status()).toBe(200)
-    } catch (error) {
-      console.log('[e2e-cleanup]', JSON.stringify({ ...cleanupLog, event: 'failed', durationMs: Date.now() - cleanupStarted }))
-      throw error
-    }
   })
 
   test('Q&A and reviews are read-only through tenant MCP, and only Q&A is writable through the CMS', async ({ request, baseURL }) => {
@@ -287,9 +297,9 @@ test.describe('stateless MCP server', () => {
   test.describe('owner management workflows', () => {
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
-      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-      const organizationId = await ensureOrganization(request, baseURL!)
-      const locationId = await ensureLocation(request, baseURL!, organizationId)
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const locationId = 'loc-demo'
 
       const locationSetup = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_location',

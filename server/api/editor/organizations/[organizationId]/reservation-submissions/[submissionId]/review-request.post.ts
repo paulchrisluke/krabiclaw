@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   const submissionId = getRouterParam(event, 'submissionId')
   if (!organizationId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
 
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   const submission = await queryFirst<{ id: string; location_id: string }>(db, `
     SELECT rs.id, rs.location_id
     FROM requests rs

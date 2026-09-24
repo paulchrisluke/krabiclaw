@@ -11,7 +11,6 @@ export interface BlogPost {
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   published_at?: string | null
   updated_at: string
   first_published_at?: string | null
@@ -31,7 +30,7 @@ export interface BlogPost {
   editor_template?: 'saya' | 'blawby' | 'platform'
   editor_theme_tokens?: Record<string, unknown>
   created_at?: string | null
-  editor_site_name?: string | null
+  editor_organization_name?: string | null
   editor_brand_color?: string | null
   public_path?: string | null
 }
@@ -59,7 +58,6 @@ export interface BlogPostCreateInput {
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   scheduled_for?: string | null
 }
@@ -74,7 +72,6 @@ export interface BlogPostUpdateInput {
   seo_description?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean

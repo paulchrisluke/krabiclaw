@@ -3,7 +3,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
-import { loadSettingsPayload } from '~/server/utils/site-settings'
+import { loadSettingsPayload } from '~/server/utils/organization-settings'
 
 export default defineHandler(async (event) => {
   const { env, db, organization } = await getDashboardContext(event)

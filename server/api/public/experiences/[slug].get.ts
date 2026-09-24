@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
-import { loadPublicExperienceDetail, loadPublicProductReviews } from '~/server/utils/public-products'
+import { loadPublicExperienceDetail, loadPublicProductReviews, loadPublicProductSessions } from '~/server/utils/public-products'
 import { publicLocationPayload } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -12,7 +12,7 @@ import { listMetafieldDefinitions } from '~/server/utils/product-management'
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!organizationId || !slug) return jsonResponse({ error: 'Site and Experience slugs are required' }, { status: 400 })
+  if (!organizationId || !slug) return jsonResponse({ error: 'Organization and Experience slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB
@@ -31,15 +31,16 @@ export default defineHandler(async (event) => {
       product: result.product,
       location: publicLocationPayload(result.location),
       currency: result.currency,
-      vertical: result.site.vertical,
-      brandName: result.site.name,
+      vertical: result.organization.vertical,
+      brandName: result.organization.name,
       reviews,
       booking: result.booking,
+      sessions: await loadPublicProductSessions(db, result),
       collectionName: siblingCollection?.name ?? '',
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
         : [],
-      metafieldDefinitions: await listMetafieldDefinitions(db, result.site.id),
+      metafieldDefinitions: await listMetafieldDefinitions(db, result.organization.id),
       localeRepresentations: result.localeRepresentations,
     })
   } catch (error) {

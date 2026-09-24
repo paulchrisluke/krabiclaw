@@ -364,8 +364,8 @@ function validateArtifacts(checks, manifest) {
     !containsLegacyDonationHost(manifest),
     `Canonical NCLS import data does not reference ${LEGACY_DONATION_HOST}`,
   )
-  pushCheck(checks, manifest.site?.vertical === 'service', 'Import manifest uses DB-supported service vertical')
-  pushCheck(checks, manifest.site?.theme_id === 'blawby-theme-v1', 'Import manifest selects Blawby')
+  pushCheck(checks, manifest.organization?.vertical === 'service', 'Import manifest uses DB-supported service vertical')
+  pushCheck(checks, manifest.organization?.theme_id === 'blawby-theme-v1', 'Import manifest selects Blawby')
   pushCheck(checks, (manifest.offerings ?? []).length > 0, 'Import manifest contains offerings')
   pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/pricing'), 'Import manifest contains /pricing tenant page')
   pushCheck(checks, (manifest.tenantPages ?? []).some((page) => page.path === '/donate'), 'Import manifest contains /donate tenant page')
@@ -607,7 +607,7 @@ function writeClientHandoff(outPath, report, manifest) {
   if (!outPath || !report.ok || !manifest) return
   const handoffPath = path.join(path.dirname(path.resolve(outPath)), 'client-handoff.md')
   const lines = [
-    `# Client Handoff: ${manifest.site?.brand_name || report.organization_id || 'Blawby tenant'}`,
+    `# Client Handoff: ${manifest.organization?.brand_name || report.organization_id || 'Blawby tenant'}`,
     '',
     `**Verified:** ${report.checked_at.slice(0, 10)}  `,
     `**Status:** PASSED (${report.checks.length} checks)  `,
@@ -619,9 +619,9 @@ function writeClientHandoff(outPath, report, manifest) {
     '',
     '## Contact',
     '',
-    `- Email: ${manifest.site?.email || 'Not configured'}`,
-    `- Phone: ${manifest.site?.phone || 'Not configured'}`,
-    `- Service area: ${manifest.site?.service_area?.name || manifest.site?.service_area?.locality || 'Not configured'}`,
+    `- Email: ${manifest.organization?.email || 'Not configured'}`,
+    `- Phone: ${manifest.organization?.phone || 'Not configured'}`,
+    `- Service area: ${manifest.organization?.service_area?.name || manifest.organization?.service_area?.locality || 'Not configured'}`,
     '',
     '## Services',
     '',
@@ -636,7 +636,7 @@ function writeClientHandoff(outPath, report, manifest) {
     '',
     `- Articles: ${(manifest.articles ?? []).length}`,
     `- Reviews: ${(manifest.reviews ?? []).length}`,
-    `- Q&A: ${(manifest.siteQa ?? []).length}`,
+    `- Q&A: ${(manifest.organizationQa ?? []).length}`,
     `- Media and legal files: ${(manifest.mediaInventory?.files ?? []).length}`,
     '',
     '## Legal Documents',

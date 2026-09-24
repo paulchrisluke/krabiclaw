@@ -75,9 +75,11 @@
                 {{ t('saya.experience_detail.see_all_dates') }} →
               </SayaButton>
             </div>
-            <p v-if="sessionsPending" class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.processing') }}</p>
-            <p v-else-if="!upcomingSessions.length" class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}</p>
-            <ul v-else class="mt-5 grid gap-3 sm:grid-cols-2">
+            <!-- Sessions win over the spinner: the page is served with them, so
+                 a refresh in flight never blanks dates a reader can already see.
+                 The empty copy is the last branch, reached only when a load has
+                 returned nothing — it is an answer, not an unfinished one. -->
+            <ul v-if="upcomingSessions.length" class="mt-5 grid gap-3 sm:grid-cols-2">
               <li v-for="session in upcomingSessions" :key="session.id" class="flex items-center justify-between gap-4 rounded-xl border border-default bg-elevated px-4 py-3">
                 <div class="min-w-0">
                   <p class="font-medium text-default">{{ sessionDayLabel(session) }}</p>
@@ -91,6 +93,8 @@
                 </SayaButton>
               </li>
             </ul>
+            <p v-else-if="sessionsPending" class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.processing') }}</p>
+            <p v-else class="mt-4 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}</p>
           </section>
 
           <section v-if="includedItems.length || whatToBring.length" class="mt-10 grid gap-8 border-t border-default pt-10 sm:grid-cols-2">
@@ -368,8 +372,8 @@ import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
 import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
-import { formatPostalAddress } from '~/utils/postal-address'
+import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
+import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import BookingRecap from '~/components/booking/BookingRecap.vue'
@@ -388,6 +392,11 @@ const props = defineProps<{
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
+  /**
+   * The occurrences on sale here, loaded with the page rather than after it.
+   * They arrive rendered, so the dates are in the HTML a crawler reads.
+   */
+  sessions: PublicProductSession[]
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
   /** The tenant's attribute vocabulary, so this page can label its own facts. */
@@ -397,7 +406,7 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const { trackProductOrder } = useSiteConversionTracking()
+const { trackProductOrder } = useOrganizationConversionTracking()
 const { locale, localePath, t } = useI18n()
 const collectionLabel = computed(() => {
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
@@ -533,22 +542,6 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []
 }))
 
-/**
- * The sessions a guest can claim a seat on.
- *
- * Materialized occurrences only. A bookable Product whose sessions have not
- * been generated offers nothing rather than a schedule computed on the fly
- * that no row backs.
- */
-interface PublicSession {
-  id: string
-  starts_at: string
-  ends_at: string
-  timezone: string
-  remaining: number | null
-  is_full: boolean
-}
-
 const bookingOpen = ref(false)
 const bookingStep = ref(1)
 const partySize = ref(1)
@@ -560,14 +553,21 @@ function variantPriceLabel(variant: Product['variants'][number]) {
 const timeSelection = ref<TimeSlotSelection | null>(null)
 const submitting = ref(false)
 const bookingError = ref('')
-const sessions = ref<PublicSession[]>([])
+/**
+ * The occurrences, as the page was served with them.
+ *
+ * They arrive from the payload rather than from a fetch after hydration, so
+ * the dates are in the HTML. The client refresh below replaces them; it does
+ * not supply them, because the first reader may be a crawler that runs nothing.
+ */
+const sessions = ref<PublicProductSession[]>([...props.sessions])
 const sessionsPending = ref(false)
 
-function localDateOf(session: PublicSession) {
+function localDateOf(session: PublicProductSession) {
   const parts = localPartsAt(new Date(session.starts_at), session.timezone)
   return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
 }
-function localTimeOf(session: PublicSession) {
+function localTimeOf(session: PublicProductSession) {
   const parts = localPartsAt(new Date(session.starts_at), session.timezone)
   return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 }
@@ -613,7 +613,7 @@ const guestsMax = computed(() => {
   return Math.max(1, ...pool.map(session => session.remaining ?? 0))
 })
 
-const selectedSession = computed<PublicSession | null>(() => {
+const selectedSession = computed<PublicProductSession | null>(() => {
   const selection = timeSelection.value
   if (!selection) return null
   return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
@@ -628,24 +628,31 @@ const selectedSession = computed<PublicSession | null>(() => {
  * open, the checkbox had been flipped back, and the dialog stayed hidden with
  * its sessions loaded behind it.
  */
-/** The occurrences a guest can choose from, fetched once for the page and the form alike. */
+/**
+ * Re-read the occurrences, for a reader who has been on the page a while.
+ *
+ * This refreshes what the page was served with; it is not the only source of
+ * it. A failure leaves the rendered sessions standing and says the load
+ * failed — it does not claim there is nothing to book, which is a different
+ * fact and the one this page used to state wrongly.
+ */
 async function loadSessions() {
-  if (sessions.value.length || sessionsPending.value) return
+  if (sessionsPending.value) return
   sessionsPending.value = true
   try {
-    const response = await publicApiRequest<{ success: true; sessions: PublicSession[] }>(
+    const response = await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(
       // This page is one branch's page, so it asks for that branch's
       // occurrences. Two branches running the same class at the same hour
       // would otherwise be indistinguishable by date and time alone.
       `/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
       {
-        validate: (value): value is { success: true; sessions: PublicSession[] } =>
+        validate: (value): value is { success: true; sessions: PublicProductSession[] } =>
           isRecord(value) && value.success === true && Array.isArray(value.sessions),
       },
     )
     sessions.value = response.sessions.filter(session => !session.is_full)
   } catch (error) {
-    bookingError.value = getErrorMessage(error, t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }))
+    bookingError.value = getErrorMessage(error, t('saya.experience_detail.booking_failed'))
   } finally {
     sessionsPending.value = false
   }
@@ -658,12 +665,13 @@ async function openBooking() {
 }
 
 /** A guest pressing a time on the page arrives in the form with it chosen. */
-async function openBookingAt(session: PublicSession) {
+async function openBookingAt(session: PublicProductSession) {
   timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
   await openBooking()
 }
 
-// The page shows the next sessions itself, so they are loaded with it — only
+// The page is served with its sessions; this re-reads them once the browser
+// has it, so a tab left open does not offer a seat that has since gone. Only
 // for a product a guest can book here; an enquiry has no calendar.
 onMounted(() => {
   if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
@@ -678,10 +686,10 @@ const upcomingSessions = computed(() => {
 })
 const nextSession = computed(() => upcomingSessions.value[0] ?? null)
 
-function sessionDayLabel(session: PublicSession): string {
+function sessionDayLabel(session: PublicProductSession): string {
   return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: session.timezone }).format(new Date(session.starts_at))
 }
-function sessionTimeLabel(session: PublicSession): string {
+function sessionTimeLabel(session: PublicProductSession): string {
   const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
   return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
 }
@@ -759,7 +767,7 @@ async function submitBooking(contact: ContactFormState) {
     setBookingConfirmation({
       type: 'booking',
       organizationId: props.organizationId,
-      siteName: props.location.title,
+      organizationName: props.location.title,
       guestName: contact.name,
       startsAt: session.starts_at,
       timezone: session.timezone,
@@ -792,35 +800,136 @@ function recordExternalOrderClick() {
   )
 }
 
-useSchemaOrg(computed(() => ({
-  '@type': props.presentation.structuredDataType,
-  name: props.product.name,
-  description: props.product.description,
-  image: props.product.image?.public_url,
-  // An offer node states an amount, so a product priced in words has none to
-  // state. It is still on sale; it simply is not quoted here.
-  offers: offer.value
-    ? {
-        '@type': 'Offer',
-        price: minorAmountToMajor(offer.value.unit_amount, offer.value.currency),
-        priceCurrency: offer.value.currency,
-        availability: isAvailable.value ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-        url: props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
-      }
-    : undefined,
-  aggregateRating: props.reviews.length
-    ? {
-        '@type': 'AggregateRating',
-        ratingValue: props.reviews.reduce((total, review) => total + review.rating, 0) / props.reviews.length,
-        reviewCount: props.reviews.length,
-      }
-    : undefined,
-  review: props.reviews.map(review => ({
-    '@type': 'Review',
-    author: { '@type': 'Person', name: review.author_name },
-    name: review.title,
-    reviewBody: review.content,
-    reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5 },
-  })),
-})))
+/**
+ * What this page describes, in schema.org's vocabulary.
+ *
+ * A dish is a MenuItem and a shop's goods are a Product: that is what the
+ * surface sells, and `presentation.structuredDataType` names it. An experience
+ * is a class that runs at a stated time, which is an Event — several of them
+ * are an EventSeries, with each occurrence carried as a subEvent.
+ *
+ * A bookable experience with nothing scheduled is the one case that reads back
+ * down to Product. An Event is defined by its `startDate`, and this one has no
+ * date to state; it is still a Product on sale, so it says that rather than
+ * claiming to be an Event that never happens.
+ */
+const schemaSessions = computed(() => [...sessions.value].sort((left, right) => left.starts_at.localeCompare(right.starts_at)))
+const structuredDataType = computed(() => {
+  const declared = props.presentation.structuredDataType
+  if (declared !== 'Event') return declared
+  if (!schemaSessions.value.length) return 'Product'
+  return schemaSessions.value.length > 1 ? 'EventSeries' : 'Event'
+})
+
+// Structured data names the page by an absolute URL, resolved against the
+// request the way the breadcrumbs are, so a tenant's markup stays on the
+// tenant's own domain.
+const requestURL = useRequestURL()
+const canonicalProductUrl = computed(() => new URL(
+  props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
+  requestURL.origin,
+).toString())
+
+/** Where it runs: the branch, as a place a guest can be sent to. */
+const schemaPlace = computed(() => ({
+  '@type': 'Place',
+  name: props.location.title,
+  address: schemaPostalAddress(props.location.address),
+  ...(props.location.latitude !== null && props.location.longitude !== null
+    ? { geo: { '@type': 'GeoCoordinates', latitude: props.location.latitude, longitude: props.location.longitude } }
+    : {}),
+}))
+
+/**
+ * The seat on one occurrence, priced the way the page prices it.
+ *
+ * A seat is on sale from the moment its occurrence exists — `created_at` on the
+ * session row — until the class begins. Both ends are recorded facts, so the
+ * markup states the window rather than the instant the page happened to render:
+ * a `new Date()` here would differ between the server and the hydrated client
+ * and change on every request.
+ */
+function sessionOffer(session: PublicProductSession) {
+  const price = offer.value
+  return {
+    '@type': 'Offer',
+    ...(price
+      ? { price: minorAmountToMajor(price.unit_amount, price.currency), priceCurrency: price.currency }
+      : {}),
+    availability: isAvailable.value && !session.is_full
+      ? 'https://schema.org/InStock'
+      : 'https://schema.org/SoldOut',
+    validFrom: session.created_at,
+    validThrough: session.starts_at,
+    url: canonicalProductUrl.value,
+  }
+}
+
+/** One occurrence, as its own dated Event under the series. */
+function sessionEvent(session: PublicProductSession) {
+  return {
+    '@type': 'Event',
+    name: props.product.name,
+    startDate: session.starts_at,
+    endDate: session.ends_at,
+    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    eventStatus: 'https://schema.org/EventScheduled',
+    location: schemaPlace.value,
+    offers: sessionOffer(session),
+  }
+}
+
+useSchemaOrg(computed(() => {
+  const type = structuredDataType.value
+  const list = schemaSessions.value
+  const first = list[0]
+  const last = list[list.length - 1]
+  return {
+    // Without a context this node names no vocabulary and no parser reads it.
+    '@context': 'https://schema.org',
+    '@type': type,
+    name: props.product.name,
+    description: props.product.description,
+    image: props.product.image?.public_url,
+    ...(first && last
+      ? {
+          url: canonicalProductUrl.value,
+          startDate: first.starts_at,
+          endDate: last.ends_at,
+          eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+          eventStatus: 'https://schema.org/EventScheduled',
+          location: schemaPlace.value,
+          // One offer per occurrence, so the markup says when each seat is for.
+          offers: list.map(sessionOffer),
+          ...(type === 'EventSeries' ? { subEvent: list.map(sessionEvent) } : {}),
+        }
+      : {
+          // An offer node states an amount, so a product priced in words has none to
+          // state. It is still on sale; it simply is not quoted here.
+          offers: offer.value
+            ? {
+                '@type': 'Offer',
+                price: minorAmountToMajor(offer.value.unit_amount, offer.value.currency),
+                priceCurrency: offer.value.currency,
+                availability: isAvailable.value ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+                url: canonicalProductUrl.value,
+              }
+            : undefined,
+        }),
+    aggregateRating: props.reviews.length
+      ? {
+          '@type': 'AggregateRating',
+          ratingValue: props.reviews.reduce((total, review) => total + review.rating, 0) / props.reviews.length,
+          reviewCount: props.reviews.length,
+        }
+      : undefined,
+    review: props.reviews.map(review => ({
+      '@type': 'Review',
+      author: { '@type': 'Person', name: review.author_name },
+      name: review.title,
+      reviewBody: review.content,
+      reviewRating: { '@type': 'Rating', ratingValue: review.rating, bestRating: 5 },
+    })),
+  }
+}))
 </script>

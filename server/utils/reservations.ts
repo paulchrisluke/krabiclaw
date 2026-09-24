@@ -283,7 +283,6 @@ export interface ReservationSlot {
   remaining: number | null
   is_closed: boolean
   is_full: boolean
-  note: string | null
 }
 
 interface LocationHoursRow {
@@ -317,13 +316,6 @@ export async function listReservationSlots(db: DbClient, input: {
   const special = parseSpecialHours(location.special_hours ? JSON.parse(location.special_hours) : null)
   const scheduled = generateReservationTimes(hours, input.date, { specialHours: special })
 
-  const overrides = await queryAll<{ time_slot: string | null; status: string; capacity: number | null; note: string | null }>(db, `
-    SELECT time_slot, status, capacity, note FROM location_reservation_overrides
-     WHERE organization_id = ? AND location_id = ? AND override_date = ?
-  `, [input.organizationId, input.locationId, input.date])
-  const wholeDay = overrides.find(entry => entry.time_slot === null)
-  const bySlot = new Map(overrides.filter(entry => entry.time_slot !== null).map(entry => [entry.time_slot!, entry]))
-
   const claims = await queryAll<{ starts_at: string; total: number }>(db, `
     SELECT r.starts_at, SUM(r.party_size) AS total FROM reservations r
      WHERE r.organization_id = ? AND r.location_id = ? AND ${RESERVATION_CAPACITY_CONSUMING_SQL}
@@ -332,13 +324,9 @@ export async function listReservationSlots(db: DbClient, input: {
   `, [input.organizationId, input.locationId, input.excludeReservationId ?? null])
   const claimedByInstant = new Map(claims.map(row => [row.starts_at, Number(row.total)]))
 
-  // Slots the merchant explicitly opened on this date appear even when the
-  // regular hours do not cover them; that is what an override is for.
-  const candidates = [...new Set([...scheduled, ...overrides.filter(entry => entry.time_slot && entry.status === 'open').map(entry => entry.time_slot!)])].sort()
-
-  const closedAllDay = location.status !== 'active' || wholeDay?.status === 'closed'
+  const closedAllDay = location.status !== 'active'
   const slots: ReservationSlot[] = []
-  for (const time of candidates) {
+  for (const time of scheduled) {
     let startsAt: string
     // A local time that does not exist on this date (a spring-forward gap) is
     // not offered; picking a neighbouring hour would book a guest at a time
@@ -347,15 +335,12 @@ export async function listReservationSlots(db: DbClient, input: {
     catch (error) { if (error instanceof RangeError) continue; throw error }
     if (!input.includePast && Date.parse(startsAt) <= Date.now()) continue
 
-    const override = bySlot.get(time)
-    const capacity = override?.capacity ?? wholeDay?.capacity ?? config.slot_capacity
+    const capacity = config.slot_capacity
     const claimed = claimedByInstant.get(startsAt) ?? 0
     const remaining = capacity === null ? null : capacity - claimed
-    const isClosed = closedAllDay || override?.status === 'closed' || (!scheduled.includes(time) && override?.status !== 'open')
     slots.push({
       time_slot: time, starts_at: startsAt, capacity, claimed, remaining,
-      is_closed: isClosed, is_full: remaining !== null && remaining <= 0,
-      note: override?.note ?? wholeDay?.note ?? null,
+      is_closed: closedAllDay, is_full: remaining !== null && remaining <= 0,
     })
   }
   return { timezone, slots }
@@ -403,17 +388,8 @@ export async function claimReservation(db: DbClient, input: {
   }
   const now = new Date().toISOString()
   // The seats this slot has, resolved exactly as listReservationSlots resolves
-  // them for the guest who is looking at it: the slot's own override decides,
-  // then the whole day's, then the location's standing capacity. A closed slot
-  // or a closed day has no seats at all, whatever those capacities say — the
-  // calendar shows it closed, and the claim has to agree or an owner who shuts
-  // a service down still takes bookings for it.
-  const overrideScope = `o.organization_id = c.organization_id AND o.location_id = c.location_id AND o.override_date = ?`
-  const resolvedCapacity = `COALESCE(
-            (SELECT o.capacity FROM location_reservation_overrides o WHERE ${overrideScope} AND o.time_slot = ?),
-            (SELECT o.capacity FROM location_reservation_overrides o WHERE ${overrideScope} AND o.time_slot IS NULL),
-            c.slot_capacity
-          )`
+  // them for the guest who is looking at it: the location's standing capacity.
+  const resolvedCapacity = 'c.slot_capacity'
   const claim: BatchQuery = {
     query: `
       INSERT INTO reservations (
@@ -424,11 +400,6 @@ export async function claimReservation(db: DbClient, input: {
       WHERE EXISTS (
         SELECT 1 FROM location_reservation_configs c
         WHERE c.location_id = ? AND c.organization_id = ?
-          AND NOT EXISTS (
-            SELECT 1 FROM location_reservation_overrides o
-             WHERE ${overrideScope} AND (o.time_slot = ? OR o.time_slot IS NULL)
-               AND o.status = 'closed'
-          )
           AND (${resolvedCapacity} IS NULL OR ${resolvedCapacity} >= ? + COALESCE((
             SELECT SUM(r.party_size) FROM reservations r
             WHERE r.location_id = c.location_id AND r.starts_at = ? AND ${RESERVATION_CAPACITY_CONSUMING_SQL}
@@ -440,9 +411,6 @@ export async function claimReservation(db: DbClient, input: {
       input.reservationId, input.organizationId, input.locationId, input.customerId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, 'confirmed', now, now,
       input.locationId, input.organizationId,
-      input.date, input.timeSlot,
-      input.date, input.timeSlot, input.date,
-      input.date, input.timeSlot, input.date,
       input.partySize, input.startsAt,
     ],
   }

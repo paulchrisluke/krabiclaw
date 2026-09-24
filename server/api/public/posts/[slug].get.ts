@@ -4,7 +4,7 @@ import { getPublishedPostByPublicRoute } from '~/server/utils/post-management'
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
-  if (!organizationId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Site ID and post slug are required')
+  if (!organizationId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Organization ID and post slug are required')
 
   const env = cloudflareEnv(event)
   const db = env.db

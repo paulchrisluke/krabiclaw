@@ -116,7 +116,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const rawRuntimeEnv = event.req.runtime?.cloudflare?.env as Record<string, unknown> | undefined
   const runtimeEnv = (() => {
     const env = rawRuntimeEnv
-    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'SITE_CACHE', 'AI'] as const
+    const requiredBindings = ['DB', 'MEDIA_BUCKET', 'ORGANIZATION_CACHE', 'AI'] as const
     const missing = requiredBindings.filter((key) => !env?.[key])
 
     if (missing.length > 0) {
@@ -160,8 +160,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   const publicConfig = (useRuntimeConfig().public ?? {}) as Record<string, unknown>
   const configuredEnv = {
     ...(typeof publicConfig.platformDomain === 'string' && { NUXT_PUBLIC_PLATFORM_DOMAIN: publicConfig.platformDomain }),
-    ...(typeof publicConfig.freeSiteDomain === 'string' && { NUXT_PUBLIC_FREE_SITE_DOMAIN: publicConfig.freeSiteDomain }),
-    ...(typeof publicConfig.siteUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.siteUrl }),
+    ...(typeof publicConfig.freeOrganizationDomain === 'string' && { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: publicConfig.freeOrganizationDomain }),
+    ...(typeof publicConfig.platformUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.platformUrl }),
   }
   const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
   const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined
@@ -174,7 +174,29 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
   // read-your-writes across requests while a Worker running far from the primary stops
   // paying a cross-region round trip for every SELECT. Without read replication enabled
   // on the database, the session is served by the primary and behaves as before.
-  const d1 = rawD1 ? instrumentD1(event, rawD1.withSession('first-primary'), rawD1) : undefined
+  // Locally the bindings are not objects in this process: Miniflare hands out
+  // proxy stubs into the workerd runtime beside it, and refuses to use one whose
+  // runtime has gone. Holding the stub is fine — the checks above only test that
+  // one is present — so the failure surfaces here, at the first property read on
+  // it. When workerd dies, this process keeps serving with stubs pointing at
+  // nothing and every request fails here for the rest of its life, naming
+  // whichever route ran next. That reads like a bug in that route rather than a
+  // dead runtime, and reloading never clears it because the stub outlives the
+  // reload, so say what happened and what fixes it.
+  let d1: D1Database | undefined
+  try {
+    d1 = rawD1 ? instrumentD1(event, rawD1.withSession('first-primary'), rawD1) : undefined
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('poisoned stub')) {
+      throw new HTTPError({
+        statusCode: 503,
+        statusMessage: 'The local Worker runtime backing this dev server is gone, so its Cloudflare bindings cannot be reached. '
+          + 'Restart the dev server; this does not recover on its own. '
+          + 'A machine-wide kill such as `pkill -f workerd` does this to every dev server on the machine, not just your own — stop one by its port instead.',
+      })
+    }
+    throw error
+  }
   const db = d1 ? createDb(d1) : undefined
 
   // Apply E2E delivery-mode overrides only for approved dev/E2E requests

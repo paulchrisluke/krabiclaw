@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-links-seo-title"
+    id="organization-links-seo-title"
     title="SEO title"
     :ready="editor.editorReady.value"
     :saving="editor.saving.value"

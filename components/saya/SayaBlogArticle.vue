@@ -15,19 +15,19 @@
 
     <article class="min-w-0">
     <div class="mx-auto max-w-4xl">
-    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" :site-name="siteName" :read-minutes="readTime" :blocks="post.content_blocks" template="saya" />
+    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" :organization-name="organizationName" :read-minutes="readTime" :blocks="post.content_blocks" template="saya" />
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
         <p v-if="authorName" class="text-sm font-semibold text-default">{{ authorName }}</p>
-        <p class="text-sm text-dimmed">{{ t('saya.posts.subtitle') }} · {{ siteName }}</p>
+        <p class="text-sm text-dimmed">{{ t('saya.posts.subtitle') }} · {{ organizationName }}</p>
       </div>
       <PlatformButton :to="blogBasePath" variant="outline" size="sm">{{ t('saya.posts.view_all') }}</PlatformButton>
     </div>
     </div>
 
     <div v-if="relatedPosts.length" class="mx-auto mt-16 max-w-4xl border-t border-default pt-10">
-      <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ siteName }}</h2>
+      <h2 class="mb-6 text-xl font-bold text-default">{{ t('saya.posts.title') }} · {{ organizationName }}</h2>
       <div class="grid gap-6 sm:grid-cols-2">
         <NuxtLink
           v-for="relatedPost in relatedPosts"
@@ -59,7 +59,7 @@ import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
-const { isTenant, organizationId, site } = useTenantSite()
+const { isTenant, organizationId, organization } = useTenantOrganization()
 if (!isTenant || !organizationId) throw createError({ statusCode: 404 })
 
 const { localePath, t } = useI18n()
@@ -75,7 +75,6 @@ interface TenantBlogPost {
   seo_title?: string | null
   seo_keywords?: string | null
   canonical_url?: string | null
-  robots?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   updated_at?: string | null
@@ -171,15 +170,15 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = data.value.post.localeRepresentations
 
 const post = computed(() => data.value?.post ?? null)
-const shell = useSiteShellState()
+const shell = useOrganizationShellState()
 await shell.ready
 const sourceBlogData = await usePublicPageData({ datasets: ['blog'], routeOwned: false })
 const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
-const siteName = computed(() => locale === 'en'
-  ? (shell.site.value?.name?.trim() ?? site?.name?.trim() ?? '')
-  : (shell.site.value?.name?.trim() ?? ''))
+const organizationName = computed(() => locale === 'en'
+  ? (shell.organization.value?.name?.trim() ?? organization?.name?.trim() ?? '')
+  : (shell.organization.value?.name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
 const readTime = computed(() => {
@@ -212,8 +211,7 @@ const requestURL = useRequestURL()
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value?.title || t('saya.footer.blog'), seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
   seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
-  baseUrl: requestURL.origin, publicPath: postPath.value, siteName: siteName.value,
-  robots: post.value?.visibility === 'unlisted' ? 'noindex,follow' : post.value?.robots,
+  baseUrl: requestURL.origin, publicPath: postPath.value, organizationName: organizationName.value,
 }))
 
 const { canonicalUrl } = useSocialMetadata(() => ({
@@ -223,9 +221,9 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   pageType: 'article',
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
-  robots: resolvedSeo.value.robots,
+  discoverability: post.value?.visibility === 'unlisted' ? 'unlisted' : 'listed',
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
   socialImage: post.value?.social_image ?? null,
 }))
@@ -257,9 +255,9 @@ useContentPageSchema(computed(() => {
       { name: post.value.title, url: postPath.value },
     ],
     components: renderableComponents.value,
-    siteName: siteName.value,
-    siteLogoUrl: shell.site.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
-    siteDescription: shell.site.value?.brand_description || undefined,
+    organizationName: organizationName.value,
+    organizationLogoUrl: shell.organization.value?.media.find(item => item.slot === 'logo')?.public_url || undefined,
+    organizationDescription: shell.organization.value?.brand_description || undefined,
   }
 }))
 </script>

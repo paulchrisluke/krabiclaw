@@ -1,7 +1,7 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
-import { composeRobotsDirective, type RobotsIntent } from '~/shared/robots-directive'
+import { robotsDirective, type RobotsVisibility } from '~/shared/robots-directive'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 /**
@@ -139,7 +139,7 @@ export function publicSocialMediaFromPlacements<T extends SocialMediaSource>(
 
 export interface SocialBrand {
   /** og:site_name and the name rendered on generated OG image cards. */
-  siteName: string
+  organizationName: string
 }
 
 export interface SocialPageMetadataInput {
@@ -156,10 +156,10 @@ export interface SocialPageMetadataInput {
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null
   /**
-   * Indexing intent, not a rendered directive. Unset means the default
-   * `index,follow`. See shared/robots-directive.ts.
+   * What this surface is, not what a tenant chose: the directive is derived
+   * from it. Unset means public, listed content. See shared/robots-directive.ts.
    */
-  robots?: RobotsIntent | null
+  discoverability?: RobotsVisibility | null
 }
 
 export interface ComposedSocialTags {
@@ -221,12 +221,12 @@ export function composeSocialMetadata(
     title,
     description,
     canonicalUrl: input.canonicalUrl,
-    robots: composeRobotsDirective(input.robots),
+    robots: robotsDirective(input.discoverability),
     ogTitle: title,
     ogDescription: description,
     ogType: pageType,
     ogUrl: input.canonicalUrl,
-    ogSiteName: firstNonBlank(input.brand.siteName) ?? undefined,
+    ogSiteName: firstNonBlank(input.brand.organizationName) ?? undefined,
     ogImage: resolvedOgImage?.url,
     ogImageWidth: resolvedOgImage?.width,
     ogImageHeight: resolvedOgImage?.height,
@@ -250,7 +250,7 @@ export interface SocialCardRenderPayload {
   template: SocialTemplate
   title: string
   description?: string | null
-  siteName: string
+  organizationName: string
   label?: string | null
   location?: string | null
   logoUrl?: string | null

@@ -1,6 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { updateSession } from '~/server/utils/availability'
 import { PRODUCT_SESSION_STATUSES, type ProductSessionStatus } from '~/shared/bookings'
 import { defineHandler } from 'nitro'
@@ -17,11 +17,11 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
   const sessionId = getRouterParam(event, 'sessionId')
-  if (!organizationId || !productId || !sessionId) return jsonResponse({ error: 'Site, product and session IDs are required' }, { status: 400 })
+  if (!organizationId || !productId || !sessionId) return jsonResponse({ error: 'Organization, product and session IDs are required' }, { status: 400 })
   try {
     const { db, session: auth, organization } = await requireOrganizationAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ starts_at?: unknown; ends_at?: unknown; capacity?: unknown; status?: unknown }>(event, {
       starts_at: 'unknown', ends_at: 'unknown', capacity: 'unknown', status: 'unknown',
     })

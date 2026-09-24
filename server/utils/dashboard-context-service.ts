@@ -6,7 +6,6 @@ import {
   listDashboardLocations,
   loadDashboardOrganizationCard,
 } from '~/server/utils/dashboard-context'
-import { isOrganizationWideRole, listUserOrganizationTeamIds, resolveDashboardAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 
 // The scope is the route's `org` query param. No organization is a 400 and one
@@ -22,21 +21,15 @@ export async function loadDashboardContext(
 ) {
   const contextStartedAt = performance.now()
   const env = cloudflareEnv(event)
-  const { db, organization, userId } = await getDashboardContext(event, {
+  const { db, organization } = await getDashboardContext(event, {
     organizationSlug: scope.orgSlug,
   })
   recordRequestPhase(event, 'context', contextStartedAt)
 
-  const teamIds = isOrganizationWideRole(organization.role)
-    ? null
-    : await listUserOrganizationTeamIds({ env, organizationId: organization.id, userId, event })
-  const principal = { env, userId, role: organization.role, teamIds }
-
   const resourcesStartedAt = performance.now()
-  const [card, locations, access] = await Promise.all([
+  const [card, locations] = await Promise.all([
     loadDashboardOrganizationCard(env, db, organization.id),
-    listDashboardLocations(db, organization.id, principal),
-    resolveDashboardAccess(db, memberAccessPrincipal(organization, { env, event })),
+    listDashboardLocations(db, organization.id),
   ])
   recordRequestPhase(event, 'resources', resourcesStartedAt)
 
@@ -44,6 +37,5 @@ export async function loadDashboardContext(
     success: true as const,
     organization: { ...organization, ...card },
     locations,
-    access,
   }
 }

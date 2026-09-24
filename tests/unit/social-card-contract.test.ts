@@ -100,7 +100,7 @@ test('an article social card derives from its leading image block', () => {
 test('social card generation keys change when a byte-producing source changes', () => {
   const base = {
     logoAssetId: 'logo-1',
-    payload: { template: 'saya' as const, title: 'Site', siteName: 'Site', backgroundImageUrl: 'https://img.example/background.png' },
+    payload: { template: 'saya' as const, title: 'Site', organizationName: 'Site', backgroundImageUrl: 'https://img.example/background.png' },
   }
   assert.notEqual(
     buildSocialCardGenerationKey({ ...base, sourceAssetId: 'source-1' }),

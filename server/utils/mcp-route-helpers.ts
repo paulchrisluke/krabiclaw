@@ -1,6 +1,6 @@
 import type { H3Event } from 'nitro';
 import { setResponseHeader } from 'nitro/h3';
-import { purgeSiteKvCache } from '~/server/utils/edge-cache'
+import { purgeOrganizationKvCache } from '~/server/utils/edge-cache'
 
 export function quoteChallengeValue(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -123,7 +123,7 @@ export function scheduleMcpKvHtmlPurge(options: {
   const uniqueHostnames = [...new Set(hostnames.filter((value): value is string => Boolean(value)))]
   if (uniqueHostnames.length === 0) return
 
-  const purgeAsync = purgeSiteKvCache(kv, uniqueHostnames).catch((err: unknown) => {
+  const purgeAsync = purgeOrganizationKvCache(kv, uniqueHostnames).catch((err: unknown) => {
     console.warn(`[${logPrefix}] failed:`, String(err))
   })
 

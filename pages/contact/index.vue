@@ -251,12 +251,12 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, organizationId, previewAuthorized, site } = useTenantSite()
+const { isPlatform, organizationId, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 if (isPlatform || !organizationId) throw createError({ statusCode: 404 })
 
 const { locale, localePath, t } = useI18n()
-const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const vertCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Plain-Tailwind form styling — replaces UInput/UTextarea's default look
@@ -265,7 +265,7 @@ import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/utils/postal-address'
 const inputClass = FORM_INPUT_CLASS
 
-const businessName = computed(() => site?.name?.trim() ?? '')
+const businessName = computed(() => organization?.name?.trim() ?? '')
 // A preview is the real site, so the form is real too — but an owner looking
 // at an unlaunched site should not be able to file a guest thread against it.
 const isDraftPreview = computed(() => previewAuthorized)
@@ -341,7 +341,7 @@ const tenantForm = ref<TenantContactForm>({
   message: aboutPrefix,
 })
 const tenantSubmitting = ref(false)
-const { mirrorSubmission } = useSiteConversionTracking()
+const { mirrorSubmission } = useOrganizationConversionTracking()
 const tenantErrors = ref<TenantFieldError[]>([])
 const tenantSubmitError = ref<string | null>(null)
 const tenantFieldError = (name: keyof TenantContactForm) =>
@@ -387,7 +387,7 @@ const handleTenantContact = async () => {
   try {
     setContactConfirmation({
       organizationId,
-      siteName: businessName.value,
+      organizationName: businessName.value,
       guestName: tenantForm.value.name,
       subject: tenantForm.value.subject,
     })
@@ -404,7 +404,7 @@ useSocialMetadata(() => ({
   title: tenantPage.value?.seo_title || tenantPage.value?.title || businessName.value,
   description: tenantPage.value?.seo_description || tenantPage.value?.summary || '',
   brand: {
-    siteName: businessName.value,
+    organizationName: businessName.value,
   },
 }))
 </script>

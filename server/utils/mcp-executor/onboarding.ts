@@ -3,7 +3,7 @@ import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { NOT_HANDLED, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "save_generated_image": {
       const imageData = requiredString(args, "image_data_base64");
@@ -17,13 +17,13 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       }
       console.error("[MCP] save_generated_image uploading bytes=%d contentType=%s", upload.buffer.byteLength, upload.contentType);
 
-      const provider = resolveImageUploadProvider(upload.contentType, site.env);
+      const provider = resolveImageUploadProvider(upload.contentType, organization.env);
 
       const uploaded = await uploadResolvedMediaToAssetStore({
-        db: site.db,
-        env: site.env as never,
-        organizationId: site.organizationId,
-        userId: site.userId,
+        db: organization.db,
+        env: organization.env as never,
+        organizationId: organization.organizationId,
+        userId: organization.userId,
         buffer: upload.buffer,
         contentType: upload.contentType,
         filename: upload.filename,
@@ -43,12 +43,12 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const attachment = toolFileReference(args.attachment_id, "attachment_id");
       const prompt = optionalString(args, "prompt") ?? null;
       const upload = await resolveGeneratedImageFile(attachment);
-      const provider = resolveImageUploadProvider(upload.contentType, site.env);
+      const provider = resolveImageUploadProvider(upload.contentType, organization.env);
       const uploaded = await uploadResolvedMediaToAssetStore({
-        db: site.db,
-        env: site.env as never,
-        organizationId: site.organizationId,
-        userId: site.userId,
+        db: organization.db,
+        env: organization.env as never,
+        organizationId: organization.organizationId,
+        userId: organization.userId,
         buffer: upload.buffer,
         contentType: upload.contentType,
         filename: upload.filename,

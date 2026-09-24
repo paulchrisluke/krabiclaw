@@ -22,7 +22,7 @@
 
 import type { HTTPEvent } from 'nitro/h3'
 import type { DbClient } from '~/server/db'
-import { drainPublicResourceCacheInvalidations, purgeSiteCaches, type SiteChangeDrainEnv } from '~/server/utils/public-resource-cache'
+import { drainPublicResourceCacheInvalidations, purgeOrganizationCaches, type OrganizationChangeDrainEnv } from '~/server/utils/public-resource-cache'
 import { definePlugin } from 'nitro';
 
 const EDITOR_ORGANIZATIONS_PREFIX = '/api/editor/organizations/'
@@ -43,9 +43,9 @@ export default definePlugin((nitroApp) => {
 
     const runtimeEnv = request.runtime?.cloudflare?.env as ({
       DB?: DbClient
-      SITE_CACHE?: KVNamespace
-    } & SiteChangeDrainEnv) | undefined
-    const kv = runtimeEnv?.SITE_CACHE
+      ORGANIZATION_CACHE?: KVNamespace
+    } & OrganizationChangeDrainEnv) | undefined
+    const kv = runtimeEnv?.ORGANIZATION_CACHE
     if (!kv || !runtimeEnv?.DB) return
 
     // The site's own caches are cleared before this request is done with, so a
@@ -53,11 +53,7 @@ export default definePlugin((nitroApp) => {
     // resources right after an edit. The queue drain, which also brings the
     // site's search index up to date, outlives the response: a write's own
     // response is not made to wait on a list of index items.
-    try {
-      await purgeSiteCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN)
-    } catch (err: unknown) {
-      console.warn('[public-resource-cache] purge failed:', String(err))
-    }
+    await purgeOrganizationCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
     const drained = drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { limit: 100 })
       .catch((err: unknown) => console.warn('[public-resource-cache] site change drain failed:', String(err)))
     const waitUntil = request.runtime?.cloudflare?.context?.waitUntil

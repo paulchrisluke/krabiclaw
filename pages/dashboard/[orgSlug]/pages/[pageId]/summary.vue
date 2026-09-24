@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel
-    id="site-page-summary"
+    id="organization-page-summary"
     title="Summary"
     :ready="editor.ready.value"
     :saving="editor.saving.value"

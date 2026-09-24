@@ -56,7 +56,7 @@ export function isSubmissionType(value: string): value is SubmissionType {
   return value === 'contact' || value === 'reservation' || value === 'booking'
 }
 
-export async function getSubmissionOrgSite(db: DbClient, submissionType: SubmissionType, submissionId: string): Promise<{ organizationId: string } | null> {
+export async function getSubmissionOrganization(db: DbClient, submissionType: SubmissionType, submissionId: string): Promise<{ organizationId: string } | null> {
   const row = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM requests WHERE kind = ? AND id = ?', [submissionType, submissionId])
   return row ? { organizationId: row.organization_id } : null
 }

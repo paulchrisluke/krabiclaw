@@ -12,8 +12,8 @@ const PII_KEY_PATTERN = /email|phone|address/i;
 // Business/entity name fields — not personal data, safe to log verbatim even
 // though they end in "_name" like the person-name keys below.
 const NON_PERSONAL_NAME_KEYS = new Set([
-  "site_name", "business_name", "name", "location_name",
-  "organization_name", "product_name", "experience_name",
+  "organization_name", "business_name", "name", "location_name",
+  "product_name", "experience_name",
 ]);
 
 function isPersonNameKey(key: string): boolean {

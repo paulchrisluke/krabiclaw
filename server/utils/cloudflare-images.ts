@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro'
+
 interface CloudflareImagesEnv {
   CF_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
@@ -8,8 +10,22 @@ function accountId(env: CloudflareImagesEnv): string {
   return env.CF_ACCOUNT_ID || ''
 }
 
-export function hasCloudflareImagesConfig(env: CloudflareImagesEnv): boolean {
-  return Boolean(accountId(env) && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE)
+/**
+ * Only production holds the Images credentials, on purpose. Staging, preview,
+ * local development and E2E run on copies of production's rows, and those rows
+ * name production's images: an environment holding the token deleted
+ * production's social cards whenever it regenerated its own. Without the
+ * credentials those environments still show every image (delivery URLs are
+ * public) but cannot store or delete one, and this says so rather than failing
+ * somewhere further down.
+ */
+export function assertCloudflareImagesConfigured(env: CloudflareImagesEnv): void {
+  if (accountId(env) && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE) return
+  throw new HTTPError({
+    statusCode: 503,
+    statusMessage: 'Cloudflare Images is not configured in this environment, by design',
+    message: 'Cloudflare Images is not configured in this environment, by design. Only production holds the Images credentials: staging, preview, local development and E2E run on copies of production data, so storing or deleting an image from them would change production\'s images. Image uploads, social-card generation and image deletion run only in production; do not add the credentials here to make this pass.',
+  })
 }
 
 interface CloudflareImagesResponse {
@@ -29,6 +45,7 @@ function authHeader(env: CloudflareImagesEnv): Record<string, string> {
 
 /** Request a one-time Direct Creator Upload URL. Client uploads directly to CF Images — no server buffering. */
 export async function requestImageUpload(env: CloudflareImagesEnv): Promise<{ imageId: string; uploadUrl: string }> {
+  assertCloudflareImagesConfigured(env)
   const formData = new FormData()
   const res = await fetch(`${apiBase(env)}/v2/direct_upload`, {
     method: 'POST',
@@ -53,6 +70,7 @@ export async function uploadImageBuffer(
   filename: string,
   contentType = 'image/png'
 ): Promise<{ imageId: string; publicUrl: string; thumbnailUrl: string }> {
+  assertCloudflareImagesConfigured(env)
   const form = new FormData()
   form.append('file', new Blob([buffer], { type: contentType }), filename)
   const signal = AbortSignal.timeout(30_000)
@@ -88,6 +106,7 @@ export async function uploadImageBuffer(
 
 /** Delete an image from Cloudflare Images. */
 export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Promise<void> {
+  assertCloudflareImagesConfigured(env)
   let res: Response
   try {
     res = await fetch(`${apiBase(env)}/v1/${imageId}`, {
@@ -112,6 +131,7 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
  * client sent. Null when the image is gone.
  */
 export async function getImageFilename(env: CloudflareImagesEnv, imageId: string): Promise<string | null> {
+  assertCloudflareImagesConfigured(env)
   const res = await fetch(`${apiBase(env)}/v1/${imageId}`, {
     headers: authHeader(env),
     signal: AbortSignal.timeout(30_000),

@@ -17,7 +17,7 @@
 
       <div v-else-if="optedOut" class="mt-12 rounded-lg border border-default p-8">
         <h1 class="text-2xl font-semibold">You are opted out</h1>
-        <p class="mt-3 text-sm text-muted">You will not receive more review request emails from {{ requestData?.site?.name || 'this business' }}.</p>
+        <p class="mt-3 text-sm text-muted">You will not receive more review request emails from {{ requestData?.organization?.name || 'this business' }}.</p>
       </div>
 
       <div v-else-if="submitted" class="mt-12 rounded-lg border border-default p-8">
@@ -34,7 +34,7 @@
       </div>
 
       <form v-else class="mt-12 rounded-lg border border-default p-8" @submit.prevent="submitReview">
-        <p class="saya-eyebrow text-muted">{{ requestData?.site?.name }}</p>
+        <p class="saya-eyebrow text-muted">{{ requestData?.organization?.name }}</p>
         <h1 class="mt-3 text-3xl font-semibold">How was your visit?</h1>
         <p class="mt-3 text-sm text-muted">{{ requestData?.location?.title }}</p>
 
@@ -147,7 +147,7 @@ const videoCount = computed(() => media.value.filter(item => item.kind === 'vide
 
 const { data: requestData, pending, error: validationError } = await useAsyncData<{
   request: { id: string; bookingType: string; expiresAt: string }
-  site: { id: string; name: string | null }
+  organization: { id: string; name: string | null }
   location: { id: string | null; slug: string | null; title: string | null; googleReviewUrl: string | null }
   customer: { name: string | null }
 }>(() => `review-request-validation-${token.value}`, () =>

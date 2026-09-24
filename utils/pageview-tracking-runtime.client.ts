@@ -22,7 +22,7 @@ export function registerPageviewTracking() {
   const win = window as Window & { __kc_pageview_tracking_registered?: boolean; zaraz?: ZarazPageviewApi }
   if (win.__kc_pageview_tracking_registered) return
 
-  const { isTenant, isPlatform } = useTenantSite()
+  const { isTenant, isPlatform } = useTenantOrganization()
   if (!isTenant && !isPlatform) return
   win.__kc_pageview_tracking_registered = true
 

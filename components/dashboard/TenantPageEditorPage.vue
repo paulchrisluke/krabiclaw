@@ -3,7 +3,7 @@
     The page: its rows are its sections list and the fields a page has of its
     own. Each is a level below this one; the shell reads which is open.
   -->
-  <DashboardIndexPanel id="site-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-page" :title="isNew ? 'New page' : draft.title || 'Page'" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <UAlert
       v-if="loadError"
       color="error"
@@ -37,7 +37,7 @@
           :fields="localizationFields"
           :load-values="loadPageLocalization"
           :save-values="savePageLocalization"
-          :language-settings-path="siteLocalizationSettingsPath"
+          :language-settings-path="organizationLocalizationSettingsPath"
           :disabled="dirty"
         />
       </div>
@@ -49,7 +49,6 @@
 
 <script lang="ts">
 import type { InjectionKey, Ref } from 'vue'
-import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS } from '~/shared/robots-directive'
 import {
   isTenantPageListResponse,
   isTenantPageResponse,
@@ -66,8 +65,6 @@ export const SECTION_LABELS = {
   canonical: 'Canonical URL',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
-
-export const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
 
 /**
  * What a page's own leaves edit and how they commit. The draft itself is the
@@ -91,7 +88,7 @@ export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import { getErrorMessage, isNotFoundError, showNotFound } from '~/utils/errors'
+import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 import { previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 import { tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
 import {
@@ -129,23 +126,11 @@ const loadError = computed(() => (error.value && !isNotFoundError(error.value)
 /** The open child, for the create walk; with nothing open the walk starts at Title. */
 const openKey = computed<SectionKey>(() => (level.child.value ?? 'title') as SectionKey)
 
-// An unsupported route 404s rather than quietly showing the first section. A
-// watcher, not a setup-time check: moving between leaves reuses this component.
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  const open = level.child.value
-  if (open && !(open in SECTION_LABELS)) return showNotFound()
-  // Only Sections has anything beneath it; the rest are leaves.
-  if (level.mode.value === 'yield' && open !== 'sections') showNotFound()
-})
-
 const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty
@@ -158,8 +143,7 @@ const sectionsSummary = computed(() => {
 })
 
 const searchSummary = computed(() => {
-  const robots = ROBOTS_INTENT_LABELS[draft.value.robots as keyof typeof ROBOTS_INTENT_LABELS]
-  return draft.value.seo_title.trim() || robots || 'Falls back to the page title'
+  return draft.value.seo_title.trim() || 'Falls back to the page title'
 })
 
 /**
@@ -365,7 +349,6 @@ async function savePageLocalization(locale: string, submitted: Record<string, un
     seoTitle: null,
     seoDescription: null,
     canonicalUrl: null,
-    robots: source.robots || null,
     pageType: source.page_type,
     recipe: source.recipe || null,
     sortOrder: source.sort_order,

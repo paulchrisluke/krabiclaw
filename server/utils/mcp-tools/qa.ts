@@ -1,12 +1,12 @@
 import type { McpToolDefinition } from './shared'
-import { pageInfoObject, paginationInputSchema, qaItemObject, siteTool } from './shared'
+import { pageInfoObject, paginationInputSchema, qaItemObject, organizationTool } from './shared'
 
 export const QA_TOOLS: McpToolDefinition[] = [
-  siteTool({
+  organizationTool({
     name: 'list_organization_qa',
     description: 'Read general tenant Q&A, or only the specified page Q&A when page_path is provided. Q&A is read-only; manage Google questions and answers in Google.',
     domain: 'qa',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: { page_path: { type: ['string', 'null'], description: 'Public route path such as /about, /pricing, or /blog. Omit for general site Q&A.' }, ...paginationInputSchema },
     outputSchema: {
@@ -15,11 +15,11 @@ export const QA_TOOLS: McpToolDefinition[] = [
       required: ['items', 'page_info'],
     },
   }),
-  siteTool({
+  organizationTool({
       name: 'list_location_qa',
       description: 'Read Q&A for an explicit location. Q&A is read-only; manage Google questions and answers in Google.',
       domain: 'qa',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { location_id: { type: 'string' }, ...paginationInputSchema },
       required: ['location_id'],

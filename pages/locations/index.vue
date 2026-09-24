@@ -107,12 +107,12 @@ import { addressPlaceName, formatPostalAddress, type PostalAddress } from '~/uti
 
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const session = authClient.useSession()
 const isAuthenticated = computed(() => Boolean(session.value.data?.user))
 const { locale, localePath, t } = useI18n()
-const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
+const locationsCopy = computed(() => getVerticalCopy(unref(organization)?.vertical, locale.value))
 
 const { locations: publishedLocations, pending } = await usePublicPageData()
 const locations = computed(() => publishedLocations.value.map(location => ({
@@ -138,14 +138,14 @@ function todayHours(location: ApiRecord): string {
   return getTodayHoursLabel(location.opening_hours, t('saya.location.closed'), location.timezone, new Date(), location.special_hours, locale.value) ?? ''
 }
 
-const siteName = computed(() => unref(site)?.name || '')
+const organizationName = computed(() => unref(organization)?.name || '')
 
 useSocialMetadata(() => ({
   path: '/locations',
-  title: t('saya.locations.collection_title', { site: siteName.value }),
+  title: t('saya.locations.collection_title', { organization: organizationName.value }),
   description: t('saya.locations.meta_description'),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

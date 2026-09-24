@@ -62,9 +62,9 @@ import { mediaStillUrl } from '~/shared/media-placement-contract'
 // selected rather than every location the site happens to have.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath, locale, t } = useI18n()
-const { site } = useTenantSite()
+const { organization } = useTenantOrganization()
 
-const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const homeCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 const items = computed(() => blockRecords(props.block.data.items).map((item) => {
   const media = blockRecords(item.media)[0] ?? null
   return {

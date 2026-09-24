@@ -22,6 +22,64 @@ export function blawbyShieldVariant(path: string): BlawbyShieldVariant {
   return SHIELDS[path] ?? 'about'
 }
 
+/**
+ * The colour a page opens on. The hero paints it and the shield beneath cuts
+ * its own shape out of it, so they are one answer: they were two switches on
+ * the same variant, in two components, and the shield's had no case for the
+ * legal pages at all.
+ *
+ * The legal pages open white. They are long documents, and the tint the other
+ * pages use behind a short hero ran the whole length of the terms.
+ */
+export function blawbySurface(variant: BlawbyShieldVariant): string {
+  if (variant === 'schedule') return 'var(--blawby-primary-800)'
+  if (variant === 'about' || variant === 'contact') return 'var(--blawby-accent-200)'
+  if (variant === 'privacy' || variant === 'terms' || variant === 'third-party-notices') return '#ffffff'
+  return 'var(--blawby-primary-100)'
+}
+
+/**
+ * The prose block the service overview draws inside its own column.
+ *
+ * This page is one two-column section: the pictures on the left, and on the
+ * right the name, the whole body copy and the buttons. The body is its own
+ * `markdown` block, so the hero draws it there and the renderer skips it —
+ * one answer read by both, rather than drawing the block twice or folding an
+ * article into `subtitle`, which is a one-line summary the cards also use.
+ */
+export function blawbyHeroProseBlockId(page: {
+  path: string
+  blocks: ReadonlyArray<{ id: string; type: string }>
+  media: ReadonlyArray<{ kind: string | null; slot: string }>
+}): string | null {
+  if (page.path === '/') return null
+  if (!page.media.some(item => item.kind === 'image' && (item.slot === 'cover' || item.slot === 'gallery'))) return null
+  const heroIndex = page.blocks.findIndex(block => block.type === 'hero')
+  if (heroIndex < 0) return null
+  const next = page.blocks[heroIndex + 1]
+  return next?.type === 'markdown' ? next.id : null
+}
+
+/**
+ * A heading cut into the part before its emphasised phrase, the phrase, and the
+ * part after — so the phrase can carry colour where it actually sits rather
+ * than being repeated at the end. The hero and every section heading ask the
+ * same question of their own title, and they answered it twice: the section
+ * heading appended the accent instead of cutting it out, which is why the
+ * practice-area FAQ heading read "Frequently asked questions questions".
+ *
+ * A title that does not contain the phrase keeps no accent, so a heading in a
+ * locale the phrase was never translated into reads whole rather than gaining a
+ * stray English word.
+ */
+export function blawbySplitAccent(title: string, accent?: string | null): { before: string; accent: string; after: string } {
+  const phrase = accent ?? ''
+  const index = phrase ? title.indexOf(phrase) : -1
+  return index >= 0
+    ? { before: title.slice(0, index), accent: phrase, after: title.slice(index + phrase.length) }
+    : { before: title, accent: '', after: '' }
+}
+
 
 export interface PublicBlawbyPageLink {
   id: string
@@ -30,14 +88,14 @@ export interface PublicBlawbyPageLink {
 }
 
 
-export interface PublicSiteQa {
+export interface PublicOrganizationQa {
   id: string
   question: string
   answer: string | null
   sort_order: number
 }
 
-export interface PublicSiteReview {
+export interface PublicOrganizationReview {
   source: string | null
   original_reference: string | null
   google_review_metadata: GoogleReviewMetadata | null
@@ -79,7 +137,6 @@ export interface PublicBlogPost extends PublicBlogSummary {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string
-  robots: string | null
   visibility: 'listed' | 'unlisted'
   created_at: string | null
   updated_at: string | null
@@ -120,8 +177,8 @@ export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
   localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
-  qa: PublicSiteQa[]
-  reviews: PublicSiteReview[]
+  qa: PublicOrganizationQa[]
+  reviews: PublicOrganizationReview[]
   posts: PublicBlogSummary[]
   post: PublicBlogPost | null
 }
@@ -192,6 +249,8 @@ export interface PublicBlawbyShellData {
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
   pageLinks: PublicBlawbyPageLink[]
+  /** The Search Console META token, served while Google needs to see it. */
+  searchConsoleVerification: string | null
 }
 
 export interface PublicBlawbyData {

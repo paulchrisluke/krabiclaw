@@ -1,6 +1,6 @@
 import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { SiteLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/links-page'
+import { OrganizationLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/links-page'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
     return jsonResponse(result)
   } catch (error) {
     rethrowHttpError(error)
-    if (error instanceof SiteLinksValidationError) {
+    if (error instanceof OrganizationLinksValidationError) {
       return jsonResponse({ error: error.message }, { status: 400 })
     }
     console.error('Links page save failed:', error)

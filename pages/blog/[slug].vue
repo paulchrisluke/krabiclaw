@@ -15,6 +15,6 @@
 import PlatformBlogArticle from '~/components/blog/PlatformBlogArticle.vue'
 import SayaBlogArticle from '~/components/saya/SayaBlogArticle.vue'
 
-const { isPlatform } = useTenantSite()
+const { isPlatform } = useTenantOrganization()
 definePageMeta({ layout: false, middleware: 'tenant-blog-canonical' })
 </script>

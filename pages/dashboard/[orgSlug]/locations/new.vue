@@ -46,11 +46,11 @@
       </div>
       <OnboardingPreviewPane
         :iframe-src="iframeSrc"
-        :site-locations="siteLocations"
+        :organization-locations="organizationLocations"
         :selected-location-id="selectedLocationId"
         :selected-page="selectedPreviewPage"
-        :site-status="computedSiteStatus"
-        :site-domain="siteDomain"
+        :organization-status="computedOrganizationStatus"
+        :organization-domain="organizationDomain"
         :vertical="previewVertical"
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
@@ -68,11 +68,11 @@ import {
   type OnboardingStepId,
 } from '~/composables/useOnboardingFlow'
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 
 // Adding a location is a tile's worth of work reached from Locations, which is
 // where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-sites' })
+definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-locations' })
 
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -80,34 +80,34 @@ const config = useRuntimeConfig()
 const orgSlug = route.params.orgSlug as string
 
 const dashboard = useDashboardOrganization()
-const siteData = computed(() => dashboard.organization.value as ApiRecord | null)
-const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
-const siteLocations = computed(() => dashboard.locations.value)
+const organizationData = computed(() => dashboard.organization.value as ApiRecord | null)
+const previewVertical = computed<OrganizationVertical>(() => normalizeVertical(organizationData.value?.vertical as string | undefined) as OrganizationVertical)
+const organizationLocations = computed(() => dashboard.locations.value)
 const selectedLocationId = ref<string | null>(null)
 const selectedPreviewPage = ref('home')
 const previewReloadToken = ref(0)
 
 const platformHostname = computed(() => {
-  const domain = config.public.freeSiteDomain as string
+  const domain = config.public.freeOrganizationDomain as string
   return domain.replace(/^https?:\/\//, '')
 })
 
-const siteDomain = computed(() =>
-  siteData.value?.subdomain ? `${siteData.value.subdomain}.${platformHostname.value}` : ''
+const organizationDomain = computed(() =>
+  organizationData.value?.subdomain ? `${organizationData.value.subdomain}.${platformHostname.value}` : ''
 )
 
 // The preview is the live site on its own host, so this pane shows exactly
 // what a visitor sees.
-const sitePreviewBaseUrl = computed(() => siteData.value?.subdomain
-  ? tenantSiteOrigin({
+const organizationPreviewBaseUrl = computed(() => organizationData.value?.subdomain
+  ? tenantOrganizationOrigin({
       platformDomain: String(config.public.platformDomain),
-      freeSiteDomain: String(config.public.freeSiteDomain),
-      subdomain: siteData.value.subdomain,
+      freeOrganizationDomain: String(config.public.freeOrganizationDomain),
+      subdomain: organizationData.value.subdomain,
     })
   : '')
 
 const selectedLocation = computed(() =>
-  siteLocations.value.find(l => l.id === selectedLocationId.value) ?? null
+  organizationLocations.value.find(l => l.id === selectedLocationId.value) ?? null
 )
 
 const locationScopedPages = new Set(['location', 'menu'])
@@ -121,10 +121,10 @@ const previewPagePath = computed(() => {
 })
 
 const iframeSrc = computed(() => {
-  if (!sitePreviewBaseUrl.value) return ''
+  if (!organizationPreviewBaseUrl.value) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value) return ''
   const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  const url = new URL(sitePreviewBaseUrl.value + subPath)
+  const url = new URL(organizationPreviewBaseUrl.value + subPath)
   url.searchParams.set('preview', 'true')
   if (currentPageIsLocationScoped.value && selectedLocation.value) {
     url.searchParams.set('location', selectedLocation.value.slug)
@@ -133,8 +133,8 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
-const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' =>
-  siteData.value?.status === 'active' ? 'live' : 'setup'
+const computedOrganizationStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' =>
+  organizationData.value?.status === 'active' ? 'live' : 'setup'
 )
 
 const onSelectPage = (page: string) => {
@@ -150,7 +150,7 @@ const onLocationCreated = async (locationSlug: string | null) => {
   await dashboard.refresh()
   previewReloadToken.value = Date.now()
 
-  const addedLocation = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
+  const addedLocation = locationSlug ? organizationLocations.value.find(l => l.slug === locationSlug) : null
   if (addedLocation) selectedLocationId.value = addedLocation.id
 }
 

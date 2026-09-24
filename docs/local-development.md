@@ -33,6 +33,28 @@ the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
 verifies the resulting D1 database. Do not replace its steps with direct
 Wrangler writes or a hand-edited local database.
 
+## Stopping a server
+
+Stop a server by the port it holds, never by process name:
+
+```sh
+lsof -nP -iTCP:3000 -sTCP:LISTEN     # see who holds it first
+lsof -ti tcp:3000 | xargs kill
+```
+
+`pkill -f workerd` and `pkill -f "nuxt dev"` match every matching process on the
+machine, not the one in this checkout. Several worktrees run their own server at
+once, and `workerd` is the runtime behind all of them.
+
+Killing `workerd` under a running dev server does not stop that server. The Node
+process keeps serving, holding Miniflare stubs into a runtime that no longer
+exists, so every request answers 500 with `Attempted to use poisoned stub` until
+the server is restarted. Nothing about the checkout is wrong when this happens,
+and reloading does not clear it — the stub outlives the reload.
+
+If the listener on the port belongs to another worktree, use a different port
+rather than killing it.
+
 Fixtures are written before the Worker starts. Setup is not ready for a client
 handoff until the post-start social-card generation and public verification pass:
 
@@ -101,6 +123,12 @@ setup keeps minting a throwaway and the route answers 400.
 `local:setup` refreshes the fixture users and sessions. If local data or auth is
 stale, run the whole command again and then sign in again. Do not run an
 individual seed or provisioning script as an alternate repair path.
+
+A schema change regenerates `migrations/0000_baseline.sql` under the same name,
+so `schema:local` treats the local database as current and setup stops with
+"local D1 does not carry the current baseline". The local database is only ever
+a copy, so delete `.wrangler/state/v3/d1` and run `corepack yarn local:setup`
+again.
 
 ## Dashboard URLs
 

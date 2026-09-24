@@ -9,7 +9,7 @@ export interface PublicLinksItem {
 }
 
 export interface PublicLinksPayload {
-  site: {
+  organization: {
     id: string
     organization_id: string
     name: string | null
@@ -20,7 +20,6 @@ export interface PublicLinksPayload {
   page: {
     path: '/links'
     title: string
-    robots: string
     seo_title: string | null
     seo_description: string | null
   }
@@ -35,20 +34,19 @@ function isNullableString(value: unknown): value is string | null {
 }
 
 export function isPublicLinksPayload(value: unknown): value is PublicLinksPayload {
-  if (!isRecord(value) || !isRecord(value.site) || !isRecord(value.page) || !Array.isArray(value.items)) return false
+  if (!isRecord(value) || !isRecord(value.organization) || !isRecord(value.page) || !Array.isArray(value.items)) return false
 
-  const site = value.site
+  const organization = value.organization
   const page = value.page
-  return typeof site.id === 'string'
-    && typeof site.organization_id === 'string'
-    && isNullableString(site.name)
-    && isNullableString(site.brand_description)
-    && Array.isArray(site.media)
-    && site.media.every(item => isRecord(item) && typeof item.asset_id === 'string' && typeof item.slot === 'string' && isNullableString(item.public_url) && isNullableString(item.thumbnail_url) && isNullableString(item.kind))
-    && (site.template === 'saya' || site.template === 'blawby')
+  return typeof organization.id === 'string'
+    && typeof organization.organization_id === 'string'
+    && isNullableString(organization.name)
+    && isNullableString(organization.brand_description)
+    && Array.isArray(organization.media)
+    && organization.media.every(item => isRecord(item) && typeof item.asset_id === 'string' && typeof item.slot === 'string' && isNullableString(item.public_url) && isNullableString(item.thumbnail_url) && isNullableString(item.kind))
+    && (organization.template === 'saya' || organization.template === 'blawby')
     && page.path === '/links'
     && typeof page.title === 'string'
-    && typeof page.robots === 'string'
     && isNullableString(page.seo_title)
     && isNullableString(page.seo_description)
     && value.items.every(item =>

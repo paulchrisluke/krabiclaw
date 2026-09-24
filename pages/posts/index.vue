@@ -39,29 +39,28 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { locale, localePath } = useI18n()
-const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const postsCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
 
-const { googleBusiness, locations } = await usePublicPageData()
-const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const { googleMaps, socialPosts, locations } = await usePublicPageData()
+const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 // Progressive reveal — 6 at a time
 const PAGE_SIZE = 6
 const visibleCount = ref(PAGE_SIZE)
-const visiblePosts = computed(() => googlePosts.value.slice(0, visibleCount.value))
-const hasMore = computed(() => visibleCount.value < googlePosts.value.length)
-const remaining = computed(() => googlePosts.value.length - visibleCount.value)
+const visiblePosts = computed(() => socialPosts.value.slice(0, visibleCount.value))
+const hasMore = computed(() => visibleCount.value < socialPosts.value.length)
+const remaining = computed(() => socialPosts.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
 useSocialMetadata(() => ({
   path: '/posts',
-  title: `Updates | ${siteName.value}`,
-  description: `Latest news and updates from ${siteName.value}.`,
+  title: `Updates | ${organizationName.value}`,
+  description: `Latest news and updates from ${organizationName.value}.`,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 </script>

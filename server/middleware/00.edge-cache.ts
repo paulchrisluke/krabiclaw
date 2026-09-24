@@ -2,7 +2,7 @@
 // Replaces the previous caches.default approach which was per-datacenter only.
 //
 // Cache key: html:<host>[:<preview tenant>]:<build id>:<pathname>
-// Stored in SITE_CACHE KV namespace with CACHE_TTL_SECONDS TTL.
+// Stored in ORGANIZATION_CACHE KV namespace with CACHE_TTL_SECONDS TTL.
 // On a hit: D1 tenant lookup and Vue SSR are skipped entirely.
 // On a miss: falls through to SSR; server/plugins/edge-cache.ts populates KV.
 //
@@ -43,7 +43,7 @@ export default defineHandler(async (event) => {
 
   // Access KV directly from the Cloudflare event context
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kv = (event.req.runtime?.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+  const kv = (event.req.runtime?.cloudflare?.env as any)?.ORGANIZATION_CACHE as KVNamespace | undefined
   if (!kv) return
 
   try {

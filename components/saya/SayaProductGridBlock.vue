@@ -17,11 +17,11 @@ import { resolveSocialImageUrl } from '~/utils/social-metadata'
 // and no owner could change.
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { locale, t } = useI18n()
-const { site } = useTenantSite()
+const { organization } = useTenantOrganization()
 
-const presentation = computed(() => resolveProductPresentation(site?.vertical))
-const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const brandName = computed(() => String(site?.name ?? '').trim())
+const presentation = computed(() => resolveProductPresentation(organization?.vertical))
+const homeCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
+const brandName = computed(() => String(organization?.name ?? '').trim())
 
 const items = computed(() => blockRecords(props.block.data.items).map((item) => {
   const media = blockRecords(item.media)[0] ?? null
@@ -58,7 +58,7 @@ const featured = computed(() => ({
   kicker: blockText(props.block.data.description)
     || (allExperiences.value ? homeCopy.value.experiencesPageTitle : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.footer.products')),
   heading: blockText(props.block.data.title)
-    || (allExperiences.value ? t('saya.experiences.collection_title', { site: brandName.value }) : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.products.collection_title', { site: brandName.value })),
+    || (allExperiences.value ? t('saya.experiences.collection_title', { organization: brandName.value }) : presentation.value?.locationCollectionSegment === 'menu' ? t('saya.footer.menu') : t('saya.products.collection_title', { organization: brandName.value })),
   linkTarget: allExperiences.value ? '/experiences' : presentation.value?.collectionPath ?? null,
 }))
 </script>

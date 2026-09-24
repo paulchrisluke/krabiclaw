@@ -89,20 +89,6 @@ INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES (${sqlString(`member-${fixture.id}-${membership.organizationId}`)}, ${sqlString(membership.organizationId)}, ${sqlString(fixture.id)}, ${sqlString(membership.role)}, unixepoch())
 ON CONFLICT(id) DO UPDATE SET role = excluded.role;
 `).join('')
-  // Every location team of the named organization. A site team would be one row
-  // and is what this used to write; `sites` is gone, so site-wide reach is
-  // membership in each of that organization's locations.
-  const teamMemberships = (fixture.organizationIds ?? []).map((organizationId) => `
-INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-SELECT 'location:' || id, COALESCE(title, id), organization_id, unixepoch()
-FROM business_locations WHERE organization_id = ${sqlString(organizationId)};
-UPDATE business_locations SET team_id = COALESCE(team_id, 'location:' || id) WHERE organization_id = ${sqlString(organizationId)};
-INSERT INTO teamMember (id, teamId, userId, membershipKey, createdAt)
-SELECT ${sqlString(`team-member-${fixture.id}-`)} || bl.id, bl.team_id, ${sqlString(fixture.id)}, bl.team_id || ':' || ${sqlString(fixture.id)}, unixepoch()
-FROM business_locations bl WHERE bl.organization_id = ${sqlString(organizationId)} AND bl.team_id IS NOT NULL
-ON CONFLICT(id) DO UPDATE SET teamId = excluded.teamId, userId = excluded.userId, membershipKey = excluded.membershipKey;
-`).join('')
-
   return `
 INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
 VALUES (${sqlString(fixture.id)}, ${sqlString(fixture.name)}, ${sqlString(fixture.email)}, 1, ${sqlString(platformRole)}, unixepoch(), unixepoch())
@@ -119,13 +105,18 @@ SET phoneNumber = ${fixture.phoneNumber ? sqlString(fixture.phoneNumber) : 'NULL
 WHERE id = ${sqlString(fixture.id)};
 
 DELETE FROM session WHERE userId = ${sqlString(fixture.id)};
-DELETE FROM teamMember WHERE userId = ${sqlString(fixture.id)};
-DELETE FROM member WHERE userId = ${sqlString(fixture.id)};
+-- Only the memberships this fixture declares. An unscoped delete also removed
+-- the ones a fixture earned at runtime — the onboarding wizard leaves its user
+-- owning a new organization on every run — and the insert below could not put
+-- them back, because the fixture never declared them.
+${(fixture.memberships ?? []).length
+  ? `DELETE FROM member WHERE userId = ${sqlString(fixture.id)} AND organizationId IN (${(fixture.memberships ?? []).map(membership => sqlString(membership.organizationId)).join(', ')});`
+  : ''}
 DELETE FROM invitation WHERE lower(email) = lower(${sqlString(fixture.email)});
 DELETE FROM account WHERE userId = ${sqlString(fixture.id)} AND providerId = 'credential';
 INSERT INTO account (id, accountId, providerId, userId, password, createdAt, updatedAt)
 VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id)}, 'credential', ${sqlString(fixture.id)}, ${sqlString(passwordHash)}, unixepoch(), unixepoch());
-${memberships}${teamMemberships}`
+${memberships}`
 }).join('\n')
 
 const localDeveloperCleanupSql = isLocalDev
@@ -154,7 +145,7 @@ try {
     console.log(`URL: ${LOCAL_DEVELOPER_LOGIN_URL}`)
     console.log(`Email: ${LOCAL_DEVELOPER_AUTH_FIXTURE.email}`)
     console.log(`Password: ${localDeveloperPassword}`)
-    console.log('Use dashboard links after sign-in. When constructing one manually, its site segment is the site subdomain.')
+    console.log('Use dashboard links after sign-in. When constructing one manually, its segment is the organization slug.')
   }
 } finally {
   rmSync(directory, { recursive: true, force: true })

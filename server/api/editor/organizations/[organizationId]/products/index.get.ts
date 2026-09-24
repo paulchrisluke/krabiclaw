@@ -6,7 +6,7 @@ import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
-  if (!organizationId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
+  if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
   try {
     const { db, organization } = await requireOrganizationAccess(event, organizationId)
     // Everything this site carries, published or withheld: the editor decides

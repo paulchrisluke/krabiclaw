@@ -1,5 +1,5 @@
 <template>
-  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :reviews="detail.reviews" :booking="detail.booking" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :metafield-definitions="detail.metafieldDefinitions" :currency="detail.currency" :presentation="presentation" />
+  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :reviews="detail.reviews" :booking="detail.booking" :sessions="detail.sessions" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :metafield-definitions="detail.metafieldDefinitions" :currency="detail.currency" :presentation="presentation" />
 </template>
 
 <script setup lang="ts">
@@ -34,6 +34,6 @@ useSocialMetadata(() => ({
     priceSelection: priceSelection.value,
   }, t),
   socialImage: detail.value.product.social_image,
-  brand: { siteName: detail.value.brandName },
+  brand: { organizationName: detail.value.brandName },
 }))
 </script>

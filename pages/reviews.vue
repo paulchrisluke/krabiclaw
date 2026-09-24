@@ -66,15 +66,15 @@
 <script setup>
 definePageMeta({ layout: 'saya' })
 
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()
 
-const { googleBusiness, locations } = await usePublicPageData()
-const allReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const { googleMaps, locations } = await usePublicPageData()
+const allReviews = computed(() => googleMaps.value?.reviews ?? [])
 
 const googleReviewSummary = computed(() => {
-  const summary = googleBusiness.value?.business?.reviewSummary
+  const summary = googleMaps.value?.business?.reviewSummary
   if (!summary) {
     const ratings = allReviews.value.map(r => r.rating).filter(Boolean)
     if (!ratings.length) return null
@@ -93,22 +93,22 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const siteName = computed(() => site?.name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
+const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
 
 useSocialMetadata(() => ({
   path: '/reviews',
-  title: `${t('saya.footer.reviews')} | ${siteName.value}`,
-  description: t('saya.reviews_page.meta_description', { site: siteName.value }),
+  title: `${t('saya.footer.reviews')} | ${organizationName.value}`,
+  description: t('saya.reviews_page.meta_description', { organization: organizationName.value }),
   label: t('saya.footer.reviews'),
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
 useSchemaOrg([
   computed(() => ({
-    '@type': getBusinessSchemaTypes(site?.vertical),
-    name: siteName.value,
+    '@type': getBusinessSchemaTypes(organization?.vertical),
+    name: organizationName.value,
     review: allReviews.value.map(r => ({
       '@type': 'Review',
       author: { '@type': 'Person', name: r.author_name || t('saya.qa.guest') },

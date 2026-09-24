@@ -8,24 +8,7 @@ interface GuestInboxHubEnv {
 interface InboxSocketAttachment {
   organizationId: string
   userId: string
-  allowedSiteIds: string[] | null
-  allowedLocationIds: string[]
   connectedAt: string
-}
-
-function parseAllowedIds(value: string | null): string[] {
-  if (!value) return []
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error('Invalid location authorization payload')
-  }
-  if (!Array.isArray(parsed) || parsed.some((id) => typeof id !== 'string' || !id)) {
-    throw new Error('Invalid location authorization payload')
-  }
-  return [...new Set(parsed)]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,22 +19,16 @@ function isSocketAttachment(value: unknown): value is InboxSocketAttachment {
   return isRecord(value)
     && typeof value.organizationId === 'string'
     && typeof value.userId === 'string'
-    && (value.allowedSiteIds === null
-      || Array.isArray(value.allowedSiteIds) && value.allowedSiteIds.every(id => typeof id === 'string'))
-    && Array.isArray(value.allowedLocationIds)
-    && value.allowedLocationIds.every(id => typeof id === 'string')
     && typeof value.connectedAt === 'string'
 }
 
 function canReceive(attachment: InboxSocketAttachment, event: DashboardInvalidation): boolean {
   if (attachment.organizationId !== event.organizationId) return false
   if ('targetUserId' in event && event.targetUserId && event.targetUserId !== attachment.userId) return false
-  if (event.type === 'notification.read' && event.targetUserId === attachment.userId) return true
-  if (attachment.allowedSiteIds === null) return true
-  return Boolean(
-    event.organizationId && attachment.allowedSiteIds.includes(event.organizationId)
-    || event.locationId && attachment.allowedLocationIds.includes(event.locationId),
-  )
+  // Every member of a tenant is organization-wide, so reaching the tenant is
+  // the whole of the decision. This used to also carry the location teams a
+  // scoped editor held, which no role has any more.
+  return true
 }
 
 export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
@@ -74,16 +51,6 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
     const userId = request.headers.get('x-krabiclaw-user-id')
     if (!organizationId || !userId) return new Response('Unauthorized', { status: 401 })
 
-    let allowedSiteIds: string[] | null
-    let allowedLocationIds: string[]
-    try {
-      const sites = request.headers.get('x-krabiclaw-allowed-site-ids')
-      allowedSiteIds = sites === '*' ? null : parseAllowedIds(sites)
-      allowedLocationIds = parseAllowedIds(request.headers.get('x-krabiclaw-allowed-location-ids'))
-    } catch (error) {
-      return new Response(error instanceof Error ? error.message : 'Invalid authorization payload', { status: 400 })
-    }
-
     const pair = new WebSocketPair()
     const client = pair[0]
     const server = pair[1]
@@ -92,8 +59,6 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
     server.serializeAttachment({
       organizationId,
       userId,
-      allowedSiteIds,
-      allowedLocationIds,
       connectedAt: new Date().toISOString(),
     } satisfies InboxSocketAttachment)
     return new Response(null, { status: 101, webSocket: client })
@@ -129,15 +94,31 @@ export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
       return new Response('Invalid dashboard invalidation', { status: 400 })
     }
 
+    // A send that throws is usually a socket the client has already dropped, and
+    // the other dashboards watching this organization should still be told. But
+    // if every eligible socket failed then the event reached nobody who was
+    // entitled to it, and answering 204 to that is the publisher's cue to carry
+    // on as though the dashboards had been updated.
     const encoded = JSON.stringify(event)
+    let eligible = 0
+    let delivered = 0
+    const failures: string[] = []
     for (const socket of this.ctx.getWebSockets()) {
       const attachment: unknown = socket.deserializeAttachment()
       if (!isSocketAttachment(attachment) || !canReceive(attachment, event)) continue
+      eligible += 1
       try {
         socket.send(encoded)
+        delivered += 1
       } catch (error) {
-        console.error('Dashboard invalidation delivery failed', error)
+        failures.push(error instanceof Error ? error.message : String(error))
       }
+    }
+    if (eligible > 0 && delivered === 0) {
+      return new Response(
+        `Dashboard invalidation reached none of ${eligible} connected dashboards: ${failures.join('; ')}`,
+        { status: 500 },
+      )
     }
 
     return new Response(null, { status: 204 })

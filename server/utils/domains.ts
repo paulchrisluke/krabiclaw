@@ -4,7 +4,7 @@ import { instantDate } from '~/utils/timezone'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
-import { fireOrganizationEvent, fireOrganizationEventSafe, type OrganizationEventType } from '~/server/utils/organization-events'
+import { fireOrganizationEvent, type OrganizationEventType } from '~/server/utils/organization-events'
 
 export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
@@ -13,7 +13,7 @@ export interface DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
@@ -106,15 +106,6 @@ const MAX_RETRY_COUNT = 12
 const STUCK_AFTER_MS = 48 * 60 * 60 * 1000
 const DNS_QUERY_TIMEOUT_MS = 5_000
 
-async function reconcileZarazForDomainChange(env: DomainEnv, db: D1Database, organizationId: string): Promise<void> {
-  try {
-    const { reconcileZarazAnalytics } = await import('~/server/utils/zaraz-analytics')
-    await reconcileZarazAnalytics(env, db)
-  } catch (error) {
-    console.error('zaraz_reconciliation_failed', { organizationId, error })
-  }
-}
-
 const reservedDomains = [
   'app', 'api', 'admin', 'dashboard', 'login', 'signup',
   'pricing', 'billing', 'support', 'help', 'docs', 'blog', 'posts',
@@ -124,8 +115,8 @@ const reservedDomains = [
 ]
 
 export function platformHostname(env: DomainEnv): string {
-  const domain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
-  if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+  const domain = env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN
+  if (!domain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
   return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
@@ -137,13 +128,13 @@ export function platformDomain(env: DomainEnv): string {
 
 function platformDomainCandidates(env: DomainEnv): string[] {
   const values = [
-    env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+    env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
     env.NUXT_PUBLIC_PLATFORM_DOMAIN,
   ]
   const domains = values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
-  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   return domains
 }
 
@@ -637,9 +628,7 @@ async function persistCloudflareState(
 
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId]) as DomainRecord
 
-  if (before.status !== after.status && (before.status === 'active' || after.status === 'active')) {
-    await reconcileZarazForDomainChange(env, db, after.organization_id)
-  }
+  const zarazNeedsReconcile = before.status !== after.status && (before.status === 'active' || after.status === 'active')
 
   if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
     await logDomainEvent(db, {
@@ -654,7 +643,7 @@ async function persistCloudflareState(
     })
 
     if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
-      await fireOrganizationEventSafe({
+      await fireOrganizationEvent({
         db,
         organizationId: after.organization_id,
         actorId: options.actorId ?? null,
@@ -670,14 +659,27 @@ async function persistCloudflareState(
   // organization_domains rows for this site — callers still inserting other domain
   // rows for the same batch (createCustomDomainPair) must defer this until
   // after those inserts are done, so the candidate rows already exist.
-  if (options.skipPromotion) return after
-  if (after.status === 'active') await promoteCanonicalIfReady(db, after.organization_id)
-  else await queueReconciliation(db, domainId, after.next_check_at || undefined)
+  if (!options.skipPromotion) {
+    if (after.status === 'active') await promoteCanonicalIfReady(db, after.organization_id)
+    else await queueReconciliation(db, domainId, after.next_check_at || undefined)
+  }
+
+  // Last, and deliberately so. Reconciliation rewrites the analytics configuration
+  // this domain change invalidates, and a failure is raised rather than swallowed —
+  // but the status transition committed in the batch above, and every step between
+  // there and here is derived from it and runs exactly once. Raising before them
+  // stranded the domain: the next reconcile reads before.status === after.status
+  // and reruns none of it, an active domain has next_check_at NULL so nothing
+  // reschedules, and inside createCustomDomainPair the throw reached a cleanup
+  // that deleted the hostnames just provisioned.
+  if (zarazNeedsReconcile) {
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
+  }
 
   return after
 }
 
-export type DomainActorType = 'owner' | 'admin' | 'editor' | 'system' | 'cloudflare'
+export type DomainActorType = 'owner' | 'admin' | 'system' | 'cloudflare'
 
 export async function createCustomDomainPair(
   env: DomainEnv,
@@ -745,21 +747,6 @@ export async function createCustomDomainPair(
       else await queueReconciliation(db, record.id, record.next_check_at || undefined)
     }
 
-    // Fired only once the whole pairing flow (Cloudflare provisioning, DB
-    // inserts, state sync, promotion/reconciliation) has succeeded — the catch
-    // block below rolls back organization_domains rows on failure, so firing earlier
-    // could record a domain.connected event for a domain that never existed.
-    for (const entry of entries) {
-      await fireOrganizationEventSafe({
-        db,
-        organizationId: opts.organizationId,
-        actorId: opts.actorId ?? null,
-        eventType: 'domain.connected',
-        entityType: 'domain',
-        entityId: entry.id,
-        metadata: { domain: entry.domain, role: entry.role },
-      })
-    }
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')
     const message = normalizedError.message || 'Cloudflare hostname creation failed'
@@ -801,6 +788,24 @@ export async function createCustomDomainPair(
     }
 
     throw new Error(message, { cause: error })
+  }
+
+  // Outside the try, and that is the point. These record that the pairing above
+  // succeeded, and the catch tears down the Cloudflare hostnames and the
+  // organization_domains rows. Firing them inside it meant an audit write that
+  // failed would delete a domain pair that had provisioned correctly. The events
+  // still raise — a missing audit row is a real failure — but they raise after
+  // the work they describe is safe.
+  for (const entry of entries) {
+    await fireOrganizationEvent({
+      db,
+      organizationId: opts.organizationId,
+      actorId: opts.actorId ?? null,
+      eventType: 'domain.connected',
+      entityType: 'domain',
+      entityId: entry.id,
+      metadata: { domain: entry.domain, role: entry.role },
+    })
   }
 
   return records
@@ -935,9 +940,6 @@ export async function deleteCustomDomain(
   `, [now, domainId, token])
   if (deleted.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
 
-  if (domain.status === 'active') {
-    await reconcileZarazForDomainChange(env, db, domain.organization_id)
-  }
   await logDomainEvent(db, {
     organizationId: domain.organization_id,
     domainId,
@@ -947,6 +949,14 @@ export async function deleteCustomDomain(
     message: `${domain.domain} deleted`,
   })
   await promoteCanonicalIfReady(db, domain.organization_id)
+
+  // Same ordering as reconcileDomain, for the same reason: the row is already
+  // 'deleted', so a second call answers "Domain not found" and never reaches
+  // here again. Raising before the promotion left the site with no canonical
+  // domain at all, which is worse than the analytics it was protecting.
+  if (domain.status === 'active') {
+    await (await import('~/server/utils/zaraz-analytics')).reconcileZarazAnalytics(env, db)
+  }
 }
 
 // Releases the Cloudflare custom hostnames behind a set of organization_domains rows.
@@ -961,16 +971,27 @@ async function deleteCustomDomainsWhere(
     SELECT id FROM organization_domains
     WHERE ${scope.column} = ? AND type = 'custom' AND status != 'deleted'
   `, [scope.value])
+  // Every domain is attempted before any failure is raised, because one that
+  // cannot be deleted must not strand the rest. But a sweep that left domains
+  // behind has not deleted them, and said so only to a console.
+  const undeleted: Array<{ domainId: string; cause: unknown }> = []
   for (const domain of domains || []) {
     try {
       await deleteCustomDomain(env, db, domain.id, 'system')
     } catch (error) {
+      undeleted.push({ domainId: domain.id, cause: error })
       console.error('deleteCustomDomains: failed to delete domain', {
         [scope.column]: scope.value,
         domainId: domain.id,
         error: error instanceof Error ? error.message : String(error),
       })
     }
+  }
+  if (undeleted.length) {
+    throw new AggregateError(
+      undeleted.map(({ cause }) => cause instanceof Error ? cause : new Error(String(cause))),
+      `${undeleted.length} custom domain(s) could not be deleted: ${undeleted.map(({ domainId }) => domainId).join(', ')}`,
+    )
   }
 }
 
@@ -1103,4 +1124,23 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
     }
   }
   return { checked, failed }
+}
+
+/**
+ * The site's canonical public origin, as a URL-prefix property: scheme, host,
+ * trailing slash. Search Console treats `https://example.com` and
+ * `https://example.com/` as different properties and only accepts the latter
+ * for a URL prefix, so the slash is part of the value rather than a caller's
+ * responsibility.
+ *
+ * Null when the organization has no active canonical domain yet, which is a organization that
+ * cannot be verified — the caller says so rather than guessing a host.
+ */
+export async function organizationPublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
+  const row = await queryFirst<{ domain: string }>(db, `
+    SELECT domain FROM organization_domains
+    WHERE organization_id = ? AND role = 'canonical' AND status = 'active'
+    LIMIT 1
+  `, [organizationId])
+  return row ? `https://${row.domain}/` : null
 }

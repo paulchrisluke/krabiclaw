@@ -18,6 +18,7 @@ export type ScheduledTaskName =
   | 'instagram-sync-process'
   | 'review-request-automation'
   | 'social-card-backfill'
+  | 'social-card-cleanup'
   | 'sessions-materialize'
   | 'deletion-sweep'
   | 'stripe-webhook-retry'
@@ -32,12 +33,13 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'deletion-sweep'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry'],
+  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'blog-scheduled-publish': async () => import('./tasks/blog-scheduled-publish'),
   'social-card-backfill': async () => import('./tasks/social-card-backfill'),
+  'social-card-cleanup': async () => import('./tasks/social-card-cleanup'),
   'post-scheduled-publish': async () => import('./tasks/post-scheduled-publish'),
   'public-resource-cache-invalidation': async () => import('./tasks/public-resource-cache-invalidation'),
   'domain-reconciliation': async () => import('./tasks/domain-reconciliation'),
@@ -60,7 +62,6 @@ export function getScheduledTaskNames(cron: string): readonly ScheduledTaskName[
 export interface ScheduledTaskRunOptions {
   loadTask?: (_name: ScheduledTaskName) => Promise<ScheduledTaskDefinition>
   scheduledTime?: number
-  onError?: (_name: ScheduledTaskName, _error: unknown) => void
 }
 
 /**
@@ -68,7 +69,9 @@ export interface ScheduledTaskRunOptions {
  *
  * Each job is isolated so one failing integration does not prevent its peers
  * from running while the native Cloudflare scheduled hook remains the only
- * Worker event entrypoint.
+ * Worker event entrypoint. Once all have run, any failure fails the invocation,
+ * so Cloudflare records the cron run as failed rather than a log line nobody
+ * reads being the only trace of it.
  */
 export async function runScheduledTasks(
   cron: string,
@@ -78,20 +81,17 @@ export async function runScheduledTasks(
   const names = getScheduledTaskNames(cron)
   const loadTask = options.loadTask ?? (async (name: ScheduledTaskName) => (await TASK_LOADERS[name]()).default)
   const scheduledTime = options.scheduledTime ?? Date.now()
-  const onError = options.onError ?? ((name, error) => {
-    console.error(`Error while running scheduled task "${name}"`, error)
-  })
 
-  await Promise.all(names.map(async (name) => {
-    try {
-      const task = await loadTask(name)
-      await task.run({
-        name,
-        payload: { scheduledTime },
-        context: { cloudflare: { env } },
-      })
-    } catch (error) {
-      onError(name, error)
-    }
+  const outcomes = await Promise.allSettled(names.map(async (name) => {
+    const task = await loadTask(name)
+    await task.run({
+      name,
+      payload: { scheduledTime },
+      context: { cloudflare: { env } },
+    })
   }))
+  const failures = outcomes.flatMap((outcome, index) => outcome.status === 'rejected'
+    ? [new Error(`Scheduled task "${names[index]}" failed`, { cause: outcome.reason })]
+    : [])
+  if (failures.length) throw new AggregateError(failures, `${failures.length} of ${names.length} scheduled tasks failed for "${cron}"`)
 }

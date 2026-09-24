@@ -60,7 +60,6 @@ import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 
 interface DocsArticleDetail {
   id: string
@@ -161,14 +160,13 @@ const breadcrumbs = computed(() => [
 ])
 
 const runtimeConfig = useRuntimeConfig()
-const requestURL = useRequestURL()
-const platformOrigin = computed(() => runtimeConfig.public.siteUrl || requestURL.origin)
+const platformOrigin = computed(() => runtimeConfig.public.platformUrl)
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
   schema: false,
   title: seoTitle.value,
   description: seoDescription.value,
-  brand: { siteName: 'KrabiClaw' },
+  brand: { organizationName: 'KrabiClaw' },
   // A category index is one of the site's own index pages, so it carries the
   // site's social card the way /features and /pricing do. An article carries
   // its own generated card and nothing else — omitting the key would reach for
@@ -176,7 +174,6 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   pageType: 'article' as const,
   path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
   socialImage: article.value?.social_image ?? null,
-  robots: normalizeRobotsIntent(article.value?.robots),
 }))
 
 useContentPageSchema(computed(() => {

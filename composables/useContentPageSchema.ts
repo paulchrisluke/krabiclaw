@@ -65,9 +65,9 @@ interface ContentPageSchemaInput {
   proficiencyLevel?: string | null
   components?: ContentComponent[] | null
   /** Publisher identity for the Organization/WebSite nodes. Defaults to KrabiClaw (the platform blog's own identity) — tenant callers must pass their own site name/logo/description so a tenant's blog post doesn't get stamped with KrabiClaw as its publisher. */
-  siteName?: string | null
-  siteLogoUrl?: string | null
-  siteDescription?: string | null
+  organizationName?: string | null
+  organizationLogoUrl?: string | null
+  organizationDescription?: string | null
 }
 
 function normalizeDate(value?: string | null) {
@@ -97,16 +97,19 @@ function buildImageValue(url: string, width?: number | null, height?: number | n
 export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaInput | null | undefined>) {
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
+  const { isPlatform } = useTenantOrganization()
 
   useSchemaOrg(computed(() => {
     const value = toValue(input)
     if (!value?.url || !value.title) return null
 
-    const origin = config.public.siteUrl || requestURL.origin
+    // A tenant's article belongs to the tenant's own site; only a platform
+    // page is KrabiClaw's.
+    const origin = isPlatform ? config.public.platformUrl : requestURL.origin
     const pageUrl = normalizeAbsoluteUrl(value.url, origin)
-    const siteRoot = normalizeAbsoluteUrl('/', origin).replace(/\/$/, '')
-    const websiteId = `${siteRoot}/#website`
-    const organizationId = `${siteRoot}/#organization`
+    const organizationRoot = normalizeAbsoluteUrl('/', origin).replace(/\/$/, '')
+    const websiteId = `${organizationRoot}/#website`
+    const organizationId = `${organizationRoot}/#organization`
     const webpageId = `${pageUrl}#webpage`
     const articleId = `${pageUrl}#article`
     const breadcrumbId = `${pageUrl}#breadcrumb`
@@ -171,28 +174,28 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
       articleNode.proficiencyLevel = value.proficiencyLevel.trim()
     }
 
-    const tenantPublisherFields = Boolean(value.siteName?.trim() || value.siteLogoUrl?.trim() || value.siteDescription?.trim())
-    const siteName = value.siteName?.trim() || 'KrabiClaw'
-    const siteLogoUrl = value.siteLogoUrl?.trim()
-      ? normalizeAbsoluteUrl(value.siteLogoUrl.trim(), origin)
-      : (tenantPublisherFields ? undefined : `${siteRoot}/krabi-claw-logo.png`)
-    const siteDescription = value.siteDescription?.trim() || (tenantPublisherFields ? undefined : 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.')
+    const tenantPublisherFields = Boolean(value.organizationName?.trim() || value.organizationLogoUrl?.trim() || value.organizationDescription?.trim())
+    const organizationName = value.organizationName?.trim() || 'KrabiClaw'
+    const organizationLogoUrl = value.organizationLogoUrl?.trim()
+      ? normalizeAbsoluteUrl(value.organizationLogoUrl.trim(), origin)
+      : (tenantPublisherFields ? undefined : `${organizationRoot}/krabi-claw-logo.png`)
+    const organizationDescription = value.organizationDescription?.trim() || (tenantPublisherFields ? undefined : 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.')
 
     const graph: ApiRecord[] = [
       {
         '@type': 'Organization',
         '@id': organizationId,
-        name: siteName,
-        url: siteRoot,
-        ...(siteLogoUrl ? { logo: siteLogoUrl } : {}),
-        ...(siteDescription ? { description: siteDescription } : {}),
+        name: organizationName,
+        url: organizationRoot,
+        ...(organizationLogoUrl ? { logo: organizationLogoUrl } : {}),
+        ...(organizationDescription ? { description: organizationDescription } : {}),
       },
       {
         '@type': 'WebSite',
         '@id': websiteId,
-        url: siteRoot,
-        name: siteName,
-        ...(siteDescription ? { description: siteDescription } : {}),
+        url: organizationRoot,
+        name: organizationName,
+        ...(organizationDescription ? { description: organizationDescription } : {}),
         publisher: { '@id': organizationId },
       },
       webpageNode,

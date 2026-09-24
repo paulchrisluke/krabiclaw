@@ -127,7 +127,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
   return {
     growth: {
       headline: 'Your own domain, synced everywhere',
-      subheading: `You focus on the ${foodWord} — we keep your site accurate, notified, and found by tourists.`,
+      subheading: `You focus on the ${foodWord} — we keep your organization accurate, notified, and found by tourists.`,
       bullets: [
         'Your own domain (yourbusiness.com)',
         `${menuCapitalized} updates via ChatGPT — just send us a message`,
@@ -151,9 +151,9 @@ async function handleCta() {
   loading.value = true
   try {
     if (type.value !== NEW_SALE_PLAN_ID) return
-    const siteId = dashboard.organizationId.value
-    if (!siteId) throw new Error('Choose a site before starting checkout')
-    await startOrganizationCheckout(siteId, type.value)
+    const organizationId = dashboard.organizationId.value
+    if (!organizationId) throw new Error('Choose an organization before starting checkout')
+    await startOrganizationCheckout(organizationId, type.value)
     close()
   } catch (err) {
     console.error('Checkout error:', err)

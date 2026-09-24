@@ -4,7 +4,6 @@ import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hou
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
 import { PUBLICATION_CONTENT_BLOCK_TYPES } from '~/shared/content-registries'
-import { ROBOTS_INTENTS } from '~/shared/robots-directive'
 import { RESERVATION_STATUSES } from '~/shared/bookings'
 
 export interface McpToolDefinition {
@@ -54,7 +53,6 @@ export const pageInfoObject = {
 
 // --- reusable schema fragments ---
 
-export const ROBOTS_DIRECTIVE_ENUM = [...ROBOTS_INTENTS]
 
 /** SEO override fields shared across location/Product/experience/site tools. */
 export function seoOverrideFieldsSchema() {
@@ -62,7 +60,6 @@ export function seoOverrideFieldsSchema() {
     seo_title: { type: ['string', 'null'], description: 'Optional SEO title override. Falls back to the computed default if unset.' },
     seo_description: { type: ['string', 'null'], description: 'Optional SEO meta description override. Falls back to the computed default if unset.' },
     canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
-    robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
   }
 }
 
@@ -106,7 +103,6 @@ export const locationObject = {
     description: { type: ['string', 'null'] },
     short_description: { type: ['string', 'null'] },
     status: { type: 'string' },
-    notification_phone: { type: ['string', 'null'], description: 'WhatsApp number for internal booking/reservation alerts to this location\'s manager. Not shown to guests. Null means no location-specific recipient is configured. Site-wide recipients are configured independently.' },
     timezone: { ...timezoneSchema, type: ['string', 'null'] },
     max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
     facebook_url: { type: ['string', 'null'] },
@@ -115,7 +111,6 @@ export const locationObject = {
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     media: {
       type: 'array',
       items: {
@@ -194,8 +189,8 @@ export const blogComponentInputSchema = {
         properties: {
           data: {
             type: 'object',
-            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `site_qa` the site-wide set.
-            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'site_qa'] } },
+            // The block stores no questions: `page_qa` lists the published Q&A records filed under this page, `organization_qa` the site-wide set.
+            properties: { title: { type: ['string', 'null'] }, source: { type: 'string', enum: ['page_qa', 'organization_qa'] } },
             required: ['source'],
           },
         },
@@ -307,7 +302,6 @@ export const blogPostObject = {
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
@@ -349,7 +343,6 @@ export const blogPostSummaryObject = {
     seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
-    robots: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
@@ -763,7 +756,7 @@ export const organizationIdSchema = {
   organization_id: { type: 'string', description: 'Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.' },
 }
 
-export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
+export function organizationTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 'outputSchema'> & {
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>

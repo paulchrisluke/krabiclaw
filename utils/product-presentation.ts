@@ -38,7 +38,11 @@ export const EXPERIENCE_PRESENTATION: ProductPresentation = {
   itemLabelPlural: 'Experiences',
   collectionGroupLabel: 'Collection',
   collectionGroupLabelPlural: 'Collections',
-  structuredDataType: 'Product',
+  // A class that runs at a stated time on stated dates is an Event, not a
+  // Product. It is what Google's date-and-time result reads, and a Product node
+  // can never win one. The page reads this down to Product for the one
+  // experience with nothing scheduled, which has no startDate to state.
+  structuredDataType: 'Event',
 }
 
 /** The surface this product is read on, and the paths and words that go with it. */

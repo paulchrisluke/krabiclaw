@@ -151,7 +151,7 @@ interface MediaAsset {
 const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
-const siteApiBase = `/api/editor/organizations/${organizationId}`
+const organizationApiBase = `/api/editor/organizations/${organizationId}`
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
@@ -170,7 +170,7 @@ const photoCategory = ref<string>('other')
 const photoError = ref<string | null>(null)
 const attachError = ref<string | null>(null)
 const detachError = ref<string | null>(null)
-const { uploading, error: uploadError, upload } = useMediaUpload(siteApiBase)
+const { uploading, error: uploadError, upload } = useMediaUpload(organizationApiBase)
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
   && Array.isArray(value.media)
@@ -249,7 +249,7 @@ async function loadPhotos() {
   loadError.value = null
   try {
     const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })
     assets.value = res.media
@@ -301,7 +301,7 @@ async function loadAttachableMedia() {
   attachError.value = null
   try {
     const params = new URLSearchParams({ limit: '100' })
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })
     const attachedIds = new Set(assets.value.map(asset => asset.id))
@@ -322,7 +322,7 @@ async function openAttachModal() {
 async function patchAsset(asset: MediaAsset, body: ApiRecord) {
   photoError.value = null
   try {
-    await dashboardApi(`${siteApiBase}/media/${asset.id}`, {
+    await dashboardApi(`${organizationApiBase}/media/${asset.id}`, {
       method: 'PATCH',
       body,
       validate: (value): value is { updated: true } =>
@@ -343,7 +343,7 @@ async function attachPhotoById(assetId: string): Promise<boolean> {
   galleryMutating.value = true
   attachError.value = null
   try {
-    await dashboardApi(`${siteApiBase}/media/placements/attach`, {
+    await dashboardApi(`${organizationApiBase}/media/placements/attach`, {
       method: 'POST',
       body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
@@ -375,7 +375,7 @@ async function detachMany(ids: string[]) {
   galleryMutating.value = true
   detachError.value = null
   try {
-    await Promise.all(ids.map(assetId => dashboardApi(`${siteApiBase}/media/placements/remove`, {
+    await Promise.all(ids.map(assetId => dashboardApi(`${organizationApiBase}/media/placements/remove`, {
       method: 'POST',
       body: { placement: GALLERY_PLACEMENT(), asset_id: assetId },
       validate: (value): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids),
@@ -398,7 +398,7 @@ const { data: photosResource, pending: photosPending, error: photosError } = awa
   async () => {
     if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
     const params = new URLSearchParams({ ownerType: 'business_location', ownerId: locationId.value, slot: 'gallery', limit: '100' })
-    return await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+    return await dashboardApi<{ media: MediaAsset[] }>(`${organizationApiBase}/media?${params}`, {
       validate: isMediaResponse,
     })
   },

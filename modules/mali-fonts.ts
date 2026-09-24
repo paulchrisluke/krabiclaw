@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { defineNuxtModule } from 'nuxt/kit'
-import { MALI_ASSET_BASE, MALI_FONT_FILES } from '../shared/site-fonts'
+import { MALI_ASSET_BASE, MALI_FONT_FILES } from '../shared/organization-fonts'
 
 // Build-time only. The deployed Worker and visitors never contact Fontsource,
 // Google Fonts, or GitHub. Pin the source commit and version the public path.

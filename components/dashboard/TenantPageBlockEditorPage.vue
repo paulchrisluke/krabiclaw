@@ -6,7 +6,7 @@
   -->
   <DashboardLeafPanel
     v-if="isLeaf"
-    id="site-page-block"
+    id="organization-page-block"
     :title="blockLabel"
     :ready="ready || isNew"
     :saving="saving"
@@ -46,7 +46,7 @@
     />
   </DashboardLeafPanel>
 
-  <DashboardIndexPanel v-else id="site-page-block" :title="blockLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel v-else id="organization-page-block" :title="blockLabel" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <UFormField v-if="isNew" label="Section type" required class="mb-6">
       <USelect
         :model-value="newType"

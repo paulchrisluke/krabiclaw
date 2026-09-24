@@ -2,14 +2,14 @@ import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-ev
 import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/availability'
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { notifyBookingCreated } from '~/server/utils/notifications'
-import { recordSubmissionConversionSafe } from '~/server/utils/site-conversions'
+import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
+import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
 import { getProduct } from '~/server/utils/product-management'
-import { getSourceLocale } from '~/server/utils/site-locales'
+import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
@@ -36,8 +36,8 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const site = await queryFirst<{ id: string; name: string | null; public_url: string | null }>(db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
-  if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+  const organization = await queryFirst<{ id: string; name: string | null; public_url: string | null }>(db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
     SELECT p.id, p.name FROM products p
@@ -87,7 +87,7 @@ export default defineHandler(async (event) => {
           WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
             AND pl.active = 1 AND pl.published = 1
        ))
-  `, [sessionId, product.id, site.id, organizationId])
+  `, [sessionId, product.id, organization.id, organizationId])
   if (!session) return jsonResponse({ error: 'That session is not open for booking' }, { status: 404 })
 
   // What is being bought is a variant. Adult and child seats, or a class and
@@ -99,7 +99,7 @@ export default defineHandler(async (event) => {
     SELECT id FROM product_variants
      WHERE product_id = ? AND organization_id = ? AND active = 1
      ORDER BY sort_order, id
-  `, [product.id, site.id])
+  `, [product.id, organization.id])
   if (variants.length === 0) return jsonResponse({ error: 'This product has no bookable option' }, { status: 409 })
   if (requestedVariantId && !variants.some(variant => variant.id === requestedVariantId)) {
     return jsonResponse({ error: 'That option is not available for this product' }, { status: 400 })
@@ -128,7 +128,7 @@ export default defineHandler(async (event) => {
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   const authSession = await getAuthSession(event, env)
   const customerInput = {
-    organizationId: site.id, name: guestName, email: guestEmail,
+    organizationId: organization.id, name: guestName, email: guestEmail,
     phone: normalizedGuestPhone, source: 'booking', userId: authSession?.user?.id || null,
   } as const
   const customer = await findOrCreateCustomer(db, customerInput)
@@ -144,11 +144,11 @@ export default defineHandler(async (event) => {
     // raises nothing, so a thread written ahead of it would commit on its own.
     // The booking takes its request id once the thread exists.
     await claimSessionCapacity(db, {
-      organizationId: site.id, productId: product.id, sessionId: session.id,
+      organizationId: organization.id, productId: product.id, sessionId: session.id,
       productVariantId, partySize, customerId: customer.id, requestId: null,
       following: bookingId => [
         ...requestInsertQueries({
-          kind: 'booking', id: threadId, organization_id: site.id,
+          kind: 'booking', id: threadId, organization_id: organization.id,
           location_id: session.location_id, customer_id: customer.id, review_id: null,
           conversation_state: 'needs_attention', resolved_at: null, payload,
           created_at: now, updated_at: now,
@@ -174,36 +174,38 @@ export default defineHandler(async (event) => {
   // One instant, one zone: the message the guest reads and the record the
   // host sees are formatted from the same session row.
   const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at))
-  try {
-    const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-      resolveLocationContact(db, organizationId, session.location_id),
-      buildOwnerThreadInboxUrl(env, db, { organizationId: site.id, locationId: session.location_id ?? undefined, threadId }),
-    ])
-    const siteBaseUrl = site.public_url?.replace(/\/$/, '')
-    const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
-    await notifyBookingCreated(env, db, {
-      organizationId: site.id, siteName: site.name, locationId: session.location_id,
-      bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-      productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
-      partySize, notes: notes || null,
-      cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
-    })
-  } catch (error) {
-    console.error('booking_notification_failed', { organizationId: site.id, threadId, error: error instanceof Error ? error.message : String(error) })
-  }
-
+  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+    resolveLocationContact(db, organizationId, session.location_id),
+    buildOwnerThreadInboxUrl(env, db, { organizationId: organization.id, locationId: session.location_id ?? undefined, threadId }),
+  ])
+  const organizationBaseUrl = organization.public_url?.replace(/\/$/, '')
+  const cancelUrl = organizationBaseUrl ? `${organizationBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
+  // Telling the owner and recording the conversion are independent, so both are
+  // attempted before either failure is raised: running the notification first
+  // meant a failed dispatch silently cost the tenant the conversion record too.
   const requestedLocale = cleanString(body.locale, 10)
-  const [full, locale] = await Promise.all([
+  const [full, locale, ...followUps] = await Promise.all([
     // The policy the guest is shown is the product's own attribute. There is
     // no site or location policy merged underneath it.
-    getProduct(db, site.id, product.id),
-    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, site.id),
-    recordSubmissionConversionSafe(db, event, {
-      organizationId: site.id, eventName: 'booking_submit', stage: 'submitted',
-      locationId: session.location_id, entityType: 'request', entityId: threadId,
-      pageType: 'product', pagePath: `/products/${slug}`,
-    }),
+    getProduct(db, organization.id, product.id),
+    requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
+    ...await Promise.allSettled([
+      notifyBookingCreated(env, db, {
+        organizationId: organization.id, organizationName: organization.name, locationId: session.location_id,
+        bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+        productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
+        partySize, notes: notes || null,
+        cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+      }),
+      recordOrganizationConversionEvent(db, event, {
+        organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted',
+        locationId: session.location_id, entityType: 'request', entityId: threadId,
+        pageType: 'product', pagePath: `/products/${slug}`,
+      }),
+    ]),
   ])
+  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps,
+    ['notifyBookingCreated', 'recordOrganizationConversionEvent'])
 
   return jsonResponse({
     success: true, booking_id: threadId, cancellation_token: cancellation.token,

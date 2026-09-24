@@ -6,7 +6,7 @@ import { getRouterParam } from 'nitro/h3'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
-  if (!organizationId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
+  if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
   try {
     const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
     const body = await readStrictBody<{ collection_ids: unknown; location_id?: unknown }>(event, { collection_ids: 'unknown', location_id: 'unknown' })

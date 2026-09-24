@@ -61,6 +61,10 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   ].join(', ')).first()
   await expect(media).toBeVisible()
   for (const text of tenant.forbidden) await expect(page.locator('body')).not.toContainText(text)
+  // A component handed a prop it never declared renders it onto the element as
+  // block="[object Object]". The shield divider did exactly that for seven weeks
+  // while every assertion here still passed, because nothing read the markup.
+  expect(await page.content()).not.toContain('[object Object]')
   await page.waitForFunction(() => Boolean(
     (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
   ))
@@ -80,11 +84,11 @@ for (const tenant of tenants) {
   test(`${tenant.name} renders home and detail routes on desktop`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     const response = await openTenantPage(page, `${tenant.baseURL}/`, tenant.headers)
-    expect(response?.status()).toBeLessThan(400)
+    expect(response?.status()).toBe(200)
     expect(new URL(page.url()).origin).toBe(new URL(tenant.baseURL).origin)
     await expectTenantDocument(page, tenant)
     const route = await page.goto(`${tenant.baseURL}${tenant.detailPath}`, { waitUntil: 'load' })
-    expect(route?.status()).toBeLessThan(400)
+    expect(route?.status()).toBe(200)
     await expect(page.locator('main')).toContainText(tenant.detailContent)
     await expect(page.locator(tenant.shell)).toBeVisible()
     // The tenant's own theme tokens must survive hydration; losing them
@@ -130,10 +134,30 @@ test.describe('NCLS representative journeys', () => {
       { path: '/schedule', text: /consultation|schedule/i },
       { path: '/blog', text: /blog|legal/i },
       { path: '/donate', text: /donate|support/i },
+      // These three rendered a hero, a divider and nothing else for months. A
+      // legal page with no body still matched /terms/i, because the word is in
+      // the footer of every page on the site.
+      { path: '/policies/privacy', text: /personal information/i },
+      { path: '/policies/terms', text: /terms of service/i },
+      { path: '/third-party-notices', text: /legal aid|inner banks/i },
     ]) {
       const response = await openTenantPage(page, `${blawbyBaseURL}${journey.path}`, blawbyExtraHeaders)
-      expect(response?.status(), journey.path).toBeLessThan(400)
+      expect(response?.status(), journey.path).toBe(200)
       await expect(page.locator('main'), journey.path).toContainText(journey.text)
+      // The hero repeats the page's own title and the closing CTA is identical
+      // on every page, so neither shows the page has anything to say. What tells
+      // them apart is a section between the two.
+      const body = page.locator('main [data-parity-section]'
+        + ':not([data-parity-section="page-hero"])'
+        + ':not([data-parity-section="shield-divider"])'
+        + ':not([data-parity-section="consultation"])')
+      expect(await body.count(), `${journey.path} renders no section of its own`).toBeGreaterThan(0)
+      // And those sections have to say something. /policies/privacy kept a
+      // callout holding 19 bytes, which is a section by every structural measure
+      // and a blank page to the reader. The thinnest real page here carries ~870
+      // characters, so 200 fails an empty body without tracking the copy.
+      const bodyText = (await body.allInnerTexts()).join(' ').trim()
+      expect(bodyText.length, `${journey.path} body sections are empty`).toBeGreaterThan(200)
     }
   })
 })

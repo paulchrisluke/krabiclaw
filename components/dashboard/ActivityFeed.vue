@@ -69,12 +69,12 @@ import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 
-const { eventLabel } = useSiteEventLabels()
+const { eventLabel } = useOrganizationEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
 const dashboard = useDashboardOrganization()
 const loadMoreError = ref<string | null>(null)
 
-type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
+type OrganizationEvent = import('~/server/utils/dashboard-events').DashboardEvent
 
 // Nuxt UI's SelectItem throws if given an empty-string value (it's reserved
 // internally for clearing the selection) — use a distinct sentinel for the
@@ -89,7 +89,7 @@ const filters = reactive({
 
 const eventTypeOptions = computed(() => [
   { label: 'All types', value: FILTER_ALL },
-  ...SITE_EVENT_TYPES.map(type => ({ label: eventLabel(type), value: type })),
+  ...ORGANIZATION_EVENT_TYPES.map(type => ({ label: eventLabel(type), value: type })),
 ])
 
 interface Member { userId: string; name: string }
@@ -161,21 +161,21 @@ const eventQuery = computed(() => ({
 const eventsKey = computed(() =>
   `dashboard-events-${String(route.params.orgSlug ?? '')}-${JSON.stringify(eventQuery.value)}`,
 )
-const isEventsResponse = (value: unknown): value is { events: SiteEvent[]; nextCursor: string | null } =>
+const isEventsResponse = (value: unknown): value is { events: OrganizationEvent[]; nextCursor: string | null } =>
   isRecord(value)
   && Array.isArray(value.events)
   && value.events.every(event =>
     isRecord(event)
     && typeof event.id === 'string'
     && typeof event.event_type === 'string'
-    && typeof event.site_id === 'string'
+    && (event.organization_id === null || typeof event.organization_id === 'string')
     && typeof event.created_at === 'string',
   )
   && (value.nextCursor === null || typeof value.nextCursor === 'string')
 
 const { data: eventsData, pending, error: eventsError } = await useAsyncData(
   eventsKey,
-  () => dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
+  () => dashboardApi<{ events: OrganizationEvent[]; nextCursor: string | null }>(
     '/api/dashboard/events',
     { query: eventQuery.value, validate: isEventsResponse },
   ),
@@ -184,7 +184,7 @@ const { data: eventsData, pending, error: eventsError } = await useAsyncData(
   // loading state here.
   { watch: [eventQuery], lazy: true },
 )
-const events = ref<SiteEvent[]>([])
+const events = ref<OrganizationEvent[]>([])
 const nextCursor = ref<string | null>(null)
 watch(eventsData, (value) => {
   events.value = value?.events ?? []
@@ -193,7 +193,7 @@ watch(eventsData, (value) => {
 const loadingMore = ref(false)
 
 async function fetchEvents(before?: string) {
-  return await dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
+  return await dashboardApi<{ events: OrganizationEvent[]; nextCursor: string | null }>(
     '/api/dashboard/events',
     { query: { ...eventQuery.value, before }, validate: isEventsResponse },
   )
@@ -234,7 +234,7 @@ function groupLabel(dateStr: string) {
 }
 
 const groups = computed(() => {
-  const map = new Map<string, SiteEvent[]>()
+  const map = new Map<string, OrganizationEvent[]>()
   for (const ev of events.value) {
     const label = groupLabel(ev.created_at)
     if (!map.has(label)) map.set(label, [])

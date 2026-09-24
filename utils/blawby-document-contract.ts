@@ -65,6 +65,7 @@ export const isBlawbyDocumentPayload = (
   && hasValidConsultation(value.shell.consultation)
   && hasValidThemeTokens(value.shell.themeTokens)
   && Array.isArray(value.shell.pageLinks)
+  && (value.shell.searchConsoleVerification === null || typeof value.shell.searchConsoleVerification === 'string')
   && typeof value.route.recipe === 'string'
   && RECIPES.has(value.route.recipe)
   && value.route.recipe === expectedRecipe

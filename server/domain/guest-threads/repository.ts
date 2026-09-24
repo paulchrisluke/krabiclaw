@@ -1,9 +1,6 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import {
-  listAccessibleLocationIds,
-  type MemberAccessPrincipal,
-} from '~/server/utils/member-access'
+import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 import type {
   ConversationState,
   GuestThreadListItemViewModel,
@@ -103,22 +100,6 @@ export async function getGuestThreadOperationSummary(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  if (opts.principal) {
-    const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
-    if (accessibleLocationIds !== null) {
-      if (accessibleLocationIds.length === 0) {
-        return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
-      }
-      if (opts.locationId) {
-        if (!accessibleLocationIds.includes(opts.locationId)) {
-          return { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
-        }
-      } else {
-        where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
-        params.push(d1JsonStringSet(accessibleLocationIds))
-      }
-    }
-  }
 
   const counts = await queryFirst<OperationSummary>(db, `
     SELECT
@@ -167,7 +148,7 @@ async function countUnreadThreadIds(
 type GuestThreadListRow = GuestThreadRow & {
   guest_name: string
   location_title: string | null
-  site_name?: string | null
+  organization_name?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
   source_preview: string | null
@@ -193,18 +174,6 @@ export async function listGuestThreads(
   if (opts.locationId) {
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
-  }
-  if (opts.principal) {
-    const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
-    if (accessibleLocationIds !== null) {
-      if (accessibleLocationIds.length === 0) return []
-      if (opts.locationId) {
-        if (!accessibleLocationIds.includes(opts.locationId)) return []
-      } else {
-        where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
-        params.push(d1JsonStringSet(accessibleLocationIds))
-      }
-    }
   }
   if (opts.type) {
     where += ' AND gt.kind = ?'
@@ -313,19 +282,6 @@ export async function listOrganizationGuestThreads(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
-  // The same question the thread list asks, asked the same way. This used to
-  // read `teamIds` the caller had assembled and match them against a site team
-  // that no longer exists, which is a second answer to "which locations".
-  const accessibleLocationIds = await listAccessibleLocationIds(db, opts.principal)
-  if (accessibleLocationIds !== null) {
-    if (accessibleLocationIds.length === 0) return []
-    if (opts.locationId) {
-      if (!accessibleLocationIds.includes(opts.locationId)) return []
-    } else {
-      where += ` AND gt.location_id IN (SELECT value FROM json_each(?))`
-      params.push(d1JsonStringSet(accessibleLocationIds))
-    }
-  }
   if (opts.type) {
     where += ' AND gt.kind = ?'
     params.push(opts.type)
@@ -363,7 +319,7 @@ export async function listOrganizationGuestThreads(
       gt.*,
       ${SOURCE_GUEST_NAME_SQL} AS guest_name,
       bl.title AS location_title,
-      s.name AS site_name,
+      s.name AS organization_name,
       (
         SELECT body FROM activity_entries
         WHERE request_id = gt.id AND kind = 'message'
@@ -393,9 +349,9 @@ export async function listOrganizationGuestThreads(
   const items: GuestThreadListItemViewModel[] = []
   for (const row of rows ?? []) {
     const unread = unreadIds.has(row.id)
-    const contextLabel = row.site_name && row.location_title
-      ? `${row.site_name} · ${row.location_title}`
-      : row.site_name || row.location_title || ''
+    const contextLabel = row.organization_name && row.location_title
+      ? `${row.organization_name} · ${row.location_title}`
+      : row.organization_name || row.location_title || ''
     const preview = sourcePreviewText(row)
     items.push({
       id: row.id,

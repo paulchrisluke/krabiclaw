@@ -7,7 +7,7 @@ import type {
   GuestThreadListItemViewModel,
 } from '../../server/domain/guest-threads/types'
 import { loginAs } from './helpers/auth'
-import { devLoginHeaders, testBaseUrl } from './test-env'
+import { devLoginHeaders, potteryHouseTestExtraHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
 
 interface NotificationView {
   id: string
@@ -56,10 +56,10 @@ interface LocationSlot { date: string; time: string }
  * bookable, or null once today has run out — the caller skips rather than pretending a
  * booking could land.
  *
- * Cleanup deletes the override row outright, so this must never land on a slot loc-demo
- * already has: the editor calendar (read with includePast, so it covers the whole day)
- * says which minutes are taken, and minutes that are a multiple of five are skipped so
- * the time cannot sit on any ordinary 15/30/60-minute grid either.
+ * Cleanup clears the location's special hours outright, so this must never land on a
+ * slot loc-demo already has: the editor calendar (read with includePast, so it covers
+ * the whole day) says which minutes are taken, and minutes that are a multiple of five
+ * are skipped so the time cannot sit on any ordinary 15/30/60-minute grid either.
  */
 function openableMinuteToday(local: { date: string; time: string }, taken: ReadonlySet<string>): LocationSlot | null {
   const { date, time } = local
@@ -80,30 +80,49 @@ async function loadLocationDay(request: APIRequestContext, date: string) {
   return new Set((days[0]?.slots ?? []).map(slot => slot.time_slot))
 }
 
-function setLocationSlot(request: APIRequestContext, slot: LocationSlot, directive: 'set' | 'inherit') {
-  return request.put('/api/editor/organizations/org-demo/locations/loc-demo/reservation-availability', {
+/**
+ * Dated hours replace the day's ordinary periods, and a slot is generated every
+ * thirty minutes from the opening until an hour before closing — so a period
+ * exactly sixty minutes wide yields precisely the one minute asked for.
+ */
+async function readSpecialHours(request: APIRequestContext): Promise<unknown> {
+  const response = await request.get('/api/organizations/org-demo/locations/loc-demo')
+  await expectStatus(response, 200)
+  return (await response.json() as { location: { special_hours: unknown } }).location.special_hours ?? null
+}
+
+function restoreSpecialHours(request: APIRequestContext, special: unknown) {
+  return request.patch('/api/organizations/org-demo/locations/loc-demo', { data: { special_hours: special } })
+}
+
+function setLocationSlot(request: APIRequestContext, slot: LocationSlot) {
+  const [hours, minutes] = slot.time.split(':').map(Number)
+  const closeMinute = hours! * 60 + minutes! + 60
+  const close = `${String(Math.floor(closeMinute / 60) % 24).padStart(2, '0')}:${String(closeMinute % 60).padStart(2, '0')}`
+  return request.patch('/api/organizations/org-demo/locations/loc-demo', {
     data: {
-      changes: [{
-        override_date: slot.date,
-        time_slot: slot.time,
-        directive,
-        ...(directive === 'set' ? { status: 'open' } : {}),
+      special_hours: [{
+        kind: 'hours',
+        date: slot.date,
+        periods: [{ open_time: slot.time, close_time: close, close_day_offset: closeMinute >= 24 * 60 ? 1 : 0 }],
+        note: null,
       }],
     },
   })
 }
 
-// Set while the Today journey holds an opened slot, so the override is taken back even
-// when the test fails partway and leaves loc-demo open at an hour it does not serve.
-let openedTodaySlot: LocationSlot | null = null
+// The location's own special hours, read before the Today journey replaces them, so
+// cleanup puts back what the tenant had rather than clearing the field. Null is a
+// value here: it means the location had none, which is not the same as "leave it".
+let priorSpecialHours: { value: unknown } | null = null
 
 test.afterEach(async ({ page }) => {
-  if (!openedTodaySlot) return
-  const slot = openedTodaySlot
-  openedTodaySlot = null
+  if (!priorSpecialHours) return
+  const previous = priorSpecialHours.value
+  priorSpecialHours = null
   // A cleanup that quietly 4xxs would leave loc-demo open at an hour it does not serve,
-  // and PUT resolves on any status, so the status is asserted rather than assumed.
-  await expectStatus(await setLocationSlot(page.request, slot, 'inherit'), 200)
+  // and PATCH resolves on any status, so the status is asserted rather than assumed.
+  await expectStatus(await restoreSpecialHours(page.request, previous), 200)
 })
 
 // The list has no search of its own any more (search is the dashboard's one
@@ -162,6 +181,7 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     const message = `Canonical source detail proof ${nonce}`
     const startedAt = new Date().toISOString()
     const submission = await owner.post(`/api/public/contact`, {
+      headers: potteryHouseTestExtraHeaders(),
       data: { name: guestName, email: guestEmail, subject, message },
     })
     await expectStatus(submission, 201)
@@ -301,6 +321,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   const guestEmail = `maya-${now}@example.test`
   const availability = await page.request.get('/api/public/reservations/availability', {
     params: { date: new Date(now).toISOString().slice(0, 10), location_id: 'loc-demo' },
+    headers: tenantTestExtraHeaders(),
   })
   await expectStatus(availability, 200)
   const { timezone } = await availability.json() as { timezone: string }
@@ -309,11 +330,11 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   // local day (listTodayAgenda), and listReservationSlots drops every slot already in
   // the past. loc-demo's ordinary hours end at 20:00 Asia/Bangkok, so once CI runs
   // after that — 13:00-17:00 UTC, every day — the location's today has no bookable
-  // slot left and a guest who "arrives today" cannot be created at all. Opening a slot
-  // for the rest of today is what the availability override exists for, so the test
-  // opens one instead of depending on the hour CI happens to start.
+  // slot left and a guest who "arrives today" cannot be created at all. Dated hours for
+  // the rest of today are what special hours exist for, so the test opens one instead of
+  // depending on the hour CI happens to start.
   // One reading of the location's clock feeds both the calendar lookup and the chosen
-  // minute; reading it twice could straddle local midnight and write the override to a
+  // minute; reading it twice could straddle local midnight and write the hours to a
   // different day than the one checked for collisions.
   const localToday = localNow(timezone)
   const todaySlot = openableMinuteToday(localToday, await loadLocationDay(page.request, localToday.date))
@@ -321,8 +342,8 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
     !todaySlot,
     `${timezone} is within ${TODAY_SLOT_LEAD_MINUTES} minutes of midnight, so no reservation can still arrive today`,
   )
-  await expectStatus(await setLocationSlot(page.request, todaySlot!, 'set'), 200)
-  openedTodaySlot = todaySlot!
+  priorSpecialHours = { value: await readSpecialHours(page.request) }
+  await expectStatus(await setLocationSlot(page.request, todaySlot!), 200)
 
   const bookingIds: string[] = []
   for (const [name, email, plan] of [
@@ -338,7 +359,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
       date = localDateAt(new Date(plan), timezone)
       for (let dayOffset = 0; dayOffset < 4 && !slot; dayOffset += 1) {
         date = localDateAt(new Date(plan + dayOffset * 86_400_000), timezone)
-        const day = await page.request.get('/api/public/reservations/availability', { params: { date, location_id: 'loc-demo' } })
+        const day = await page.request.get('/api/public/reservations/availability', { params: { date, location_id: 'loc-demo' }, headers: tenantTestExtraHeaders() })
         await expectStatus(day, 200)
         // is_closed answers whether the location serves the time, not whether anyone is
         // left to seat: a slot at capacity comes back is_full with is_closed false, and
@@ -353,6 +374,7 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
       ({ date, time } = plan)
     }
     const response = await page.request.post('/api/public/reservations', {
+      headers: tenantTestExtraHeaders(),
       data: { name, email, phone: '+12025550123', date, time, guests: '2', location_id: 'loc-demo' },
     })
     await expectStatus(response, 201)
@@ -392,8 +414,11 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
   // Beside its index a leaf carries only Save — Airbnb's shape at two columns,
   // measured 2026-09-21 — so leaving one here is the index's own Back. Cancel
-  // belongs to the sheet the leaf becomes below `lg`.
-  await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeHidden()
+  // belongs to the sheet the leaf becomes below `lg`. The rule is the leaf's, so
+  // it is asserted inside the leaf: the index beside it keeps the Cancel that
+  // abandons the note it is writing.
+  await expect(page.locator('#dashboard-panel-booking-note').getByRole('button', { name: 'Cancel', exact: true })).toBeHidden()
+  await expect(page.locator('#dashboard-panel-booking-note').getByRole('button', { name: 'Save', exact: true })).toBeVisible()
   // Back is a link to the level above, never the browser's history.
   await page.getByRole('link', { name: 'Back', exact: true }).click()
 

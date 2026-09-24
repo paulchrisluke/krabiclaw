@@ -417,7 +417,7 @@ if (routesWithHtml.length === 0) {
 
   if (missing.length > 0) {
     fail(
-      `No og:image on ${missing.length} route(s): ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? " …" : ""}. Regenerate this site's social cards.`,
+      `No og:image on ${missing.length} route(s): ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? " …" : ""}. Regenerate this organization's social cards.`,
     );
   } else if (notGenerated.length > 0) {
     fail(
@@ -889,6 +889,6 @@ if (failures > 0) {
   console.error(`\n  FAILED — fix the issues above before shipping\n`);
   process.exit(1);
 } else {
-  console.log(`\n  PASSED — site looks good\n`);
+  console.log(`\n  PASSED — organization looks good\n`);
   process.exit(0);
 }

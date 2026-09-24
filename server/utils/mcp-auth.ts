@@ -10,7 +10,7 @@ import { assertOrganizationWideAccess, isOrganizationWideRole, resolveOrganizati
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
-export type McpToolRole = 'owner' | 'admin' | 'editor'
+export type McpToolRole = 'owner' | 'admin'
 
 /**
  * The role floor each tool declares, as a permission.
@@ -23,7 +23,6 @@ export type McpToolRole = 'owner' | 'admin' | 'editor'
  * three configuration tools need.
  */
 const TOOL_ROLE_PERMISSIONS: Record<McpToolRole, OrganizationPermissions> = {
-  editor: { sites: ['read'] },
   admin: { settings: ['update'] },
   owner: { organization: ['delete'] },
 }
@@ -334,68 +333,55 @@ function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[
   }
 }
 
-// `organization` accepts the organization's id, subdomain, or active domain —
-// all three are exact, unambiguous identifiers (unlike a free-text business
-// name), so resolving them directly here removes a list-then-match round trip
-// for every tenant-scoped tool.
 export async function requireMcpOrganization(
   event: H3Event,
-  organization: string,
-  minimumRole: McpToolRole = 'editor',
+  organizationId: string,
+  minimumRole: McpToolRole = 'admin',
   authenticatedUser?: McpUserContext,
 ): Promise<McpOrganizationContext> {
   const user = authenticatedUser ?? await requireMcpUser(event)
 
-  type TenantRow = { id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }
-  const tenantByColumn = async (column: 'id' | 'subdomain' | 'domain') =>
-    queryFirst<TenantRow>(
-      user.db,
-      `
+  const organization = await queryFirst<{ id: string; subdomain: string | null; custom_domain: string | null; public_url: string | null }>(
+    user.db,
+    `
       SELECT o.id, o.subdomain, (SELECT domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = o.id AND role = 'canonical' AND status = 'active') AS public_url
       FROM organization o
-      WHERE ${column === 'domain' ? "EXISTS (SELECT 1 FROM organization_domains WHERE organization_id = o.id AND domain = ? AND status = 'active')" : `o.${column} = ?`}
+      WHERE o.id = ?
       LIMIT 1
     `,
-      [organization],
-    )
+    [organizationId],
+  )
 
-  // Check id first, then subdomain, then active domain — see note above on
-  // why an OR across all three columns is ambiguous.
-  const site = await tenantByColumn('id')
-    ?? await tenantByColumn('subdomain')
-    ?? await tenantByColumn('domain')
-
-  if (!site) {
+  if (!organization) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found or access denied' })
   }
   const membership = await resolveOrganizationMembership(user.env, {
-    organizationId: site.id,
+    organizationId: organization.id,
     userId: user.userId,
   })
   if (!membership) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found or access denied' })
 
   const role = normalizeRole(membership.role)
-  if (!role || !await roleSatisfies(site.id, membership.role, minimumRole)) {
+  if (!role || !await roleSatisfies(organization.id, membership.role, minimumRole)) {
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
   // MCP tools operate on the whole tenant at this auth layer, so anything short
   // of an organization-wide role is refused here rather than silently getting
-  // tenant-wide access. A location-scoped editor could never satisfy
-  // `minimumRole: 'editor'` anyway (that role name does not normalize to a
-  // valid McpToolRole), so no existing MCP user loses access — the
-  // never-actually-reachable case is now enforced explicitly.
+  // tenant-wide access. Owner and admin are the only roles there are, so this
+  // is the same question the floor asks; it stays because the floor is what is
+  // published to MCP clients and this is the boundary that enforces it.
   if (!isOrganizationWideRole(role)) {
     await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }
 
   return {
     ...user,
-    organizationId: site.id,
+    organizationId: organization.id,
     organizationSlug: membership.organizationSlug || undefined,
-    subdomain: site.subdomain ?? null,
-    customDomain: site.custom_domain ?? null,
-    publicUrl: site.public_url ?? null,
+    subdomain: organization.subdomain ?? null,
+    customDomain: organization.custom_domain ?? null,
+    publicUrl: organization.public_url ?? null,
     role,
     // Kept so the tool executors authorize from the membership this call
     // resolved rather than reassembling one out of role and organizationId.
@@ -405,11 +391,11 @@ export async function requireMcpOrganization(
 
 export async function getVisibleOrganizationContext(
   event: H3Event,
-  organization: string,
+  organizationId: string,
 ): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
-    const site = await requireMcpOrganization(event, organization, 'editor')
-    return { role: site.role, organizationId: site.organizationId }
+    const context = await requireMcpOrganization(event, organizationId, 'admin')
+    return { role: context.role, organizationId: context.organizationId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
       ? Number((error as { statusCode: number }).statusCode)
@@ -434,7 +420,7 @@ export async function roleSatisfies(organizationId: string, actual: string, mini
 }
 
 export function normalizeRole(role: string | null | undefined): McpToolRole | null {
-  if (role === 'owner' || role === 'admin' || role === 'editor') return role
+  if (role === 'owner' || role === 'admin') return role
   return null
 }
 

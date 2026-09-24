@@ -5,7 +5,7 @@ export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const slug = getRouterParam(event, 'slug')
   const reviewId = getRouterParam(event, 'reviewId')
-  if (!organizationId || !slug || !reviewId) return apiErrorResponse(event, 400, 'REVIEW_PARAMS_REQUIRED', 'Site, location, and review identifiers are required')
+  if (!organizationId || !slug || !reviewId) return apiErrorResponse(event, 400, 'REVIEW_PARAMS_REQUIRED', 'Organization, location, and review identifiers are required')
 
   const env = cloudflareEnv(event)
   const db = env.db

@@ -4,7 +4,7 @@ import { deleteFromR2 } from './cloudflare-r2'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import {
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
@@ -137,7 +137,7 @@ export function mediaPlacementOwnerQuery(input: {
       JOIN content_documents root ON root.id = COALESCE(owner.root_id, owner.id)
       WHERE owner.id = ? AND owner.organization_id = ?`, params,
   }
-  // A product is organization-owned and reaches a site through its publication.
+  // A product is organization-owned and is public through its publication.
   // Its locations are a many relationship (product_locations), so there is no
   // single location to narrow authorization by.
   if (input.ownerType === 'product') return {
@@ -448,7 +448,7 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
   const query = buildMediaAssetInsertQuery(data)
   await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.organization_id, 'media-create')])
 
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId: data.organization_id,
     locationId: null,
@@ -607,7 +607,17 @@ async function getMediaStorageReferenceState(
   }
 }
 
-/** Soft-delete in DB and delete each owned Cloudflare object once. */
+/**
+ * Claim the row first, then delete each owned Cloudflare object once.
+ *
+ * Storage used to go first, so every deletion carried a window in which the
+ * bytes were gone while `media_assets.status` still read `active` — a row that
+ * is served to customers and returns 404. With the row claimed first, a lost
+ * race deletes nothing, and a storage failure leaves an object that no active
+ * row points at. That failure is thrown, naming the objects, and deleting the
+ * same asset again retries only its storage: both storage deletes are
+ * idempotent, and the claim, audit event and placement changes already ran.
+ */
 export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, organizationId: string, deletedByUserId: string | null): Promise<void> {
   const pendingAsset = await queryFirst<{
     id: string
@@ -617,15 +627,18 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     organization_id: string
     created_by_user_id: string | null
     source: string
+    status: string
   }>(db, `
-    SELECT id, provider, cloudflare_image_id, r2_key, organization_id, created_by_user_id, source
+    SELECT id, provider, cloudflare_image_id, r2_key, organization_id, created_by_user_id, source, status
     FROM media_assets
-    WHERE id = ? AND organization_id = ? AND status != 'deleted'
+    WHERE id = ? AND organization_id = ?
   `, [id, organizationId]) ?? null
 
   if (!pendingAsset) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
+  const claimed = pendingAsset.status !== 'deleted'
+  // A deleted row's placements went with its claim, so a retry refreshes nothing.
   const sourcePlacements = pendingAsset.source === 'generated' ? [] : await queryAll<{ owner_type: string; owner_id: string; slot: string }>(db,
     'SELECT owner_type, owner_id, slot FROM media_placements WHERE asset_id = ? AND organization_id = ?', [id, organizationId])
 
@@ -644,41 +657,45 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     const imageId = pendingAsset.cloudflare_image_id
     deletions.push({ label: `Cloudflare image ${imageId}`, run: () => deleteImage(env, imageId) })
   }
+  if (claimed) {
+    const [result] = await executeBatch(db, [{
+      query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
+      params: [new Date().toISOString(), pendingAsset.id, organizationId],
+    }, {
+      query: 'DELETE FROM media_placements WHERE organization_id = ? AND asset_id = ?',
+      params: [organizationId, pendingAsset.id],
+    }, publicResourceCacheInvalidationQuery(organizationId, 'media-delete')])
+    if (Number(result?.meta?.changes ?? 0) !== 1) {
+      throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
+    }
+  }
+
   const deletionResults = await Promise.allSettled(deletions.map(deletion => deletion.run()))
   const failures = deletionResults.flatMap((result, index) => result.status === 'rejected'
     ? [`${deletions[index]!.label}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
     : [])
-  if (failures.length > 0) {
-    throw new Error(`Media deletion failed: ${failures.join('; ')}`)
-  }
 
-  const [result] = await executeBatch(db, [{
-    query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
-    params: [new Date().toISOString(), pendingAsset.id, organizationId],
-  }, {
-    query: 'DELETE FROM media_placements WHERE organization_id = ? AND asset_id = ?',
-    params: [organizationId, pendingAsset.id],
-  }, publicResourceCacheInvalidationQuery(organizationId, 'media-delete')])
-  if (Number(result?.meta?.changes ?? 0) !== 1) {
-    throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
+  if (claimed) {
+    await fireOrganizationEvent({
+      db,
+      organizationId: pendingAsset.organization_id,
+      locationId: null,
+      actorId: deletedByUserId,
+      eventType: 'media.deleted',
+      entityType: 'media_asset',
+      entityId: pendingAsset.id,
+      metadata: {
+        provider: pendingAsset.provider,
+      },
+    })
   }
-
-  await fireOrganizationEventSafe({
-    db,
-    organizationId: pendingAsset.organization_id,
-    locationId: null,
-    actorId: deletedByUserId,
-    eventType: 'media.deleted',
-    entityType: 'media_asset',
-    entityId: pendingAsset.id,
-    metadata: {
-      provider: pendingAsset.provider,
-    },
-  })
   if (sourcePlacements.length) {
     const { refreshSocialCard, socialCardRefreshOwnersForPlacement } = await import('~/server/utils/social-card')
     for (const placement of sourcePlacements) {
       for (const owner of await socialCardRefreshOwnersForPlacement(db, placement)) await refreshSocialCard({ db, env, owner, actorId: deletedByUserId })
     }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Media asset ${pendingAsset.id} is deleted but its storage was not: ${failures.join('; ')}`)
   }
 }

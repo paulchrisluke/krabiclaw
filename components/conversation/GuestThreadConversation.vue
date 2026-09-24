@@ -39,6 +39,7 @@
                 <UAvatar
                   :src="item.entry.platform ? '/platform/krabiclaw-symbol.svg' : undefined"
                   :alt="actorLabel(item.entry)"
+                  icon="i-lucide-user"
                   size="md"
                   class="mb-1 shrink-0"
                 />

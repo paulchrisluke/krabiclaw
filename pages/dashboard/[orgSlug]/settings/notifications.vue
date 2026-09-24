@@ -181,11 +181,10 @@ async function markAllRead() {
 }
 
 async function openNotification(notification: DashboardNotification) {
-  try {
-    await markRead(notification)
-  } catch (error) {
-    console.error('notification_mark_read_failed', error)
-  }
+  // The row is navigated away from immediately after this, so a mark-read that
+  // failed and only reached the console left a notification that reappears as
+  // unread with nothing on screen saying why.
+  await markRead(notification)
   const destination = safeDeepLink(notification.deep_link)
   if (destination) await navigateTo(destination)
 }

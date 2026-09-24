@@ -4,7 +4,7 @@ import { MAX_D1_BATCH_STATEMENTS } from '~/server/db/d1-limits'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   assertNoConflictingPrices,
@@ -430,7 +430,7 @@ export async function listCollectionProducts(db: DbClient, input: {
  * behind an id the caller supplied: without this, a caller authorized for its
  * own site can name another tenant's product and have a write land on it.
  */
-export async function requireSiteProduct(db: DbClient, input: {
+export async function requireOrganizationProduct(db: DbClient, input: {
   organizationId: string; productId: string
 }): Promise<Product> {
   const product = await getProduct(db, input.organizationId, input.productId).catch(() => null)
@@ -466,7 +466,7 @@ export function resolveVariantPrice(variant: ProductVariant, selection: PriceSel
 
 interface Actor { actorId: string }
 
-function slugCandidate(base: string, attempt: number): string {
+export function slugCandidate(base: string, attempt: number): string {
   const normalized = base.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, PRODUCT_LIMITS.slug)
   const root = normalized || 'product'
   return attempt === 0 ? root : `${root}-${attempt + 1}`
@@ -518,11 +518,11 @@ async function organizationDefaultCurrency(db: DbClient, organizationId: string)
   // Currency comes from an explicit site when the caller has one. With no site
   // context the caller must supply the currency on the price itself; there is
   // no platform default standing in for a merchant's decision.
-  if (!organizationId) invalid('currency is required when no site context is given')
-  const site = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ?', [organizationId])
-  if (!site) notFound('Site not found')
-  if (!isCurrencyCode(site.default_currency)) throw new Error(`Site ${organizationId} has an unsupported default currency`)
-  return site.default_currency
+  if (!organizationId) invalid('currency is required when no organization context is given')
+  const organization = await queryFirst<{ default_currency: string }>(db, 'SELECT default_currency FROM organization WHERE id = ?', [organizationId])
+  if (!organization) notFound('Organization not found')
+  if (!isCurrencyCode(organization.default_currency)) throw new Error(`Organization ${organizationId} has an unsupported default currency`)
+  return organization.default_currency
 }
 
 interface NormalizedPrice {
@@ -956,7 +956,7 @@ export async function createProduct(db: DbClient, input: {
     writes.push(publicResourceCacheInvalidationQuery(input.organizationId, 'product_created'))
   }
   await executeBatch(db, writes, { operation: 'Create product' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
+  await fireOrganizationEvent({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', entityId: planned.id })
   return getProduct(db, input.organizationId, planned.id)
 }
 
@@ -1033,7 +1033,7 @@ export async function createProductsBatch(db: DbClient, input: {
 }): Promise<Product[]> {
   const { ids, queries } = await planProductCreateWrites(db, { ...input, now: new Date().toISOString() })
   await executeBatch(db, queries, { operation: 'Create products' })
-  await fireOrganizationEventSafe({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
+  await fireOrganizationEvent({ db, organizationId: input.organizationId, actorId: input.actor.actorId, eventType: 'product.created', entityType: 'product', metadata: { product_count: ids.length } })
   const rows = await queryAll<Row>(db, `SELECT ${PRODUCT_COLUMNS} FROM products p WHERE p.organization_id = ? AND p.id IN (SELECT value FROM json_each(?))`, [input.organizationId, d1JsonArray(ids)])
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
@@ -1234,12 +1234,12 @@ export async function deleteProduct(db: DbClient, input: {
  * while looking correct.
  */
 async function productCacheInvalidations(db: DbClient, organizationId: string, productId: string, reason: string): Promise<BatchQuery[]> {
-  const sites = await queryAll<{ organization_id: string }>(db, `
+  const organizations = await queryAll<{ organization_id: string }>(db, `
     SELECT organization_id FROM product_publications WHERE organization_id = ? AND product_id = ?
     UNION
     SELECT organization_id FROM content_documents WHERE organization_id = ? AND product_id = ?
   `, [organizationId, productId, organizationId, productId])
-  return sites.map(row => publicResourceCacheInvalidationQuery(row.organization_id, reason))
+  return organizations.map(row => publicResourceCacheInvalidationQuery(row.organization_id, reason))
 }
 
 // ---------------------------------------------------------------------------
@@ -1278,8 +1278,8 @@ export async function removeProductPublication(db: DbClient, input: {
 export async function setProductLocation(db: DbClient, input: {
   organizationId: string; productId: string; locationId: string; active?: boolean; published?: boolean; actor: Actor
 }): Promise<void> {
-  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
-  if (!site) notFound('Location not found')
+  const organization = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  if (!organization) notFound('Location not found')
   const now = new Date().toISOString()
   await executeBatch(db, [{
     query: `INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
@@ -1294,8 +1294,8 @@ export async function setProductLocation(db: DbClient, input: {
 export async function removeProductLocation(db: DbClient, input: {
   organizationId: string; productId: string; locationId: string
 }): Promise<void> {
-  const site = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
-  if (!site) notFound('Location not found')
+  const organization = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  if (!organization) notFound('Location not found')
   await executeBatch(db, [
     { query: 'DELETE FROM product_locations WHERE organization_id = ? AND product_id = ? AND location_id = ?', params: [input.organizationId, input.productId, input.locationId] },
     publicResourceCacheInvalidationQuery(input.organizationId, 'product_location_changed'),

@@ -1,5 +1,5 @@
 <template>
-  <DashboardIndexPanel id="site-blog" title="Blog">
+  <DashboardIndexPanel id="organization-blog" title="Blog">
     <BlogPostList />
   </DashboardIndexPanel>
 </template>

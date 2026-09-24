@@ -252,20 +252,6 @@ const openKey = computed(() => detailKey.value ?? 'personal')
 // device would read as another device, with a Log out it must not have.
 watch(() => [openKey.value === 'login', sessionData.value?.session?.token] as const, ([open, token]) => { if (open && token) void loadSessions() }, { immediate: true })
 
-// An unsupported row 404s rather than opening an empty pane. Raised, not
-// thrown: the dashboard renders on the client, where a throw in a nested page's
-// setup leaves a blank screen (DESIGN.md).
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  if (detailKey.value && !(detailKey.value in DETAIL_LABELS)) return showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  // Only Notifications has anything beneath it; the rest are leaves.
-  if (level.mode.value === 'yield' && detailKey.value !== 'notifications') {
-    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  }
-})
-
 const { preferences: notificationPreferences, load: loadNotificationPreferences } = useNotificationPreferences(() => sessionData.value?.user?.id)
 await loadNotificationPreferences()
 
@@ -292,7 +278,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
 ])
 
 function runRowAction(id: string) {
-  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
+  if (id === 'log-out') void logOut()
 }
 
 // Personal information and Login & security carry their own controls on

@@ -78,6 +78,8 @@ export interface ProductSession {
   ends_at: string
   capacity: number | null
   status: ProductSessionStatus
+  /** When the occurrence came into existence, which is when its seats went on sale. */
+  created_at: string
 }
 
 /** A session with its claimed seats resolved. `remaining` is null when uncapped. */
@@ -406,7 +408,7 @@ export async function listSessions(db: DbClient, input: {
   const statuses = input.statuses ?? ['scheduled']
   return queryAll<SessionAvailability>(db, `
     SELECT s.id, s.organization_id, s.product_id, s.location_id, s.availability_rule_id,
-           s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status,
+           s.source_occurrence_key, s.timezone, s.starts_at, s.ends_at, s.capacity, s.status, s.created_at,
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}

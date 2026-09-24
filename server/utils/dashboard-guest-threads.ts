@@ -31,6 +31,39 @@ export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadLi
 }
 
 /**
+ * Both thread-list routes parsed this identically, and neither said anything
+ * about a parameter it did not implement: `?search=` was accepted, dropped, and
+ * the whole inbox returned, which a test then asserted against for months. The
+ * keys a caller may send are the keys read here, so the two cannot drift.
+ */
+export function parseGuestThreadListQuery(
+  query: Record<string, unknown>,
+): { error: string } | OrganizationGuestThreadListQuery {
+  const read = (key: string) => typeof query[key] === 'string' ? (query[key] as string).trim() : ''
+  const unsupported = Object.keys(query).filter(key => !GUEST_THREAD_LIST_PARAMS.has(key))
+  if (unsupported.length) return { error: `Unsupported query parameter(s): ${unsupported.join(', ')}` }
+
+  const type = read('type')
+  const conversationState = read('conversation_state')
+  const occurrence = read('occurrence')
+  return {
+    organizationId: read('organization_id') || null,
+    locationId: read('location_id') || null,
+    type: type === 'contact' || type === 'reservation' || type === 'booking' ? type as GuestThreadSubmissionType : null,
+    conversationState: conversationState === 'needs_attention' || conversationState === 'waiting_on_guest' || conversationState === 'resolved'
+      ? conversationState as ConversationState
+      : null,
+    unreadOnly: query.unread === '1' || query.unread === 'true',
+    occurrence: occurrence === 'past' || occurrence === 'upcoming' ? occurrence : null,
+  }
+}
+
+// `org` is the dashboard's route scope, not a filter, and is read elsewhere.
+const GUEST_THREAD_LIST_PARAMS = new Set([
+  'organization_id', 'location_id', 'type', 'conversation_state', 'unread', 'occurrence', 'org',
+])
+
+/**
  * The thread list for a caller whose access is already resolved.
  *
  * `loadDashboardGuestThreads` below is this with the resolution in front of it,
@@ -66,7 +99,7 @@ export async function loadDashboardGuestThreads(
   organizationId: string,
   query: DashboardGuestThreadListQuery,
 ) {
-  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
   const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (query.locationId) {
     await assertMemberScope(db, { ...principal, locationId: query.locationId })
@@ -79,7 +112,7 @@ export async function loadDashboardGuestThread(
   organizationId: string,
   threadId: string,
 ) {
-  const { db, env, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { db, env, organization } = await requireOrganizationAccess(event, organizationId)
   const thread = await getGuestRequest(db, threadId, organizationId)
   if (!thread) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })

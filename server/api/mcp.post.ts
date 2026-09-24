@@ -23,8 +23,8 @@ import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { createDb, queryAll } from "~/server/db";
-import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
+import { purgeOrganizationKvCache } from "~/server/utils/edge-cache";
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
 import {
   visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
@@ -81,12 +81,12 @@ This entire flow runs within the current conversation — do not tell the user t
 **User-uploaded (user provides their own photo):**
 1. Ask the user to attach the photo directly in ChatGPT if they have not already done so. Do not send users to the KrabiClaw dashboard/media uploader for photos from this MCP app.
 2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
-3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
+3. If the intended use is obvious, describe it briefly and ask the user to confirm the target organization, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_media({ organization_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
 7. After upload_user_media returns asset_id/public_url, call set_media with asset_id for a single-value placement. For an ordered placement, call attach_media for each new asset and reorder_media only when needed.
-8. Reply with the exact site, placement, asset_id, and public_url that were updated.
+8. Reply with the exact organization, placement, asset_id, and public_url that were updated.
 
 **Videos:**
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
@@ -97,7 +97,7 @@ This entire flow runs within the current conversation — do not tell the user t
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
 - **create_post** — a time-boxed announcement, offer, or event that can be published to the website and connected Facebook/Instagram channels. Use for "we're running a sale this week" or "come to our event Saturday."
-- **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
+- **create_blog_post** — long-form narrative/story content on the organization's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
 - **create_product** — a permanent thing the business sells, with its own page: a dish, a class, a package, a tour. What a customer buys is a variant, so give it at least one variant with a price. Booking is a capability a Product gains rather than a different kind of row, so a class and a dish are created the same way. Use it for "we want a dedicated page for X" when X is something people buy or book.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
 
@@ -220,23 +220,23 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const organizationIdHeader = event.req.headers.get("x-krabiclaw-organization-id");
     const hasOrganizationIdParam = organizationIdHeader !== null;
     const organizationId = organizationIdHeader?.trim() || null;
-    const siteCtx = organizationId ? await getVisibleOrganizationContext(event, organizationId) : null;
+    const organizationCtx = organizationId ? await getVisibleOrganizationContext(event, organizationId) : null;
 
     const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
 
-    const entitlementKeys = siteCtx
+    const entitlementKeys = organizationCtx
       ? [...new Set(visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(Boolean) as string[])]
       : [];
-    const activeEntitlements = siteCtx
-      ? await getActiveEntitlements(cfEnv, siteCtx.organizationId, entitlementKeys)
+    const activeEntitlements = organizationCtx
+      ? await getActiveEntitlements(cfEnv, organizationCtx.organizationId, entitlementKeys)
       : new Set<string>();
 
     // The role gate is the permission matrix now, so resolve it once per tool
     // before filtering rather than awaiting inside a sync predicate.
     const roleAllowsTool = new Map<string, boolean>()
-    if (hasOrganizationIdParam && organizationId && siteCtx) {
+    if (hasOrganizationIdParam && organizationId && organizationCtx) {
       await Promise.all(visibleSurfaceTools.map(async (tool) => {
-        roleAllowsTool.set(tool.name, await roleSatisfies(siteCtx.organizationId, siteCtx.role, tool.minimumRole))
+        roleAllowsTool.set(tool.name, await roleSatisfies(organizationCtx.organizationId, organizationCtx.role, tool.minimumRole))
       }))
     }
 
@@ -246,7 +246,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       // site must fail closed instead of receiving the unscoped catalog.
       if (!hasOrganizationIdParam) return true;
       if (!organizationId) return false;
-      if (!siteCtx) return false;
+      if (!organizationCtx) return false;
       if (!roleAllowsTool.get(tool.name)) return false;
       if (tool.requiredEntitlement && !activeEntitlements.has(tool.requiredEntitlement)) return false;
       return true;
@@ -260,7 +260,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
 
     const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))];
     logMcpEventDetached(event, cfEnv.DB, {
-      organizationId: siteCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
+      organizationId: organizationCtx?.organizationId ?? null,  userId: mcpUser.userId, requestId: null, method: "tools/list", result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, });
 
     // Our own McpToolDefinition types inputSchema/outputSchema as a loose
     // Record<string, unknown>; every entry in mcp-tools/*.ts is a real JSON
@@ -326,15 +326,15 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const modelText = isRender && result.modelText ? result.modelText : JSON.stringify(structuredContent, null, 2);
 
     // Resolved once and reused for both telemetry and the cache-purge below.
-    const structuredContextSiteId = structuredContent && typeof structuredContent === "object" && "context" in structuredContent
+    const structuredContextOrganizationId = structuredContent && typeof structuredContent === "object" && "context" in structuredContent
       ? (structuredContent.context as Record<string, unknown>)?.organization_id
       : null;
-    const metaContextSiteId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === "object"
+    const metaContextOrganizationId = isRender && result.privateMeta?.context && typeof result.privateMeta.context === "object"
       ? (result.privateMeta.context as Record<string, unknown>)?.organization_id
       : null;
-    const ctxSiteId = typeof structuredContextSiteId === "string" ? structuredContextSiteId : metaContextSiteId;
-    const resolvedSiteId = typeof ctxSiteId === "string"
-      ? ctxSiteId.trim()
+    const ctxOrganizationId = typeof structuredContextOrganizationId === "string" ? structuredContextOrganizationId : metaContextOrganizationId;
+    const resolvedOrganizationId = typeof ctxOrganizationId === "string"
+      ? ctxOrganizationId.trim()
       : typeof rawArgs.organization_id === "string" ? rawArgs.organization_id.trim() : null;
 
     logMcpEventDetached(event, cfEnv.DB, {
@@ -344,11 +344,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
     // Fire-and-forget — never block the MCP response on cache ops.
     if (isMcpMutatingTool(toolDef)) {
-      const organizationId = resolvedSiteId;
+      const organizationId = resolvedOrganizationId;
       if (organizationId) {
         const env = cloudflareEnv(event);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
+        const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const db = (env as any).DB as D1Database | undefined;
         if (kv) {
@@ -359,14 +359,14 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
           // that reads public resources immediately after this mutation could still
           // see stale data.
           const cacheStartedAt = performance.now();
+          // A purge that failed is the edit not reaching the site: the tool
+          // reported the write and the reader kept being served what it replaced.
           try {
-            await purgePublicResourceCacheSafe({
+            await purgePublicResourceCacheNow({
               DB: env.db,
-              SITE_CACHE: kv,
-              NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+              ORGANIZATION_CACHE: kv,
+              NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
             }, organizationId);
-          } catch (err: unknown) {
-            console.warn("[mcp-cache-purge] public resource purge failed:", String(err));
           } finally {
             recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
           }
@@ -379,7 +379,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
                  LIMIT 20`, [organizationId], )
             .then((results) => {
               const hostnames = (results ?? []).map((r) => r.domain);
-              if (hostnames.length > 0) return purgeSiteKvCache(kv, hostnames);
+              if (hostnames.length > 0) return purgeOrganizationKvCache(kv, hostnames);
             })
             .catch((err: unknown) => {
               console.warn("[mcp-cache-purge] failed:", String(err));
@@ -394,12 +394,12 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     }
     // The write above queued "this site changed"; drain it now so the site's
     // search index follows the tool call, the way a dashboard write's does.
-    if (isMcpMutatingTool(toolDef) && resolvedSiteId) {
+    if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
       const env = cloudflareEnv(event);
-      const kv = env.SITE_CACHE;
+      const kv = env.ORGANIZATION_CACHE;
       const db = env.db ?? (env.DB ? createDb(env.DB) : null);
       if (kv && db) {
-        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedSiteId, limit: 100 })
+        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 })
           .catch((error: unknown) => console.warn(`[ai-search] site change drain failed after tenant MCP ${toolName}: ${String(error)}`));
         const waitUntil = getCloudflareWaitUntil(event);
         if (waitUntil) waitUntil(drained);

@@ -11,7 +11,7 @@
 // this issue's scope and would otherwise false-positive here.
 export const CANONICAL_LOADER_PATHS = [
   'composables/usePublicPageData.ts',
-  'composables/useSiteShell.ts',
+  'composables/useOrganizationShell.ts',
   'composables/dashboardFetch.ts',
   'composables/useDashboardSite.ts',
   'server/utils/public-page.ts',

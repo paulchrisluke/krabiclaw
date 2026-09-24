@@ -38,10 +38,10 @@ export async function useBlawbyDocument(
   options: { server?: boolean; lazy?: boolean } = {},
 ) {
   const nuxtApp = useNuxtApp()
-  const { organizationId, isTenant } = useTenantSite()
+  const { organizationId, isTenant } = useTenantOrganization()
   const locale = useState<string>('public-locale', () => 'en')
   if (!isTenant || !organizationId) {
-    throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
+    throw createError({ statusCode: 404, statusMessage: 'Blawby organization context is unavailable' })
   }
 
   const normalizedSlug = slug?.trim() || ''

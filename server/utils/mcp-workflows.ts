@@ -1,16 +1,14 @@
 
 import {
-  getOrgWhatsAppPhone,
-  setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
 import type { CloudflareEnv } from "~/server/utils/auth";
-import { execute, queryAll, queryFirst } from "~/server/db";
+import { queryAll, queryFirst } from "~/server/db";
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { reorderQa, updateQa } from "~/server/utils/location-qa";
 import { listUserOrganizations, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { localPartsAt } from '~/utils/timezone'
 
-export async function listSitesForUser(
+export async function listOrganizationsForUser(
   db: D1Database,
   env: CloudflareEnv,
   userId: string,
@@ -27,13 +25,13 @@ export async function listSitesForUser(
   `, [d1JsonStringSet(orgIds)]);
 }
 
-export async function getSiteForMcp(
+export async function getOrganizationForMcp(
   db: D1Database,
   env: CloudflareEnv,
   organizationId: string,
   userId: string,
 ) {
-  const site = await queryFirst<Record<string, unknown>>(db, `
+  const organization = await queryFirst<Record<string, unknown>>(db, `
       SELECT s.id, s.name, s.theme_id, s.slug, s.subdomain,
              (SELECT domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active' AND type = 'custom') AS custom_domain, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS public_url, s.status, s.updated_at, s.onboarding_status
       FROM organization s
@@ -42,72 +40,10 @@ export async function getSiteForMcp(
     `, [organizationId]);
 
   const membership = await resolveOrganizationMembership(env, { organizationId, userId })
-  if (!site || !membership) throw new Error("Organization not found or access denied");
-  return site;
+  if (!organization || !membership) throw new Error("Organization not found or access denied");
+  return organization;
 }
 
-export async function getNotificationsSettings(
-  db: D1Database,
-  organizationId: string,
-) {
-  const [whatsappPhone, channelsRow] = await Promise.all([
-    getOrgWhatsAppPhone(db, organizationId),
-    queryFirst<{ value: string }>(
-      db,
-      `SELECT json_extract(settings_json, '$.config.owner_notification_channels') AS value FROM organization WHERE id = ? LIMIT 1`,
-      [organizationId],
-    ),
-  ])
-  // Mirrors the send-time default in server/utils/notifications.ts getOwnerNotificationChannels:
-  // only default to whatsapp if a number is actually configured, otherwise email.
-  const defaultChannels = whatsappPhone ? ['whatsapp'] : ['email']
-  let channels: string[] = defaultChannels
-  if (channelsRow?.value) {
-    try {
-      const parsed = JSON.parse(channelsRow.value)
-      if (Array.isArray(parsed)) {
-        const validChannels = parsed.filter(c => c === 'whatsapp' || c === 'email')
-        // Drop whatsapp from channels if no whatsapp phone is configured
-        const availableChannels = whatsappPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
-        channels = availableChannels.length ? availableChannels : defaultChannels
-      }
-    } catch {
-      channels = defaultChannels
-    }
-  }
-  return { whatsapp_phone: whatsappPhone, channels }
-}
-
-export async function updateNotificationsSettings(
-  db: D1Database,
-  organizationId: string,
-  whatsappPhone?: string,
-  channels?: string[],
-) {
-  const ops: Promise<unknown>[] = []
-  const trimmedPhone = whatsappPhone?.trim()
-  // Explicit null or empty string means clear the phone
-  if (whatsappPhone !== undefined) {
-    ops.push(setOrgWhatsAppPhone(db, organizationId, trimmedPhone || ''))
-  }
-  if (channels) {
-    const defaultPhone = trimmedPhone || await getOrgWhatsAppPhone(db, organizationId)
-    const validChannels = channels.filter(c => c === 'whatsapp' || c === 'email')
-    // Filter out whatsapp if no phone is available
-    const channelsToPersist = defaultPhone ? validChannels : validChannels.filter(c => c !== 'whatsapp')
-    const finalChannels = channelsToPersist.length ? channelsToPersist : ['email']
-    const value = JSON.stringify(finalChannels)
-    ops.push(
-      execute(
-        db,
-        `UPDATE organization SET settings_json = json_set(settings_json, '$.config.owner_notification_channels', json(?)) WHERE id = ?`,
-        [value, organizationId],
-      )
-    )
-  }
-  await Promise.all(ops)
-  return await getNotificationsSettings(db, organizationId)
-}
 
 export async function listContactSubmissions(
   db: D1Database,
@@ -252,7 +188,7 @@ export async function listLocationReviews(
     ORDER BY r.created_at DESC
   `, [organizationId, locationId]);
 
-  const { attachReviewMedia } = await import('~/server/utils/site-reviews')
+  const { attachReviewMedia } = await import('~/server/utils/organization-reviews')
   return await attachReviewMedia(db, organizationId, rows)
 }
 export function buildTenantPageReplacementConfirmationToken(expectedUpdatedAt: string, removedBlockIds: readonly string[]) {

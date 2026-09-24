@@ -39,10 +39,10 @@ async function publishedTenantSitemapScope(db: DbClient | undefined, organizatio
 }
 
 function isAllowedTenantPath(event: H3Event, path: string, scope: { paths: Set<string>; locales: Set<string> }) {
-  const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
+  const organization = event.context.organization as { theme?: string | null; vertical?: string | null } | undefined
   const template = resolvePublicTemplate({
     themeId: event.context.themeId as string | null | undefined,
-    vertical: site?.vertical,
+    vertical: organization?.vertical,
   })
   const exactPaths = new Set(template.sitemap.exactPaths)
   const normalized = path === '/' ? '/' : path.replace(/\/$/, '')

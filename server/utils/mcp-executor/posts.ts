@@ -1,9 +1,8 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro';
-import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, type PostSocialPublish, updatePost } from '~/server/utils/post-management'
-import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
@@ -21,41 +20,41 @@ async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
 }
 
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {
-  const { toolName, args, site } = ctx
+  const { toolName, args, organization } = ctx
   switch (toolName) {
     case "list_posts":
       {
         const posts = (await listPosts(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           optionalString(args, "status") ?? undefined,
           optionalString(args, "location_id") ?? undefined,
-        )).map((post) => attachViewUrlToRecord(post, site, {}));
-        const page = paginateMcpCollection(posts, args, { resource: `posts:${site.organizationId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
+        )).map((post) => attachViewUrlToRecord(post, organization, {}));
+        const page = paginateMcpCollection(posts, args, { resource: `posts:${organization.organizationId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
         return { posts: page.items, page_info: page.page_info };
       }
     case "get_post":
       {
         const post = await getPost(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           requiredString(args, "post_id"),
         );
         return {
-          post: post ? attachViewUrlToRecord(post, site, {}) : null,
+          post: post ? attachViewUrlToRecord(post, organization, {}) : null,
         };
       }
     case "create_post":
       {
         const post = await asMcpValidationError(() => createPost(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           omit(args, ["organization_id"]),
-          site.userId,
-          site.env,
+          organization.userId,
+          organization.env,
         ));
-        const hydratedPost = attachViewUrlToRecord(post, site, {});
-        const createPostContext = await mutationContextPayload(site, {
+        const hydratedPost = attachViewUrlToRecord(post, organization, {});
+        const createPostContext = await mutationContextPayload(organization, {
           locationId: post && typeof post.location_id === "string" ? post.location_id : null,
         });
         return renderStructuredResponse(
@@ -75,12 +74,12 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case "update_post":
       {
         const post = await asMcpValidationError(() => updatePost(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           requiredString(args, "post_id"),
           omit(args, ["post_id", "organization_id"]),
-          site.userId,
-          site.env,
+          organization.userId,
+          organization.env,
         ));
         if (!post) {
           return renderStructuredResponse(
@@ -88,8 +87,8 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
             "No post found with that id — nothing was changed.",
           );
         }
-        const hydratedPost = attachViewUrlToRecord(post, site, {});
-        const updatePostContext = await mutationContextPayload(site, {
+        const hydratedPost = attachViewUrlToRecord(post, organization, {});
+        const updatePostContext = await mutationContextPayload(organization, {
           locationId: typeof post.location_id === "string" ? post.location_id : null,
         });
         return renderStructuredResponse(
@@ -109,48 +108,24 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
       const postId = requiredString(args, "post_id");
-      const wantsFacebook = channels.includes("facebook");
-      const wantsInstagram = channels.includes("instagram");
-      const socialEnabled = isConversationalToolGroupEnabled(site.env, "social_publishing");
-
-      let facebookConnection: Awaited<ReturnType<typeof getFacebookPagesConnection>> | null = null;
-      let socialSkipReason: string | null = null;
-      if (wantsFacebook || wantsInstagram) {
-        if (!socialEnabled) {
-          socialSkipReason = "social_publishing_disabled";
-        } else if (!(await hasSiteEntitlement(site.env as CloudflareEnv, site.db, site.organizationId, "managed_service"))) {
-          socialSkipReason = "not_entitled";
-        } else {
-          facebookConnection = await getFacebookPagesConnection(
-            site.env as never,
-            site.organizationId,
-            
-          );
-          if (!facebookConnection?.page_id || !facebookConnection.encrypted_page_token) {
-            socialSkipReason = "not_connected";
-          }
-        }
-      }
-
-      const socialPublish: PostSocialPublish | null = socialSkipReason
-        ? { kind: 'unavailable', reason: socialSkipReason }
-        : facebookConnection?.page_id && facebookConnection.encrypted_page_token
-          ? { kind: 'connected', pageId: facebookConnection.page_id, pageToken: facebookConnection.encrypted_page_token }
-          : null;
+      const wantsSocial = channels.includes("facebook") || channels.includes("instagram");
+      const socialDisabledReason = wantsSocial && !isConversationalToolGroupEnabled(organization.env, "social_publishing")
+        ? "social_publishing_disabled"
+        : null;
       const post = await publishPost(
-        site.db,
-        site.organizationId,
+        organization.db,
+        organization.organizationId,
         postId,
         channels,
-        site.env,
-        socialPublish,
+        organization.env as CloudflareEnv,
+        socialDisabledReason,
       );
       if (!post)
         throw new HTTPError({ statusCode: 404, statusMessage: "Post not found" });
       const channelJobs = post.channels.filter(job => channels.includes(job.channel));
 
       const publishedChannels = [
-        ...(channels.includes('site') ? ['site'] : []),
+        ...(channels.includes('organization') ? ['organization'] : []),
         ...channelJobs.filter(j => j.status === 'published').map(j => j.channel),
       ];
       const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
@@ -159,14 +134,14 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       const channelOutcomes = {
         ...Object.fromEntries(channelJobs
           .map(job => [job.channel, { status: job.status, ...(job.error ? { reason: job.error } : {}) }])),
-        ...(channels.includes('site') ? { site: { status: 'published' } } : {}),
+        ...(channels.includes('organization') ? { organization: { status: 'published' } } : {}),
       };
 
-      const publishContext = await mutationContextPayload(site, {
+      const publishContext = await mutationContextPayload(organization, {
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
       });
 
-      const hydratedPublishedPost = attachViewUrlToRecord(post, site, {});
+      const hydratedPublishedPost = attachViewUrlToRecord(post, organization, {});
 
       const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;
       const successMessage = hasFailures || pendingChannels.length > 0
@@ -197,11 +172,11 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       return {
         post_id: postId,
         deleted: await deletePost(
-          site.db,
-          site.organizationId,
+          organization.db,
+          organization.organizationId,
           postId,
         ),
-        context: await mutationContextPayload(site),
+        context: await mutationContextPayload(organization),
       };
     }
     default:

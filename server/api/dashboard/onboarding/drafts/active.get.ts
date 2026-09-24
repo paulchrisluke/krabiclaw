@@ -35,7 +35,7 @@ export default defineHandler(async (event) => {
   const payload = parseOnboardingDraftPayload(row.payload_json)
   if (!payload) return jsonResponse({ success: true, draft: null })
 
-  const site = row.organization_id && row.subdomain_candidate
+  const organization = row.organization_id && row.subdomain_candidate
     ? await queryFirst<{ id: string; subdomain: string | null }>(db, `
         SELECT id, subdomain FROM organization
         WHERE id = ? AND subdomain = ? AND onboarding_status = 'pending'
@@ -46,8 +46,8 @@ export default defineHandler(async (event) => {
   // A draft older than the token's lifetime is still resumable; the token is
   // minted fresh on every read rather than stored with the draft.
   const previewSecret = previewSecretOf(env)
-  const previewToken = site?.subdomain && previewSecret
-    ? await createPreviewToken(previewSecret, site.id, Date.now() + PREVIEW_TOKEN_TTL_MS)
+  const previewToken = organization?.subdomain && previewSecret
+    ? await createPreviewToken(previewSecret, organization.id, Date.now() + PREVIEW_TOKEN_TTL_MS)
     : null
 
   return jsonResponse({
@@ -64,8 +64,8 @@ export default defineHandler(async (event) => {
         category: product.collection,
         amountMinor: product.price === null ? null : product.price.unit_amount,
       })),
-      organizationId: site?.id ?? null,
-      subdomainCandidate: site?.subdomain ?? row.subdomain_candidate,
+      organizationId: organization?.id ?? null,
+      subdomainCandidate: organization?.subdomain ?? row.subdomain_candidate,
       previewToken,
     },
   })

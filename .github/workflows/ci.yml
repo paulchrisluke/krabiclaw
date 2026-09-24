@@ -52,6 +52,67 @@ jobs:
       - run: yarn lint:schema-drift
       - run: yarn test:migrations
 
+  e2e:
+    name: E2E
+    # The whole suite, on every pull request, against a local build and a local
+    # D1 pulled from production. Before this, a pull request ran Checks and
+    # nothing else, and e2e-staging ran only test:e2e:tenant-rendering after the
+    # merge had already happened — two specs of nineteen. tenant-guest-journeys,
+    # every mcp-* spec, oauth-discovery and provider-ingress had never run in CI
+    # anywhere, which is how the suite reached twenty-two failures with no one
+    # told. The playwright.config comment about "a test broken by #1001 sat
+    # failing while only the @smoke subset ran in CI" is the same gap, a year on.
+    if: >-
+      github.event_name == 'pull_request'
+      && !(github.base_ref == 'main' && github.head_ref == 'staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      # The onboarding draft endpoints sign their preview tokens with it and
+      # answer 503 without it, so the wizard never got past its first save.
+      PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # CIMD client metadata must be public HTTPS, which localhost cannot serve.
+      # Staging's test-client documents are the ones docs/testing-strategy.md names.
+      MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
+      MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
+      PLAYWRIGHT_WORKERS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.18.1"
+      - run: corepack enable
+      - name: Restore Yarn package cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+          restore-keys: yarn-${{ runner.os }}-
+      - run: corepack yarn install --immutable
+      - run: corepack yarn playwright install --with-deps chromium
+      # playwright.config.ts runs e2e:local:prepare itself when the worker is not
+      # already prepared: local migrations, a production snapshot into local D1,
+      # development auth, and the production build.
+      - run: yarn test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: playwright-report-pr
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
@@ -70,7 +131,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw Staging
       NUXT_PUBLIC_SITE_URL: https://staging.krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://staging.krabiclaw.com/help
@@ -115,6 +176,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: corepack yarn wrangler d1 migrations apply DB --env staging --remote
+      # `d1 migrations apply` skips a tag already in `d1_migrations`, so a
+      # regenerated baseline leaves the database on whatever it first carried
+      # and the deploy says nothing. This is where that stops being silent.
+      - name: Verify the staging database carries this baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: corepack yarn lint:schema-drift --env staging
       - name: Deploy staging Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -172,7 +241,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help
@@ -207,6 +276,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: corepack yarn wrangler d1 migrations apply DB --remote
+      - name: Verify the production database carries this baseline
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: corepack yarn lint:schema-drift --production
       - name: Deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -230,7 +304,7 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
       NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help

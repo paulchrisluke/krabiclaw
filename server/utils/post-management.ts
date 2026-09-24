@@ -1,7 +1,7 @@
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, parsePostTopic, PostValidationError, type PostTopic } from '~/shared/posts'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { fireOrganizationEventSafe } from '~/server/utils/organization-events'
+import { fireOrganizationEvent } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import type { DomainEnv } from '~/server/utils/domains'
 import { insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
@@ -14,7 +14,10 @@ import {
   projectLocalizedMediaAlt,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { getLinkedInstagramAccount, publishToInstagram, publishToPage } from '~/server/utils/facebook-pages'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
+import { getFacebookPagesConnection, publishToPage } from '~/server/utils/facebook-pages'
+import { publishToInstagram, readInstagramConnection } from '~/server/utils/instagram'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export { normalizePostSlug, postPublicPath }
@@ -76,11 +79,7 @@ export type PostWithChannels = Post & {
   channels: PostChannelState[]
 }
 
-export type PostPublishChannel = 'site' | 'instagram' | 'facebook'
-
-export type PostSocialPublish =
-  | { kind: 'connected'; pageToken: string; pageId: string }
-  | { kind: 'unavailable'; reason: string }
+export type PostPublishChannel = 'organization' | 'instagram' | 'facebook'
 
 type SqlBindValue = string | number | boolean | null
 
@@ -122,7 +121,7 @@ interface PublishedPostRow {
 
 async function validatePostLocation(db: DbClient, organizationId: string, locationId: string | null, post: PostTopic) {
   const location = locationId ? await queryFirst<{ phone: string | null }>(db, 'SELECT phone FROM business_locations WHERE id = ? AND organization_id = ?', [locationId, organizationId]) : null
-  if (locationId && !location) throw new PostValidationError('location_id must belong to this site')
+  if (locationId && !location) throw new PostValidationError('location_id must belong to this organization')
   if (post.call_to_action?.action_type === 'call' && !location?.phone) throw new PostValidationError('CALL requires a location with a phone number')
 }
 
@@ -137,7 +136,7 @@ function absoluteUrl(origin: string | null, path: string) {
   return new URL(path, origin.endsWith('/') ? origin : `${origin}/`).toString()
 }
 
-async function resolveSitePublicOrigin(db: DbClient, organizationId: string) {
+async function resolveOrganizationPublicOrigin(db: DbClient, organizationId: string) {
   const domain = await queryFirst<{ domain: string }>(db,
     "SELECT domain FROM organization_domains WHERE organization_id = ? AND role = 'canonical' AND status = 'active'", [organizationId])
   return domain ? `https://${domain.domain}` : null
@@ -289,7 +288,7 @@ export async function listPosts(
   }
   query += ` ORDER BY p.updated_at DESC LIMIT 100`
   const results = await queryAll<PostRow>(db, query, params)
-  const origin = await resolveSitePublicOrigin(db, organizationId)
+  const origin = await resolveOrganizationPublicOrigin(db, organizationId)
   const mediaByPost = await getPostMediaByPostIds(db, organizationId, (results ?? []).map((post) => post.id))
   return (results ?? []).map((post) => attachPostPublicFields(post, mediaByPost.get(post.id), origin))
 }
@@ -317,7 +316,7 @@ export async function getPost(
       c.value ->> '$.error_message' AS error, c.value ->> '$.published_at' AS published_at, c.value ->> '$.created_at' AS created_at
       FROM content_documents d, json_each(d.metadata_json, '$.channels') c
       WHERE d.id = ? AND d.kind = 'social_post' AND d.row_role = 'root' ORDER BY c.key`, [postId]),
-    resolveSitePublicOrigin(db, organizationId),
+    resolveOrganizationPublicOrigin(db, organizationId),
     getPostMediaByPostIds(db, organizationId, [postId]),
   ])
 
@@ -372,7 +371,7 @@ export async function createPost(
 
   const createdPost = await getPost(db, organizationId, id)
   if (!createdPost) throw new Error('Post not found after creation')
-  await fireOrganizationEventSafe({
+  await fireOrganizationEvent({
     db,
     organizationId,
     
@@ -461,8 +460,9 @@ export async function publishPost(
   organizationId: string,
   postId: string,
   channels: PostPublishChannel[],
-  env: DomainEnv,
-  socialPublish: PostSocialPublish | null,
+  env: CloudflareEnv,
+  /** Why the calling surface will not publish to social channels at all, when it will not. */
+  socialDisabledReason: string | null = null,
 ): Promise<PostWithChannels | null> {
   if (!channels.length) {
     throw new Error('At least one publish channel is required')
@@ -470,9 +470,6 @@ export async function publishPost(
   const socialChannels = channels.filter((channel): channel is PostChannelState['channel'] =>
     channel === 'facebook' || channel === 'instagram',
   )
-  if (socialChannels.length > 0 && !socialPublish) {
-    throw new Error('Social publish capability is required for external channels')
-  }
 
   const existing = await queryFirst<PostRow>(
     db,
@@ -484,7 +481,7 @@ export async function publishPost(
   const now = new Date(Math.max(Date.now(), Date.parse(existing.updated_at) + 1)).toISOString()
   const slug = existing.slug ?? await allocatePostSlug(db, organizationId, existing.title ?? existing.body.slice(0, 80) ?? postId, postId)
 
-  if (channels.includes('site')) {
+  if (channels.includes('organization')) {
     const [updateResult] = await executeBatch(db, [{
       query: `UPDATE content_documents
           SET status = 'published', slug = ?, scheduled_for = NULL,
@@ -497,11 +494,11 @@ export async function publishPost(
     if (Number(updateResult?.meta.changes ?? 0) === 0) return null
   }
 
-  const publishedChannels = channels.filter(channel => channel === 'site')
+  const publishedChannels = channels.filter(channel => channel === 'organization')
 
   const post = await getPost(db, organizationId, postId)
-  if (post && channels.includes('site') && existing.status !== 'published') {
-    await fireOrganizationEventSafe({
+  if (post && channels.includes('organization') && existing.status !== 'published') {
+    await fireOrganizationEvent({
       db,
       organizationId,
       
@@ -520,17 +517,19 @@ export async function publishPost(
 
   await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
 
-  const socialCapability = socialPublish
+  const skipReason = socialChannels.length === 0
+    ? null
+    : socialDisabledReason ?? (await hasOrganizationEntitlement(env, organizationId, 'managed_service')
+      ? null
+      : 'Publishing to Facebook and Instagram requires the Growth plan.')
   for (const channel of socialChannels) {
     if (!(await claimPostChannelState(db, postId, channel, now))) continue
 
-    if (socialCapability?.kind === 'unavailable') {
-      await settlePostChannelState(db, postId, channel, { kind: 'skipped', reason: socialCapability.reason })
+    if (skipReason) {
+      await settlePostChannelState(db, postId, channel, { kind: 'skipped', reason: skipReason })
       continue
     }
-
-    if (!socialCapability) throw new Error('Social publish capability is required for external channels')
-    await publishPostChannel(db, postId, channel, post, socialCapability)
+    await publishPostChannel(db, env, organizationId, postId, channel, post)
   }
 
   return await getPost(db, organizationId, postId)
@@ -566,69 +565,37 @@ async function settlePostChannelState(db: DbClient, postId: string, channel: Pos
 
 async function publishPostChannel(
   db: DbClient,
+  env: CloudflareEnv,
+  organizationId: string,
   postId: string,
   channel: PostChannelState['channel'],
   post: PostWithChannels,
-  socialPublish: Extract<PostSocialPublish, { kind: 'connected' }>,
 ) {
-  if (channel === 'facebook') {
-    let providerPostId: string
-    try {
-      const result = await publishToPage(socialPublish.pageToken, socialPublish.pageId, { message: post.body })
-      providerPostId = result.id
-    } catch (error) {
-      await settlePostChannelState(db, postId, channel, {
-        kind: 'failed',
-        reason: error instanceof Error ? error.message : 'facebook publish failed',
-      })
-      return
+  // Each channel is its own connection. A lookup that throws is a failure, not
+  // "not connected": reporting the second as the first told an author their
+  // post had no destination when the truth was that we never found out.
+  const publish = async (): Promise<PostChannelStateOutcome> => {
+    if (channel === 'facebook') {
+      const connection = await getFacebookPagesConnection(env, organizationId)
+      if (!connection?.encrypted_page_token) return { kind: 'skipped', reason: 'No Facebook Page connected.' }
+      const result = await publishToPage(connection.encrypted_page_token, connection.page_id, { message: post.body })
+      return { kind: 'published', providerPostId: result.id }
     }
-    await settlePostChannelState(db, postId, channel, { kind: 'published', providerPostId })
-    return
+    const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
+    if (!imageUrl) return { kind: 'skipped', reason: 'Instagram requires an image. Add a photo to this post.' }
+    const connection = await readInstagramConnection(env, organizationId)
+    if (!connection) return { kind: 'skipped', reason: 'No Instagram account connected.' }
+    const result = await publishToInstagram(connection, { caption: post.body, imageUrl })
+    return { kind: 'published', providerPostId: result.id }
   }
 
-  const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
-  if (!imageUrl) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'skipped',
-      reason: 'Instagram requires an image. Add a photo to this post.',
-    })
-    return
-  }
-
-  let instagramAccountId: string | null
+  let outcome: PostChannelStateOutcome
   try {
-    instagramAccountId = await getLinkedInstagramAccount(socialPublish.pageToken, socialPublish.pageId)
+    outcome = await publish()
   } catch (error) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'failed',
-      reason: error instanceof Error ? error.message : 'instagram account lookup failed',
-    })
-    return
+    outcome = { kind: 'failed', reason: error instanceof Error ? error.message : `${channel} publish failed` }
   }
-  if (!instagramAccountId) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'skipped',
-      reason: 'No Instagram Business account is linked to this Facebook Page.',
-    })
-    return
-  }
-
-  let providerPostId: string
-  try {
-    const result = await publishToInstagram(socialPublish.pageToken, instagramAccountId, {
-      caption: post.body,
-      imageUrl,
-    })
-    providerPostId = result.id
-  } catch (error) {
-    await settlePostChannelState(db, postId, channel, {
-      kind: 'failed',
-      reason: error instanceof Error ? error.message : 'instagram publish failed',
-    })
-    return
-  }
-  await settlePostChannelState(db, postId, channel, { kind: 'published', providerPostId })
+  await settlePostChannelState(db, postId, channel, outcome)
 }
 
 interface DuePostRow {
@@ -680,14 +647,14 @@ export async function publishDuePosts(db: DbClient, now = new Date()) {
     ])
     if (Number(results[0]?.meta?.changes ?? 0) !== 1) continue
     published += 1
-    await fireOrganizationEventSafe({
+    await fireOrganizationEvent({
       db,
       organizationId: post.organization_id,
       locationId: post.location_id,
       eventType: 'post.published',
       entityType: 'post',
       entityId: post.id,
-      metadata: { post_type: post.post_type, channels: ['site'] },
+      metadata: { post_type: post.post_type, channels: ['organization'] },
     })
   }
   return { published }
@@ -737,7 +704,7 @@ export async function getPublishedPosts(
   params.push(limit)
   const rows = await queryAll<PublishedPostRow>(db, query, params)
   const [origin, mediaByPost] = await Promise.all([
-    resolveSitePublicOrigin(db, organizationId),
+    resolveOrganizationPublicOrigin(db, organizationId),
     getPostMediaByPostIds(db, organizationId, (rows ?? []).map((post) => post.id)),
   ])
 
@@ -773,7 +740,7 @@ export async function getPublishedPost(
   )
   if (!row) return null
   const [origin, mediaByPost] = await Promise.all([
-    resolveSitePublicOrigin(db, organizationId),
+    resolveOrganizationPublicOrigin(db, organizationId),
     getPostMediaByPostIds(db, organizationId, [row.id]),
   ])
   const summary = formatPublishedPost(row, mediaByPost.get(row.id), origin)
@@ -792,10 +759,10 @@ export async function getPublishedPostByPublicRoute(
   slug: string,
   locale: string,
 ) {
-  const site = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
-  if (!site) return null
+  const organization = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? AND status = \'active\' LIMIT 1', [organizationId])
+  if (!organization) return null
 
-  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, site.id, locale)
+  const localizations = locale === 'en' ? [] : await loadExactPublicLocalizations(env, db, organization.id, locale)
   const translated = locale === 'en' ? null : await queryFirst<{
     id: string; root_id: string; title: string | null; summary: string | null;
     seo_title: string | null; seo_description: string | null; metadata_json: string;
@@ -821,14 +788,14 @@ export async function getPublishedPostByPublicRoute(
     const publicPath = '/' + locale + '/posts/' + slug
     post = { ...sourcePost, id: translated.id, slug, title: translated.title ?? '', body: translated.summary, summary: translated.summary,
       seo_title: translated.seo_title, seo_description: translated.seo_description, public_path: publicPath,
-      canonical_url: absoluteUrl(await resolveSitePublicOrigin(db, organizationId), publicPath),
+      canonical_url: absoluteUrl(await resolveOrganizationPublicOrigin(db, organizationId), publicPath),
       ...topic,
       media: projectLocalizedMediaAlt(media, localizations), social_image: socialMedia?.social_image ?? null,
     }
   }
 
   const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-    organizationId: site.id,
+    organizationId: organization.id,
     
     sourcePath: sourcePost.public_path,
     documentId: sourcePost.id,

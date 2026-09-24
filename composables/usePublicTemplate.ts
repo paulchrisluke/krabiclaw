@@ -1,7 +1,7 @@
 import { PLATFORM_TEMPLATE, isBlawbyTemplate, resolvePublicTemplate } from '~/utils/template-registry'
 
 export function usePublicTemplate() {
-  const { isPlatform, site, themeId } = useTenantSite()
+  const { isPlatform, organization, themeId } = useTenantOrganization()
   // KrabiClaw's own site has a template like any other site: it renders page
   // documents at the paths that template declares (#903). Returning null here
   // made every platform route ask a template that did not exist, which is why
@@ -14,14 +14,14 @@ export function usePublicTemplate() {
     ? PLATFORM_TEMPLATE
     : resolvePublicTemplate({
         themeId,
-        vertical: site?.vertical,
+        vertical: organization?.vertical,
       }))
 
   return {
     template,
     isBlawby: computed(() => !isPlatform && isBlawbyTemplate({
       themeId,
-      vertical: site?.vertical,
+      vertical: organization?.vertical,
     })),
   }
 }

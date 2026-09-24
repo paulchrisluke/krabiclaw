@@ -186,19 +186,11 @@ async function refreshSocialCardForPlacement(db: DbClient, input: {
   env: CloudflareEnv
   placement: MediaPlacementKey
 }) {
-  try {
-    const owners = await socialCardRefreshOwnersForPlacement(db, input.placement)
-    for (const owner of owners) await refreshSocialCard({ db, env: input.env, owner })
-  } catch (error) {
-    // Placement writes are already committed; preserve their truthful response and
-    // report this derived-projection failure under the documented SEO contract.
-    console.error('[social-card]', {
-      stage: 'placement_refresh',
-      ownerType: input.placement.owner_type,
-      ownerId: input.placement.owner_id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
+  // The placement write has committed, and the card is derived from it. A card
+  // that did not regenerate is the wrong image on every share of that page, which
+  // is not something the console should be the only one to know.
+  const owners = await socialCardRefreshOwnersForPlacement(db, input.placement)
+  for (const owner of owners) await refreshSocialCard({ db, env: input.env, owner })
 }
 
 // Attaches one asset to an ordered collection. Appends at the end (its

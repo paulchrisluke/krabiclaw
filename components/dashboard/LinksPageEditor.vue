@@ -4,7 +4,7 @@
     column once a leaf is, and it yields both columns to a link record below
     `items`. The shell reads that from the route tree.
   -->
-  <DashboardIndexPanel id="site-links" title="Links page" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel id="organization-links" title="Links page" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <template #right>
       <UButton
         color="neutral"
@@ -35,7 +35,7 @@
         :load-values="loadLinksLocalization"
         :save-values="saveLinksLocalization"
         :route-path="localizedLinksPath"
-        :language-settings-path="siteLocalizationSettingsPath"
+        :language-settings-path="organizationLocalizationSettingsPath"
       />
     </template>
 
@@ -48,13 +48,11 @@
 
 <script lang="ts">
 import type { InjectionKey, Reactive, Ref } from 'vue'
-import { ROBOTS_INTENTS, ROBOTS_INTENT_LABELS, type RobotsIntent } from '~/shared/robots-directive'
 import type { LinkItemStatus } from '~/server/utils/links-page'
 
 export interface LinksPage {
   id: string
   title: string
-  robots: RobotsIntent
   seo_title: string
   seo_description: string
 }
@@ -88,11 +86,10 @@ export interface LinksEditor {
   revert: () => void
   loadLinksLocalization: (locale: string, linkItemId?: string) => Promise<Record<string, unknown>>
   saveLinksLocalization: (locale: string, values: Record<string, unknown>, linkItemId?: string) => Promise<void>
-  siteLocalizationSettingsPath: Ref<string>
+  organizationLocalizationSettingsPath: Ref<string>
 }
 
 export const linksEditorKey = Symbol('links-editor') as InjectionKey<LinksEditor>
-export const ROBOTS_OPTIONS = ROBOTS_INTENTS.map(value => ({ label: ROBOTS_INTENT_LABELS[value], value }))
 export const LINK_STATUS_OPTIONS = [
   { label: 'Active', value: 'active' },
   { label: 'Hidden', value: 'hidden' },
@@ -147,7 +144,6 @@ const itemsPath = computed(() => `${linksPath.value}/items`)
 const form = reactive<LinksPage>({
   id: '',
   title: '',
-  robots: 'noindex,follow',
   seo_title: '',
   seo_description: '',
 })
@@ -158,7 +154,7 @@ const linksPageLocalizationFields = computed(() => [
   { key: 'seo_title', label: 'SEO title', source: data.value?.page.seo_title },
   { key: 'seo_description', label: 'SEO description', source: data.value?.page.seo_description, multiline: true },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }
@@ -280,7 +276,6 @@ async function persist(nextItems: Array<Omit<LinkItem, 'id'> & { id?: string }>)
     body: {
       page: {
         title: form.title,
-        robots: form.robots,
         seo_title: form.seo_title,
         seo_description: form.seo_description,
       },
@@ -320,7 +315,6 @@ function revert() {
 }
 
 // ── The index ─────────────────────────────────────────────
-const robotsLabel = computed(() => ROBOTS_INTENT_LABELS[form.robots])
 
 function linksSummary(): string {
   if (!items.value.length) return 'No links yet'
@@ -348,7 +342,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     id: 'search',
     label: 'Search',
     items: [
-      { id: 'robots', label: 'Robots', summary: robotsLabel.value, to: `${linksPath.value}/robots` },
       { id: 'seo-title', label: 'SEO title', summary: form.seo_title || 'Falls back to the title', placeholder: !form.seo_title, to: `${linksPath.value}/seo-title` },
       {
         id: 'seo-description',
@@ -373,7 +366,7 @@ provide(linksEditorKey, {
   revert,
   loadLinksLocalization,
   saveLinksLocalization,
-  siteLocalizationSettingsPath,
+  organizationLocalizationSettingsPath,
 })
 
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

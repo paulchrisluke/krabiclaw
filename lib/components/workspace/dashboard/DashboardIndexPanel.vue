@@ -68,9 +68,8 @@ const router = useRouter()
 let opened = false
 onMounted(() => {
   watch([() => props.autoOpen, pane, level.mode], ([target, wide, mode]) => {
-    // `stale` is this index on its way out after a navigation elsewhere; its
-    // answers are about a route it is no longer part of.
-    if (opened || !target || !wide || mode !== 'index' || level.stale.value) return
+    // An index on its way out after a navigation elsewhere yields, so it opens nothing.
+    if (opened || !target || !wide || mode !== 'index') return
     // A target that is this level's own URL opens nothing. An index whose rows
     // are still loading offers itself as the first row, and taking that as the
     // child both navigated nowhere and used up the one open this index gets.

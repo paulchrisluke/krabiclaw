@@ -1,5 +1,5 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 
 export type ReviewBookingType = 'reservation' | 'booking'
 export type CompletionSource = 'manual' | 'auto'
@@ -45,9 +45,9 @@ export interface ReviewBookingContext {
   review_reminder_sent_at: string | null
   review_submitted_at: string | null
   review_id: string | null
-  site_name: string | null
-  site_public_url: string | null
-  site_subdomain: string | null
+  organization_name: string | null
+  organization_public_url: string | null
+  organization_subdomain: string | null
   location_slug: string | null
   location_title: string | null
   google_place_id: string | null
@@ -108,8 +108,8 @@ export async function getReviewBookingContext(
     json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at,
     json_extract(r.payload_json, '$.review.reminder_sent_at') AS review_reminder_sent_at,
     json_extract(r.payload_json, '$.review.submitted_at') AS review_submitted_at, r.review_id,
-    s.name AS site_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS site_public_url,
-    s.subdomain AS site_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
+    s.name AS organization_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS organization_public_url,
+    s.subdomain AS organization_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
     record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size, record.product_id
     FROM requests r JOIN organization s ON s.id = r.organization_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id
     -- The visit itself lives on the operational record, never on the thread. A
@@ -169,8 +169,8 @@ export async function createOrRotateReviewRequest(
   if (context.review_submitted_at || context.review_id) throw new Error('Booking already has a submitted review')
   if (context.customer_opted_out_at) throw new Error('Customer has opted out of review requests')
 
-  const entitled = await hasSiteEntitlement(env, db, context.organization_id, 'review_requests')
-  if (!entitled) throw new Error('Review requests are not enabled for this site')
+  const entitled = await hasOrganizationEntitlement(env, context.organization_id, 'review_requests')
+  if (!entitled) throw new Error('Review requests are not enabled for this organization')
 
   const token = createReviewRequestToken()
   const tokenHash = await hashReviewRequestToken(token)

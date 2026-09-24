@@ -5,17 +5,17 @@ import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/u
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
-  if (!organizationId) return apiErrorResponse(event, 400, 'SITE_ID_REQUIRED', 'Unknown tenant')
+  if (!organizationId) return apiErrorResponse(event, 400, 'ORGANIZATION_ID_REQUIRED', 'Unknown tenant')
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Database unavailable')
   // A site that has not finished onboarding is served only to a holder of its
   // preview token, exactly as tenant resolution serves the pages themselves.
   const preview = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(env))
-  const site = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM organization WHERE id = ? AND status = 'active'${preview ? '' : " AND onboarding_status = 'active'"} LIMIT 1
+  const organization = await queryFirst<{ id: string }>(db, `
+    SELECT id FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', preview)} LIMIT 1
   `, [organizationId])
-  if (!site) return apiErrorResponse(event, 404, 'SITE_NOT_FOUND', 'Site not found')
+  if (!organization) return apiErrorResponse(event, 404, 'ORGANIZATION_NOT_FOUND', 'Organization not found')
 
   const query = getQuery(event)
   const path = typeof query.path === 'string' ? query.path : null
@@ -35,3 +35,4 @@ export default defineHandler(async (event) => {
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';
 import { getRouterParam } from 'nitro/h3';
+import { publicTenantVisibilitySql } from '~/server/utils/public-base'

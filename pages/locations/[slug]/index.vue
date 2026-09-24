@@ -55,7 +55,7 @@
               <em class="saya-italic">{{ heroSubtitle }}</em>
             </p>
             <p v-else-if="!heroTitle" class="saya-display mt-5 text-2xl text-white/70">
-              <em class="saya-italic">{{ siteName }}</em>
+              <em class="saya-italic">{{ organizationName }}</em>
             </p>
             <div v-if="activeClosureMessage" class="mt-8 flex items-center gap-2.5 text-sm uppercase tracking-widest text-white">
               <span class="size-1.5 rounded-full bg-red-400" />
@@ -206,7 +206,7 @@
           <div class="mb-12 flex flex-wrap items-end justify-between gap-8">
             <div>
               <p class="saya-kicker mb-6">{{ locationIndexCopy.otherLocationsHeading }}</p>
-              <h2 class="saya-display-md text-inverted"><em class="saya-italic">{{ siteName }}</em></h2>
+              <h2 class="saya-display-md text-inverted"><em class="saya-italic">{{ organizationName }}</em></h2>
             </div>
             <NuxtLink
               :to="localePath('/locations')"
@@ -283,7 +283,6 @@ import { productLocationCollectionPath, resolveProductPresentation } from '~/uti
 import { selectPrice, type Price } from '~/shared/prices'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { Product } from '~/server/types/products'
-import { normalizeRobotsIntent } from '~/shared/robots-directive'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 
@@ -293,13 +292,13 @@ const { resolveMedia } = useMedia()
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
-const { organizationId, site } = useTenantSite()
+const { organizationId, organization } = useTenantOrganization()
 const { locale, localePath, t } = useI18n()
-const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
+const locationIndexCopy = computed(() => getVerticalCopy((organization as ApiValue)?.vertical, locale.value))
 if (!organizationId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => String((site as ApiValue)?.name ?? '').trim())
+const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
 const {
   location,
@@ -319,12 +318,12 @@ const {
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 
 
-const productPresentation = computed(() => resolveProductPresentation((site as ApiValue)?.vertical as string | null | undefined))
+const productPresentation = computed(() => resolveProductPresentation((organization as ApiValue)?.vertical as string | null | undefined))
 const locationProducts = computed(() => products.value.filter(product =>
   product.locations.some(entry => entry.location_id === location.value?.id && entry.published && entry.active)))
 const productCollectionPath = computed(() => {
   if (!productPresentation.value || !location.value) return null
-  return productLocationCollectionPath((site as ApiValue)?.vertical as string, location.value.slug)
+  return productLocationCollectionPath((organization as ApiValue)?.vertical as string, location.value.slug)
 })
 const locationMedia = (location: ApiRecord) => Array.isArray(location.media)
   ? (location.media as ApiRecord[]).find(item => item.slot === 'hero') ?? null
@@ -358,7 +357,7 @@ const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
 // Neutral default until the owner picks a brand color in onboarding.
 const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
-const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
+const locationHeroIcon = computed(() => (organization as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
 
 // Sanitize hero background URL to prevent CSS injection
 const heroBackgroundStyle = computed(() => {
@@ -391,11 +390,11 @@ const heroBackgroundStyle = computed(() => {
 //
 // The currency is on the page payload's config, which is where the shell query
 // puts it (server/utils/public-shell-query.ts) and where every sibling surface
-// reads it. `useTenantSite`'s site is the tenant-resolution context — brand
+// reads it. `useTenantOrganization`'s site is the tenant-resolution context — brand
 // name, media, vertical — and has never carried a currency, so reading it here
 // was always undefined and took both of Pottery House's location pages down.
 const rawCurrency = pageConfig.value.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
 
 /** The offer this location shows for a product, through the one contract. */
@@ -494,10 +493,9 @@ useSocialMetadata(() => ({
   path: location.value?.canonical_url || `/locations/${slug.value}`,
   title: location.value?.seo_title || location.value?.title || '',
   description: location.value?.seo_description || '',
-  robots: normalizeRobotsIntent(location.value?.robots),
   socialImage: locationSocialCard.value,
   brand: {
-    siteName: siteName.value,
+    organizationName: organizationName.value,
   },
 }))
 
@@ -509,8 +507,8 @@ useSchemaOrg([
     // here — the vendored UseSchemaOrgInput type just doesn't include it in its union.
     if (!loc) return undefined as unknown as Record<string, unknown>
     return {
-      '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
-      name: `${siteName.value} — ${loc.title}`,
+      '@type': getBusinessSchemaTypes((organization as ApiValue)?.vertical),
+      name: `${organizationName.value} — ${loc.title}`,
       description: formattedAddress.value,
       address: schemaPostalAddress((location.value?.address ?? null) as PostalAddress | null),
       telephone: loc.phone,
@@ -522,7 +520,7 @@ useSchemaOrg([
   computed(() => ({
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: siteName.value, item: `${tenantOrigin}${localePath('/')}` },
+      { '@type': 'ListItem', position: 1, name: organizationName.value, item: `${tenantOrigin}${localePath('/')}` },
       { '@type': 'ListItem', position: 2, name: t('saya.header.locations'), item: `${tenantOrigin}${localePath('/locations')}` },
       { '@type': 'ListItem', position: 3, name: location.value?.title ?? slug.value, item: `${tenantOrigin}${localePath(`/locations/${slug.value}`)}` }
     ]

@@ -51,11 +51,11 @@ definePageMeta({ layout: 'saya' })
 
 const { locale } = useI18n()
 const justCopied = ref(false)
-const { organizationId } = useTenantSite()
+const { organizationId } = useTenantOrganization()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
-const { site } = useTenantSite()
-const presentation = computed(() => resolveProductPresentation((site as { vertical?: string | null } | null)?.vertical))
+const { organization } = useTenantOrganization()
+const presentation = computed(() => resolveProductPresentation((organization as { vertical?: string | null } | null)?.vertical))
 // Back to where the guest booked from: this location's own catalogue when the
 // booking names one, otherwise the site's.
 const browseHref = computed(() => {
@@ -111,7 +111,7 @@ const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).ma
 
 async function share() {
   if (!confirmation.value) return
-  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.siteName} on ${readableDate.value} at ${readableTime.value}.`
+  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })

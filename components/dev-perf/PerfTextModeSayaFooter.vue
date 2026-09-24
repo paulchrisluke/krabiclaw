@@ -11,7 +11,7 @@
           <p>The Saya footer is the variable.</p>
         </main>
         <LazySayaFooter
-          :site="null"
+          :organization="null"
           :is-platform="false"
           :locations="[]"
           :locales="[]"

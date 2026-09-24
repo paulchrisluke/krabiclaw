@@ -13,7 +13,7 @@ import {
   buildPublicPageUrl,
   type PublicPageDataset,
 } from "~/composables/usePublicPageRequest";
-import { useSiteShellState } from "~/composables/useSiteShell";
+import { useOrganizationShellState } from "~/composables/useOrganizationShell";
 import type { Product } from '~/server/types/products'
 import {
   isPublicPagePayload,
@@ -54,7 +54,7 @@ export const usePublicPageData = async (options: {
   lazy?: boolean
   routeOwned?: boolean
 } = {}) => {
-  const { isPlatform, organizationId } = useTenantSite();
+  const { isPlatform, organizationId } = useTenantOrganization();
   const route = useRoute();
   const params = usePublicPageRequest();
   const requestedParams = computed(() => options.datasets
@@ -64,7 +64,7 @@ export const usePublicPageData = async (options: {
 
   const url = computed(() => buildPublicPageUrl(organizationId, requestedParams.value));
 
-  const shell = useSiteShellState();
+  const shell = useOrganizationShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
   const deferredSupplement = options.routeOwned === false
     && options.server === false
@@ -119,12 +119,14 @@ export const usePublicPageData = async (options: {
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
-  const { locations, config, site, locales } = shell;
-  const googleBusiness = computed(() => ({
-    ...(shell.googleBusiness.value ?? {}),
+  const { locations, config, organization, locales } = shell;
+  const googleMaps = computed(() => ({
+    ...(shell.googleMaps.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
-    posts: data.value?.globalPosts ?? [],
   }))
+  // The site's own published social posts. They were carried under the Google
+  // key, which described neither where they come from nor what they are.
+  const socialPosts = computed(() => data.value?.globalPosts ?? [])
   const products = computed(() => data.value?.products ?? []);
   const collections = computed(() => data.value?.collections ?? []);
   /**
@@ -291,10 +293,11 @@ export const usePublicPageData = async (options: {
     pending,
     refresh,
     locations,
-    site,
+    organization,
     location,
     config,
-    googleBusiness,
+    googleMaps,
+    socialPosts,
     locationReviews,
     reviewsAggregate,
     reviewsList,

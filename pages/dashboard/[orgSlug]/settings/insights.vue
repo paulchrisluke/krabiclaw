@@ -8,30 +8,6 @@
         title="Analytics could not be loaded"
         :description="loadError"
       />
-      <!--
-        Which sites the figures cover. Every site the member may read is
-        listed, so the filter can never offer one the API would refuse.
-      -->
-      <div v-if="sites.length > 1" class="flex flex-wrap gap-2">
-        <UButton
-          label="All sites"
-          size="sm"
-          :variant="selectedSiteId === null ? 'soft' : 'ghost'"
-          :color="selectedSiteId === null ? 'primary' : 'neutral'"
-          @click="selectSite(null)"
-        />
-        <UButton
-          v-for="site in sites"
-          :key="site.id"
-          :label="site.label"
-          size="sm"
-          :variant="selectedSiteId === site.id ? 'soft' : 'ghost'"
-          :color="selectedSiteId === site.id ? 'primary' : 'neutral'"
-          @click="selectSite(site.id)"
-        />
-      </div>
-
-
       <UTabs
         v-model="tab"
         :items="tabItems"
@@ -271,21 +247,21 @@
 
       <div v-else-if="tab === 'opportunities'" class="space-y-6">
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <UCard v-for="site in setup" :key="site.organizationId" variant="soft">
+          <UCard v-if="setup" variant="soft">
             <template #header>
               <div class="flex items-baseline justify-between gap-3">
-                <h2 class="min-w-0 truncate font-semibold text-highlighted">{{ site.label }}</h2>
-                <span class="shrink-0 text-sm tabular-nums text-muted">{{ site.completed }}/{{ site.total }}</span>
+                <h2 class="min-w-0 truncate font-semibold text-highlighted">{{ setup.label }}</h2>
+                <span class="shrink-0 text-sm tabular-nums text-muted">{{ setup.completed }}/{{ setup.total }}</span>
               </div>
             </template>
             <span class="mb-4 block h-2 overflow-hidden rounded-full bg-elevated">
               <span
                 class="block h-full rounded-full bg-primary"
-                :style="{ width: `${site.total ? (site.completed / site.total) * 100 : 0}%` }"
+                :style="{ width: `${setup.total ? (setup.completed / setup.total) * 100 : 0}%` }"
               />
             </span>
             <ul class="space-y-2">
-              <li v-for="item in site.items" :key="item.id" class="flex items-center gap-2 text-sm">
+              <li v-for="item in setup.items" :key="item.id" class="flex items-center gap-2 text-sm">
                 <UIcon
                   :name="item.done ? 'i-lucide-circle-check' : 'i-lucide-circle-dashed'"
                   class="size-4 shrink-0"
@@ -336,7 +312,6 @@ interface AnalyticsResponse {
 
 const route = useRoute()
 
-interface InsightsSite { id: string; label: string; subdomain: string | null }
 interface InsightsReviews {
   total: number
   average: number | null
@@ -351,11 +326,10 @@ interface InsightsSetup {
   items: Array<{ id: string; label: string; done: boolean }>
 }
 interface InsightsResponse {
-  sites: InsightsSite[]
-  organizationId: string | null
+  organizationId: string
   report: AnalyticsResponse
   reviews: InsightsReviews
-  setup: InsightsSetup[]
+  setup: InsightsSetup
 }
 
 // Reviews and Opportunities read what we actually hold. There is no Superhost
@@ -384,11 +358,8 @@ const tabItems = [
   { label: 'Activity', value: 'activity' as const },
 ]
 
-const sites = ref<InsightsSite[]>([])
 const reviews = ref<InsightsResponse['reviews']>({ total: 0, average: null, distribution: [], recent: [] })
-const setup = ref<InsightsResponse['setup']>([])
-// Deep-linked from a site's own overview; null means every site in the org.
-const selectedSiteId = ref<string | null>(typeof route.query.organizationId === 'string' && route.query.organizationId ? route.query.organizationId : null)
+const setup = ref<InsightsSetup | null>(null)
 
 const presets: Array<{ key: PresetKey; label: string }> = [
   { key: 'last_52_weeks', label: 'Last 52 weeks' },
@@ -443,31 +414,31 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
 
 const isInsightsResponse = (value: unknown): value is InsightsResponse =>
   isRecord(value)
-  && Array.isArray(value.sites)
-  && value.sites.every(site => isRecord(site) && typeof site.id === 'string' && typeof site.label === 'string')
-  && (value.organizationId === null || typeof value.organizationId === 'string')
+  && typeof value.organizationId === 'string'
   && isAnalyticsResponse(value.report)
   && isRecord(value.reviews)
   && typeof value.reviews.total === 'number'
   && Array.isArray(value.reviews.distribution)
   && Array.isArray(value.reviews.recent)
-  && Array.isArray(value.setup)
-  && value.setup.every(entry => isRecord(entry) && typeof entry.organizationId === 'string' && Array.isArray(entry.items))
+  && isRecord(value.setup)
+  && typeof value.setup.label === 'string'
+  && typeof value.setup.completed === 'number'
+  && typeof value.setup.total === 'number'
+  && Array.isArray(value.setup.items)
 
 const initialRange = { ...range }
 let latestManualRequestId = 0
 
-/** One read for the filter's options and the figures, so they cannot disagree. */
 async function fetchInsights(query: { startDate?: string; endDate?: string }) {
   return await dashboardApi<InsightsResponse>('/api/dashboard/analytics', {
-    query: { ...query, ...(selectedSiteId.value ? { organizationId: selectedSiteId.value } : {}) },
+    query,
     validate: isInsightsResponse,
   })
 }
 
 const { data: insightsResource, pending: analyticsPending, error: analyticsResourceError } =
   await useAsyncData(
-    `dashboard-org-insights:${initialRange.startDate}:${initialRange.endDate}:${selectedSiteId.value ?? 'all'}`,
+    `dashboard-org-insights:${initialRange.startDate}:${initialRange.endDate}`,
     () => fetchInsights({}),
     { lazy: true },
   )
@@ -480,8 +451,6 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
     return
   }
   if (resource) {
-    sites.value = resource.sites
-    selectedSiteId.value = resource.organizationId
     analytics.value = resource.report
     Object.assign(range, { startDate: resource.report.period.startDate, endDate: resource.report.period.endDate })
     reviews.value = resource.reviews
@@ -489,14 +458,6 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
     loadError.value = null
   }
 }, { immediate: true })
-
-function selectSite(organizationId: string | null) {
-  if (selectedSiteId.value === organizationId) return
-  selectedSiteId.value = organizationId
-  // Keeps the filter in the URL so a deep link and a reload agree.
-  void navigateTo({ query: organizationId ? { ...route.query, organizationId } : { ...route.query, organizationId: undefined } }, { replace: true })
-  loadAnalytics()
-}
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
 const maxTrendValue = computed(() => Math.max(1, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))))
@@ -547,8 +508,6 @@ async function loadAnalytics() {
   try {
     const response = await fetchInsights({ startDate: range.startDate, endDate: range.endDate })
     if (requestId !== latestManualRequestId) return
-    sites.value = response.sites
-    selectedSiteId.value = response.organizationId
     analytics.value = response.report
     Object.assign(range, { startDate: response.report.period.startDate, endDate: response.report.period.endDate })
     reviews.value = response.reviews

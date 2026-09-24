@@ -5,7 +5,7 @@ import {
   getCloudflareGeo,
   getOrCreateSessionId,
   getOrCreateVisitorId,
-  getSiteInternalHosts,
+  getOrganizationInternalHosts,
   hashIp,
   isCanonicalEventId,
   isKnownBot,
@@ -19,7 +19,7 @@ import {
   updateTenantPageviewDuration,
   SESSION_COOKIE,
 } from '~/server/utils/pageview-tracking'
-import { normalizeLocale } from '~/server/utils/site-i18n'
+import { normalizeLocale } from '~/server/utils/organization-i18n'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { normalizeReferrerHost, sanitizeAttributionParams } from '~/utils/analytics-attribution'
 import { defineHandler } from 'nitro'
@@ -135,12 +135,12 @@ export default defineHandler(async (event) => {
       const [locationId, page, internalHosts] = await Promise.all([
         resolveLocationIdFromPath(db, organizationId, pagePath),
         resolvePageviewTenantPageIdentity(db, organizationId, pagePath, locale),
-        getSiteInternalHosts(db, organizationId, event.url.hostname),
+        getOrganizationInternalHosts(db, organizationId, event.url.hostname),
       ])
-      const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
+      const organization = event.context.organization as { theme?: string | null; vertical?: string | null } | undefined
       if (!page && !isKnownTenantPublicPath(pagePath, {
         themeId: event.context.themeId as string | null | undefined,
-        vertical: site?.vertical,
+        vertical: organization?.vertical,
       })) {
         return jsonResponse({ error: 'Page path is not a published tenant route' }, { status: 400 })
       }

@@ -1,19 +1,30 @@
-import { jsonResponse } from '../../../utils/api-response'
-import { syncPlaceToLocation } from '../../../utils/google-places'
-import { hasSiteEntitlement } from '~/server/utils/billing'
-import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
+import { defineHandler } from 'nitro'
+import { readBody } from 'nitro/h3'
+import { jsonResponse } from '~/server/utils/api-response'
+import { syncPlaceToLocation } from '~/server/utils/google-places'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
+import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
 
+/**
+ * Connecting a location to Google Maps, and re-importing from it.
+ *
+ * With `placeId` this is the connection: the tenant confirmed that place is
+ * this location, so its id is stored and its details imported. Without one it
+ * is the explicit re-import of the place already connected. Both replace the
+ * location's address, phone, hours and timezone with Google's — which is why
+ * each is only ever a confirmed tenant action, and the hourly sync is not.
+ */
 export default defineHandler(async (event) => {
-  const body = await readBody(event) as { organizationId?: string; locationId?: string } | undefined
+  const body = await readBody(event) as { organizationId?: string; locationId?: string; placeId?: string } | undefined
   const locationId = body?.locationId
   if (!locationId) return jsonResponse({ error: 'locationId is required' }, { status: 400 })
 
   const { env, db, organization } = await requireRequestedLocationAccess(event, locationId, body?.organizationId)
 
-  if (!await hasSiteEntitlement(env, db, organization.id, 'google_places')) {
-    return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
+  if (!await hasOrganizationEntitlement(env, organization.id, 'google_places')) {
+    return jsonResponse({ error: 'Google Maps requires a Growth plan or higher.' }, { status: 403 })
   }
 
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
@@ -24,25 +35,22 @@ export default defineHandler(async (event) => {
     WHERE id = ? AND organization_id = ?
     LIMIT 1
   `, [locationId, organization.id])
-
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
-  if (!location.google_place_id) {
-    return jsonResponse({ error: 'No Google Place ID set on this location. Add one in Location Settings.' }, { status: 400 })
-  }
+
+  const placeId = body?.placeId?.trim() || location.google_place_id
+  if (!placeId) return jsonResponse({ error: 'This location is not connected to Google Maps.' }, { status: 400 })
 
   try {
-    const { place, reviewsUpserted } = await syncPlaceToLocation(
-      db, apiKey, organization.id, locationId, location.google_place_id
-    )
-    await purgePublicResourceCacheSafe(env, organization.id)
+    const { place, reviewsUpserted } = await syncPlaceToLocation(db, apiKey, organization.id, locationId, placeId, 'import')
+    await purgePublicResourceCacheNow(env, organization.id)
 
     return jsonResponse({
       success: true, syncedAt: new Date().toISOString(), reviewsUpserted, place: {
-        name: place.name, phone: place.phone, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, address: place.address, }, })
-  } catch (err) {
-    console.error('Google Places sync failed:', err)
-    return jsonResponse({ error: err instanceof Error ? err.message : 'Sync failed' }, { status: 502 })
+        placeId: place.placeId, name: place.name, phone: place.phone, rating: place.rating, ratingCount: place.ratingCount,
+        openingHours: place.openingHours, timezone: place.timezone, address: place.address, mapsUrl: place.mapsUrl,
+      },
+    })
+  } catch (error) {
+    return jsonResponse({ error: error instanceof Error ? error.message : 'Google Maps import failed' }, { status: 502 })
   }
 })
-import { defineHandler } from 'nitro';
-import { readBody } from 'nitro/h3';

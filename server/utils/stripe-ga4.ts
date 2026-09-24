@@ -369,14 +369,9 @@ async function clearInteractiveStripeMetadata(
   const hasEphemeralMetadata = keys.some(key => metadata[key] !== undefined)
   if (!hasEphemeralMetadata) return
   for (const key of keys) metadata[key] = ''
-  try {
-    await stripe.subscriptions.update(subscription.id, { metadata })
-  } catch (error) {
-    console.error('stripe_ga4_ephemeral_metadata_cleanup_failed', {
-      subscriptionId: subscription.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
+  // Leaving the ephemeral keys on the subscription is the failure this was
+  // reporting to nobody; the caller decides what to do about it.
+  await stripe.subscriptions.update(subscription.id, { metadata })
 }
 
 async function sendStripeGa4Lifecycle(

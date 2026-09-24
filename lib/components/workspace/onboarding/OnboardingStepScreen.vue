@@ -9,7 +9,7 @@
       v-if="step.id === 'type'"
       :choices="VERTICAL_CHOICES"
       :model-value="state.vertical"
-      @update:model-value="choose(() => { state.vertical = $event as SiteVertical })"
+      @update:model-value="choose(() => { state.vertical = $event as OrganizationVertical })"
     />
 
     <OnboardingChoiceRows
@@ -86,7 +86,7 @@ import OnboardingReviewCard from '~/lib/components/workspace/onboarding/Onboardi
 import { useOnboardingState, type OnboardingStep } from '~/composables/useOnboardingFlow'
 import { currencyForCountry } from '~/shared/currencies'
 import { singleTimezoneForCountry } from '~/utils/timezone'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 /**
  * One step of the flow, rendered. Both shells — the routed new-site flow and

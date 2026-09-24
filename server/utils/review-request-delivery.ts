@@ -13,9 +13,9 @@ import {
 
 type ReviewRequestDeliveryEnv = CloudflareEnv
 
-function siteBaseUrl(context: ReviewBookingContext): string {
-  const publicUrl = context.site_public_url?.replace(/\/$/, '')
-  if (!publicUrl) throw new Error('Site has no active canonical domain')
+function organizationBaseUrl(context: ReviewBookingContext): string {
+  const publicUrl = context.organization_public_url?.replace(/\/$/, '')
+  if (!publicUrl) throw new Error('Organization has no active canonical domain')
   return publicUrl
 }
 
@@ -42,14 +42,14 @@ export async function sendReviewRequestForBooking(
   if (!recipientEmail) throw new Error('Booking customer has no email address')
 
   const { request, token } = await createOrRotateReviewRequest(env as CloudflareEnv, db, context)
-  const baseUrl = siteBaseUrl(context)
+  const baseUrl = organizationBaseUrl(context)
   const reviewUrl = `${baseUrl}/locations/${encodeURIComponent(context.location_slug)}/review-submit?token=${encodeURIComponent(token)}`
   const optOutUrl = `${reviewUrl}&optOut=1`
 
   try {
-    const sent = await notifyReviewRequest(env, db, {
+    await notifyReviewRequest(env, db, {
       organizationId: context.organization_id,
-      siteName: context.site_name,
+      organizationName: context.organization_name,
       locationId: context.location_id,
       requestId: request.id,
       bookingType,
@@ -64,11 +64,6 @@ export async function sendReviewRequestForBooking(
       reviewUrl,
       optOutUrl,
     })
-    if (!sent) {
-      await markReviewRequestSendFailure(db, request.id, new Error('Email delivery failed'))
-      return { sent: false, requestId: request.id, error: 'Email delivery failed' }
-    }
-
     await markReviewRequestSendSuccess(db, request.id, kind)
     return { sent: true, requestId: request.id }
   } catch (error) {

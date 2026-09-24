@@ -50,7 +50,7 @@ export function buildHtmlCacheKey(event: H3Event | HTTPEvent): string | null {
  * We list by prefix html:<host>: and delete all matches, so a purge clears the
  * host's entries for every build id and preview tenant.
  */
-export async function purgeSiteKvCache(
+export async function purgeOrganizationKvCache(
   kv: KVNamespace,
   hostnames: string[],
 ): Promise<void> {

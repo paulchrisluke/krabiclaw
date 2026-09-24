@@ -1,4 +1,4 @@
-import type { SiteSettings, SiteIntegrations } from '../../shared/site-settings'
+import type { OrganizationSettings, OrganizationIntegrations } from '../../shared/organization-settings'
 import type { MediaCategory } from '~/shared/media-placement-contract'
 import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
@@ -81,22 +81,11 @@ export const business_locations = sqliteTable("business_locations", {
 	google_review_url: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	notification_phone: text(),
 	timezone: text(),
 	max_capacity: integer(),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
-	// Better Auth Team scoping this location to non-org-wide editors. A location
-	// *has* a team; it is not one — `team` is five fields describing a grouping of
-	// members, and this table is the place itself. Owners/admins are org-wide and
-	// need no team row. Do not add a parallel membership/scope table — this column
-	// plus Better Auth Teams APIs are the entire mechanism.
-	//
-	// The `site:*` teams that used to sit above these are gone with `sites`. The one
-	// membership that existed only there was expanded into this organization's
-	// location teams rather than dropped.
-	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	feature_overrides: text(),
 }, (table) => [
 	check("business_locations_instants_check", sql`(last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
@@ -192,7 +181,7 @@ export const activity_entries = sqliteTable("activity_entries", {
  uniqueIndex("activity_entries_notification_source_unique").on(table.parent_id).where(sql`kind = 'notification' AND parent_id IS NOT NULL`),
  index("activity_entries_request_occurred_idx").on(table.request_id, table.occurred_at),
  index("activity_entries_parent_actor_idx").on(table.parent_id, table.actor_user_id, table.occurred_at),
- index("activity_entries_context_site_created_idx").on(table.kind, table.organization_id, table.created_at),
+ index("activity_entries_context_organization_created_idx").on(table.kind, table.organization_id, table.created_at),
  index("activity_entries_kind_org_created_idx").on(table.kind, table.created_at),
  index("activity_entries_org_created_idx").on(table.kind, table.organization_id, table.created_at),
  index("activity_entries_target_created_idx").on(table.kind, table.target_user_id, table.created_at)
@@ -228,7 +217,6 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	teamId: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
@@ -300,6 +288,7 @@ export const media_placements = sqliteTable("media_placements", {
 		foreignColumns: [media_assets.organization_id, media_assets.id],
 		name: "media_placements_asset_scope_fk",
 	}).onDelete("cascade"),
+	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')`),
 	check("media_placements_sort_order_check", sql`sort_order >= 0`),
 	unique("media_placements_org_owner_slot_asset_unique").on(table.owner_type, table.owner_id, table.slot, table.asset_id),
 	unique("media_placements_org_owner_slot_order_unique").on(table.owner_type, table.owner_id, table.slot, table.sort_order),
@@ -316,28 +305,6 @@ export const member = sqliteTable("member", {
 	// Better Auth's organization adapter resolves membership by userId and organizationId.
 	index("member_userId_organizationId_idx").on(table.userId, table.organizationId),
 	index("member_organizationId_idx").on(table.organizationId),
-]);
-
-export const team = sqliteTable("team", {
-	id: text().primaryKey(),
-	name: text().notNull(),
-	memberCount: integer().default(0).notNull(),
-	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-	updatedAt: integer({ mode: "timestamp" }),
-}, (table) => [
-	index("team_organizationId_idx").on(table.organizationId),
-]);
-
-export const teamMember = sqliteTable("teamMember", {
-	id: text().primaryKey(),
-	teamId: text().notNull().references(() => team.id, { onDelete: "cascade" } ),
-	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	membershipKey: text().unique(),
-	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-}, (table) => [
-	index("teamMember_teamId_idx").on(table.teamId),
-	index("teamMember_userId_idx").on(table.userId),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -696,9 +663,9 @@ export const collections = sqliteTable("collections", {
 	check("collections_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "collections_location_scope_fk" }).onDelete("cascade"),
 	unique("collections_org_id_unique").on(table.organization_id, table.id),
-	uniqueIndex("collections_org_slug_unique").on(table.slug).where(sql`location_id IS NULL`),
+	uniqueIndex("collections_org_slug_unique").on(table.organization_id, table.slug).where(sql`location_id IS NULL`),
 	uniqueIndex("collections_location_slug_unique").on(table.organization_id, table.location_id, table.slug).where(sql`location_id IS NOT NULL`),
-	index("collections_org_sort_idx").on(table.location_id, table.sort_order),
+	index("collections_org_sort_idx").on(table.organization_id, table.location_id, table.sort_order),
 	check("collections_name_not_blank_check", sql`trim(name) <> ''`),
 	check("collections_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
 	check("collections_sort_order_check", sql`sort_order >= 0`),
@@ -887,6 +854,12 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	weekday: integer().notNull(),
 	// Local wall-clock 'HH:MM'.
 	start_time: text().notNull(),
+	// A repeating slot: start_time, then every interval_minutes until the last
+	// start at or before end_time. Both null is a single start time, which is
+	// what a class is. A restaurant service is one row per weekday instead of
+	// one per seating.
+	end_time: text(),
+	interval_minutes: integer(),
 	interval_weeks: integer().default(1).notNull(),
 	effective_from_date: text(),
 	effective_until_date: text(),
@@ -912,6 +885,9 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	index("product_availability_rules_product_idx").on(table.product_id, table.weekday, table.start_time),
 	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
 	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
+	// end_time and interval_minutes are one feature: neither means anything
+	// alone, and a repeat that ends before it starts has no occurrences.
+	check("product_availability_rules_repeat_check", sql`(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)`),
 	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
 	// A cadence longer than a week has to say from when, or "every other
 	// Saturday" means a different Saturday depending on the day generation
@@ -981,6 +957,7 @@ export const product_sessions = sqliteTable("product_sessions", {
 	index("product_sessions_product_start_idx").on(table.product_id, table.starts_at, table.status),
 	index("product_sessions_location_start_idx").on(table.location_id, table.starts_at, table.status),
 	check("product_sessions_interval_check", sql`ends_at > starts_at`),
+	check("product_sessions_status_check", sql`status IN ('scheduled', 'cancelled')`),
 	check("product_sessions_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
 	check("product_sessions_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
 ]);
@@ -1112,41 +1089,6 @@ export const location_reservation_configs = sqliteTable("location_reservation_co
 //   actual product_sessions row.
 // Deletion: cascades from the config.
 // Read/write: server/utils/reservations.ts.
-export const location_reservation_overrides = sqliteTable("location_reservation_overrides", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	location_id: text().notNull(),
-	override_date: text().notNull(),
-	time_slot: text(),
-	// 'open' | 'closed' (registry in shared/).
-	status: text().notNull(),
-	capacity: integer(),
-	note: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	check("location_reservation_overrides_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [location_reservation_configs.organization_id, location_reservation_configs.location_id], name: "location_reservation_overrides_config_scope_fk" }).onDelete("cascade"),
-	uniqueIndex("location_reservation_overrides_slot_unique").on(table.location_id, table.override_date, table.time_slot).where(sql`time_slot IS NOT NULL`),
-	uniqueIndex("location_reservation_overrides_date_unique").on(table.location_id, table.override_date).where(sql`time_slot IS NULL`),
-	index("location_reservation_overrides_date_idx").on(table.location_id, table.override_date),
-	check("location_reservation_overrides_date_check", sql`date(override_date, '+0 days') IS override_date`),
-	check("location_reservation_overrides_time_slot_check", sql`time_slot IS NULL OR (time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00')`),
-	check("location_reservation_overrides_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
-]);
-
-// A table reservation.
-// Row meaning: this party holds this location for this interval, in this state.
-// Owner/scope: location, which carries site and organization.
-// Null semantics: customer_id NULL is a guest reservation with contact details
-//   on the linked request. request_id NULL is a reservation taken without an
-//   inbox thread.
-// Deletion: cascades from location. An inbox thread cannot be deleted while a
-//   reservation links to it; the domain operation unlinks first.
-// Read/write: server/utils/reservations.ts for policy,
-//   server/domain/requests.ts for the inbox thread linkage.
 export const reservations = sqliteTable("reservations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
@@ -1431,10 +1373,10 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
  * The business. One record, one name, one handle, one mark.
  *
  * This used to be two: an `organization` holding identity and membership, and a
- * `sites` row beside it holding everything the business actually is. The two
+ * `organizations` row beside it holding everything the business actually is. The two
  * disagreed — `organization.name` read "Pottery House Owner" while the site
  * rendered "Pottery House Krabi" — and the handle lived in three columns across
- * them. `sites` is gone and its configuration is here, as Better Auth
+ * them. `organizations` is gone and its configuration is here, as Better Auth
  * `additionalFields` (see organizationOptions in server/utils/auth.ts), which is
  * the plugin's own extension point rather than a table bolted alongside it.
  *
@@ -1462,9 +1404,9 @@ export const organization = sqliteTable("organization", {
 	// placement, which is why this stays NULL.
 	logo: text(),
 
-	// ── Formerly `sites`. ────────────────────────────────────────────────────
-	settings_json: text({ mode: "json" }).$type<SiteSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
-	integrations_json: text({ mode: "json" }).$type<SiteIntegrations>().default({}).notNull(),
+	// ── Formerly `organizations`. ────────────────────────────────────────────────────
+	settings_json: text({ mode: "json" }).$type<OrganizationSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
+	integrations_json: text({ mode: "json" }).$type<OrganizationIntegrations>().default({}).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),
 	subdomain: text().unique(),
 	brand_description: text(),
@@ -1506,7 +1448,6 @@ export const organization = sqliteTable("organization", {
 	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
 	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
 	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
-	check("organization_config_whatsapp_phone_check", sql`json_type(settings_json, '$.config.whatsapp_phone') IS NULL OR json_type(settings_json, '$.config.whatsapp_phone') IS 'text'`),
 	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
 	check("organization_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
 	check("organization_theme_saya_check", sql`json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE`),
@@ -2068,7 +2009,7 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 	foreignKey({
 		columns: [table.organization_id, table.locale],
 		foreignColumns: [organization_locales.organization_id, organization_locales.locale],
-		name: "resource_localizations_site_locale_fk",
+		name: "resource_localizations_organization_locale_fk",
 	}).onDelete("cascade"),
 	unique("resource_localizations_org_resource_locale_unique").on(
 		table.organization_id,
@@ -2149,9 +2090,9 @@ export const analytics_events = sqliteTable("analytics_events", {
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')
     AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
     AND json_type(payload_json, '$.attributed_at') IS 'text')`),
-  index("analytics_events_org_kind_created_idx").on(table.kind, table.created_at),
-  index("analytics_events_org_session_idx").on(table.kind, table.session_id),
-  index("analytics_events_org_visitor_idx").on(table.kind, table.visitor_id),
+  index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
+  index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),
+  index("analytics_events_org_visitor_idx").on(table.organization_id, table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
   index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
   uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
@@ -2159,7 +2100,7 @@ export const analytics_events = sqliteTable("analytics_events", {
 
 export const analytics_summaries = sqliteTable("analytics_summaries", {
   id: text().primaryKey(),
-  kind: text({ enum: ["session", "site_day", "page_day", "dimension_day"] }).notNull(),
+  kind: text({ enum: ["session", "organization_day", "page_day", "dimension_day"] }).notNull(),
   organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
   date: text().notNull(),
   key: text().notNull(),
@@ -2176,7 +2117,7 @@ export const analytics_summaries = sqliteTable("analytics_summaries", {
     AND json_type(payload_json, '$.duration_seconds') IS 'integer' AND (payload_json ->> '$.duration_seconds') >= 0)
     OR (kind != 'session' AND date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
       AND json_type(payload_json, '$.page_views') IS 'integer' AND (payload_json ->> '$.page_views') >= 0)`),
-  check("analytics_summaries_day_metrics_check", sql`kind != 'site_day' OR (key = ''
+  check("analytics_summaries_day_metrics_check", sql`kind != 'organization_day' OR (key = ''
     AND json_type(payload_json, '$.unique_sessions') IS 'integer' AND (payload_json ->> '$.unique_sessions') >= 0
     AND json_type(payload_json, '$.unique_visitors') IS 'integer' AND (payload_json ->> '$.unique_visitors') >= 0
     AND json_type(payload_json, '$.returning_visitors') IS 'integer' AND (payload_json ->> '$.returning_visitors') >= 0

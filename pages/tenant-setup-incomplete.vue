@@ -46,13 +46,12 @@
 </template>
 
 <script setup>
-import { NON_INDEXABLE_ROBOTS_INTENT } from '~/shared/robots-directive'
 definePageMeta({ layout: 'saya' })
 useSocialMetadata({
   schema: false,
   path: '/tenant-setup-incomplete',
   title: 'Setup incomplete',
   description: 'This site has not finished its setup yet.',
-  robots: NON_INDEXABLE_ROBOTS_INTENT,
+  discoverability: 'private',
 })
 </script>

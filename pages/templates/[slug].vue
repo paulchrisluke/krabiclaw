@@ -236,8 +236,8 @@ if (!template) {
 
 const config = useRuntimeConfig()
 const requestUrl = useRequestURL()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')
-if (!platformHostname) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_FREE_SITE_DOMAIN is required' })
+const platformHostname = config.public.freeOrganizationDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')
+if (!platformHostname) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required' })
 const isDemoPreviewOpen = ref(false)
 const previewDialogRef = ref<HTMLElement | null>(null)
 const closePreviewButtonRef = ref<HTMLButtonElement | null>(null)
@@ -301,8 +301,7 @@ onUnmounted(() => {
   if (import.meta.client) document.documentElement.classList.remove('overflow-hidden')
 })
 
-const requestURL = useRequestURL()
-const siteUrl = config.public.siteUrl || requestURL.origin
+const organizationUrl = config.public.platformUrl
 
 // Marketing-page schema only: a Product node describing the template
 // offering itself. This is intentionally not the ProfessionalService/
@@ -326,10 +325,10 @@ useSocialMetadata({
   schemaNodes: [
     {
       '@type': 'Product',
-      '@id': `${siteUrl}/templates/${template.slug}#product`,
+      '@id': `${organizationUrl}/templates/${template.slug}#product`,
       name: template.displayName,
       description: template.description,
-      url: `${siteUrl}/templates/${template.slug}`,
+      url: `${organizationUrl}/templates/${template.slug}`,
       offers: template.schemaOffer ? {
         '@type': 'Offer',
         price: template.schemaOffer.price,

@@ -87,7 +87,7 @@ const dashboard = useDashboardOrganization()
 const dashboardLocation = useDashboardLocation()
 
 const vertical = dashboard.organization.value?.vertical
-if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 // The surface this collection is managed on owns the words: a collection of
 // bookable products reads as experiences, a section of a menu as dishes.
 const segment = String(route.params.surface ?? '')
@@ -95,7 +95,7 @@ if (!isCatalogSurface(vertical, segment)) throw createError({ statusCode: 404, s
 const presentation = presentationForSurface(vertical, segment)
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const rawCurrency = dashboard.organization.value?.default_currency
-if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported site currency' })
+if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
 const locationId = computed(() => dashboardLocation.currentLocation.value?.id ?? null)
 // The path comes from the route this screen is mounted on, not from the

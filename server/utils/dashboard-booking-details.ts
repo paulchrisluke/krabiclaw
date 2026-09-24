@@ -3,14 +3,14 @@ import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertResourceAccess, listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 import { localPartsAt } from '~/utils/timezone'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { resolveLocationTimezone } from '~/server/utils/site-config'
+import { resolveLocationTimezone } from '~/server/utils/organization-config'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 
@@ -19,7 +19,7 @@ export type DashboardBookingType = 'reservation' | 'booking'
 interface BookingRow {
   id: string
   organization_id: string
-  site_name: string
+  organization_name: string
   vertical: string
   location_id: string
   location_slug: string
@@ -54,7 +54,7 @@ export interface DashboardBookingDetails {
   id: string
   type: DashboardBookingType
   organizationId: string
-  siteName: string
+  organizationName: string
   vertical: string
   locationId: string
   locationSlug: string
@@ -119,7 +119,7 @@ async function loadBookingRow(
   // When, for how many and against what all live on the record the thread
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
-  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, s.name AS site_name, s.vertical,
+  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, s.name AS organization_name, s.vertical,
     record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
@@ -191,9 +191,8 @@ export async function loadDashboardBookingDetails(
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
 
-  const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env}))
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
-  const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
+  const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
   const locationMedia = await loadPublicSocialMedia(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
@@ -212,7 +211,7 @@ export async function loadDashboardBookingDetails(
     id: row.id,
     type: input.type,
     organizationId: row.organization_id,
-    siteName: row.site_name,
+    organizationName: row.organization_name,
     vertical: row.vertical,
     locationId: row.location_id,
     locationSlug: row.location_slug,

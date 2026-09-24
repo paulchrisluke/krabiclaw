@@ -122,7 +122,31 @@ application source when the source is wrong.
 Authoritative operational contracts:
 
 - `docs/operations/release-and-outage-prevention.md`
-- `docs/operations/release-flow.md`
+
+## Failure reporting
+
+A caught error is reported or it is not caught.
+
+A `catch` that writes to a console and continues is a failure nobody learns
+about. It is refused mechanically by `eslint.config.mjs` and it is refused here.
+Every `catch` must throw, return an error status or failed result, or put the
+reason into state the caller actually reads.
+
+There is no "best effort", "non-fatal" or "transient provider" exemption. The
+infrastructure is not what fails; the code is. Do not add a tolerance, a retry
+that gives up quietly, or a comment attributing a failure to a provider without
+evidence that the provider was at fault.
+
+A name ending in `Safe`, or a wrapper whose body is a try/catch around one call,
+is a swallow with a reassuring label. Delete it and let the call fail.
+
+Do not default, placeholder or fabricate state that could not be read. Missing
+or invalid required state fails visibly — a manufactured value is worse than an
+error because it is indistinguishable from a real one.
+
+A write that succeeded while the work that makes it visible failed has not
+succeeded. Cache purges, index refreshes, reconciliations, notifications and
+audit rows are part of the operation that asked for them.
 
 ## Evidence
 
@@ -137,6 +161,16 @@ evidence, not substitutes for verifying the real runtime boundary.
 
 Exercise the behavior with what the repository already has. Writing something
 new to observe it is an addition and is gated — see Complexity.
+
+A test must not create the state it then asserts. A helper named `ensure*`,
+`getOrCreate*` or `*OrDefault` in a test is a prompt to check whether it is
+manufacturing its own premise — one of them re-provisioned a live tenant on
+every run so that the assertion after it would hold.
+
+Assert the outcome, not the status code. Read a write back through a different
+path than the one that made it. Assert the exact status rather than "not an
+error". Never loosen an assertion to make it pass: decide whether the spec or
+the application is wrong, say which, and fix that.
 
 Follow `docs/testing-strategy.md`.
 

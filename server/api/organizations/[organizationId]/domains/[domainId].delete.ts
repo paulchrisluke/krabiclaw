@@ -8,7 +8,7 @@ import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const domainId = getRouterParam(event, 'domainId')
-  if (!organizationId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
+  if (!organizationId || !domainId) return jsonResponse({ error: 'Organization ID and domain ID are required' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
 
@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
   if (!domain) return jsonResponse({ error: 'Domain not found' }, { status: 404 })
 
   try {
-    await deleteCustomDomain(env, db, domainId, organization.member_role as 'owner' | 'admin' | 'editor', session.user.id)
+    await deleteCustomDomain(env, db, domainId, organization.member_role as 'owner' | 'admin', session.user.id)
     await notifyDomainLifecycle(env, db, {
       organizationId: organization.id, domain: domain.domain, status: 'deleted', title: `Domain deleted: ${domain.domain}`, message: `${domain.domain} has been removed from KrabiClaw.`, dashboardUrl: buildDashboardUrl({
         env, organizationId: organization.id, organizationSlug: organization.slug }, 'organization.domains')

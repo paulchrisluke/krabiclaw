@@ -59,7 +59,7 @@
               variant="soft"
               icon="i-lucide-clock"
               title="Deletion scheduled"
-              :description="`Everything is deleted on ${account.deletionDateLabel.value}. Your site stays online until then.`"
+              :description="`Everything is deleted on ${account.deletionDateLabel.value}. Your organization stays online until then.`"
             />
             <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
             <UButton color="neutral" variant="outline" label="Keep my account" :loading="account.deleting.value" @click="account.keepAccount" />
