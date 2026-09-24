@@ -466,7 +466,7 @@ export function resolveVariantPrice(variant: ProductVariant, selection: PriceSel
 
 interface Actor { actorId: string }
 
-function slugCandidate(base: string, attempt: number): string {
+export function slugCandidate(base: string, attempt: number): string {
   const normalized = base.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, PRODUCT_LIMITS.slug)
   const root = normalized || 'product'
   return attempt === 0 ? root : `${root}-${attempt + 1}`

@@ -133,23 +133,17 @@ export default defineHandler(async (event) => {
     `, [now, now, draftId])
     committed = true
 
-    // Activation must not fail the launch: the tenant is live either way, and the
-    // dashboard resolves an organization for the session on its next request.
-    await activateSessionOrganization(event, env, organizationId).catch((error: unknown) => {
-      console.error('onboarding_activate_session_organization_failed', {
-        organizationId, error: error instanceof Error ? error.message : String(error),
-      })
-    })
+    // The tenant is live from here, so its public cache is purged whichever of
+    // the steps before it fails, and a failed purge fails the response rather
+    // than a background promise nobody reads.
+    try {
+      await activateSessionOrganization(event, env, organizationId)
 
-    // The homepage and its media are live now: generate the social card once so
-    // its first real card uses the homepage hero. Deliberately one owner —
-    // everything else is picked up by the social-card-backfill task.
-    await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
-
-    const waitUntil = event.req.runtime?.cloudflare?.context?.waitUntil
-    if (typeof waitUntil === 'function') {
-      waitUntil.call(event.req.runtime?.cloudflare?.context, purgePublicResourceCacheNow(env, organizationId))
-    } else {
+      // The homepage and its media are live now: generate the social card once so
+      // its first real card uses the homepage hero. Deliberately one owner —
+      // everything else is picked up by the social-card-backfill task.
+      await refreshSocialCard({ db, env, owner: { owner_type: 'organization', owner_id: organizationId }, actorId: session.user.id })
+    } finally {
       await purgePublicResourceCacheNow(env, organizationId)
     }
 

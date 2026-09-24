@@ -13,9 +13,9 @@ import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours
 import { googleReviewUpserts } from '~/server/utils/google-places'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { resourceLocalizationDeletionQueries } from '~/server/utils/localization'
-import { planProductCreateWrites } from '~/server/utils/product-management'
+import { planProductCreateWrites, slugCandidate } from '~/server/utils/product-management'
 import { updateLocation } from '~/server/utils/location-management'
-import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, slugify, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { getDraftMedia, onboardingPageBlocks, onboardingPagePath, onboardingPageType, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { createMediaAsset, insertInitialMediaPlacements, type CreateInput } from '~/server/utils/media-asset-manager'
 import { applyOnboardingTenantPages } from '~/server/utils/content/pages'
 import { createOrganization, provisionOrganization } from '~/server/utils/organization-provisioning'
@@ -278,6 +278,7 @@ export async function applyOnboardingDraft(
       ]
     : []
 
+  let productIds: string[] = []
   if (orderedProducts.length) {
     const { ids, queries } = await planProductCreateWrites(db, {
       organizationId,
@@ -303,21 +304,8 @@ export async function applyOnboardingDraft(
     })
     batchQueries.push(...queries)
 
-    // Publication, location membership and collection grouping are separate
-    // rows, and onboarding states all three explicitly.
-    const collections = new Map<string, string>()
-    for (const product of orderedProducts) {
-      if (collections.has(product.collection)) continue
-      collections.set(product.collection, crypto.randomUUID())
-    }
-    for (const [name, id] of collections) {
-      batchQueries.push({
-        query: `INSERT INTO collections (id, organization_id, location_id, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
-                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (organization_id, slug) WHERE location_id IS NULL DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
-        params: [id, organizationId, name, slugify(name) || id, [...collections.keys()].indexOf(name), now, now, userId, userId],
-      })
-    }
+    // Publication and location membership are separate rows, and onboarding
+    // states both explicitly.
     orderedProducts.forEach((product, index) => {
       const productId = ids[index]!
       batchQueries.push({
@@ -330,15 +318,63 @@ export async function applyOnboardingDraft(
                 VALUES (?, ?, ?, 1, 1, ?, ?, ?, ?)`,
         params: [organizationId, productId, locationRow.id, now, now, userId, userId],
       })
-      batchQueries.push({
-        query: `INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
-                SELECT ?, c.id, ?, ?, ?, ?, ?, ?
-                  FROM collections c
-                 WHERE c.organization_id = ? AND c.slug = ? AND c.location_id IS NULL`,
-        params: [organizationId, productId, index, now, now, userId, userId, organizationId, slugify(product.collection) || product.collection],
-      })
     })
+    productIds = ids
   }
+
+  // The owner's sections are the organization's whole set of collections while
+  // the tenant is pending, so each save reconciles that set: a section keeps its
+  // collection (and its id and slug) across saves by name, a section the owner
+  // renamed or emptied loses its collection, and every section is ordered as
+  // the owner ordered it. Slugs come from the canonical collection slug rule,
+  // suffixed within this organization, so two sections never share a row.
+  const existingCollections = await queryAll<{ id: string; name: string; slug: string }>(db, `
+    SELECT id, name, slug FROM collections WHERE organization_id = ? AND location_id IS NULL
+  `, [organizationId])
+  const sectionNames = [...new Set(orderedProducts.map(product => product.collection))]
+  const kept = new Map(existingCollections.filter(row => sectionNames.includes(row.name)).map(row => [row.name, row]))
+  const retired = existingCollections.filter(row => !kept.has(row.name)).map(row => row.id)
+  if (retired.length) {
+    const retiredIds = JSON.stringify(retired)
+    batchQueries.push(
+      ...resourceLocalizationDeletionQueries('collection', { query: 'SELECT value FROM json_each(?)', params: [retiredIds] }),
+      { query: 'DELETE FROM collections WHERE organization_id = ? AND location_id IS NULL AND id IN (SELECT value FROM json_each(?))', params: [organizationId, retiredIds] },
+    )
+  }
+  const takenSlugs = new Set([...kept.values()].map(row => row.slug))
+  const collectionIds = new Map<string, string>()
+  sectionNames.forEach((name, sortOrder) => {
+    const existing = kept.get(name)
+    if (existing) {
+      collectionIds.set(name, existing.id)
+      batchQueries.push({
+        query: 'UPDATE collections SET sort_order = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
+        params: [sortOrder, now, userId, organizationId, existing.id],
+      })
+      return
+    }
+    let attempt = 0
+    while (takenSlugs.has(slugCandidate(name, attempt))) attempt += 1
+    const slug = slugCandidate(name, attempt)
+    takenSlugs.add(slug)
+    const id = crypto.randomUUID()
+    collectionIds.set(name, id)
+    batchQueries.push({
+      query: `INSERT INTO collections (id, organization_id, location_id, name, slug, sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [id, organizationId, name, slug, sortOrder, now, now, userId, userId],
+    })
+  })
+  // Membership of a kept collection went with the products the previous save
+  // imported (collection_products cascades from products), so every dish is
+  // placed again under the id resolved above.
+  orderedProducts.forEach((product, index) => {
+    batchQueries.push({
+      query: `INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [organizationId, collectionIds.get(product.collection)!, productIds[index]!, index, now, now, userId, userId],
+    })
+  })
 
   const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND row_role = 'root' AND kind IN ('qa','social_post')", [organizationId])
   for (const document of replaced) batchQueries.push(...prepareContentDocumentDeletion({ documentId: document.id, organizationId }))
