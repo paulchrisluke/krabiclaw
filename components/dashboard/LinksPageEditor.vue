@@ -154,7 +154,7 @@ const linksPageLocalizationFields = computed(() => [
   { key: 'seo_title', label: 'SEO title', source: data.value?.page.seo_title },
   { key: 'seo_description', label: 'SEO description', source: data.value?.page.seo_description, multiline: true },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 function localizedLinksPath(locale: string): string {
   return `/${locale}/links`
 }

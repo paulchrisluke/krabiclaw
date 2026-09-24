@@ -39,14 +39,18 @@ export interface SiteSettingsForm {
   brand_color: string
   font_preset: SiteFontPreset
   default_currency: CurrencyCode | null
-  google_site_verification: string
+  status: WebsiteStatus
   social_facebook_url: string
   social_instagram_url: string
   social_tiktok_url: string
 }
 
+/** Live and Draft are the tenant's; Suspended is KrabiClaw's hold. */
+export type WebsiteStatus = 'active' | 'inactive' | 'suspended'
+
 export interface SiteSettingsResponse {
   theme?: string
+  status: WebsiteStatus
   name?: string | null
   brand_description?: string | null
   media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
@@ -54,9 +58,6 @@ export interface SiteSettingsResponse {
   brand_color?: string | null
   font_preset?: SiteFontPreset
   default_currency?: string | null
-  robots?: string | null
-  google_analytics_measurement_id?: string | null
-  google_site_verification?: string | null
   social_facebook_url?: string | null
   social_instagram_url?: string | null
   social_tiktok_url?: string | null
@@ -69,8 +70,6 @@ export interface LocalizationCatalogRow { locale: string; label: string; directi
 export interface LocalizationSettings { effective_plan: string; languages: LocalizationLanguageRow[]; available_catalogs: LocalizationCatalogRow[] }
 
 export interface LocalizationProgress { locale: string; completed: number; total: number; opportunities: Array<{ id: string; label: string; completed: number; total: number; path: string }> }
-
-export interface FacebookConnectionStatus { connected: boolean; page_name?: string }
 
 /**
  * The site's settings draft and everything a leaf shows or does beside its
@@ -90,13 +89,6 @@ export interface SiteSettingsEditor {
   descriptionCharactersRemaining: ComputedRef<number>
   supportsSiteFonts: ComputedRef<boolean>
   whatsappPhone: Ref<string>
-  searchIndexed: Ref<boolean>
-  hasFacebookAccess: ComputedRef<boolean>
-  facebookConnection: Ref<FacebookConnectionStatus | null>
-  facebookError: Ref<string>
-  connectingFacebook: Ref<boolean>
-  startFacebookConnect: () => Promise<void>
-  refreshSettings: () => Promise<void>
   localizationSettings: Ref<LocalizationSettings | null>
   localizationLoading: Ref<boolean>
   localizationBusy: Ref<boolean>
@@ -134,11 +126,10 @@ const surface = computed(() => props.surface)
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 const editorError = ref<string | null>(null)
-const facebookError = ref('')
 const dashboard = useDashboardOrganization()
 const siteDashboardPath = computed(() => `/dashboard/${String(route.params.orgSlug)}`)
 const brandPath = computed(() => `${siteDashboardPath.value}/brand`)
-const settingsPath = computed(() => `${siteDashboardPath.value}/settings`)
+const settingsPath = computed(() => `${siteDashboardPath.value}/settings/website`)
 // The level runs while setup is still synchronous: it injects the record the
 // `<RouterView>` above rendered, and an `await` before it would bind nothing.
 const level = useRouteLevel()
@@ -220,7 +211,6 @@ async function keepWorkspace() {
 interface SettingsPageResource {
   settings: { success: boolean; settings: SiteSettingsResponse }
   notifications: { success: boolean; notifications: { whatsapp_phone: string | null } }
-  facebook: FacebookConnectionStatus
 }
 
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: SiteSettingsResponse } =>
@@ -228,38 +218,21 @@ const isSettingsResponse = (value: unknown): value is { success: boolean; settin
   && (value.settings.name === undefined || value.settings.name === null || typeof value.settings.name === 'string')
   && (value.settings.font_preset === undefined || isSiteFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
+  && isWebsiteStatus(value.settings.status)
 const isNotificationsResponse = (value: unknown): value is { success: boolean; notifications: { whatsapp_phone: string | null } } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.notifications)
   && (value.notifications.whatsapp_phone === null || typeof value.notifications.whatsapp_phone === 'string')
-const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
-  isRecord(value) && typeof value.connected === 'boolean' && (value.page_name === undefined || typeof value.page_name === 'string')
+function isWebsiteStatus(value: unknown): value is WebsiteStatus {
+  return value === 'active' || value === 'inactive' || value === 'suspended'
+}
 
 
 /** Which leaf is open, named by the route below this rail rather than counted here. */
 const detailKey = computed(() => level.child.value)
-const validBrandKeys = new Set(['name', 'logo', 'sharing-image', 'description', 'color', 'font', 'contact', 'social'])
-const validSettingsKeys = new Set(['domains', 'currency', 'notifications', 'search', 'analytics', 'publishing', 'localization', 'delete'])
-const routeIsCanonical = computed(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return true
-  if (level.mode.value === 'index') return true
-  if (level.mode.value === 'yield') return false
-  return (surface.value === 'brand' ? validBrandKeys : validSettingsKeys).has(detailKey.value ?? '')
-})
-// Raised, not thrown: the dashboard renders on the client, where a throw in a
-// nested page's setup leaves a blank screen (DESIGN.md).
-watchEffect(() => {
-  if (!routeIsCanonical.value) showError(createError({ statusCode: 404, statusMessage: 'Setting not found' }))
-})
-
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const saving = ref(false)
-const connectingFacebook = ref(false)
 const whatsappPhone = ref('')
-const searchIndexed = ref(true)
-const facebookConnection = ref<FacebookConnectionStatus | null>(null)
 const localizationSettings = ref<LocalizationSettings | null>(null)
 const localizationLoading = ref(false)
 const localizationBusy = ref(false)
@@ -273,7 +246,7 @@ const loadedNotifications = ref<{ whatsapp_phone: string | null } | null>(null)
 const originalSignature = ref('')
 const form = reactive<SiteSettingsForm>({
   name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
-  default_currency: null, google_site_verification: '',
+  default_currency: null, status: 'inactive',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 // Only the specimen uses Mali. Never change the dashboard's typography.
@@ -286,7 +259,6 @@ const brandLocalizationFields = computed(() => [
   { key: 'name', label: 'Brand name', source: loadedSettings.value?.name },
   { key: 'brand_description', label: 'Description', source: loadedSettings.value?.brand_description, multiline: true, rows: 6 },
 ])
-const hasFacebookAccess = computed(() => dashboard.organization.value?.effective_plan === 'growth')
 const enableableCatalogOptions = computed(() => (localizationSettings.value?.available_catalogs ?? [])
   .filter(catalog => !localizationSettings.value?.languages.some(language => language.locale === catalog.locale && language.status !== 'disabled'))
   .map(catalog => ({ label: `${catalog.label} (${catalog.locale})`, value: catalog.locale })))
@@ -299,7 +271,7 @@ const socialSummary = computed(() => {
   const count = [loadedSettings.value?.social_facebook_url, loadedSettings.value?.social_instagram_url, loadedSettings.value?.social_tiktok_url].filter(Boolean).length
   return count ? `${count} ${count === 1 ? 'profile' : 'profiles'} connected` : 'Not configured'
 })
-const searchSummary = computed(() => loadedSettings.value?.robots === 'noindex,nofollow' ? 'Hidden from search engines' : 'Visible to search engines')
+const STATUS_LABELS: Record<WebsiteStatus, string> = { active: 'Live', inactive: 'Draft', suspended: 'Suspended' }
 const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
@@ -319,13 +291,11 @@ function onRowAction(id: string) {
 // Flat, values on the rows, the way Edit preferences reads: nothing a visitor
 // sees is here, and nothing here opens a second list.
 const settingsItems = computed<EditorNavigationItem[]>(() => [
+  { id: 'status', label: 'Status', summary: loadedSettings.value ? STATUS_LABELS[loadedSettings.value.status] : 'Not set', icon: 'i-lucide-radio', to: `${settingsPath.value}/status` },
   { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
   { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   { id: 'notifications', label: 'WhatsApp number', summary: notificationSummary.value, icon: 'i-lucide-bell', to: `${settingsPath.value}/notifications` },
-  { id: 'search', label: 'Search engines', summary: searchSummary.value, icon: 'i-lucide-scan-search', to: `${settingsPath.value}/search` },
-  { id: 'analytics', label: 'Google Analytics', summary: explicitSummary(loadedSettings.value?.google_analytics_measurement_id, 'Not connected'), icon: 'i-lucide-chart-no-axes-combined', to: `${settingsPath.value}/analytics` },
-  { id: 'publishing', label: 'Facebook publishing', summary: facebookConnection.value?.connected ? explicitSummary(facebookConnection.value.page_name, 'Connected') : 'Not connected', icon: 'i-simple-icons-facebook', to: `${settingsPath.value}/publishing` },
   // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value
@@ -356,7 +326,7 @@ function editorSignature(key: string | null) {
     case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
     case 'notifications': return whatsappPhone.value
-    case 'search': return JSON.stringify([searchIndexed.value, form.google_site_verification])
+    case 'status': return JSON.stringify(form.status)
     case 'localization': return JSON.stringify(newLocale.value)
     default: return ''
   }
@@ -375,6 +345,7 @@ const validationMessage = computed(() => {
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'notifications': return null
+    case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
   }
@@ -395,11 +366,10 @@ function fillForm(settings: SiteSettingsResponse) {
   // A stored value that is not a supported code is not this form's to reinterpret:
   // showing it as USD invited the owner to save that over whatever is really there.
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
-  form.google_site_verification = settings.google_site_verification ?? ''
+  form.status = settings.status
   form.social_facebook_url = settings.social_facebook_url ?? ''
   form.social_instagram_url = settings.social_instagram_url ?? ''
   form.social_tiktok_url = settings.social_tiktok_url ?? ''
-  searchIndexed.value = settings.robots !== 'noindex,nofollow'
 }
 function fillNotifications(notifications: { whatsapp_phone: string | null }) {
   loadedNotifications.value = notifications
@@ -407,7 +377,6 @@ function fillNotifications(notifications: { whatsapp_phone: string | null }) {
 }
 function resetDraft() {
   editorError.value = null
-  facebookError.value = ''
   if (loadedSettings.value) fillForm(loadedSettings.value)
   if (loadedNotifications.value) fillNotifications(loadedNotifications.value)
   newLocale.value = ''
@@ -419,13 +388,12 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 const settingsResourceKey = computed(() => `dashboard-organization-settings:${String(route.params.orgSlug)}`)
-const { data: settingsResource, pending: settingsPending, error: settingsResourceError, refresh: refreshSettings } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
-  const [settings, notifications, facebook] = await Promise.all([
+const { data: settingsResource, pending: settingsPending, error: settingsResourceError } = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
+  const [settings, notifications] = await Promise.all([
     dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', { validate: isSettingsResponse }),
     dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { validate: isNotificationsResponse }),
-    hasFacebookAccess.value ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { organizationId }, validate: isFacebookStatus }) : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
   ])
-  return { settings, notifications, facebook }
+  return { settings, notifications }
 }, { lazy: true })
 watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
   loading.value = pending
@@ -433,7 +401,6 @@ watch([settingsResource, settingsPending, settingsResourceError], ([resource, pe
   if (!resource) return
   fillForm(resource.settings.settings)
   fillNotifications(resource.notifications.notifications)
-  facebookConnection.value = resource.facebook
   originalSignature.value = editorSignature(detailKey.value)
   loadError.value = null
 }, { immediate: true })
@@ -464,7 +431,7 @@ async function saveCurrentEditor() {
         await patchSettings({ default_currency: form.default_currency })
         break
       }
-      case 'search': await patchSettings({ robots: searchIndexed.value ? 'index,follow' : 'noindex,nofollow', google_site_verification: form.google_site_verification.trim() }); break
+      case 'status': await patchSettings({ status: form.status }); break
       case 'notifications': {
         const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null } }>(`/api/editor/organizations/${organizationId}/notifications`, { method: 'PATCH', body: { whatsapp_phone: whatsappPhone.value.trim() }, validate: isNotificationsResponse })
         fillNotifications(response.notifications)
@@ -478,15 +445,6 @@ async function saveCurrentEditor() {
       }
     }
   } catch (error) { editorError.value = errorMessage(error, 'Failed to save this setting') } finally { saving.value = false }
-}
-async function startFacebookConnect() {
-  connectingFacebook.value = true
-  facebookError.value = ''
-  try {
-    const response = await dashboardApi<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST', validate: (value): value is { authUrl?: string; error?: string } => isRecord(value) && (value.authUrl === undefined || typeof value.authUrl === 'string') && (value.error === undefined || typeof value.error === 'string') })
-    if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
-    await navigateTo(response.authUrl, { external: true })
-  } catch (error) { facebookError.value = errorMessage(error, 'Failed to connect Facebook'); connectingFacebook.value = false }
 }
 const isLocalizationSettings = (value: unknown): value is LocalizationSettings =>
   isRecord(value) && Array.isArray(value.languages) && Array.isArray(value.available_catalogs)
@@ -559,13 +517,6 @@ provide(siteSettingsEditorKey, {
   descriptionCharactersRemaining,
   supportsSiteFonts,
   whatsappPhone,
-  searchIndexed,
-  hasFacebookAccess,
-  facebookConnection,
-  facebookError,
-  connectingFacebook,
-  startFacebookConnect,
-  refreshSettings,
   localizationSettings,
   localizationLoading,
   localizationBusy,

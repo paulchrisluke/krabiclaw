@@ -88,7 +88,7 @@ export const tenantPageEditorKey = Symbol('tenant-page-editor') as InjectionKey<
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
-import { getErrorMessage, isNotFoundError, showNotFound } from '~/utils/errors'
+import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 import { previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 import { tenantPageBlockLabel } from '~/utils/tenant-page-block-sections'
 import {
@@ -126,23 +126,11 @@ const loadError = computed(() => (error.value && !isNotFoundError(error.value)
 /** The open child, for the create walk; with nothing open the walk starts at Title. */
 const openKey = computed<SectionKey>(() => (level.child.value ?? 'title') as SectionKey)
 
-// An unsupported route 404s rather than quietly showing the first section. A
-// watcher, not a setup-time check: moving between leaves reuses this component.
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  const open = level.child.value
-  if (open && !(open in SECTION_LABELS)) return showNotFound()
-  // Only Sections has anything beneath it; the rest are leaves.
-  if (level.mode.value === 'yield' && open !== 'sections') showNotFound()
-})
-
 const saving = ref(false)
 const errorMessage = ref('')
 
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/settings/website/localization`)
 
 function preview(value: string, empty: string) {
   return value.trim() || empty

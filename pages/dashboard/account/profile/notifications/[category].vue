@@ -27,7 +27,6 @@ interface CategoryEditor {
 }
 
 const route = useRoute()
-const level = useRouteLevel()
 
 // Moving from one category to the next reuses this page, so the category is
 // read from the route every time rather than once at setup — read once, the
@@ -40,7 +39,6 @@ const category = computed(() => {
 // Raised, not thrown: the dashboard renders on the client, where a throw in a
 // nested page's setup leaves a blank screen (DESIGN.md).
 watchEffect(() => {
-  if (level.stale.value) return
   if (!category.value) showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
 })
 

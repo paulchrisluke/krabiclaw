@@ -278,7 +278,7 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
 })
 
 const publishingSummary = computed(() => {
-  const visibility = form.visibility === 'unlisted' ? 'Unlisted' : 'Public'
+  const visibility = form.visibility === 'unlisted' ? 'Unlisted' : 'Listed'
   if (post.value?.status === 'published') return `Published · ${visibility}`
   if (publishTiming.value === 'Scheduled') {
     return form.scheduled_for ? `Scheduled ${form.scheduled_for.replace('T', ' ')} UTC · ${visibility}` : `Scheduled · ${visibility}`

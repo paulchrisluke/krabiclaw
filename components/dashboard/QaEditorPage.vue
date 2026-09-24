@@ -76,15 +76,6 @@ const detailKey = computed(() => level.child.value)
 /** With nothing open the pane still shows the first section rather than empty space. */
 const openKey = computed<SectionKey>(() => (detailKey.value ?? 'question') as SectionKey)
 
-watchEffect(() => {
-  // A level on its way out after a navigation elsewhere answers about a route
-  // it is no longer part of, so it judges nothing.
-  if (level.stale.value) return
-  if (level.mode.value === 'yield' || (detailKey.value && !(detailKey.value in SECTION_LABELS))) {
-    showError(createError({ statusCode: 404, statusMessage: 'Page not found' }))
-  }
-})
-
 function emptyDraft() {
   return { question: '', answer: '', published: true }
 }
@@ -130,7 +121,7 @@ const qaLocalizationFields = computed(() => [
   { key: 'title', label: 'Question', source: record.value?.question },
   { key: 'summary', label: 'Answer', source: record.value?.answer, multiline: true, rows: 4 },
 ])
-const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/localization`)
+const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 
 const navigationGroups = computed<EditorNavigationGroup[]>(() => [
   {
