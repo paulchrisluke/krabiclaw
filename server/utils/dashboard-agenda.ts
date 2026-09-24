@@ -51,13 +51,6 @@ export interface AgendaQuery {
   organizationSlug?: string
 }
 
-export interface AgendaSite {
-  id: string
-  label: string
-  slug: string
-  vertical: string
-}
-
 export interface AgendaLocation {
   id: string
   organizationId: string
@@ -67,7 +60,9 @@ export interface AgendaLocation {
 export interface AgendaPayload {
   items: AgendaItem[]
   availableKinds: AgendaKind[]
-  sites: AgendaSite[]
+  // One organization answers one request, and the only thing the callers read
+  // off it is which nouns its surfaces use.
+  vertical: string
   locations: AgendaLocation[]
 }
 
@@ -197,7 +192,7 @@ export async function listAgenda(
   if (requestedKinds.size === 0) {
     return {
       items: [], availableKinds,
-      sites: capabilitySites.map(site => ({ id: site.id, label: site.name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
+      vertical: capabilitySites[0]?.vertical ?? '',
       locations: [],
     }
   }
@@ -318,7 +313,7 @@ export async function listAgenda(
   }))
   return {
     items, availableKinds,
-    sites: capabilitySites.map(site => ({ id: site.id, label: site.name ?? site.subdomain ?? site.id, slug: site.subdomain ?? site.id, vertical: site.vertical })),
+    vertical: capabilitySites[0]?.vertical ?? '',
     locations: locations.map(location => ({ id: location.id, organizationId: location.organization_id, title: location.title })),
   }
 }

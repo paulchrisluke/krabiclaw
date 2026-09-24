@@ -9,49 +9,17 @@
             <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
             <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
           </div>
-          <div class="flex gap-2" aria-label="Calendar view">
-            <UButton
-              label="Agenda"
-              :variant="calendarView === 'agenda' ? 'solid' : 'soft'"
-              :color="calendarView === 'agenda' ? 'primary' : 'neutral'"
-              @click="calendarView = 'agenda'"
-            />
-            <UButton
-              label="Availability"
-              :variant="calendarView === 'availability' ? 'solid' : 'soft'"
-              :color="calendarView === 'availability' ? 'primary' : 'neutral'"
-              @click="calendarView = 'availability'"
-            />
-          </div>
         </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[26rem]">
           <UFormField label="Location">
             <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
           </UFormField>
-          <UFormField v-if="calendarView === 'agenda'" label="Kind">
+          <UFormField label="Kind">
             <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
           </UFormField>
         </div>
       </div>
 
-      <template v-if="calendarView === 'availability'">
-        <UAlert
-          v-if="filters.locationId === FILTER_ALL"
-          color="neutral"
-          variant="soft"
-          title="Choose a location"
-          description="Availability is managed for one location at a time."
-        />
-        <DashboardAvailabilityCalendar
-          v-else
-          :organization-id="organizationId"
-          :location-id="filters.locationId"
-          :from="monthStart"
-          :to="monthEnd"
-        />
-      </template>
-
-      <template v-else>
         <UAlert
           v-if="agendaError"
           color="error"
@@ -114,16 +82,14 @@
           <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
         </div>
         </template>
-      </template>
     </div>
   </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
 import { formatCalendarDate } from '~/utils/timezone'
-import DashboardAvailabilityCalendar from '~/components/dashboard/AvailabilityCalendar.vue'
 import { getErrorMessage } from '~/utils/errors'
-import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, AgendaSite } from '~/server/utils/dashboard-agenda'
+import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Calendar | KrabiClaw', robots: 'noindex, nofollow' })
@@ -133,11 +99,9 @@ const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
 const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
-const organizationId = computed(() => useDashboardOrganization().organizationId.value ?? '')
 const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
-const calendarView = ref(route.query.view === 'availability' ? 'availability' : 'agenda')
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
 const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
@@ -169,12 +133,11 @@ const isAgendaItem = (value: unknown): value is AgendaItem =>
   && typeof value.startsAt === 'string' && typeof value.dayKey === 'string'
   && typeof value.timeZone === 'string' && typeof value.title === 'string'
   && typeof value.status === 'string' && typeof value.to === 'string'
-const isSite = (value: unknown): value is AgendaSite => isRecord(value) && typeof value.id === 'string' && typeof value.label === 'string' && typeof value.slug === 'string'
 const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string'
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'session', 'post'].includes(String(kind)))
-  && Array.isArray(value.sites) && value.sites.every(isSite)
+  && typeof value.vertical === 'string'
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
 async function fetchAgenda(): Promise<AgendaPayload> {
@@ -203,13 +166,9 @@ watch(requestKey, async (key) => {
   }
 })
 
-watch([() => filters.locationId, calendarView], ([locationId, view]) => {
+watch(() => filters.locationId, (locationId) => {
   void router.replace({
-    query: {
-      ...route.query,
-      view: view === 'availability' ? view : undefined,
-      locationId: locationId === FILTER_ALL ? undefined : locationId,
-    },
+    query: { ...route.query, locationId: locationId === FILTER_ALL ? undefined : locationId },
   })
 })
 watch(() => filters.kind, async kind => {

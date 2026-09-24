@@ -14,7 +14,7 @@ export function isBookingDetailsResponse(value: unknown): value is { booking: Da
   return isRecord(value)
     && isRecord(value.booking)
     && typeof value.booking.id === 'string'
-    && typeof value.booking.siteId === 'string'
+    && typeof value.booking.organizationId === 'string'
     && typeof value.booking.guestName === 'string'
     && Array.isArray(value.booking.notes)
     && isRecord(value.booking.policy)

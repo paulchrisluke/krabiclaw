@@ -300,6 +300,7 @@ export const media_placements = sqliteTable("media_placements", {
 		foreignColumns: [media_assets.organization_id, media_assets.id],
 		name: "media_placements_asset_scope_fk",
 	}).onDelete("cascade"),
+	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')`),
 	check("media_placements_sort_order_check", sql`sort_order >= 0`),
 	unique("media_placements_org_owner_slot_asset_unique").on(table.owner_type, table.owner_id, table.slot, table.asset_id),
 	unique("media_placements_org_owner_slot_order_unique").on(table.owner_type, table.owner_id, table.slot, table.sort_order),
@@ -918,6 +919,9 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	index("product_availability_rules_product_idx").on(table.product_id, table.weekday, table.start_time),
 	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
 	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
+	// end_time and interval_minutes are one feature: neither means anything
+	// alone, and a repeat that ends before it starts has no occurrences.
+	check("product_availability_rules_repeat_check", sql`(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)`),
 	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
 	// A cadence longer than a week has to say from when, or "every other
 	// Saturday" means a different Saturday depending on the day generation
@@ -987,6 +991,7 @@ export const product_sessions = sqliteTable("product_sessions", {
 	index("product_sessions_product_start_idx").on(table.product_id, table.starts_at, table.status),
 	index("product_sessions_location_start_idx").on(table.location_id, table.starts_at, table.status),
 	check("product_sessions_interval_check", sql`ends_at > starts_at`),
+	check("product_sessions_status_check", sql`status IN ('scheduled', 'cancelled')`),
 	check("product_sessions_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
 	check("product_sessions_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
 ]);
@@ -1118,41 +1123,6 @@ export const location_reservation_configs = sqliteTable("location_reservation_co
 //   actual product_sessions row.
 // Deletion: cascades from the config.
 // Read/write: server/utils/reservations.ts.
-export const location_reservation_overrides = sqliteTable("location_reservation_overrides", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	location_id: text().notNull(),
-	override_date: text().notNull(),
-	time_slot: text(),
-	// 'open' | 'closed' (registry in shared/).
-	status: text().notNull(),
-	capacity: integer(),
-	note: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	check("location_reservation_overrides_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [location_reservation_configs.organization_id, location_reservation_configs.location_id], name: "location_reservation_overrides_config_scope_fk" }).onDelete("cascade"),
-	uniqueIndex("location_reservation_overrides_slot_unique").on(table.location_id, table.override_date, table.time_slot).where(sql`time_slot IS NOT NULL`),
-	uniqueIndex("location_reservation_overrides_date_unique").on(table.location_id, table.override_date).where(sql`time_slot IS NULL`),
-	index("location_reservation_overrides_date_idx").on(table.location_id, table.override_date),
-	check("location_reservation_overrides_date_check", sql`date(override_date, '+0 days') IS override_date`),
-	check("location_reservation_overrides_time_slot_check", sql`time_slot IS NULL OR (time_slot GLOB '[0-2][0-9]:[0-5][0-9]' AND time_slot < '24:00')`),
-	check("location_reservation_overrides_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
-]);
-
-// A table reservation.
-// Row meaning: this party holds this location for this interval, in this state.
-// Owner/scope: location, which carries site and organization.
-// Null semantics: customer_id NULL is a guest reservation with contact details
-//   on the linked request. request_id NULL is a reservation taken without an
-//   inbox thread.
-// Deletion: cascades from location. An inbox thread cannot be deleted while a
-//   reservation links to it; the domain operation unlinks first.
-// Read/write: server/utils/reservations.ts for policy,
-//   server/domain/requests.ts for the inbox thread linkage.
 export const reservations = sqliteTable("reservations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
