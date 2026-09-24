@@ -57,7 +57,11 @@ export function getInstagramAuthUrl(env: InstagramEnv, state: string): string {
   return `https://www.instagram.com/oauth/authorize?${params.toString()}`
 }
 
-/** Short-lived token plus the account it belongs to. */
+/**
+ * Short-lived token plus the Instagram-scoped id of the person who granted it —
+ * the id Meta's deauthorize and data-deletion callbacks name. Publishing uses
+ * the professional account id from getInstagramAccount instead.
+ */
 export async function exchangeInstagramCode(
   env: InstagramEnv,
   code: string,
@@ -80,7 +84,12 @@ export async function exchangeInstagramCode(
   })
   if (!response.ok) throw new Error(`Instagram token exchange failed: ${(await response.text()).slice(0, 300)}`)
 
-  const token = await response.json() as { access_token?: string; user_id?: number | string }
+  // Documented as `{ data: [{ access_token, user_id, permissions }] }`
+  // (developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login);
+  // the same endpoint under the retired Basic Display API answered unwrapped.
+  type Grant = { access_token?: string; user_id?: number | string }
+  const body = await response.json() as Grant & { data?: Grant[] }
+  const token = body.data?.[0] ?? body
   if (!token.access_token || token.user_id === undefined) throw new Error('Instagram did not return an access token')
   return { accessToken: token.access_token, instagramUserId: String(token.user_id) }
 }
@@ -144,6 +153,7 @@ export async function storeInstagramConnection(
     organization_id: string
     connected_by_user_id: string
     instagram_user_id: string
+    scoped_user_id: string
     username: string
     access_token: string
     token_expires_at: string
@@ -157,6 +167,7 @@ export async function storeInstagramConnection(
     revision: crypto.randomUUID(),
     connected_by_user_id: input.connected_by_user_id,
     instagram_user_id: input.instagram_user_id,
+    scoped_user_id: input.scoped_user_id,
     username: input.username,
     encrypted_access_token: await encryptSecret(input.access_token, encryptionEnv(env)),
     token_expires_at: input.token_expires_at,

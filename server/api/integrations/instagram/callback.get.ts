@@ -53,6 +53,7 @@ export default defineHandler(async (event) => {
       organization_id: organizationId,
       connected_by_user_id: userId,
       instagram_user_id: account.id,
+      scoped_user_id: shortLived.instagramUserId,
       username: account.username,
       access_token: longLived.accessToken,
       token_expires_at: longLived.expiresAt,

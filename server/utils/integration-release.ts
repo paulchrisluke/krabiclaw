@@ -266,8 +266,9 @@ export async function releaseMetaUserIntegrations(
      WHERE json_extract(integrations_json, '$.facebook.facebook_user_id') = ?
     UNION ALL
     SELECT id AS organization_id, 'instagram' AS product FROM organization
-     WHERE json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
-  `, [metaUserId, metaUserId])
+     WHERE json_extract(integrations_json, '$.instagram.scoped_user_id') = ?
+        OR json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
+  `, [metaUserId, metaUserId, metaUserId])
 
   const results: ReleaseIntegrationResult[] = []
   for (const row of rows) {

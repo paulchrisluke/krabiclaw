@@ -24,8 +24,9 @@ export default defineHandler(async (event) => {
   const remaining = await queryFirst<{ remaining: number }>(env.DB, `
     SELECT COUNT(*) AS remaining FROM organization
      WHERE json_extract(integrations_json, '$.facebook.facebook_user_id') = ?
+        OR json_extract(integrations_json, '$.instagram.scoped_user_id') = ?
         OR json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
-  `, [payload.metaUserId, payload.metaUserId])
+  `, [payload.metaUserId, payload.metaUserId, payload.metaUserId])
 
   if (!remaining) throw new Error('Meta connection count returned no row')
   const complete = remaining.remaining === 0
