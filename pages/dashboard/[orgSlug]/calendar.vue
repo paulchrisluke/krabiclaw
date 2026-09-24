@@ -48,8 +48,6 @@
           :location-id="filters.locationId"
           :from="monthStart"
           :to="monthEnd"
-          :owner-type="availabilityOwnerType"
-          :owner-id="availabilityOwnerId"
         />
       </template>
 
@@ -165,8 +163,6 @@ const query = computed(() => ({
   kinds: filters.kind !== FILTER_ALL ? [filters.kind as AgendaKind] : undefined,
 }))
 const requestKey = computed(() => `dashboard-calendar-${orgSlug.value}-${JSON.stringify(query.value)}`)
-const availabilityOwnerType = computed(() => route.query.ownerType === 'location' || route.query.ownerType === 'experience' ? route.query.ownerType : undefined)
-const availabilityOwnerId = computed(() => typeof route.query.ownerId === 'string' ? route.query.ownerId : undefined)
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
@@ -213,8 +209,6 @@ watch([() => filters.locationId, calendarView], ([locationId, view]) => {
       ...route.query,
       view: view === 'availability' ? view : undefined,
       locationId: locationId === FILTER_ALL ? undefined : locationId,
-      ownerType: undefined,
-      ownerId: undefined,
     },
   })
 })

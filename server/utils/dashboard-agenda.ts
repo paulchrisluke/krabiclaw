@@ -121,7 +121,7 @@ function scopeConditions(query: AgendaQuery, alias: string): string {
 
 function mediaUrlSelect(
   alias: string,
-  ownerType: 'business_location' | 'product' | 'content_document' | 'site',
+  ownerType: 'business_location' | 'product' | 'content_document' | 'organization',
   ownerId: string,
   slots: string[],
 ): string {
@@ -132,10 +132,8 @@ function mediaUrlSelect(
     JOIN media_assets media_asset
       ON media_asset.id = placement.asset_id
      AND media_asset.organization_id = placement.organization_id
-     AND media_asset.organization_id = placement.organization_id
      AND media_asset.status = 'active'
     WHERE placement.organization_id = ${alias}.organization_id
-      AND placement.organization_id = ${alias}.organization_id
       AND placement.owner_type = '${ownerType}'
       AND placement.owner_id = ${ownerId}
       AND placement.slot IN (${slotList})
@@ -144,8 +142,8 @@ function mediaUrlSelect(
     LIMIT 1)`
 }
 
-function siteMediaUrlSelect(alias: string): string {
-  return mediaUrlSelect(alias, 'site', `${alias}.organization_id`, ['social_card', 'social_share', 'logo'])
+function organizationMediaUrlSelect(alias: string): string {
+  return mediaUrlSelect(alias, 'organization', `${alias}.organization_id`, ['social_card', 'social_share', 'logo'])
 }
 
 function locationMediaUrlSelect(alias: string): string {
@@ -217,7 +215,7 @@ export async function listAgenda(
            l.slug AS location_slug, l.title AS location_title,
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
            NULL AS guest_image_url,
-           ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${siteMediaUrlSelect(alias)})`} AS resource_image_url,
+           ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${organizationMediaUrlSelect(alias)})`} AS resource_image_url,
            ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.name, s.subdomain, s.id)'} AS resource_title
     FROM ${kind === 'post' ? 'content_documents' : 'requests'} ${alias}
     JOIN organization s ON s.id = ${alias}.organization_id
@@ -240,7 +238,7 @@ export async function listAgenda(
     joins: `JOIN bookings agenda_booking ON agenda_booking.request_id = b.id
       JOIN product_sessions agenda_session ON agenda_session.id = agenda_booking.product_session_id
       LEFT JOIN products agenda_product ON agenda_product.id = agenda_booking.product_id AND agenda_product.organization_id = agenda_booking.organization_id`,
-    resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'agenda_booking.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${siteMediaUrlSelect('b')})`,
+    resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'agenda_booking.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${organizationMediaUrlSelect('b')})`,
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
   })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
   // The class itself: one row per scheduled session in the window, titled by
@@ -256,7 +254,7 @@ export async function listAgenda(
            l.slug AS location_slug, l.title AS location_title,
            agenda_session.timezone AS timezone,
            NULL AS guest_image_url,
-           COALESCE(${mediaUrlSelect('pub', 'product', 'agenda_session.product_id', ['image', 'gallery'])}, ${mediaUrlSelect('pub', 'business_location', 'agenda_session.location_id', ['social_card', 'hero', 'gallery'])}, ${siteMediaUrlSelect('pub')}) AS resource_image_url,
+           COALESCE(${mediaUrlSelect('pub', 'product', 'agenda_session.product_id', ['image', 'gallery'])}, ${mediaUrlSelect('pub', 'business_location', 'agenda_session.location_id', ['social_card', 'hero', 'gallery'])}, ${organizationMediaUrlSelect('pub')}) AS resource_image_url,
            agenda_product.name AS resource_title
     FROM product_sessions agenda_session
     JOIN products agenda_product ON agenda_product.id = agenda_session.product_id AND agenda_product.organization_id = agenda_session.organization_id
@@ -273,7 +271,7 @@ export async function listAgenda(
   `, [...params(), broadFrom, broadTo]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
     NULLIF(COALESCE(NULLIF(p.title, ''), json_extract(p.metadata_json, '$.event.title')), '') AS title, json_extract(p.metadata_json, '$.post_type') AS subtitle, NULL AS party_size, p.status`, {
-    resourceImage: `COALESCE(${mediaUrlSelect('p', 'content_document', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${siteMediaUrlSelect('p')})`,
+    resourceImage: `COALESCE(${mediaUrlSelect('p', 'content_document', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${organizationMediaUrlSelect('p')})`,
   })}
     AND CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
 

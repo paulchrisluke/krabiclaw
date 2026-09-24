@@ -429,7 +429,7 @@ async function saveSelection(): Promise<void> {
           ...base,
           directive: 'set' as const,
           status: edit.directive,
-          capacity_override: edit.capacity,
+          capacity: edit.capacity,
           note: edit.note,
         }
   }))
