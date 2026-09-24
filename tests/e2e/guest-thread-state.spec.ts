@@ -414,8 +414,11 @@ test('Today uses the CMS patterns and sends one reservation change request', asy
   await expect(page.getByLabel('Note', { exact: true })).toHaveValue(note)
   // Beside its index a leaf carries only Save — Airbnb's shape at two columns,
   // measured 2026-09-21 — so leaving one here is the index's own Back. Cancel
-  // belongs to the sheet the leaf becomes below `lg`.
-  await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeHidden()
+  // belongs to the sheet the leaf becomes below `lg`. The rule is the leaf's, so
+  // it is asserted inside the leaf: the index beside it keeps the Cancel that
+  // abandons the note it is writing.
+  await expect(page.locator('#dashboard-panel-booking-note').getByRole('button', { name: 'Cancel', exact: true })).toBeHidden()
+  await expect(page.locator('#dashboard-panel-booking-note').getByRole('button', { name: 'Save', exact: true })).toBeVisible()
   // Back is a link to the level above, never the browser's history.
   await page.getByRole('link', { name: 'Back', exact: true }).click()
 
