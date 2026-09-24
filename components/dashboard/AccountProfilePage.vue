@@ -278,7 +278,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
 ])
 
 function runRowAction(id: string) {
-  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
+  if (id === 'log-out') void logOut()
 }
 
 // Personal information and Login & security carry their own controls on

@@ -86,7 +86,7 @@
 
           <div class="mt-6 border-t border-default pt-2">
             <NuxtLink :to="`${editorPath}/guest`" class="flex items-center gap-4 py-4">
-              <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" size="md" class="shrink-0" />
+              <UAvatar :src="booking.guestImageUrl || undefined" :alt="booking.guestName" icon="i-lucide-user" size="md" class="shrink-0" />
               <span class="min-w-0 flex-1">
                 <span class="block text-base font-medium text-highlighted">{{ booking.guestName }}</span>
                 <span class="block text-sm text-muted">{{ guestCountLabel }}</span>

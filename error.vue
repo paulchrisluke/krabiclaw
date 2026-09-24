@@ -64,7 +64,7 @@ useHead(() => ({
     ...(surfaceStylesheet.value ? [{ rel: 'stylesheet', href: surfaceStylesheet.value }] : []),
     ...buildTenantHeadLinks({
       isPlatform,
-      siteMedia: site?.media,
+      organizationMedia: site?.media,
     }),
   ],
 }))

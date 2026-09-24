@@ -143,15 +143,15 @@ import { useMediaQuery } from '@vueuse/core'
 // The sidebar this layout used to carry is gone, along with the scope-grouped
 // manager nav that issue #316 designed. That nav had already stopped rendering
 // before it was removed — its groups were declared, underscore-prefixed to
-// silence the unused-vars rule, and referenced by nothing. Site-level nav lives
-// on the site overview page itself, which links Media, Settings, Links, Pages
-// and Locations directly.
+// silence the unused-vars rule, and referenced by nothing. Everything beyond
+// the bottom-bar tabs lives in the Menu tab, the organization's settings level
+// (see useDashboardMenu).
 //
 // Invariants that must hold no matter what gets added later:
 // - One layout, one nav source. mobileNavItems feeds both the top nav and the
 //   bottom bar; never build a second list for one of them.
-// - `scope` is derived ONLY from explicit route params (locationSlug > siteSlug
-//   > orgSlug), never from route.path regexes, residual dashboard-context state,
+// - `scope` is derived ONLY from explicit route params (locationSlug >
+//   orgSlug), never from route.path regexes, residual dashboard-context state,
 //   or a "last visited" fallback — those misclassify scope at ancestor routes
 //   once state has been populated from a deeper page in the same session.
 // - New verticals/templates need zero changes here: capabilities come from
@@ -163,7 +163,6 @@ interface AuthOrganization {
   id: string
   name: string
   slug: string
-  logo?: string | null
 }
 
 const route = useRoute()
@@ -279,8 +278,7 @@ const organizationAvatar = computed(() =>
 // there is no separate sidebar shell per scope, only scope-driven content inside
 // the one stable header/nav slots (see issue #316's "one stable sidebar" rule).
 //
-// There used to be a 'site' scope between these two. A business is its
-// organization, so the drill-in is organization → location.
+// A business is its organization, so the drill-in is organization → location.
 const scope = computed<'organization' | 'location'>(() => routeLocationSlug.value ? 'location' : 'organization')
 
 // One reusable scope-header model feeds both the desktop sidebar and the mobile
@@ -288,17 +286,17 @@ const scope = computed<'organization' | 'location'>(() => routeLocationSlug.valu
 // parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   return {
-    scope: 'organization',
     current: {
       label: organizationLabel.value,
       avatar: organizationAvatar.value,
-      icon: organizationAvatar.value ? undefined : 'i-lucide-building-2'
     },
     parent: null,
+    // Peers carry no mark. `organization.logo` is Better Auth's column and
+    // nothing here writes it, and the dashboard context loads media for the
+    // active organization only — drawing anything for a peer would claim
+    // "no logo" where the truth is "not loaded".
     peers: organizations.value.map((org) => ({
       label: org.name,
-      avatar: org.logo ?? undefined,
-      icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
       // Which one is a plain link is the *session's* question, not the route's.
       // A route can be open in an organization the session is not active in —

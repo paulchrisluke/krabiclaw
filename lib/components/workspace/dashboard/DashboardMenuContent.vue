@@ -8,7 +8,6 @@
     >
       <UButton
         :avatar="scopeModel?.current.avatar ? { src: scopeModel.current.avatar } : undefined"
-        :icon="scopeModel?.current.avatar ? undefined : scopeModel?.current.icon"
         :label="scopeModel?.current.label"
         color="neutral"
         variant="subtle"
@@ -20,8 +19,8 @@
     </UDropdownMenu>
 
     <!--
-      Insights is organization-wide with its own site filter, so it belongs to
-      the organization-scoped menu rather than to any one site.
+      Insights is organization-wide, so it belongs to the organization-scoped
+      menu rather than to any one location.
     -->
     <NuxtLink
       v-if="insightsPath"
@@ -33,7 +32,7 @@
         <p class="text-[15px] font-semibold text-highlighted">Insights</p>
         <UIcon name="i-lucide-chart-no-axes-column" class="size-5 text-muted" />
       </div>
-      <p class="mt-1 text-sm text-muted">Traffic, sources and conversions across your sites.</p>
+      <p class="mt-1 text-sm text-muted">Traffic, sources and conversions for your organization.</p>
     </NuxtLink>
 
     <EditorNavigationList :groups="groups" :active-item="activeItem" @act="onAct" />
@@ -52,17 +51,15 @@ const { orgPaths } = useDashboardSiteLinks()
 const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.settings}/insights`))
 
 function onAct(id: string) {
-  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
+  if (id === 'log-out') void logOut()
 }
-
 
 const scopeItems = computed<DropdownMenuItem[][]>(() => {
   const model = scopeModel.value
   if (!model || model.peers.length === 0) return []
   const peers = model.peers.map(peer => ({
     label: peer.label,
-    avatar: !peer.active && peer.avatar ? { src: peer.avatar } : undefined,
-    icon: peer.active ? 'i-lucide-check' : peer.avatar ? undefined : peer.icon,
+    icon: peer.active ? 'i-lucide-check' : undefined,
     to: peer.to,
     onSelect: peer.onSelect,
   }))

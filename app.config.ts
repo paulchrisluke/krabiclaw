@@ -9,9 +9,11 @@ export default defineAppConfig({
       error: 'red',
       neutral: 'zinc'
     },
+    // No default icon. A person glyph on every avatar made a business whose
+    // mark is missing look like a person. The glyph is a statement about the
+    // subject, so the surface that knows the subject states it.
     avatar: {
       defaultVariants: {
-        icon: 'i-lucide-user',
         color: 'neutral'
       }
     },
@@ -80,8 +82,8 @@ export default defineAppConfig({
         variant: 'outline'
       }
     },
-    // One pill control for the whole CMS: Today's range switcher, the site and
-    // location tab rows, the experiences editor.
+    // One pill control for the whole CMS: Today's range switcher, the organization
+    // and location tab rows, the experiences editor.
     //
     // This overrides `variants.variant.pill` rather than `slots`, because the
     // variant sets these same slots and a `slots` entry does not outrank it.
