@@ -8,7 +8,6 @@ import { requireLocationAccess, requireOrganizationAccess } from '~/server/utils
 import {
   assertLocationAccess,
   assertResourceAccess,
-  listAccessibleLocationIds,
   memberAccessPrincipal,
 } from '~/server/utils/member-access'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
@@ -33,14 +32,12 @@ interface EditorLocationRow {
 }
 
 export async function loadDashboardEditorContext(event: H3Event, organizationId: string) {
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   if (!organization.vertical) throw new HTTPError({ statusCode: 500, statusMessage: 'Organization vertical is not configured' })
 
-  const principal = memberAccessPrincipal(organization.membership, { env, event })
-  // requireOrganizationAccess(event, organizationId, 'context') has already run
-  // assertOrganizationContextAccess with this exact principal (location-access.ts), so
-  // asserting it again here only bought a second read of the same member row.
-  const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
+  // requireOrganizationAccess(event, organizationId) has already
+  // authorized this caller (location-access.ts), so asserting again here only
+  // bought a second read of the same member row.
   const [locationRows, entitlements] = await Promise.all([
     queryAll<EditorLocationRow>(db, `
       SELECT id, slug, title, status, feature_overrides
@@ -51,7 +48,6 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
     getOrganizationEntitlements(env, organization.id),
   ])
   const locations = locationRows
-    .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
   if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
   }
@@ -76,7 +72,7 @@ export async function loadDashboardEditorContext(event: H3Event, organizationId:
       organization: { id: organization.id, name: organization.name },
       locations,
       scopes: [
-        ...(accessibleLocationIds === null ? [{ id: null, label: 'Brand-wide', type: 'brand' as const }] : []),
+        { id: null, label: 'Brand-wide', type: 'brand' as const },
         ...locations.map(location => ({ id: location.id, label: location.title, type: 'location' as const })),
       ],
       previewToken,
@@ -112,7 +108,7 @@ export async function loadDashboardMedia(
   organizationId: string,
   filters: DashboardMediaFilters = {},
 ) {
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
   const principal = memberAccessPrincipal(organization.membership, { env, event })
   if (filters.id) {
     const asset = await getMediaAsset(db, filters.id, organizationId)

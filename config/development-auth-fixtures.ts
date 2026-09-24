@@ -6,21 +6,23 @@ export interface E2eAuthFixture {
   platformRole?: 'user' | 'admin'
   memberships?: Array<{
     organizationId: string
-    role: 'owner' | 'admin' | 'editor' | 'member'
+    role: 'owner' | 'admin'
   }>
-  /**
-   * Organizations whose every location team this fixture joins. This was
-   * `siteIds` and a single site team; the `site:*` teams are gone with `sites`,
-   * so an editor who needs reach across a whole business joins its location
-   * teams — the same expansion the production derivation performs (#1050).
-   */
-  organizationIds?: string[]
 }
 
-// Phone numbers come from Ofcom's reserved drama range (+44 7700 900000-900999),
-// which is never assigned to a real subscriber. These were previously real
-// customer numbers copied out of production, which collided on user.phoneNumber
-// the moment a developer database held real rows.
+// Phone numbers come from ACMA's reserved fictitious mobile range
+// (+61 491 570 006 - 570 156), which is never assigned to a real subscriber.
+// These were previously real customer numbers copied out of production, which
+// collided on user.phoneNumber the moment a developer database held real rows.
+// They were then Ofcom's drama range (+44 7700 900xxx), which libphonenumber
+// reports as invalid — and a notification phone goes through parsePhoneOrThrow,
+// so a fixture in that range cannot be one a tenant could have saved.
+//
+// A fixture's phoneNumber is where its WhatsApp owner alerts go: the member is
+// the recipient, so a verified number on the account is the whole of the
+// routing. The suite used to alert whichever number a location had configured,
+// which meant it alerted whichever production number the snapshot happened to
+// carry.
 export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
   {
     id: 'user-e2e-platform-admin',
@@ -38,28 +40,26 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     id: 'user-e2e-pottery-editor',
     name: 'E2E Pottery Editor',
     email: 'pottery-editor@playwright.example',
-    memberships: [{ organizationId: 'org-user-pottery-house', role: 'editor' }],
-    organizationIds: ['org-user-pottery-house'],
+    memberships: [{ organizationId: 'org-user-pottery-house', role: 'admin' }],
   },
   {
     id: 'user-e2e-pottery-owner',
     name: 'E2E Pottery Owner',
     email: 'pottery-owner@playwright.example',
-    phoneNumber: '+447700900001',
+    phoneNumber: '+61491570006',
     memberships: [{ organizationId: 'org-user-pottery-house', role: 'owner' }],
   },
   {
     id: 'user-e2e-pottery-location-owner',
     name: 'E2E Pottery Location Owner',
     email: 'pottery-location-owner@playwright.example',
-    phoneNumber: '+447700900002',
     memberships: [{ organizationId: 'org-user-pottery-house', role: 'owner' }],
   },
   {
     id: 'user-e2e-kikuzuki-owner',
     name: 'E2E Kikuzuki Owner',
     email: 'kikuzuki-owner@playwright.example',
-    phoneNumber: '+447700900003',
+    phoneNumber: '+61491570156',
     memberships: [{ organizationId: 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', role: 'owner' }],
   },
   {

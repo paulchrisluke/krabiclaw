@@ -4,7 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
 import { oncePerRequest } from '~/server/utils/request-scope'
-import { assertLocationAccess, assertOrganizationContextAccess, assertOrganizationWideAccess, memberAccessPrincipal, resolveOrganizationMembership, type ResolvedMembership } from '~/server/utils/member-access'
+import { assertLocationAccess, assertOrganizationWideAccess, memberAccessPrincipal, resolveOrganizationMembership, type ResolvedMembership } from '~/server/utils/member-access'
 import type { H3Event } from 'nitro';
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
@@ -53,7 +53,7 @@ async function readMemberOrganizationRow(db: DbClient, env: CloudflareEnv, organ
   // member-access.ts, not by which role names are allowed to reach this
   // route. An unrelated org member who isn't owner/admin/editor still fails
   // the scope check inside assertOrganizationWideAccess/assertLocationAccess/
-  // assertOrganizationContextAccess (isScopedRole/isOrganizationWideRole both false).
+  // assertOrganizationWideAccess (isScopedRole/isOrganizationWideRole both false).
   const row = await queryFirst<Omit<OrganizationAccessRow, 'slug' | 'name' | 'user_id' | 'member_role' | 'membership'>>(db, `
     SELECT id, subdomain,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url,
@@ -109,20 +109,18 @@ export async function requireLocationAccess(event: H3Event, organizationId: stri
 }
 
 /**
- * Organization-wide management access (default): tenant settings, blog,
- * localized content, professional-services, analytics, domains, the
- * contact-submissions inbox. Requires an org-wide role — an editor is scoped to
- * locations and must not reach tenant configuration.
+ * Organization-wide access: tenant settings, blog, localized content,
+ * professional-services, analytics, domains, the contact-submissions inbox, and
+ * the discovery reads that load the tenant principal.
  *
- * Pass `accessClass: 'context'` for discovery/navigation reads, or to load the
- * authenticated tenant/member principal before a synchronous role check. It
- * must not directly authorize tenant configuration, other locations' data, or a
- * mutation.
+ * There used to be an `accessClass` telling those two apart, because a
+ * location-scoped editor could reach navigation but not configuration. Owner
+ * and admin are the only roles now and both are organization-wide, so the two
+ * classes asked the same question and every caller got the same answer.
  */
 export async function requireOrganizationAccess(
   event: H3Event,
   organizationId: string,
-  accessClass: 'organization-wide' | 'context' = 'organization-wide',
 ) {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -135,11 +133,7 @@ export async function requireOrganizationAccess(
   if (!organization) throw new HTTPError({ statusCode: 404, message: 'Not found or access denied' })
 
   const principal = memberAccessPrincipal(organization.membership, { env, event })
-  if (accessClass === 'context') {
-    await assertOrganizationContextAccess(db, principal)
-  } else {
-    await assertOrganizationWideAccess(db, principal)
-  }
+  await assertOrganizationWideAccess(db, principal)
 
   return { env, db, session, organization }
 }

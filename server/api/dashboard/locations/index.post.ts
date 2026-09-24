@@ -9,7 +9,6 @@ import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces, googleReviewUpsert
 import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
-import { parsePhone } from '~/utils/phone'
 import { postalAddressFromAnswers } from '~/utils/postal-address'
 import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 
@@ -33,22 +32,6 @@ function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location'
 }
 
-// Normalize to canonical E.164 at this write boundary (issue #293 Section D), // mirroring server/api/dashboard/locations/[id].patch.ts — this create path
-// previously stored the raw trimmed input, which silently broke the E.164
-function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
-  if (raw === null || raw === undefined || raw === '') return { ok: true, value: null }
-  if (typeof raw !== 'string') return { ok: false, error: 'Phone number must be a string' }
-  const trimmed = raw.trim()
-  if (!trimmed) return { ok: true, value: null }
-  // No default country: the wizard sends E.164 for the country the owner picked,
-  // so a number that only parses with an assumed country is a number we would
-  // be guessing a country for.
-  const parsed = parsePhone(trimmed)
-  if (!parsed.valid || !parsed.e164) {
-    return { ok: false, error: 'The notification phone number must include its country code, for example +66 81 234 5678.' }
-  }
-  return { ok: true, value: parsed.e164 }
-}
 
 async function uniqueLocationSlug(db: DbClient, organizationId: string, base: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
@@ -93,17 +76,13 @@ export default defineHandler(async (event) => {
 
   // Manual path: business name only, no Google Places lookup required.
   if (name && !mapsUrl && !placeId && !query) {
-    const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
-    if (!notificationPhone.ok) {
-      return jsonResponse({ error: notificationPhone.error }, { status: 400 })
-    }
 
     const baseSlug = slugify(name).slice(0, 50)
     const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
     const result = await createLocation(
       env as SetupEnv, db, organizationId, {
-        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, address: detailsAddress(details), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, address: detailsAddress(details), phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: parseOpeningHours(details?.openingHours ?? null), special_hours: parseSpecialHours(details?.specialHours ?? null), timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
@@ -142,10 +121,6 @@ export default defineHandler(async (event) => {
         placeId: place.placeId, name: place.name, address: place.address, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
   }
 
-  const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
-  if (!notificationPhone.ok) {
-    return jsonResponse({ error: notificationPhone.error }, { status: 400 })
-  }
 
   const baseSlug = slugify(place.name).slice(0, 50)
   const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
@@ -156,7 +131,7 @@ export default defineHandler(async (event) => {
         ? details.phone.trim()
         : place.phone ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
         ? details.websiteUrl.trim()
-        : place.websiteUrl ?? null, address: detailsAddress(details) ?? place.address, opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+        : place.websiteUrl ?? null, address: detailsAddress(details) ?? place.address, opening_hours: parseOpeningHours(details && 'openingHours' in details ? details.openingHours : place.openingHours), special_hours: parseSpecialHours(details?.specialHours ?? null), rating: place.rating ?? null, review_count: place.ratingCount ?? null, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
         ? details.timezone.trim()
         : place.timezone, }, session.user.id, )
 

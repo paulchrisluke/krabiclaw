@@ -2,16 +2,14 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { listContactSubmissions } from '~/server/utils/mcp-workflows'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
 
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
-  const locationIds = await listAccessibleLocationIds(db, memberAccessPrincipal(organization.membership, { env, event }))
+  const { db } = await requireOrganizationAccess(event, organizationId)
 
-  const submissions = await listContactSubmissions(db, organizationId, { locationIds })
+  const submissions = await listContactSubmissions(db, organizationId)
   return jsonResponse({ submissions })
 })
 import { defineHandler } from 'nitro';

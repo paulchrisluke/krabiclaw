@@ -41,13 +41,11 @@ export interface DashboardLocation {
   feature_overrides: string | null
 }
 
-export type DashboardAccess = 'organization' | 'location'
 
 interface DashboardContextResponse {
   success: boolean
   organization: DashboardOrganization
   locations: DashboardLocation[]
-  access: DashboardAccess
 }
 
 const isSocialImage = (value: unknown): value is { url: string } | null =>
@@ -95,7 +93,6 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
   && isDashboardOrganization(value.organization)
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
-  && (value.access === 'organization' || value.access === 'location')
 
 // The dashboard org scope is sent as an explicit `org` query param (see
 // dashboardFetch in composables/dashboardFetch.ts) rather than a header —
@@ -193,7 +190,6 @@ export function useDashboardOrganization() {
   const organization = computed(() => state.value?.organization ?? null)
   const organizationId = computed(() => organization.value?.id ?? null)
   const locations = computed(() => state.value?.locations ?? [])
-  const access = computed(() => state.value?.access ?? null)
 
   return {
     state,
@@ -202,7 +198,6 @@ export function useDashboardOrganization() {
     organization,
     organizationId,
     locations,
-    access,
     /** Re-runs the owner's request. For an explicit reload after a mutation. */
     refresh: () => refreshNuxtData(contextKey.value),
   }

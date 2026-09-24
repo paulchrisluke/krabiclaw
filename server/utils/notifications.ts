@@ -1,11 +1,11 @@
 import { formatCalendarDate, formatTime } from '~/utils/timezone'
 import { getGuestRequest } from '~/server/domain/requests'
-import { queryFirst, type DbClient } from '~/server/db'
+import type { DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
-import { buildWhatsAppTemplatePayload, getOrgWhatsAppPhone, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { getWhatsAppDeliveryMode } from '~/server/utils/whatsapp-delivery'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
-import { resolveAuthorizedWhatsAppRecipient, getOrganizationOwnerRecipient } from '~/server/utils/member-access'
+import { listOrganizationNotificationMembers } from '~/server/utils/member-access'
 import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import type { NotificationCategory } from '~/shared/notification-categories'
@@ -228,77 +228,62 @@ async function buildOwnerReviewsUrl(
   return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews`
 }
 
-export interface OwnerEmailRecipient {
-  to: string
+/**
+ * One person this alert reaches, and where.
+ *
+ * `email` and `phone` are null when that channel is not theirs to receive on —
+ * they switched the category off, or they have no verified phone. The account
+ * is the address for both: there is no configured number any more, so there is
+ * no way to name a recipient the product cannot also identify.
+ */
+export interface OwnerRecipient {
   userId: string
+  email: string | null
+  phone: string | null
   /** The footer link a person clicks. */
   unsubscribeUrl: string | null
   /** The RFC 8058 endpoint a mail client POSTs to. */
   unsubscribeOneClickUrl: string | null
 }
 
-export interface OwnerPhoneRecipient {
-  phone: string
-  requireOrganizationWide: boolean
-}
-
 /**
  * Who actually receives this alert, on which channel.
  *
- * Replaced the per-site `settings_json.$.config.owner_notification_channels`
- * array. A notification is delivered to a person, so the choice belongs to the
- * person — and the array's unset behaviour picked a channel from whichever data
- * happened to exist (`hasWhatsAppPhone ? ['whatsapp'] : ['email']`), which meant
- * configuring a business number silently switched a tenant's email off.
- *
- * Preference and authorization stay separate: `resolveAuthorizedWhatsAppRecipient`
- * decides whether a number may receive anything at all, and only then is the
- * account behind it asked whether it wants this category.
+ * Both channels resolve from Better Auth membership and each person's own
+ * `user_notification_preferences`. WhatsApp used to resolve from a number typed
+ * into a location or organization settings field instead, which made "who gets
+ * told" answerable two ways: a tenant could configure a number no account held,
+ * and the send was refused to a console line no tenant could read. A number is
+ * now reached because a member proved they hold it, which is the same rule
+ * email has always followed.
  */
 async function resolveOwnerRecipients(
   env: NotificationEnv,
   db: DbClient,
   opts: {
     organizationId: string
-    locationId?: string | null
     category: NotificationCategory
-    candidatePhones: OwnerPhoneRecipient[]
   },
-): Promise<{ email: OwnerEmailRecipient | null; phones: OwnerPhoneRecipient[] }> {
-  const owner = await getOrganizationOwnerRecipient(env, opts.organizationId)
-
-  const unsubscribe = owner ? await buildUnsubscribeUrls(env, { userId: owner.userId, category: opts.category }) : null
-  const email = owner && await wantsNotification(db, owner.userId, opts.category, 'email')
-    ? {
-        to: owner.email,
-        userId: owner.userId,
-        unsubscribeUrl: unsubscribe?.pageUrl ?? null,
-        unsubscribeOneClickUrl: unsubscribe?.oneClickUrl ?? null,
-      }
-    : null
-
-  const phones: OwnerPhoneRecipient[] = []
-  for (const target of opts.candidatePhones) {
-    const recipient = await resolveAuthorizedWhatsAppRecipient(db, {
-      env,
-      phone: target.phone,
-      organizationId: opts.organizationId,
-      locationId: opts.locationId ?? null,
-      requireOrganizationWide: target.requireOrganizationWide,
-    })
-    if (!recipient) {
-      console.error('whatsapp_delivery_blocked', {
-        organizationId: opts.organizationId,
-        locationId: opts.locationId ?? null,
-        reason: 'recipient_access_pending',
-      })
-      continue
+): Promise<OwnerRecipient[]> {
+  const members = await listOrganizationNotificationMembers(env, opts.organizationId)
+  const recipients = await Promise.all(members.map(async (member) => {
+    const [wantsEmail, wantsWhatsApp] = await Promise.all([
+      wantsNotification(db, member.userId, opts.category, 'email'),
+      member.phone ? wantsNotification(db, member.userId, opts.category, 'whatsapp') : Promise.resolve(false),
+    ])
+    if (!wantsEmail && !wantsWhatsApp) return null
+    const unsubscribe = await buildUnsubscribeUrls(env, { userId: member.userId, category: opts.category })
+    return {
+      userId: member.userId,
+      email: wantsEmail ? member.email : null,
+      phone: wantsWhatsApp ? member.phone : null,
+      unsubscribeUrl: unsubscribe?.pageUrl ?? null,
+      unsubscribeOneClickUrl: unsubscribe?.oneClickUrl ?? null,
     }
-    if (await wantsNotification(db, recipient.userId, opts.category, 'whatsapp')) phones.push(target)
-  }
-
-  return { email, phones }
+  }))
+  return recipients.filter((recipient): recipient is OwnerRecipient => recipient !== null)
 }
+
 
 async function sendEmailNotification(
   env: NotificationEnv,
@@ -490,12 +475,6 @@ async function recordGuestCancellation(
   return { guestThreadId: thread.id, sourceEntryId: entry.id }
 }
 
-async function getLocationNotificationPhone(db: DbClient, locationId: string, organizationId: string): Promise<string | null> {
-  const row = await queryFirst<{ notification_phone: string | null }>(db, `
-    SELECT notification_phone FROM business_locations WHERE id = ? AND organization_id = ?  LIMIT 1
-  `, [locationId, organizationId])
-  return row?.notification_phone ?? null
-}
 
 // Both sends are attempted before either failure is raised: an owner alert that
 // fails must not cancel the guest's acknowledgement, nor the reverse. But a send
@@ -545,89 +524,85 @@ async function notifyOwner(
     : opts.submissionType && opts.submissionType !== 'invitation' && opts.submissionId
       ? await getOpeningThreadContext(db, opts.submissionType, opts.submissionId)
       : null
-  const [, sitePhone, locationPhone] = await Promise.all([
-    createCanonicalNotification(db, {
-      publishEnv: env,
-      scope: 'organization',
-      template: opts.template,
-      organizationId: opts.organizationId,
-      locationId: opts.locationId ?? null,
-      sourceEntryId: threadContext?.sourceEntryId ?? null,
-      idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
-      title: opts.title,
-      threadId: threadContext?.guestThreadId ?? null,
-      deepLink: opts.payload.deep_link || null,
-    }),
-    getOrgWhatsAppPhone(db, opts.organizationId),
-    opts.locationId ? getLocationNotificationPhone(db, opts.locationId, opts.organizationId) : null,
-  ])
-
-  const configuredTargets = [
-    locationPhone ? { phone: locationPhone, requireOrganizationWide: false } : null,
-    sitePhone ? { phone: sitePhone, requireOrganizationWide: true } : null,
-  ].filter(Boolean) as OwnerPhoneRecipient[]
-  const targetByPhone = new Map<string, OwnerPhoneRecipient>()
-  for (const target of configuredTargets) {
-    const existing = targetByPhone.get(target.phone)
-    // A number that is both the location's and the site's is reachable at
-    // location scope, so the *least* restrictive of the two wins. Taking the
-    // most restrictive locked a location-scoped editor out of alerts for their
-    // own location whenever the site reused their number.
-    targetByPhone.set(target.phone, {
-      phone: target.phone,
-      requireOrganizationWide: existing ? existing.requireOrganizationWide && target.requireOrganizationWide : target.requireOrganizationWide,
-    })
-  }
-
-  // Internal email alerts always go to the org owner/admin account.
-  // Public contact emails are guest-facing data and must not double as notification routing.
-  const recipients = await resolveOwnerRecipients(env, db, {
+  await createCanonicalNotification(db, {
+    publishEnv: env,
+    scope: 'organization',
+    template: opts.template,
     organizationId: opts.organizationId,
     locationId: opts.locationId ?? null,
-    category: opts.message.category,
-    candidatePhones: [...targetByPhone.values()],
+    sourceEntryId: threadContext?.sourceEntryId ?? null,
+    idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
+    title: opts.title,
+    threadId: threadContext?.guestThreadId ?? null,
+    deepLink: opts.payload.deep_link || null,
   })
 
-  if (recipients.email) {
-    const { to, unsubscribeUrl, unsubscribeOneClickUrl } = recipients.email
-    const rendered = await renderNotificationEmail(opts.message, {
-      platformDomain: getPlatformDomain(env),
-      preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
-      unsubscribeUrl,
-    })
-    await sendEmailNotification(env, db, {
-      ...opts,
-      to,
-      email: { subject: sanitizeEmailHeaderValue(opts.message.title), html: rendered.html, text: rendered.text },
-      unsubscribeOneClickUrl,
-      delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
-    })
+  const recipients = await resolveOwnerRecipients(env, db, {
+    organizationId: opts.organizationId,
+    category: opts.message.category,
+  })
+
+  const whatsappVars = opts.whatsappTemplate && recipients.some(recipient => recipient.phone)
+    ? toWhatsAppVars(opts.message, opts.whatsappTemplate)
+    : null
+  if (whatsappVars?.omitted.length) {
+    // Declared in WHATSAPP_MAPPINGS.cannotCarry and enforced by
+    // lint:notification-parity, so this is a record of a known template
+    // limit rather than a surprise.
+    console.info('whatsapp_facts_omitted', { template: opts.whatsappTemplate, omitted: whatsappVars.omitted })
   }
 
-  if (opts.whatsappTemplate && recipients.phones.length > 0) {
-    const { vars, omitted } = toWhatsAppVars(opts.message, opts.whatsappTemplate)
-    if (omitted.length) {
-      // Declared in WHATSAPP_MAPPINGS.cannotCarry and enforced by
-      // lint:notification-parity, so this is a record of a known template
-      // limit rather than a surprise.
-      console.info('whatsapp_facts_omitted', { template: opts.whatsappTemplate, omitted })
+  const results = await Promise.allSettled(recipients.flatMap((recipient) => {
+    const sends: Array<Promise<unknown>> = []
+    if (recipient.email) {
+      const to = recipient.email
+      sends.push((async () => {
+        // Rendered per person: the footer carries that recipient's own opt-out
+        // link, so the same event cannot hand one member another's.
+        const rendered = await renderNotificationEmail(opts.message, {
+          platformDomain: getPlatformDomain(env),
+          preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
+          unsubscribeUrl: recipient.unsubscribeUrl,
+        })
+        await sendEmailNotification(env, db, {
+          ...opts,
+          to,
+          email: { subject: sanitizeEmailHeaderValue(opts.message.title), html: rendered.html, text: rendered.text },
+          unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
+          delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
+        })
+      })())
     }
-    await Promise.allSettled(recipients.phones.map(async target => {
+    if (recipient.phone && opts.whatsappTemplate && whatsappVars) {
+      const toPhone = recipient.phone
       const sendOptions = {
         organizationId: opts.organizationId,
         locationId: opts.locationId ?? null,
-        toPhone: target.phone,
-        template: opts.whatsappTemplate!,
-        vars,
+        toPhone,
+        template: opts.whatsappTemplate,
+        vars: whatsappVars.vars,
       }
-      const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', opts.template, target.phone)
-      if (delivery) {
-        await sendWhatsAppThreadNotification(env, db, { ...sendOptions, delivery })
-      } else {
-        await sendWhatsAppNotification(env, sendOptions)
-      }
-    }))
-  }
+      const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', opts.template, toPhone)
+      // A refused send resolves rather than throwing, so without this the
+      // settled-failure check sees a fulfilled promise and reports nothing —
+      // the alert is lost exactly as quietly as the console line it replaced.
+      sends.push((async () => {
+        if (delivery) {
+          if (!await sendWhatsAppThreadNotification(env, db, { ...sendOptions, delivery })) {
+            throw new Error(`WhatsApp owner alert was not delivered for organization ${opts.organizationId}`)
+          }
+          return
+        }
+        const result = await sendWhatsAppNotification(env, sendOptions)
+        if (!result.success) {
+          throw new Error(`WhatsApp owner alert was not delivered for organization ${opts.organizationId}: ${result.error}`)
+        }
+      })())
+    }
+    return sends
+  }))
+  raiseSettledFailures('notifyOwner', `organization ${opts.organizationId}`, results,
+    results.map(() => 'ownerAlert'))
 }
 
 // Email subjects go into a header context, not HTML — strip CR/LF so a guest name can't
@@ -1226,13 +1201,6 @@ async function notifyGuestThreadReplyInner(
     deepLink: payload.deep_link || null,
   })
 
-  const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId)
-  const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId) : null
-  const candidatePhones: OwnerPhoneRecipient[] = [
-    locationPhone ? { phone: locationPhone, requireOrganizationWide: false } : null,
-    sitePhone && sitePhone !== locationPhone ? { phone: sitePhone, requireOrganizationWide: true } : null,
-  ].filter(Boolean) as OwnerPhoneRecipient[]
-
   const ownerMessage = guestReplyMessage({
     guestName: opts.guestName,
     guestEmail: opts.guestEmail ?? null,
@@ -1244,53 +1212,57 @@ async function notifyGuestThreadReplyInner(
 
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,
-    locationId: opts.locationId ?? null,
     category: ownerMessage.category,
-    candidatePhones,
   })
 
-  const emailResults = recipients.email
-    ? await Promise.allSettled([sendEmailNotification(env, db, {
-      organizationId: opts.organizationId,
-      siteName: opts.siteName ?? null,
-      locationId: opts.locationId ?? null,
-      to: recipients.email.to,
-      template: 'guest_thread_reply_email',
-      title,
-      payload,
-      email: {
-        subject: sanitizeEmailHeaderValue(ownerMessage.title),
-        ...(await renderNotificationEmail(ownerMessage, {
-          platformDomain: getPlatformDomain(env),
-          preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
-          unsubscribeUrl: recipients.email.unsubscribeUrl,
-        })),
-      },
-      unsubscribeUrl: recipients.email.unsubscribeUrl,
-      unsubscribeOneClickUrl: recipients.email.unsubscribeOneClickUrl,
-      delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', recipients.email.to),
-    })])
-    : []
-
-  if (recipients.phones.length > 0) {
-    await Promise.allSettled(recipients.phones.map(async ({ phone: toPhone }) => {
+  const results = await Promise.allSettled(recipients.flatMap((recipient) => {
+    const sends: Array<Promise<unknown>> = []
+    if (recipient.email) {
+      const to = recipient.email
+      sends.push((async () => {
+        await sendEmailNotification(env, db, {
+          organizationId: opts.organizationId,
+          siteName: opts.siteName ?? null,
+          locationId: opts.locationId ?? null,
+          to,
+          template: 'guest_thread_reply_email',
+          title,
+          payload,
+          email: {
+            subject: sanitizeEmailHeaderValue(ownerMessage.title),
+            ...(await renderNotificationEmail(ownerMessage, {
+              platformDomain: getPlatformDomain(env),
+              preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
+              unsubscribeUrl: recipient.unsubscribeUrl,
+            })),
+          },
+          unsubscribeUrl: recipient.unsubscribeUrl,
+          unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
+          delivery: threadDelivery(threadContext, 'owner_alert', 'email', 'guest_thread_reply_email', to),
+        })
+      })())
+    }
+    if (recipient.phone) {
+      const toPhone = recipient.phone
       const delivery = threadDelivery(threadContext, 'owner_alert', 'whatsapp', 'guest_thread_reply_whatsapp', toPhone)
       if (!delivery) throw new Error('Guest reply delivery context is missing')
-      await sendWhatsAppThreadNotification(env, db, {
-        organizationId: opts.organizationId,
-        locationId: opts.locationId ?? null,
-        toPhone,
-        template: 'guest_thread_reply_whatsapp',
-        vars: toWhatsAppVars(ownerMessage, 'guest_thread_reply_whatsapp').vars,
-        delivery,
-      })
-    }))
-  }
-
-  if (emailResults.some(result => result.status === 'rejected')) {
-    throw new Error('Guest thread owner email notification was not delivered')
-  }
-
+      sends.push((async () => {
+        if (!await sendWhatsAppThreadNotification(env, db, {
+          organizationId: opts.organizationId,
+          locationId: opts.locationId ?? null,
+          toPhone,
+          template: 'guest_thread_reply_whatsapp',
+          vars: toWhatsAppVars(ownerMessage, 'guest_thread_reply_whatsapp').vars,
+          delivery,
+        })) {
+          throw new Error(`WhatsApp guest-reply alert was not delivered for thread ${opts.threadId}`)
+        }
+      })())
+    }
+    return sends
+  }))
+  raiseSettledFailures('notifyGuestThreadReply', `thread ${opts.threadId}`, results,
+    results.map(() => 'ownerAlert'))
 }
 
 export interface OrganizationInvitationInput {

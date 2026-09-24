@@ -8,7 +8,7 @@ import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/memb
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
-  const { env, db, organization } = await requireOrganizationAccess(event, organizationId, 'context')
+  const { env, db, organization } = await requireOrganizationAccess(event, organizationId)
 
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id.trim()

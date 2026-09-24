@@ -7,8 +7,7 @@ import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
-import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { assertOrganizationContextAccess, isOrganizationWideRole, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
+import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganization, type ResolvedMembership } from '~/server/utils/member-access'
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 import { parsePostalAddress } from '~/utils/postal-address'
@@ -128,7 +127,6 @@ export interface DashboardLocationContextRow {
   price_level: string | null
   google_place_id: string | null
   google_review_url: string | null
-  notification_phone: string | null
   timezone: string | null
   feature_overrides: string | null
 }
@@ -278,7 +276,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   }
   const organization: DashboardOrganizationRow = Object.assign(membership, config)
 
-  await assertOrganizationContextAccess(db, memberAccessPrincipal(organization, { env, event }))
+  await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
   return { env, db, session, userId: session.user.id, organization }
 }
@@ -336,11 +334,7 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
 export async function listDashboardLocations(
   db: DbClient,
   organizationId: string,
-  principal?: { role: string; teamIds: string[] | null },
 ) {
-  const scopedTeamIds = principal && !isOrganizationWideRole(principal.role) ? principal.teamIds ?? [] : null
-  if (scopedTeamIds && scopedTeamIds.length === 0) return []
-  const scopedTeamIdsJson = scopedTeamIds ? d1JsonStringSet(scopedTeamIds) : null
 
   const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
     hero_asset_id: string | null
@@ -372,9 +366,8 @@ export async function listDashboardLocations(
       AND ma_social.organization_id = business_locations.organization_id AND ma_social.status = 'active'
     WHERE business_locations.organization_id = ?
       AND business_locations.status = 'active'
-      ${scopedTeamIds ? `AND business_locations.team_id IN (SELECT value FROM json_each(?))` : ''}
     ORDER BY title ASC
-  `, scopedTeamIdsJson ? [organizationId, scopedTeamIdsJson] : [organizationId])
+  `, [organizationId])
 
   return locations.map((location) => {
     const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url,

@@ -45,14 +45,12 @@ function expectOwnerDispatch(state: NotificationState) {
   expect(unsettled, `deliveries not settled as sent: ${JSON.stringify(unsettled)}`).toHaveLength(0)
 }
 
-// A location that carries a notification_phone is a location whose owner asked
-// to be told on WhatsApp, so that is what this asserts. It was briefly weakened
-// to email-only because the local run could not satisfy it; production says the
-// assertion was right and the environment is what is wrong. Kikuzuki's
-// +66952932112 matches a verified member and its alerts deliver; Pottery House's
-// two numbers match no member account, so resolveAuthorizedWhatsAppRecipient
-// declines and writes whatsapp_delivery_blocked to a console the owner cannot
-// read. Until that is fixed this fails, and it should.
+// An owner with a verified phone who has not switched the category off is
+// told on WhatsApp as well as by email, so that is what this asserts. It was
+// briefly weakened to email-only because the local run could not satisfy it;
+// the assertion was right and the environment was wrong. The number came from
+// whatever a location had configured, which is how a tenant could set one no
+// account held and hear nothing at all.
 const ownerAlertSent = (state: NotificationState) =>
   state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'whatsapp' && row.status === 'sent')
   && state.deliveries.some(row => row.purpose === 'owner_alert' && row.channel === 'email' && row.status === 'sent')
