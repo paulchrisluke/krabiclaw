@@ -40,11 +40,10 @@ export function useDashboardMenu() {
 
   const notificationsTo = computed(() => orgBase.value ? `${orgBase.value}/settings/notifications` : null)
 
-  /** Ends the session and returns here after the next sign-in. Stays put if the sign-out failed. */
+  /** Ends the session and returns here after the next sign-in. */
   async function logOut() {
     const redirect = route.fullPath
-    const { error } = await authClient.signOut()
-    if (error) throw new Error(error.message || 'Sign-out failed')
+    await authClient.signOut()
     await navigateTo({ path: '/login', query: { redirect } })
   }
 

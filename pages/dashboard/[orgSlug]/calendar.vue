@@ -137,7 +137,6 @@ const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) 
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
   && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'session', 'post'].includes(String(kind)))
-  && typeof value.vertical === 'string'
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
 async function fetchAgenda(): Promise<AgendaPayload> {

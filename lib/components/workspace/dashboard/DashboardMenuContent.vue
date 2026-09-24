@@ -51,9 +51,8 @@ const { orgPaths } = useDashboardSiteLinks()
 const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.settings}/insights`))
 
 function onAct(id: string) {
-  if (id === 'log-out') logOut().catch(error => console.error('sign_out_failed', error))
+  if (id === 'log-out') void logOut()
 }
-
 
 const scopeItems = computed<DropdownMenuItem[][]>(() => {
   const model = scopeModel.value
