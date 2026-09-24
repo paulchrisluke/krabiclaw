@@ -11,7 +11,6 @@
 </template>
 
 <script setup lang="ts">
-import { authClient } from '~/lib/auth-client'
 definePageMeta({ layout: false })
 
 const { isPlatform, organizationId } = useTenantOrganization()
@@ -32,10 +31,13 @@ if (!isPlatform && !organizationId) {
 // account yet; everyone else goes to their dashboard. Anonymous visitors and
 // crawlers are untouched, so the cached public page is unchanged: a request
 // carrying a session cookie bypasses the edge cache (00.edge-cache.ts).
-// Better Auth's Nuxt session read runs through useFetch, so the server answers
-// a hard load with the 302 and the client covers in-app navigation to `/`.
+// The session is read through applicationFetch, which forwards the visitor's
+// cookie during SSR, so the server answers a hard load with the 302 and the
+// client covers in-app navigation to `/`.
 if (isPlatform) {
-  const { data: session } = await authClient.useSession(useFetch)
-  if (session.value?.user) await navigateTo('/api/post-login', { external: true, redirectCode: 302 })
+  const session = await applicationFetch<{ user?: { id?: string } } | null>('/api/auth/get-session', {
+    validate: (value): value is { user?: { id?: string } } | null => value === null || typeof value === 'object',
+  })
+  if (session?.user?.id) await navigateTo('/api/post-login', { external: true, redirectCode: 302 })
 }
 </script>

@@ -64,11 +64,14 @@ watch(googleError, value => { operationError.value = value })
 if (route.query.verified === '1') notice.value = 'Your email is verified. You can sign in now.'
 else if (route.query.reset === 'success') notice.value = 'Your password was updated. Sign in with your new password.'
 
-// Better Auth's Nuxt session read: through useFetch it runs on the server with
-// the request's cookie, so a signed-in visitor gets the 302 before any page is
-// rendered, and on the client for in-app navigation.
-const { data: session } = await authClient.useSession(useFetch)
-const isAuthenticated = computed(() => Boolean(session.value?.user))
+// The session is read through applicationFetch, which forwards the visitor's
+// cookie during SSR: Better Auth's client resolves an absolute base URL on the
+// server, and useFetch does not forward cookies to one, so the server never saw
+// the session and the redirect only ever happened after hydration.
+const session = await applicationFetch<{ user?: { id?: string } } | null>('/api/auth/get-session', {
+  validate: (value): value is { user?: { id?: string } } | null => value === null || typeof value === 'object',
+})
+const isAuthenticated = computed(() => Boolean(session?.user?.id))
 if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true, redirectCode: 302 })
 
 function finishPhoneSignIn() {
