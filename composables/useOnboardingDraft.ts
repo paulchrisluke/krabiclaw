@@ -61,7 +61,6 @@ export function useOnboardingDraft() {
       phone: details.phone.trim() || null,
       openingHours: parseOpeningHours(state.value.hours.hours),
       specialHours: parseSpecialHours(state.value.hours.specialHours),
-      notificationPhone: details.phone.trim() || null,
       timezone: state.value.hours.timezone.trim() || null,
       currency: details.currency ?? null,
     }

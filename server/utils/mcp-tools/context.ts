@@ -6,7 +6,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
       name: 'get_workspace_context',
       description: 'Get the active MCP organization and location context, plus the organizations and locations available to this user. Use context.organization_id or one of the returned organization ids as organization_id for tenant-scoped tools; do not pass public URLs, hostnames, custom domains, subdomains, slugs, or business names as organization_id.',
       domain: 'context',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { type: 'object', properties: {}, additionalProperties: true },
       outputSchema: {
@@ -23,7 +23,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
       name: 'set_workspace_context',
       description: 'Persist the active MCP organization and optional location so later tool calls can omit raw IDs. Pass an internal organization_id from get_workspace_context or list_organizations to switch tenants. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id. Pass location_id to switch locations within the active or specified organization.',
       domain: 'context',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         type: 'object',

@@ -5,17 +5,16 @@
 // (https://www.better-auth.com/docs/plugins/organization), and already
 // enforces the invariants that matter (only an existing owner can grant or
 // touch the owner role, the last owner can't demote themselves). This route
-// wraps that call the same way remove.post.ts wraps removeMember: the only
-// thing layered on top is our app-specific location team scoping for the
-// 'editor' role, which Better Auth's flat role model has no concept of.
+// wraps that call the same way remove.post.ts wraps removeMember, and layers
+// nothing on top: owner and admin are both organization-wide, so there is no
+// scope to reconcile beside the role Better Auth already stores.
 
-import { queryFirst } from '~/server/db'
 import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { addMemberResourceAccess, findOrganizationMemberById, isOrganizationWideRole, isScopedRole, removeAllMemberResourceAccess } from '~/server/utils/member-access'
+import { findOrganizationMemberById, isOrganizationWideRole } from '~/server/utils/member-access'
 
-const ALLOWED_ROLES = new Set(['member', 'admin', 'editor', 'owner'])
+const ALLOWED_ROLES = new Set(['admin', 'owner'])
 
 interface UpdateMemberRoleApi {
   updateMemberRole(_input: {
@@ -29,42 +28,24 @@ export default defineHandler(async (event) => {
   const memberId = String(getRouterParam(event, 'memberId') || '').trim()
   if (!memberId) return jsonResponse({ error: 'Member id is required' }, { status: 400 })
 
-  const { env, db, organization } = await getDashboardContext(event, {})
+  const { env, organization } = await getDashboardContext(event, {})
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can change member roles' }, { status: 403 })
   }
 
-  const body = await readBody(event).catch(() => null) as {
-    role?: unknown
-    locationId?: unknown
-  } | null
+  const body = await readBody(event).catch(() => null) as { role?: unknown } | null
   const role = typeof body?.role === 'string' ? body.role.trim() : ''
-  const locationId = typeof body?.locationId === 'string' && body.locationId.trim() ? body.locationId.trim() : null
 
   if (!ALLOWED_ROLES.has(role)) {
-    return jsonResponse({ error: 'Role must be member, admin, editor, or owner' }, { status: 400 })
+    return jsonResponse({ error: 'Role must be admin or owner' }, { status: 400 })
   }
   if (role === 'owner' && organization.role !== 'owner') {
     return jsonResponse({ error: 'Only an owner can grant the owner role' }, { status: 403 })
-  }
-  // An editor is scoped to locations, so one has to be named: there is no
-  // organization-wide team to fall back to.
-  if (role === 'editor' && !locationId) {
-    return jsonResponse({ error: 'Editors must be assigned to a location' }, { status: 400 })
   }
 
   const target = await findOrganizationMemberById(env, memberId)
   if (!target || target.organizationId !== organization.id) {
     return jsonResponse({ error: 'Member not found' }, { status: 404 })
-  }
-
-  if (locationId) {
-    const location = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM business_locations
-      WHERE id = ? AND organization_id = ?
-      LIMIT 1
-    `, [locationId, organization.id])
-    if (!location) return jsonResponse({ error: 'locationId must reference a location in this organization' }, { status: 400 })
   }
 
   const auth = createAuth(env)
@@ -90,15 +71,6 @@ export default defineHandler(async (event) => {
       if (text) message = text
     }
     return jsonResponse({ error: message }, { status: response.status || 500 })
-  }
-
-  // Better Auth's role column is now authoritative — reconcile our
-  // app-specific location Teams scoping (which it has no concept of) to match.
-  if (role === 'editor' && locationId) {
-    await addMemberResourceAccess(db, {
-      env, userId: target.userId, organizationId: organization.id, locationId, })
-  } else if (isScopedRole(target.role)) {
-    await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }
 
   return jsonResponse({ success: true, memberId: target.id, role })

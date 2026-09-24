@@ -6,7 +6,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
       name: 'get_contact_inquiries',
       description: 'List contact submissions, including the submitter\'s name, email address, phone number, and message.',
       domain: 'submissions',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       outputSchema: {
         type: 'object',
@@ -18,7 +18,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
       name: 'get_reservation_inquiries',
       description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Results include the guest\'s name, contact details, and reservation details. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. Seats booked on a bookable Product are answered in the dashboard inbox, not on this connection.',
       domain: 'submissions',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         location_id: { type: 'string', description: 'Optional location id to list only that location\'s reservations.' },

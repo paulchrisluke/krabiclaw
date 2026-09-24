@@ -30,6 +30,10 @@ import { PROMOTE_PRODUCT_COVERS_SQL, RENUMBER_PRODUCT_GALLERIES_SQL } from './li
 import { serializeMetafieldValue } from '../shared/metafields.ts'
 import { occurrenceKey } from '../shared/bookings.ts'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
+import { organizationRoles } from '../utils/organization-access.ts'
+
+/** The roles the access matrix declares. Anything else evaluates to no permissions. */
+const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
 import { localDateTimeToInstant } from '../utils/timezone.ts'
 
 const MIGRATIONS_DIRECTORY = 'migrations'
@@ -156,6 +160,14 @@ export const TRANSFORMS = [
 )
 UPDATE content_blocks SET position = (SELECT new_position FROM map WHERE map.id = content_blocks.id)
 WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map WHERE map.id = content_blocks.id)` },
+  // The organization's WhatsApp number decided who heard about a booking, beside
+  // the Better Auth membership that already said so. Notifications resolve from
+  // the member to their own verified phone now, so the key is retired with the
+  // column its location-level twin lived in. Nothing reads it; left behind it is
+  // a setting a tenant could still see in an export and believe in.
+  { name: 'organization_whatsapp_phone_is_retired', sql: `UPDATE organization
+      SET settings_json = json_remove(settings_json, '$.config.whatsapp_phone')
+    WHERE json_type(settings_json, '$.config.whatsapp_phone') IS NOT NULL` },
   { name: 'localized_brand_name_is_organization_name', sql: `UPDATE resource_localizations
       SET values_json = json_remove(json_set(values_json, '$.name', values_json ->> '$.brand_name'), '$.brand_name')
     WHERE resource_type IN ('site', 'organization')
@@ -255,6 +267,26 @@ export function auditTargetInvariants(target) {
   const placements = target.prepare('SELECT DISTINCT owner_type, slot FROM media_placements').all()
   const unsupported = placements.filter(row => !isSupportedMediaPlacement(row))
   results.push({ name: 'media_placement_slots_are_declared', violations: unsupported.length, unsupported: unsupported.map(row => `${row.owner_type}:${row.slot}`) })
+  // Roles are declared in TypeScript (utils/organization-access.ts), not in SQL.
+  // A role the matrix does not know evaluates to no permissions at all, so a row
+  // carrying a retired one is a person who quietly cannot reach their own tenant.
+  //
+  // This fails rather than rewriting the row. Mapping a retired role onto a
+  // surviving one is a privilege decision: `member` granted nothing and
+  // `editor` was scoped to a single location, so rewriting either to `admin`
+  // hands out settings, billing and member management that nobody approved —
+  // and an audit that accepts the resulting `admin` cannot see it happened.
+  // Whoever runs the transfer resolves the row first.
+  //
+  // Only live authorization counts. A member row authorizes; an invitation
+  // authorizes while it is pending. An accepted or revoked one is a record of
+  // what happened and grants nothing.
+  const roles = target.prepare(`
+    SELECT DISTINCT role FROM member WHERE role IS NOT NULL
+    UNION SELECT DISTINCT role FROM invitation WHERE role IS NOT NULL AND status = 'pending'
+  `).all().map(row => String(row.role))
+  const undeclared = roles.filter(role => !DECLARED_ORGANIZATION_ROLES.has(role))
+  results.push({ name: 'organization_roles_are_declared', violations: undeclared.length, undeclared })
   return results
 }
 

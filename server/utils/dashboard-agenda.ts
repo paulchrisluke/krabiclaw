@@ -2,7 +2,7 @@ import { assertCalendarDate, isValidTimezone, instantDate, localDateAt, addLocal
 import { queryAll, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { isOrganizationWideRole, listAccessibleLocationIds, memberAccessPrincipal, type ResolvedMembership } from '~/server/utils/member-access'
+import type { ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 
@@ -154,25 +154,12 @@ export async function listAgenda(
   assertCalendarDate(query.to)
   if (query.from > query.to) throw new Error('from must not be after to')
 
-  const scoped = Boolean(query.principal && !isOrganizationWideRole(query.principal.membership.role))
-  const allCapabilitySites = await queryAll<CapabilitySiteRow>(db, `
+  const capabilitySites = await queryAll<CapabilitySiteRow>(db, `
     SELECT s.id, s.name, s.subdomain, s.vertical, s.theme_id, s.feature_overrides
     FROM organization s
     WHERE s.id = ?
     ORDER BY s.id
   `, [organizationId])
-  const accessibleLocationsBySite = new Map<string, string[] | null>()
-  if (scoped && query.principal) {
-    await Promise.all(allCapabilitySites.map(async (site) => {
-      accessibleLocationsBySite.set(site.id, await listAccessibleLocationIds(
-        db,
-        memberAccessPrincipal(query.principal!.membership, { env: query.principal!.env}),
-      ))
-    }))
-  }
-  const capabilitySites = allCapabilitySites.filter(site =>
-    !scoped || (accessibleLocationsBySite.get(site.id)?.length ?? 1) > 0)
-
   const available = new Set<AgendaKind>(['post'])
   for (const site of capabilitySites) {
     const { capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
@@ -270,11 +257,7 @@ export async function listAgenda(
   })}
     AND CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
 
-  const rows = (await Promise.all(sourceQueries)).flat().filter((row) => {
-    if (!scoped) return true
-    const locationIds = accessibleLocationsBySite.get(row.organization_id)
-    return locationIds === null || Boolean(row.location_id && locationIds?.includes(row.location_id))
-  })
+  const rows = (await Promise.all(sourceQueries)).flat()
   const organizationSlug = query.organizationSlug ?? organizationId
   const items = rows.flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
@@ -306,11 +289,7 @@ export async function listAgenda(
     SELECT l.id, l.organization_id, l.title FROM business_locations l
     WHERE l.organization_id = ? AND l.organization_id IN (SELECT value FROM json_each(?))
     ORDER BY l.title, l.id
-  `, locationParams).then(rows => rows.filter((location) => {
-    if (!scoped) return true
-    const locationIds = accessibleLocationsBySite.get(location.organization_id)
-    return locationIds === null || Boolean(locationIds?.includes(location.id))
-  }))
+  `, locationParams)
   return {
     items, availableKinds,
     vertical: capabilitySites[0]?.vertical ?? '',

@@ -18,7 +18,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       name: 'list_organizations',
       description: 'List the organizations the caller can reach and the current authenticated account identity. Use this to choose the internal organization id for organization_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or business name, match it against the returned organizations and pass the matching id as organization_id; never pass the URL/domain/name itself as organization_id.',
       domain: 'sites',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { type: 'object', properties: { ...paginationInputSchema }, additionalProperties: true },
       outputSchema: {
@@ -38,7 +38,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       name: 'get_organization',
       description: 'Get site details for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       outputSchema: {
         type: 'object',
@@ -68,7 +68,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
       name: 'get_organization_settings',
       description: 'Get editable site settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
       domain: 'sites',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       outputSchema: {
         type: 'object',

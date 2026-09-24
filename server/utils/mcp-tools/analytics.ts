@@ -10,7 +10,7 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
     name: 'get_organization_analytics',
     description: 'Get the canonical read-only traffic, attribution, and conversion report for the site. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates.',
     domain: 'analytics',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {
       start_date: { type: 'string', description: 'Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.' },

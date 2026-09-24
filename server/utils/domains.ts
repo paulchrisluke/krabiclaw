@@ -679,7 +679,7 @@ async function persistCloudflareState(
   return after
 }
 
-export type DomainActorType = 'owner' | 'admin' | 'editor' | 'system' | 'cloudflare'
+export type DomainActorType = 'owner' | 'admin' | 'system' | 'cloudflare'
 
 export async function createCustomDomainPair(
   env: DomainEnv,

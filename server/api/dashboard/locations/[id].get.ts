@@ -15,7 +15,11 @@ export default defineHandler(async (event) => {
 
   const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides as string | null ?? null)
 
-  return jsonResponse({ success: true, location: parseLocationPayload(location), ...capabilitySummary })
+  return jsonResponse({
+    success: true,
+    location: parseLocationPayload(location),
+    ...capabilitySummary,
+  })
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam } from 'nitro/h3';

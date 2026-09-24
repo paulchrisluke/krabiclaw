@@ -3,7 +3,7 @@ import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { assertResourceAccess, listAccessibleLocationIds, memberAccessPrincipal } from '~/server/utils/member-access'
+import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 import { localPartsAt } from '~/utils/timezone'
@@ -191,9 +191,8 @@ export async function loadDashboardBookingDetails(
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
 
-  const allowedLocationIds = await listAccessibleLocationIds(context.db, memberAccessPrincipal(context.organization, { env: context.env}))
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
-  const visibleLocations = locations.filter(location => (allowedLocationIds === null || allowedLocationIds.includes(location.id)) && (input.type === 'reservation' || location.id === row.location_id))
+  const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
   const locationMedia = await loadPublicSocialMedia(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([

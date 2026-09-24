@@ -22,7 +22,7 @@ export interface FireOrganizationEventParams {
   entityType?: string
   entityId?: string
   metadata?: unknown
-  actorType?: 'owner' | 'admin' | 'editor' | 'member' | 'system' | 'cloudflare'
+  actorType?: 'owner' | 'admin' | 'system' | 'cloudflare'
   message?: string
   beforeState?: unknown
   afterState?: unknown

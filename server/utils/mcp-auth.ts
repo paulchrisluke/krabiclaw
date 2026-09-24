@@ -10,7 +10,7 @@ import { assertOrganizationWideAccess, isOrganizationWideRole, resolveOrganizati
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
-export type McpToolRole = 'owner' | 'admin' | 'editor'
+export type McpToolRole = 'owner' | 'admin'
 
 /**
  * The role floor each tool declares, as a permission.
@@ -23,7 +23,6 @@ export type McpToolRole = 'owner' | 'admin' | 'editor'
  * three configuration tools need.
  */
 const TOOL_ROLE_PERMISSIONS: Record<McpToolRole, OrganizationPermissions> = {
-  editor: { sites: ['read'] },
   admin: { settings: ['update'] },
   owner: { organization: ['delete'] },
 }
@@ -341,7 +340,7 @@ function ensureForbiddenScopesAbsent(scopes: string[], forbiddenScopes?: string[
 export async function requireMcpOrganization(
   event: H3Event,
   organization: string,
-  minimumRole: McpToolRole = 'editor',
+  minimumRole: McpToolRole = 'admin',
   authenticatedUser?: McpUserContext,
 ): Promise<McpOrganizationContext> {
   const user = authenticatedUser ?? await requireMcpUser(event)
@@ -381,10 +380,9 @@ export async function requireMcpOrganization(
 
   // MCP tools operate on the whole tenant at this auth layer, so anything short
   // of an organization-wide role is refused here rather than silently getting
-  // tenant-wide access. A location-scoped editor could never satisfy
-  // `minimumRole: 'editor'` anyway (that role name does not normalize to a
-  // valid McpToolRole), so no existing MCP user loses access — the
-  // never-actually-reachable case is now enforced explicitly.
+  // tenant-wide access. Owner and admin are the only roles there are, so this
+  // is the same question the floor asks; it stays because the floor is what is
+  // published to MCP clients and this is the boundary that enforces it.
   if (!isOrganizationWideRole(role)) {
     await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }
@@ -408,7 +406,7 @@ export async function getVisibleOrganizationContext(
   organization: string,
 ): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
-    const site = await requireMcpOrganization(event, organization, 'editor')
+    const site = await requireMcpOrganization(event, organization, 'admin')
     return { role: site.role, organizationId: site.organizationId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
@@ -434,7 +432,7 @@ export async function roleSatisfies(organizationId: string, actual: string, mini
 }
 
 export function normalizeRole(role: string | null | undefined): McpToolRole | null {
-  if (role === 'owner' || role === 'admin' || role === 'editor') return role
+  if (role === 'owner' || role === 'admin') return role
   return null
 }
 

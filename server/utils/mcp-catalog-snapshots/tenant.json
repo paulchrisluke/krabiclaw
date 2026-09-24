@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:afdc74bf7bb3fdbfbbae681ac50b8c6dafdb2619083530d734c795a5a82b9471",
+  "fingerprint": "sha256:51c2847a67386c07bb41f027cdb04aad52c5e49cf5cf5c418896f47c109897bc",
   "tools": [
     {
       "name": "append_content_block",
@@ -4190,13 +4190,6 @@
                   "type": "object"
                 },
                 "type": "array"
-              },
-              "notification_phone": {
-                "description": "WhatsApp number for internal booking/reservation alerts to this location's manager. Not shown to guests. Null means no location-specific recipient is configured. Site-wide recipients are configured independently.",
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "opening_hours": {
                 "anyOf": [
@@ -13987,13 +13980,6 @@
             "description": "Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.",
             "type": [
               "number",
-              "null"
-            ]
-          },
-          "notification_phone": {
-            "description": "WhatsApp number for internal booking/reservation alerts to this location's manager. Not shown to guests. Null means no location-specific recipient is configured. Site-wide recipients are configured independently.",
-            "type": [
-              "string",
               "null"
             ]
           },

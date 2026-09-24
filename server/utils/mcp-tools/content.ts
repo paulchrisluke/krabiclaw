@@ -71,7 +71,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'append_content_block',
       description: 'Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         document_id: { type: 'string', description: 'The blog post id or tenant page variant id.' },
@@ -85,7 +85,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'replace_content_block',
       description: 'Replace one block\'s data and media in place, keeping its position. Requires the block\'s own updated_at from the last read; a stale token is rejected with a conflict.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         block_id: { type: 'string' },
@@ -100,7 +100,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'delete_content_block',
       description: 'Delete one block, and any blocks nested under it, from a blog article or tenant page. Requires the block\'s own updated_at from the last read.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         block_id: { type: 'string' },
@@ -113,7 +113,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'list_tenant_pages',
       description: 'List canonical tenant-page variants for one manually managed locale. Automated translation is not used; create or update each locale explicitly.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { locale: { type: ['string', 'null'] }, ...paginationInputSchema },
       outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } }, page_info: pageInfoObject }, required: ['pages', 'page_info'] },
@@ -122,7 +122,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'get_tenant_page',
       description: 'Get one canonical tenant-page variant, including its current document timestamp and blocks.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { variant_id: { type: 'string' } },
       required: ['variant_id'],
@@ -132,7 +132,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'create_tenant_page',
       description: 'Create a manually authored tenant-page variant. A non-source locale must provide page_id for an existing source page; no automated translation is performed.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         page_id: { type: ['string', 'null'] },
@@ -148,7 +148,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'update_tenant_page',
       description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
@@ -165,7 +165,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'delete_tenant_page',
       description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
@@ -191,7 +191,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'get_reservation_policy',
       description: 'Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         location_id: { type: 'string' },
@@ -211,7 +211,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       name: 'update_reservation_policy',
       description: 'Create or amend the reservation policy for one location. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         location_id: { type: 'string' },

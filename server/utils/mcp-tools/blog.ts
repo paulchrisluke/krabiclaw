@@ -25,7 +25,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       name: 'list_blog_posts',
       description: 'List this site\'s draft, published and scheduled blog articles. This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
       domain: 'blog',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { status: { type: 'string', enum: ['draft', 'published', 'scheduled'] }, ...paginationInputSchema },
       outputSchema: {
@@ -39,7 +39,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       name: 'get_blog_post',
       description: 'Get a single blog post by id or slug. Returns the canonical top-level content_blocks array plus one updated_at concurrency token; there is no body, components, or content_document authoring shape.',
       domain: 'blog',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],
@@ -56,7 +56,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       name: 'create_blog_post',
       description: 'Create a long-form, evergreen, SEO-indexed article using content_blocks as the only authoring shape. Creation saves a draft by default. Set status to published to publish immediately, or provide a future scheduled_for to schedule it. Compose and review the complete article with the user before calling this tool. category is free text for tenant blogs.',
       domain: 'blog',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         title: { type: 'string' },
@@ -80,7 +80,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       name: 'update_blog_post',
       description: 'Save changes to an existing blog article: metadata, or the whole article body. Only provided fields are changed. content_blocks replaces every block and requires expected_updated_at; to change one block, use append_content_block, replace_content_block or delete_content_block instead. Changes to a live article are public immediately; compose and review them with the user first.',
       domain: 'blog',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
@@ -106,7 +106,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'publish_blog_post',
       description: 'Publish a draft or scheduled tenant blog article immediately, or reschedule it with scheduled_for. Requires the current document concurrency token. Use only after the writer has approved the final article.',
-      domain: 'blog', minimumRole: 'editor', confirmRequired: true,
+      domain: 'blog', minimumRole: 'admin', confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         expected_updated_at: { type: 'string', description: 'Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
@@ -119,7 +119,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       name: 'delete_blog_post',
       description: 'Delete a blog post.',
       domain: 'blog',
-      minimumRole: 'editor',
+      minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: { post_id: { type: 'string', description: 'Post id or slug.' } },
       required: ['post_id'],

@@ -81,22 +81,11 @@ export const business_locations = sqliteTable("business_locations", {
 	google_review_url: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	notification_phone: text(),
 	timezone: text(),
 	max_capacity: integer(),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
-	// Better Auth Team scoping this location to non-org-wide editors. A location
-	// *has* a team; it is not one — `team` is five fields describing a grouping of
-	// members, and this table is the place itself. Owners/admins are org-wide and
-	// need no team row. Do not add a parallel membership/scope table — this column
-	// plus Better Auth Teams APIs are the entire mechanism.
-	//
-	// The `site:*` teams that used to sit above these are gone with `sites`. The one
-	// membership that existed only there was expanded into this organization's
-	// location teams rather than dropped.
-	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	feature_overrides: text(),
 }, (table) => [
 	check("business_locations_instants_check", sql`(last_synced_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', last_synced_at, '+0 days') IS last_synced_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
@@ -228,7 +217,6 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	teamId: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
@@ -317,28 +305,6 @@ export const member = sqliteTable("member", {
 	// Better Auth's organization adapter resolves membership by userId and organizationId.
 	index("member_userId_organizationId_idx").on(table.userId, table.organizationId),
 	index("member_organizationId_idx").on(table.organizationId),
-]);
-
-export const team = sqliteTable("team", {
-	id: text().primaryKey(),
-	name: text().notNull(),
-	memberCount: integer().default(0).notNull(),
-	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-	updatedAt: integer({ mode: "timestamp" }),
-}, (table) => [
-	index("team_organizationId_idx").on(table.organizationId),
-]);
-
-export const teamMember = sqliteTable("teamMember", {
-	id: text().primaryKey(),
-	teamId: text().notNull().references(() => team.id, { onDelete: "cascade" } ),
-	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	membershipKey: text().unique(),
-	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
-}, (table) => [
-	index("teamMember_teamId_idx").on(table.teamId),
-	index("teamMember_userId_idx").on(table.userId),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -1482,7 +1448,6 @@ export const organization = sqliteTable("organization", {
 	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
 	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
 	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
-	check("organization_config_whatsapp_phone_check", sql`json_type(settings_json, '$.config.whatsapp_phone') IS NULL OR json_type(settings_json, '$.config.whatsapp_phone') IS 'text'`),
 	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
 	check("organization_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
 	check("organization_theme_saya_check", sql`json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE`),

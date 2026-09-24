@@ -28,7 +28,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'list_organization_locales',
     description: 'List the immutable English source locale and exact authored secondary locales for this site. Billing is managed only in the dashboard.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {},
     outputSchema: {
@@ -44,7 +44,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'get_resource_localization',
     description: 'Read one exact resource or content document representation. Returns not found when that exact representation does not exist; never returns English fallback content.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -58,7 +58,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'put_resource_localization',
     description: 'Fully replace one exact resource or content document representation. Q&A is read-only and cannot be changed. Resource values replace the exact localization; document fields and blocks update the exact representation with expected_updated_at.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -76,7 +76,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'delete_resource_localization',
     description: 'Permanently delete one localized resource representation and its owned document and redirect state. Q&A is read-only and cannot be deleted. This does not change billing.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES, 'content_document'] },
@@ -90,7 +90,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'get_product_catalog_localization',
     description: 'List canonical Product IDs, source Product fields, and existing Product localizations for one published secondary locale. Localize collection names separately with get_resource_localization and put_resource_localization using resource_type collection, resource_id collection_id, and values { name }.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: { locale: { type: 'string' } },
     required: ['locale'],
@@ -100,7 +100,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
     name: 'replace_resource_localizations',
     description: 'Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.',
     domain: 'locales',
-    minimumRole: 'editor',
+    minimumRole: 'admin',
     confirmRequired: true,
     inputSchema: {
       resource_type: { type: 'string', enum: [...LOCALIZED_RESOURCE_TYPES] },
