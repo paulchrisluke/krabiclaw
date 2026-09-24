@@ -145,7 +145,7 @@ try {
     console.log(`URL: ${LOCAL_DEVELOPER_LOGIN_URL}`)
     console.log(`Email: ${LOCAL_DEVELOPER_AUTH_FIXTURE.email}`)
     console.log(`Password: ${localDeveloperPassword}`)
-    console.log('Use dashboard links after sign-in. When constructing one manually, its site segment is the site subdomain.')
+    console.log('Use dashboard links after sign-in. When constructing one manually, its segment is the organization slug.')
   }
 } finally {
   rmSync(directory, { recursive: true, force: true })

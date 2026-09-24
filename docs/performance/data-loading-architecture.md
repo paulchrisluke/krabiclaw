@@ -17,7 +17,7 @@ for the header and hero. The complete homepage resource uses a different key and
 loads after the critical document has painted. A critical failure is still a
 terminal error; it is never replaced with an empty or generic tenant shell.
 
-During SSR, non-home `useSiteShellState` and `usePublicPageData` share the same
+During SSR, non-home `useOrganizationShellState` and `usePublicPageData` share the same
 keyed `useAsyncData` state and call the request-scoped page provider once. The
 homepage layout waits only for its critical keyed page resource; the home route
 then starts its complete page resource after hydration. Both providers invoke
@@ -35,7 +35,7 @@ own pending state; an obsolete result cannot populate a different route key.
 
 ## Dashboard and CMS
 
-Dashboard state is keyed by `orgSlug` and `siteSlug`. `dashboardFetch` is the
+Dashboard state is keyed by `orgSlug` and `organizationSlug`. `dashboardFetch` is the
 only dashboard/CMS browser transport. It sends both route scopes explicitly,
 uses `retry: 0`, applies the centralized read/mutation timeouts, and preserves
 the server status and request ID in `ApiClientError`.

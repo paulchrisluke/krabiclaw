@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2dbff7ea-6899-4150-900b-665f4d70b36c",
+  "id": "175fe3c0-a37d-4db3-9f90-0b32f9f4066b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -302,8 +302,8 @@
           ],
           "isUnique": false
         },
-        "activity_entries_context_site_created_idx": {
-          "name": "activity_entries_context_site_created_idx",
+        "activity_entries_context_organization_created_idx": {
+          "name": "activity_entries_context_organization_created_idx",
           "columns": [
             "kind",
             "organization_id",
@@ -749,7 +749,7 @@
         },
         "analytics_summaries_day_metrics_check": {
           "name": "analytics_summaries_day_metrics_check",
-          "value": "kind != 'site_day' OR (key = ''\n    AND json_type(payload_json, '$.unique_sessions') IS 'integer' AND (payload_json ->> '$.unique_sessions') >= 0\n    AND json_type(payload_json, '$.unique_visitors') IS 'integer' AND (payload_json ->> '$.unique_visitors') >= 0\n    AND json_type(payload_json, '$.returning_visitors') IS 'integer' AND (payload_json ->> '$.returning_visitors') >= 0\n    AND json_type(payload_json, '$.avg_session_duration') IN ('integer', 'real') AND (payload_json ->> '$.avg_session_duration') >= 0\n    AND json_type(payload_json, '$.pages_per_session') IN ('integer', 'real') AND (payload_json ->> '$.pages_per_session') >= 0\n    AND json_type(payload_json, '$.avg_session_duration') IS NOT NULL AND json_type(payload_json, '$.pages_per_session') IS NOT NULL)"
+          "value": "kind != 'organization_day' OR (key = ''\n    AND json_type(payload_json, '$.unique_sessions') IS 'integer' AND (payload_json ->> '$.unique_sessions') >= 0\n    AND json_type(payload_json, '$.unique_visitors') IS 'integer' AND (payload_json ->> '$.unique_visitors') >= 0\n    AND json_type(payload_json, '$.returning_visitors') IS 'integer' AND (payload_json ->> '$.returning_visitors') >= 0\n    AND json_type(payload_json, '$.avg_session_duration') IN ('integer', 'real') AND (payload_json ->> '$.avg_session_duration') >= 0\n    AND json_type(payload_json, '$.pages_per_session') IN ('integer', 'real') AND (payload_json ->> '$.pages_per_session') >= 0\n    AND json_type(payload_json, '$.avg_session_duration') IS NOT NULL AND json_type(payload_json, '$.pages_per_session') IS NOT NULL)"
         },
         "analytics_summaries_dimension_key_check": {
           "name": "analytics_summaries_dimension_key_check",
@@ -1140,7 +1140,7 @@
       "checkConstraints": {
         "broadcasts_category_check": {
           "name": "broadcasts_category_check",
-          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'site_and_billing', 'product_news')"
+          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')"
         },
         "broadcasts_created_at_check": {
           "name": "broadcasts_created_at_check",
@@ -1697,6 +1697,7 @@
         "collections_org_slug_unique": {
           "name": "collections_org_slug_unique",
           "columns": [
+            "organization_id",
             "slug"
           ],
           "isUnique": true,
@@ -1715,6 +1716,7 @@
         "collections_org_sort_idx": {
           "name": "collections_org_sort_idx",
           "columns": [
+            "organization_id",
             "location_id",
             "sort_order"
           ],
@@ -9229,8 +9231,8 @@
         }
       },
       "foreignKeys": {
-        "resource_localizations_site_locale_fk": {
-          "name": "resource_localizations_site_locale_fk",
+        "resource_localizations_organization_locale_fk": {
+          "name": "resource_localizations_organization_locale_fk",
           "tableFrom": "resource_localizations",
           "tableTo": "organization_locales",
           "columnsFrom": [
@@ -11193,7 +11195,7 @@
       "checkConstraints": {
         "user_notification_preferences_category_check": {
           "name": "user_notification_preferences_category_check",
-          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'site_and_billing', 'product_news')"
+          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')"
         },
         "user_notification_preferences_updated_at_check": {
           "name": "user_notification_preferences_updated_at_check",

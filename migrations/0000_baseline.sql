@@ -52,7 +52,7 @@ CREATE UNIQUE INDEX `activity_entries_request_sequence_unique` ON `activity_entr
 CREATE UNIQUE INDEX `activity_entries_notification_source_unique` ON `activity_entries` (`parent_id`) WHERE kind = 'notification' AND parent_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `activity_entries_request_occurred_idx` ON `activity_entries` (`request_id`,`occurred_at`);--> statement-breakpoint
 CREATE INDEX `activity_entries_parent_actor_idx` ON `activity_entries` (`parent_id`,`actor_user_id`,`occurred_at`);--> statement-breakpoint
-CREATE INDEX `activity_entries_context_site_created_idx` ON `activity_entries` (`kind`,`organization_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `activity_entries_context_organization_created_idx` ON `activity_entries` (`kind`,`organization_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `activity_entries_kind_org_created_idx` ON `activity_entries` (`kind`,`created_at`);--> statement-breakpoint
 CREATE INDEX `activity_entries_org_created_idx` ON `activity_entries` (`kind`,`organization_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `activity_entries_target_created_idx` ON `activity_entries` (`kind`,`target_user_id`,`created_at`);--> statement-breakpoint
@@ -104,7 +104,7 @@ CREATE TABLE `analytics_summaries` (
     AND json_type(payload_json, '$.duration_seconds') IS 'integer' AND (payload_json ->> '$.duration_seconds') >= 0)
     OR (kind != 'session' AND date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
       AND json_type(payload_json, '$.page_views') IS 'integer' AND (payload_json ->> '$.page_views') >= 0)),
-	CONSTRAINT "analytics_summaries_day_metrics_check" CHECK(kind != 'site_day' OR (key = ''
+	CONSTRAINT "analytics_summaries_day_metrics_check" CHECK(kind != 'organization_day' OR (key = ''
     AND json_type(payload_json, '$.unique_sessions') IS 'integer' AND (payload_json ->> '$.unique_sessions') >= 0
     AND json_type(payload_json, '$.unique_visitors') IS 'integer' AND (payload_json ->> '$.unique_visitors') >= 0
     AND json_type(payload_json, '$.returning_visitors') IS 'integer' AND (payload_json ->> '$.returning_visitors') >= 0
@@ -168,7 +168,7 @@ CREATE TABLE `broadcasts` (
 	`category` text NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`content_document_id`) REFERENCES `content_documents`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "broadcasts_category_check" CHECK(category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'site_and_billing', 'product_news')),
+	CONSTRAINT "broadcasts_category_check" CHECK(category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')),
 	CONSTRAINT "broadcasts_created_at_check" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)
 );
 --> statement-breakpoint
@@ -259,9 +259,9 @@ CREATE TABLE `collections` (
 	CONSTRAINT "collections_sort_order_check" CHECK(sort_order >= 0)
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `collections_org_slug_unique` ON `collections` (`slug`) WHERE location_id IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `collections_org_slug_unique` ON `collections` (`organization_id`,`slug`) WHERE location_id IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `collections_location_slug_unique` ON `collections` (`organization_id`,`location_id`,`slug`) WHERE location_id IS NOT NULL;--> statement-breakpoint
-CREATE INDEX `collections_org_sort_idx` ON `collections` (`location_id`,`sort_order`);--> statement-breakpoint
+CREATE INDEX `collections_org_sort_idx` ON `collections` (`organization_id`,`location_id`,`sort_order`);--> statement-breakpoint
 CREATE UNIQUE INDEX `collections_org_id_unique` ON `collections` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `content_blocks` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -1602,7 +1602,7 @@ CREATE TABLE `user_notification_preferences` (
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	PRIMARY KEY(`user_id`, `category`),
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "user_notification_preferences_category_check" CHECK(category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'site_and_billing', 'product_news')),
+	CONSTRAINT "user_notification_preferences_category_check" CHECK(category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')),
 	CONSTRAINT "user_notification_preferences_updated_at_check" CHECK(strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at),
 	CONSTRAINT "user_notification_preferences_account_security_check" CHECK(category != 'account_security' OR email_enabled = 1)
 );

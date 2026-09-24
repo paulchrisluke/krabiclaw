@@ -13,7 +13,7 @@ export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const locationSlug = getRouterParam(event, 'locationSlug')
   const productSlug = getRouterParam(event, 'productSlug')
-  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
+  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Organization, location, and Product slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB
@@ -32,8 +32,8 @@ export default defineHandler(async (event) => {
       product: result.product,
       location: publicLocationPayload(result.location),
       currency: result.currency,
-      vertical: result.site.vertical,
-      brandName: result.site.name,
+      vertical: result.organization.vertical,
+      brandName: result.organization.name,
       reviews,
       booking: result.booking,
       sessions: await loadPublicProductSessions(db, result),
@@ -41,7 +41,7 @@ export default defineHandler(async (event) => {
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
         : [],
-      metafieldDefinitions: await listMetafieldDefinitions(db, result.site.id),
+      metafieldDefinitions: await listMetafieldDefinitions(db, result.organization.id),
       localeRepresentations: result.localeRepresentations,
     })
   } catch (error) {

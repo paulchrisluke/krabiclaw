@@ -1,4 +1,4 @@
-// Site status check for tenant setup pages
+// Organization status check for tenant setup pages
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { queryFirst } from '~/server/db'
 
@@ -22,25 +22,25 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    // Verify site is active
-    const site = await queryFirst<{ onboarding_status: string; status: string }>(db, `
+    // Verify the organization is active
+    const organization = await queryFirst<{ onboarding_status: string; status: string }>(db, `
       SELECT onboarding_status, status FROM organization
       WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
       LIMIT 1
     `, [organizationId])
 
-    if (!site) {
+    if (!organization) {
       return jsonResponse({ 
-        error: 'Site not ready' 
+        error: 'Organization not ready' 
       }, { status: 404 })
     }
 
     return jsonResponse({
-      status: 'ready', onboarding_status: site.onboarding_status
+      status: 'ready', onboarding_status: organization.onboarding_status
     })
 
   } catch (error) {
-    console.error('Site status check failed:', error)
+    console.error('Organization status check failed:', error)
     return jsonResponse({ 
       error: 'Failed to check site status' 
     }, { status: 500 })

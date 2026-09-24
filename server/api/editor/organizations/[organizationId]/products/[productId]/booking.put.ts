@@ -1,6 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { executeBatch } from '~/server/db'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -15,11 +15,11 @@ import { getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
   try {
     const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
     // Authorizing the site does not authorize the product id in the path.
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ duration_minutes?: unknown; default_capacity?: unknown }>(event, { duration_minutes: 'unknown', default_capacity: 'unknown' })
     for (const field of ['duration_minutes', 'default_capacity'] as const) {
       const value = body[field]

@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { getSiteDomainsDashboardPayload } from '~/server/utils/domain-read-model'
+import { getOrganizationDomainsDashboardPayload } from '~/server/utils/domain-read-model'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 export default defineHandler(async (event) => {
@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
 
   const { db } = await requireOrganizationAccess(event, organizationId)
 
-  const payload = await getSiteDomainsDashboardPayload(db, organizationId)
+  const payload = await getOrganizationDomainsDashboardPayload(db, organizationId)
 
   return jsonResponse({ success: true, ...payload, organizationId })
 })

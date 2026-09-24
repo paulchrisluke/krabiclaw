@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/ap
 import { getAuthSession } from '~/server/utils/auth'
 import { assertOrganizationWideAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
-import { loadSettingsPayload } from '~/server/utils/site-settings'
+import { loadSettingsPayload } from '~/server/utils/organization-settings'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 
@@ -34,21 +34,21 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-    if (!siteAccess) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    const organizationAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+    if (!organizationAccess) {
+      return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
     }
 
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(organizationAccess.membership, { env, event }))
 
-    const settings = await loadSettingsPayload(db, siteAccess.id)
+    const settings = await loadSettingsPayload(db, organizationAccess.id)
     return jsonResponse({ success: true, settings })
 
   } catch (error) {
     rethrowHttpError(error)
-    console.error('Failed to get site settings:', error)
+    console.error('Failed to get organization settings:', error)
     return jsonResponse({
-      error: 'Failed to get site settings'
+      error: 'Failed to get organization settings'
     }, { status: 500 })
   }
 })

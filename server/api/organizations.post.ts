@@ -6,7 +6,7 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { provisionOrganization, VALID_VERTICALS } from '~/server/utils/organization-provisioning'
 import { isCurrencyCode, SUPPORTED_CURRENCIES } from '~/shared/currencies'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 // Provisions an organization the caller already belongs to: gives it its
 // address, its template and its seeded structure. The organization is explicit:
@@ -22,7 +22,7 @@ export default defineHandler(async (event) => {
   if (!name || !subdomain) {
     return jsonResponse({ error: 'name and subdomain are required' }, { status: 400 })
   }
-  if (!vertical || !VALID_VERTICALS.includes(vertical as SiteVertical)) {
+  if (!vertical || !VALID_VERTICALS.includes(vertical as OrganizationVertical)) {
     return jsonResponse({
       error: `vertical is required and must be one of: ${VALID_VERTICALS.join(', ')}`
     }, { status: 400 })
@@ -55,7 +55,7 @@ export default defineHandler(async (event) => {
     organizationId: organization.id,
     name,
     subdomain,
-    vertical: vertical as SiteVertical,
+    vertical: vertical as OrganizationVertical,
     defaultCurrency,
   })
   // Provisioning is not finished until the caller's session is on the new

@@ -7,7 +7,7 @@ import { getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const locationId = getRouterParam(event, 'locationId')
-  if (!organizationId || !locationId) return jsonResponse({ error: 'Site ID and location ID are required' }, { status: 400 })
+  if (!organizationId || !locationId) return jsonResponse({ error: 'Organization ID and location ID are required' }, { status: 400 })
   try {
     const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
     // The editor shows the photograph the public page shows. Placements are

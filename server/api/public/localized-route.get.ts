@@ -9,14 +9,14 @@ export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const path = getQuery(event).path
   if (!organizationId || typeof path !== 'string') {
-    throw createError({ statusCode: 400, statusMessage: 'Site ID and localized path are required' })
+    throw createError({ statusCode: 400, statusMessage: 'Organization ID and localized path are required' })
   }
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  const site = await queryFirst<{ id: string }>(db, `
+  const organization = await queryFirst<{ id: string }>(db, `
     SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1
   `, [organizationId])
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
   return { route: await resolveLocalizedPublicRoute(env, db, organizationId, path) }
 })

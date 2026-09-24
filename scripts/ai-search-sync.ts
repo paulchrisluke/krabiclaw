@@ -22,7 +22,7 @@ if (changedSince) {
     'server/utils/public-search.ts',
     'server/utils/platform-llm.ts',
     'server/utils/content/documents.ts',
-    'server/utils/platform-site.ts',
+    'server/utils/platform-organization.ts',
   ])
   const changedInputs = changedFiles.filter(file => indexInputs.has(file))
   if (changedInputs.length === 0) {
@@ -46,9 +46,9 @@ if (!secret) {
 
 // Each pass is its own request so none meets the Workers request ceiling: the
 // platform's corpus first, then every live business's slice, one at a time.
-async function reindex(site?: string) {
+async function reindex(organization?: string) {
   const url = new URL('/api/internal/search/reindex', baseUrl)
-  if (site) url.searchParams.set('site', site)
+  if (organization) url.searchParams.set('site', organization)
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -58,25 +58,25 @@ async function reindex(site?: string) {
   })
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!response.ok) {
-    console.error(`AI Search sync failed (${response.status})${site ? ` for site ${site}` : ''}`, payload)
+    console.error(`AI Search sync failed (${response.status})${organization ? ` for site ${organization}` : ''}`, payload)
     process.exit(1)
   }
-  console.log(JSON.stringify({ site: site ?? 'platform', ...payload }, null, 2))
+  console.log(JSON.stringify({ organization: organization ?? 'platform', ...payload }, null, 2))
   return payload
 }
 
 // A pass sends a bounded batch of uploads per request and says what is left;
 // it is repeated until nothing is.
-async function reindexUntilDone(site?: string) {
-  let payload = await reindex(site)
-  while (Number(payload?.pending ?? 0) > 0) payload = await reindex(site)
+async function reindexUntilDone(organization?: string) {
+  let payload = await reindex(organization)
+  while (Number(payload?.pending ?? 0) > 0) payload = await reindex(organization)
   return payload
 }
 
 try {
   const platform = await reindexUntilDone()
-  const sites = Array.isArray(platform?.sites) ? platform.sites.filter((site): site is string => typeof site === 'string') : []
-  for (const site of sites) await reindexUntilDone(site)
+  const organizations = Array.isArray(platform?.organizations) ? platform.organizations.filter((organization): organization is string => typeof organization === 'string') : []
+  for (const organization of organizations) await reindexUntilDone(organization)
 } catch (error) {
   const message = error instanceof Error && error.name === 'AbortError'
     ? 'Request timed out'

@@ -1,5 +1,5 @@
 import { defineHandler } from 'nitro'
-import type { IntegrationOAuthState } from '~/shared/site-settings'
+import type { IntegrationOAuthState } from '~/shared/organization-settings'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { verifyOAuthState } from '~/server/utils/encryption'
 import {

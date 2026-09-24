@@ -2,12 +2,12 @@ import { getRouterParam, readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
-import { recordSiteConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/site-conversions'
-import { SITE_CONVERSION_EVENT_NAMES, type SiteConversionEventName } from '~/utils/site-conversion-events'
+import { recordOrganizationConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/organization-conversions'
+import { ORGANIZATION_CONVERSION_EVENT_NAMES, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { defineHandler } from 'nitro'
 
-const VALID_EVENTS = new Set<string>(SITE_CONVERSION_EVENT_NAMES)
+const VALID_EVENTS = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES)
 
 function destinationHost(value: string): string | null {
   try {
@@ -28,9 +28,9 @@ export default defineHandler(async (event) => {
 
   const eventName = cleanString(body.event_name, 80)
   if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
-  const site = await queryFirst<{ id: string; vertical: string | null }>(db,
+  const organization = await queryFirst<{ id: string; vertical: string | null }>(db,
     `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
-  if (!site || !normalizeVertical(site.vertical)) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+  if (!organization || !normalizeVertical(organization.vertical)) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   const ipHash = await hashClientIp(getClientIp(event))
   const hour = new Date().toISOString().slice(0, 13)
@@ -137,8 +137,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })
   }
 
-  const result = await recordSiteConversionEvent(db, event, {
-    organizationId: site.id, eventName: eventName as SiteConversionEventName,
+  const result = await recordOrganizationConversionEvent(db, event, {
+    organizationId: organization.id, eventName: eventName as OrganizationConversionEventName,
     stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata,
   })
   return jsonResponse({ success: true, id: result.id }, { status: 201 })

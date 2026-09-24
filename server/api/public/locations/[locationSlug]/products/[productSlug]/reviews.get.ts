@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
   const locationSlug = getRouterParam(event, 'locationSlug')
   const productSlug = getRouterParam(event, 'productSlug')
-  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Site, location, and Product slugs are required' }, { status: 400 })
+  if (!organizationId || !locationSlug || !productSlug) return jsonResponse({ error: 'Organization, location, and Product slugs are required' }, { status: 400 })
   try {
     const env = cloudflareEnv(event)
     const db = env.DB

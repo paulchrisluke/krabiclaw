@@ -8,7 +8,7 @@ interface DomainPatchBody {
   status?: 'disabled'
 }
 
-interface SiteDomainRow {
+interface OrganizationDomainRow {
   id: string
   organization_id: string
   domain: string
@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  if (!organizationId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
+  if (!organizationId || !domainId) return jsonResponse({ error: 'Organization ID and domain ID are required' }, { status: 400 })
   if (body.role && body.status) {
     return jsonResponse({ error: 'Provide only one of role or status' }, { status: 400 })
   }
@@ -51,9 +51,9 @@ export default defineHandler(async (event) => {
 
     if (body.status === 'disabled') {
       const now = new Date().toISOString()
-      let promotedDomain: SiteDomainRow | null = null
+      let promotedDomain: OrganizationDomainRow | null = null
 
-      const existing = await queryFirst<SiteDomainRow>(db, `
+      const existing = await queryFirst<OrganizationDomainRow>(db, `
         SELECT *
         FROM organization_domains
         WHERE id = ? AND organization_id = ? AND type = 'custom'
@@ -63,7 +63,7 @@ export default defineHandler(async (event) => {
         return jsonResponse({ error: 'Domain not found' }, { status: 404 })
       }
 
-      const priorCanonical = await queryFirst<SiteDomainRow>(db, `
+      const priorCanonical = await queryFirst<OrganizationDomainRow>(db, `
         SELECT * FROM organization_domains WHERE organization_id = ? AND role = 'canonical' LIMIT 1
       `, [organizationId])
 
@@ -75,7 +75,7 @@ export default defineHandler(async (event) => {
         `, [now, domainId, organizationId])
 
         if (existing.role === 'canonical') {
-          promotedDomain = await queryFirst<SiteDomainRow>(db, `
+          promotedDomain = await queryFirst<OrganizationDomainRow>(db, `
             SELECT *
             FROM organization_domains
             WHERE organization_id = ?
@@ -105,7 +105,7 @@ export default defineHandler(async (event) => {
         throw error
       }
 
-      const domain = await queryFirst<SiteDomainRow>(db, `
+      const domain = await queryFirst<OrganizationDomainRow>(db, `
         SELECT * FROM organization_domains
         WHERE id = ? AND organization_id = ? AND type = 'custom'
         LIMIT 1

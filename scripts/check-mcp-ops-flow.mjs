@@ -196,7 +196,7 @@ async function main() {
   const combinedOutcome = data(combinedPublish.body)?.channel_outcomes
   expectValue(
     'publish_post reports site published and facebook skipped',
-    combinedOutcome?.site?.status === 'published'
+    combinedOutcome?.organization?.status === 'published'
       && combinedOutcome?.facebook?.status === 'skipped',
     combinedPublish.body,
   )

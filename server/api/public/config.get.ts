@@ -1,7 +1,7 @@
 // GET public site config
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getConfig } from '~/server/utils/site-config'
+import { getConfig } from '~/server/utils/organization-config'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
@@ -16,19 +16,19 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await queryFirst<{ id: string; default_currency: string }>(db, `
+    const organization = await queryFirst<{ id: string; default_currency: string }>(db, `
       SELECT id, default_currency
       FROM organization
       WHERE id = ? AND status = 'active'
       LIMIT 1
     `, [organizationId]) ?? null
 
-    if (!site) {
-      return jsonResponse({ error: 'Site not found' }, { status: 404 })
+    if (!organization) {
+      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
     }
 
     const config = {
-      ...await getConfig(db, site.id), default_currency: site.default_currency, }
+      ...await getConfig(db, organization.id), default_currency: organization.default_currency, }
     return jsonResponse({
       success: true, config
     })

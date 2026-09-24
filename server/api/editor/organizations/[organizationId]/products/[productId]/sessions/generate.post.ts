@@ -1,6 +1,6 @@
 import { jsonResponse, readStrictBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
-import { requireSiteProduct } from '~/server/utils/product-management'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
 import { materializeSessions } from '~/server/utils/availability'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -15,11 +15,11 @@ import { getRouterParam } from 'nitro/h3'
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const productId = getRouterParam(event, 'productId')
-  if (!organizationId || !productId) return jsonResponse({ error: 'Site ID and product ID are required' }, { status: 400 })
+  if (!organizationId || !productId) return jsonResponse({ error: 'Organization ID and product ID are required' }, { status: 400 })
   try {
     const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
     // A product id in the path is not authorized by the site in the path.
-    await requireSiteProduct(db, { organizationId: organization.id, productId })
+    await requireOrganizationProduct(db, { organizationId: organization.id, productId })
     const body = await readStrictBody<{ through: unknown; from?: unknown }>(event, { through: 'unknown', from: 'unknown' })
     if (typeof body.through !== 'string') return jsonResponse({ error: 'through must be a YYYY-MM-DD date' }, { status: 400 })
     const result = await materializeSessions(db, {

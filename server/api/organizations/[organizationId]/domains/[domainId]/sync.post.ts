@@ -15,7 +15,7 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   const domainId = getRouterParam(event, 'domainId')
   if (typeof organizationId !== 'string' || !organizationId.trim() || typeof domainId !== 'string' || !domainId.trim()) {
-    return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
+    return jsonResponse({ error: 'Organization ID and domain ID are required' }, { status: 400 })
   }
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
@@ -27,13 +27,13 @@ export default defineHandler(async (event) => {
     LIMIT 1
   `, [domainId])
   if (!domainRecord || domainRecord.organization_id !== organization.id) {
-    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
   }
 
   try {
     const domain = await syncDomainWithCloudflare(env, db, domainId, organization.member_role as 'owner' | 'admin', session.user.id, undefined, { forceRevalidation: true })
     if (domain.organization_id !== organization.id) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+      return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
     }
 
     await notifyDomainLifecycle(env, db, {

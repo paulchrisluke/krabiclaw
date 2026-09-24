@@ -9,7 +9,7 @@ export default defineHandler(async (event) => {
   const locale = getRouterParam(event, 'locale')
   const path = getQuery(event).path
   if (!organizationId || !locale || typeof path !== 'string') {
-    throw createError({ statusCode: 400, statusMessage: 'Site ID, locale, and path are required' })
+    throw createError({ statusCode: 400, statusMessage: 'Organization ID, locale, and path are required' })
   }
   const env = cloudflareEnv(event)
   const db = env.db

@@ -45,14 +45,14 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const siteAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-    if (!siteAccess) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    const organizationAccess = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+    if (!organizationAccess) {
+      return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
     }
 
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(siteAccess.membership, { env, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(organizationAccess.membership, { env, event }))
 
-    const site = await queryFirst<{
+    const organization = await queryFirst<{
       id: string
       slug: string | null
       name: string | null
@@ -69,10 +69,10 @@ export default defineHandler(async (event) => {
       FROM organization s
       WHERE s.id = ?
       LIMIT 1
-    `, [siteAccess.slug, organizationId])
+    `, [organizationAccess.slug, organizationId])
 
-    if (!site) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    if (!organization) {
+      return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
     }
 
 
@@ -113,20 +113,20 @@ export default defineHandler(async (event) => {
     const hasAddress = hasLocations && locationProgress?.missing_address === 0
     const hasHours = hasLocations && locationProgress?.missing_hours === 0
     const hasFiveProducts = productCount >= 5
-    const hasLogo = Boolean(site.has_logo)
-    const hasBrandDescription = !!site.brand_description
+    const hasLogo = Boolean(organization.has_logo)
+    const hasBrandDescription = !!organization.brand_description
     const hasPhotos = photoCount >= 3
     const hasAboutPage = !!aboutContent
-    const hasContactEmail = !!site.contact_email
-    if (!site.slug) {
+    const hasContactEmail = !!organization.contact_email
+    if (!organization.slug) {
       return jsonResponse({ error: 'Organization routing context is incomplete' }, { status: 500 })
     }
-    const siteBase = `/dashboard/${site.slug}`
-    const locationsBase = `${siteBase}/locations`
+    const organizationBase = `/dashboard/${organization.slug}`
+    const locationsBase = `${organizationBase}/locations`
 
     const steps: SetupStep[] = [
       {
-        id: 'site_created', label: 'Site created', description: 'Your restaurant site and subdomain are live.', done: true, required: true
+        id: 'organization_created', label: 'Organization created', description: 'Your restaurant site and subdomain are live.', done: true, required: true
       }, {
         id: 'locations', label: 'Location added', description: 'Add your restaurant\'s physical location so guests can find you.', done: hasLocations, required: true, action_url: `${locationsBase}/new`
       }, {
@@ -136,15 +136,15 @@ export default defineHandler(async (event) => {
       }, {
         id: 'products', label: 'Products — at least 5 items', description: 'Add Products so guests know what you offer.', done: hasFiveProducts, required: true, action_url: locationsBase
       }, {
-        id: 'logo', label: 'Logo', description: 'Upload your logo for a polished look across your site.', done: hasLogo, required: false, action_url: `${siteBase}/settings`
+        id: 'logo', label: 'Logo', description: 'Upload your logo for a polished look across your site.', done: hasLogo, required: false, action_url: `${organizationBase}/settings`
       }, {
-        id: 'brand_description', label: 'Brand description', description: 'A short tagline used in SEO and your homepage.', done: hasBrandDescription, required: false, action_url: `${siteBase}/settings`
+        id: 'brand_description', label: 'Brand description', description: 'A short tagline used in SEO and your homepage.', done: hasBrandDescription, required: false, action_url: `${organizationBase}/settings`
       }, {
         id: 'photos', label: 'At least 3 photos', description: 'Photos bring your restaurant to life.', done: hasPhotos, required: false, action_url: locationsBase
       }, {
-        id: 'about_page', label: 'About page content', description: 'Tell your story — where you came from, what makes you special.', done: hasAboutPage, required: false, action_url: `${siteBase}/pages`
+        id: 'about_page', label: 'About page content', description: 'Tell your story — where you came from, what makes you special.', done: hasAboutPage, required: false, action_url: `${organizationBase}/pages`
       }, {
-        id: 'contact_email', label: 'Contact email', description: 'Let guests reach you directly from your website.', done: hasContactEmail, required: false, action_url: `${siteBase}/settings`
+        id: 'contact_email', label: 'Contact email', description: 'Let guests reach you directly from your website.', done: hasContactEmail, required: false, action_url: `${organizationBase}/settings`
       }
     ]
 
@@ -152,7 +152,7 @@ export default defineHandler(async (event) => {
     const recommendedSteps = steps.filter(s => !s.required)
 
     const progress: SetupProgress = {
-      steps, required_complete: requiredSteps.filter(s => s.done).length, required_total: requiredSteps.length, recommended_complete: recommendedSteps.filter(s => s.done).length, recommended_total: recommendedSteps.length, can_publish: requiredSteps.every(s => s.done), public_url: site.public_url
+      steps, required_complete: requiredSteps.filter(s => s.done).length, required_total: requiredSteps.length, recommended_complete: recommendedSteps.filter(s => s.done).length, recommended_total: recommendedSteps.length, can_publish: requiredSteps.every(s => s.done), public_url: organization.public_url
     }
 
     return jsonResponse({ success: true, progress })

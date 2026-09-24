@@ -67,7 +67,7 @@ if (!args['skip-seed']) {
   console.log('\n  Step 1: skipped (--skip-seed)')
 }
 
-console.log(`\n${rule()}\n  Step 2: Verify live site\n${rule()}`)
+console.log(`\n${rule()}\n  Step 2: Verify live organization\n${rule()}`)
 const verifyResult = spawnSync('node', [
   'scripts/client-verify.mjs',
   '--url', liveUrl,

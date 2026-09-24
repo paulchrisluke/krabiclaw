@@ -58,7 +58,7 @@ Every write to a site's data queues a "this site changed" row
 write's own batch: content documents, products and collections, locations, media, guest
 threads at intake, and Better Auth's member hooks. The drainer
 (`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
-`syncSiteSearchIndex()`, which lists the site's own items (`items.list` with a
+`syncOrganizationSearchIndex()`, which lists the site's own items (`items.list` with a
 `metadata_filter` on `organization_id`), rebuilds its documents from D1, uploads the ones whose
 `content_hash` changed and deletes the ones that are gone. It runs right after every
 dashboard editor response and every mutating MCP tool call, and every two minutes from the

@@ -7,7 +7,7 @@ import { updateMediaAssetMetadata, type MediaAsset } from '~/server/utils/media-
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 
-interface MediaAssetSiteRow {
+interface MediaAssetOrganizationRow {
   id: string
   organization_id: string
 }
@@ -26,16 +26,16 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
-  if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+  if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
   try {
-    const asset = await queryFirst<MediaAssetSiteRow>(
+    const asset = await queryFirst<MediaAssetOrganizationRow>(
       db, `SELECT id, organization_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.organization_id !== organizationId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const principal = memberAccessPrincipal(site.membership, { env, event })
+    const principal = memberAccessPrincipal(organization.membership, { env, event })
     await assertResourceAccess(db, { ...principal, resourceLocationId: null })
 
     const body = await readBody(event)

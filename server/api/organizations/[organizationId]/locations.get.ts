@@ -32,15 +32,15 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const site = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
+    const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
 
-    if (!site) {
+    if (!organization) {
       return jsonResponse({
-        error: 'Site not found or access denied'
+        error: 'Organization not found or access denied'
       }, { status: 404 })
     }
 
-    await assertOrganizationWideAccess(db, memberAccessPrincipal(site.membership, { env, event }))
+    await assertOrganizationWideAccess(db, memberAccessPrincipal(organization.membership, { env, event }))
 
     const locations = await queryAll<ApiValue>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, ma.id AS asset_id, ma.public_url AS media_public_url, ma.thumbnail_url AS media_thumbnail_url, ma.kind AS media_kind
