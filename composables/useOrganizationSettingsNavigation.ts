@@ -8,7 +8,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 // list, so a row exists in one place.
 export function useOrganizationSettingsNavigation() {
   const route = useRoute()
-  const { orgPaths, businessPaths } = useDashboardSiteLinks()
+  const { orgPaths, businessPaths } = useDashboardOrganizationLinks()
   const dashboard = useDashboardOrganization()
 
   const settingsPath = computed(() => orgPaths.value.settings)
@@ -19,10 +19,10 @@ export function useOrganizationSettingsNavigation() {
    * Airbnb has no equivalent — internal admin tooling is not in the host's
    * dashboard — so this row is a deliberate addition, not parity.
    */
-  const isPlatformSite = computed(() => {
-    const site = dashboard.organization.value
-    if (!site) return false
-    return resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical }).slug === 'platform'
+  const isPlatformOrganization = computed(() => {
+    const organization = dashboard.organization.value
+    if (!organization) return false
+    return resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).slug === 'platform'
   })
 
   const items = computed(() => {
@@ -40,7 +40,7 @@ export function useOrganizationSettingsNavigation() {
         : []),
       { id: 'members', label: 'Team', summary: 'People and access', to: `${settingsPath.value}/members` },
       // "Team" is this organization's members; this is every account there is.
-      ...(isPlatformSite.value
+      ...(isPlatformOrganization.value
         ? [{ id: 'people', label: 'Platform accounts', summary: 'Every account, and impersonation', to: `${settingsPath.value}/people` }]
         : []),
       { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },

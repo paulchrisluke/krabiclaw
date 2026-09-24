@@ -78,7 +78,7 @@ function validateGridItems(errors: string[], data: EditorData, label = 'Item') {
   })
 }
 
-const DYNAMIC_GRID_SOURCES = new Set(['site_posts', 'site_reviews', 'calculator', 'billing_plans'])
+const DYNAMIC_GRID_SOURCES = new Set(['organization_posts', 'organization_reviews', 'calculator', 'billing_plans'])
 
 export function validateTenantPageBlock(block: TenantPageBlock): string[] {
   const errors: string[] = []

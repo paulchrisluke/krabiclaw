@@ -16,7 +16,7 @@ export const NOTIFICATION_CATEGORIES = [
   'reservations_bookings',
   'guest_messages',
   'reviews',
-  'site_and_billing',
+  'organization_and_billing',
   'product_news',
 ] as const
 
@@ -50,7 +50,7 @@ export const NOTIFICATION_CATEGORY_DEFAULTS = {
   reservations_bookings: { email: true, whatsapp: true },
   guest_messages: { email: true, whatsapp: true },
   reviews: { email: true, whatsapp: false },
-  site_and_billing: { email: true, whatsapp: false },
+  organization_and_billing: { email: true, whatsapp: false },
   product_news: { email: true, whatsapp: false },
 } as const satisfies Record<NotificationCategory, NotificationCategorySetting>
 
@@ -59,7 +59,7 @@ export const NOTIFICATION_CATEGORY_LABELS = {
   reservations_bookings: 'Reservations and bookings',
   guest_messages: 'Guest messages',
   reviews: 'New reviews',
-  site_and_billing: 'Site and billing',
+  organization_and_billing: 'Organization and billing',
   product_news: 'KrabiClaw news',
 } as const satisfies Record<NotificationCategory, string>
 

@@ -70,12 +70,9 @@ export const useOrganizationSubscription = () => {
     await navigateTo(portalUrl, { external: true })
   }
 
-  // The organization owns one recurring subscription. A site is only
-  // metadata on the upgrade request and receives derived entitlements after
-  // Better Auth confirms the subscription through Stripe.
-  async function startOrganizationCheckout(siteId: string, plan: string) {
-    const organizationId = dashboard.organization.value?.id
-    if (!organizationId) throw new Error('Organization context is unavailable')
+  // The organization owns one recurring subscription; its entitlements follow
+  // once Better Auth confirms the subscription through Stripe.
+  async function startOrganizationCheckout(organizationId: string, plan: string) {
     const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
     if (subscription.status === 'past_due') {
       await openBillingPortal()
@@ -84,7 +81,6 @@ export const useOrganizationSubscription = () => {
     const currentPlan = subscription.plan
     await startSubscriptionCheckout({
       organizationId,
-      siteId,
       plan,
       currentPlan,
       subscriptionId: subscription.id,

@@ -1,4 +1,4 @@
-export type SiteVertical =
+export type OrganizationVertical =
   | "restaurant"
   | "experience"
   | "service";
@@ -9,7 +9,7 @@ export type SiteVertical =
 // rather than redeclaring its own array, and any UI vertical picker should
 // import this (or ALL_VERTICALS) instead of hand-writing a local
 // 'restaurant' | 'experience' union that silently omits new verticals.
-export const ALL_VERTICALS: SiteVertical[] = ["restaurant", "experience", "service"];
+export const ALL_VERTICALS: OrganizationVertical[] = ["restaurant", "experience", "service"];
 
 type LocaleCode = "en" | "th" | "ja";
 
@@ -111,7 +111,7 @@ type VerticalCopy = {
   cancelLabel: (_word: string) => string
 }
 
-const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> = {
+const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, VerticalCopy>>> = {
   ja: {},
   en: {
     restaurant: {
@@ -824,7 +824,7 @@ registry.ja.service = {
 }
 
 export function normalizeVertical(vertical: string | null | undefined): string {
-  // `sites.vertical` is NOT NULL (sites_vertical_check in server/db/schema.ts).
+  // `organizations.vertical` is NOT NULL (organizations_vertical_check in server/db/schema.ts).
   // Every caller already gates on the site being loaded before calling this,
   // or uses its own local ref for a genuine pre-creation onboarding default —
   // so a missing vertical here means the caller's data source failed to load,
@@ -847,11 +847,11 @@ export function getVerticalCopy(vertical: string | null | undefined, locale: str
   const v = normalizeVertical(vertical)
   const l = String(locale ?? "en") as LocaleCode
   const byLocale = Object.prototype.hasOwnProperty.call(registry, l) ? registry[l]! : registry.en
-  const localized = byLocale[v as SiteVertical]
+  const localized = byLocale[v as OrganizationVertical]
   if (localized) return localized
-  const english = registry.en[v as SiteVertical]
+  const english = registry.en[v as OrganizationVertical]
   if (english) return english
-  // `v` is a value the sites_vertical_check constraint allows (e.g. 'retail',
+  // `v` is a value the organizations_vertical_check constraint allows (e.g. 'retail',
   // 'wellness') but that isn't in ALL_VERTICALS/the copy registry yet, or an
   // unrecognized string entirely — a real data/registry gap, not a state to
   // paper over with restaurant copy.

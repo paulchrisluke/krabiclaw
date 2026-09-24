@@ -3,8 +3,8 @@ import test from 'node:test'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
-import { cleanupTenantAnalytics, getSiteAnalyticsReport } from '../../server/utils/site-analytics-report.ts'
-import { deleteConfig, setConfig } from '../../server/utils/site-config.ts'
+import { cleanupTenantAnalytics, getAnalyticsReport } from '../../server/utils/analytics-report.ts'
+import { deleteConfig, setConfig } from '../../server/utils/organization-config.ts'
 
 test('a new organization initializes analytics time without inventing a location timezone', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -34,7 +34,7 @@ test('a new organization initializes analytics time without inventing a location
     await cleanupTenantAnalytics(db, new Date('2026-09-06T12:00:00Z'))
     assert.equal(await db.prepare("SELECT count(*) AS count FROM analytics_events WHERE id = 'old-pageview'").first('count'), 0)
     for (const { id, zone } of [{ id: 'org', zone: 'UTC' }, { id: 'platform', zone: 'UTC' }, { id: 'mcp-fixture', zone: 'Asia/Bangkok' }]) {
-      const report = await getSiteAnalyticsReport(db, { organizationId: id, startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') })
+      const report = await getAnalyticsReport(db, { organizationId: id, startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') })
       assert.equal(report.period.timezone, zone)
     }
     assert.equal(await db.prepare("SELECT settings_json ->> '$.config.brand_color' AS color FROM organization WHERE id = 'org'").first('color'), '#123456')

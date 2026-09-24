@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { replaceMediaUrls } from '../../scripts/utils/media-url-replacements.mjs'
-import { SiteLinksValidationError, validateLinkDestination } from '../../server/utils/links-page.ts'
+import { OrganizationLinksValidationError, validateLinkDestination } from '../../server/utils/links-page.ts'
 
 test('replaces media URLs inside nested Markdown strings', () => {
   const source = 'https://images.example.test/legacy/image.webp'
@@ -26,6 +26,6 @@ test('site link destinations validate URLs', () => {
   assert.equal(validateLinkDestination('mailto:hello@example.com'), 'mailto:hello@example.com')
   assert.equal(validateLinkDestination('tel:+15551234567'), 'tel:+15551234567')
   for (const destination of ['', 'not a url', '//evil.example/path', '\\contact', 'javascript:alert(1)', 'data:text/html,test']) {
-    assert.throws(() => validateLinkDestination(destination), SiteLinksValidationError)
+    assert.throws(() => validateLinkDestination(destination), OrganizationLinksValidationError)
   }
 })

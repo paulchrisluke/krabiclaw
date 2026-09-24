@@ -14,7 +14,7 @@ export function useOnboardingDraft() {
   const routeScope = useDashboardRouteScope()
   const busy = ref(false)
   const error = ref<string | null>(null)
-  const { trackSiteCreated } = useAnalytics()
+  const { trackOrganizationCreated } = useAnalytics()
 
   /** The address as the review step shows it, on one line. */
   function addressSummary() {
@@ -197,14 +197,14 @@ export function useOnboardingDraft() {
         { method: 'POST', validate: (value): value is Record<string, unknown> => isRecord(value) },
       )
       if (res.success !== true) {
-        throw new Error(typeof res.error === 'string' ? res.error : 'Failed to create your site. Please try again.')
+        throw new Error(typeof res.error === 'string' ? res.error : 'Failed to create your organization. Please try again.')
       }
       state.value.created = {
         orgSlug: typeof res.orgSlug === 'string' ? res.orgSlug : null,
-        siteSlug: typeof res.siteSlug === 'string' ? res.siteSlug : null,
+        organizationSlug: typeof res.organizationSlug === 'string' ? res.organizationSlug : null,
         locationSlug: typeof res.locationSlug === 'string' ? res.locationSlug : null,
       }
-      if (typeof res.organizationId === 'string') trackSiteCreated(res.organizationId)
+      if (typeof res.organizationId === 'string') trackOrganizationCreated(res.organizationId)
       return true
     } catch (cause) {
       error.value = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'
@@ -236,7 +236,7 @@ export function useOnboardingDraft() {
       }
       state.value.created = {
         orgSlug: typeof res.orgSlug === 'string' ? res.orgSlug : null,
-        siteSlug: typeof res.siteSlug === 'string' ? res.siteSlug : null,
+        organizationSlug: typeof res.organizationSlug === 'string' ? res.organizationSlug : null,
         locationSlug: typeof res.locationSlug === 'string' ? res.locationSlug : null,
       }
       return true
@@ -262,7 +262,7 @@ export function useOnboardingDraft() {
    * Discard would delete, and has to say so rather than offer the control
    * anyway or hide it without a reason.
    */
-  async function activeDraftSiteId(): Promise<string | null> {
+  async function activeDraftOrganizationId(): Promise<string | null> {
     const res = await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/drafts/active', {
       validate: (value): value is Record<string, unknown> => isRecord(value),
     })
@@ -289,14 +289,14 @@ export function useOnboardingDraft() {
         validate: (value): value is Record<string, unknown> => isRecord(value),
       })
       if (res.success !== true) {
-        throw new Error(typeof res.error === 'string' ? res.error : 'Could not discard your unfinished site. Please try again.')
+        throw new Error(typeof res.error === 'string' ? res.error : 'Could not discard your unfinished organization. Please try again.')
       }
       // The endpoint answers `deleted: false` when the caller has no active
       // draft any more — it activated, or another tab discarded it. Nothing was
       // removed, so reporting this as done would close the dialog over a site
       // that is still there. Say what actually happened.
       if (res.deleted !== true) {
-        throw new Error('Nothing was discarded: you no longer have an unfinished site. Reload this page to see its current state.')
+        throw new Error('Nothing was discarded: you no longer have an unfinished organization. Reload this page to see its current state.')
       }
       return true
     } catch (cause) {
@@ -373,5 +373,5 @@ export function useOnboardingDraft() {
     }
   }
 
-  return { busy, error, save, lookup, activate, addLocation, restore, activeDraftSiteId, discard, addressSummary }
+  return { busy, error, save, lookup, activate, addLocation, restore, activeDraftOrganizationId, discard, addressSummary }
 }

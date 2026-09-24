@@ -175,7 +175,7 @@ import {
 } from '~/lib/components/workspace/messages/guest-thread-client'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
 import { useDashboardInvalidations } from '~/composables/useDashboardInvalidations'
 
 /*
@@ -185,7 +185,6 @@ import { useDashboardInvalidations } from '~/composables/useDashboardInvalidatio
   route parent owns that chrome.
 */
 const props = defineProps<{
-  scope: 'organization' | 'site'
   /** Locks the list to one kind, for a surface that is only ever about that kind. */
   submissionTypeFilter?: SubmissionType
   /** Rendered somewhere other than the messages screen: it opens nothing on its own. */
@@ -199,13 +198,10 @@ const { formatRelativeTime } = useHumanTime()
 const route = useRoute()
 const router = useRouter()
 
-const isOrganizationScope = computed(() => props.scope === 'organization')
-const organizationId = computed(() => isOrganizationScope.value ? null : dashboard.organizationId.value)
+const organizationId = computed(() => dashboard.organizationId.value)
 
 const listRoute = computed(() => {
-  const orgSlug = String(route.params.orgSlug)
-  if (isOrganizationScope.value) return `/dashboard/${orgSlug}/messages`
-  return `/dashboard/${orgSlug}/messages`
+  return `/dashboard/${String(route.params.orgSlug)}/messages`
 })
 
 // The open thread, for the selected row. It is the segment below this list, so
@@ -260,10 +256,10 @@ const capabilities = computed(() => {
   const vertical = dashboard.organization.value?.vertical
   if (!vertical) return null
   try {
-    const normalizedVertical = normalizeVertical(vertical) as SiteVertical
+    const normalizedVertical = normalizeVertical(vertical) as OrganizationVertical
     const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
     return resolveCmsCapabilities(normalizedVertical, template, {
-      site: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
+      organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
     })
   } catch {
     return null
@@ -309,7 +305,6 @@ const emptyDescription = computed(() => {
   if (route.query.query) return `Nothing matched “${route.query.query}”.`
   if (filtersApplied.value) return 'Try a different filter, or clear them to see everything.'
   if (pastOnly.value) return 'Conversations move here once their booking has passed.'
-  if (isOrganizationScope.value) return 'New guest conversations across all sites will appear here.'
   return 'New guest conversations will appear here.'
 })
 
@@ -324,9 +319,7 @@ const listQuery = computed(() => ({
 const initialThreadsKey = computed(() => [
   'dashboard-guest-threads',
   String(route.params.orgSlug ?? ''),
-  organizationId.value ?? 'org',
-  props.scope,
-  isOrganizationScope.value ? 'org' : 'site',
+  organizationId.value,
   activeType.value ?? 'all',
   pastOnly.value ? 'past' : 'current',
   unreadOnly.value ? 'unread' : 'any',
@@ -339,12 +332,6 @@ const {
 } = await useAsyncData<{ threads: ThreadListItem[] }>(initialThreadsKey, async () => {
   if (!dashboardScope.value) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
-  }
-  if (isOrganizationScope.value) {
-    return await dashboardApi<{ threads: ThreadListItem[] }>('/api/dashboard/guest-threads', {
-      query: listQuery.value,
-      validate: isThreadListResponse,
-    })
   }
   return await dashboardApi<{ threads: ThreadListItem[] }>(
     `/api/dashboard/organizations/${organizationId.value}/guest-threads`,
@@ -364,17 +351,14 @@ watch([initialThreads, initialThreadsPending, initialThreadsError], ([data, pend
 // The newest thread, for the index above to open into its second column on
 // arrival. The list only says which; whether there is a column is the shell's.
 watch([threads, openThreadId], ([rows, open]) => {
-  if (open || isOrganizationScope.value || props.embedded) return
+  if (open || props.embedded) return
   const first = rows[0]
   emit('first', first ? { path: threadRoute(first), query: route.query } : null)
 }, { immediate: true })
 
-// One inbox per organization: a thread opens there whichever location it
-// belongs to. Within a location the thread opens beside this list.
+// A thread opens beside this list, whichever location it belongs to.
 function threadRoute(thread: ThreadListItem) {
-  if (!isOrganizationScope.value) return `${listRoute.value}/${encodeURIComponent(thread.id)}`
-  const orgSlug = encodeURIComponent(String(route.params.orgSlug))
-  return `/dashboard/${orgSlug}/messages/${encodeURIComponent(thread.id)}`
+  return `${listRoute.value}/${encodeURIComponent(thread.id)}`
 }
 
 /**
@@ -384,7 +368,7 @@ function threadRoute(thread: ThreadListItem) {
  */
 function occurrenceLine(thread: ThreadListItem) {
   if (thread.whenLabel) return thread.whenLabel
-  return (isOrganizationScope.value ? thread.contextLabel : thread.locationLabel) ?? ''
+  return thread.locationLabel ?? ''
 }
 
 async function loadThreads() {
@@ -393,15 +377,10 @@ async function loadThreads() {
   loadingThreads.value = true
   threadsError.value = null
   try {
-    const res = isOrganizationScope.value
-      ? await dashboardApi<{ threads: ThreadListItem[] }>('/api/dashboard/guest-threads', {
-        query: listQuery.value,
-        validate: isThreadListResponse,
-      })
-      : await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${organizationId.value}/guest-threads`, {
-        query: listQuery.value,
-        validate: isThreadListResponse,
-      })
+    const res = await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${organizationId.value}/guest-threads`, {
+      query: listQuery.value,
+      validate: isThreadListResponse,
+    })
     if (requestToken !== threadsRequestToken) return
     threads.value = res.threads ?? []
   } catch (error) {

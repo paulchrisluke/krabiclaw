@@ -20,9 +20,9 @@
       </div>
 
       <USelect
-        v-if="currentTabIsLocationScoped && siteLocations.length > 0"
+        v-if="currentTabIsLocationScoped && organizationLocations.length > 0"
         :model-value="selectedLocationId ?? undefined"
-        :items="siteLocations.map(location => ({ label: location.title, value: location.id }))"
+        :items="organizationLocations.map(location => ({ label: location.title, value: location.id }))"
         placeholder="Select a location"
         aria-label="Preview location"
         @update:model-value="$emit('select-location', $event)"
@@ -30,7 +30,7 @@
 
       <div class="ml-auto flex items-center gap-2">
         <UBadge
-          v-if="siteStatus === 'live'"
+          v-if="organizationStatus === 'live'"
           color="success"
           variant="soft"
           size="sm"
@@ -40,7 +40,7 @@
           Live
         </UBadge>
         <UBadge
-          v-else-if="siteStatus === 'ready'"
+          v-else-if="organizationStatus === 'ready'"
           color="primary"
           variant="soft"
           size="sm"
@@ -117,16 +117,16 @@
 <script setup lang="ts">
 import { getEditablePages } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 const props = withDefaults(defineProps<{
   iframeSrc: string
-  siteLocations: Array<{ id: string; slug: string; title: string }>
+  organizationLocations: Array<{ id: string; slug: string; title: string }>
   selectedLocationId: string | null
   selectedPage: string
-  siteStatus: 'setup' | 'progress' | 'ready' | 'live'
-  siteDomain?: string
-  vertical?: SiteVertical
+  organizationStatus: 'setup' | 'progress' | 'ready' | 'live'
+  organizationDomain?: string
+  vertical?: OrganizationVertical
   homeOnly?: boolean
   emptyVisualUrl?: string
   emptyVisualAlt?: string
@@ -189,22 +189,22 @@ const secondaryTab = computed(() => {
   if (props.vertical === 'service') {
     const offeringsPath = resolvePublicTemplate({ vertical: props.vertical }).serviceRoutes.offeringsIndex
     if (!offeringsPath) return null
-    return { id: offeringsPath.replace(/^\//, ''), label: 'Services', enabled: !!props.iframeSrc || props.siteLocations.length > 0, locationScoped: false }
+    return { id: offeringsPath.replace(/^\//, ''), label: 'Services', enabled: !!props.iframeSrc || props.organizationLocations.length > 0, locationScoped: false }
   }
   const template = resolvePublicTemplate({ vertical: props.vertical })
   const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'products')
   if (!match) return null
   const locationScoped = match.scope === 'location'
-  const enabled = locationScoped ? props.siteLocations.length > 0 : !!props.iframeSrc || props.siteLocations.length > 0
+  const enabled = locationScoped ? props.organizationLocations.length > 0 : !!props.iframeSrc || props.organizationLocations.length > 0
   return { id: match.id, label: match.label, enabled, locationScoped }
 })
 
 const tabs = computed(() => {
-  const list = [{ id: 'home', label: 'Home', enabled: !!props.iframeSrc || props.siteLocations.length > 0, locationScoped: false }]
+  const list = [{ id: 'home', label: 'Home', enabled: !!props.iframeSrc || props.organizationLocations.length > 0, locationScoped: false }]
   if (props.homeOnly) return list
   if (secondaryTab.value) list.push(secondaryTab.value)
-  list.push({ id: 'about', label: 'About', enabled: !!props.iframeSrc || props.siteLocations.length > 0, locationScoped: false })
-  list.push({ id: 'contact', label: 'Contact', enabled: !!props.iframeSrc || props.siteLocations.length > 0, locationScoped: false })
+  list.push({ id: 'about', label: 'About', enabled: !!props.iframeSrc || props.organizationLocations.length > 0, locationScoped: false })
+  list.push({ id: 'contact', label: 'Contact', enabled: !!props.iframeSrc || props.organizationLocations.length > 0, locationScoped: false })
   return list
 })
 

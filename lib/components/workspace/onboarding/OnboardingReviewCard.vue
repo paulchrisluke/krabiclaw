@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { useOnboardingState } from '~/composables/useOnboardingFlow'
 import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
-import { tenantSiteOrigin } from '~/utils/tenant-site-origin'
+import { tenantOrganizationOrigin } from '~/utils/tenant-organization-origin'
 
 /**
  * What is answered and what is still blank, before the one irreversible press.
@@ -41,9 +41,9 @@ const config = useRuntimeConfig()
 const liveHost = computed(() => {
   const subdomain = state.value.preview?.subdomainCandidate
   if (!subdomain) return ''
-  return tenantSiteOrigin({
+  return tenantOrganizationOrigin({
     platformDomain: String(config.public.platformDomain),
-    freeSiteDomain: String(config.public.freeSiteDomain),
+    freeOrganizationDomain: String(config.public.freeOrganizationDomain),
     subdomain,
   }).replace(/^https?:\/\//, '')
 })

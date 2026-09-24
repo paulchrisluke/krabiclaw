@@ -75,9 +75,9 @@ test.describe('OAuth discovery endpoints', () => {
       },
     })
     expect(workspace.status()).toBe(200)
-    const result = await mcpJson<{ result: { isError: boolean; structuredContent: { sites: Array<{ id: string }> } } }>(workspace)
+    const result = await mcpJson<{ result: { isError: boolean; structuredContent: { organizations: Array<{ id: string }> } } }>(workspace)
     expect(result.result.isError).toBe(false)
-    expect(result.result.structuredContent.sites.some(site => site.id === 'site-kikuzuki')).toBe(true)
+    expect(result.result.structuredContent.organizations.map(organization => organization.id)).toContain('org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX')
   })
 
   // One discovery pass: a client reads all three documents back to back, and

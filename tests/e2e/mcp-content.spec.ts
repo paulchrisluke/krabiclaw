@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
 import Ajv from 'ajv'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
-import { mcpRequest, mcpData, ensureOrganization } from './helpers/mcp'
+import { tenantBaseURL, tenantExtraHeaders } from './helpers'
+import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
+import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
@@ -19,8 +20,8 @@ test.describe('stateless MCP server', () => {
   // shared one further.
 
   test('invalid event and offer posts are rejected with validation errors', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
     const invalidEvent = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
@@ -43,8 +44,8 @@ test.describe('stateless MCP server', () => {
 
   test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
-    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
     let createdPostId: string | undefined
 
     try {
@@ -95,15 +96,15 @@ test.describe('stateless MCP server', () => {
       expect(draft.status).toBe('draft')
       expect(draft.published_at).toBeNull()
       expect(draft.public_url).toBeNull()
-      expect((await request.get(`${baseURL}/api/public/posts/${encodeURIComponent(draft.slug)}`)).status()).toBe(404)
+      expect((await request.get(`${tenantBaseURL}/api/public/posts/${encodeURIComponent(draft.slug)}`, { headers: tenantExtraHeaders })).status()).toBe(404)
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { organization_id: organizationId, post_id: created.id, channels: ['site', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.id, channels: ['organization', 'facebook'] },
       })
       expect(publish.status()).toBe(200)
       const publishData = mcpData<{ channel_outcomes: Record<string, { status: string, reason?: string }> }>(await publish.json())
-      expect(publishData.channel_outcomes.site?.status).toBe('published')
+      expect(publishData.channel_outcomes.organization?.status).toBe('published')
       expect(publishData.channel_outcomes.facebook?.status).toBe('skipped')
       expect(publishData.channel_outcomes.facebook?.reason).toMatch(/not_connected|not_entitled|social_publishing_disabled/)
 
@@ -115,7 +116,7 @@ test.describe('stateless MCP server', () => {
       expect(firstPost.published_at).toEqual(expect.any(String))
       expect(firstPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
-      const publicRead = await request.get(`${baseURL}/api/public/posts/${encodeURIComponent(firstPost.slug)}`)
+      const publicRead = await request.get(`${tenantBaseURL}/api/public/posts/${encodeURIComponent(firstPost.slug)}`, { headers: tenantExtraHeaders })
       expect(publicRead.status()).toBe(200)
       const publicPost = (await publicRead.json() as { post: { id: string, media: Array<{ asset_id: string, slot: string }> } }).post
       expect(publicPost.id).toBe(created.id)
@@ -123,7 +124,7 @@ test.describe('stateless MCP server', () => {
 
       const repeat = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { organization_id: organizationId, post_id: created.id, channels: ['site', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.id, channels: ['organization', 'facebook'] },
       })
       expect(repeat.status()).toBe(200)
       const reread = await mcpRequest(request, baseURL!, {
@@ -148,8 +149,8 @@ test.describe('stateless MCP server', () => {
   // file was split and timed out the same way (run 30084182210).
   test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
-    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const now = Date.now()
     const createdPostIds: string[] = []
 
@@ -189,7 +190,7 @@ test.describe('stateless MCP server', () => {
   test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
     test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const organizationId = await ensureOrganization(request, baseURL!)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
     expect(discovery.status()).toBe(200)
     const catalog = await discovery.json() as { result: { tools: Array<{ name: string; outputSchema: object }> } }

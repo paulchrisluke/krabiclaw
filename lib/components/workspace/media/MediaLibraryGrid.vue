@@ -273,7 +273,7 @@ async function upload(file: File) {
 }
 
 const initialMediaKey = computed(() =>
-  `dashboard-media-library:${props.organizationId}:${props.locationId ?? 'site'}:${kindFilter.value}`,
+  `dashboard-media-library:${props.organizationId}:${props.locationId ?? 'organization'}:${kindFilter.value}`,
 )
 const {
   data: initialMedia,

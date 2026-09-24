@@ -6,7 +6,7 @@
 export interface BookingConfirmation {
   type: 'reservation' | 'booking'
   organizationId: string
-  siteName: string
+  organizationName: string
   policySummary?: ApiRecord | null
   guestName: string
   /**

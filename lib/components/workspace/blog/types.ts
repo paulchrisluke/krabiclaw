@@ -30,7 +30,7 @@ export interface BlogPost {
   editor_template?: 'saya' | 'blawby' | 'platform'
   editor_theme_tokens?: Record<string, unknown>
   created_at?: string | null
-  editor_site_name?: string | null
+  editor_organization_name?: string | null
   editor_brand_color?: string | null
   public_path?: string | null
 }

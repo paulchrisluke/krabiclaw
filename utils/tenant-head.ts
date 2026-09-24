@@ -4,12 +4,12 @@ type HeadLink =
 
 export interface TenantHeadLinkOptions {
   isPlatform: boolean
-  siteMedia?: Array<{ slot: string; public_url: string | null }> | null
+  organizationMedia?: Array<{ slot: string; public_url: string | null }> | null
 }
 
 export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[] {
   const tenantFaviconUrl = !options.isPlatform
-    ? options.siteMedia?.find(item => item.slot === 'favicon')?.public_url
+    ? options.organizationMedia?.find(item => item.slot === 'favicon')?.public_url
     : null
 
   // A tenant that uploaded a favicon gets that one file and nothing of ours.

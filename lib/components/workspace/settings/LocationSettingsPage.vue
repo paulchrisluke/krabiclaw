@@ -21,7 +21,7 @@
     resource-label="location"
     :fields="editor.locationLocalizationFields.value"
     :route-path="editor.localizedLocationPath"
-    :language-settings-path="editor.siteLocalizationSettingsPath.value"
+    :language-settings-path="editor.organizationLocalizationSettingsPath.value"
   />
 </template>
 
@@ -34,7 +34,7 @@ import type { LocationReservationConfig, LocationReservationConfigPatch } from '
 import { getErrorMessage } from '~/utils/errors'
 import { defaultModuleFeaturesForVertical, resolveCmsCapabilities, toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 import { postalAddressFromAnswers, type PostalAddress } from '~/utils/postal-address'
 
 
@@ -105,26 +105,26 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   // supports must collapse the stored override to null, not an equivalent-but-redundant explicit
   // delta. Both come straight from the location GET/PATCH response (server/utils/location-management.ts's
   // resolveLocationCapabilitySummary) rather than being recomputed client-side.
-  const siteEffectiveFeatures = ref<ProductFeature[]>([])
+  const organizationEffectiveFeatures = ref<ProductFeature[]>([])
   const locationEffectiveFeatures = ref<ProductFeature[]>([])
 
   const locationToggleableFeatures = computed<ProductFeature[]>(() => {
-    const site = dashboard.organization.value
-    if (!site?.vertical) return []
-    const template = resolvePublicTemplate({ themeId: site.theme_id, vertical: site.vertical as SiteVertical }).slug
+    const organization = dashboard.organization.value
+    if (!organization?.vertical) return []
+    const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical as OrganizationVertical }).slug
     const configurableHere = new Set(toggleableModulesForScope(template, 'location'))
-    return siteEffectiveFeatures.value.filter(feature => configurableHere.has(feature))
+    return organizationEffectiveFeatures.value.filter(feature => configurableHere.has(feature))
   })
 
   const locationFeatureLabels = computed<Map<ProductFeature, string>>(() => {
-    const site = dashboard.organization.value
-    if (!site?.vertical) return new Map()
-    const vertical = site.vertical as SiteVertical
-    const template = resolvePublicTemplate({ themeId: site.theme_id, vertical }).slug
+    const organization = dashboard.organization.value
+    if (!organization?.vertical) return new Map()
+    const vertical = organization.vertical as OrganizationVertical
+    const template = resolvePublicTemplate({ themeId: organization.theme_id, vertical }).slug
     const defaults = defaultModuleFeaturesForVertical(vertical)
-    const effective = siteEffectiveFeatures.value
+    const effective = organizationEffectiveFeatures.value
     const capabilities = resolveCmsCapabilities(vertical, template, {
-      site: {
+      organization: {
         enabled: effective.filter(feature => !defaults.includes(feature)),
         disabled: defaults.filter(feature => !effective.includes(feature)),
       },
@@ -139,7 +139,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   }
 
   interface LocationCapabilitySummary {
-    site_effective_features?: ProductFeature[]
+    organization_effective_features?: ProductFeature[]
     location_effective_features?: ProductFeature[]
   }
 
@@ -156,14 +156,14 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
   }
   const isCapabilitySummary = (value: unknown): value is LocationCapabilitySummary =>
     isRecord(value)
-    && (value.site_effective_features === undefined
-      || (Array.isArray(value.site_effective_features) && value.site_effective_features.every(item => typeof item === 'string')))
+    && (value.organization_effective_features === undefined
+      || (Array.isArray(value.organization_effective_features) && value.organization_effective_features.every(item => typeof item === 'string')))
     && (value.location_effective_features === undefined
       || (Array.isArray(value.location_effective_features) && value.location_effective_features.every(item => typeof item === 'string')))
   const isLocationResponse = (value: unknown): value is { success: true; location: BusinessLocation } & LocationCapabilitySummary =>
     isRecord(value) && value.success === true && isBusinessLocation(value.location) && isCapabilitySummary(value)
   function fillLocationFeatures(summary: LocationCapabilitySummary) {
-    siteEffectiveFeatures.value = summary.site_effective_features ?? []
+    organizationEffectiveFeatures.value = summary.organization_effective_features ?? []
     locationEffectiveFeatures.value = summary.location_effective_features ?? []
     const enabled = new Set(locationEffectiveFeatures.value)
     // Only ever read through locationToggleableFeatures (see the template's v-for and
@@ -177,15 +177,15 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     editorError.value = null
     try {
       // Delta against the SITE's effective set, not this location's prior state (see
-      // siteEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
+      // organizationEffectiveFeatures' doc comment) — collapses to `null` when the checked set exactly
       // matches what the site already supports. `enabled` is structurally always [] today:
-      // locationToggleableFeatures is itself filtered from siteEffectiveFeatures (see its own
-      // computed above), so every feature checked here already satisfies `siteSet.has(feature)`.
+      // locationToggleableFeatures is itself filtered from organizationEffectiveFeatures (see its own
+      // computed above), so every feature checked here already satisfies `organizationSet.has(feature)`.
       // Kept as a real filter (not hardcoded to []) so this stays correct if that upstream
       // computed ever changes — don't "simplify" this away without re-checking that invariant.
-      const siteSet = new Set(siteEffectiveFeatures.value)
-      const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !siteSet.has(feature))
-      const disabled = locationToggleableFeatures.value.filter(feature => siteSet.has(feature) && !locationEnabledFeatureSet[feature])
+      const organizationSet = new Set(organizationEffectiveFeatures.value)
+      const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !organizationSet.has(feature))
+      const disabled = locationToggleableFeatures.value.filter(feature => organizationSet.has(feature) && !locationEnabledFeatureSet[feature])
       const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
       const response = await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
         method: 'PATCH',
@@ -256,7 +256,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     description: '',
     status: 'active',
   })
-  const siteLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
+  const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
   const locationLocalizationFields = computed(() => [
     { key: 'title', label: 'Name', source: location.value?.title },
     { key: 'short_description', label: 'Short description', source: location.value?.short_description },
@@ -362,7 +362,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     fillDetailsForm(location.value)
     reservationForm.value = reservationPatchFrom(reservationConfig.value)
     fillLocationFeatures({
-      site_effective_features: siteEffectiveFeatures.value,
+      organization_effective_features: organizationEffectiveFeatures.value,
       location_effective_features: locationEffectiveFeatures.value,
     })
     originalSignature.value = editorSignature(key)
@@ -546,7 +546,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     detailsForm, hoursForm, reservationForm, reservationConfigExists, closingReservations,
     locationToggleableFeatures, locationEnabledFeatureSet, locationFeatureLabel,
     setDetailsActive,
-    navigationGroups, locationLocalizationFields, localizedLocationPath, siteLocalizationSettingsPath,
+    navigationGroups, locationLocalizationFields, localizedLocationPath, organizationLocalizationSettingsPath,
     revert: resetDraft, save: saveCurrentEditor, closeReservations, loadLocationWorkspace,
   }
 }

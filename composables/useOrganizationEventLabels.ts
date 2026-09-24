@@ -1,4 +1,4 @@
-const SITE_EVENT_LABELS: Record<string, string> = {
+const ORGANIZATION_EVENT_LABELS: Record<string, string> = {
   'contact.created': 'New contact message',
   'post.created': 'Created a post',
   'post.published': 'Published a post',
@@ -31,11 +31,11 @@ const SITE_EVENT_LABELS: Record<string, string> = {
   'member.access_scope_revoked': 'Revoked WhatsApp notification access',
 }
 
-export const SITE_EVENT_TYPES = Object.keys(SITE_EVENT_LABELS)
+export const ORGANIZATION_EVENT_TYPES = Object.keys(ORGANIZATION_EVENT_LABELS)
 
-export function useSiteEventLabels() {
+export function useOrganizationEventLabels() {
   function eventLabel(type: string) {
-    return SITE_EVENT_LABELS[type] ?? type.replace('.', ' ')
+    return ORGANIZATION_EVENT_LABELS[type] ?? type.replace('.', ' ')
   }
 
   return { eventLabel }

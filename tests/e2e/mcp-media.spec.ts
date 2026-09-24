@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData, ensureOrganization, loginAsFreshMcpUser } from './helpers/mcp'
+import { MCP_VERSION, MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 import { devLoginHeaders } from './test-env'
 
-const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/sites/org-demo/media/media-demo-pizza-prep-video.mp4'
+const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/organizations/org-demo/media/media-demo-pizza-prep-video.mp4'
 const MCP_VIDEO_POSTER_URL = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public'
 
 test.describe('stateless MCP server', () => {
@@ -87,8 +87,8 @@ test.describe('stateless MCP server', () => {
 
   test('ChatGPT-shaped video and poster attachments produce an active public asset', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
-    await loginAsFreshMcpUser(request, baseURL!, 'media')
-    const organizationId = await ensureOrganization(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
     let assetId = ''
 
     try {
@@ -113,7 +113,7 @@ test.describe('stateless MCP server', () => {
       const uploaded = mcpData<{ asset_id: string; public_url: string; thumbnail_url: string | null; status: string; kind: string }>(await upload.json())
       expect(uploaded.status).toBe('active')
       expect(uploaded.kind).toBe('video')
-      expect(uploaded.public_url).toContain('/sites/')
+      expect(uploaded.public_url).toContain(`/organizations/${organizationId}/media/`)
       expect(uploaded.thumbnail_url).toContain('imagedelivery.net')
       assetId = uploaded.asset_id
 

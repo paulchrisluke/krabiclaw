@@ -243,16 +243,16 @@ export function buildPostalAddressNode(address: ProfessionalServiceAddress | nul
 
 /** Builds the shared Organization node. `@id` is stable per-origin (`${origin}/#organization`). */
 export function buildOrganizationNode(org: ProfessionalServiceOrgIdentity, origin: string): SchemaNode {
-  const siteRoot = origin.replace(/\/$/, '')
+  const organizationRoot = origin.replace(/\/$/, '')
   const orgTypes = ['Organization']
   if (org.entityType) orgTypes.push(org.entityType)
   else orgTypes.push('ProfessionalService')
 
   const node: SchemaNode = {
     '@type': Array.from(new Set(orgTypes)),
-    '@id': `${siteRoot}/#organization`,
+    '@id': `${organizationRoot}/#organization`,
     name: org.name || undefined,
-    url: siteRoot,
+    url: organizationRoot,
   }
   if (org.description) node.description = org.description
   if (org.logoUrl) node.logo = resolveUrl(org.logoUrl, origin)
@@ -273,14 +273,14 @@ export function buildOrganizationNode(org: ProfessionalServiceOrgIdentity, origi
 }
 
 export function buildWebsiteNode(org: ProfessionalServiceOrgIdentity, origin: string): SchemaNode {
-  const siteRoot = origin.replace(/\/$/, '')
+  const organizationRoot = origin.replace(/\/$/, '')
   return {
     '@type': 'WebSite',
-    '@id': `${siteRoot}/#website`,
-    url: siteRoot,
+    '@id': `${organizationRoot}/#website`,
+    url: organizationRoot,
     name: org.name || undefined,
     ...(org.description ? { description: org.description } : {}),
-    publisher: { '@id': `${siteRoot}/#organization` },
+    publisher: { '@id': `${organizationRoot}/#organization` },
   }
 }
 

@@ -112,7 +112,7 @@ Nuxt hot module replacement. It never resets D1. Run
 snapshot.
 
 Open tenant dashboards from the dashboard UI instead of guessing their URLs.
-When a route must be constructed manually, the segment named `siteSlug` is the
+When a route must be constructed manually, the segment named `organizationSlug` is the
 site's `subdomain`, not its `slug`. Kikuzuki therefore uses
 `/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`, not
 `/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki`.

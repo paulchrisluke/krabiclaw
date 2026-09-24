@@ -12,17 +12,17 @@ import { environmentTenantAliasHostname, normalizeHost } from '~/server/utils/te
  * production site, so every surface that needs a site's origin (the onboarding
  * pane, the page editor's preview, the dashboard's live-site links) calls this.
  */
-export function tenantSiteOrigin(input: {
+export function tenantOrganizationOrigin(input: {
   platformDomain: string
-  freeSiteDomain: string
+  freeOrganizationDomain: string
   subdomain: string
 }): string {
   const subdomain = input.subdomain.trim().toLowerCase()
   if (!subdomain) return ''
 
-  const freeSiteHost = input.freeSiteDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
-  if (!freeSiteHost) return ''
-  const protocol = input.freeSiteDomain.startsWith('http://') ? 'http:' : 'https:'
+  const freeOrganizationHost = input.freeOrganizationDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  if (!freeOrganizationHost) return ''
+  const protocol = input.freeOrganizationDomain.startsWith('http://') ? 'http:' : 'https:'
 
   // Deployed preview and staging: a first-level alias off the production root.
   // normalizeHost first: environmentTenantAliasHostname takes a hostname, and
@@ -30,5 +30,5 @@ export function tenantSiteOrigin(input: {
   const alias = environmentTenantAliasHostname(normalizeHost(input.platformDomain), subdomain)
   if (alias) return `${protocol}//${alias}`
 
-  return `${protocol}//${subdomain}.${freeSiteHost}`
+  return `${protocol}//${subdomain}.${freeOrganizationHost}`
 }

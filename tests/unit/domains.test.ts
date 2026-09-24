@@ -8,7 +8,7 @@ function domain(overrides: Partial<DomainRecord>): DomainRecord {
   return {
     id: 'domain-root',
     organization_id: 'org',
-    site_id: 'site',
+    organization_id: 'site',
     domain: 'example.com',
     type: 'custom',
     role: 'secondary',

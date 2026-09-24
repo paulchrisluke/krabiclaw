@@ -33,7 +33,7 @@ const props = defineProps({
 const errorStatusCode = computed(() => props.error?.statusCode ?? props.error?.status ?? 500)
 const isNotFound = computed(() => errorStatusCode.value === 404)
 
-const { isPlatform, tenantType, themeId, site } = useTenantSite()
+const { isPlatform, tenantType, themeId, site } = useTenantOrganization()
 const route = useRoute()
 
 // Nuxt renders this page outside the layout system, so the surface CSS a layout
@@ -64,7 +64,7 @@ useHead(() => ({
     ...(surfaceStylesheet.value ? [{ rel: 'stylesheet', href: surfaceStylesheet.value }] : []),
     ...buildTenantHeadLinks({
       isPlatform,
-      siteMedia: site?.media,
+      organizationMedia: site?.media,
     }),
   ],
 }))

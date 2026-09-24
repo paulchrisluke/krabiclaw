@@ -4,11 +4,11 @@
 import { buildPublicPageUrl, usePublicResourceKey, type PublicPageRequest } from "~/composables/usePublicPageRequest";
 import {
   isPublicShellPayload,
-  type PublicShellPayload as SiteShellPayload,
+  type PublicShellPayload as OrganizationShellPayload,
 } from '~/utils/public-resource-contracts'
 
-export const useSiteShellState = () => {
-  const { isPlatform, organizationId } = useTenantSite();
+export const useOrganizationShellState = () => {
+  const { isPlatform, organizationId } = useTenantOrganization();
   const requestEvent = useRequestEvent();
   const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
@@ -33,21 +33,21 @@ export const useSiteShellState = () => {
   const key = computed(() => usePublicResourceKey('shell', organizationId, params.value));
   const url = computed(() => buildPublicPageUrl(organizationId, params.value, 'shell'));
 
-  let data: Ref<SiteShellPayload | undefined>
+  let data: Ref<OrganizationShellPayload | undefined>
   let error: Ref<Error | null>
   let pending: Ref<boolean>
   let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
   if (isSyntheticServerAssetFetch || isPlatform || !organizationId) {
-    data = ref<SiteShellPayload>()
+    data = ref<OrganizationShellPayload>()
     error = ref<Error | null>(null)
     pending = ref(false)
     refresh = async () => {}
     ready = Promise.resolve()
   } else {
-    const asyncData = useAsyncData<SiteShellPayload>(
+    const asyncData = useAsyncData<OrganizationShellPayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<OrganizationShellPayload>({
               organizationId,
               resourceKind: 'shell',
               url: url.value,
@@ -69,7 +69,7 @@ export const useSiteShellState = () => {
             // frame), which renders a different shell than the one being
             // hydrated. The page loader does the same for the same reason.
             getCachedData(cacheKey) {
-              return useNuxtApp().payload.data[cacheKey] as SiteShellPayload | undefined
+              return useNuxtApp().payload.data[cacheKey] as OrganizationShellPayload | undefined
             },
           },
         );
@@ -82,7 +82,7 @@ export const useSiteShellState = () => {
 
   const locations = computed(() => data.value?.locations ?? []);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
-  const shellSite = computed(() => data.value?.site ?? null);
+  const shellOrganization = computed(() => data.value?.organization ?? null);
   const googleMaps = computed(() => data.value?.googleMaps ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
@@ -96,7 +96,7 @@ export const useSiteShellState = () => {
   return {
     locations,
     config,
-    site: shellSite,
+    organization: shellOrganization,
     googleMaps,
     locales,
     hasProducts,

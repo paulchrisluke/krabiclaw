@@ -1,7 +1,7 @@
 import type { CmsCapabilityDefinition, CmsCapabilityOverrides, CmsPageCapability } from '~/config/cms-registry'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import type { OrganizationVertical } from '~/utils/vertical-copy'
 
 export interface PreviewContext {
   locationSlug?: string
@@ -11,8 +11,8 @@ export interface EditablePage {
   id: string
   label: string
   path: string
-  scope: 'site' | 'location'
-  scopeLabelKey: 'site' | 'location' | 'office'
+  scope: 'organization' | 'location'
+  scopeLabelKey: 'organization' | 'location' | 'office'
   editor: CmsPageCapability['editor']
 }
 
@@ -39,7 +39,7 @@ export const contentRegistry: Record<string, { path: string }> = {
 }
 
 export function getEditablePages(
-  vertical: SiteVertical,
+  vertical: OrganizationVertical,
   template: PublicTemplateSlug,
   overrides?: CmsCapabilityOverrides,
 ): EditablePage[] {
@@ -49,8 +49,8 @@ export function getEditablePages(
     label: page.label,
     path: page.route,
     scope: page.scope,
-    scopeLabelKey: page.scope === 'site'
-      ? 'site'
+    scopeLabelKey: page.scope === 'organization'
+      ? 'organization'
       : capability.locationVocabulary === 'office/service area' ? 'office' : 'location',
     editor: page.editor,
   }))
@@ -61,9 +61,9 @@ export function getEditablePages(
  * Pages manager authorizes and resolves variants through its own API.
  */
 export function getScopedEditablePages(
-  _vertical: SiteVertical | null,
+  _vertical: OrganizationVertical | null,
   _capabilities: CmsCapabilityDefinition | null,
-  _scope: 'site' | 'location',
+  _scope: 'organization' | 'location',
 ): EditablePage[] {
   return []
 }

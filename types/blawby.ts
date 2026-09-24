@@ -88,14 +88,14 @@ export interface PublicBlawbyPageLink {
 }
 
 
-export interface PublicSiteQa {
+export interface PublicOrganizationQa {
   id: string
   question: string
   answer: string | null
   sort_order: number
 }
 
-export interface PublicSiteReview {
+export interface PublicOrganizationReview {
   source: string | null
   original_reference: string | null
   google_review_metadata: GoogleReviewMetadata | null
@@ -177,8 +177,8 @@ export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
   localeRepresentations: PublicLocaleRepresentation[]
   page: PublicTenantPage | null
-  qa: PublicSiteQa[]
-  reviews: PublicSiteReview[]
+  qa: PublicOrganizationQa[]
+  reviews: PublicOrganizationReview[]
   posts: PublicBlogSummary[]
   post: PublicBlogPost | null
 }

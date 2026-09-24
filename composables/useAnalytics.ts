@@ -19,7 +19,7 @@ declare global {
 export type AnalyticsEventName =
   // User Acquisition & Onboarding
   | 'sign_up'
-  | 'site_created'
+  | 'organization_created'
   | 'onboarding_completed'
   | 'domain_connected'
   // Billing & Subscription
@@ -99,7 +99,7 @@ export interface AnalyticsEventProperties {
 // that get lifted into their own page/location/metadata groups instead of
 // staying in the flat properties bag — see trackEvent() below.
 export interface AnalyticsEventInput extends AnalyticsEventProperties {
-  site_id?: string
+  organization_id?: string
   template?: string
   page_path?: string
   page_title?: string
@@ -173,7 +173,7 @@ export const getBillingAnalyticsContext = (): BillingAnalyticsContext => {
 }
 
 export const useAnalytics = () => {
-  const { isPlatform } = useTenantSite()
+  const { isPlatform } = useTenantOrganization()
 
   // Builds a structured payload instead of one flat params bag, so it reads
   // the same way it's queried later: page/location/metadata are recognizable
@@ -190,14 +190,14 @@ export const useAnalytics = () => {
     if (typeof window === 'undefined') return
     if (!isPlatform) return
 
-    const { site_id, template, page_path, page_title, page_language, location_id, ...properties } = input
+    const { organization_id, template, page_path, page_title, page_language, location_id, ...properties } = input
 
     const flatParams: Record<string, unknown> = {
       ...(page_path ? { page_path } : {}),
       ...(page_title ? { page_title } : {}),
       ...(page_language ? { page_language } : {}),
       ...(location_id ? { location_id } : {}),
-      ...(site_id ? { site_id } : {}),
+      ...(organization_id ? { organization_id } : {}),
       ...(template ? { template } : {}),
       device_language: navigator.language,
       is_prod: import.meta.env.PROD,
@@ -212,12 +212,12 @@ export const useAnalytics = () => {
     trackEvent('sign_up', { method })
   }
 
-  const trackSiteCreated = (siteId: string) => {
-    trackEvent('site_created', { site_id: siteId })
+  const trackOrganizationCreated = (organizationId: string) => {
+    trackEvent('organization_created', { organization_id: organizationId })
   }
 
-  const trackDomainConnected = (domain: string, siteId: string) => {
-    trackEvent('domain_connected', { domain, site_id: siteId })
+  const trackDomainConnected = (domain: string, organizationId: string) => {
+    trackEvent('domain_connected', { domain, organization_id: organizationId })
   }
 
   // Billing & Subscription
@@ -251,50 +251,50 @@ export const useAnalytics = () => {
   }
 
   // Content Creation
-  const trackProductCreated = (contentId: string, siteId: string) => {
-    trackEvent('product_created', { content_id: contentId, site_id: siteId, content_type: 'product' })
+  const trackProductCreated = (contentId: string, organizationId: string) => {
+    trackEvent('product_created', { content_id: contentId, organization_id: organizationId, content_type: 'product' })
   }
 
-  const trackProductsImported = (siteId: string, importMethod: string) => {
-    trackEvent('product_imported', { site_id: siteId, import_method: importMethod })
+  const trackProductsImported = (organizationId: string, importMethod: string) => {
+    trackEvent('product_imported', { organization_id: organizationId, import_method: importMethod })
   }
 
-  const trackPostCreated = (contentId: string, siteId: string) => {
-    trackEvent('post_created', { content_id: contentId, site_id: siteId, content_type: 'post' })
+  const trackPostCreated = (contentId: string, organizationId: string) => {
+    trackEvent('post_created', { content_id: contentId, organization_id: organizationId, content_type: 'post' })
   }
 
-  const trackPostPublished = (contentId: string, siteId: string) => {
-    trackEvent('post_published', { content_id: contentId, site_id: siteId, content_type: 'post' })
+  const trackPostPublished = (contentId: string, organizationId: string) => {
+    trackEvent('post_published', { content_id: contentId, organization_id: organizationId, content_type: 'post' })
   }
 
   // Media Management
-  const trackImageUploaded = (siteId: string, fileSize: number, provider: string) => {
-    trackEvent('image_uploaded', { site_id: siteId, file_size: fileSize, provider, media_type: 'image' })
+  const trackImageUploaded = (organizationId: string, fileSize: number, provider: string) => {
+    trackEvent('image_uploaded', { organization_id: organizationId, file_size: fileSize, provider, media_type: 'image' })
   }
 
-  const trackVideoUploaded = (siteId: string, fileSize: number, provider: string) => {
-    trackEvent('video_uploaded', { site_id: siteId, file_size: fileSize, provider, media_type: 'video' })
+  const trackVideoUploaded = (organizationId: string, fileSize: number, provider: string) => {
+    trackEvent('video_uploaded', { organization_id: organizationId, file_size: fileSize, provider, media_type: 'video' })
   }
 
-  const trackMediaGenerated = (siteId: string, prompt: string) => {
-    trackEvent('media_generated', { site_id: siteId, generation_prompt: prompt.substring(0, 100) })
+  const trackMediaGenerated = (organizationId: string, prompt: string) => {
+    trackEvent('media_generated', { organization_id: organizationId, generation_prompt: prompt.substring(0, 100) })
   }
 
-  const trackMediaLibraryViewed = (siteId: string) => {
-    trackEvent('media_library_viewed', { site_id: siteId })
+  const trackMediaLibraryViewed = (organizationId: string) => {
+    trackEvent('media_library_viewed', { organization_id: organizationId })
   }
 
   // Feature Usage
-  const trackDashboardVisited = (section: string, siteId?: string) => {
-    trackEvent('dashboard_visited', { dashboard_section: section, site_id: siteId })
+  const trackDashboardVisited = (section: string, organizationId?: string) => {
+    trackEvent('dashboard_visited', { dashboard_section: section, organization_id: organizationId })
   }
 
-  const trackChowbotInteraction = (siteId?: string) => {
-    trackEvent('chowbot_interaction', { site_id: siteId })
+  const trackChowbotInteraction = (organizationId?: string) => {
+    trackEvent('chowbot_interaction', { organization_id: organizationId })
   }
 
-  const trackEditorSessionStarted = (siteId: string) => {
-    trackEvent('editor_session_started', { site_id: siteId })
+  const trackEditorSessionStarted = (organizationId: string) => {
+    trackEvent('editor_session_started', { organization_id: organizationId })
   }
 
   // Engagement
@@ -318,7 +318,7 @@ export const useAnalytics = () => {
   return {
     trackEvent,
     trackSignUp,
-    trackSiteCreated,
+    trackOrganizationCreated,
     trackDomainConnected,
     trackPlanViewed,
     trackCheckoutStarted,

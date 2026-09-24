@@ -75,7 +75,7 @@ export function useRouteLevel() {
   /**
    * The nearest screen above this one. A record at the same URL is the same
    * level — a directory's `index.vue` — and a record that only carries a path
-   * segment, as `sites/[siteSlug].vue` does with nothing but `<NuxtPage>`, is
+   * segment, as `sites/[organizationSlug].vue` does with nothing but `<NuxtPage>`, is
    * not somewhere Back can land. Both are stepped over.
    */
   const parent = computed(() => {
@@ -106,7 +106,7 @@ export function useRouteLevel() {
 
   /**
    * A declared parent is resolved with only the params its own path names.
-   * The current route carries more — a leaf under a site has `siteSlug`, `qaId`
+   * The current route carries more — a leaf under a site has `organizationSlug`, `qaId`
    * — and the router refuses a named target handed params it has no place for.
    */
   function resolveNamed(name: string): string | null {

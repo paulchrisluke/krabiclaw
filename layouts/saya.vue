@@ -17,7 +17,7 @@
     <div id="saya-portal-root" />
 
     <SayaHeader
-      :site="resolvedSite"
+      :organization="resolvedOrganization"
       :locations="locations"
       :has-products="shell.hasProducts.value"
       :has-bookable-products="shell.hasBookableProducts.value"
@@ -26,7 +26,7 @@
       <slot />
     </main>
     <LazySayaFooter
-      :site="resolvedSite"
+      :organization="resolvedOrganization"
       :is-platform="isPlatform"
       :locations="footerLocations"
       :locales="locales"
@@ -41,7 +41,7 @@
 <script setup lang="ts">
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
-import { MALI_FONT_CSS, resolveSiteFontPreset, siteFontStyles } from '~/shared/site-fonts'
+import { MALI_FONT_CSS, resolveOrganizationFontPreset, organizationFontStyles } from '~/shared/organization-fonts'
 
 const route = useRoute()
 const hydrated = ref(false)
@@ -74,19 +74,19 @@ if (import.meta.dev) useDebugLCP()
 
 // Persistent chrome uses the minimal shell contract. Route-specific Product and
 // experience data comes from the keyed page loader and changes independently.
-const shell = useSiteShellState()
+const shell = useOrganizationShellState()
 // The layout's root attributes are serialized before its children render.
 // Await the existing keyed shell on every SSR route, not only the homepage,
 // so a direct menu/contact visit cannot serialize Default and hydrate as Mali.
 if (import.meta.server) await shell.ready
-const { config, locations, locales, error: bootstrapError, site: shellSite } = shell
-const { isPlatform, site } = useTenantSite()
-const resolvedSite = computed(() => shellSite.value || site)
+const { config, locations, locales, error: bootstrapError, organization: shellOrganization } = shell
+const { isPlatform, organization } = useTenantOrganization()
+const resolvedOrganization = computed(() => shellOrganization.value || organization)
 const brandColor = computed(
   () => config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
-const fontPreset = computed(() => resolveSiteFontPreset(config.value.font_preset))
+const fontPreset = computed(() => resolveOrganizationFontPreset(config.value.font_preset))
 
 // The existing SSR shell supplies the choice. No mounted font loader, extra
 // settings request, global font stylesheet, or font preloads: the faces are
@@ -98,7 +98,7 @@ useHead(() => ({
 }))
 
 const themeStyles = computed(() => {
-  const styles = siteFontStyles(fontPreset.value)
+  const styles = organizationFontStyles(fontPreset.value)
   if (brandColor.value) {
     styles['--brand-color'] = brandColor.value
     styles['--brand-color-foreground'] = brandTextColor.value
@@ -167,7 +167,7 @@ if (import.meta.client) {
 // real business collecting real visitor data, so it's excluded from search
 // (see the discoverability below) and skips the cookie-consent banner rather
 // than asking demo visitors to accept/reject tracking that isn't happening.
-// Matches these exact hosts (see seed-definitions/demo.ts siteDomains) rather
+// Matches these exact hosts (see seed-definitions/demo.ts organizationDomains) rather
 // than a "demo." prefix — a real tenant's own custom domain (e.g.
 // demo.example.com) can legitimately start with "demo." and must not be
 // treated as our internal showcase site.
@@ -176,10 +176,10 @@ const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
 useSocialMetadata(() => ({
   path: route.path,
-  title: config.value?.seo_title || config.value?.name || resolvedSite.value?.name || '',
+  title: config.value?.seo_title || config.value?.name || resolvedOrganization.value?.name || '',
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {
-    siteName: config.value?.name || resolvedSite.value?.name || '',
+    organizationName: config.value?.name || resolvedOrganization.value?.name || '',
   },
   // Everything a live site serves is offered to discovery; the showcase site
   // is not a real business and is offered to nobody. A page that is itself

@@ -88,7 +88,7 @@ export interface InstagramIntegration {
   updated_at: string
 }
 
-export interface SiteIntegrations {
+export interface OrganizationIntegrations {
   google_credential?: GoogleCredential
   google_analytics?: GoogleAnalyticsIntegration
   google_search_console?: GoogleSearchConsoleIntegration
@@ -96,10 +96,10 @@ export interface SiteIntegrations {
   instagram?: InstagramIntegration
 }
 
-export interface SiteSettings {
+export interface OrganizationSettings {
   config?: {
     brand_color?: string
-    font_preset?: import('./site-fonts').SiteFontPreset
+    font_preset?: import('./organization-fonts').OrganizationFontPreset
     press_email?: string
     partnerships_email?: string
     catering_email?: string

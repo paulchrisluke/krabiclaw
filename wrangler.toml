@@ -38,7 +38,7 @@ zone_name = "krabiclaw.com"
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
-NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
@@ -103,7 +103,7 @@ bucket_name = "krabiclaw-media"
 remote = false
 
 [[kv_namespaces]]
-binding = "SITE_CACHE"
+binding = "ORGANIZATION_CACHE"
 id = "7fadf142e35745d6bec16b260eaab2f2"
 remote = false
 
@@ -153,7 +153,7 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 MEDIA_BASE_URL = "https://preview.krabiclaw.com/__media"
-NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 NUXT_PUBLIC_SITE_URL = "https://preview.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://preview.krabiclaw.com/help"
@@ -192,7 +192,7 @@ bucket_name = "krabiclaw-media-preview"
 remote = false
 
 [[env.preview.kv_namespaces]]
-binding = "SITE_CACHE"
+binding = "ORGANIZATION_CACHE"
 id = "69252567b9cd4becbd486a337ab1e589"
 remote = false
 
@@ -241,7 +241,7 @@ CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
 MEDIA_BASE_URL = "https://staging.krabiclaw.com/__media"
-NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
 NUXT_PUBLIC_SITE_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://staging.krabiclaw.com/help"
@@ -280,7 +280,7 @@ bucket_name = "krabiclaw-media-staging"
 remote = false
 
 [[env.staging.kv_namespaces]]
-binding = "SITE_CACHE"
+binding = "ORGANIZATION_CACHE"
 id = "9e829557fd2b46dba4148f2ed27a5c0b"
 remote = false
 

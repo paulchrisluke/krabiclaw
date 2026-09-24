@@ -145,12 +145,12 @@ export function resolveBlogSeo(input: {
   baseUrl: string
   pathPrefix?: string
   publicPath?: string
-  siteName?: string | null
+  organizationName?: string | null
   descriptionMaxLength?: number
 }) {
   const path = input.publicPath || `${(input.pathPrefix || '/blog').replace(/\/$/, '')}/${encodeURIComponent(input.slug)}`
   const maxLength = input.descriptionMaxLength ?? 160
-  const rawDescription = input.seoDescription?.trim() || input.excerpt?.trim() || `A post from ${input.siteName?.trim() || 'this site'}.`
+  const rawDescription = input.seoDescription?.trim() || input.excerpt?.trim() || `A post from ${input.organizationName?.trim() || 'this organization'}.`
   const description = rawDescription.length <= maxLength
     ? rawDescription
     : `${rawDescription.slice(0, maxLength - 1).replace(/\s+\S*$/, '').trim()}…`

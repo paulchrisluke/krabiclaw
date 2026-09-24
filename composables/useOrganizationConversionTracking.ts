@@ -1,10 +1,10 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
-import type { SiteConversionEventName } from '~/utils/site-conversion-events'
+import type { OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
 
 interface ConversionPayload {
-  event_name: SiteConversionEventName
+  event_name: OrganizationConversionEventName
   stage: string
   page_type?: string | null
   page_path?: string | null
@@ -38,8 +38,8 @@ function mirrorConversion(payload: ConversionPayload) {
   window.zaraz?.track(payload.event_name, params)
 }
 
-export function useSiteConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
-  const { organizationId } = useTenantSite()
+export function useOrganizationConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
+  const { organizationId } = useTenantOrganization()
 
   function track(payload: ConversionPayload) {
     if (!organizationId) return

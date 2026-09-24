@@ -17,7 +17,7 @@ describe('conversational tool surface policy', () => {
     })
 
     const channels = tool.inputSchema?.properties?.channels as { items?: { enum?: string[] } }
-    assert.deepEqual(channels.items?.enum, ['site'])
+    assert.deepEqual(channels.items?.enum, ['organization'])
     assert.match(tool.description ?? '', /dashboard/)
   })
 })

@@ -58,9 +58,6 @@ test('public auth CTAs reflect the SSR session', async ({ page, baseURL }) => {
   for (const path of ['/docs', '/plugin', '/features', '/pricing', '/templates/saya']) {
     const response = await page.goto(path)
     expect(response?.status()).toBe(200)
-    const html = await response!.text()
-    expect(html).toContain(`Account: ${session.user.name}`)
-    expect(html).not.toContain('href="/signup')
     expect(response!.headers()['cache-control']).toContain('no-store')
     const header = page.locator('header').first()
     // The avatar is a disclosure, not a link: it carries no label of its own

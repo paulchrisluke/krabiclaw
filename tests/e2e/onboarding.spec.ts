@@ -13,7 +13,7 @@ import { formatMinorAmount } from '../../shared/prices'
  * so the first label of that hostname carries the environment suffix and is not
  * the stored value. Everywhere else the first label IS the subdomain.
  */
-function siteSubdomain(origin: string): string {
+function organizationSubdomain(origin: string): string {
   const hostname = new URL(origin).hostname
   const alias = environmentTenantAliasSlug(hostname, { NUXT_PUBLIC_PLATFORM_DOMAIN: testBaseUrl() })
   return alias ? alias : hostname.split('.')[0]!
@@ -98,7 +98,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
 
   const previewFrame = page.locator('iframe[title="Site preview"]')
   await expect(previewFrame).toHaveAttribute('src', /preview_token=/)
-  const siteOrigin = new URL((await previewFrame.getAttribute('src'))!).origin
+  const organizationOrigin = new URL((await previewFrame.getAttribute('src'))!).origin
   if (tenantHostIsAddressable()) {
     const preview = page.frameLocator('iframe[title="Site preview"]')
     await expect(preview.locator('body')).toContainText(name, { timeout: firstSaveTimeout })
@@ -120,8 +120,8 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // addressable tenant host the run carries tenant identity in a header, the way
   // every other tenant spec here does.
   const asAnyone = tenantHostIsAddressable()
-    ? { url: `${siteOrigin}/`, headers: {} }
-    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': siteSubdomain(siteOrigin) } }
+    ? { url: `${organizationOrigin}/`, headers: {} }
+    : { url: `${baseURL}/`, headers: { 'x-preview-tenant': organizationSubdomain(organizationOrigin) } }
   expect(await (await request.get(asAnyone.url, { headers: asAnyone.headers })).text()).not.toContain(name)
 
   await page.getByRole('button', { name: 'Enter the details myself' }).click()
@@ -174,7 +174,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // Review: the answers, and the address the next press claims.
   await expect(step('review')).toContainText(name)
   const liveHost = (await step('review').getByText('Your site goes live at').locator('strong').textContent())!.trim()
-  expect(liveHost).toBe(new URL(siteOrigin).host)
+  expect(liveHost).toBe(new URL(organizationOrigin).host)
 
   // There is no done screen. Activation lands the owner in their new
   // organization's dashboard, so leaving the flow is how the press reports it
@@ -199,7 +199,7 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // host the pane framed names the subdomain, not the slug. The organization is
   // the site, so the subdomain is the organization's own.
   const context = await (await page.request.get('/api/dashboard/context', { params: { org: created!.slug } })).json() as { organization: { subdomain: string | null } }
-  expect(context.organization.subdomain).toBe(siteSubdomain(siteOrigin))
+  expect(context.organization.subdomain).toBe(organizationSubdomain(organizationOrigin))
 
   // And the request that a moment ago did not get the site now does, with no
   // preview token anywhere: that is what activation means.

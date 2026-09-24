@@ -150,7 +150,7 @@ import { useMediaQuery } from '@vueuse/core'
 // Invariants that must hold no matter what gets added later:
 // - One layout, one nav source. mobileNavItems feeds both the top nav and the
 //   bottom bar; never build a second list for one of them.
-// - `scope` is derived ONLY from explicit route params (locationSlug > siteSlug
+// - `scope` is derived ONLY from explicit route params (locationSlug > organizationSlug
 //   > orgSlug), never from route.path regexes, residual dashboard-context state,
 //   or a "last visited" fallback — those misclassify scope at ancestor routes
 //   once state has been populated from a deeper page in the same session.

@@ -16,8 +16,8 @@ export type ConversationState = 'needs_attention' | 'waiting_on_guest' | 'resolv
 
 export interface ThreadListItem {
   id: string
-  siteId?: string
-  siteSlug?: string | null
+  organizationId?: string
+  organizationSlug?: string | null
   guestName: string
   submissionType: SubmissionType
   contextLabel: string

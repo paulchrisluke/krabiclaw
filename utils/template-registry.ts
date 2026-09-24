@@ -189,7 +189,7 @@ export function isBlawbyTemplate(input: {
 
 // The public Blawby API routes are a security gate, not just a rendering-path
 // decision, so they require both a supported vertical and the exact theme id.
-export function siteSupportsBlawbyTemplate(input: {
+export function organizationSupportsBlawbyTemplate(input: {
   vertical?: string | null
   themeId?: string | null
 }): boolean {

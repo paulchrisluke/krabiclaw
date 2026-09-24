@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function useDashboardSiteLinks() {
+export function useDashboardOrganizationLinks() {
   const dashboard = useDashboardOrganization()
   const dashboardLocation = useDashboardLocation()
 
@@ -21,34 +21,34 @@ export function useDashboardSiteLinks() {
 
   /**
    * The business's own screens. There used to be two builders here — one keyed
-   * on the site's subdomain, one on a `siteSlug` route param — producing nearly
+   * on the site's subdomain, one on a `organizationSlug` route param — producing nearly
    * the same paths from the same organization. The tenant is the organization,
    * so there is one.
    */
   const businessPaths = computed(() => {
     const organizationSlug = dashboard.scope.value?.orgSlug
     if (!organizationSlug) return null
-    const site = `/dashboard/${organizationSlug}`
-    const settings = `${site}/settings`
+    const organization = `/dashboard/${organizationSlug}`
+    const settings = `${organization}/settings`
     return {
-      site,
-      locations: `${site}/locations`,
-      newLocation: `${site}/locations/new`,
-      pages: `${site}/pages`,
-      blog: `${site}/blog`,
-      qa: `${site}/qa`,
-      brand: `${site}/brand`,
-      inbox: `${site}/messages`,
+      organization,
+      locations: `${organization}/locations`,
+      newLocation: `${organization}/locations/new`,
+      pages: `${organization}/pages`,
+      blog: `${organization}/blog`,
+      qa: `${organization}/qa`,
+      brand: `${organization}/brand`,
+      inbox: `${organization}/messages`,
       domains: `${settings}/website/domains`,
     }
   })
 
   const locationPaths = computed(() => {
-    const site = businessPaths.value
+    const organization = businessPaths.value
     const locationSlug = dashboardLocation.currentLocationSlug.value
-    if (!site || !locationSlug) return null
+    if (!organization || !locationSlug) return null
 
-    const location = `${site.locations}/${locationSlug}`
+    const location = `${organization.locations}/${locationSlug}`
 
     return {
       location,

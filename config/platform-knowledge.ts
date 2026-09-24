@@ -6,7 +6,7 @@ export type PlatformKnowledgeResultType =
   | 'route'
   | 'platform_page'
   // A business's own records, indexed for its dashboard's search and scoped
-  // to it by `site_id` at query time.
+  // to it by `organization_id` at query time.
   | 'product'
   | 'collection'
   | 'location'

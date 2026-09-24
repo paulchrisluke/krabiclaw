@@ -37,12 +37,6 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     memberships: [{ organizationId: 'org-demo', role: 'owner' }],
   },
   {
-    id: 'user-e2e-pottery-editor',
-    name: 'E2E Pottery Editor',
-    email: 'pottery-editor@playwright.example',
-    memberships: [{ organizationId: 'org-user-pottery-house', role: 'admin' }],
-  },
-  {
     id: 'user-e2e-pottery-owner',
     name: 'E2E Pottery Owner',
     email: 'pottery-owner@playwright.example',
@@ -68,11 +62,6 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     email: 'ncls-owner@playwright.example',
     memberships: [{ organizationId: 'org-ncls-blawby', role: 'owner' }],
   },
-  {
-    id: 'user-e2e-growth-service-owner',
-    name: 'E2E Growth Service Owner',
-    email: 'growth-service-owner@playwright.example',
-  },
   ...[
     'oauth-cimd',
     'oauth-private-cimd',
@@ -80,7 +69,6 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     // organization, which reset-e2e-artifacts sweeps as a non-fixture org.
     'onboarding-wizard',
     ...[
-      'media',
       'inaccessible',
       'wrong-site',
       'cross-a',

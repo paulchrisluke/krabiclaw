@@ -47,7 +47,7 @@ import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vu
 // Rendered by both the desktop slideover and the mobile menu page, off one
 // model, so the two surfaces cannot show different menus.
 const { groups, activeItem, scopeModel, logOut } = useDashboardMenu()
-const { orgPaths } = useDashboardSiteLinks()
+const { orgPaths } = useDashboardOrganizationLinks()
 
 const insightsPath = computed(() => (orgPaths.value.org === '/dashboard' ? null : `${orgPaths.value.settings}/insights`))
 

@@ -10,7 +10,7 @@ import type { Collection, Product } from '~/server/types/products'
  * means they share one request and one cache entry, and a write in any of them
  * refreshes all three.
  */
-export function useLocationProductCatalog(siteId: string, locationId: Ref<string | null>) {
+export function useLocationProductCatalog(organizationId: string, locationId: Ref<string | null>) {
   const dashboardApi = useDashboardApi()
 
   const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
@@ -19,7 +19,7 @@ export function useLocationProductCatalog(siteId: string, locationId: Ref<string
     isRecord(value) && Array.isArray(value.products)
 
   const { data, pending, error, refresh } = useAsyncData(
-    computed(() => `location-product-catalog:${siteId}:${locationId.value ?? 'missing'}`),
+    computed(() => `location-product-catalog:${organizationId}:${locationId.value ?? 'missing'}`),
     async () => {
       const id = locationId.value
       // No location resolved yet is not an error — it is a request that has
@@ -29,8 +29,8 @@ export function useLocationProductCatalog(siteId: string, locationId: Ref<string
         // Collections scoped to this location, and the site-wide ones, are
         // different questions. This screen edits the location's own catalog,
         // so it asks for that scope explicitly.
-        dashboardApi(`/api/editor/organizations/${siteId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-        dashboardApi(`/api/editor/organizations/${siteId}/locations/${id}/products`, { validate: isProductList }),
+        dashboardApi(`/api/editor/organizations/${organizationId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
+        dashboardApi(`/api/editor/organizations/${organizationId}/locations/${id}/products`, { validate: isProductList }),
       ])
       return { collections: collectionResponse.collections, products: productResponse.products }
     },

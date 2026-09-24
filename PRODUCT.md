@@ -220,12 +220,12 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - Public tenant routes are template-specific: Saya remains location-centric under `/locations/[slug]`, with each Product's page beneath the location that offers it; Blawby is page-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
   - `/dashboard/{orgSlug}` — org root; lists sites, auto-redirects to the single site if the org has exactly one
-  - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
-  - `/dashboard/{orgSlug}/sites/{siteSlug}/locations/{locationSlug}` — location workspace
+  - `/dashboard/{orgSlug}/sites/{organizationSlug}` — site workspace (`organizationSlug` is the site's `subdomain`)
+  - `/dashboard/{orgSlug}/sites/{organizationSlug}/locations/{locationSlug}` — location workspace
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
   - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
-- App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`siteSlug`), not by guessing the org's oldest site.
+- App-facing dashboard APIs use `/api/dashboard/*`; the active org/site are resolved server-side from explicit `org`/`site` query params (attached by `dashboardFetch` in `composables/dashboardFetch.ts` based on the route's `orgSlug`/`organizationSlug`), not by guessing the org's oldest site.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.
 
 ## Language
@@ -236,7 +236,7 @@ A tenant whose public site sells expertise, consultation, representation, care, 
 **Tenant vertical (canonical contract)**:
 The business category that controls public copy, route expectations, schema defaults, onboarding language, and verification rules for a tenant. A vertical is broader than a template and must not be used to hardcode one client.
 
-`SiteVertical` in `utils/vertical-copy.ts` defines the supported values `restaurant`, `experience`, and `service`. The dashboard, onboarding, import pipeline, template registry, and database use these values directly. `service` covers legal and other professional services; it is not a separate template. Do not introduce storage aliases or a client-specific vertical. Readers must preserve all supported verticals rather than narrowing to restaurant and experience.
+`OrganizationVertical` in `utils/vertical-copy.ts` defines the supported values `restaurant`, `experience`, and `service`. The dashboard, onboarding, import pipeline, template registry, and database use these values directly. `service` covers legal and other professional services; it is not a separate template. Do not introduce storage aliases or a client-specific vertical. Readers must preserve all supported verticals rather than narrowing to restaurant and experience.
 
 **Professional-service empty state**:
 Fallback or edit-mode copy shown when professional-service tenant content is missing. It may use neutral professional examples in owner-facing edit mode, but public production pages must not leak restaurant, hospitality, retail, or experience wording.
@@ -315,7 +315,7 @@ The plan of the one Better Auth `subscription` row for the organization that is 
 _Avoid_: an application projection of subscription state, site billing, site entitlement, mutable capability projection, direct runtime SQL against Better Auth tables
 
 **Organization activity event**:
-An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `site_id` and `location_id` are nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
+An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `organization_id` and `location_id` are nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
 _Avoid_: site event for organization-only work, arbitrary primary-site resolution, conversion click duplicated into activity
 
 **KrabiClaw's own site**:

@@ -1,20 +1,20 @@
-export const SITE_FONT_PRESETS = ['default', 'mali'] as const
-export type SiteFontPreset = typeof SITE_FONT_PRESETS[number]
+export const ORGANIZATION_FONT_PRESETS = ['default', 'mali'] as const
+export type OrganizationFontPreset = typeof ORGANIZATION_FONT_PRESETS[number]
 
-export const SITE_FONT_OPTIONS: Array<{ label: string; value: SiteFontPreset }> = [
+export const ORGANIZATION_FONT_OPTIONS: Array<{ label: string; value: OrganizationFontPreset }> = [
   { label: 'Default', value: 'default' },
   { label: 'Mali (Thai and English)', value: 'mali' },
 ]
 
-export function isSiteFontPreset(value: unknown): value is SiteFontPreset {
+export function isOrganizationFontPreset(value: unknown): value is OrganizationFontPreset {
   return value === 'default' || value === 'mali'
 }
 
 // An absent optional setting means the template's existing typography. Invalid
 // stored values are errors, never arbitrary CSS or a substitute font choice.
-export function resolveSiteFontPreset(value: unknown): SiteFontPreset {
+export function resolveOrganizationFontPreset(value: unknown): OrganizationFontPreset {
   if (value === undefined) return 'default'
-  if (!isSiteFontPreset(value)) throw new Error('Unsupported site font preset')
+  if (!isOrganizationFontPreset(value)) throw new Error('Unsupported organization font preset')
   return value
 }
 
@@ -58,9 +58,9 @@ export const MALI_FONT_FILES = MALI_FACES.flatMap(face => Object.entries(MALI_SU
 // to prevent.
 export const MALI_FONT_CSS = MALI_FONT_FILES.map(face => `@font-face{font-family:"Mali";font-style:${face.style};font-weight:${face.weight};font-display:optional;src:url("${MALI_ASSET_BASE}/${face.filename}") format("woff2");unicode-range:${face.unicodeRange};}`).join('\n')
 
-export function siteFontStyles(preset: SiteFontPreset): Record<string, string> {
+export function organizationFontStyles(preset: OrganizationFontPreset): Record<string, string> {
   if (preset === 'default') return {}
-  if (preset !== 'mali') throw new Error('Unsupported site font preset')
+  if (preset !== 'mali') throw new Error('Unsupported organization font preset')
   return {
     '--font-saya': MALI_FONT_FAMILY,
     '--font-sans': MALI_FONT_FAMILY,

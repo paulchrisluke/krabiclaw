@@ -37,7 +37,7 @@ export interface DashboardScopeHeaderPeer {
 // pattern of a back-row sized like every other nav item, not custom chrome
 // inside the switcher header. Do not add parent-rendering back here.
 export interface DashboardScopeHeaderModel {
-  scope: 'organization' | 'site' | 'location'
+  scope: 'organization' | 'location'
   current: { label: string; icon?: string; avatar?: string }
   parent: { label: string; to: string } | null
   peers: DashboardScopeHeaderPeer[]

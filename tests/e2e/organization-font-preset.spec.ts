@@ -168,7 +168,7 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
   try {
     await patch({ font_preset: 'default', brand_color: '' })
     const cms = await dashboard.newPage()
-    const brandPath = `${baseURL}/dashboard/kikuzuki-krabi-thailand/brand/font`
+    const brandPath = `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/brand/font`
     // The deployed dashboard DOES serve the Zaraz consent modal, whose
     // .cf_modal_container overlay intercepts pointer events until it is dismissed.
     // openTenantPage accepts it; plain goto left every click on this page blocked
