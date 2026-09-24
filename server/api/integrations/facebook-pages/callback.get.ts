@@ -39,17 +39,11 @@ export default defineHandler(async (event) => {
   }
 
   const { organizationId, userId } = stateData
-  const settingsRedirect = async (status: string) => {
-    try {
-      const organization = await resolveUserOrganization(env, { userId, organizationId })
-      return organization
-        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings?fb=${status}`
-        : `/dashboard?fb=${status}`
-    } catch (e) {
-      console.error('Facebook Pages redirect organization query failed:', e)
-      return `/dashboard?fb=${status}`
-    }
-  }
+  const organization = await resolveUserOrganization(env, { userId, organizationId })
+  const leaf = organization
+    ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/integrations/facebook`
+    : '/dashboard'
+  const settingsRedirect = (status: string) => `${leaf}?fb=${status}`
 
   try {
     const db = env.DB
@@ -67,7 +61,7 @@ export default defineHandler(async (event) => {
     const pages = await getFacebookPages(systemUserToken)
 
     if (pages.length === 0) {
-      return new Response(null, { status: 302, headers: { Location: await settingsRedirect('no_pages') } })
+      return new Response(null, { status: 302, headers: { Location: settingsRedirect('no_pages') } })
     }
 
     // More than one Page is a question only the tenant can answer. Taking
@@ -83,7 +77,7 @@ export default defineHandler(async (event) => {
       })
       return new Response(null, {
         status: 302,
-        headers: { Location: `${await settingsRedirect('select_page')}&handle=${encodeURIComponent(handle)}` },
+        headers: { Location: `${settingsRedirect('select_page')}&handle=${encodeURIComponent(handle)}` },
       })
     }
 
@@ -97,9 +91,9 @@ export default defineHandler(async (event) => {
     }, stateData)
 
     return new Response(null, {
-      status: 302, headers: { Location: await settingsRedirect('connected') }, })
+      status: 302, headers: { Location: settingsRedirect('connected') }, })
   } catch (err) {
     console.error('Facebook OAuth callback failed:', err)
-    return new Response(null, { status: 302, headers: { Location: await settingsRedirect('error') } })
+    return new Response(null, { status: 302, headers: { Location: settingsRedirect('error') } })
   }
 })

@@ -195,7 +195,6 @@ export async function readGoogleCredential(
   env: GoogleCredentialEnv,
   organizationId: string,
 ): Promise<StoredGoogleCredential | null> {
-  if (!env.DB) return null
   const row = await queryFirst<StoredGoogleCredential>(env.DB, `
     SELECT id AS organization_id,
            json_extract(integrations_json, '$.google_credential.id') AS id,
@@ -263,7 +262,6 @@ export async function releaseGoogleCredential(
   env: GoogleCredentialEnv,
   organizationId: string,
 ): Promise<string | null> {
-  if (!env.DB) return null
   const remaining = await queryFirst<{ analytics: string | null; search_console: string | null }>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_analytics') AS analytics,
            json_extract(integrations_json, '$.google_search_console') AS search_console

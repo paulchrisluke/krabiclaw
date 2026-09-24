@@ -107,7 +107,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_organization_settings',
-      description: 'Update editable site settings such as brand name, description, logo, contact email, currency, analytics IDs, and search defaults. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      description: 'Update editable site settings such as brand name, description, logo, contact email, currency, and website status (Live or Draft). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
       domain: 'sites',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -124,6 +124,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         },
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
+        status: { type: 'string', enum: ['active', 'inactive'], description: 'Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.' },
         press_email: { type: 'string' },
         partnerships_email: { type: 'string' },
         catering_email: { type: 'string' },

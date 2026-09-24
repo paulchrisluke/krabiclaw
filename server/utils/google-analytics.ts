@@ -71,7 +71,6 @@ export async function readAnalyticsIntegration(
   env: GoogleCredentialEnv,
   organizationId: string,
 ): Promise<GoogleAnalyticsIntegration | null> {
-  if (!env.DB) return null
   return await queryFirst<GoogleAnalyticsIntegration>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_analytics.revision') AS revision,
            json_extract(integrations_json, '$.google_analytics.property_id') AS property_id,
@@ -84,7 +83,7 @@ export async function readAnalyticsIntegration(
      WHERE id = ?
        AND json_extract(integrations_json, '$.google_analytics') IS NOT NULL
      LIMIT 1
-  `, [organizationId])
+  `, [organizationId]) ?? null
 }
 
 /** Records the chosen property. Refuses when the record moved since it was read. */

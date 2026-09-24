@@ -1,6 +1,7 @@
 // POST /api/dashboard/onboarding/places-preview
-// Single-purpose authenticated Google Places lookup for the new-site onboarding
-// wizard's "confirm this is your business" card. Read-only: it never creates a
+// Single-purpose authenticated Google Places lookup for a "confirm this is your
+// business" card: the new-site onboarding wizard's, and the Google Maps
+// connection's for an existing location. Read-only: it never creates a
 // site, org, or location, and it never charges the AI usage ledger — the Places details
 // charge for a new-site import happens once, at draft creation time
 // (POST /api/dashboard/onboarding/drafts/active), not here.
@@ -18,7 +19,7 @@
 // owns both the preview and the mutation for an existing site's locations.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
+import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError, searchPlaces } from '~/server/utils/google-places'
 import { incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
 export default defineHandler(async (event) => {
@@ -32,10 +33,11 @@ export default defineHandler(async (event) => {
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
   if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
 
-  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown }
+  const body = await readBody(event) as { mapsUrl?: unknown; placeId?: unknown; query?: unknown }
   const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
-  if (!mapsUrl && !placeId) return jsonResponse({ error: 'mapsUrl or placeId is required' }, { status: 400 })
+  const query = typeof body?.query === 'string' ? body.query.trim() : ''
+  if (!mapsUrl && !placeId && !query) return jsonResponse({ error: 'mapsUrl, placeId or query is required' }, { status: 400 })
 
   if (!import.meta.dev) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
@@ -48,9 +50,13 @@ export default defineHandler(async (event) => {
 
   let place
   try {
-    place = placeId
-      ? await getPlaceDetails(apiKey, placeId)
-      : await getPlaceDetailsByUrl(apiKey, mapsUrl)
+    if (placeId) place = await getPlaceDetails(apiKey, placeId)
+    else if (mapsUrl) place = await getPlaceDetailsByUrl(apiKey, mapsUrl)
+    else {
+      const top = (await searchPlaces(apiKey, query))[0]
+      if (!top?.placeId) return jsonResponse({ error: `No Google Maps place found for "${query}". Try the name and town, or paste the Maps link.` }, { status: 404 })
+      place = await getPlaceDetails(apiKey, top.placeId)
+    }
   } catch (err) {
     const statusCode = err instanceof PlaceDetailsError ? err.statusCode : 502
     return jsonResponse({

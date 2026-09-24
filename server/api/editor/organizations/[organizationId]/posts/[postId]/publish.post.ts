@@ -2,8 +2,7 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { publishPost, type PostPublishChannel, type PostSocialPublish } from '~/server/utils/post-management'
-import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
+import { publishPost, type PostPublishChannel } from '~/server/utils/post-management'
 import { queryFirst } from '~/server/db'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
@@ -34,19 +33,7 @@ export default defineHandler(async (event) => {
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, { ...memberAccessPrincipal(site.membership, { env, event }), resourceLocationId: postScope.location_id })
 
-  const wantsSocial = channels.includes('facebook') || channels.includes('instagram')
-  let socialPublish: PostSocialPublish | null = null
-  if (wantsSocial) {
-    // "No Facebook Page connected" is a real answer; a lookup that threw is not,
-    // and reporting the second as the first told an author their post had no
-    // destination when the truth was that we never found out.
-    const connection = await getFacebookPagesConnection(env, site.id)
-    socialPublish = connection?.page_id && connection.encrypted_page_token
-      ? { kind: 'connected', pageId: connection.page_id, pageToken: connection.encrypted_page_token }
-      : { kind: 'unavailable', reason: 'No Facebook Page connected.' }
-  }
-
-  const post = await publishPost(db, site.id, postId, channels, env, socialPublish)
+  const post = await publishPost(db, site.id, postId, channels, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   const socialErrors = Object.fromEntries(post.channels
     .filter(job => channels.includes(job.channel) && (job.status === 'failed' || job.status === 'skipped') && job.error)

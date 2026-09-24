@@ -50,17 +50,10 @@ export default defineHandler(async (event) => {
   }
 
   const leaf = product === 'search-console' ? 'google-search-console' : 'google-analytics'
-  const redirectTo = async (status: string) => {
-    try {
-      const organization = await resolveUserOrganization(env, { userId, organizationId })
-      return organization
-        ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/integrations/${leaf}?google=${status}`
-        : `/dashboard?google=${status}`
-    } catch (error) {
-      console.error('google_oauth_redirect_lookup_failed', { organizationId, error })
-      return `/dashboard?google=${status}`
-    }
-  }
+  const organization = await resolveUserOrganization(env, { userId, organizationId })
+  const redirectTo = (status: string) => organization
+    ? `/dashboard/${encodeURIComponent(organization.slug)}/settings/integrations/${leaf}?google=${status}`
+    : `/dashboard?google=${status}`
 
   try {
     if (!env.DB) throw new Error('Database unavailable')
@@ -84,10 +77,10 @@ export default defineHandler(async (event) => {
       expires_at: new Date(Date.now() + token.expiresIn * 1000).toISOString(),
     }, { revision: stateData.revision })
 
-    return new Response(null, { status: 302, headers: { Location: await redirectTo('connected') } })
+    return new Response(null, { status: 302, headers: { Location: redirectTo('connected') } })
   } catch (error) {
     console.error('google_oauth_callback_failed', { organizationId, product, error })
-    return new Response(null, { status: 302, headers: { Location: await redirectTo('error') } })
+    return new Response(null, { status: 302, headers: { Location: redirectTo('error') } })
   }
 })
 import { defineHandler } from 'nitro';

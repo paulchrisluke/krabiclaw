@@ -6,6 +6,7 @@ import { isCurrencyCode } from '~/shared/currencies'
 import { isSiteFontPreset, resolveSiteFontPreset } from '~/shared/site-fonts'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
+import type { SiteIntegrations } from '~/shared/site-settings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
 import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
@@ -83,7 +84,7 @@ export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
 ) {
-  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string }>(db, `
+  const updatedSite = await queryFirst<FullSiteRow & { vertical: string; theme_id: string; integrations_json: string; locations_json: string }>(db, `
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
@@ -97,7 +98,12 @@ export async function loadSettingsPayload(
            seo_title, seo_description, canonical_url,
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
-           vertical, theme_id
+           vertical, theme_id, integrations_json,
+           (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title,
+                     'google_place_id', google_place_id, 'rating', rating, 'review_count', review_count,
+                     'last_synced_at', last_synced_at))
+              FROM (SELECT * FROM business_locations
+                     WHERE organization_id = organization.id AND status = 'active' ORDER BY title, id)) AS locations_json
     FROM organization
     LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
       AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
@@ -180,8 +186,43 @@ export async function loadSettingsPayload(
     catering_email: siteConfig.catering_email || '',
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
+    integrations: integrationsSummary(JSON.parse(updatedSite.integrations_json) as SiteIntegrations, JSON.parse(updatedSite.locations_json) as IntegrationLocation[]),
     created_at: updatedSite.created_at,
     updated_at: updatedSite.updated_at,
+  }
+}
+
+interface IntegrationLocation {
+  id: string
+  slug: string
+  title: string
+  google_place_id: string | null
+  rating: number | null
+  review_count: number | null
+  last_synced_at: string | null
+}
+
+/**
+ * What each integration is connected to, for the Integrations list and its
+ * leaves — names and statuses, never a token. Google Maps is per location, so
+ * its answer is the locations and which of them name a place.
+ */
+function integrationsSummary(integrations: SiteIntegrations, locations: IntegrationLocation[]) {
+  return {
+    google_maps: locations,
+    google_analytics: integrations.google_analytics
+      ? { property_name: integrations.google_analytics.property_name ?? null, measurement_id: integrations.google_analytics.measurement_id, status: integrations.google_analytics.status }
+      : null,
+    google_search_console: integrations.google_search_console
+      ? { site_url: integrations.google_search_console.site_url, status: integrations.google_search_console.status }
+      : null,
+    google_account: integrations.google_credential?.provider_account_email ?? null,
+    facebook: integrations.facebook
+      ? { page_name: integrations.facebook.page_name, status: integrations.facebook.status }
+      : null,
+    instagram: integrations.instagram
+      ? { username: integrations.instagram.username, status: integrations.instagram.status }
+      : null,
   }
 }
 

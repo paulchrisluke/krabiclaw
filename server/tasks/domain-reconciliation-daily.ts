@@ -33,16 +33,7 @@ export default defineScheduledTask({
     if (!env?.CF_CUSTOM_HOSTNAMES_API_TOKEN) missingKeys.push('CF_CUSTOM_HOSTNAMES_API_TOKEN')
     if (!env?.CF_SAAS_CNAME_TARGET) missingKeys.push('CF_SAAS_CNAME_TARGET')
 
-    if (missingKeys.length > 0) {
-      console.error('domains_reconcile_daily_missing_env', { missingKeys })
-      return {
-        result: {
-          checked: 0,
-          failed: 0,
-          skipped: `Missing required env: ${missingKeys.join(', ')}`
-        }
-      }
-    }
+    if (missingKeys.length > 0) throw new Error(`Domain reconciliation is missing required env: ${missingKeys.join(', ')}`)
 
     const result = await reconcileDueDomains(env, db, 200)
     return { result }

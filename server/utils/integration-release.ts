@@ -179,7 +179,7 @@ export async function releaseIntegration(
 
   const present = await queryFirst<{ connected: number }>(env.DB, `
     SELECT json_extract(integrations_json, ?) IS NOT NULL AS connected
-      FROM organization WHERE id = ? AND organization_id = ? LIMIT 1
+      FROM organization WHERE id = ? LIMIT 1
   `, [`$.${key}`, organizationId])
   const released = Boolean(present?.connected)
 

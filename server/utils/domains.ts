@@ -1136,11 +1136,11 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
  * Null when the site has no active canonical domain yet, which is a site that
  * cannot be verified — the caller says so rather than guessing a host.
  */
-export async function sitePublicUrl(db: D1Database, siteId: string): Promise<string | null> {
+export async function sitePublicUrl(db: D1Database, organizationId: string): Promise<string | null> {
   const row = await queryFirst<{ domain: string }>(db, `
-    SELECT domain FROM site_domains
-    WHERE site_id = ? AND role = 'canonical' AND status = 'active'
+    SELECT domain FROM organization_domains
+    WHERE organization_id = ? AND role = 'canonical' AND status = 'active'
     LIMIT 1
-  `, [siteId])
+  `, [organizationId])
   return row ? `https://${row.domain}/` : null
 }

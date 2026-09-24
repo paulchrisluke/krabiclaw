@@ -22,12 +22,13 @@ export default defineHandler(async (event) => {
   if (!payload?.metaUserId) return jsonResponse({ error: 'Unknown confirmation code' }, { status: 404 })
 
   const remaining = await queryFirst<{ remaining: number }>(env.DB, `
-    SELECT COUNT(*) AS remaining FROM sites
+    SELECT COUNT(*) AS remaining FROM organization
      WHERE json_extract(integrations_json, '$.facebook.facebook_user_id') = ?
         OR json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
   `, [payload.metaUserId, payload.metaUserId])
 
-  const complete = (remaining?.remaining ?? 0) === 0
+  if (!remaining) throw new Error('Meta connection count returned no row')
+  const complete = remaining.remaining === 0
   return jsonResponse({
     confirmation_code: code,
     status: complete ? 'complete' : 'incomplete',

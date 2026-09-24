@@ -24,7 +24,7 @@ interface TaskResult {
   skipped?: string
 }
 
-async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failed: number }> {
+async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failures: string[] }> {
   const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
   const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
   const candidates = await queryAllPages<SendDueRow>(db, `
@@ -50,7 +50,7 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
   const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
 
   let sent = 0
-  let failed = 0
+  const failures: string[] = []
   for (const row of rows) {
     const result = await sendReviewRequestForBooking(env, db, row.booking_type, row.id, kind).catch((error) => ({
       sent: false,
@@ -58,9 +58,9 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
       error: error instanceof Error ? error.message : String(error),
     }))
     if (result.sent) sent += 1
-    else failed += 1
+    else failures.push(`${row.booking_type}/${row.id}: ${result.error ?? 'not sent'}`)
   }
-  return { sent, failed }
+  return { sent, failures }
 }
 
 export default defineScheduledTask({
@@ -81,12 +81,8 @@ export default defineScheduledTask({
     const first = await sendDue(db, env, 'first')
     const reminders = await sendDue(db, env, 'reminder')
 
-    return {
-      result: {
-        first_sent: first.sent,
-        reminders_sent: reminders.sent,
-        failed: first.failed + reminders.failed,
-      },
-    }
+    const failures = [...first.failures, ...reminders.failures]
+    if (failures.length) throw new Error(`${failures.length} review requests were not sent: ${failures.join('; ')}`)
+    return { result: { first_sent: first.sent, reminders_sent: reminders.sent, failed: 0 } }
   },
 })

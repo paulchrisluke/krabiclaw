@@ -1,9 +1,8 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { HTTPError } from 'nitro';
-import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, type PostSocialPublish, updatePost } from '~/server/utils/post-management'
-import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
-import { hasSiteEntitlement } from '~/server/utils/billing'
+import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
@@ -109,41 +108,17 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
       const postId = requiredString(args, "post_id");
-      const wantsFacebook = channels.includes("facebook");
-      const wantsInstagram = channels.includes("instagram");
-      const socialEnabled = isConversationalToolGroupEnabled(site.env, "social_publishing");
-
-      let facebookConnection: Awaited<ReturnType<typeof getFacebookPagesConnection>> | null = null;
-      let socialSkipReason: string | null = null;
-      if (wantsFacebook || wantsInstagram) {
-        if (!socialEnabled) {
-          socialSkipReason = "social_publishing_disabled";
-        } else if (!(await hasSiteEntitlement(site.env as CloudflareEnv, site.db, site.organizationId, "managed_service"))) {
-          socialSkipReason = "not_entitled";
-        } else {
-          facebookConnection = await getFacebookPagesConnection(
-            site.env as never,
-            site.organizationId,
-            
-          );
-          if (!facebookConnection?.page_id || !facebookConnection.encrypted_page_token) {
-            socialSkipReason = "not_connected";
-          }
-        }
-      }
-
-      const socialPublish: PostSocialPublish | null = socialSkipReason
-        ? { kind: 'unavailable', reason: socialSkipReason }
-        : facebookConnection?.page_id && facebookConnection.encrypted_page_token
-          ? { kind: 'connected', pageId: facebookConnection.page_id, pageToken: facebookConnection.encrypted_page_token }
-          : null;
+      const wantsSocial = channels.includes("facebook") || channels.includes("instagram");
+      const socialDisabledReason = wantsSocial && !isConversationalToolGroupEnabled(site.env, "social_publishing")
+        ? "social_publishing_disabled"
+        : null;
       const post = await publishPost(
         site.db,
         site.organizationId,
         postId,
         channels,
-        site.env,
-        socialPublish,
+        site.env as CloudflareEnv,
+        socialDisabledReason,
       );
       if (!post)
         throw new HTTPError({ statusCode: 404, statusMessage: "Post not found" });

@@ -84,7 +84,6 @@ export async function readSearchConsoleIntegration(
   env: GoogleCredentialEnv,
   organizationId: string,
 ): Promise<GoogleSearchConsoleIntegration | null> {
-  if (!env.DB) return null
   const row = await queryFirst<Omit<GoogleSearchConsoleIntegration, 'verified'> & { verified: number }>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_search_console.revision') AS revision,
            json_extract(integrations_json, '$.google_search_console.site_url') AS site_url,
