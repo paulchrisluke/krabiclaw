@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { formatOpeningHours, getIsOpenNow } from '~/utils/formatters'
-import { getTodayHoursLabel } from '~/shared/reservation-hours'
+import { getTodayHoursLabel, schemaOpeningHours } from '~/shared/reservation-hours'
 import { addressPlaceName, formatPostalAddress, schemaPostalAddress, type PostalAddress } from '~/utils/postal-address'
 const DOMPurify = useHtmlSanitizer()
 
@@ -222,16 +222,6 @@ useSchemaOrg([
   computed(() => {
     const loc = location.value
     if (!loc) return {}
-    const schemaHours = weekHours.value.map((h: ApiValue) => {
-      if (!h.hours || typeof h.hours !== 'string' || !h.hours.includes('–')) return null
-      if (h.hours.toLowerCase() === 'closed') return null
-      const parts = h.hours.split('–')
-      if (parts.length !== 2) return null
-      const opens = parts[0]?.trim()
-      const closes = parts[1]?.trim()
-      if (!opens || !closes) return null
-      return { '@type': 'OpeningHoursSpecification', dayOfWeek: `https://schema.org/${h.day}`, opens, closes }
-    }).filter((h: ApiValue) => h && h.opens)
     return {
       '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
       name: `${siteName.value} — ${loc.title}`,
@@ -239,7 +229,7 @@ useSchemaOrg([
       telephone: loc.phone,
       email: loc.email,
       hasMap: loc.maps_url,
-      openingHoursSpecification: schemaHours,
+      openingHoursSpecification: schemaOpeningHours(loc.opening_hours ?? null),
       ...(loc.latitude && loc.longitude ? { geo: { '@type': 'GeoCoordinates', latitude: loc.latitude, longitude: loc.longitude } } : {})
     }
   }),

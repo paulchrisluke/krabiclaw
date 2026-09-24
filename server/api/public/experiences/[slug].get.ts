@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
-import { loadPublicExperienceDetail, loadPublicProductReviews } from '~/server/utils/public-products'
+import { loadPublicExperienceDetail, loadPublicProductReviews, loadPublicProductSessions } from '~/server/utils/public-products'
 import { publicLocationPayload } from '~/server/utils/public-products'
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
@@ -35,6 +35,7 @@ export default defineHandler(async (event) => {
       brandName: result.site.name,
       reviews,
       booking: result.booking,
+      sessions: await loadPublicProductSessions(db, result),
       collectionName: siblingCollection?.name ?? '',
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)

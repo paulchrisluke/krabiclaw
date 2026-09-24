@@ -1,5 +1,5 @@
 import type { Product, ProductSurface } from '~/server/types/products'
-import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview } from '~/server/utils/public-products'
+import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
@@ -15,6 +15,12 @@ export interface PublicProductDetailPayload {
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
+  /**
+   * The occurrences on sale at this branch, loaded with the page so they reach
+   * the server-rendered HTML. Empty is an answer — nothing scheduled — not an
+   * unfinished load.
+   */
+  sessions: PublicProductSession[]
   /** The collection this page was reached through, and its other members. */
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
@@ -42,6 +48,15 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && (value.booking === null || (isRecord(value.booking)
       && (value.booking.duration_minutes === null || typeof value.booking.duration_minutes === 'number')
       && (value.booking.default_capacity === null || typeof value.booking.default_capacity === 'number')))
+    && Array.isArray(value.sessions)
+    && value.sessions.every(session => isRecord(session)
+      && typeof session.id === 'string'
+      && typeof session.starts_at === 'string'
+      && typeof session.ends_at === 'string'
+      && typeof session.timezone === 'string'
+      && (session.remaining === null || typeof session.remaining === 'number')
+      && typeof session.is_full === 'boolean'
+      && typeof session.created_at === 'string')
     && Array.isArray(value.reviews)
     && value.reviews.every(review => isRecord(review)
       && typeof review.id === 'string'
@@ -95,7 +110,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
@@ -122,6 +137,9 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           brandName: detail.site.name,
           reviews: locale === 'en' ? await loadPublicProductReviews(db, detail) : [],
           booking: detail.booking,
+          // The calendar travels with the page, so the dates are in the bytes
+          // a crawler reads rather than appearing only after hydration.
+          sessions: await loadPublicProductSessions(db, detail),
           // Siblings come from the collection this product actually belongs
           // to on this site. With none, there are no siblings to show — the
           // page does not fall back to "everything at this location".
