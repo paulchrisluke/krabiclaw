@@ -222,11 +222,11 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     organization_id: organizationId,
-    placement: { owner_type: 'site', owner_id: organizationId, slot: 'logo' },
+    placement: { owner_type: 'organization', owner_id: organizationId, slot: 'logo' },
     asset_id: assetId,
   }, (payload) => {
-    expectValue('set_media site_logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
-    expectValue('set_media site_logo returns context', payload?.context?.organization_id === organizationId, payload)
+    expectValue('set_media organization logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
+    expectValue('set_media organization logo returns context', payload?.context?.organization_id === organizationId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
