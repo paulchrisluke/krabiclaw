@@ -6,7 +6,7 @@
 
       <article class="prose prose-lg max-w-none text-default">
         <h1><strong>Krabiclaw Privacy Policy</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400">Krabiclaw is operated by </span
           ><strong>Aurelox LLC</strong
@@ -296,23 +296,23 @@
           <span style="font-weight: 400"
             >Krabiclaw provides Model Context Protocol (MCP) connections that
             authorized merchants can use with compatible services such as
-            ChatGPT and Claude. When a merchant connects one of these services
-            and asks it to perform an action, Krabiclaw returns information from
-            the authorized merchant organization to that service only if the
-            authenticated user has permissions for that action. Depending on the
-            request, returned information may include website content,
-            analytics, submissions, customer contact information, booking or
-            reservation information, or other merchant data the connected
-            account is authorized to access.</span
+            ChatGPT and Claude. When a merchant connects one of these services,
+            Krabiclaw applies the authenticated user's technical account
+            permissions to determine which information and operations the
+            connected client can access. Depending on the request, returned
+            information may include website content, analytics, submissions,
+            customer contact information, booking or reservation information, or
+            other merchant data within those permissions.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >Actions performed through a connected AI assistant are treated as
-            actions authorized by the authenticated user's account and
-            permissions. Merchants are responsible for reviewing significant
-            actions performed through AI-assisted interfaces before and after
-            execution.</span
+            >Technical permission to access an operation does not by itself
+            establish action-specific authorization for every action a connected
+            client may request. Where Krabiclaw requires an action-specific
+            confirmation, that confirmation must be satisfied before execution.
+            The absence of a general review screen in a connected client does not
+            waive a confirmation Krabiclaw requires.</span
           >
         </p>
         <p>
@@ -323,7 +323,8 @@
             identifiers, and shortened summaries of tool inputs and outputs.
             Sensitive structured fields are limited or redacted where designed
             to do so, but free-text information can still appear in diagnostic
-            summaries. MCP telemetry is retained for 90-180 days.</span
+            summaries. MCP tool-call telemetry is retained for up to 180 days
+            from creation.</span
           >
         </p>
         <p>
@@ -654,35 +655,22 @@
           <span style="font-weight: 400"
             >We retain Personal Data for the period reasonably necessary for the
             purpose for which it was collected, including to provide the
-            Services, preserve merchant functionality, complete transactions,
-            maintain security and audit records, resolve disputes, enforce
-            agreements, and comply with legal obligations.</span
+            Services, complete transactions, maintain security, resolve
+            disputes, enforce agreements, and comply with applicable legal
+            obligations.</span
           >
         </p>
         <p>
-          <span style="font-weight: 400"
-            >Current retention practices include:</span
-          >
+          <span style="font-weight: 400">Current retention practices include:</span>
         </p>
         <ul>
           <li style="font-weight: 400">
             <strong>Merchant accounts and business content:</strong
             ><span style="font-weight: 400">
               generally retained while the account or organization remains
-              active and until deleted through applicable controls or a verified
-              deletion process, subject to legal, security, backup, and
-              dispute-related retention needs.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>Scheduled account or organization deletion:</strong
-            ><span style="font-weight: 400">
-              Krabiclaw currently uses a 30-day deletion grace period. During
-              that period, the account or organization remains scheduled for
-              deletion and the request can be cancelled. After the grace period,
-              Krabiclaw's deletion process removes the account or organization
-              and associated data subject to technical, legal, backup, and
-              provider limitations.</span
+              active and until deleted through applicable controls, subject to
+              records that Krabiclaw may retain where applicable law permits or
+              requires.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -691,17 +679,18 @@
               when Krabiclaw processes customer data for a merchant, the
               merchant generally determines the primary retention period. Data
               may remain until the merchant deletes it, the relevant merchant
-              account is deleted, or retention is otherwise required for
-              operational or legal reasons.</span
+              organization is deleted, or retention is otherwise permitted or
+              required under applicable law.</span
             >
           </li>
           <li style="font-weight: 400">
             <strong>Payments:</strong
             ><span style="font-weight: 400">
-              Krabiclaw retains limited transaction and billing records for 7
-              years for tax and audit purposes. Stripe separately retains
-              information under its own policies and legal obligations.
-              Krabiclaw's payment records are separate from Stripe's records.</span
+              Krabiclaw retains limited transaction and billing records as
+              reasonably necessary for accounting, tax, fraud prevention,
+              disputes, and other applicable legal obligations. Stripe
+              separately retains information under its own policies and legal
+              obligations.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -710,9 +699,15 @@
               Krabiclaw's current cleanup processes are designed to remove raw
               pageview-event data after approximately 90 days and certain
               analytics session or aggregate data after approximately 740 days.
-              These periods are current operational practices and may change.
               Aggregated or de-identified information may be retained longer
               when it no longer identifies an individual.</span
+            >
+          </li>
+          <li style="font-weight: 400">
+            <strong>MCP telemetry:</strong
+            ><span style="font-weight: 400">
+              MCP tool-call telemetry is retained for up to 180 days from the
+              time the record is created.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -720,65 +715,41 @@
             ><span style="font-weight: 400">
               media generally remains until deleted by an authorized user or
               removed through an account or organization deletion process.
-              Copies may remain temporarily in caches, backups, or recovery
-              systems.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>MCP and operational diagnostics:</strong
-            ><span style="font-weight: 400">
-              diagnostic and tool-usage records are retained for 90-180 days
-              for debugging purposes. Security-relevant logs are retained for
-              1-2 years for incident investigation and compliance. Some diagnostic
-              records do not currently have a fixed automatic age-based
-              expiration and may remain until an operational cleanup or verified
-              deletion process applies.</span
+              Copies may remain temporarily in caches or provider-operated
+              recovery systems.</span
             >
           </li>
           <li style="font-weight: 400">
             <strong>Backups and recovery copies:</strong
             ><span style="font-weight: 400">
-              deleted information may remain for 30-90 days in online backup
-              systems and up to 1 year in long-term backup systems before it is
-              overwritten or otherwise removed. Such copies are not used as active
-              production records except for recovery, security, or legal
-              purposes. Restoration from backups is limited to recovery, security,
-              or legal purposes and is not a general data-recovery service.</span
+              deleted information may remain temporarily in provider-operated
+              backup, point-in-time recovery, disaster-recovery, or similar
+              systems until those copies are overwritten or expire under the
+              provider's applicable recovery process. Such copies are not used
+              as ordinary active records. If a recovery copy is restored,
+              Krabiclaw applies applicable deletion controls before data that was
+              previously deleted is returned to ordinary production use.</span
             >
           </li>
           <li style="font-weight: 400">
-            <strong>Transactional emails:</strong
+            <strong>Operational, security, and email delivery records:</strong
             ><span style="font-weight: 400">
-              email delivery records may be retained for 1-2 years for delivery
-              troubleshooting, security, and legal compliance.</span
+              these records are retained only as reasonably necessary for
+              security, fraud prevention, incident investigation, delivery
+              troubleshooting, service operation, disputes, and applicable legal
+              obligations. Krabiclaw does not state a fixed period where the
+              applicable system does not enforce one.</span
             >
           </li>
           <li style="font-weight: 400">
-            <strong>Operational and security logs:</strong
+            <strong>Legal holds and claims:</strong
             ><span style="font-weight: 400">
-              access logs and operational logs are retained for 30-90 days.
-              Security event logs are retained for 1-2 years for incident
-              response, debugging, and audit purposes. Some logs do not currently
-              have automatic expiration and may be retained until operational
-              cleanup or legal hold release.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>Legal holds:</strong
-            ><span style="font-weight: 400">
-              information may be retained beyond normal retention periods when
-              subject to a legal hold, litigation, investigation, or other legal
-              process.</span
+              information may be retained beyond an otherwise applicable period
+              when required by legal process, a legal hold, an investigation, or
+              the establishment, exercise, or defense of legal claims.</span
             >
           </li>
         </ul>
-        <p>
-          <span style="font-weight: 400"
-            >We may retain information longer when required by law, legal
-            process, a legal hold, fraud prevention, security needs, or the
-            establishment, exercise, or defense of legal claims.</span
-          >
-        </p>
         <h2><strong>9. Security</strong></h2>
         <p>
           <span style="font-weight: 400"
@@ -966,7 +937,7 @@
         <h1>
           <strong>Supplemental Merchant and Partner Privacy Notice</strong>
         </h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice supplements the Krabiclaw Privacy Policy for merchants,
@@ -1108,60 +1079,39 @@
         <h2><strong>Account and organization deletion</strong></h2>
         <p>
           <span style="font-weight: 400"
-            >Krabiclaw currently schedules account and organization deletion
-            with a 30-day grace period. An organization may be deleted with an
-            account only when the account holder is both the sole owner and the
-            sole member of that organization. If the account holder is the sole
-            owner but other members remain, account deletion is blocked until
-            another member is promoted to owner or the organization/membership
-            situation is otherwise resolved. If another owner already exists,
-            deleting the account does not delete the organization. Data associated
-            with an organization is deleted through the platform deletion process
-            after the grace period, subject to legal, backup, provider, and
-            technical limitations described in the main Policy.</span
+            >Krabiclaw provides separate controls to permanently delete an
+            account or organization after explicit destructive confirmation.
+            Deleting an account does not by itself delete an organization.
+            Organization deletion is a separate action subject to the
+            permissions and billing controls applicable to that
+            organization.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >An owner may schedule organization deletion even when other members
-            exist. Organization deletion requires explicit destructive
-            confirmation naming the organization and making clear that the
-            organization and its data will be deleted and other members will lose
-            access. Affected members are notified using Krabiclaw's existing
-            notification and email infrastructure. Organization deletion is
-            blocked when the canonical billing state shows an active or
-            unresolved paid subscription or billing obligation.</span
+            >When an organization is deleted, its organization data is removed
+            and its members lose access. If an active subscription or other
+            provider condition prevents organization deletion, it must be
+            resolved through the applicable billing or provider controls before
+            deletion can complete.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >During the 30-day grace period, the account or organization remains
-            scheduled for deletion and the request can be cancelled. After the
-            grace period, Krabiclaw's deletion process re-checks destructive
-            eligibility when deletion actually executes; the deletion relies on
-            current state at execution time, not only on state captured 30 days
-            earlier. If eligibility has changed (for example, an organization
-            now has an active paid subscription or billing obligation),
-            deletion is skipped.</span
-          >
-        </p>
-        <p>
-          <span style="font-weight: 400"
-            >Account or organization deletion through Krabiclaw's controls is
-            distinct from a statutory personal-data deletion request under
-            privacy law. For statutory deletion requests, applicable legal
-            requirements and deadlines apply. CCPA/CPRA requires response within
-            45 days (with a possible 45-day extension). GDPR requires response
-            within one month where applicable. Billing blocks, ownership
-            resolution requirements, and surviving organizations' data may
-            affect what can be deleted within statutory deadlines. Where a
-            statutory deadline conflicts with a technical or billing block,
-            Krabiclaw will follow applicable law and may retain specific records
-            until the block is resolved or the legal obligation is satisfied.</span
+            >Account or organization deletion through Krabiclaw's product
+            controls is distinct from a statutory Personal Data request. For a
+            privacy-rights request, Krabiclaw responds within the period required
+            by applicable law, subject to verification requirements and any
+            extension permitted by that law. Krabiclaw may retain specific
+            records after a deletion request only where an applicable legal
+            basis permits or requires that retention, such as accounting or tax
+            obligations, fraud or security needs, disputes, legal claims, or
+            legal process. A technical or billing issue does not by itself create
+            an independent basis to retain Personal Data.</span
           >
         </p>
         <h1><strong>Supplemental Consumer Privacy Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice applies when you visit, communicate with, create a
@@ -1265,7 +1215,7 @@
             >Supplemental Website Visitor and Support Privacy Notice</strong
           >
         </h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice applies when you visit Krabiclaw's own websites, create
@@ -1300,7 +1250,7 @@
           >
         </p>
         <h1><strong>United States Regional Privacy Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice supplements the Krabiclaw Privacy Policy for residents
@@ -1873,7 +1823,7 @@
           >
         </p>
         <h1><strong>Cookie and Tracking Technologies Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >Krabiclaw and Krabiclaw-powered merchants use cookies and similar
