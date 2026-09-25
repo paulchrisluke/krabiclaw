@@ -14,7 +14,7 @@ export default defineScheduledTask({
   async run({ context }) {
     const env = (context as DeletionSweepTaskContext | undefined)?.cloudflare?.env
     if (!env?.DB && import.meta.dev) {
-      return { result: { organizations: 0, users: 0, skipped: ['DB unavailable in local scheduled task context'] } }
+      return { result: { expiredStripeGa4Intents: false } }
     }
     if (!env?.DB) throw new Error('DB is required')
 
@@ -22,7 +22,7 @@ export default defineScheduledTask({
     // sweep is retention only: it marks lapsed intents expired and drops
     // consumed ones past the 90-day window. It rode on the hourly Stripe
     // reconciliation task before that task and the billing layer it reconciled
-    // were deleted; the daily tenant sweep is the only remaining retention job.
+    // were deleted; this daily task is the remaining retention job.
     // A retention pass that did not run is a retention pass that did not run, and
     // the scheduler is the only thing positioned to notice.
     await expireStripeGa4Intents(env.DB)
