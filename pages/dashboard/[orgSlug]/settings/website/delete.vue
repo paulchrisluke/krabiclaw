@@ -7,7 +7,7 @@
     @cancel="editor.revert"
   >
     <p class="text-base text-muted">
-      Permanently deletes this organization, its site, locations, content and media, and removes access for its other members. Any active or trialing subscription is cancelled first. This cannot be undone.
+      Permanently deletes this organization, its site, locations, content and media, and removes access for its other members. This cannot be undone.
     </p>
     <UAlert v-if="editor.deletionError.value" class="mt-4" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.deletionError.value" />
     <UFormField class="mt-6" label="Type DELETE to confirm">
