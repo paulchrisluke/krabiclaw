@@ -151,6 +151,7 @@ export function guestBookingCancelledMessage(input: GuestBookingInput & { produc
     sections: contactSection(input),
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
