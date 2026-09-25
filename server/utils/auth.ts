@@ -1,4 +1,4 @@
-import { APIError, betterAuth } from 'better-auth'
+import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
@@ -28,6 +28,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
+import { cleanupOrganizationBeforeDelete } from '~/server/utils/tenant-deletion'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -55,19 +56,33 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  // Deleting a tenant is a scheduled operation with a grace period and with
-  // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
-  // owns it and calls this plugin's adapter. The plugin's own route would delete
-  // immediately and leak both, so it stays closed.
-  disableOrganizationDeletion: true,
-  schema: {
-    organization: {
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
-      },
-    },
-  },
 } as const
+
+
+/**
+ * Better Auth Stripe wraps the organization plugin's delete hook with its own
+ * subscription guard. This plugin is deliberately registered after Stripe so
+ * that provider-owned billing checks run first; only then do we release the
+ * KrabiClaw resources Better Auth cannot know about.
+ */
+function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin {
+  return {
+    id: 'organization-deletion-cleanup',
+    init(ctx) {
+      const orgPlugin = ctx.getPlugin('organization')
+      if (!orgPlugin) throw new Error('Organization plugin is required')
+      const existingHooks = orgPlugin.options.organizationHooks ?? {}
+      const beforeDeleteOrganization = existingHooks.beforeDeleteOrganization
+      orgPlugin.options.organizationHooks = {
+        ...existingHooks,
+        beforeDeleteOrganization: async (data, hookCtx) => {
+          await beforeDeleteOrganization?.(data, hookCtx)
+          await cleanupOrganizationBeforeDelete(env, data.organization.id)
+        },
+      }
+    },
+  }
+}
 
 async function configureCimdTenantScopes(event: {
   client: SchemaClient<Scope[]>
@@ -261,13 +276,8 @@ export function createAuth(env: CloudflareEnv) {
       },
     },
     user: {
-      // Account deletion is scheduled through /api/user/delete-account and
-      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
-      // which also removes the organizations the account owns alone. Better
-      // Auth's own /delete-user route stays disabled: it would delete the user
-      // immediately and leave those organizations with no owner, still serving.
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
+      deleteUser: {
+        enabled: true,
       },
     },
     rateLimit: {
@@ -531,6 +541,7 @@ export function createAuth(env: CloudflareEnv) {
           await handleStripeGa4Event(env, db, stripeClient, event)
         },
       }),
+      organizationDeletionCleanupPlugin(env),
       admin({
         ac: platformAdminAccessControl,
         adminRoles: ['admin'],

@@ -89,14 +89,10 @@ export interface AccountEditor {
   revokeDevice: (token: string) => Promise<void>
   describeDevice: (userAgent?: string | null) => string
   formatExactDateTime: (value: string | Date, options?: { includeTime?: boolean }) => string
-  deletionScheduledAt: ComputedRef<Date | null>
-  deletionDateLabel: ComputedRef<string>
   deleteError: Ref<string>
   deleting: Ref<boolean>
-  graceDays: Ref<number>
   deleteConfirmText: Ref<string>
   confirmDeleteAccount: () => Promise<void>
-  keepAccount: () => Promise<void>
   // appearance
   themeInput: Ref<PlatformThemePreference>
   themeOptions: Array<{ label: string; value: PlatformThemePreference; description?: string }>
@@ -400,88 +396,19 @@ const deleteConfirmText = ref('')
 const deleting = ref(false)
 const deleteError = ref('')
 
-interface DeleteErrorBody {
-  error?: string
-  message?: string
-}
-
-function getDeleteErrorBody(error: unknown): DeleteErrorBody {
-  if (error instanceof ApiClientError) {
-    return {
-      error: typeof error.data.error === 'string' ? error.data.error : undefined,
-      message: error.message,
-    }
-  }
-  if (!error || typeof error !== 'object') return {}
-  const record = error as Record<string, unknown>
-  const data = record.data
-  if (data && typeof data === 'object') return data as DeleteErrorBody
-  const response = record.response
-  if (response && typeof response === 'object') {
-    const responseData = (response as Record<string, unknown>)._data
-    if (responseData && typeof responseData === 'object') return responseData as DeleteErrorBody
-  }
-  return {}
-}
-
-// Deletion is scheduled, never immediate: the account and the organizations it
-// owns alone carry a due instant, and the deletion-sweep task performs the
-// deletion when it passes. Until then this row is the way back out.
-const graceDays = ref(30)
-const deletionScheduledAt = computed(() => {
-  const scheduled = (sessionData.value?.user as { deletionScheduledAt?: string | Date | null } | undefined)?.deletionScheduledAt
-  if (!scheduled) return null
-  const at = new Date(scheduled)
-  return Number.isNaN(at.getTime()) ? null : at
-})
-const deletionDateLabel = computed(() => deletionScheduledAt.value
-  ? deletionScheduledAt.value.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-  : '')
-
+// Better Auth owns account deletion and session/cookie invalidation. The
+// dashboard adds only the explicit destructive confirmation.
 async function confirmDeleteAccount() {
   if (deleteConfirmText.value !== 'DELETE') return
   deleting.value = true
   deleteError.value = ''
 
   try {
-    const res = await applicationFetch<{ success?: boolean; scheduled_at?: string; grace_days?: number }>('/api/user/delete-account', {
-      method: 'POST',
-      validate: (value): value is { success?: boolean; scheduled_at?: string; grace_days?: number } =>
-        isRecord(value) && (value.success === undefined || typeof value.success === 'boolean'),
-    })
-    if (res?.success) {
-      if (typeof res.grace_days === 'number') graceDays.value = res.grace_days
-      await refreshSession()
-      deleteConfirmText.value = ''
-    } else {
-      deleteError.value = 'Scheduling the deletion failed. Please try again.'
-    }
-  } catch (_err) {
-    const body = getDeleteErrorBody(_err instanceof Error ? _err : new Error(String(_err)))
-    if (body?.error === 'active_subscription') {
-      deleteError.value = 'You have an active subscription. Please cancel it from the Billing page before deleting your account.'
-    } else {
-      deleteError.value = body?.message ?? 'Something went wrong. Please try again.'
-    }
-  } finally {
-    deleting.value = false
-  }
-}
-
-async function keepAccount() {
-  deleting.value = true
-  deleteError.value = ''
-  try {
-    const res = await applicationFetch<{ success?: boolean }>('/api/user/delete-account', {
-      method: 'DELETE',
-      validate: (value): value is { success?: boolean } =>
-        isRecord(value) && (value.success === undefined || typeof value.success === 'boolean'),
-    })
-    if (res?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
-    await refreshSession()
-  } catch (_err) {
-    const body = getDeleteErrorBody(_err instanceof Error ? _err : new Error(String(_err)))
-    deleteError.value = body?.message ?? 'Cancelling the deletion failed. Please try again.'
+    const { error } = await authClient.deleteUser()
+    if (error) throw new Error(error.message || 'Account deletion failed. Please try again.')
+    await navigateTo('/', { replace: true })
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : 'Account deletion failed. Please try again.'
   } finally {
     deleting.value = false
   }
@@ -495,7 +422,7 @@ provide(accountEditorKey, {
   nameInput, nameDirty, nameSaving, nameError, nameTouched, saveNameInline,
   phoneInput, phoneDirty, phoneSaving, phoneError, phoneTouched, requestPhoneVerify,
   googleStatus, sessions, sessionsError, revoking, revokeDevice, describeDevice, formatExactDateTime,
-  deletionScheduledAt, deletionDateLabel, deleteError, deleting, graceDays, deleteConfirmText, confirmDeleteAccount, keepAccount,
+  deleteError, deleting, deleteConfirmText, confirmDeleteAccount,
   themeInput, themeOptions: [...THEME_OPTIONS], saveDisabled,
   revert: cancelEdit,
   save: saveDetail,
