@@ -40,10 +40,6 @@ async function cancelOrganizationSubscriptions(env: CloudflareEnv, organizationI
  * Cloudflare Images the organization is the last holder of. An image id shared
  * with another organization (an import can reuse one) stays.
  */
-/**
- * Cloudflare Images the organization is the last holder of. An image id shared
- * with another organization (an import can reuse one) stays.
- */
 async function ownedImageIds(
   db: DbClient,
   scope: { column: 'organization_id' | 'organization_id'; value: string },
@@ -68,9 +64,8 @@ async function ownedImageIds(
  * Delete an organization now: release what lives outside D1 first, then let
  * Better Auth delete the organization and the cascade do the rest.
  *
- * Cloudflare failures are logged and skipped rather than aborting: the domain
- * path already queues its own reconciliation retry, and an image that outlives
- * its rows must not keep a customer's data alive in D1.
+ * Required external cleanup happens before the database row is removed. A
+ * cleanup failure aborts deletion so provider data is not silently orphaned.
  */
 export async function deleteOrganizationNow(env: CloudflareEnv, organizationId: string): Promise<void> {
   const db = env.DB
