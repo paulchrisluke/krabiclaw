@@ -238,7 +238,6 @@ export async function resolveUserOrganization(
   name: string
   slug: string
   memberId: string
-  deletionScheduledAt: string | null
 }) | null> {
   const organization = input.organizationId
     ? await organizationById(env, input.organizationId, event)
@@ -256,7 +255,6 @@ export async function resolveUserOrganization(
     slug: organization.slug,
     role: String(member.role),
     memberId: member.id,
-    deletionScheduledAt: organization.deletionScheduledAt ? new Date(organization.deletionScheduledAt).toISOString() : null,
   })
 }
 
