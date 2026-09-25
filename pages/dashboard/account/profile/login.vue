@@ -53,25 +53,12 @@
       <section>
         <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
         <div class="mt-3 space-y-4">
-          <template v-if="account.deletionScheduledAt.value">
-            <UAlert
-              color="warning"
-              variant="soft"
-              icon="i-lucide-clock"
-              title="Deletion scheduled"
-              :description="`Everything is deleted on ${account.deletionDateLabel.value}. Your organization stays online until then.`"
-            />
-            <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
-            <UButton color="neutral" variant="outline" label="Keep my account" :loading="account.deleting.value" @click="account.keepAccount" />
-          </template>
-          <template v-else>
-            <p class="text-sm text-muted">Your account, organization, site, locations and menu data are deleted in {{ account.graceDays.value }} days. You can cancel until then.</p>
-            <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
-            <UFormField label="Type DELETE to confirm">
-              <UInput v-model="account.deleteConfirmText.value" placeholder="DELETE" :disabled="account.deleting.value" class="w-full" />
-            </UFormField>
-            <UButton color="error" variant="soft" label="Schedule deletion" :disabled="account.deleteConfirmText.value !== 'DELETE'" :loading="account.deleting.value" @click="account.confirmDeleteAccount" />
-          </template>
+          <p class="text-sm text-muted">Permanently deletes your account. Organizations you solely own may also be deleted. If you are the sole owner of an organization with other members, transfer ownership first. This cannot be undone.</p>
+          <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
+          <UFormField label="Type DELETE to confirm">
+            <UInput v-model="account.deleteConfirmText.value" placeholder="DELETE" :disabled="account.deleting.value" class="w-full" />
+          </UFormField>
+          <UButton color="error" variant="soft" label="Delete account" :disabled="account.deleteConfirmText.value !== 'DELETE'" :loading="account.deleting.value" @click="account.confirmDeleteAccount" />
         </div>
       </section>
     </div>
