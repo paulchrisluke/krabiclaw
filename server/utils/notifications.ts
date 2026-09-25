@@ -137,7 +137,6 @@ interface ReviewRequestNotificationInput extends OrganizationContext {
   requestId: string
   bookingType: 'reservation' | 'booking'
   bookingId: string
-  kind: 'first' | 'reminder'
   guestName: string
   email: string
   locationName?: string | null
@@ -879,10 +878,6 @@ export async function notifyReviewRequest(
 ): Promise<void> {
   const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
-  const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
-  const title = opts.kind === 'reminder'
-    ? `Review reminder for ${opts.bookingPhrase}`
-    : `Review request for ${opts.bookingPhrase}`
 
   const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
@@ -892,14 +887,13 @@ export async function notifyReviewRequest(
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
-    reminder: opts.kind === 'reminder',
   }), { platformDomain })
 
   await sendEmailNotification(env, db, {
     ...opts,
     to: opts.email,
-    template: templateName,
-    title,
+    template: 'booking_thank_you_review_request',
+    title: `Review request for ${opts.bookingPhrase}`,
     payload: {
       request_id: opts.requestId,
       booking_type: opts.bookingType,
@@ -913,9 +907,7 @@ export async function notifyReviewRequest(
       organization_name: restaurant,
     },
     email: {
-      subject: opts.kind === 'reminder'
-        ? `Reminder: review ${restaurant}`
-        : `How was your visit to ${restaurant}?`,
+      subject: `How was your visit to ${restaurant}?`,
       html: email.html,
       text: email.text,
     },

@@ -18,15 +18,12 @@ interface SendDueRow {
 }
 
 interface TaskResult {
-  first_sent: number
-  reminders_sent: number
+  sent: number
   failed: number
   skipped?: string
 }
 
-async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failures: string[] }> {
-  const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
-  const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
+async function sendDue(db: D1Database, env: ApiRecord): Promise<{ sent: number; failures: string[] }> {
   const candidates = await queryAllPages<SendDueRow>(db, `
       SELECT r.id, r.organization_id, r.kind AS booking_type
         FROM requests r JOIN customers c ON c.id = r.customer_id
@@ -42,17 +39,16 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
          AND datetime(record.ends_at) <= datetime('now')
          AND json_extract(r.payload_json, '$.review.submitted_at') IS NULL
          AND c.review_request_opted_out_at IS NULL
-         AND ${kind === 'first'
-           ? "json_extract(r.payload_json, '$.review.request_sent_at') IS NULL AND datetime(record.ends_at) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"
-           : "json_extract(r.payload_json, '$.review.request_sent_at') IS NOT NULL AND json_extract(r.payload_json, '$.review.reminder_sent_at') IS NULL AND datetime(json_extract(r.payload_json, '$.review.request_sent_at')) <= datetime('now', CASE r.kind WHEN 'reservation' THEN ? ELSE ? END)"}
+         AND json_extract(r.payload_json, '$.review.request_sent_at') IS NULL
+         AND datetime(record.ends_at) <= datetime('now', '-24 hours')
        ORDER BY booking_type, r.id
-    `, [reservationDelay, experienceDelay])
+    `, [])
   const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
 
   let sent = 0
   const failures: string[] = []
   for (const row of rows) {
-    const result = await sendReviewRequestForBooking(env, db, row.booking_type, row.id, kind).catch((error) => ({
+    const result = await sendReviewRequestForBooking(env, db, row.booking_type, row.id).catch((error) => ({
       sent: false,
       requestId: '',
       error: error instanceof Error ? error.message : String(error),
@@ -74,15 +70,13 @@ export default defineScheduledTask({
     const db = env.DB as D1Database | undefined
 
     if (!db && import.meta.dev) {
-      return { result: { first_sent: 0, reminders_sent: 0, failed: 0, skipped: 'DB unavailable in local scheduled task context' } }
+      return { result: { sent: 0, failed: 0, skipped: 'DB unavailable in local scheduled task context' } }
     }
     if (!db) throw new Error('DB is required')
 
-    const first = await sendDue(db, env, 'first')
-    const reminders = await sendDue(db, env, 'reminder')
+    const { sent, failures } = await sendDue(db, env)
 
-    const failures = [...first.failures, ...reminders.failures]
     if (failures.length) throw new Error(`${failures.length} review requests were not sent: ${failures.join('; ')}`)
-    return { result: { first_sent: first.sent, reminders_sent: reminders.sent, failed: 0 } }
+    return { result: { sent, failed: 0 } }
   },
 })

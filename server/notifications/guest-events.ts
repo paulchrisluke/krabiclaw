@@ -239,13 +239,10 @@ export function reviewRequestMessage(input: {
   partySize: string
   reviewUrl: string
   optOutUrl: string
-  reminder: boolean
 }): NotificationMessage {
   return {
-    title: input.reminder ? `How was your visit to ${input.organizationName}?` : `Thanks for visiting ${input.organizationName}`,
-    preheader: input.reminder
-      ? `${input.organizationName} is still hoping to hear how it went.`
-      : `${input.organizationName} would love to hear how everything went.`,
+    title: `Thanks for visiting ${input.organizationName}`,
+    preheader: `${input.organizationName} would love to hear how everything went.`,
     hero: null,
     intro: `Thanks for visiting, ${input.guestName}. A couple of lines helps other guests know what to expect.`,
     facts: facts(

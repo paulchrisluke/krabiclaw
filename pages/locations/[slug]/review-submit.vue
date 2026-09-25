@@ -24,9 +24,9 @@
         <h1 class="text-3xl font-semibold">Thank you</h1>
         <p class="mt-3 text-sm text-muted">Your review is pending moderation.</p>
         <div class="mt-8 flex flex-wrap gap-3">
-          <a v-if="requestData?.location?.googleReviewUrl" :href="requestData.location.googleReviewUrl" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-full bg-(--brand-color) px-6 py-3 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90">
-            Also share on Google
-          </a>
+          <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-(--brand-color) px-6 py-3 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
+            {{ copyButtonLabel }}
+          </button>
           <SayaButton variant="outline" @click="linkAccount">
             Sign in to link this review
           </SayaButton>
@@ -136,6 +136,7 @@ const submitting = ref(false)
 const submitted = ref(false)
 const optedOut = ref(false)
 const submitError = ref('')
+const copyButtonLabel = ref('Copy my review & post on Google Maps')
 const mediaError = ref('')
 const uploadingMedia = ref(false)
 const removingMediaAssetId = ref<string | null>(null)
@@ -405,6 +406,15 @@ async function submitReview() {
 async function linkAccount() {
   const callbackURL = `/locations/${slug.value}/review-submit?token=${encodeURIComponent(token.value)}`
   await authClient.signIn.social({ provider: 'google', callbackURL })
+}
+
+async function copyAndOpenGoogle() {
+  const reviewText = [title.value, content.value].filter(Boolean).join('\n\n')
+  if (reviewText) {
+    await navigator.clipboard.writeText(reviewText)
+    copyButtonLabel.value = 'Copied! Opening Google Maps…'
+  }
+  window.open(requestData.value?.location?.googleReviewUrl ?? '', '_blank', 'noopener')
 }
 
 async function optOut() {
