@@ -239,11 +239,13 @@ export function reviewRequestMessage(input: {
   partySize: string
   reviewUrl: string
   optOutUrl: string
+  organizationLogoUrl?: string | null
 }): NotificationMessage {
   return {
     title: `Thanks for visiting ${input.organizationName}`,
     preheader: `${input.organizationName} would love to hear how everything went.`,
     hero: null,
+    organizationLogoUrl: input.organizationLogoUrl,
     intro: `Thanks for visiting, ${input.guestName}. A couple of lines helps other guests know what to expect.`,
     facts: facts(
       fact('visitAt', 'Visit', input.visitAt),

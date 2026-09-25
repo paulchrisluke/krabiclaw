@@ -699,14 +699,15 @@ export async function notifyReservationCancelled(
   const prettyDate = formatCalendarDate(opts.date, 'en')
   const prettyTime = formatTime(opts.time, 'en')
   const platformDomain = getPlatformDomain(env)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    locationId: opts.locationId,
-    tab: 'reservations',
-    submissionId: opts.reservationId,
-  })
-    ? `Reservation cancelled for ${opts.guestName}`
-    : `Reservation request cancelled by ${opts.guestName}`
+  const [inboxUrl, logoUrl] = await Promise.all([
+    buildOwnerInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      locationId: opts.locationId,
+      tab: 'reservations',
+      submissionId: opts.reservationId,
+    }),
+    organizationLogo(db, opts.organizationId),
+  ])
   const guestCancelTitle = confirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled'
 
   const payload = {
@@ -733,6 +734,7 @@ export async function notifyReservationCancelled(
   const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
     guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
     partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
@@ -878,6 +880,7 @@ export async function notifyReviewRequest(
 ): Promise<void> {
   const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
+  const logoUrl = await organizationLogo(db, opts.organizationId)
 
   const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
@@ -887,6 +890,7 @@ export async function notifyReviewRequest(
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
 
   await sendEmailNotification(env, db, {
@@ -1005,14 +1009,15 @@ export async function notifyBookingCancelled(
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
   const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    locationId: opts.locationId,
-    tab: 'bookings',
-    submissionId: opts.bookingId,
-  })
-    ? `Booking cancelled for ${opts.guestName}`
-    : `Booking request cancelled by ${opts.guestName}`
+  const [inboxUrl, logoUrl] = await Promise.all([
+    buildOwnerInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      locationId: opts.locationId,
+      tab: 'bookings',
+      submissionId: opts.bookingId,
+    }),
+    organizationLogo(db, opts.organizationId),
+  ])
   const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
 
   const payload = {
@@ -1038,6 +1043,7 @@ export async function notifyBookingCancelled(
   const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
     guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',

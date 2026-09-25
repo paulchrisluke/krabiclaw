@@ -53,7 +53,7 @@ export default defineComponent({
               .email-label, .email-footer { color: ${dark.textDimmed} !important; }
               .email-footer a { color: ${dark.textMuted} !important; }
               .email-avatar-ring { border-color: ${dark.surface} !important; }
-              .email-header-name { color: ${dark.text} !important; }
+              .email-body .email-header-name { color: ${dark.text} !important; }
               /* The hero's letterbox is the page behind the picture, so it
                  follows the scheme rather than staying a light band. */
               .email-hero-img { background-color: ${dark.bg} !important; }
