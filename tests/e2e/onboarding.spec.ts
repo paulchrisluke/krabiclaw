@@ -9,7 +9,7 @@ import { formatMinorAmount } from '../../shared/prices'
  * The subdomain the site is stored under, from the host this environment frames
  * it at.
  *
- * Deployed environments address a tenant as `<subdomain>-preview.krabiclaw.com`,
+ * Staging addresses a tenant as `<subdomain>-staging.krabiclaw.com`,
  * so the first label of that hostname carries the environment suffix and is not
  * the stored value. Everywhere else the first label IS the subdomain.
  */

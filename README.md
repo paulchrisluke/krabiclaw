@@ -145,8 +145,7 @@ printed by `corepack yarn local:setup` for browser work.
 
 Local tenant tests use a shared-host routing contract: the browser targets
 `localhost` and the test helper supplies `x-preview-tenant` for the selected
-fixture. Deployed preview and staging use direct first-level tenant aliases
-instead. This is the authoritative local browser path; do not rely on direct
+fixture. Deployed staging uses direct first-level tenant aliases instead. This is the authoritative local browser path; do not rely on direct
 `*.localhost` navigation for Worker browser verification.
 
 ```text
@@ -168,26 +167,16 @@ ulimit -n 65536
 
 Deployment follows the branches in `.github/workflows/ci.yml`:
 
-1. Runtime pull requests deploy the isolated preview Worker and run the fixed
-   `@smoke` suite against it. The set does not vary with the diff.
-2. Pushes to `staging` run the same `@smoke` suite against the disposable
-   preview first; only then does the staging Worker deploy, apply staging
-   migrations, and run read-only MCP and tenant rendering/navigation against
+1. Pull requests run `Checks` and the `E2E` suite against a local Worker and a
+   local D1 copied from production (`db:pull:local`). Nothing is deployed for a
+   pull request.
+2. Pushes to `staging` run `Checks`, then deploy the staging Worker, apply
+   staging migrations, and run read-only MCP and tenant rendering against
    staging itself. Nothing writes test data into real staging.
-3. The `staging` to `main` release PR reuses the checks attached to its exact
-   staging head without another deployment or test cycle.
-4. A reviewed `staging` to `main` merge first re-reads the merged staging
-   commit's checks and refuses to promote unless `Checks`, `Preview smoke` and
-   `Deploy and test staging` all succeeded on it, then deploys the production
-   Worker, applies production migrations, and runs read-only production browser
-   smoke.
+3. Pushes to `main` run `Checks`, then deploy the production Worker, apply
+   production migrations, and run read-only production browser verification.
 
 CI invokes native Wrangler commands only in the matching branch job.
-
-The **Zaraz GA4 Backfill Plan** workflow is read-only and accepts only preview or
-staging targets. It reads the target D1 connections and the current zone-level
-Zaraz configuration, then emits a plan; it never applies a Zaraz `PUT` and has
-no production operator path.
 
 During an incident, use Cloudflare's deployment history to restore the last
 known-good production deployment without changing D1 data. Then land the source

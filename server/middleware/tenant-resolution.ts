@@ -44,8 +44,8 @@ const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onb
              o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical`
 
 // KrabiClaw's own tenant is the one active organization running the platform
-// template. Platform hosts differ per environment (localhost, preview, staging,
-// the apex), so the host itself is not the key; the template is.
+// template. Platform hosts differ per environment (localhost, staging, the
+// apex), so the host itself is not the key; the template is.
 async function resolvePlatformTenant(db: DbClient): Promise<TenantRow | null> {
   return await queryFirst<TenantRow>(
     db,
@@ -193,9 +193,9 @@ export default defineHandler(async (event) => {
   const host = (event.req.headers.get("host")) || "";
   const env = cloudflareEnv(event);
 
-  // Local and raw workers.dev hosts cannot express tenant identity in their
-  // hostname, so their test harness carries it explicitly. Deployed preview and
-  // staging use direct environment aliases below.
+  // Local hosts cannot express tenant identity in their hostname, so their test
+  // harness carries it explicitly. Deployed staging uses direct environment
+  // aliases below.
   const previewSlug = usesTenantHeader(host) ? event.req.headers.get("x-preview-tenant") : null
   if (previewSlug !== null) {
     // The header names a tenant, so this request is that tenant's or it is

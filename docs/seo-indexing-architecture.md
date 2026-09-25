@@ -24,7 +24,7 @@ Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered re
 
 ### Non-production hosts
 
-Preview, staging, `pages.dev`, and `workers.dev` hosts are globally non-indexable.
+Staging, `pages.dev`, and `workers.dev` hosts are globally non-indexable.
 
 These hosts receive:
 

@@ -62,7 +62,7 @@ MCP names map to shared domain functions. REST uses HTTP methods on the same res
 2. Update the owning invariant test.
 3. Run `yarn mcp:catalog:write` and review the catalog snapshot diff.
 4. Run `yarn mcp:catalog` and the affected MCP integration tests.
-5. Deploy the preview Worker and verify `tools/list`, the changed tool call, and
+5. Run the local Worker and verify `tools/list`, the changed tool call, and
    `_meta["krabiclaw/catalogFingerprint"]` through the real client.
 6. Refresh and publish the ChatGPT app action catalog when its schema changed
    (`yarn chatgpt:submission:write`).

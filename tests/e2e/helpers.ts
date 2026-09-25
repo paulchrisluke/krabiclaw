@@ -4,8 +4,8 @@ import { blawbyTestBaseUrl, blawbyTestExtraHeaders, tenantTestBaseUrl, potteryHo
 export const tenantBaseURL = tenantTestBaseUrl()
 export const potteryHouseBaseURL = potteryHouseTestBaseUrl()
 export const blawbyBaseURL = blawbyTestBaseUrl()
-// Extra headers for tenant tests against local or raw *.workers.dev hosts.
-// Deployed preview and staging tenant tests use direct environment aliases.
+// Extra headers for tenant tests against local hosts.
+// Deployed staging tenant tests use direct environment aliases.
 export const tenantExtraHeaders = tenantTestExtraHeaders()
 export const potteryHouseExtraHeaders = potteryHouseTestExtraHeaders()
 export const blawbyExtraHeaders = blawbyTestExtraHeaders()

@@ -26,7 +26,7 @@ function main() {
   const targets = process.argv.slice(2)
   let failed = false
   for (const target of targets.length ? targets : ['local']) {
-    if (!['local', 'preview', 'staging', 'production'].includes(target)) throw new Error(`Unsupported environment: ${target}`)
+    if (!['local', 'staging', 'production'].includes(target)) throw new Error(`Unsupported environment: ${target}`)
     const args = ['wrangler', 'd1', 'execute', 'DB']
     if (target === 'local') args.push('--local')
     else { if (target !== 'production') args.push('--env', target); args.push('--remote') }

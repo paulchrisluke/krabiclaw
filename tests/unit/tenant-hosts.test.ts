@@ -113,9 +113,8 @@ test('isPlatformHost', async (t) => {
     assert.equal(isPlatformHost('preview-123.krabiclaw.pages.dev', prodEnv), true)
   })
 
-  await t.test('recognizes deployed CI preview Worker hosts on workers.dev', () => {
-    assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-    assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
+  await t.test('treats workers.dev hosts as no platform host', () => {
+    assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
     assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
   })
 })
@@ -130,36 +129,32 @@ test('getFreeOrganizationDomain rejects an unconfigured domain', () => {
   assert.throws(() => getFreeOrganizationDomain({}), /NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required/)
 })
 
-test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {
+test('non-production is local and staging, including staging tenant aliases', () => {
   assert.equal(isNonProductionHost('localhost'), true)
   assert.equal(isNonProductionHost('localhost:3000'), true)
   assert.equal(isNonProductionHost('127.0.0.1:3000'), true)
-  assert.equal(isNonProductionHost('preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('preview.krabiclaw.com'), false)
   assert.equal(isNonProductionHost('staging.krabiclaw.com'), true)
-  assert.equal(isNonProductionHost('pottery-house-preview.krabiclaw.com'), true)
+  assert.equal(isNonProductionHost('pottery-house-preview.krabiclaw.com'), false)
   assert.equal(isNonProductionHost('pottery-house-staging.krabiclaw.com'), true)
   assert.equal(isNonProductionHost('preview.customer.com'), false)
-  assert.equal(isNonProductionHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
   assert.equal(isNonProductionHost('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 
-test('tenant headers are confined to local and raw workers.dev shared hosts', () => {
+test('tenant headers are confined to local hosts', () => {
   assert.equal(usesTenantHeader('localhost:3000'), true)
-  assert.equal(usesTenantHeader('krabiclaw-preview.paulchrisluke.workers.dev'), true)
+  assert.equal(usesTenantHeader('krabiclaw-preview.paulchrisluke.workers.dev'), false)
   assert.equal(usesTenantHeader('preview.krabiclaw.com'), false)
   assert.equal(usesTenantHeader('staging.krabiclaw.com'), false)
   assert.equal(usesTenantHeader('pottery-house-staging.krabiclaw.com'), false)
 })
 
-test('environment tenant aliases use first-level preview and staging hostnames', () => {
+test('environment tenant aliases use first-level staging hostnames', () => {
   assert.equal(
     environmentTenantAliasHostname('staging.krabiclaw.com', 'pottery-house'),
     'pottery-house-staging.krabiclaw.com',
   )
-  assert.equal(
-    environmentTenantAliasHostname('preview.krabiclaw.com', 'ncls'),
-    'ncls-preview.krabiclaw.com',
-  )
+  assert.equal(environmentTenantAliasHostname('preview.krabiclaw.com', 'ncls'), '')
   assert.equal(environmentTenantAliasHostname('krabiclaw.com', 'ncls'), '')
   assert.equal(environmentTenantAliasHostname('staging.krabiclaw.com', '../ncls'), '')
 

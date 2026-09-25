@@ -22,7 +22,7 @@ export function useSeoUrl(value: MaybeRefOrGetter<string | null | undefined>) {
  * canonical/schema origin must always be config.public.platformUrl first — matching
  * useSocialMetadata() and useContentPageSchema() — so it doesn't disagree with
  * itself by resolving to whatever host actually served the request (e.g. a
- * staging/preview Worker). Never use this for tenant/Saya pages: those must
+ * staging Worker). Never use this for tenant/Saya pages: those must
  * resolve against the tenant's actual request origin, which is what useSeoUrl
  * does and why its precedence is intentionally reversed from this one.
  */

@@ -13,8 +13,8 @@ const WORKER_MEDIA_PREFIX = '/__media/'
 
 // Non-production environments have no separate media.krabiclaw.com host, so
 // their canonical public media URLs use /__media on the app origin. The host
-// boundary is the authorization boundary here: preview, staging, local, and
-// workers.dev hosts may serve public media, while production tenant/platform
+// boundary is the authorization boundary here: staging and local hosts may
+// serve public media, while production tenant/platform
 // hosts cannot use this path and continue through media.krabiclaw.com.
 function isWorkerMediaPathAllowed(event: Parameters<typeof getHeader>[0]): boolean {
   if (import.meta.dev) return true

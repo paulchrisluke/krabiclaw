@@ -4,7 +4,6 @@ import path from 'node:path'
 
 const CONFIGS = [
   { label: 'production', prefix: '' },
-  { label: 'preview', prefix: 'env.preview.' },
   { label: 'staging', prefix: 'env.staging.' },
 ]
 
