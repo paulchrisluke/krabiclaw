@@ -115,6 +115,7 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { isCurrencyCode } from '~/shared/currencies'
 import { MALI_FONT_CSS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { authClient } from '~/lib/auth-client'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -131,9 +132,9 @@ const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
 
-// Organization deletion is immediate after explicit confirmation. The server
-// cancels active/trialing Stripe subscriptions, releases external resources,
- // and only then removes the organization.
+// Better Auth owns organization authorization, Stripe delete gating and the
+// organization deletion itself. KrabiClaw contributes only its registered
+// external-resource cleanup hook.
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
 const deletionConfirmText = ref('')
 const deletionSaving = ref(false)
@@ -144,11 +145,8 @@ async function deleteWorkspace() {
   deletionSaving.value = true
   deletionError.value = ''
   try {
-    const response = await dashboardApi<{ success?: boolean }>('/api/dashboard/organizations/deletion', {
-      method: 'POST',
-      validate: (value): value is { success?: boolean } => isRecord(value),
-    })
-    if (response?.success !== true) throw new Error('Deletion failed. Please try again.')
+    const { error } = await authClient.organization.delete({ organizationId })
+    if (error) throw new Error(error.message || 'Deletion failed. Please try again.')
     await navigateTo('/dashboard', { replace: true })
   } catch (error) {
     deletionError.value = error instanceof Error ? error.message : 'Deletion failed. Please try again.'
@@ -156,7 +154,6 @@ async function deleteWorkspace() {
     deletionSaving.value = false
   }
 }
-
 
 interface SettingsPageResource {
   settings: { success: boolean; settings: OrganizationSettingsResponse }
