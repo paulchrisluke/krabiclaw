@@ -55,18 +55,10 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  // Deleting a tenant is a scheduled operation with a grace period and with
-  // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
-  // owns it and calls this plugin's adapter. The plugin's own route would delete
-  // immediately and leak both, so it stays closed.
+  // KrabiClaw performs the external-resource cleanup before asking the
+  // organization adapter to delete the row. Keep the raw plugin route closed so
+  // callers cannot bypass that cleanup.
   disableOrganizationDeletion: true,
-  schema: {
-    organization: {
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
-      },
-    },
-  },
 } as const
 
 async function configureCimdTenantScopes(event: {
@@ -261,14 +253,9 @@ export function createAuth(env: CloudflareEnv) {
       },
     },
     user: {
-      // Account deletion is scheduled through /api/user/delete-account and
-      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
-      // which also removes the organizations the account owns alone. Better
-      // Auth's own /delete-user route stays disabled: it would delete the user
-      // immediately and leave those organizations with no owner, still serving.
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
-      },
+      // Account deletion is exposed through /api/user/delete-account so
+      // KrabiClaw can resolve organization ownership and external resources
+      // before Better Auth removes the user and sessions.
     },
     rateLimit: {
       customRules: {
