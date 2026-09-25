@@ -76,10 +76,6 @@ function idWith(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
 }
 
-function nullableString(value: unknown, maxLength: number) {
-  const cleaned = cleanString(value as ApiValue, maxLength)
-  return cleaned || null
-}
 
 function requiredString(value: unknown, maxLength: number, field: string) {
   const cleaned = cleanString(value as ApiValue, maxLength)
