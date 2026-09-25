@@ -98,8 +98,8 @@ function trackConsultation(pageType: string, destination: string) {
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/schedule',
-  title: page.value.seo_title || `Consultation | ${identity.value.name}`,
-  description: page.value.seo_description || page.value.summary || '',
+  title: `${page.value.title || 'Consultation'} | ${identity.value.name}`,
+  description: page.value.summary || '',
   brand: {
     organizationName: identity.value.name,
   },
@@ -110,8 +110,8 @@ useProfessionalServiceSchema(() => ({
   recipe: 'schedule',
   org: org.value,
   pageUrl: canonicalUrl.value,
-  pageTitle: page.value.seo_title || page.value.title,
-  pageDescription: page.value.seo_description || page.value.summary || null,
+  pageTitle: page.value.title,
+  pageDescription: page.value.summary || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Schedule', url: canonicalUrl.value },

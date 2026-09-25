@@ -401,8 +401,8 @@ const handleTenantContact = async () => {
 // ── SEO ──────────────────────────────────────────────────
 useSocialMetadata(() => ({
   path: '/contact',
-  title: tenantPage.value?.seo_title || tenantPage.value?.title || businessName.value,
-  description: tenantPage.value?.seo_description || tenantPage.value?.summary || '',
+  title: tenantPage.value?.title || businessName.value,
+  description: tenantPage.value?.summary || '',
   brand: {
     organizationName: businessName.value,
   },
