@@ -53,7 +53,7 @@
       <section>
         <h2 class="text-lg font-semibold text-highlighted">Delete account</h2>
         <div class="mt-3 space-y-4">
-          <p class="text-sm text-muted">Permanently deletes your account. Organizations you solely own may also be deleted. If you are the sole owner of an organization with other members, transfer ownership first. This cannot be undone.</p>
+          <p class="text-sm text-muted">Permanently deletes your account. Organizations are managed separately. This cannot be undone.</p>
           <UAlert v-if="account.deleteError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="account.deleteError.value" />
           <UFormField label="Type DELETE to confirm">
             <UInput v-model="account.deleteConfirmText.value" placeholder="DELETE" :disabled="account.deleting.value" class="w-full" />
