@@ -1,4 +1,4 @@
-import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { deleteImage } from '~/server/utils/cloudflare-images'
@@ -32,9 +32,9 @@ async function ownedImageIds(db: DbClient, organizationId: string): Promise<stri
  *
  * The Better Auth organization lifecycle owns authorization, subscription
  * gating and the organization/member deletion itself. This function only
- * releases external resources and D1 guest records that intentionally restrict
- * the organization delete. Any failure propagates and aborts the Better Auth
- * deletion.
+ * releases external resources. The schema epoch owns tenant-cascade foreign
+ * key behavior, so this path does not manually order-delete tenant rows. Any
+ * cleanup failure propagates and aborts the Better Auth deletion.
  */
 export async function cleanupOrganizationBeforeDelete(
   env: CloudflareEnv,
@@ -47,11 +47,6 @@ export async function cleanupOrganizationBeforeDelete(
   for (const imageId of await ownedImageIds(db, organizationId)) {
     await deleteImage(env, imageId)
   }
-
-  await executeBatch(db, [
-    { query: 'DELETE FROM bookings WHERE organization_id = ?', params: [organizationId] },
-    { query: 'DELETE FROM reservations WHERE organization_id = ?', params: [organizationId] },
-  ], { operation: 'Release organization guest records' })
 }
 
 /**
