@@ -60,6 +60,25 @@ looks likely.
 Missing or invalid required state must fail visibly or be fixed at its source.
 Do not manufacture plausible state to conceal the failure.
 
+
+Existing repository code is evidence, not authority.
+
+Agents often find a local implementation first and extend it because it appears
+established, tested, or production-proven. Do not assume that makes it
+canonical or correct. Before building on local code for behavior that an
+installed dependency, framework, SDK, or external provider may already own,
+inspect the current documented API and, when behavior is version-sensitive, the
+installed version's implementation.
+
+Search dependency/provider capabilities before extending a repository wrapper.
+A dependency is an existing implementation even when the repository has no
+helper around it yet.
+
+If repository code duplicates behavior already owned by the configured
+dependency/provider, prefer deleting or reducing the repository implementation
+to the provider boundary. Passing tests, recent implementation, production use,
+or reviewer familiarity are not reasons to preserve duplicated lifecycle logic.
+
 ## Complexity
 
 Default order:
@@ -190,6 +209,45 @@ bypasses, undocumented support principals, or parallel authorization logic.
 
 Dashboard, MCP, WhatsApp, and other application surfaces must share the same
 canonical authorization and domain behavior.
+
+
+### External accounts and provider credentials
+
+When a configured auth/provider library can own an external identity or
+credential lifecycle, it owns that lifecycle.
+
+For OAuth integrations, use Better Auth linked accounts, social providers, or
+Generic OAuth before implementing provider OAuth directly. Wherever Better
+Auth's documented provider mechanism supports the required flow, Better Auth
+owns:
+
+- authorization redirects, callback and state handling;
+- provider account identity;
+- access and refresh token storage;
+- token encryption and expiry;
+- granted scope tracking and incremental scopes;
+- access-token refresh; and
+- account link/unlink lifecycle.
+
+Application code may store only domain state Better Auth cannot represent, such
+as which Google Analytics property, Search Console site, Facebook Page, or
+Instagram professional account an organization selected.
+
+Before writing OAuth URL construction, authorization-code exchange,
+access/refresh-token persistence, token encryption/decryption, scope merging,
+token refresh, or provider-account identity state, verify from the installed
+Better Auth version's documented API/source that Better Auth does not already
+provide the operation. A provider-specific API requirement is not permission to
+duplicate the surrounding OAuth lifecycle.
+
+The same rule applies to other configured provider integrations. For example,
+Better Auth Stripe owns subscription lifecycle and subscription state where the
+plugin provides the operation. Do not read provider-owned state and recreate
+its state machine in application code merely because the data is accessible.
+
+Do not preserve custom credential or lifecycle infrastructure merely because it
+already exists. If a canonical provider/library mechanism supersedes it, delete
+the custom implementation in the same change.
 
 ## Tenant integrity
 
