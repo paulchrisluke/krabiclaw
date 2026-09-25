@@ -58,9 +58,8 @@ export interface ReviewBookingContext {
 }
 
 export const REVIEW_REQUEST_TTL_DAYS = 30
-export const RESERVATION_FIRST_SEND_DELAY_HOURS = 2
+export const RESERVATION_FIRST_SEND_DELAY_HOURS = 24
 export const EXPERIENCE_FIRST_SEND_DELAY_HOURS = 24
-export const REVIEW_REMINDER_DELAY_DAYS = 5
 
 function isoFromMs(ms: number): string {
   return new Date(ms).toISOString()
@@ -226,43 +225,27 @@ export async function createOrRotateReviewRequest(
 export async function markReviewRequestSendSuccess(
   db: DbClient,
   requestId: string,
-  kind: 'first' | 'reminder',
   sentAt = new Date().toISOString(),
 ): Promise<void> {
-  if (kind === 'first') {
-    await execute(db, `
-      UPDATE review_requests
-      SET first_sent_at = COALESCE(first_sent_at, ?),
-          send_count = CASE WHEN first_sent_at IS NULL THEN send_count + 1 ELSE send_count END,
-          last_error = NULL,
-          updated_at = ?
-      WHERE id = ?
-    `, [sentAt, sentAt, requestId])
-    const request = await queryFirst<ReviewRequestRow>(db, `SELECT * FROM review_requests WHERE id = ? LIMIT 1`, [requestId])
-    if (request) await markBookingReviewRequestSent(db, request.booking_type, request.booking_id, kind, sentAt)
-    return
-  }
-
   await execute(db, `
     UPDATE review_requests
-    SET reminder_sent_at = COALESCE(reminder_sent_at, ?),
-        send_count = CASE WHEN reminder_sent_at IS NULL THEN send_count + 1 ELSE send_count END,
+    SET first_sent_at = COALESCE(first_sent_at, ?),
+        send_count = CASE WHEN first_sent_at IS NULL THEN send_count + 1 ELSE send_count END,
         last_error = NULL,
         updated_at = ?
     WHERE id = ?
   `, [sentAt, sentAt, requestId])
   const request = await queryFirst<ReviewRequestRow>(db, `SELECT * FROM review_requests WHERE id = ? LIMIT 1`, [requestId])
-  if (request) await markBookingReviewRequestSent(db, request.booking_type, request.booking_id, kind, sentAt)
+  if (request) await markBookingReviewRequestSent(db, request.booking_type, request.booking_id, sentAt)
 }
 
 export async function markBookingReviewRequestSent(
   db: DbClient,
   bookingType: ReviewBookingType,
   bookingId: string,
-  kind: 'first' | 'reminder',
   sentAt = new Date().toISOString(),
 ): Promise<void> {
-  const path = kind === 'first' ? '$.review.request_sent_at' : '$.review.reminder_sent_at'
+  const path = '$.review.request_sent_at'
   await execute(db, `
     UPDATE requests
     SET payload_json = json_set(payload_json, ?, COALESCE(json_extract(payload_json, ?), ?)), updated_at = ?

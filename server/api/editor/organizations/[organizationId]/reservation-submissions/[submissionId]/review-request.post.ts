@@ -20,11 +20,9 @@ export default defineHandler(async (event) => {
 
   await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: submission.location_id })
 
-  const body = await readBody(event) as { kind?: string } | undefined
-  const kind = body?.kind === 'reminder' ? 'reminder' : 'first'
-  const result = await sendReviewRequestForBooking(env, db, 'reservation', submissionId, kind)
+  const result = await sendReviewRequestForBooking(env, db, 'reservation', submissionId)
 
   return jsonResponse(result, { status: result.sent ? 200 : 502 })
 })
 import { defineHandler } from 'nitro';
-import { getRouterParam, readBody  } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

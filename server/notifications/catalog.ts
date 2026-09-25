@@ -67,10 +67,13 @@ const reservation = {
 // A real tenant asset, so the preview shows what a hero actually looks like
 // rather than a message that happens to have none.
 const sampleCover = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/public'
+// A real tenant logo asset from D1, so the preview shows the logo stack in the header.
+const sampleLogo = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/881bb3e2-b2eb-47e0-9e05-152bfa0f1dba/thumbnail'
 
 const booking = {
   ...reservation,
   heroImageUrl: sampleCover,
+  organizationLogoUrl: sampleLogo,
   guestName: 'Mina Park',
   guestEmail: 'mina@example.com',
   guestPhone: '+66 76 000 0002',
@@ -85,6 +88,7 @@ const booking = {
 const guestVisit = {
   guestName: 'Alex Carter',
   organizationName: restaurant,
+  organizationLogoUrl: sampleLogo,
   date: 'Tue, Jul 14, 2026',
   time: '7:00 PM',
   partySize: '2 guests',
@@ -171,7 +175,6 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   { id: 'guest-thread-reply', audience: 'guest', title: 'Guest — a reply from the business', message: guestThreadReplyMessage({ organizationName: restaurant, body: 'Hi Jordan,\n\nYes — we have a full vegan menu, and there is street parking on Soi 3 right outside. See you Tuesday!' }) },
   { id: 'guest-thread-status', audience: 'guest', title: 'Guest — reservation status changed', message: guestThreadStatusMessage({ organizationName: restaurant, heading: `Your reservation at ${restaurant} is confirmed`, body: 'Your reservation is confirmed: Tue, Jul 14, 2026 at 7:00 PM for 2 guests.', actionUrl: guestVisit.cancelUrl, actionLabel: 'Manage your reservation' }) },
   { id: 'guest-booking-change-proposal', audience: 'guest', title: 'Guest — booking change proposed', message: bookingChangeProposalMessage({ guestName: 'Mina Park', organizationName: studio, heading: 'Please review changes to your booking', intro: 'Your host has requested changes. Your booking stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/preview', actionLabel: 'Review the changes' }) },
-  { id: 'guest-review-request', audience: 'guest', title: 'Guest — review request', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', optOutUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview&optOut=1', reminder: false }) },
-  { id: 'guest-review-reminder', audience: 'guest', title: 'Guest — review reminder', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', optOutUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview&optOut=1', reminder: true }) },
+  { id: 'guest-review-request', audience: 'guest', title: 'Guest — review request', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', optOutUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview&optOut=1', organizationLogoUrl: sampleLogo }) },
   { id: 'article-announcement', audience: 'owner', title: 'KrabiClaw news — new article', message: articleAnnouncementMessage({ title: 'Turning walk-ins into repeat guests', summary: 'Three things the best-performing KrabiClaw sites do after a guest leaves.', coverImageUrl: null, articleUrl: 'https://krabiclaw.com/blog/operations/preview' }) },
 ]

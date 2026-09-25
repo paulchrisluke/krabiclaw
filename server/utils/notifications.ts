@@ -12,7 +12,7 @@ import type { NotificationCategory } from '~/shared/notification-categories'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
-import { locationHero, productHero, resolveHero } from '~/server/notifications/hero'
+import { locationHero, productHero, resolveHero, organizationLogo } from '~/server/notifications/hero'
 import {
   guestBookingCancelledMessage,
   guestBookingReceivedMessage,
@@ -137,7 +137,6 @@ interface ReviewRequestNotificationInput extends OrganizationContext {
   requestId: string
   bookingType: 'reservation' | 'booking'
   bookingId: string
-  kind: 'first' | 'reminder'
   guestName: string
   email: string
   locationName?: string | null
@@ -647,7 +646,10 @@ export async function notifyReservationCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const hero = await resolveHero(() => locationHero(db, opts.organizationId, opts.locationId))
+  const [hero, logoUrl] = await Promise.all([
+    resolveHero(() => locationHero(db, opts.organizationId, opts.locationId)),
+    organizationLogo(db, opts.organizationId),
+  ])
   const ownerMessage = reservationCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.phone ?? null,
     date: prettyDate, time: prettyTime, partySize: opts.guests,
@@ -655,10 +657,10 @@ export async function notifyReservationCreated(
     notes: opts.requests ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestReservationReceivedMessage({
-    guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
-    partySize: opts.guests, notes: opts.requests, locationName: opts.locationName,
-    contactPhone: opts.contactPhone, contactEmail: opts.contactEmail, cancelUrl: opts.cancelUrl,
-    heroImageUrl: hero?.imageUrl ?? null,
+    guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: logoUrl,
+    date: prettyDate, time: prettyTime, partySize: opts.guests, notes: opts.requests,
+    locationName: opts.locationName, contactPhone: opts.contactPhone, contactEmail: opts.contactEmail,
+    cancelUrl: opts.cancelUrl, heroImageUrl: hero?.imageUrl ?? null,
   }), { platformDomain })
 
   const results = await Promise.allSettled([
@@ -697,14 +699,15 @@ export async function notifyReservationCancelled(
   const prettyDate = formatCalendarDate(opts.date, 'en')
   const prettyTime = formatTime(opts.time, 'en')
   const platformDomain = getPlatformDomain(env)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    locationId: opts.locationId,
-    tab: 'reservations',
-    submissionId: opts.reservationId,
-  })
-    ? `Reservation cancelled for ${opts.guestName}`
-    : `Reservation request cancelled by ${opts.guestName}`
+  const [inboxUrl, logoUrl] = await Promise.all([
+    buildOwnerInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      locationId: opts.locationId,
+      tab: 'reservations',
+      submissionId: opts.reservationId,
+    }),
+    organizationLogo(db, opts.organizationId),
+  ])
   const guestCancelTitle = confirmed ? 'Your reservation was cancelled' : 'Your reservation request was cancelled'
 
   const payload = {
@@ -731,6 +734,7 @@ export async function notifyReservationCancelled(
   const guestEmail = await renderNotificationEmail(guestReservationCancelledMessage({
     guestName: opts.guestName, organizationName: restaurant, date: prettyDate, time: prettyTime,
     partySize: opts.guests, notes: opts.requests, locationName: opts.locationName, wasConfirmed: confirmed,
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'reservation',
@@ -876,10 +880,7 @@ export async function notifyReviewRequest(
 ): Promise<void> {
   const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
-  const templateName = opts.kind === 'reminder' ? 'booking_review_reminder' : 'booking_thank_you_review_request'
-  const title = opts.kind === 'reminder'
-    ? `Review reminder for ${opts.bookingPhrase}`
-    : `Review request for ${opts.bookingPhrase}`
+  const logoUrl = await organizationLogo(db, opts.organizationId)
 
   const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
@@ -889,14 +890,14 @@ export async function notifyReviewRequest(
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
     optOutUrl: opts.optOutUrl,
-    reminder: opts.kind === 'reminder',
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
 
   await sendEmailNotification(env, db, {
     ...opts,
     to: opts.email,
-    template: templateName,
-    title,
+    template: 'booking_thank_you_review_request',
+    title: `Review request for ${opts.bookingPhrase}`,
     payload: {
       request_id: opts.requestId,
       booking_type: opts.bookingType,
@@ -910,9 +911,7 @@ export async function notifyReviewRequest(
       organization_name: restaurant,
     },
     email: {
-      subject: opts.kind === 'reminder'
-        ? `Reminder: review ${restaurant}`
-        : `How was your visit to ${restaurant}?`,
+      subject: `How was your visit to ${restaurant}?`,
       html: email.html,
       text: email.text,
     },
@@ -954,7 +953,10 @@ export async function notifyBookingCreated(
     deep_link: inboxUrl ?? '',
   }
 
-  const hero = await resolveHero(() => productHero(db, opts.organizationId, opts.productId))
+  const [hero, logoUrl] = await Promise.all([
+    resolveHero(() => productHero(db, opts.organizationId, opts.productId)),
+    organizationLogo(db, opts.organizationId),
+  ])
   const ownerMessage = bookingCreatedMessage({
     guestName: opts.guestName, guestEmail: opts.email, guestPhone: opts.guestPhone ?? null,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
@@ -962,10 +964,10 @@ export async function notifyBookingCreated(
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
-    guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
-    date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes,
-    contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null, cancelUrl: opts.cancelUrl ?? null,
-    heroImageUrl: hero?.imageUrl ?? null,
+    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl,
+    productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
+    notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,
+    cancelUrl: opts.cancelUrl ?? null, heroImageUrl: hero?.imageUrl ?? null,
   }), { platformDomain })
 
   const results = await Promise.allSettled([
@@ -1007,14 +1009,15 @@ export async function notifyBookingCancelled(
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))
   const prettyTime = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, timeStyle: 'short' }).format(new Date(opts.startsAt))
   const platformDomain = getPlatformDomain(env)
-  const inboxUrl = await buildOwnerInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    locationId: opts.locationId,
-    tab: 'bookings',
-    submissionId: opts.bookingId,
-  })
-    ? `Booking cancelled for ${opts.guestName}`
-    : `Booking request cancelled by ${opts.guestName}`
+  const [inboxUrl, logoUrl] = await Promise.all([
+    buildOwnerInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      locationId: opts.locationId,
+      tab: 'bookings',
+      submissionId: opts.bookingId,
+    }),
+    organizationLogo(db, opts.organizationId),
+  ])
   const guestCancelTitle = confirmed ? 'Your booking was cancelled' : 'Your booking request was cancelled'
 
   const payload = {
@@ -1040,6 +1043,7 @@ export async function notifyBookingCancelled(
   const guestEmail = await renderNotificationEmail(guestBookingCancelledMessage({
     guestName: opts.guestName, organizationName: studio, productTitle: opts.productTitle,
     date: prettyDate, time: prettyTime, partySize: String(opts.partySize), notes: opts.notes, wasConfirmed: confirmed,
+    organizationLogoUrl: logoUrl,
   }), { platformDomain })
   const threadContext = await recordGuestCancellation(db, {
     submissionType: 'booking',

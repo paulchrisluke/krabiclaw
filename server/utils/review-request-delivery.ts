@@ -30,14 +30,11 @@ export async function sendReviewRequestForBooking(
   db: DbClient,
   bookingType: ReviewBookingType,
   bookingId: string,
-  kind: 'first' | 'reminder' = 'first',
 ): Promise<{ sent: boolean; requestId: string; error?: string }> {
   const context = await getReviewBookingContext(db, bookingType, bookingId)
   if (!context) throw new Error('Booking not found')
   if (!context.location_slug) throw new Error('Booking location is missing a public slug')
-  if (kind === 'first' && context.review_request_sent_at) throw new Error('Review request has already been sent')
-  if (kind === 'reminder' && !context.review_request_sent_at) throw new Error('Cannot send reminder before first request')
-  if (kind === 'reminder' && context.review_reminder_sent_at) throw new Error('Review reminder has already been sent')
+  if (context.review_request_sent_at) throw new Error('Review request has already been sent')
   const recipientEmail = context.customer_email || context.guest_email || ''
   if (!recipientEmail) throw new Error('Booking customer has no email address')
 
@@ -54,7 +51,6 @@ export async function sendReviewRequestForBooking(
       requestId: request.id,
       bookingType,
       bookingId,
-      kind,
       guestName: context.customer_name || context.guest_name || 'there',
       email: recipientEmail,
       locationName: context.location_title,
@@ -64,7 +60,7 @@ export async function sendReviewRequestForBooking(
       reviewUrl,
       optOutUrl,
     })
-    await markReviewRequestSendSuccess(db, request.id, kind)
+    await markReviewRequestSendSuccess(db, request.id)
     return { sent: true, requestId: request.id }
   } catch (error) {
     await markReviewRequestSendFailure(db, request.id, error)

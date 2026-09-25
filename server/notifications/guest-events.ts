@@ -68,6 +68,7 @@ export function organizationInviteMessage(input: {
 export interface GuestBookingInput {
   guestName: string
   organizationName: string
+  organizationLogoUrl?: string | null
   productTitle?: string | null
   date: string
   time: string
@@ -108,6 +109,7 @@ export function guestReservationReceivedMessage(input: GuestBookingInput): Notif
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -120,6 +122,7 @@ export function guestReservationCancelledMessage(input: GuestBookingInput & { wa
     sections: contactSection(input),
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -135,6 +138,7 @@ export function guestBookingReceivedMessage(input: GuestBookingInput & { product
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -147,6 +151,7 @@ export function guestBookingCancelledMessage(input: GuestBookingInput & { produc
     sections: contactSection(input),
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -235,14 +240,13 @@ export function reviewRequestMessage(input: {
   partySize: string
   reviewUrl: string
   optOutUrl: string
-  reminder: boolean
+  organizationLogoUrl?: string | null
 }): NotificationMessage {
   return {
-    title: input.reminder ? `How was your visit to ${input.organizationName}?` : `Thanks for visiting ${input.organizationName}`,
-    preheader: input.reminder
-      ? `${input.organizationName} is still hoping to hear how it went.`
-      : `${input.organizationName} would love to hear how everything went.`,
+    title: `Thanks for visiting ${input.organizationName}`,
+    preheader: `${input.organizationName} would love to hear how everything went.`,
     hero: null,
+    organizationLogoUrl: input.organizationLogoUrl,
     intro: `Thanks for visiting, ${input.guestName}. A couple of lines helps other guests know what to expect.`,
     facts: facts(
       fact('visitAt', 'Visit', input.visitAt),
