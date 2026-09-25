@@ -1,4 +1,4 @@
-import { APIError, betterAuth } from 'better-auth'
+import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
@@ -28,6 +28,7 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
+import { cleanupOrganizationBeforeDelete } from '~/server/utils/tenant-deletion'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -55,11 +56,33 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  // KrabiClaw performs the external-resource cleanup before asking the
-  // organization adapter to delete the row. Keep the raw plugin route closed so
-  // callers cannot bypass that cleanup.
-  disableOrganizationDeletion: true,
 } as const
+
+
+/**
+ * Better Auth Stripe wraps the organization plugin's delete hook with its own
+ * subscription guard. This plugin is deliberately registered after Stripe so
+ * that provider-owned billing checks run first; only then do we release the
+ * KrabiClaw resources Better Auth cannot know about.
+ */
+function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin {
+  return {
+    id: 'organization-deletion-cleanup',
+    init(ctx) {
+      const orgPlugin = ctx.getPlugin('organization')
+      if (!orgPlugin) throw new Error('Organization plugin is required')
+      const existingHooks = orgPlugin.options.organizationHooks ?? {}
+      const beforeDeleteOrganization = existingHooks.beforeDeleteOrganization
+      orgPlugin.options.organizationHooks = {
+        ...existingHooks,
+        beforeDeleteOrganization: async (data, hookCtx) => {
+          await beforeDeleteOrganization?.(data, hookCtx)
+          await cleanupOrganizationBeforeDelete(env, data.organization.id)
+        },
+      }
+    },
+  }
+}
 
 async function configureCimdTenantScopes(event: {
   client: SchemaClient<Scope[]>
@@ -253,9 +276,9 @@ export function createAuth(env: CloudflareEnv) {
       },
     },
     user: {
-      // Account deletion is exposed through /api/user/delete-account so
-      // KrabiClaw can resolve organization ownership and external resources
-      // before Better Auth removes the user and sessions.
+      deleteUser: {
+        enabled: true,
+      },
     },
     rateLimit: {
       customRules: {
@@ -518,6 +541,7 @@ export function createAuth(env: CloudflareEnv) {
           await handleStripeGa4Event(env, db, stripeClient, event)
         },
       }),
+      organizationDeletionCleanupPlugin(env),
       admin({
         ac: platformAdminAccessControl,
         adminRoles: ['admin'],
