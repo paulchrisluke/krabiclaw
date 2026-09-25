@@ -1079,33 +1079,21 @@
         <h2><strong>Account and organization deletion</strong></h2>
         <p>
           <span style="font-weight: 400"
-            >Krabiclaw provides controls to permanently delete an account or
-            organization after explicit destructive confirmation. Account
-            deletion is blocked if the account holder is the sole owner of an
-            organization that still has other members. The account holder must
-            first promote another existing member to owner or otherwise resolve
-            that membership. Krabiclaw does not automatically choose or promote
-            a successor.</span
-          >
-        </p>
-        <p>
-          <span style="font-weight: 400"
-            >If another owner already exists, deleting the account does not
-            delete that organization. If the account holder is both the sole
-            owner and sole member of an organization, that organization may be
-            deleted as part of account deletion.</span
-          >
-        </p>
-        <p>
-          <span style="font-weight: 400"
-            >An organization owner may permanently delete an organization even
-            when other members exist. The deletion confirmation identifies the
-            organization and explains that its data will be deleted and other
-            members will lose access. Krabiclaw notifies affected members using
-            its existing notification or email systems. If the organization has
-            an active or trialing paid subscription, Krabiclaw cancels that
-            subscription as part of the deletion process before removing the
+            >Krabiclaw provides separate controls to permanently delete an
+            account or organization after explicit destructive confirmation.
+            Deleting an account does not by itself delete an organization.
+            Organization deletion is a separate action subject to the
+            permissions and billing controls applicable to that
             organization.</span
+          >
+        </p>
+        <p>
+          <span style="font-weight: 400"
+            >When an organization is deleted, its organization data is removed
+            and its members lose access. If an active subscription or other
+            provider condition prevents organization deletion, it must be
+            resolved through the applicable billing or provider controls before
+            deletion can complete.</span
           >
         </p>
         <p>
