@@ -21,8 +21,8 @@ const org = useBlawbyOrgIdentity(identity, compliance)
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/contact',
-  title: page.value?.seo_title || `Contact | ${identity.value.name}`,
-  description: page.value?.seo_description || page.value?.summary || '',
+  title: `${page.value?.title || 'Contact'} | ${identity.value.name}`,
+  description: page.value?.summary || '',
   brand: {
     organizationName: identity.value.name,
   },
@@ -33,8 +33,8 @@ useProfessionalServiceSchema(() => ({
   recipe: 'contact',
   org: org.value,
   pageUrl: canonicalUrl.value,
-  pageTitle: page.value?.seo_title || page.value?.title || '',
-  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  pageTitle: page.value?.title || '',
+  pageDescription: page.value?.summary || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Contact', url: canonicalUrl.value },

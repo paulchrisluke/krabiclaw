@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9d382f936ef19e6ece57a5a05593dcdf9439c387c62977fa8a992e13ff1fbeee",
+  "fingerprint": "sha256:f8694db1ce92f2dccbe29e489cb720e36e5ca29795b12b4f8ae63b041448043a",
   "tools": [
     {
       "name": "append_content_block",
@@ -3141,12 +3141,6 @@
             },
             "type": "array"
           },
-          "canonicalUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "locale": {
             "type": [
               "string",
@@ -3179,18 +3173,6 @@
           },
           "recipe": {
             "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seoDescription": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seoTitle": {
             "type": [
               "string",
               "null"
@@ -15850,12 +15832,6 @@
             },
             "type": "array"
           },
-          "canonicalUrl": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "confirmation_token": {
             "type": "string"
           },
@@ -15892,18 +15868,6 @@
               "type": "string"
             },
             "type": "array"
-          },
-          "seoDescription": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seoTitle": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "sortOrder": {
             "description": "The page's position in the site's page list. Send the sort_order from the last read unless you are reordering.",

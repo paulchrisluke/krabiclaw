@@ -141,8 +141,8 @@ function trackLinkClick(item: PublicLinksItem) {
 
 useSocialMetadata(() => ({
   path: '/links',
-  title: linksPage.value?.page.seo_title || linksPage.value?.page.title || brandName.value,
-  description: linksPage.value?.page.seo_description || linksPage.value?.organization.brand_description || '',
+  title: linksPage.value?.page.title || brandName.value,
+  description: linksPage.value?.organization.brand_description || '',
   discoverability: 'unlisted',
   brand: { organizationName: brandName.value },
 }))

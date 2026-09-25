@@ -26,7 +26,6 @@ import {
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { refreshSocialCard } from '~/server/utils/social-card'
-import { normalizeDomain } from '~/server/utils/domain-shared'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { buildSingleMediaPlacementQueries, insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
@@ -45,9 +44,6 @@ export interface TenantPageEditorInput {
   path: string
   title: string
   summary?: string | null
-  seoTitle?: string | null
-  seoDescription?: string | null
-  canonicalUrl?: string | null
   pageType?: TenantPageType
   recipe?: string | null
   sortOrder?: number | null
@@ -68,9 +64,6 @@ export interface TenantPageDto {
   path: string
   title: string
   summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
   page_type: TenantPageType
   recipe: string | null
   sort_order: number
@@ -87,9 +80,6 @@ interface PageRepresentationRow {
   path: string
   title: string
   summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
   page_type: TenantPageType
   recipe: string | null
   sort_order: number
@@ -126,9 +116,6 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
     path,
     title: asString(input.title, 'title', true)!,
     summary: asString(input.summary, 'summary'),
-    seoTitle: asString(input.seoTitle, 'seoTitle'),
-    seoDescription: asString(input.seoDescription, 'seoDescription'),
-    canonicalUrl: asString(input.canonicalUrl, 'canonicalUrl'),
     pageType,
     recipe: asString(input.recipe, 'recipe'),
   }
@@ -172,18 +159,6 @@ async function assertTenantPageSupport(env: CloudflareEnv, db: DbClient, organiz
       if (!blockDefinition(block.type).allowedPageTypes.includes(pageType)) {
         badRequest(`Block type "${block.type}" is not supported by page type "${pageType}"`)
       }
-    }
-  }
-  const canonicalUrl = input.canonicalUrl?.trim() || null
-  if (canonicalUrl) {
-    let parsed: URL
-    try { parsed = new URL(canonicalUrl) } catch { badRequest('canonicalUrl must be an absolute HTTP(S) URL') }
-    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) badRequest('canonicalUrl must be an absolute HTTP(S) URL')
-    const allowedHosts = await queryAll<{ domain: string }>(db, `
-      SELECT domain FROM organization_domains WHERE organization_id = ? AND status = 'active'
-    `, [organizationId])
-    if (!allowedHosts.some(row => normalizeDomain(row.domain) === normalizeDomain(parsed.hostname))) {
-      badRequest('canonicalUrl must use an approved domain for this organization')
     }
   }
 }
@@ -305,7 +280,7 @@ export interface TenantPageScope {
 async function getPageRepresentation(db: DbClient, variantId: string, scope?: TenantPageScope): Promise<PageRepresentationRow | null> {
   return await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
+    '       v.title, v.summary,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.id = ? AND (? IS NULL OR v.organization_id = ?) LIMIT 1`,
@@ -458,9 +433,6 @@ function pageDto(row: PageRepresentationRow, document: TenantPageDocument, block
     path: row.path,
     title: row.title,
     summary: row.summary,
-    seo_title: row.seo_title,
-    seo_description: row.seo_description,
-    canonical_url: row.canonical_url,
     page_type: row.page_type,
     recipe: row.recipe,
     sort_order: row.sort_order,
@@ -474,7 +446,7 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
   const locale = await resolveLocale(db, organizationId, opts.locale)
   const rows = await queryAll<PageRepresentationRow>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
+    '       v.title, v.summary,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? ORDER BY p.sort_order ASC, v.title ASC`,
@@ -521,7 +493,7 @@ export async function getPublishedTenantPage(db: DbClient, organizationId: strin
   const normalizedPath = normalizeTenantPagePath(path)
   const selectPublished = async (candidateLocale: string) => await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url,',
+    '       v.title, v.summary,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     " WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ? LIMIT 1",
@@ -621,8 +593,7 @@ export async function createTenantPagesBatch(
     const prepared = prepareContentDocumentWithBlocks({
       id: variantId, rowRole: 'root', locale: 'en', organizationId: input.organizationId, kind: 'page',
       metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages',
-      path, title: metadata.title, summary: metadata.summary, seoTitle: metadata.seoTitle, seoDescription: metadata.seoDescription,
-      canonicalUrl: metadata.canonicalUrl, createdBy: input.userId, updatedBy: input.userId,
+      path, title: metadata.title, summary: metadata.summary, createdBy: input.userId, updatedBy: input.userId,
     }, blocksAsInputs(blocks), {
       additionalQueriesAfter: placementQueries,
     })
@@ -645,9 +616,6 @@ export interface OnboardingTenantPageInput {
   path: string
   title: string
   summary: string | null
-  seoTitle: string | null
-  seoDescription: string | null
-  canonicalUrl: string | null
   pageType: TenantPageType
   recipe: string | null
   blocks: unknown
@@ -678,8 +646,7 @@ export async function applyOnboardingTenantPages(
   const locale = await resolveLocale(db, input.organizationId, 'en')
   const existingRows = await queryAll<OnboardingPageRepresentationRow>(db, `
     SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale,
-           v.path, v.title, v.summary, v.seo_title,
-           v.seo_description, v.canonical_url, json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe,
+           v.path, v.title, v.summary, json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe,
            p.sort_order, v.updated_at,
            v.created_at
       FROM content_documents v
@@ -728,7 +695,6 @@ export async function applyOnboardingTenantPages(
     const prepared = prepareContentDocumentUpdate(document, {
       blocks: blocksAsInputs(blocks), expected_updated_at: row.updated_at,
       changes: { path: page.path, title: metadata.title, summary: metadata.summary,
-        seo_title: metadata.seoTitle, seo_description: metadata.seoDescription, canonical_url: metadata.canonicalUrl,
         updated_by: input.userId,
         metadata: { page_type: metadata.pageType, recipe: metadata.recipe } },
       additionalQueriesAfter: placementQueries,
@@ -755,9 +721,6 @@ export async function applyOnboardingTenantPages(
           path: page.path,
           title: page.title,
           summary: page.summary,
-          seoTitle: page.seoTitle,
-          seoDescription: page.seoDescription,
-          canonicalUrl: page.canonicalUrl,
           pageType: page.pageType,
           recipe: page.recipe,
           blocks: page.blocks,
@@ -823,8 +786,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
       rowRole: 'root', locale: 'en', metadata: { page_type: metadata.pageType, recipe: metadata.recipe }, source: 'pages',
       ...(typeof effectiveData.sortOrder === 'number' ? { sortOrder: effectiveData.sortOrder } : {}),
     }),
-    path, title: metadata.title, summary: metadata.summary, seoTitle: metadata.seoTitle, seoDescription: metadata.seoDescription,
-    canonicalUrl: metadata.canonicalUrl, createdBy: input.userId, updatedBy: input.userId,
+    path, title: metadata.title, summary: metadata.summary, createdBy: input.userId, updatedBy: input.userId,
   }
   await createContentDocumentWithBlocks(db, representation, blocksAsInputs(blocks), {
     additionalQueriesAfter: [...placementQueries, publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-create')],
@@ -1007,8 +969,8 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
       ]
     : []
   const updateVariant: BatchQuery = {
-    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
-    params: [path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, input.userId, variantId, input.scope.organizationId],
+    query: 'UPDATE content_documents SET path = ?, title = ?, summary = ?, updated_by = ? WHERE id = ? AND organization_id = ?',
+    params: [path, metadata.title, metadata.summary, input.userId, variantId, input.scope.organizationId],
   }
   const updatePage: BatchQuery = {
     query: `UPDATE content_documents SET metadata_json = json_set(metadata_json, '$.page_type', ?, '$.recipe', ?),
