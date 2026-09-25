@@ -61,6 +61,8 @@ export interface NotificationMessage {
   category: NotificationCategory
   /** The tenant this is sent on behalf of, for the footer. Null for platform mail. */
   organizationName?: string | null
+  /** The tenant's logo URL, rendered in the header avatar stack alongside KrabiClaw. */
+  organizationLogoUrl?: string | null
 }
 
 export function leadFacts(message: NotificationMessage): NotificationFact[] {

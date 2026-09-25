@@ -68,6 +68,7 @@ export function organizationInviteMessage(input: {
 export interface GuestBookingInput {
   guestName: string
   organizationName: string
+  organizationLogoUrl?: string | null
   productTitle?: string | null
   date: string
   time: string
@@ -108,6 +109,7 @@ export function guestReservationReceivedMessage(input: GuestBookingInput): Notif
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -120,6 +122,7 @@ export function guestReservationCancelledMessage(input: GuestBookingInput & { wa
     sections: contactSection(input),
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -135,6 +138,7 @@ export function guestBookingReceivedMessage(input: GuestBookingInput & { product
     finePrint: input.cancelUrl ? 'The link above stays valid for 30 days.' : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 

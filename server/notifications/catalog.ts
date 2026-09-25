@@ -67,10 +67,13 @@ const reservation = {
 // A real tenant asset, so the preview shows what a hero actually looks like
 // rather than a message that happens to have none.
 const sampleCover = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/public'
+// A real tenant logo asset from D1, so the preview shows the logo stack in the header.
+const sampleLogo = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/881bb3e2-b2eb-47e0-9e05-152bfa0f1dba/thumbnail'
 
 const booking = {
   ...reservation,
   heroImageUrl: sampleCover,
+  organizationLogoUrl: sampleLogo,
   guestName: 'Mina Park',
   guestEmail: 'mina@example.com',
   guestPhone: '+66 76 000 0002',
@@ -85,6 +88,7 @@ const booking = {
 const guestVisit = {
   guestName: 'Alex Carter',
   organizationName: restaurant,
+  organizationLogoUrl: sampleLogo,
   date: 'Tue, Jul 14, 2026',
   time: '7:00 PM',
   partySize: '2 guests',

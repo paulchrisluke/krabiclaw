@@ -19,6 +19,8 @@ export default defineComponent({
     preheader: { type: String, required: true },
     /** The tenant this is sent for, named in the footer. Null for platform mail. */
     organizationName: { type: String as PropType<string | null>, default: null },
+    /** The tenant's logo URL, rendered in front in the avatar stack. */
+    organizationLogoUrl: { type: String as PropType<string | null>, default: null },
     /** Where someone chooses what they receive, rather than switching it all off. */
     preferencesUrl: { type: String as PropType<string | null>, default: null },
     unsubscribeUrl: { type: String as PropType<string | null>, default: null },
@@ -34,6 +36,9 @@ export default defineComponent({
     return () => {
       const preferencesUrl = props.preferencesUrl
       const unsubscribeUrl = props.unsubscribeUrl
+      const orgName = props.organizationName
+      const orgLogo = props.organizationLogoUrl
+
       return h(EHtml, { lang: 'en', dir: 'ltr' }, () => [
         h(EHead, null, () => [
           h('meta', { name: 'color-scheme', content: 'light dark' }),
@@ -47,6 +52,8 @@ export default defineComponent({
               .email-body hr, .email-divider { border-color: ${dark.border} !important; }
               .email-label, .email-footer { color: ${dark.textDimmed} !important; }
               .email-footer a { color: ${dark.textMuted} !important; }
+              .email-avatar-ring { border-color: ${dark.surface} !important; }
+              .email-header-name { color: ${dark.text} !important; }
               /* The hero's letterbox is the page behind the picture, so it
                  follows the scheme rather than staying a light band. */
               .email-hero-img { background-color: ${dark.bg} !important; }
@@ -76,14 +83,50 @@ export default defineComponent({
             class: 'email-surface email-body',
             style: `max-width:${layout.width};margin:0 auto;background:${light.surface};`,
           }, () => [
-            h(ESection, { class: 'email-gutter', style: `padding:32px ${layout.gutter} 0` }, () => [
-              h(EImg, {
-                src: `${origin}/krabi-claw-logo.png`,
-                alt: 'KrabiClaw',
-                width: '64',
-                height: '64',
-                style: 'display:block;width:64px;height:64px',
-              }),
+            h(ESection, { class: 'email-gutter', style: `padding:24px ${layout.gutter} 0` }, () => [
+              h('table', { role: 'presentation', cellPadding: '0', cellSpacing: '0', style: 'border-collapse:collapse' }, [
+                h('tbody', null, [
+                  h('tr', null, [
+                    h('td', { style: 'vertical-align:middle;line-height:0' }, [
+                      // Avatar stack: tenant logo in front (top z-order), KrabiClaw mark overlapping behind.
+                      orgLogo
+                        ? [
+                            h(EImg, {
+                              class: 'email-avatar-ring',
+                              src: orgLogo,
+                              alt: orgName ?? 'Logo',
+                              width: '36',
+                              height: '36',
+                              style: `display:inline-block;vertical-align:middle;width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid ${light.surface};position:relative;z-index:2`,
+                            }),
+                            h(EImg, {
+                              class: 'email-avatar-ring',
+                              src: `${origin}/krabi-claw-logo.png`,
+                              alt: 'KrabiClaw',
+                              width: '26',
+                              height: '26',
+                              style: `display:inline-block;vertical-align:middle;width:26px;height:26px;border-radius:50%;border:2px solid ${light.surface};margin-left:-10px;position:relative;z-index:1`,
+                            }),
+                          ]
+                        : h(EImg, {
+                            src: `${origin}/krabi-claw-logo.png`,
+                            alt: 'KrabiClaw',
+                            width: '32',
+                            height: '32',
+                            style: 'display:inline-block;vertical-align:middle;width:32px;height:32px',
+                          }),
+                    ]),
+                    orgName
+                      ? h('td', { style: 'vertical-align:middle;padding-left:12px' }, [
+                          h('span', {
+                            class: 'email-header-name',
+                            style: `font-size:15px;font-weight:700;letter-spacing:-0.2px;color:${light.text};font-family:${font.body};line-height:1`,
+                          }, orgName),
+                        ])
+                      : null,
+                  ]),
+                ]),
+              ]),
             ]),
             slots.default?.(),
             h(ESection, { class: 'email-gutter', style: `padding:40px ${layout.gutter} 40px` }, () => [

@@ -28,6 +28,7 @@ export const NotificationEmail = defineComponent({
       return h(EmailFrame, {
         preheader: message.preheader,
         organizationName: message.organizationName ?? null,
+        organizationLogoUrl: message.organizationLogoUrl ?? null,
         preferencesUrl: props.preferencesUrl,
         unsubscribeUrl: props.unsubscribeUrl,
         platformDomain: props.platformDomain,
