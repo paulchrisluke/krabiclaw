@@ -738,7 +738,11 @@ export function validateTenantPageSnapshot(value: unknown): TenantPageSnapshot {
     path: normalizeTenantPagePath(asString(metadata.path, 'snapshot.metadata.path', true)!),
     title: asString(metadata.title, 'snapshot.metadata.title', true)!,
     summary: asString(metadata.summary, 'snapshot.metadata.summary'),
-    pageType: asString(metadata.pageType, 'snapshot.metadata.pageType', true)! as TenantPageType,
+    pageType: (() => {
+      const type = asString(metadata.pageType, 'snapshot.metadata.pageType', true)!
+      if (!TENANT_PAGE_TYPES.includes(type as TenantPageType)) throw new Error('snapshot.metadata.pageType is invalid.')
+      return type as TenantPageType
+    })(),
     recipe: asString(metadata.recipe, 'snapshot.metadata.recipe'),
   }
   const blocks = normalizeTenantPageBlocks(snapshot.blocks)
