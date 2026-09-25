@@ -2158,76 +2158,25 @@
         <h3><strong>14.2.1 Account and Organization Deletion</strong></h3>
         <p>
           <span style="font-weight: 400"
-            >Account and organization deletion are permanent destructive actions
-            that execute after explicit confirmation rather than after a
-            scheduled grace period.</span
+            >Account and organization deletion are separate permanent
+            destructive actions that execute after explicit confirmation rather
+            than after a scheduled grace period.</span
           >
         </p>
-        <p><span style="font-weight: 400">Account deletion is subject to the following rules:</span></p>
-        <ul>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >if you are the sole owner and sole member of an organization,
-              that organization may be deleted as part of deleting your
-              account;</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >if you are the sole owner but other members remain, account
-              deletion is blocked until another existing member is promoted to
-              owner or the organization or membership is otherwise
-              resolved;</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >Krabiclaw does not automatically select or promote a successor;
-              and</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >if another owner already exists, deleting your account does not
-              delete that organization.</span
-            >
-          </li>
-        </ul>
-        <p><span style="font-weight: 400">Organization deletion is subject to the following rules:</span></p>
-        <ul>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >an authorized organization owner may delete the organization even
-              when other members exist;</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >organization deletion requires explicit destructive confirmation
-              identifying the organization and stating that its data will be
-              deleted and other members will lose access;</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >Krabiclaw notifies affected members through its existing
-              notification or email systems; and</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <span style="font-weight: 400"
-              >if the organization has an active or trialing paid subscription,
-              you authorize Krabiclaw to cancel that subscription immediately as
-              part of the deletion process before the organization is
-              removed.</span
-            >
-          </li>
-        </ul>
         <p>
           <span style="font-weight: 400"
-            >Deleting your account does not cancel or otherwise alter a
-            subscription belonging to an organization that survives because
-            another owner remains.</span
+            >Deleting your account does not by itself delete an organization.
+            Organization deletion is subject to the permissions and billing
+            controls applicable to that organization.</span
+          >
+        </p>
+        <p>
+          <span style="font-weight: 400"
+            >When an organization is deleted, its organization data is removed
+            and its members lose access. If an active subscription or other
+            provider condition prevents organization deletion, you must resolve
+            it through the applicable billing or provider controls before
+            deletion can complete.</span
           >
         </p>
         <h3><strong>14.3 Suspension or Termination by Krabiclaw</strong></h3>
