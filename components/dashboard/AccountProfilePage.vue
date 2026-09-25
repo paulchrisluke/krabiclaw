@@ -396,49 +396,19 @@ const deleteConfirmText = ref('')
 const deleting = ref(false)
 const deleteError = ref('')
 
-interface DeleteErrorBody {
-  error?: string
-  message?: string
-}
-
-function getDeleteErrorBody(error: unknown): DeleteErrorBody {
-  if (error instanceof ApiClientError) {
-    return {
-      error: typeof error.data.error === 'string' ? error.data.error : undefined,
-      message: error.message,
-    }
-  }
-  if (!error || typeof error !== 'object') return {}
-  const record = error as Record<string, unknown>
-  const data = record.data
-  if (data && typeof data === 'object') return data as DeleteErrorBody
-  const response = record.response
-  if (response && typeof response === 'object') {
-    const responseData = (response as Record<string, unknown>)._data
-    if (responseData && typeof responseData === 'object') return responseData as DeleteErrorBody
-  }
-  return {}
-}
-
-// Account deletion is immediate after the user types DELETE. The server resolves
-// organization ownership, cancels subscriptions for organizations that are
-// deleted with the account, releases external resources, then removes the user.
+// Better Auth owns account deletion and session/cookie invalidation. The
+// dashboard adds only the explicit destructive confirmation.
 async function confirmDeleteAccount() {
   if (deleteConfirmText.value !== 'DELETE') return
   deleting.value = true
   deleteError.value = ''
 
   try {
-    const res = await applicationFetch<{ success?: boolean }>('/api/user/delete-account', {
-      method: 'POST',
-      validate: (value): value is { success?: boolean } =>
-        isRecord(value) && (value.success === undefined || typeof value.success === 'boolean'),
-    })
-    if (res?.success !== true) throw new Error('Account deletion failed. Please try again.')
+    const { error } = await authClient.deleteUser()
+    if (error) throw new Error(error.message || 'Account deletion failed. Please try again.')
     await navigateTo('/', { replace: true })
-  } catch (_err) {
-    const body = getDeleteErrorBody(_err instanceof Error ? _err : new Error(String(_err)))
-    deleteError.value = body?.message ?? 'Account deletion failed. Please try again.'
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : 'Account deletion failed. Please try again.'
   } finally {
     deleting.value = false
   }
