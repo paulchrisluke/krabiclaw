@@ -63,10 +63,7 @@ export interface TenantPageSnapshotMetadata {
   path: string
   title: string
   summary: string | null
-  seoTitle: string | null
-  seoDescription: string | null
-  canonicalUrl: string | null
-  pageType: string
+  pageType: TenantPageType
   recipe: string | null
 }
 
@@ -741,15 +738,8 @@ export function validateTenantPageSnapshot(value: unknown): TenantPageSnapshot {
     path: normalizeTenantPagePath(asString(metadata.path, 'snapshot.metadata.path', true)!),
     title: asString(metadata.title, 'snapshot.metadata.title', true)!,
     summary: asString(metadata.summary, 'snapshot.metadata.summary'),
-    seoTitle: asString(metadata.seoTitle, 'snapshot.metadata.seoTitle'),
-    seoDescription: asString(metadata.seoDescription, 'snapshot.metadata.seoDescription'),
-    canonicalUrl: asString(metadata.canonicalUrl, 'snapshot.metadata.canonicalUrl'),
-    pageType: asString(metadata.pageType, 'snapshot.metadata.pageType', true)!,
+    pageType: asString(metadata.pageType, 'snapshot.metadata.pageType', true)! as TenantPageType,
     recipe: asString(metadata.recipe, 'snapshot.metadata.recipe'),
-  }
-  if (normalizedMetadata.canonicalUrl) {
-    const canonical = new URL(normalizedMetadata.canonicalUrl)
-    if (!['http:', 'https:'].includes(canonical.protocol)) throw new Error('snapshot.metadata.canonicalUrl must use HTTP(S).')
   }
   const blocks = normalizeTenantPageBlocks(snapshot.blocks)
   if (byteLength({ schemaVersion: TENANT_PAGE_SCHEMA_VERSION, metadata: normalizedMetadata, blocks }) > 256 * 1024) {

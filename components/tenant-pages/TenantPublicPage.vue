@@ -175,16 +175,16 @@ useProfessionalServiceSchema(() => {
     org: schemaOrg.value,
     pageUrl: page.value.path,
     pageTitle: page.value.title,
-    pageDescription: page.value.seo_description || page.value.summary,
+    pageDescription: page.value.summary,
     faqs: faqItems,
     items: serviceItems,
     donationUrl,
   }
 })
 useSocialMetadata(() => page.value && ({
-  path: page.value.canonical_url || page.value.path,
-  title: page.value.seo_title || `${page.value.title} | ${organization?.name || ''}`,
-  description: page.value.seo_description || page.value.summary || '',
+  path: page.value.path,
+  title: `${page.value.title} | ${organization?.name || ''}`,
+  description: page.value.summary || '',
   // KrabiClaw's own brand name is the platform name, which useSocialMetadata
   // already states once for every platform surface; a tenant states its own.
   ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),

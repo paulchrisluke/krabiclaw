@@ -38,8 +38,8 @@ const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) 
 
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
-  title: page.value?.seo_title || `Articles | ${identity.value.name}`,
-  description: page.value?.seo_description || page.value?.summary || '',
+  title: `${page.value?.title || 'Articles'} | ${identity.value.name}`,
+  description: page.value?.summary || '',
   brand: {
     organizationName: identity.value.name,
   },
@@ -51,7 +51,7 @@ useProfessionalServiceSchema(() => ({
   org: org.value,
   pageUrl: canonicalUrl.value,
   pageTitle: heroTitle.value,
-  pageDescription: page.value?.seo_description || page.value?.summary || null,
+  pageDescription: page.value?.summary || null,
   breadcrumbs: [
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: canonicalUrl.value },

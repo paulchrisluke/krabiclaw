@@ -31,9 +31,6 @@ export interface PublicTenantPage {
   path: string
   title: string
   summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
   page_type: string
   recipe: string | null
   sort_order: number
@@ -442,9 +439,6 @@ function mapPage(
     path: page.path,
     title: page.title,
     summary: page.summary,
-    seo_title: page.seo_title,
-    seo_description: page.seo_description,
-    canonical_url: page.canonical_url,
     page_type: page.page_type,
     recipe: page.recipe,
     sort_order: page.sort_order,
@@ -507,10 +501,7 @@ export async function getPublicTenantPageForPath(
     sourcePath: await resolvePublicDocumentSourcePath(db, organizationId, page.page_id),
     documentId: page.page_id,
   })
-  const publicPage = page.locale === sourceLocale.locale
-    ? page
-    : { ...page, seo_title: page.title, seo_description: page.summary }
-  return mapPage(publicPage, blocks, localizedMedia, localeRepresentations)
+  return mapPage(page, blocks, localizedMedia, localeRepresentations)
 }
 
 async function resolveVariantId(db: DbClient, organizationId: string, path: string, locale?: string | null): Promise<string> {

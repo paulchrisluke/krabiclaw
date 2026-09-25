@@ -61,8 +61,6 @@ export const SECTION_LABELS = {
   sections: 'Sections',
   title: 'Title',
   summary: 'Summary',
-  search: 'Search appearance',
-  canonical: 'Canonical URL',
 } as const
 export type SectionKey = keyof typeof SECTION_LABELS
 
@@ -142,10 +140,6 @@ const sectionsSummary = computed(() => {
   return count === 1 ? '1 section' : `${count} sections`
 })
 
-const searchSummary = computed(() => {
-  return draft.value.seo_title.trim() || 'Falls back to the page title'
-})
-
 /**
  * Creating asks for the title and nothing else: everything below describes a
  * page that does not exist yet, and has nowhere to hang until it does.
@@ -177,26 +171,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           summary: preview(draft.value.summary, 'Nothing written yet'),
           placeholder: !draft.value.summary.trim(),
           to: `${recordPath.value}/summary`,
-        },
-      ],
-    },
-    {
-      id: 'search',
-      label: 'Search',
-      items: [
-        {
-          id: 'search',
-          label: 'Search appearance',
-          summary: searchSummary.value,
-          placeholder: !draft.value.seo_title.trim(),
-          to: `${recordPath.value}/search`,
-        },
-        {
-          id: 'canonical',
-          label: 'Canonical URL',
-          summary: preview(draft.value.canonical_url, 'This page’s own address'),
-          placeholder: !draft.value.canonical_url.trim(),
-          to: `${recordPath.value}/canonical`,
         },
       ],
     },
@@ -346,9 +320,6 @@ async function savePageLocalization(locale: string, submitted: Record<string, un
     path: source.path,
     title: title.trim(),
     summary: typeof submitted.summary === 'string' ? submitted.summary : '',
-    seoTitle: null,
-    seoDescription: null,
-    canonicalUrl: null,
     pageType: source.page_type,
     recipe: source.recipe || null,
     sortOrder: source.sort_order,
