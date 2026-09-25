@@ -36,9 +36,6 @@ export type DashboardOrganizationRow = ResolvedMembership & {
   id: string
   name: string
   slug: string
-  // Set while a deletion is pending: the tenant keeps serving until the
-  // deletion-sweep task runs, and an owner can cancel until then.
-  deletionScheduledAt: string | null
 } & DashboardOrganizationConfig
 
 const ORGANIZATION_CONFIG_SQL = `
