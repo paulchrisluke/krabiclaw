@@ -23,7 +23,7 @@ export interface DashboardGuestThreadListQuery {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
-  occurrence?: 'upcoming' | 'past' | null
+  mailbox?: 'current' | 'past' | null
 }
 
 export interface OrganizationGuestThreadListQuery extends DashboardGuestThreadListQuery {
@@ -45,7 +45,7 @@ export function parseGuestThreadListQuery(
 
   const type = read('type')
   const conversationState = read('conversation_state')
-  const occurrence = read('occurrence')
+  const mailbox = read('mailbox')
   return {
     organizationId: read('organization_id') || null,
     locationId: read('location_id') || null,
@@ -54,13 +54,13 @@ export function parseGuestThreadListQuery(
       ? conversationState as ConversationState
       : null,
     unreadOnly: query.unread === '1' || query.unread === 'true',
-    occurrence: occurrence === 'past' || occurrence === 'upcoming' ? occurrence : null,
+    mailbox: mailbox === 'current' || mailbox === 'past' ? mailbox : null,
   }
 }
 
 // `org` is the dashboard's route scope, not a filter, and is read elsewhere.
 const GUEST_THREAD_LIST_PARAMS = new Set([
-  'organization_id', 'location_id', 'type', 'conversation_state', 'unread', 'occurrence', 'org',
+  'organization_id', 'location_id', 'type', 'conversation_state', 'unread', 'mailbox', 'org',
 ])
 
 /**
@@ -84,7 +84,7 @@ export async function listDashboardGuestThreadsForPrincipal(
     userId,
     type: query.type ?? null,
     conversationState: query.conversationState ?? null,
-    occurrence: query.occurrence ?? null,
+    mailbox: query.mailbox ?? null,
     unreadOnly: query.unreadOnly ?? false,
   }
   const [threads, summary] = await Promise.all([

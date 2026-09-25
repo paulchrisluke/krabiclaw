@@ -4,7 +4,7 @@ import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
-import { updateThreadProjectionIfLatestEntry } from './repository'
+import { updateThreadProjectionIfLatestEntry, archiveThread, unarchiveThread } from './repository'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
@@ -17,10 +17,11 @@ import type {
   GuestThreadSubmissionType,
 } from './types'
 
-// A thread is never archived by hand. Cancelling resolves it
-// as a consequence of the booking's own lifecycle; there is no separate
-// resolve/reopen for a member to reach for, and no surface that offered one.
-export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery'])
+// Thread archive/unarchive are manual mailbox operations, separate from
+// booking lifecycle. Cancelling resolves a thread as a consequence of the
+// booking's own lifecycle; there is no separate resolve/reopen for a member
+// to reach for.
+export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery', 'archive', 'unarchive'])
 
 type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
 
@@ -527,6 +528,18 @@ async function retryDelivery(
 }
 
 export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOperationInput): Promise<OperationOutcome> {
+  // Archive/unarchive are simple state mutations that don't require idempotency
+  if (input.action === 'archive' || input.action === 'unarchive') {
+    const context = await loadThreadContext(db, input.threadId, input.organizationId)
+    if ('ok' in context) return context
+    if (input.action === 'archive') {
+      await archiveThread(db, input.threadId, input.actorUserId)
+    } else {
+      await unarchiveThread(db, input.threadId)
+    }
+    return await successfulOutcome(db, context)
+  }
+
   if (!input.idempotencyKey) return { ok: false, status: 400, reason: 'missing_idempotency_key' }
   const context = await loadThreadContext(db, input.threadId, input.organizationId)
   if ('ok' in context) return context

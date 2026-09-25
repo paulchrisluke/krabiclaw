@@ -172,10 +172,9 @@ export interface ListGuestThreadsOptions {
   conversationState?: ConversationState | null
   unreadOnly?: boolean
   /**
-   * Which side of now the booking behind the thread falls on. A thread with no
-   * booking has no occurrence and belongs to neither, so it stays in the
-   * unfiltered list.
+   * Which mailbox to show. Current = not manually archived + occurrence not ended.
+   * Past = manually archived OR occurrence ended.
    */
-  occurrence?: 'upcoming' | 'past' | null
+  mailbox?: 'current' | 'past' | null
   limit?: number
 }

@@ -312,7 +312,7 @@ let threadsRequestToken = 0
 
 const listQuery = computed(() => ({
   type: activeType.value ?? undefined,
-  occurrence: pastOnly.value ? 'past' as const : 'upcoming' as const,
+  mailbox: pastOnly.value ? 'past' as const : 'current' as const,
   unread: unreadOnly.value ? '1' as const : undefined,
 }))
 

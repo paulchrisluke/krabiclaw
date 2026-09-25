@@ -34,7 +34,8 @@ export default defineHandler(async (event) => {
   const bodyKey = body && typeof body === 'object' && 'idempotencyKey' in body && typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined
   const idempotencyKey = bodyKey || headerKey || undefined
 
-  if (!idempotencyKey) {
+  // Archive/unarchive don't require idempotency keys
+  if (action !== 'archive' && action !== 'unarchive' && !idempotencyKey) {
     return jsonResponse({ error: 'Idempotency key is required' }, { status: 400 })
   }
 
@@ -45,7 +46,7 @@ export default defineHandler(async (event) => {
     actorUserId: session.user.id,
     body: replyBody,
     deliveryId,
-    idempotencyKey,
+    idempotencyKey: action === 'archive' || action === 'unarchive' ? crypto.randomUUID() : idempotencyKey,
     env,
   })
 

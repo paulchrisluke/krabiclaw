@@ -21,11 +21,11 @@ const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
  */
 const OPERATIONAL_RECORD_SQL = `
   LEFT JOIN (
-    SELECT b.request_id, b.status, b.party_size, s.starts_at, s.timezone
+    SELECT b.request_id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone
       FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id
      WHERE b.request_id IS NOT NULL
     UNION ALL
-    SELECT r.request_id, r.status, r.party_size, r.starts_at, r.timezone
+    SELECT r.request_id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone
       FROM reservations r WHERE r.request_id IS NOT NULL
   ) op ON op.request_id = gt.id`
 
@@ -34,7 +34,7 @@ const OPERATIONAL_RECORD_SQL = `
 // can only concatenate the stored UTC instant.
 const SOURCE_PREVIEW_SQL = `SUBSTR(CASE WHEN gt.kind = 'contact' THEN json_extract(gt.payload_json, '$.message') ELSE NULLIF(TRIM(json_extract(gt.payload_json, '$.notes')), '') END, 1, 160)`
 
-const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.timezone AS record_timezone, op.party_size AS record_party_size,
+const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.ends_at AS record_ends_at, op.timezone AS record_timezone, op.party_size AS record_party_size,
       json_extract(gt.payload_json, '$.party_size_is_minimum') AS party_size_is_minimum`
 
 /*
@@ -60,6 +60,7 @@ const PLACE_IMAGE_COLUMNS = `COALESCE(ma_hero.kind, ma_logo.kind) AS place_image
 function sourcePreviewText(row: {
   source_preview: string | null
   record_starts_at: string | null
+  record_ends_at: string | null
   record_timezone: string | null
   record_party_size: number | null
   party_size_is_minimum: unknown
@@ -153,6 +154,7 @@ type GuestThreadListRow = GuestThreadRow & {
   latest_message_kind: 'message' | null
   source_preview: string | null
   record_starts_at: string | null
+  record_ends_at: string | null
   record_timezone: string | null
   record_party_size: number | null
   party_size_is_minimum: unknown
@@ -183,13 +185,17 @@ export async function listGuestThreads(
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
   }
-  if (opts.occurrence) {
-    // A thread with no booking has no occurrence, so it is never past. It stays
-    // in the current list, the way a direct message does on Airbnb.
-    where += opts.occurrence === 'past'
-      ? ' AND op.starts_at < ?'
-      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
-    params.push(new Date().toISOString())
+  if (opts.mailbox) {
+    const now = new Date().toISOString()
+    if (opts.mailbox === 'current') {
+      // Current: not manually archived AND (no occurrence OR occurrence not ended)
+      where += ' AND gt.archived_at IS NULL AND (op.ends_at IS NULL OR op.ends_at >= ?)'
+      params.push(now)
+    } else {
+      // Past: manually archived OR occurrence ended
+      where += ' AND (gt.archived_at IS NOT NULL OR op.ends_at < ?)'
+      params.push(now)
+    }
   }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
@@ -290,13 +296,17 @@ export async function listOrganizationGuestThreads(
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
   }
-  if (opts.occurrence) {
-    // A thread with no booking has no occurrence, so it is never past. It stays
-    // in the current list, the way a direct message does on Airbnb.
-    where += opts.occurrence === 'past'
-      ? ' AND op.starts_at < ?'
-      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
-    params.push(new Date().toISOString())
+  if (opts.mailbox) {
+    const now = new Date().toISOString()
+    if (opts.mailbox === 'current') {
+      // Current: not manually archived AND (no occurrence OR occurrence not ended)
+      where += ' AND gt.archived_at IS NULL AND (op.ends_at IS NULL OR op.ends_at >= ?)'
+      params.push(now)
+    } else {
+      // Past: manually archived OR occurrence ended
+      where += ' AND (gt.archived_at IS NOT NULL OR op.ends_at < ?)'
+      params.push(now)
+    }
   }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
@@ -436,4 +446,29 @@ export async function updateThreadProjectionIfLatestEntry(
           )
       )
   `, [update.conversationState, update.conversationState === 'resolved' ? now : null, now, threadId, entryId])
+}
+
+export async function archiveThread(
+  db: DbClient,
+  threadId: string,
+  userId: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  await execute(db, `
+    UPDATE requests
+    SET archived_at = ?, archived_by_user_id = ?, updated_at = ?
+    WHERE id = ?
+  `, [now, userId, now, threadId])
+}
+
+export async function unarchiveThread(
+  db: DbClient,
+  threadId: string,
+): Promise<void> {
+  const now = new Date().toISOString()
+  await execute(db, `
+    UPDATE requests
+    SET archived_at = NULL, archived_by_user_id = NULL, updated_at = ?
+    WHERE id = ?
+  `, [now, threadId])
 }
