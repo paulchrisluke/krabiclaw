@@ -37,7 +37,7 @@ const organizationId = 'org-user-pottery-house'
 const ownerId = 'user-e2e-pottery-owner'
 const secondOwnerId = 'user-e2e-pottery-location-owner'
 const foreignOwnerId = 'user-e2e-kikuzuki-owner'
-const writable = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(new URL(baseURL).hostname)
+const writable = ['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)
 const local = ['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)
 
 async function expectStatus(response: APIResponse, status: number) {

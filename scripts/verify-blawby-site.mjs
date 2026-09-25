@@ -512,7 +512,7 @@ async function validateRemoteMedia(checks, ...sources) {
 
 function validateSitemap(checks, sitemap, manifest, hostname) {
   if (isNonIndexableHost(hostname)) {
-    // server/plugins/sitemap.ts intentionally zeroes the sitemap for preview/staging/workers.dev
+    // server/plugins/sitemap.ts intentionally zeroes the sitemap for staging/workers.dev
     // hosts (server/utils/seo-policy.ts isNonIndexableHost) so they never get indexed. An empty
     // sitemap there is correct behavior, not a defect — skip rather than assert against it.
     pushCheck(checks, true, `Sitemap checks skipped for non-indexable host: ${hostname}`)

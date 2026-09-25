@@ -19,8 +19,6 @@ export interface OrganizationLinksPage {
   organization_id: string
   path: string
   title: string
-  seo_title: string | null
-  seo_description: string | null
   created_at: string
   updated_at: string
   updated_by: string | null
@@ -57,8 +55,6 @@ export interface PublicOrganizationLinksPayload {
 
 export interface LinksPageUpdateInput {
   title?: unknown
-  seo_title?: unknown
-  seo_description?: unknown
 }
 
 export interface LinkItemUpdateInput {
@@ -80,10 +76,6 @@ function idWith(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
 }
 
-function nullableString(value: unknown, maxLength: number) {
-  const cleaned = cleanString(value as ApiValue, maxLength)
-  return cleaned || null
-}
 
 function requiredString(value: unknown, maxLength: number, field: string) {
   const cleaned = cleanString(value as ApiValue, maxLength)
@@ -135,8 +127,6 @@ function mapPage(row: ApiRecord): OrganizationLinksPage {
     organization_id: required(row.organization_id, 'organization_id'),
     path: required(row.path, 'path'),
     title: required(row.title, 'title'),
-    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
-    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     created_at: required(row.created_at, 'created_at'),
     updated_at: required(row.updated_at, 'updated_at'),
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
@@ -173,8 +163,6 @@ export function defaultLinksPage(input: { organizationId: string; name?: string 
     organization_id: input.organizationId,
     path: '/links',
     title: input.name || 'Links',
-    seo_title: null,
-    seo_description: null,
     created_at: now,
     updated_at: now,
     updated_by: null,
@@ -183,8 +171,8 @@ export function defaultLinksPage(input: { organizationId: string; name?: string 
 
 export async function getLinksPage(db: DbClient, organizationId: string, locale = 'en'): Promise<{ page: OrganizationLinksPage | null; items: OrganizationLinkItem[] }> {
   const pageRow = await queryFirst<ApiRecord>(db, `
-    SELECT d.id, d.organization_id, d.path, d.title, d.seo_title,
-           d.seo_description, d.created_at, d.updated_at, d.updated_by
+    SELECT d.id, d.organization_id, d.path, d.title,
+           d.created_at, d.updated_at, d.updated_by
       FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
      WHERE d.organization_id = ? AND d.locale = ? AND root.kind = 'page' AND root.row_role = 'root'
        AND (root.metadata_json ->> '$.recipe') = 'links'
@@ -303,15 +291,14 @@ export async function upsertLinksPage(db: DbClient, input: {
     id: item.id, type: 'cta' as const, data: { label: item.label, url: item.destination,
       status: item.status, updated_by: input.updatedBy ?? null },
   }))
-  const copy = { title, seo_title: nullableString(input.page.seo_title, 200),
-    seo_description: nullableString(input.page.seo_description, 500), updated_by: input.updatedBy ?? null }
+  const copy = { title, updated_by: input.updatedBy ?? null }
   if (current.page) {
     await updateContentDocument(db, current.page.id, { expected_updated_at: input.expectedUpdatedAt ?? current.page.updated_at,
       changes: copy, blocks })
   } else {
     await createContentDocumentWithBlocks(db, { id: pageId, organizationId: input.organizationId,
       kind: 'page', rowRole: 'root', locale: 'en', path: '/links', title,
-      seoTitle: copy.seo_title, seoDescription: copy.seo_description, updatedBy: input.updatedBy,
+      updatedBy: input.updatedBy,
       metadata: { recipe: 'links', page_type: 'custom' } }, blocks)
   }
   return { ...await getLinksPage(db, input.organizationId), created_item_ids: createdItemIds }

@@ -78,7 +78,7 @@ It requires the target Worker to be running and `E2E_TEST_PASSWORD` for the
 authorized account (`--email` selects it). Remote targets also require an explicit
 `--base-url`.
 
-Only production runs the `social-card-backfill` task: preview and staging set
+Only production runs the `social-card-backfill` task: staging sets
 `crons = []`, and it is bounded to a small number of owners per night.
 
 Local setup copies production through `db:pull:local`.
@@ -89,7 +89,7 @@ integrity checks on the copy stop setup before it writes the target. Existing
 bookings retain their
 original dates; setup does not manufacture current activity. For date-sensitive
 Today or Calendar checks, create bookings through the guest flow in the local
-or preview environment.
+environment.
 
 ## Signing in
 

@@ -484,7 +484,7 @@ test('a review request reads the visit from the record that holds it', async () 
       'status and the visit come from the reservation, not from the thread payload',
     )
 
-    const result = await sendReviewRequestForBooking(env, db, 'reservation', 'reservation-review', 'first')
+    const result = await sendReviewRequestForBooking(env, db, 'reservation', 'reservation-review')
     assert.deepEqual({ sent: result.sent, error: result.error }, { sent: true, error: undefined })
     // The email states the visit. A row that reads "your reservation" is the
     // headline fragment leaking into a value, which is what this guards — the
@@ -493,7 +493,7 @@ test('a review request reads the visit from the record that holds it', async () 
     const { html } = await renderNotificationEmail(reviewRequestMessage({
       guestName: 'Sivan', organizationName: 'Kikuzuki', locationName: 'Main Room',
       visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone), partySize: '6 guests',
-      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1', reminder: false,
+      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1',
     }), { platformDomain: 'proof.example' })
     assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
     assert.match(html, /6 guests/)

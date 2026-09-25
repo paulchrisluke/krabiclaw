@@ -179,9 +179,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             path: requiredString(args, "path"),
             title: requiredString(args, "title"),
             summary: nullableStringArg(args, "summary", null),
-            seoTitle: nullableStringArg(args, "seoTitle", null),
-            seoDescription: nullableStringArg(args, "seoDescription", null),
-            canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
             // Omitted is omitted: a translation takes its identity from the
             // source page, and a null here would be read as stating a
             // different one.
@@ -210,9 +207,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             path: requiredString(args, "path"),
             title: requiredString(args, "title"),
             summary: nullableStringArg(args, "summary", null),
-            seoTitle: nullableStringArg(args, "seoTitle", null),
-            seoDescription: nullableStringArg(args, "seoDescription", null),
-            canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
             pageType: requiredString(args, "pageType") as "custom" | "recipe" | "legal" | "system",
             recipe: requiredNullableString(args, "recipe"),
             sortOrder: requiredNumber(args, "sortOrder"),

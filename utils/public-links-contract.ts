@@ -20,8 +20,6 @@ export interface PublicLinksPayload {
   page: {
     path: '/links'
     title: string
-    seo_title: string | null
-    seo_description: string | null
   }
   items: PublicLinksItem[]
   localeRepresentations: PublicLocaleRepresentation[]
@@ -47,8 +45,6 @@ export function isPublicLinksPayload(value: unknown): value is PublicLinksPayloa
     && (organization.template === 'saya' || organization.template === 'blawby')
     && page.path === '/links'
     && typeof page.title === 'string'
-    && isNullableString(page.seo_title)
-    && isNullableString(page.seo_description)
     && value.items.every(item =>
       isRecord(item)
       && typeof item.id === 'string'

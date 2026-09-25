@@ -53,8 +53,6 @@ import type { LinkItemStatus } from '~/server/utils/links-page'
 export interface LinksPage {
   id: string
   title: string
-  seo_title: string
-  seo_description: string
 }
 
 export interface LinkItem {
@@ -103,10 +101,7 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 
-interface ApiLinksPage extends Omit<LinksPage, 'seo_title' | 'seo_description'> {
-  seo_title: string | null
-  seo_description: string | null
-}
+type ApiLinksPage = LinksPage
 
 const isLinksResponse = (
   value: unknown,
@@ -144,15 +139,11 @@ const itemsPath = computed(() => `${linksPath.value}/items`)
 const form = reactive<LinksPage>({
   id: '',
   title: '',
-  seo_title: '',
-  seo_description: '',
 })
 const items = ref<LinkItem[]>([])
 
 const linksPageLocalizationFields = computed(() => [
   { key: 'title', label: 'Title', source: data.value?.page.title },
-  { key: 'seo_title', label: 'SEO title', source: data.value?.page.seo_title },
-  { key: 'seo_description', label: 'SEO description', source: data.value?.page.seo_description, multiline: true },
 ])
 const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)
 function localizedLinksPath(locale: string): string {
@@ -170,8 +161,6 @@ const { data, pending } = await useAsyncData(
 
 interface LinksTranslation {
   title: string | null
-  seo_title: string | null
-  seo_description: string | null
   updated_at: string
   content_blocks: Array<{ id?: string; source_block_id: string | null; type: 'cta'; data: Record<string, unknown> }>
 }
@@ -195,13 +184,13 @@ async function loadLinksLocalization(locale: string, linkItemId?: string): Promi
   if (generation !== linkLocalizationGenerations.get(key)) return {}
   linkLocalizationStates.set(key, { locale, translation })
   if (linkItemId) return { label: translation?.content_blocks.find(block => block.source_block_id === linkItemId)?.data.label }
-  return { title: translation?.title, seo_title: translation?.seo_title, seo_description: translation?.seo_description }
+  return { title: translation?.title }
 }
 async function saveLinksLocalization(locale: string, submitted: Record<string, unknown>, linkItemId?: string): Promise<void> {
   const key = linkItemId ?? form.id
   const state = linkLocalizationStates.get(key)
   if (!state || state.locale !== locale) throw new Error('Choose the language again before saving.')
-  const values = { title: state.translation?.title ?? null, seo_title: state.translation?.seo_title ?? null, seo_description: state.translation?.seo_description ?? null }
+  const values = { title: state.translation?.title ?? null }
   let blocks = structuredClone(state.translation?.content_blocks ?? [])
   if (linkItemId) {
     const existing = blocks.find(block => block.source_block_id === linkItemId)
@@ -209,7 +198,7 @@ async function saveLinksLocalization(locale: string, submitted: Record<string, u
     blocks = blocks.filter(block => block.source_block_id !== linkItemId)
     if (label) blocks.push({ id: existing?.id, source_block_id: linkItemId, type: 'cta', data: { label } })
   } else {
-    for (const field of ['title', 'seo_title', 'seo_description'] as const) values[field] = typeof submitted[field] === 'string' ? submitted[field] : null
+    values.title = typeof submitted.title === 'string' ? submitted.title : null
   }
   const response = await dashboardApi<{ localization: LinksTranslation }>(
     `/api/editor/organizations/${organizationId}/localization/content_document/${form.id}/${encodeURIComponent(locale)}`, {
@@ -222,8 +211,6 @@ async function saveLinksLocalization(locale: string, submitted: Record<string, u
 function loadForm(value: { page: ApiLinksPage; items: LinkItem[] }) {
   Object.assign(form, {
     ...value.page,
-    seo_title: value.page.seo_title ?? '',
-    seo_description: value.page.seo_description ?? '',
   })
   items.value = value.items
 }
@@ -276,8 +263,6 @@ async function persist(nextItems: Array<Omit<LinkItem, 'id'> & { id?: string }>)
     body: {
       page: {
         title: form.title,
-        seo_title: form.seo_title,
-        seo_description: form.seo_description,
       },
       items: nextItems.map((item, index) => ({
         ...(item.id ? { id: item.id } : {}),
@@ -336,20 +321,6 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [
     items: [
       { id: 'title', label: 'Title', summary: form.title || 'Not named yet', placeholder: !form.title, to: `${linksPath.value}/title` },
       { id: 'items', label: 'Links', summary: linksSummary(), placeholder: !items.value.length, to: `${linksPath.value}/items` },
-    ],
-  },
-  {
-    id: 'search',
-    label: 'Search',
-    items: [
-      { id: 'seo-title', label: 'SEO title', summary: form.seo_title || 'Falls back to the title', placeholder: !form.seo_title, to: `${linksPath.value}/seo-title` },
-      {
-        id: 'seo-description',
-        label: 'SEO description',
-        summary: form.seo_description || 'Nothing written yet',
-        placeholder: !form.seo_description,
-        to: `${linksPath.value}/seo-description`,
-      },
     ],
   },
 ])

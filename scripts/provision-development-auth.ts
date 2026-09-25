@@ -26,21 +26,15 @@ function requirePolicyCompliant(password: string, source: string): string {
 
 const { values: options } = parseArgs({
   options: {
-    preview: { type: 'boolean', default: false },
     'local-dev': { type: 'boolean', default: false },
     'persist-to': { type: 'string' },
     'user-id': { type: 'string' },
   },
   strict: true,
 })
-const isPreview = options.preview
 const isLocalDev = options['local-dev']
 const persistTo = options['persist-to'] ? resolve(options['persist-to']) : null
 if (options['user-id'] !== undefined && !isLocalDev) throw new Error('--user-id requires --local-dev.')
-if (isPreview && isLocalDev) throw new Error('Choose only one of --preview or --local-dev.')
-if (persistTo && isPreview) {
-  throw new Error('--persist-to is available only for local D1 fixture provisioning.')
-}
 
 // Local runs are driven by hand, so the developer's own .env is the environment
 // they mean. CI sets these in the real environment and ships no .env file, where
@@ -129,14 +123,11 @@ const sqlPath = join(directory, 'e2e-auth.sql')
 try {
   writeFileSync(sqlPath, sql, { encoding: 'utf8', mode: 0o600 })
   const args = [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'execute', 'DB']
-  if (isPreview) args.push('--env', 'preview', '--remote')
-  else {
-    args.push('--local')
-    if (persistTo) args.push('--persist-to', persistTo)
-  }
+  args.push('--local')
+  if (persistTo) args.push('--persist-to', persistTo)
   args.push('--file', sqlPath)
   execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
-  console.log(`Provisioned ${credentialFixtures.length} verified Better Auth development credentials (${isPreview ? 'preview' : 'local'}).`)
+  console.log(`Provisioned ${credentialFixtures.length} verified Better Auth development credentials (local).`)
   if (credentialFixtures.some(fixture => fixture.id === LOCAL_DEVELOPER_AUTH_FIXTURE.id)) {
     console.log('\nLocal developer sign-in')
     if (process.env.LOCAL_DEVELOPER_PASSWORD) {

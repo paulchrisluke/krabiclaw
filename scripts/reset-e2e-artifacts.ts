@@ -20,7 +20,7 @@ const GUEST_BOOKING_ORG_IDS = ['org-user-pottery-house', 'org-bVY8SxxUuG6Ctk2CQn
 // below already excludes from the fixture set.
 // Retained/audit tables are explicit because their organization foreign keys
 // are often SET NULL (or intentionally polymorphic), so deleting the
-// organization alone would leave rows behind in the shared preview database.
+// organization alone would leave rows behind in the local database.
 // `reservations` and `bookings` restrict their request's deletion, so they are
 // swept first. Order here is the order the statements are emitted in.
 const RETAINED_ORG_TABLES = [
@@ -46,20 +46,16 @@ const FIXTURE_USER_IDS = [
   'user-ncls-blawby',
 ]
 
-const isPreview = process.argv.includes('--preview')
 const isStdout = process.argv.includes('--stdout')
 
 if (process.argv.includes('--staging') || process.argv.includes('--remote')) {
-  console.error('E2E cleanup supports only local and preview disposable data.')
+  console.error('E2E cleanup supports only local disposable data.')
   process.exit(1)
 }
 
-// Intentionally no standalone --remote: this script targets non-fixture organizations through
-// the fixed fixture allowlist and age guard, plus guest rows marked '@playwright.example'. That
-// scope is meaningless against production, so it must always be explicitly scoped to --preview
-// or default to --local for testing the emitted SQL against a local D1 file.
-const envFlag = isPreview ? '--env preview' : '--local'
-const remoteFlag = isPreview ? '--remote' : ''
+// No --remote: this script targets non-fixture organizations through the fixed fixture
+// allowlist and age guard, plus guest rows marked '@playwright.example'. That scope is
+// meaningless against a deployed database, so it only ever runs against local D1.
 
 const ageArg = process.argv.find((arg) => arg.startsWith('--older-than-hours='))
 const olderThanHours = ageArg ? Number(ageArg.split('=')[1]) : 2
@@ -120,7 +116,7 @@ const disposableGuestRequestIds = `
   ORDER BY id LIMIT ${batchSize}
 `
 
-const sql = `-- Sweeps E2E-generated rows from local/preview so they don't accumulate forever.
+const sql = `-- Sweeps E2E-generated rows from local D1 so they don't accumulate forever.
 -- Safe to re-run: only ever targets organizations outside the fixed fixture allowlist and the
 -- '@playwright.example' guest-email marker that tests/e2e specs already use. Curated fixtures
 -- (Pottery House, Kikuzuki, demo, MCP plan fixtures, NCLS/Blawby) are untouched - they live under
@@ -156,7 +152,7 @@ DELETE FROM user WHERE id IN (${eligibleUserIds});
 // An organization the sweep deletes may own a Stripe customer, created when a
 // test drove checkout. Stripe never learns the organization is gone, so the
 // customer is deleted here, before the rows that name it. Only a test-mode key
-// may run this: the sweep exists for local and preview databases, and a live
+// may run this: the sweep exists for local databases, and a live
 // key here would be a configuration fault, not a cleanup.
 async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
   const key = process.env.STRIPE_SECRET_KEY
@@ -165,7 +161,7 @@ async function deleteStripeCustomersOfSweptOrganizations(): Promise<void> {
   // `--file` against a remote database goes through D1's import path, which
   // returns an import summary instead of the rows; `--command` returns them.
   const query = `SELECT stripeCustomerId FROM organization WHERE stripeCustomerId IS NOT NULL AND id IN (${eligibleOrgIds});`
-  const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--command', query, '--json'], { encoding: 'utf8' })
+  const result = spawnYarn(['wrangler', 'd1', 'execute', 'DB', '--local', '--command', query, '--json'], { encoding: 'utf8' })
   if (result.error) throw result.error
   const stdout = String(result.stdout ?? '')
   if (result.status !== 0) throw new Error((String(result.stderr ?? '') || stdout || `Wrangler exited ${result.status}`).trim())
@@ -192,7 +188,7 @@ if (isStdout) {
 
   try {
     writeFileSync(sqlPath, sql, 'utf8')
-    const args = ['wrangler', 'd1', 'execute', 'DB', ...envFlag.split(' '), ...remoteFlag.split(' ').filter(Boolean), '--file', sqlPath]
+    const args = ['wrangler', 'd1', 'execute', 'DB', '--local', '--file', sqlPath]
     console.log(`[reset-e2e-artifacts] Applying: corepack yarn ${args.join(' ')}`)
     const result = spawnYarn(args)
     if (result.error) throw result.error

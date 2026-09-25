@@ -51,7 +51,6 @@ them with a Node upgrade; those require their own demonstrated reason.
    corepack yarn build
    corepack yarn test:e2e:local
    corepack yarn wrangler deploy --dry-run --strict
-   corepack yarn wrangler deploy --env preview --dry-run --strict
    corepack yarn wrangler deploy --env staging --dry-run --strict
    ```
 
@@ -62,11 +61,10 @@ them with a Node upgrade; those require their own demonstrated reason.
    `.output/server/index.mjs`, named Durable Object exports, native `fetch`,
    `scheduled`, and `queue` handlers, and a compressed Worker below Cloudflare's
    account limit.
-6. Open a ready pull request to `staging`. The deployed preview must pass its
-   full selected coverage on the exact PR head; a local pass alone is not enough.
-7. After merge, require the exact staging deployment and complete browser
-   qualification to pass. The updated `staging` to `main` PR reuses those
-   exact-head checks before production promotion.
+6. Open a ready pull request to `staging`. `Checks` and `E2E` must pass on the
+   exact PR head.
+7. After merge, require the staging deployment and its read-only browser
+   verification to pass before promoting `staging` to `main`.
 
 ## Failure handling
 

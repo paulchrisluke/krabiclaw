@@ -4,14 +4,13 @@
  *
  * Reads client-imports/<slug>/approved.json, verifies the manifest hash, then executes
  * client-imports/<slug>/seed-preview.sql against the target D1. This is the standard way
- * to re-seed a real client import in local dev, staging, or preview without re-running the
+ * to re-seed a real client import in local dev or staging without re-running the
  * full onboarding pipeline.
  *
  * Usage:
  *   yarn client:replay --slug pottery-house-krabi               # local D1 (default)
  *   yarn client:replay --slug pottery-house-krabi --remote      # production D1
  *   yarn client:replay --slug pottery-house-krabi --env staging # staging D1
- *   yarn client:replay --slug pottery-house-krabi --env preview # preview D1
  */
 
 import { createHash } from 'node:crypto'

@@ -9,7 +9,7 @@ type NotificationRow = { template: string }
 type DeliveryRow = { channel: 'email' | 'whatsapp'; purpose: string; status: string }
 type NotificationState = { notifications: NotificationRow[]; deliveries: DeliveryRow[] }
 const executionHost = new URL(testBaseUrl()).hostname
-const writableEnvironment = ['localhost', '127.0.0.1', 'preview.krabiclaw.com'].includes(executionHost)
+const writableEnvironment = ['localhost', '127.0.0.1'].includes(executionHost)
 
 function notificationUrl(baseURL: string, organizationId: string, since: string) {
   const url = new URL(`${baseURL}/api/dev/notifications`)
@@ -165,7 +165,6 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
   })
 
   test('guest validation rejects invalid input and re-used cancellation tokens', async ({ request }) => {
-    test.skip(executionHost === 'preview.krabiclaw.com', 'destructive token validation runs only against local disposable D1')
     const baseURL = testBaseUrl()
     const headers = { ...devLoginHeaders(), 'x-preview-tenant': 'pottery-house' }
     // A guest names a SESSION, not a date and a time: the occurrence is a real

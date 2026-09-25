@@ -9,10 +9,8 @@ export interface TenantHostEnv {
 
 const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 
-// CI runs Playwright against the one preview Worker's canonical workers.dev host.
-const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
-const ENVIRONMENT_PLATFORM_HOST_PATTERN = /^(preview|staging)\.(.+)$/
-const ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?-(?:preview|staging)\.krabiclaw\.com$/
+const ENVIRONMENT_PLATFORM_HOST_PATTERN = /^(staging)\.(.+)$/
+const ENVIRONMENT_TENANT_ALIAS_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?-staging\.krabiclaw\.com$/
 const TENANT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
 
 // Strip protocol, path, and port so config values (which may be
@@ -54,9 +52,6 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   if (hostname === PAGES_DEV_HOST || hostname.endsWith(`.${PAGES_DEV_HOST}`)) {
     return true
   }
-  if (WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)) {
-    return true
-  }
   return getPlatformHosts(env).includes(hostname)
 }
 
@@ -92,19 +87,18 @@ export function environmentTenantAliasSlug(host: string, env: TenantHostEnv): st
 }
 
 // Only hosts that cannot express tenant identity in their hostname use the
-// test-only x-preview-tenant header. Deployed preview and staging use direct
-// first-level tenant aliases instead.
+// test-only x-preview-tenant header. Deployed staging uses direct first-level
+// tenant aliases instead.
 export function usesTenantHeader(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
   // A tenant is framed locally as <subdomain>.localhost, which is as
   // non-production as localhost itself. Missing that served every local page
   // from the public resource cache, so an edit appeared to change nothing.
-  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
-  return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
+  return hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1'
 }
 
-// Returns true for non-production hosts: local development, the preview and
-// staging environments, and their tenant aliases. This is about *which
+// Returns true for non-production hosts: local development, the staging
+// environment, and its tenant aliases. This is about *which
 // environment* a request is in — not about the preview of an unpublished site,
 // which is server/utils/preview-token.ts and means one owner looking at their
 // own site. Call usesTenantHeader() when deciding how tenant identity is
@@ -112,13 +106,9 @@ export function usesTenantHeader(host: string): boolean {
 // their hostname.
 export function isNonProductionHost(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
-  // A tenant is framed locally as <subdomain>.localhost, which is as
-  // non-production as localhost itself. Missing that served every local page
-  // from the public resource cache, so an edit appeared to change nothing.
-  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1') return true
-  if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
-  if (isEnvironmentTenantAliasHost(hostname)) return true
-  return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
+  if (usesTenantHeader(hostname)) return true
+  if (hostname === 'staging.krabiclaw.com') return true
+  return isEnvironmentTenantAliasHost(hostname)
 }
 
 export function getFreeOrganizationDomain(env: TenantHostEnv): string {

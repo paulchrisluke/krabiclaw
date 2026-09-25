@@ -49,6 +49,19 @@ export async function locationHero(db: DbClient, organizationId: string, locatio
   return firstPlacement(db, { organizationId, ownerType: 'business_location', ownerId: locationId, slot: 'hero' })
 }
 
+/** An organization's brand logo mark. */
+export async function organizationLogo(db: DbClient, organizationId: string | null | undefined): Promise<string | null> {
+  if (!organizationId) return null
+  const placements = await getMediaPlacements(db, {
+    organizationId,
+    ownerType: 'organization',
+    ownerIds: [organizationId],
+    slot: 'logo',
+  })
+  const item = placements.get(organizationId)?.[0]
+  return mediaStillUrl(item) ?? null
+}
+
 /**
  * Never lets a missing picture break a notification. An email that arrives
  * without its hero is a smaller problem than one that does not arrive.

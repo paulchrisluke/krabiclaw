@@ -21,9 +21,6 @@ export interface TenantPageDraft {
   path: string
   title: string
   summary: string
-  seo_title: string
-  seo_description: string
-  canonical_url: string
   page_type: TenantPageType
   recipe: string
   sort_order: number
@@ -38,9 +35,6 @@ export interface TenantPageResponse {
   path: string
   title: string
   summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
   page_type: TenantPageType
   recipe: string | null
   sort_order: number
@@ -72,7 +66,7 @@ export function isTenantPageResponse(value: unknown): value is { page: TenantPag
   const page = value.page
   return ['id', 'page_id', 'organization_id', 'locale', 'path', 'title', 'page_type', 'updated_at']
     .every(field => typeof page[field] === 'string')
-    && ['summary', 'seo_title', 'seo_description', 'canonical_url', 'recipe'].every(field => isOptionalString(page[field]))
+    && ['summary', 'recipe'].every(field => isOptionalString(page[field]))
     && typeof page.sort_order === 'number'
     && Array.isArray(page.blocks)
     && isRecord(page.document) && typeof page.document.updated_at === 'string'
@@ -147,9 +141,6 @@ function emptyDraft(): TenantPageDraft {
     path: '',
     title: '',
     summary: '',
-    seo_title: '',
-    seo_description: '',
-    canonical_url: '',
     page_type: 'custom',
     recipe: '',
     sort_order: 0,
@@ -165,9 +156,6 @@ function toDraft(page: TenantPageResponse): TenantPageDraft {
     path: page.path,
     title: page.title,
     summary: page.summary ?? '',
-    seo_title: page.seo_title ?? '',
-    seo_description: page.seo_description ?? '',
-    canonical_url: page.canonical_url ?? '',
     page_type: page.page_type,
     recipe: page.recipe ?? '',
     sort_order: page.sort_order,
@@ -304,9 +292,6 @@ export function useTenantPageDraft(organizationId: string, pageId: string) {
       path,
       title,
       summary: draft.value.summary,
-      seoTitle: draft.value.seo_title || null,
-      seoDescription: draft.value.seo_description || null,
-      canonicalUrl: draft.value.canonical_url || null,
       pageType: draft.value.page_type,
       recipe: draft.value.recipe || null,
       sortOrder: draft.value.sort_order,
