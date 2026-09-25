@@ -120,9 +120,8 @@ export type AbandonedDraftTenantOutcome =
 /**
  * Abandoning a wizard draft: delete the pending organization it created, now.
  *
- * There is no grace period because nothing was ever public — onboarding has not
- * finished, so tenant resolution has only ever served it to the holder of its
- * preview token. Deleting it immediately also gives the owner their address
+ * Onboarding has not finished, so tenant resolution has only ever served the
+ * draft to the holder of its preview token. Deleting it immediately also gives the owner their address
  * back straight away, which matters when they abandoned the draft precisely
  * because they typed the wrong business name.
  *
