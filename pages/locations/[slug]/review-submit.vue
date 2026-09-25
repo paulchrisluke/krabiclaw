@@ -409,12 +409,17 @@ async function linkAccount() {
 }
 
 async function copyAndOpenGoogle() {
+  const googleUrl = requestData.value?.location?.googleReviewUrl
+  if (googleUrl) window.open(googleUrl, '_blank', 'noopener')
   const reviewText = [title.value, content.value].filter(Boolean).join('\n\n')
-  if (reviewText) {
-    await navigator.clipboard.writeText(reviewText)
-    copyButtonLabel.value = 'Copied! Opening Google Maps…'
+  if (reviewText && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(reviewText)
+      copyButtonLabel.value = 'Copied! Opening Google Maps…'
+    } catch {
+      // Clipboard write permission denied or unavailable; navigation already initiated
+    }
   }
-  window.open(requestData.value?.location?.googleReviewUrl ?? '', '_blank', 'noopener')
 }
 
 async function optOut() {

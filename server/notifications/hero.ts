@@ -52,19 +52,14 @@ export async function locationHero(db: DbClient, organizationId: string, locatio
 /** An organization's brand logo mark. */
 export async function organizationLogo(db: DbClient, organizationId: string | null | undefined): Promise<string | null> {
   if (!organizationId) return null
-  try {
-    const placements = await getMediaPlacements(db, {
-      organizationId,
-      ownerType: 'organization',
-      ownerIds: [organizationId],
-      slot: 'logo',
-    })
-    const item = placements.get(organizationId)?.[0]
-    return mediaStillUrl(item) ?? null
-  } catch (error) {
-    console.error('notification_logo_lookup_failed', { error: error instanceof Error ? error.message : String(error) })
-    return null
-  }
+  const placements = await getMediaPlacements(db, {
+    organizationId,
+    ownerType: 'organization',
+    ownerIds: [organizationId],
+    slot: 'logo',
+  })
+  const item = placements.get(organizationId)?.[0]
+  return mediaStillUrl(item) ?? null
 }
 
 /**
