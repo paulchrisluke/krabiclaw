@@ -99,14 +99,10 @@ export interface OrganizationSettingsEditor {
   publishLanguage: (locale: string) => Promise<void>
   disableLanguage: (locale: string) => Promise<void>
   deleteLanguage: (locale: string) => Promise<void>
-  deletionScheduledAt: ComputedRef<Date | null>
-  deletionDateLabel: ComputedRef<string>
-  deletionGraceDays: Ref<number>
   deletionConfirmText: Ref<string>
   deletionSaving: Ref<boolean>
   deletionError: Ref<string>
-  scheduleWorkspaceDeletion: () => Promise<void>
-  keepWorkspace: () => Promise<void>
+  deleteWorkspace: () => Promise<void>
   revert: () => void
   save: () => Promise<void>
 }
@@ -135,76 +131,31 @@ const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
 
-// Workspace deletion is scheduled, never immediate: the organization carries a
-// due instant and the deletion-sweep task performs the deletion once it passes.
-// server/utils/tenant-deletion.ts owns both ends.
+// Organization deletion is immediate after explicit confirmation. The server
+// cancels active/trialing Stripe subscriptions, releases external resources,
+ // and only then removes the organization.
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
-const deletionGraceDays = ref(30)
 const deletionConfirmText = ref('')
 const deletionSaving = ref(false)
 const deletionError = ref('')
-const deletionScheduledAt = computed(() => {
-  const scheduled = dashboard.organization.value?.deletionScheduledAt
-  if (!scheduled) return null
-  const at = new Date(scheduled)
-  return Number.isNaN(at.getTime()) ? null : at
-})
-const deletionDateLabel = computed(() => deletionScheduledAt.value
-  ? deletionScheduledAt.value.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-  : '')
 
-async function scheduleWorkspaceDeletion() {
+async function deleteWorkspace() {
   if (deletionConfirmText.value !== 'DELETE') return
   deletionSaving.value = true
   deletionError.value = ''
   try {
-    const response = await dashboardApi<{ success?: boolean; scheduled_at?: string; grace_days?: number }>('/api/dashboard/organizations/deletion', {
-      method: 'POST',
-      validate: (value): value is { success?: boolean; scheduled_at?: string; grace_days?: number } => isRecord(value),
-    })
-    if (response?.success !== true) throw new Error('Scheduling the deletion failed. Please try again.')
-    if (typeof response?.grace_days === 'number') deletionGraceDays.value = response.grace_days
-    deletionConfirmText.value = ''
-  } catch (error) {
-    deletionError.value = error instanceof Error ? error.message : 'Scheduling the deletion failed. Please try again.'
-    deletionSaving.value = false
-    return
-  }
-  // The deletion is scheduled. Reloading the workspace is what the date in the
-  // message is read from, and a failure there is a failure to REFRESH: saying
-  // "Scheduling the deletion failed" for a deletion that happened is how an
-  // owner schedules it twice, or believes their workspace is safe.
-  try {
-    await dashboard.refresh()
-  } catch {
-    // Ignore refresh error; deletion has already scheduled
-  } finally {
-    deletionSaving.value = false
-  }
-}
-
-async function keepWorkspace() {
-  deletionSaving.value = true
-  deletionError.value = ''
-  try {
     const response = await dashboardApi<{ success?: boolean }>('/api/dashboard/organizations/deletion', {
-      method: 'DELETE',
+      method: 'POST',
       validate: (value): value is { success?: boolean } => isRecord(value),
     })
-    if (response?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
+    if (response?.success !== true) throw new Error('Deletion failed. Please try again.')
+    await navigateTo('/dashboard', { replace: true })
   } catch (error) {
-    deletionError.value = error instanceof Error ? error.message : 'Cancelling the deletion failed. Please try again.'
-    deletionSaving.value = false
-    return
-  }
-  // Cancelled. As above, the refresh that follows is a separate thing to fail.
-  try {
-    await dashboard.refresh()
+    deletionError.value = error instanceof Error ? error.message : 'Deletion failed. Please try again.'
   } finally {
     deletionSaving.value = false
   }
 }
-
 
 
 interface SettingsPageResource {
@@ -290,7 +241,7 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value
-    ? [{ id: 'delete', label: 'Delete site', summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : 'Removes this organization, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
+    ? [{ id: 'delete', label: 'Delete site', summary: 'Permanently removes this organization, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
     : []),
 ])
 
@@ -503,14 +454,10 @@ provide(organizationSettingsEditorKey, {
   publishLanguage,
   disableLanguage,
   deleteLanguage,
-  deletionScheduledAt,
-  deletionDateLabel,
-  deletionGraceDays,
   deletionConfirmText,
   deletionSaving,
   deletionError,
-  scheduleWorkspaceDeletion,
-  keepWorkspace,
+  deleteWorkspace,
   // A cancelled leaf puts the loaded settings back before it closes.
   revert: resetDraft,
   save: saveCurrentEditor,
