@@ -225,6 +225,32 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   return [...origins]
 }
 
+// Diagnostic trace of the Instagram Login exchange (owner-requested): request
+// shape, HTTP status, response key structure, Meta trace headers, and token
+// fingerprints. Never token values.
+async function fingerprint(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return Array.from(new Uint8Array(digest)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+async function instagramTrace(stage: string, response: Response, text: string, extra: Record<string, unknown>) {
+  let shape: unknown
+  try { shape = describeShape(JSON.parse(text)) } catch { shape = `non-json(${text.length})` }
+  return {
+    stage, url: new URL(response.url).origin + new URL(response.url).pathname, status: response.status,
+    x_fb_trace_id: response.headers.get('x-fb-trace-id'), x_fb_rev: response.headers.get('x-fb-rev'),
+    x_fb_debug: response.headers.get('x-fb-debug'), www_authenticate: response.headers.get('www-authenticate'),
+    response_shape: shape, ...extra,
+  }
+}
+function describeShape(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(describeShape)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) =>
+      [k, k === 'access_token' ? `string(${String(v).length})` : (v && typeof v === 'object') ? describeShape(v) : typeof v === 'string' && k !== 'message' && k !== 'type' ? `string(${v.length})` : v]))
+  }
+  return typeof value
+}
+
 export function createAuth(env: CloudflareEnv) {
   if (!env?.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
   const d1 = unwrapInstrumentedD1(env.DB)
@@ -627,11 +653,16 @@ export function createAuth(env: CloudflareEnv) {
                 code,
               }),
             })
-            if (!grant.ok) throw new Error(`Instagram token exchange failed: ${(await grant.text()).slice(0, 300)}`)
+            const grantText = await grant.text()
+            console.info('instagram_oauth_trace', await instagramTrace('step2_code_exchange', grant, grantText, {
+              method: 'POST', params: ['client_id', 'client_secret', 'grant_type=authorization_code', 'redirect_uri', 'code'],
+              redirect_uri: redirectURI, code_fingerprint: await fingerprint(code), code_length: code.length,
+            }))
+            if (!grant.ok) throw new Error(`Instagram token exchange failed: ${grantText.slice(0, 300)}`)
             // Documented as `{ data: [{ access_token, user_id, permissions }] }`
             // (developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login).
             type Grant = { access_token?: string; permissions?: string | string[] }
-            const body = await grant.json() as Grant & { data?: Grant[] }
+            const body = JSON.parse(grantText) as Grant & { data?: Grant[] }
             const shortLived = body.data?.[0] ?? body
             if (!shortLived.access_token) throw new Error('Instagram did not return an access token')
 
@@ -640,11 +671,17 @@ export function createAuth(env: CloudflareEnv) {
               client_secret: env.INSTAGRAM_APP_SECRET,
               access_token: shortLived.access_token,
             })}`)
-            if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${(await exchange.text()).slice(0, 300)}`)
-            const longLived = await exchange.json() as { access_token?: string; expires_in?: number }
+            const exchangeText = await exchange.text()
+            console.info('instagram_oauth_trace', await instagramTrace('step3_long_lived_exchange', exchange, exchangeText, {
+              method: 'GET', params: ['grant_type=ig_exchange_token', 'client_secret', 'access_token'],
+              short_lived_fingerprint: await fingerprint(shortLived.access_token), short_lived_length: shortLived.access_token.length,
+            }))
+            if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${exchangeText.slice(0, 300)}`)
+            const longLived = JSON.parse(exchangeText) as { access_token?: string; expires_in?: number }
             if (!longLived.access_token || typeof longLived.expires_in !== 'number') {
               throw new Error('Instagram did not return a long-lived access token and its lifetime')
             }
+            console.info('instagram_oauth_trace', { stage: 'getToken_return', long_lived_fingerprint: await fingerprint(longLived.access_token), expires_in: longLived.expires_in })
             const permissions = shortLived.permissions ?? []
             return {
               tokenType: 'bearer',
@@ -662,8 +699,13 @@ export function createAuth(env: CloudflareEnv) {
               fields: 'id,user_id,username',
               access_token: tokens.accessToken ?? '',
             })}`)
-            if (!response.ok) throw new Error(`Instagram account lookup failed: ${(await response.text()).slice(0, 300)}`)
-            const account = await response.json() as { id?: string; username?: string }
+            const text = await response.text()
+            console.info('instagram_oauth_trace', await instagramTrace('getUserInfo_me', response, text, {
+              method: 'GET', params: ['fields=id,user_id,username', 'access_token'],
+              received_fingerprint: await fingerprint(tokens.accessToken ?? ''),
+            }))
+            if (!response.ok) throw new Error(`Instagram account lookup failed: ${text.slice(0, 300)}`)
+            const account = JSON.parse(text) as { id?: string; username?: string }
             if (!account.id || !account.username) throw new Error('Instagram did not return the connected account')
             return { id: account.id, name: account.username, email: null, emailVerified: false }
           },
