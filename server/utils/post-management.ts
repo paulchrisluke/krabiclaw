@@ -442,8 +442,7 @@ export async function updatePost(
   const updated = await getPost(db, organizationId, postId)
   // The card draws the title, the summary and the location's name. The cover
   // is a placement write, which refreshes the card itself.
-  if (data.title !== undefined || data.body !== undefined || data.seo_title !== undefined
-    || data.seo_description !== undefined || data.location_id !== undefined) {
+  if (data.title !== undefined || data.body !== undefined || data.location_id !== undefined) {
     await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId }, actorId: _updatedBy })
   }
   return updated
