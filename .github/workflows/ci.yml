@@ -74,6 +74,10 @@ jobs:
       # The onboarding draft endpoints sign their preview tokens with it and
       # answer 503 without it, so the wizard never got past its first save.
       PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
+      # The onboarding business search is Places API (New) through the server,
+      # which answers 503 without it, and the onboarding, add-location and
+      # Settings specs pick a real Google listing.
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # CIMD client metadata must be public HTTPS, which localhost cannot serve.

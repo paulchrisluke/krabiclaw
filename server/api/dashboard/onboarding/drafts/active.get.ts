@@ -56,6 +56,7 @@ export default defineHandler(async (event) => {
       draftId: row.id,
       draftName: payload.preview.brandName,
       sourceType: row.source_type,
+      placeId: payload.source.placeId,
       vertical: payload.preview.vertical,
       details: payload.source.details,
       config: payload.preview.config,

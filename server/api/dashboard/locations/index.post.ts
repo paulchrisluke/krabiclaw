@@ -1,11 +1,12 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 // POST /api/dashboard/locations
-// Add a new physical location to the current org's site from a Google Maps URL.
+// Add a new physical location to the current org's site: either the Google
+// place the owner picked (`placeId`) or a manually named one (`name`).
 // Requires an existing site — this is the multi-location flow, not onboarding.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces, googleReviewUpserts, PlaceDetailsError } from '~/server/utils/google-places'
+import { getPlaceDetails, googleReviewUpserts } from '~/server/utils/google-places'
 import { createLocation } from '~/server/utils/location-management'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
@@ -56,27 +57,20 @@ export default defineHandler(async (event) => {
   await assertOrganizationWideAccess(db, memberAccessPrincipal(organization, { env, event }))
 
   const body = await readBody(event) as {
-    mapsUrl?: unknown
     placeId?: unknown
-    query?: unknown
-    previewOnly?: unknown
     name?: unknown
     details?: Record<string, unknown> | null
   }
-  const mapsUrl = typeof body?.mapsUrl === 'string' ? body.mapsUrl.trim() : ''
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
-  const query = typeof body?.query === 'string' ? body.query.trim() : ''
   const name = typeof body?.name === 'string' ? body.name.trim() : ''
-  const previewOnly = body?.previewOnly === true
   const details = body.details && typeof body.details === 'object' ? body.details : null
 
-  if (!mapsUrl && !placeId && !query && !name) {
-    return jsonResponse({ error: 'mapsUrl, placeId, query, or name is required' }, { status: 400 })
+  if (Boolean(placeId) === Boolean(name)) {
+    return jsonResponse({ error: 'Exactly one of placeId or name is required' }, { status: 400 })
   }
 
   // Manual path: business name only, no Google Places lookup required.
-  if (name && !mapsUrl && !placeId && !query) {
-
+  if (name) {
     const baseSlug = slugify(name).slice(0, 50)
     const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
 
@@ -97,30 +91,11 @@ export default defineHandler(async (event) => {
 
   let place
   try {
-    if (placeId) {
-      place = await getPlaceDetails(apiKey, placeId)
-    } else if (mapsUrl) {
-      place = await getPlaceDetailsByUrl(apiKey, mapsUrl)
-    } else {
-      const results = await searchPlaces(apiKey, query)
-      const top = results[0]
-      if (!top?.placeId) {
-        return jsonResponse({ error: `No results found for "${query}". Try a more specific name.` }, { status: 404 })
-      }
-      place = await getPlaceDetails(apiKey, top.placeId)
-    }
+    place = await getPlaceDetails(apiKey, placeId)
   } catch (err) {
-    const statusCode = err instanceof PlaceDetailsError ? err.statusCode : 502
     return jsonResponse({
-      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.', }, { status: statusCode })
+      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.', }, { status: 502 })
   }
-
-  if (previewOnly) {
-    return jsonResponse({
-      success: true, preview: {
-        placeId: place.placeId, name: place.name, address: place.address, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, timezone: place.timezone, }, })
-  }
-
 
   const baseSlug = slugify(place.name).slice(0, 50)
   const slug = await uniqueLocationSlug(db, organizationId, baseSlug)
