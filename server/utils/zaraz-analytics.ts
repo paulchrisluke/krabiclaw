@@ -261,6 +261,10 @@ function upsertGa4Tool(
     defaultPurpose: ZARAZ_ANALYTICS_PURPOSE_ID,
     vendorName: GOOGLE_VENDOR_NAME,
     vendorPolicyUrl: GOOGLE_VENDOR_POLICY_URL,
+    // The template is another GA4 tool, usually the platform's; its tool-level
+    // blocking trigger must not travel with it, or the tenant tool is blocked
+    // on the tenant's own hosts (Zaraz debug on NCLS, 2026-09-27).
+    blockingTriggers: [input.triggerKey],
     actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, [input.triggerKey]),
   }
 }
