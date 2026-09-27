@@ -246,7 +246,7 @@ function describeShape(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(describeShape)
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([k, v]) =>
-      [k, k === 'access_token' ? `string(${String(v).length})` : (v && typeof v === 'object') ? describeShape(v) : typeof v === 'string' && k !== 'message' && k !== 'type' ? `string(${v.length})` : v]))
+      [k, k === 'access_token' ? `string(${String(v).length})` : (v && typeof v === 'object') ? describeShape(v) : typeof v === 'string' && k !== 'message' && k !== 'type' && k !== 'fbtrace_id' ? `string(${v.length})` : v]))
   }
   return typeof value
 }
