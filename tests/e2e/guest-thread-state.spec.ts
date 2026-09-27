@@ -432,10 +432,20 @@ for (const viewport of [
     await submitContact(page.request, guestName)
     await dismissPreviewToolbar(page)
 
+    // The rows are server-rendered, so they are visible before the menu has a
+    // handler: the list says when it has hydrated, and nothing is pressed
+    // before. On desktop the index then opens its newest thread beside the
+    // list, and that navigation re-renders the rows, so the screen has settled
+    // only once a thread is open.
+    const openMessages = async (query = '') => {
+      await page.goto(`${baseURL}/dashboard/${organizationId}/messages${query}`)
+      await expect(page.locator('[data-guest-thread-list-hydrated="true"]')).toBeVisible()
+      if (viewport.name === 'desktop') await expect(page).toHaveURL(/\/messages\/[^/?]+(\?|$)/)
+    }
     const rowFor = (name: string) => page.locator('[data-thread-row]').filter({ hasText: name })
     const actionsFor = (name: string) => rowFor(name).getByRole('button', { name: `Conversation actions for ${name}` })
 
-    await page.goto(`${baseURL}/dashboard/${organizationId}/messages`)
+    await openMessages()
     await expect(rowFor(guestName)).toBeVisible()
     await rowFor(guestName).hover()
     await actionsFor(guestName).click()
@@ -451,7 +461,7 @@ for (const viewport of [
     // The archived conversation is not left open beside the list.
     await expect(page).not.toHaveURL(new RegExp(`/messages/${threadId}`))
 
-    await page.goto(`${baseURL}/dashboard/${organizationId}/messages?archived=`)
+    await openMessages('?archived=')
     await expect(rowFor(guestName)).toBeVisible()
 
     // A conversation Past because its booking ended offers no way back.
@@ -482,7 +492,7 @@ for (const viewport of [
       await expect(rowFor(guestName)).toHaveCount(0)
     }
 
-    await page.goto(`${baseURL}/dashboard/${organizationId}/messages`)
+    await openMessages()
     await expect(rowFor(guestName)).toBeVisible()
     // Keyboard: the menu button is reachable and opens with Enter.
     await actionsFor(guestName).focus()
