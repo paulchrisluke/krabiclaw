@@ -325,6 +325,7 @@ test('the business search API refuses what the picker would never send', async (
   for (const data of [{ mapsUrl: 'https://maps.app.goo.gl/abc' }, { query: 'Kikuzuki' }, { mapsUrl: 'https://maps.app.goo.gl/abc', previewOnly: true }]) {
     const refused = await request.post('/api/dashboard/locations?org=ember-slice-demo', { data })
     expect(refused.status(), await refused.text()).toBe(400)
+    expect(await refused.json()).toEqual({ error: 'Exactly one of placeId or name is required' })
   }
 })
 

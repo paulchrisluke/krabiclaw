@@ -131,10 +131,10 @@ async function search(input: string) {
 }
 
 async function select(suggestion: GooglePlaceSuggestion) {
-  const token = sessionToken
-  if (!token) throw new Error('A prediction was chosen outside an autocomplete session')
-  // Place Details closes the session whether or not it succeeds, so the next
-  // search starts a new one.
+  // A retry after a failed Place Details call has no open session left, so it
+  // is a session of its own. Place Details closes the session whether or not
+  // it succeeds, so the next search starts a new one.
+  const token = sessionToken ?? crypto.randomUUID()
   sessionToken = null
   chosenName = suggestion.name
   if (debounce) clearTimeout(debounce)
