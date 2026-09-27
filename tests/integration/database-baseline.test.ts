@@ -38,6 +38,11 @@ function preEpochSource(directory: string, extra: string[] = []): string {
   db.exec(readFileSync(PRE_EPOCH_BASELINE, 'utf8'))
   db.exec([
     "INSERT INTO organization (id,name,slug,deletionScheduledAt) VALUES ('org','Org','org',1790000000)",
+    `UPDATE organization SET integrations_json = '${JSON.stringify({
+      google_credential: { revision: 'r', status: 'active', encrypted_access_token: 'enc-a', encrypted_refresh_token: 'enc-r', scopes: 'analytics', provider_account_email: 'owner@example.test' },
+      google_analytics: { revision: 'r', status: 'active', measurement_id: 'G-TEST' },
+      facebook: { revision: 'r', status: 'active', encrypted_user_token: 'enc-fb', page_id: 'page', page_name: 'Page' },
+    })}' WHERE id = 'org'`,
     "INSERT INTO organization_locales (id,organization_id,locale,label,is_source,status) VALUES ('org-en','org','en','English',1,'published')",
     "INSERT INTO user (id,name,email,emailVerified,stripeCustomerId,deletionScheduledAt) VALUES ('owner','Owner','owner@example.test',1,NULL,1790000000)",
     "INSERT INTO user (id,name,email,emailVerified,stripeCustomerId) VALUES ('linked-user','Linked Account Name','linked@example.test',1,'cus_linked')",
@@ -115,6 +120,12 @@ test('a pre-epoch export transfers into the #1083 baseline, and inconsistent ide
       assert.deepEqual(manifest.retired_tables, [{ table: 'broadcast_deliveries', source_rows: 1 }, { table: 'customers', source_rows: 2 }])
       assert.deepEqual(all("SELECT name FROM pragma_table_info('content_documents') WHERE name IN ('seo_title','seo_description','canonical_url','seo_keywords')"), [{ name: 'seo_keywords' }])
       assert.equal(one("SELECT count(*) AS n FROM pragma_table_info('user') WHERE name = 'deletionScheduledAt'").n, 0)
+      // #1087: a token the organization held cannot become a Better Auth linked
+      // account, so the connection goes, the owner is named, and the
+      // selection-only analytics key stays.
+      assert.deepEqual(JSON.parse(String(one("SELECT integrations_json FROM organization WHERE id = 'org'").integrations_json)),
+        { google_analytics: { revision: 'r', status: 'active', measurement_id: 'G-TEST' } })
+      assert.deepEqual(manifest.connections_to_reconnect, [{ organization_id: 'org', slug: 'org', name: 'Org', connections: ['google', 'facebook'] }])
       // 10: an existing broadcast has not been created at Resend yet.
       assert.deepEqual(all('SELECT id, provider_broadcast_id FROM broadcasts'), [{ id: 'broadcast', provider_broadcast_id: null }])
       // 12

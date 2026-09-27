@@ -383,6 +383,40 @@ export const EPOCH_RETIRED = {
   },
 }
 
+/**
+ * #1087 moves every provider credential onto the connecting person's Better
+ * Auth linked account, which the transfer cannot create from a token stored on
+ * the organization. So a `facebook` or `instagram` connection that names no
+ * `account_id`, and every `google_credential`, is removed rather than carried,
+ * and each organization that loses one is listed so its owner can reconnect.
+ * No token survives on the organization, and no account_id is invented.
+ * Selection-only keys (`google_analytics`, `google_search_console`) stay.
+ */
+function retireOrganizationProviderCredentials(stage, record) {
+  const rows = stage.prepare(`SELECT id, slug, name, integrations_json FROM main.organization
+    WHERE json_type(integrations_json, '$.google_credential') IS NOT NULL
+       OR json_type(integrations_json, '$.facebook') IS NOT NULL
+       OR json_type(integrations_json, '$.instagram') IS NOT NULL`).all()
+  const update = stage.prepare('UPDATE main.organization SET integrations_json = ? WHERE id = ?')
+  const dropped = []
+  for (const row of rows) {
+    const integrations = JSON.parse(row.integrations_json)
+    const connections = []
+    if (integrations.google_credential !== undefined) { delete integrations.google_credential; connections.push('google') }
+    for (const key of ['facebook', 'instagram']) {
+      const connection = integrations[key]
+      if (connection === undefined) continue
+      if (typeof connection?.account_id !== 'string' || !connection.account_id.trim()) { delete integrations[key]; connections.push(key); continue }
+      for (const field of Object.keys(connection).filter(name => name.startsWith('encrypted_'))) delete connection[field]
+    }
+    const serialized = JSON.stringify(integrations)
+    if (serialized !== row.integrations_json) update.run(serialized, row.id)
+    if (connections.length) dropped.push({ organization_id: row.id, slug: row.slug, name: row.name, connections })
+  }
+  record('organization_connections_to_reconnect', dropped.length)
+  return dropped
+}
+
 /** The domain rows that named a person through `customers`. */
 const CUSTOMER_REFERENCES = ['requests', 'reservations', 'bookings', 'review_requests', 'reviews']
 
@@ -572,7 +606,7 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
 /**
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables: Array<{ table: string, source_rows: number }>, retired_columns: Record<string, string[]>,
- *   added_columns: Record<string, string[]>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
+ *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
  *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number> },
  *   schema?: Array<{ type: string, name: string, sql: string }> }} TransferManifest
  */
@@ -606,6 +640,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     retired_tables: [],
     retired_columns: {},
     added_columns: {},
+    connections_to_reconnect: [],
     derived: {},
     transforms: [],
     invariants: [],
@@ -647,6 +682,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       manifest.tables.push({ table, source_rows: count(source, table) })
     }
     deriveUserIdentity(stage, sourceTables, (name, changes) => { manifest.derived[name] = changes })
+    manifest.connections_to_reconnect = retireOrganizationProviderCredentials(stage, (name, changes) => { manifest.derived[name] = changes })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
       // source. A source that never had it has nothing to fold, and the
@@ -712,6 +748,9 @@ export function printTransferReport(manifest) {
   for (const entry of manifest.retired_tables) console.log(`${entry.table.padEnd(width)}  ${String(entry.source_rows).padStart(6)}  retired`)
   for (const [table, names] of Object.entries(manifest.retired_columns)) console.log(`Retired ${table}: ${names.join(', ')}`)
   for (const [table, names] of Object.entries(manifest.added_columns)) console.log(`Added ${table}: ${names.join(', ')}`)
+  for (const entry of manifest.connections_to_reconnect) {
+    console.log(`Reconnect required: ${entry.slug} (${entry.organization_id}, ${entry.name}) loses ${entry.connections.join(', ')}`)
+  }
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, changes]) => `${name}=${changes}`).join(', ') || 'nothing'}`)
   console.log(`Transforms: ${manifest.transforms.filter(transform => transform.changes > 0).map(transform => `${transform.name}=${transform.changes}`).join(', ') || 'no changes'}`)
   if (manifest.payload?.delta) console.log(`Delta: ${Object.entries(manifest.payload.delta).filter(([, rows]) => rows > 0).map(([table, rows]) => `${table}=${rows}`).join(', ') || 'no new rows'}`)
