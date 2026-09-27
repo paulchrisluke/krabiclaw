@@ -461,13 +461,26 @@ for (const viewport of [
     await expect(page.locator(`[data-thread-row="${ended!.id}"]`)).toBeVisible()
     await expect(page.locator(`[data-thread-row="${ended!.id}"]`).getByRole('button', { name: /^Conversation actions for / })).toHaveCount(0)
 
+    // On desktop the conversation is open beside the list, so moving it back
+    // follows it into Current. Below that width nothing opens on its own, and
+    // the row simply leaves Past where it stands.
+    if (viewport.name === 'desktop') {
+      await rowFor(guestName).getByRole('link').click()
+      await expect(page).toHaveURL(new RegExp(`/messages/${threadId}\\?archived=$`))
+    }
     await rowFor(guestName).hover()
     await actionsFor(guestName).click()
     await expect(page.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0)
     const moved = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/guest-threads/${threadId}/operations/unarchive`))
     await page.getByRole('menuitem', { name: 'Move to messages' }).click()
     expect((await moved).status()).toBe(200)
-    await expect(rowFor(guestName)).toHaveCount(0)
+    if (viewport.name === 'desktop') {
+      await expect(page).toHaveURL(new RegExp(`/messages/${threadId}$`))
+      await expect(page.getByRole('heading', { name: 'Messages', level: 1 })).toBeVisible()
+      await expect(rowFor(guestName)).toBeVisible()
+    } else {
+      await expect(rowFor(guestName)).toHaveCount(0)
+    }
 
     await page.goto(`${baseURL}/dashboard/${organizationId}/messages`)
     await expect(rowFor(guestName)).toBeVisible()
