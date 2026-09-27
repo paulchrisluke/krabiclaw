@@ -14,7 +14,6 @@ export interface DashboardOrganization {
   name: string
   slug: string
   role: string
-  deletionScheduledAt: string | null
   theme_id: string
   vertical: 'restaurant' | 'experience' | 'service' | null
   subdomain: string | null
@@ -25,8 +24,7 @@ export interface DashboardOrganization {
   effective_plan: string
   default_currency: string | null
   feature_overrides: string | null
-  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
-  social_image: { url: string; width?: number; height?: number; type?: string } | null
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
 }
 
 export interface DashboardLocation {
@@ -36,7 +34,7 @@ export interface DashboardLocation {
   status: string
   city: string | null
   address: PostalAddress | null
-  media: Array<{ asset_id: string; slot: string; public_url: string; thumbnail_url: string | null; kind: string | null }>
+  media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null
 }
@@ -68,7 +66,6 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && typeof value.name === 'string'
   && typeof value.slug === 'string'
   && typeof value.role === 'string'
-  && (value.deletionScheduledAt === null || typeof value.deletionScheduledAt === 'string')
   && typeof value.theme_id === 'string'
   && (value.subdomain === null || typeof value.subdomain === 'string')
   && (value.public_url === null || typeof value.public_url === 'string')
@@ -76,7 +73,6 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && typeof value.onboarding_status === 'string'
   && (value.default_currency === null || typeof value.default_currency === 'string')
   && isMediaList(value.media)
-  && isSocialImage(value.social_image)
 
 const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   isRecord(value)

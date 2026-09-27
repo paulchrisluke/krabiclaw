@@ -271,8 +271,8 @@ async function hydrateBlocks(
   const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
     Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, organizationId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
     hasReviewSource ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
-    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
-      SELECT p.id, p.title, p.slug, p.summary AS excerpt, p.canonical_url, ${COVER_SELECT}
+    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
+      SELECT p.id, p.title, p.slug, p.summary AS excerpt, ${COVER_SELECT}
         FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
         ${coverJoinSql('p')}
        WHERE root.kind = 'article' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'listed'
@@ -306,7 +306,7 @@ async function hydrateBlocks(
       id: row.id,
       title: row.title,
       description: row.excerpt || undefined,
-      url: row.canonical_url || `${articlePrefix}/${row.slug}`,
+      url: `${articlePrefix}/${row.slug}`,
       labelKey: 'saya.posts.read_full_story',
       media: cover
         ? projectLocalizedMediaAlt([{ asset_id: cover.asset_id, slot: 'media', public_url: cover.public_url, thumbnail_url: cover.thumbnail_url, kind: cover.kind, alt_text: cover.alt_text }], localizations ?? [])
@@ -469,9 +469,16 @@ export async function getPublicTenantPageForPath(
   const localizations = page.locale === 'en'
     ? null
     : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, page.locale)
+  // The home page has no card of its own: it is the organization's page, and
+  // its image is the organization's.
   const [blocks, media, sourceLocale] = await Promise.all([
     hydrateBlocks(db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
-    loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
+    page.path === '/'
+      ? loadPublicSocialMedia(db, organizationId, 'organization', [organizationId]).then(organization => new Map([[page.id, {
+          media: [],
+          social_image: organization.get(organizationId)?.social_image ?? null,
+        }]]))
+      : loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
     queryFirst<{ locale: string }>(db, `
       SELECT locale FROM organization_locales
        WHERE organization_id = ?  AND is_source = 1

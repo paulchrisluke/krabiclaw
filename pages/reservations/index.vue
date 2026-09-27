@@ -441,8 +441,11 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata(() => ({
   path: '/reservations',
+  socialImage: organizationSocialImage,
   title: `${brandName.value} | ${resCopy.value.reserveCta}`,
   description: resCopy.value.seoReservationDescription(brandName.value),
   brand: {

@@ -112,9 +112,11 @@ export interface DraftContentRecord {
 }
 
 export interface OnboardingDraftPayload {
-  version: 2
+  version: 3
   source: {
     type: DraftSourceType
+    /** The Google place the owner picked; null on a manual draft. */
+    placeId: string | null
     place: PlaceDetailsSnapshot | null
     details: DraftDetailsInput
   }
@@ -346,9 +348,10 @@ export function buildOnboardingDraftPayload(input: {
   const content = buildDraftContent(brandName, input.vertical, heroHeadline, heroSubtitle)
 
   return {
-    version: 2,
+    version: 3,
     source: {
       type: placeSnapshot ? 'google_places' : 'manual',
+      placeId: placeSnapshot?.placeId ?? null,
       place: placeSnapshot,
       details: input.details,
     },
@@ -392,19 +395,30 @@ export function buildOnboardingDraftPayload(input: {
   }
 }
 
+/**
+ * Reads a stored draft. Version 2 drafts predate `source.placeId`; they carry
+ * the same identity on their place snapshot, so they restore as version 3 and
+ * an owner part-way through onboarding at deployment keeps their draft.
+ */
 export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload {
-  const parsed = JSON.parse(raw) as OnboardingDraftPayload
-  if (!parsed || parsed.version !== 2 || !parsed.preview || !Array.isArray(parsed.preview.media) || !Array.isArray(parsed.preview.products)) {
+  const parsed = JSON.parse(raw) as OnboardingDraftPayload | (Omit<OnboardingDraftPayload, 'version'> & { version: 2 })
+  if (!parsed || (parsed.version !== 2 && parsed.version !== 3) || !parsed.source || !parsed.preview
+    || !Array.isArray(parsed.preview.media) || !Array.isArray(parsed.preview.products)) {
     throw new Error('Unsupported onboarding draft payload')
   }
-  parsed.source.details.openingHours = parseOpeningHours(parsed.source.details.openingHours)
-  parsed.source.details.specialHours = parseSpecialHours(parsed.source.details.specialHours)
-  if (parsed.source.place) parsed.source.place.openingHours = parseOpeningHours(parsed.source.place.openingHours)
-  for (const location of parsed.preview.locations) {
+  const placeId = parsed.version === 3 ? parsed.source.placeId : parsed.source.place?.placeId ?? null
+  if (parsed.source.type === 'google_places' ? !placeId : placeId !== null || parsed.source.place !== null) {
+    throw new Error(`Onboarding draft source does not match its ${parsed.source.type} type`)
+  }
+  const payload: OnboardingDraftPayload = { ...parsed, version: 3, source: { ...parsed.source, placeId } }
+  payload.source.details.openingHours = parseOpeningHours(payload.source.details.openingHours)
+  payload.source.details.specialHours = parseSpecialHours(payload.source.details.specialHours)
+  if (payload.source.place) payload.source.place.openingHours = parseOpeningHours(payload.source.place.openingHours)
+  for (const location of payload.preview.locations) {
     location.opening_hours = parseOpeningHours(location.opening_hours)
     location.special_hours = parseSpecialHours(location.special_hours)
   }
-  return parsed
+  return payload
 }
 
 export async function upsertActiveOnboardingDraft(db: D1Database, input: {

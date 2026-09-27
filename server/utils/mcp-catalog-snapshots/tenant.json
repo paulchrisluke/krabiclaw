@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f8694db1ce92f2dccbe29e489cb720e36e5ca29795b12b4f8ae63b041448043a",
+  "fingerprint": "sha256:628ef1bd37a9d1583b9b203c77554b1a87627cc50ad78a78330492bf1b6cddec",
   "tools": [
     {
       "name": "append_content_block",
@@ -1123,9 +1123,6 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "canonical_url": {
-            "type": "string"
-          },
           "category": {
             "type": "string"
           },
@@ -1277,18 +1274,8 @@
               "null"
             ]
           },
-          "seo_description": {
-            "type": "string"
-          },
           "seo_keywords": {
             "description": "Comma-separated SEO keyword phrases when useful.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
             "type": [
               "string",
               "null"
@@ -1335,12 +1322,6 @@
             "additionalProperties": false,
             "properties": {
               "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
                 "type": [
                   "string",
                   "null"
@@ -1564,19 +1545,7 @@
                   "null"
                 ]
               },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
                 "type": [
                   "string",
                   "null"
@@ -1627,10 +1596,7 @@
               "collection",
               "category",
               "tags",
-              "seo_title",
-              "seo_description",
               "seo_keywords",
-              "canonical_url",
               "published",
               "published_at",
               "status",
@@ -2165,26 +2131,6 @@
                 "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
                 "format": "date-time",
                 "pattern": "^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seo_description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seo_title": {
-            "anyOf": [
-              {
                 "type": "string"
               },
               {
@@ -3615,12 +3561,6 @@
                   "null"
                 ]
               },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "category": {
                 "type": [
                   "string",
@@ -3839,19 +3779,7 @@
                   "null"
                 ]
               },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
                 "type": [
                   "string",
                   "null"
@@ -3902,10 +3830,7 @@
               "collection",
               "category",
               "tags",
-              "seo_title",
-              "seo_description",
               "seo_keywords",
-              "canonical_url",
               "published",
               "published_at",
               "status",
@@ -5622,18 +5547,6 @@
                   "null"
                 ]
               },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "slug": {
                 "type": [
                   "string",
@@ -6641,19 +6554,7 @@
                   "row_role": {
                     "const": "representation"
                   },
-                  "seo_description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
                   "seo_keywords": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "seo_title": {
                     "type": [
                       "string",
                       "null"
@@ -6694,8 +6595,6 @@
                   "summary",
                   "slug",
                   "path",
-                  "seo_title",
-                  "seo_description",
                   "seo_keywords",
                   "metadata",
                   "content_blocks"
@@ -6943,12 +6842,6 @@
                     "null"
                   ]
                 },
-                "canonical_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "category": {
                   "type": [
                     "string",
@@ -7073,19 +6966,7 @@
                     "null"
                   ]
                 },
-                "seo_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "seo_keywords": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_title": {
                   "type": [
                     "string",
                     "null"
@@ -7136,10 +7017,7 @@
                 "collection",
                 "category",
                 "tags",
-                "seo_title",
-                "seo_description",
                 "seo_keywords",
-                "canonical_url",
                 "published",
                 "published_at",
                 "status",
@@ -8600,18 +8478,6 @@
                     "null"
                   ]
                 },
-                "seo_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "slug": {
                   "type": [
                     "string",
@@ -8898,12 +8764,6 @@
                   "null"
                 ]
               },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "category": {
                 "type": [
                   "string",
@@ -9122,19 +8982,7 @@
                   "null"
                 ]
               },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
                 "type": [
                   "string",
                   "null"
@@ -9185,10 +9033,7 @@
               "collection",
               "category",
               "tags",
-              "seo_title",
-              "seo_description",
               "seo_keywords",
-              "canonical_url",
               "published",
               "published_at",
               "status",
@@ -9495,19 +9340,7 @@
                   "row_role": {
                     "const": "representation"
                   },
-                  "seo_description": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
                   "seo_keywords": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "seo_title": {
                     "type": [
                       "string",
                       "null"
@@ -9548,8 +9381,6 @@
                   "summary",
                   "slug",
                   "path",
-                  "seo_title",
-                  "seo_description",
                   "seo_keywords",
                   "metadata",
                   "content_blocks"
@@ -13208,9 +13039,6 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "canonical_url": {
-            "type": "string"
-          },
           "category": {
             "type": "string"
           },
@@ -13368,18 +13196,8 @@
           "reset_slug_override": {
             "type": "boolean"
           },
-          "seo_description": {
-            "type": "string"
-          },
           "seo_keywords": {
             "description": "Comma-separated SEO keyword phrases when useful.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "seo_title": {
-            "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
             "type": [
               "string",
               "null"
@@ -13422,12 +13240,6 @@
             "additionalProperties": false,
             "properties": {
               "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
                 "type": [
                   "string",
                   "null"
@@ -13651,19 +13463,7 @@
                   "null"
                 ]
               },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
                 "type": [
                   "string",
                   "null"
@@ -13714,10 +13514,7 @@
               "collection",
               "category",
               "tags",
-              "seo_title",
-              "seo_description",
               "seo_keywords",
-              "canonical_url",
               "published",
               "published_at",
               "status",
@@ -14309,28 +14106,6 @@
             ],
             "type": "string"
           },
-          "media": {
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "type": "string"
-                },
-                "slot": {
-                  "enum": [
-                    "logo",
-                    "favicon"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id",
-                "slot"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
           "name": {
             "type": "string"
           },
@@ -14702,26 +14477,6 @@
                 "description": "RFC 3339 instant with an explicit Z or numeric UTC offset. Offsetless timestamps are invalid.",
                 "format": "date-time",
                 "pattern": "^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d{1,9})?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seo_description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "seo_title": {
-            "anyOf": [
-              {
                 "type": "string"
               },
               {

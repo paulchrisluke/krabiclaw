@@ -79,8 +79,8 @@ WHATSAPP_DELIVERY_MODE = "provider"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-production-v3"
-database_id = "f189db17-ed3c-48d8-83be-96ff95a088c8"
+database_name = "krabiclaw-production-v4"
+database_id = "86ec8256-69a3-4c73-b1c4-17f4757607f0"
 migrations_dir = "migrations"
 remote = false
 
@@ -128,6 +128,64 @@ enabled = true
 # Tenant aliases stay at the first subdomain level (for example,
 # pottery-house-staging.krabiclaw.com), which is covered by the zone certificate.
 # The more-specific environment route wins over production's broad wildcard.
+# `nuxt dev` only. Wrangler's platform proxy runs an empty script, so a Durable
+# Object bound to a class in this Worker never resolves there; the class is
+# served by server/cloudflare/dev/wrangler.toml (started by
+# server/plugins/00.cloudflare-dev-bindings.ts) and bound by script_name.
+# Bindings are not inherited by an environment, so the rest mirrors the
+# top-level Worker against the same local resources. Never deployed.
+[env.dev]
+
+[env.dev.vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+MEDIA_BASE_URL = "https://media.krabiclaw.com"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
+GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
+EMAIL_DELIVERY_MODE = "provider"
+WHATSAPP_DELIVERY_MODE = "provider"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-production-v4"
+database_id = "86ec8256-69a3-4c73-b1c4-17f4757607f0"
+migrations_dir = "migrations"
+remote = false
+
+[[env.dev.durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+script_name = "krabiclaw-guest-inbox-hub"
+
+[[env.dev.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media"
+remote = false
+
+[[env.dev.kv_namespaces]]
+binding = "ORGANIZATION_CACHE"
+id = "7fadf142e35745d6bec16b260eaab2f2"
+remote = false
+
+[env.dev.ai]
+binding = "AI"
+remote = true
+
+[env.dev.images]
+binding = "IMAGES"
+
+[[env.dev.ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
 [env.staging]
 routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" },
@@ -155,6 +213,9 @@ AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 # Analytics is intentionally disabled outside production.
 GA4_MEASUREMENT_ID = ""
+# Staging runs on a copy of production's rows and has no Zaraz zone of its own;
+# reconciling would rewrite production's tags. Production leaves this unset.
+ZARAZ_ANALYTICS = "absent"
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
@@ -162,8 +223,8 @@ E2E_ALLOW_DEV_ROUTES = "true"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "krabiclaw-staging-v3"
-database_id = "fbd3b24e-e7e9-43c5-96ef-9f8fc8a43885"
+database_name = "krabiclaw-staging-v4"
+database_id = "910ec4ce-4081-47b9-bd48-66fc8fe28220"
 migrations_dir = "migrations"
 remote = false
 

@@ -310,6 +310,198 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
   }
 })
 
+type Mailbox = 'current' | 'past'
+
+// Both list loaders, so the mailbox vocabulary cannot survive in only one.
+async function loadMailbox(request: APIRequestContext, mailbox: Mailbox) {
+  const [byId, byOrg] = await Promise.all([
+    request.get(`/api/dashboard/organizations/${organizationId}/guest-threads`, { params: { mailbox } }),
+    request.get('/api/dashboard/guest-threads', { params: { org: organizationId, mailbox } }),
+  ])
+  await expectStatus(byId, 200)
+  await expectStatus(byOrg, 200)
+  return {
+    byId: (await byId.json() as { threads: GuestThreadListItemViewModel[] }).threads,
+    byOrg: (await byOrg.json() as { threads: GuestThreadListItemViewModel[] }).threads,
+  }
+}
+
+async function submitContact(request: APIRequestContext, guestName: string) {
+  const response = await request.post('/api/public/contact', {
+    headers: potteryHouseTestExtraHeaders(),
+    data: { name: guestName, email: `${guestName.replace(/\W+/g, '-').toLowerCase()}@playwright.example`, subject: 'partnerships', message: `Mailbox proof for ${guestName}` },
+  })
+  await expectStatus(response, 201)
+}
+
+test('archive and Move to messages file a conversation without reordering the inbox', async ({ playwright }) => {
+  test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
+  test.setTimeout(120_000)
+
+  const owner = await playwright.request.newContext({ baseURL })
+  const foreignOwner = await playwright.request.newContext({ baseURL })
+  try {
+    await Promise.all([loginAs(owner, baseURL, ownerId), loginAs(foreignOwner, baseURL, foreignOwnerId)])
+
+    // The retired vocabulary is refused by both loaders rather than ignored.
+    await expectStatus(await owner.get(`/api/dashboard/organizations/${organizationId}/guest-threads`, { params: { occurrence: 'upcoming' } }), 400)
+    await expectStatus(await owner.get('/api/dashboard/guest-threads', { params: { org: organizationId, occurrence: 'past' } }), 400)
+
+    const nonce = Date.now()
+    const filedName = `Mailbox filed ${nonce}`
+    const newerName = `Mailbox newer ${nonce}`
+    await submitContact(owner, filedName)
+    await submitContact(owner, newerName)
+
+    const current = await loadMailbox(owner, 'current')
+    const filed = current.byId.find(thread => thread.guestName === filedName)
+    const newer = current.byId.find(thread => thread.guestName === newerName)
+    expect(filed).toMatchObject({ mailbox: 'current', manuallyArchived: false, canArchive: true, canUnarchive: false })
+    expect(current.byOrg.find(thread => thread.id === filed!.id)).toMatchObject({ mailbox: 'current', canArchive: true })
+    const threadId = filed!.id
+    const before = await loadThreadDetail(owner, threadId)
+    expect(before).toMatchObject({ mailbox: 'current', archivedAt: null, archivedByUserId: null, canArchive: true, canUnarchive: false })
+
+    const operationUrl = (action: 'archive' | 'unarchive') =>
+      `/api/dashboard/organizations/${organizationId}/guest-threads/${threadId}/operations/${action}`
+
+    // Another business's owner cannot reach it, and a key is required.
+    expect([403, 404]).toContain((await foreignOwner.post(operationUrl('archive'), { data: { idempotencyKey: `foreign-${nonce}` } })).status())
+    await expectStatus(await owner.post(operationUrl('archive'), { data: {} }), 400)
+    expect(await loadThreadDetail(owner, threadId)).toMatchObject({ archivedAt: null, mailbox: 'current' })
+
+    // One key, sent twice at once and once more after: one archive.
+    const archive = () => owner.post(operationUrl('archive'), { data: { idempotencyKey: `archive-${nonce}` } })
+    for (const response of await Promise.all([archive(), archive()])) await expectStatus(response, 200)
+    const archived = await loadThreadDetail(owner, threadId)
+    expect(archived).toMatchObject({
+      mailbox: 'past', manuallyArchived: true, archivedByUserId: ownerId, canArchive: false, canUnarchive: true,
+      conversationState: before.conversationState, updatedAt: before.updatedAt,
+    })
+    expect(archived.archivedAt).toEqual(expect.any(String))
+    await expectStatus(await archive(), 200)
+    const retried = await loadThreadDetail(owner, threadId)
+    expect(retried.archivedAt).toBe(archived.archivedAt)
+    expect(retried.entries.filter(entry => entry.eventName === 'thread.archived')).toMatchObject([{ kind: 'operation', actorUserId: ownerId }])
+
+    const afterArchiveCurrent = await loadMailbox(owner, 'current')
+    const afterArchivePast = await loadMailbox(owner, 'past')
+    expect(afterArchiveCurrent.byId.some(thread => thread.id === threadId)).toBe(false)
+    expect(afterArchiveCurrent.byOrg.some(thread => thread.id === threadId)).toBe(false)
+    expect(afterArchivePast.byId.find(thread => thread.id === threadId)).toMatchObject({ mailbox: 'past', manuallyArchived: true, canUnarchive: true })
+    expect(afterArchivePast.byOrg.find(thread => thread.id === threadId)).toMatchObject({ mailbox: 'past', canUnarchive: true })
+
+    const unarchive = () => owner.post(operationUrl('unarchive'), { data: { idempotencyKey: `unarchive-${nonce}` } })
+    for (const response of await Promise.all([unarchive(), unarchive()])) await expectStatus(response, 200)
+    await expectStatus(await unarchive(), 200)
+    const restored = await loadThreadDetail(owner, threadId)
+    expect(restored).toMatchObject({ mailbox: 'current', archivedAt: null, archivedByUserId: null, updatedAt: before.updatedAt })
+    expect(restored.entries.filter(entry => entry.eventName === 'thread.unarchived')).toHaveLength(1)
+
+    // Filing it away and back is not conversation activity: the newer thread
+    // is still ahead of it.
+    const order = (await loadMailbox(owner, 'current')).byId.map(thread => thread.id)
+    expect(order.indexOf(newer!.id)).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf(newer!.id)).toBeLessThan(order.indexOf(threadId))
+
+    // A conversation Past because its booking ended cannot be moved back.
+    const ended = (await loadMailbox(owner, 'past')).byId.find(thread => !thread.manuallyArchived)
+    expect(ended, 'Pottery House fixtures include a booking that has ended').toBeDefined()
+    expect(ended).toMatchObject({ mailbox: 'past', canArchive: false, canUnarchive: false })
+    const refused = await owner.post(`/api/dashboard/organizations/${organizationId}/guest-threads/${ended!.id}/operations/unarchive`, {
+      data: { idempotencyKey: `unarchive-ended-${nonce}` },
+    })
+    await expectStatus(refused, 409)
+    expect(await refused.json()).toMatchObject({ error: 'This conversation is past because its booking has ended' })
+    expect(await loadThreadDetail(owner, ended!.id)).toMatchObject({ mailbox: 'past', archivedAt: null })
+  } finally {
+    await Promise.all([owner.dispose(), foreignOwner.dispose()])
+  }
+})
+
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 375, height: 812 },
+]) {
+  test(`the row menu archives a conversation and moves it back (${viewport.name})`, async ({ page }) => {
+    test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
+    test.setTimeout(120_000)
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
+    await loginAs(page.request, baseURL, ownerId)
+    const guestName = `Mailbox row ${viewport.name} ${Date.now()}`
+    await submitContact(page.request, guestName)
+    await dismissPreviewToolbar(page)
+
+    // The rows are server-rendered, so they are visible before the menu has a
+    // handler: the list says when it has hydrated, and nothing is pressed
+    // before. On desktop the index then opens its newest thread beside the
+    // list, and that navigation re-renders the rows, so the screen has settled
+    // only once a thread is open.
+    const openMessages = async (query = '') => {
+      await page.goto(`${baseURL}/dashboard/${organizationId}/messages${query}`)
+      await expect(page.locator('[data-guest-thread-list-hydrated="true"]')).toBeVisible()
+      if (viewport.name === 'desktop') await expect(page).toHaveURL(/\/messages\/[^/?]+(\?|$)/)
+    }
+    const rowFor = (name: string) => page.locator('[data-thread-row]').filter({ hasText: name })
+    const actionsFor = (name: string) => rowFor(name).getByRole('button', { name: `Conversation actions for ${name}` })
+
+    await openMessages()
+    await expect(rowFor(guestName)).toBeVisible()
+    await rowFor(guestName).hover()
+    await actionsFor(guestName).click()
+    // The menu opened; the conversation did not.
+    await expect(page.getByRole('menuitem', { name: 'Archive' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Move to messages' })).toHaveCount(0)
+    const threadId = await rowFor(guestName).getAttribute('data-thread-row')
+    if (viewport.name === 'mobile') await expect(page).toHaveURL(new RegExp(`/messages(\\?.*)?$`))
+    const archived = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/guest-threads/${threadId}/operations/archive`))
+    await page.getByRole('menuitem', { name: 'Archive' }).click()
+    expect((await archived).status()).toBe(200)
+    await expect(rowFor(guestName)).toHaveCount(0)
+    // The archived conversation is not left open beside the list.
+    await expect(page).not.toHaveURL(new RegExp(`/messages/${threadId}`))
+
+    await openMessages('?archived=')
+    await expect(rowFor(guestName)).toBeVisible()
+
+    // A conversation Past because its booking ended offers no way back.
+    const pastThreads = (await (await page.request.get(`/api/dashboard/organizations/${organizationId}/guest-threads`, { params: { mailbox: 'past' } })).json() as { threads: GuestThreadListItemViewModel[] }).threads
+    const ended = pastThreads.find(thread => !thread.manuallyArchived)
+    expect(ended, 'Pottery House fixtures include a booking that has ended').toBeDefined()
+    await expect(page.locator(`[data-thread-row="${ended!.id}"]`)).toBeVisible()
+    await expect(page.locator(`[data-thread-row="${ended!.id}"]`).getByRole('button', { name: /^Conversation actions for / })).toHaveCount(0)
+
+    // On desktop the conversation is open beside the list, so moving it back
+    // follows it into Current. Below that width nothing opens on its own, and
+    // the row simply leaves Past where it stands.
+    if (viewport.name === 'desktop') {
+      await rowFor(guestName).getByRole('link').click()
+      await expect(page).toHaveURL(new RegExp(`/messages/${threadId}\\?archived=$`))
+    }
+    await rowFor(guestName).hover()
+    await actionsFor(guestName).click()
+    await expect(page.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0)
+    const moved = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/guest-threads/${threadId}/operations/unarchive`))
+    await page.getByRole('menuitem', { name: 'Move to messages' }).click()
+    expect((await moved).status()).toBe(200)
+    if (viewport.name === 'desktop') {
+      await expect(page).toHaveURL(new RegExp(`/messages/${threadId}$`))
+      await expect(page.getByRole('heading', { name: 'Messages', level: 1 })).toBeVisible()
+      await expect(rowFor(guestName)).toBeVisible()
+    } else {
+      await expect(rowFor(guestName)).toHaveCount(0)
+    }
+
+    await openMessages()
+    await expect(rowFor(guestName)).toBeVisible()
+    // Keyboard: the menu button is reachable and opens with Enter.
+    await actionsFor(guestName).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('menuitem', { name: 'Archive' })).toBeVisible()
+    await page.keyboard.press('Escape')
+  })
+}
+
 test('Today uses the CMS patterns and sends one reservation change request', async ({ page }) => {
   test.skip(!writable, 'Today writes require disposable local or preview data')
   test.setTimeout(180_000)

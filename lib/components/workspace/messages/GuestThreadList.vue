@@ -71,6 +71,17 @@
       </UAlert>
 
       <UAlert
+        v-if="mailboxError"
+        color="error"
+        variant="soft"
+        class="m-3"
+        title="The conversation could not be moved"
+        :description="mailboxError"
+        close
+        @update:open="mailboxError = null"
+      />
+
+      <UAlert
         v-if="threadsError"
         color="error"
         variant="soft"
@@ -84,51 +95,80 @@
         32px of gutter between the picture and the pane and made every row
         narrower than the text it holds.
       -->
-      <NuxtLink
+      <div
         v-for="thread in threads"
         :key="thread.id"
-        :to="{ path: threadRoute(thread), query: route.query }"
-        class="mx-3 flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        :class="thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60'"
+        class="group relative mx-3"
+        :data-thread-row="thread.id"
       >
-        <!-- The picture leads: the location's hero, or the business's logo for
-             a thread that came to the business itself. A place with neither
-             keeps the same footprint so the rows do not reflow between them. -->
-        <img
-          v-if="thread.imageUrl"
-          :src="thread.imageUrl"
-          alt=""
-          class="size-14 shrink-0 rounded-xl object-cover"
-          loading="lazy"
+        <NuxtLink
+          :to="{ path: threadRoute(thread), query: route.query }"
+          class="flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          :class="[
+            thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60',
+            rowActions(thread).length ? 'pr-12' : '',
+          ]"
         >
-        <div v-else class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-elevated">
-          <UIcon name="i-lucide-image" class="size-5 text-dimmed" />
-        </div>
-
-        <div class="min-w-0 flex-1">
-          <!--
-            A thread with a booking leads with when it is, the way Airbnb's row
-            leads with its date range. One with no booking has nothing to put
-            there, so the name moves up rather than leaving an empty line for
-            the picture to align against.
-          -->
-          <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
-            <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
-            <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+          <!-- The picture leads: the location's hero, or the business's logo for
+               a thread that came to the business itself. A place with neither
+               keeps the same footprint so the rows do not reflow between them. -->
+          <img
+            v-if="thread.imageUrl"
+            :src="thread.imageUrl"
+            alt=""
+            class="size-14 shrink-0 rounded-xl object-cover"
+            loading="lazy"
+          >
+          <div v-else class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-elevated">
+            <UIcon name="i-lucide-image" class="size-5 text-dimmed" />
           </div>
-          <div class="flex items-baseline justify-between gap-3">
-            <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
-            <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
-          </div>
-          <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
-        </div>
 
-        <span
-          v-if="thread.unread"
-          class="mt-2 block size-2.5 shrink-0 rounded-full bg-primary"
-          :aria-label="`${thread.guestName}: unread`"
-        />
-      </NuxtLink>
+          <div class="min-w-0 flex-1">
+            <!--
+              A thread with a booking leads with when it is, the way Airbnb's row
+              leads with its date range. One with no booking has nothing to put
+              there, so the name moves up rather than leaving an empty line for
+              the picture to align against.
+            -->
+            <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
+              <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
+              <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+            </div>
+            <div class="flex items-baseline justify-between gap-3">
+              <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+              <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+            </div>
+            <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
+          </div>
+
+          <span
+            v-if="thread.unread"
+            class="mt-2 block size-2.5 shrink-0 rounded-full bg-primary"
+            :aria-label="`${thread.guestName}: unread`"
+          />
+        </NuxtLink>
+
+        <!--
+          Airbnb's row menu: a sibling of the row's link, not inside it, so
+          opening it never opens the conversation and the link stays one
+          interactive element. Hover reveals it where there is a pointer; it is
+          always there on a phone and always reachable by Tab.
+        -->
+        <UDropdownMenu
+          v-if="rowActions(thread).length"
+          :items="rowActions(thread)"
+          :content="{ align: 'end' }"
+        >
+          <UButton
+            icon="i-lucide-ellipsis"
+            color="neutral"
+            variant="ghost"
+            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
+            :loading="mailboxSaving === thread.id"
+            :aria-label="`Conversation actions for ${thread.guestName}`"
+          />
+        </UDropdownMenu>
+      </div>
 
       <!--
         Airbnb's own: a 50px full-bleed row at the foot of the list, not a tab
@@ -168,6 +208,7 @@
 import type { LocationQueryRaw } from 'vue-router'
 import { getErrorMessage } from '~/utils/errors'
 import {
+  isThreadDetailResponse,
   isThreadListResponse,
   threadFilterLabel,
   type SubmissionType,
@@ -304,7 +345,7 @@ const emptyTitle = computed(() => {
 const emptyDescription = computed(() => {
   if (route.query.query) return `Nothing matched “${route.query.query}”.`
   if (filtersApplied.value) return 'Try a different filter, or clear them to see everything.'
-  if (pastOnly.value) return 'Conversations move here once their booking has passed.'
+  if (pastOnly.value) return 'Conversations move here when their reservation or experience ends, or when you archive them.'
   return 'New guest conversations will appear here.'
 })
 
@@ -312,7 +353,7 @@ let threadsRequestToken = 0
 
 const listQuery = computed(() => ({
   type: activeType.value ?? undefined,
-  occurrence: pastOnly.value ? 'past' as const : 'upcoming' as const,
+  mailbox: pastOnly.value ? 'past' as const : 'current' as const,
   unread: unreadOnly.value ? '1' as const : undefined,
 }))
 
@@ -388,6 +429,53 @@ async function loadThreads() {
     threadsError.value = error
   } finally {
     if (requestToken === threadsRequestToken) loadingThreads.value = false
+  }
+}
+
+/*
+  The row menu offers what the server says the thread allows. Where a
+  conversation belongs is decided by the mailbox resolver, never from dates
+  here, so the menu reads `canArchive` and `canUnarchive` and nothing else.
+*/
+const mailboxSaving = ref<string | null>(null)
+const mailboxError = ref<string | null>(null)
+const mailboxAttemptKeys = ref<Record<string, string>>({})
+
+function rowActions(thread: ThreadListItem) {
+  const items: Array<{ label: string, icon: string, onSelect: () => void }> = []
+  if (thread.canArchive) items.push({ label: 'Archive', icon: 'i-lucide-archive', onSelect: () => void moveThread(thread, 'archive') })
+  if (thread.canUnarchive) items.push({ label: 'Move to messages', icon: 'i-lucide-inbox', onSelect: () => void moveThread(thread, 'unarchive') })
+  return items
+}
+
+async function moveThread(thread: ThreadListItem, transition: 'archive' | 'unarchive') {
+  if (!dashboardScope.value || !organizationId.value) return
+  // One key per attempt, kept until it succeeds, so a retry after a dropped
+  // response is the same request rather than a second one.
+  const attempt = `${thread.id}:${transition}`
+  mailboxAttemptKeys.value[attempt] ||= crypto.randomUUID()
+  const idempotencyKey = mailboxAttemptKeys.value[attempt]
+  mailboxSaving.value = thread.id
+  mailboxError.value = null
+  try {
+    await dashboardApi(
+      `/api/dashboard/organizations/${organizationId.value}/guest-threads/${encodeURIComponent(thread.id)}/operations/${transition}`,
+      { method: 'POST', body: { idempotencyKey }, validate: isThreadDetailResponse },
+    )
+    const { [attempt]: _completed, ...remaining } = mailboxAttemptKeys.value
+    mailboxAttemptKeys.value = remaining
+    const wasOpen = openThreadId.value === thread.id
+    await loadThreads()
+    if (!wasOpen) return
+    // The open conversation left this list. Archiving returns to the list so
+    // the index can open the next current thread; moving one back follows it
+    // into the list it now belongs to.
+    if (transition === 'archive') await router.push({ path: listRoute.value, query: route.query })
+    else await router.push({ path: threadRoute(thread), query: withoutArchived.value })
+  } catch (error) {
+    mailboxError.value = getErrorMessage(error, 'The conversation could not be moved')
+  } finally {
+    mailboxSaving.value = null
   }
 }
 

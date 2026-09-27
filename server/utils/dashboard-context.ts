@@ -1,5 +1,4 @@
 import { HTTPError } from 'nitro'
-import { resolveSocialImageFromMedia } from '~/utils/social-metadata';
 import { getQuery } from 'nitro/h3';
 
 import type { H3Event } from 'nitro'
@@ -11,6 +10,8 @@ import { assertOrganizationWideAccess, memberAccessPrincipal, resolveUserOrganiz
 import { getOrganizationPlan } from '~/server/utils/billing-access'
 
 import { parsePostalAddress } from '~/utils/postal-address'
+import { readMediaPlacements } from '~/server/utils/media-asset-manager'
+import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
 
 /**
  * The tenant's own configuration, read from the `organization` row.
@@ -36,9 +37,6 @@ export type DashboardOrganizationRow = ResolvedMembership & {
   id: string
   name: string
   slug: string
-  // Set while a deletion is pending: the tenant keeps serving until the
-  // deletion-sweep task runs, and an owner can cancel until then.
-  deletionScheduledAt: string | null
 } & DashboardOrganizationConfig
 
 const ORGANIZATION_CONFIG_SQL = `
@@ -49,38 +47,14 @@ const ORGANIZATION_CONFIG_SQL = `
   FROM organization WHERE id = ? LIMIT 1
 `
 
-// One loader for the tenant's social media, used by every dashboard surface so
-// two of them cannot report different images for the same business. Slots and
-// resolution order match the public surfaces exactly.
-//
-// Cards render the same image the public pages do. The dashboard used to run
-// its own query against the home page hero block's social_card — a different
-// owner from the one public reads — which is why it showed nothing while the
-// public site rendered fine.
-export type DashboardOrganizationMedia = Array<{ asset_id: string, slot: string, public_url: string, thumbnail_url: string | null, kind: string | null }>
+// The dashboard shows the business's mark and nothing else of its media: the
+// sidebar avatar is its `logo`, or no avatar at all.
+export type DashboardOrganizationMedia = Array<{ asset_id: string, slot: string, public_url: string | null, thumbnail_url: string | null, kind: string | null }>
 
-async function loadOrganizationSocialMedia(db: DbClient, organizationId: string): Promise<DashboardOrganizationMedia> {
-  return await queryAll<DashboardOrganizationMedia[number]>(db, `
-    SELECT ma.id AS asset_id, mp.slot,
-           ma.public_url, ma.thumbnail_url, ma.kind
-      FROM media_placements mp
-      JOIN media_assets ma
-        ON ma.id = mp.asset_id
-       AND ma.status = 'active'
-       AND ma.organization_id = mp.organization_id
-     WHERE mp.organization_id = ?
-       AND mp.owner_type = 'organization'
-       AND mp.status = 'active'
-       AND mp.slot IN ('social_card', 'social_share', 'logo')
-     ORDER BY mp.sort_order ASC
-  `, [organizationId])
-}
-
-/** The presentation the tenant card needs: the plan and the media, one read each. */
+/** The presentation the tenant card needs: the plan and the logo, one read each. */
 export interface DashboardOrganizationCard {
   effective_plan: string
   media: DashboardOrganizationMedia
-  social_image: { url: string, width?: number, height?: number, type?: string } | null
 }
 
 export async function loadDashboardOrganizationCard(
@@ -88,11 +62,14 @@ export async function loadDashboardOrganizationCard(
   db: DbClient,
   organizationId: string,
 ): Promise<DashboardOrganizationCard> {
-  const [effectivePlan, media] = await Promise.all([
+  const [effectivePlan, placements] = await Promise.all([
     getOrganizationPlan(env, organizationId),
-    loadOrganizationSocialMedia(db, organizationId),
+    readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId], slot: 'logo' }),
   ])
-  return { effective_plan: effectivePlan, media, social_image: resolveSocialImageFromMedia(media) }
+  const media = (placements.get(organizationId) ?? []).map(item => ({
+    asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind,
+  }))
+  return { effective_plan: effectivePlan, media }
 }
 
 export interface DashboardLocationRow {
@@ -101,7 +78,8 @@ export interface DashboardLocationRow {
   title: string
   status: string
   address: string | null
-  media: Array<{ asset_id: string; slot: 'hero'; public_url: string; thumbnail_url: string | null; kind: string | null }>
+  media: PublicSocialMedia['media']
+  social_image: PublicSocialMedia['social_image']
   // The delta is applied on top of the organization's effective feature set
   // (never the vertical defaults directly).
   feature_overrides: string | null
@@ -336,60 +314,23 @@ export async function listDashboardLocations(
   organizationId: string,
 ) {
 
-  const locations = await queryAll<Omit<DashboardLocationRow, 'media'> & {
-    hero_asset_id: string | null
-    hero_kind: string | null
-    hero_media_public_url: string | null
-    hero_media_thumbnail_url: string | null
-    social_asset_id: string | null
-    social_kind: string | null
-    social_public_url: string | null
-    social_thumbnail_url: string | null
-  }>(db, `
-    SELECT business_locations.id, business_locations.slug, business_locations.title,
-           business_locations.status,
-           business_locations.address, business_locations.feature_overrides,
-           ma_hero.id AS hero_asset_id,
-           ma_hero.kind AS hero_kind,
-           ma_hero.public_url AS hero_media_public_url,
-           ma_hero.thumbnail_url AS hero_media_thumbnail_url,
-           ma_social.id AS social_asset_id,
-           ma_social.kind AS social_kind,
-           ma_social.public_url AS social_public_url,
-           ma_social.thumbnail_url AS social_thumbnail_url
+  const locations = await queryAll<Omit<DashboardLocationRow, 'media' | 'social_image' | 'address'> & { address: string | null }>(db, `
+    SELECT id, slug, title, status, address, feature_overrides
     FROM business_locations
-    LEFT JOIN media_placements mp_hero ON mp_hero.owner_type = 'business_location' AND mp_hero.owner_id = business_locations.id AND mp_hero.slot = 'hero' AND mp_hero.status = 'active'
-    LEFT JOIN media_assets ma_hero ON ma_hero.id = mp_hero.asset_id
-      AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.status = 'active'
-    LEFT JOIN media_placements mp_social ON mp_social.owner_type = 'business_location' AND mp_social.owner_id = business_locations.id AND mp_social.slot = 'social_card' AND mp_social.sort_order = 0 AND mp_social.status = 'active'
-    LEFT JOIN media_assets ma_social ON ma_social.id = mp_social.asset_id
-      AND ma_social.organization_id = business_locations.organization_id AND ma_social.status = 'active'
-    WHERE business_locations.organization_id = ?
-      AND business_locations.status = 'active'
+    WHERE organization_id = ? AND status = 'active'
     ORDER BY title ASC
   `, [organizationId])
+  const media = await loadPublicSocialMedia(db, organizationId, 'business_location', locations.map(location => location.id))
 
   return locations.map((location) => {
-    const { hero_asset_id, hero_kind, hero_media_public_url, hero_media_thumbnail_url,
-      social_asset_id, social_kind, social_public_url, social_thumbnail_url, ...fields } = location
-    const ownerMedia = [
-      ...(social_asset_id && social_public_url
-        ? [{ asset_id: social_asset_id, slot: 'social_card' as const, public_url: social_public_url, thumbnail_url: social_thumbnail_url, kind: social_kind }]
-        : []),
-      ...(hero_asset_id && hero_media_public_url
-        ? [{ asset_id: hero_asset_id, slot: 'hero' as const, public_url: hero_media_public_url, thumbnail_url: hero_media_thumbnail_url, kind: hero_kind }]
-        : []),
-    ]
+    const locationMedia = media.get(location.id)
+    if (!locationMedia) throw new Error(`Location ${location.id} media was not loaded`)
     return {
-      ...fields,
-      id: location.id,
-      slug: location.slug,
-      title: location.title,
-      status: location.status,
+      ...location,
       address: parsePostalAddress(location.address),
-      feature_overrides: location.feature_overrides,
-      media: ownerMedia,
-      social_image: resolveSocialImageFromMedia(ownerMedia),
+      // The location tile shows its hero; the rest of its media is its own screens'.
+      media: locationMedia.media.filter(item => item.slot === 'hero'),
+      social_image: locationMedia.social_image,
     }
   })
 }

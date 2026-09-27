@@ -1,8 +1,8 @@
-import { APIError, betterAuth } from 'better-auth'
+import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
-import { admin, anonymous, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
@@ -10,15 +10,14 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, queryAll, schema } from '~/server/db'
+import { createDb, execute, executeBatch, queryAll, schema, type BatchQuery } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
-import { fireOrganizationEvent } from '~/server/utils/organization-events'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
@@ -28,6 +27,8 @@ import { createStripeClient } from '~/server/utils/stripe-client'
 import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
+import { cleanupOrganizationBeforeDelete } from '~/server/utils/tenant-deletion'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -55,19 +56,39 @@ export function oauthSigningConfig(authBaseUrl: string) {
 export const organizationOptions = {
   ac: organizationAccessControl,
   roles: organizationRoles,
-  // Deleting a tenant is a scheduled operation with a grace period and with
-  // Cloudflare hostnames and Images to release, so server/utils/tenant-deletion.ts
-  // owns it and calls this plugin's adapter. The plugin's own route would delete
-  // immediately and leak both, so it stays closed.
-  disableOrganizationDeletion: true,
-  schema: {
-    organization: {
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
-      },
-    },
-  },
 } as const
+
+
+/**
+ * Better Auth Stripe wraps the organization plugin's delete hook with its own
+ * subscription guard. This plugin is deliberately registered after Stripe so
+ * that provider-owned billing checks run first; only then do we release the
+ * KrabiClaw resources Better Auth cannot know about. Once the organization is
+ * gone, Zaraz is reconciled so its measurement id stops being served.
+ */
+function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin {
+  return {
+    id: 'organization-deletion-cleanup',
+    init(ctx) {
+      const orgPlugin = ctx.getPlugin('organization')
+      if (!orgPlugin) throw new Error('Organization plugin is required')
+      const existingHooks = orgPlugin.options.organizationHooks ?? {}
+      const beforeDeleteOrganization = existingHooks.beforeDeleteOrganization
+      const afterDeleteOrganization = existingHooks.afterDeleteOrganization
+      orgPlugin.options.organizationHooks = {
+        ...existingHooks,
+        beforeDeleteOrganization: async (data, hookCtx) => {
+          await beforeDeleteOrganization?.(data, hookCtx)
+          await cleanupOrganizationBeforeDelete(env, data.organization.id)
+        },
+        afterDeleteOrganization: async (data, hookCtx) => {
+          await afterDeleteOrganization?.(data, hookCtx)
+          await reconcileZarazAnalytics(env, env.DB)
+        },
+      }
+    },
+  }
+}
 
 async function configureCimdTenantScopes(event: {
   client: SchemaClient<Scope[]>
@@ -120,9 +141,13 @@ export interface CloudflareEnv {
   E2E_DEV_ROUTE_SECRET?: string
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
-  FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
+  INSTAGRAM_APP_ID?: string
+  INSTAGRAM_APP_SECRET?: string
   RESEND_API_KEY?: string
+  RESEND_WEBHOOK_SECRET?: string
+  RESEND_PRODUCT_NEWS_SEGMENT_ID?: string
+  RESEND_PRODUCT_NEWS_TOPIC_ID?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
@@ -209,10 +234,12 @@ export function createAuth(env: CloudflareEnv) {
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
   // Members are indexed for the dashboard's search; a change to one is a change
-  // to every site of the organization. Never lets an auth write fail over it.
-  const recordMemberChange = async (organizationId: string) => {
-    const change = publicResourceCacheInvalidationQuery(organizationId, 'member-change')
-    await execute(db, change.query, change.params ?? []).catch((error: unknown) => console.error('member_search_invalidation_failed', error))
+  // to every site of the organization. Better Auth has already committed the
+  // member row by the time its after-hook runs, and D1 has no transaction a
+  // hook could join, so the change record and the audit row commit together
+  // with each other, and a failure of either reaches the caller.
+  const recordMemberChange = async (organizationId: string, audit: BatchQuery[] = []) => {
+    await executeBatch(db, [publicResourceCacheInvalidationQuery(organizationId, 'member-change'), ...audit])
   }
   const configuredOrganizationOptions = {
     ...organizationOptions,
@@ -261,13 +288,8 @@ export function createAuth(env: CloudflareEnv) {
       },
     },
     user: {
-      // Account deletion is scheduled through /api/user/delete-account and
-      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
-      // which also removes the organizations the account owns alone. Better
-      // Auth's own /delete-user route stays disabled: it would delete the user
-      // immediately and leave those organizations with no owner, still serving.
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
+      deleteUser: {
+        enabled: true,
       },
     },
     rateLimit: {
@@ -320,36 +342,31 @@ export function createAuth(env: CloudflareEnv) {
         },
         update: {
           after: async (member: MemberRow) => {
-            await recordMemberChange(member.organizationId)
-            await fireOrganizationEvent({
-              db,
+            await recordMemberChange(member.organizationId, [organizationEventQuery({
               organizationId: member.organizationId,
               eventType: 'member.role_changed',
               entityType: 'member',
               entityId: member.id,
               metadata: { userId: member.userId, role: member.role },
-            })
+            })])
           }
         },
         delete: {
           after: async (member: MemberRow) => {
-            await recordMemberChange(member.organizationId)
-            await fireOrganizationEvent({
-              db,
+            await recordMemberChange(member.organizationId, [organizationEventQuery({
               organizationId: member.organizationId,
               eventType: 'member.removed',
               entityType: 'member',
               entityId: member.id,
               metadata: { userId: member.userId },
-            })
+            })])
           }
         }
       },
       invitation: {
         create: {
           after: async (invitation: InvitationRow) => {
-            await fireOrganizationEvent({
-              db,
+            const audit = organizationEventQuery({
               organizationId: invitation.organizationId,
               actorId: invitation.inviterId,
               eventType: 'member.invited',
@@ -357,6 +374,7 @@ export function createAuth(env: CloudflareEnv) {
               entityId: invitation.id,
               metadata: { role: invitation.role ?? null },
             })
+            await execute(db, audit.query, audit.params)
           }
         }
       }
@@ -436,24 +454,34 @@ export function createAuth(env: CloudflareEnv) {
       }),
       anonymous({
         generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
+        // The anonymous user is deleted by the plugin right after this returns,
+        // and every domain FK to it is ON DELETE SET NULL. Everything that
+        // identifies the person moves to the real user first, in one batch.
         onLinkAccount: async ({ anonymousUser, newUser }) => {
+          const from = anonymousUser.user.id
+          const to = newUser.user.id
+          if (from === to) return
           const now = new Date().toISOString()
-          await linkAnonymousCustomerToUser(db, anonymousUser.user.id, newUser.user.id)
-          await execute(db, `
-            UPDATE review_requests
-            SET user_id = ?, updated_at = ?
-            WHERE anonymous_user_id = ?
-          `, [newUser.user.id, now, anonymousUser.user.id])
-          await execute(db, `
-            UPDATE reviews
-            SET user_id = ?, updated_at = ?
-            WHERE user_id = ?
-               OR review_request_id IN (
-                 SELECT id
-                 FROM review_requests
-                 WHERE anonymous_user_id = ?
-               )
-          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
+          await executeBatch(db, [
+            // An opt-out on either identity survives the merge.
+            {
+              query: `INSERT INTO user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
+                SELECT ?, category, email_enabled, whatsapp_enabled, ? FROM user_notification_preferences WHERE user_id = ?
+                ON CONFLICT (user_id, category) DO UPDATE SET
+                  email_enabled = user_notification_preferences.email_enabled AND excluded.email_enabled,
+                  whatsapp_enabled = user_notification_preferences.whatsapp_enabled AND excluded.whatsapp_enabled,
+                  updated_at = excluded.updated_at`,
+              params: [to, now, from],
+            },
+            { query: 'DELETE FROM user_notification_preferences WHERE user_id = ?', params: [from] },
+            // Re-pointing who a record belongs to is not activity on it, so
+            // updated_at — the version booking changes compare against — stays.
+            ...['requests', 'reservations', 'bookings', 'review_requests', 'reviews'].map(table => ({
+              query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
+              params: [to, from],
+            })),
+            { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },
+          ], { operation: 'anonymous-account-link' })
         },
       }),
       oauthProvider({
@@ -531,6 +559,7 @@ export function createAuth(env: CloudflareEnv) {
           await handleStripeGa4Event(env, db, stripeClient, event)
         },
       }),
+      organizationDeletionCleanupPlugin(env),
       admin({
         ac: platformAdminAccessControl,
         adminRoles: ['admin'],
@@ -569,18 +598,111 @@ export function createAuth(env: CloudflareEnv) {
           getTempName: (phone) => `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`,
         },
       }),
+      // Instagram Login for professional accounts has no built-in Better Auth
+      // provider, so it is a Generic OAuth provider on the same linkSocial path
+      // as Google and Facebook. Its code exchange is not the standard one — the
+      // grant answers a one-hour token that must be traded for the sixty-day
+      // one — so getToken performs both and Better Auth stores the result.
+      // Renewing that token is the one step Better Auth cannot perform (see
+      // instagramAccessToken in server/utils/instagram.ts).
+      genericOAuth({
+        config: [{
+          providerId: 'instagram',
+          clientId: env.INSTAGRAM_APP_ID ?? '',
+          clientSecret: env.INSTAGRAM_APP_SECRET,
+          authorizationUrl: 'https://www.instagram.com/oauth/authorize',
+          scopes: ['instagram_business_basic', 'instagram_business_content_publish'],
+          pkce: false,
+          disableSignUp: true,
+          getToken: async ({ code, redirectURI }) => {
+            if (!env.INSTAGRAM_APP_ID || !env.INSTAGRAM_APP_SECRET) throw new Error('Missing Instagram OAuth configuration')
+            const grant = await fetch('https://api.instagram.com/oauth/access_token', {
+              method: 'POST',
+              headers: { 'content-type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: env.INSTAGRAM_APP_ID,
+                client_secret: env.INSTAGRAM_APP_SECRET,
+                grant_type: 'authorization_code',
+                redirect_uri: redirectURI,
+                code,
+              }),
+            })
+            if (!grant.ok) throw new Error(`Instagram token exchange failed: ${(await grant.text()).slice(0, 300)}`)
+            // Documented as `{ data: [{ access_token, user_id, permissions }] }`
+            // (developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login).
+            type Grant = { access_token?: string; permissions?: string | string[] }
+            const body = await grant.json() as Grant & { data?: Grant[] }
+            const shortLived = body.data?.[0] ?? body
+            if (!shortLived.access_token) throw new Error('Instagram did not return an access token')
+
+            const exchange = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({
+              grant_type: 'ig_exchange_token',
+              client_secret: env.INSTAGRAM_APP_SECRET,
+              access_token: shortLived.access_token,
+            })}`)
+            if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${(await exchange.text()).slice(0, 300)}`)
+            const longLived = await exchange.json() as { access_token?: string; expires_in?: number }
+            if (!longLived.access_token || typeof longLived.expires_in !== 'number') {
+              throw new Error('Instagram did not return a long-lived access token and its lifetime')
+            }
+            const permissions = shortLived.permissions ?? []
+            return {
+              tokenType: 'bearer',
+              accessToken: longLived.access_token,
+              accessTokenExpiresAt: new Date(Date.now() + longLived.expires_in * 1000),
+              scopes: Array.isArray(permissions) ? permissions : permissions.split(',').filter(Boolean),
+            }
+          },
+          // `id` is the app-scoped id Meta's deauthorize and data-deletion
+          // callbacks name, so it is the Better Auth account id; `user_id` is
+          // the professional account publishing addresses, which the
+          // organization stores with its selection.
+          getUserInfo: async (tokens) => {
+            const response = await fetch(`https://graph.instagram.com/v23.0/me?${new URLSearchParams({
+              fields: 'id,user_id,username',
+              access_token: tokens.accessToken ?? '',
+            })}`)
+            if (!response.ok) throw new Error(`Instagram account lookup failed: ${(await response.text()).slice(0, 300)}`)
+            const account = await response.json() as { id?: string; username?: string }
+            if (!account.id || !account.username) throw new Error('Instagram did not return the connected account')
+            return { id: account.id, name: account.username, email: null, emailVerified: false }
+          },
+        }],
+      }),
     ],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         prompt: 'select_account',
-      }
+      },
+      // Facebook Login for Business: a configuration id carries the Page
+      // permissions and yields a system-user token that does not expire, so
+      // there is nothing to refresh. It is linked to a KrabiClaw user for Page
+      // access, never used to create one.
+      facebook: {
+        clientId: env.FACEBOOK_APP_ID ?? '',
+        clientSecret: env.FACEBOOK_APP_SECRET ?? '',
+        configId: env.FACEBOOK_CONFIG_ID,
+        // The configuration carries every permission. Meta refuses a scope
+        // list beside config_id ("Invalid Scopes"), including Better Auth's
+        // default email and public_profile, so none is sent.
+        disableDefaultScope: true,
+        disableSignUp: true,
+      },
     },
     account: {
+      // Integration tokens live on these rows; Better Auth encrypts them with
+      // BETTER_AUTH_SECRET and reads rows written before this was set as-is.
+      encryptOAuthTokens: true,
       accountLinking: {
         enabled: true,
-        trustedProviders: ['google']
+        // Facebook and Instagram are linked only from an authenticated
+        // session, for Page and publishing access. Instagram returns no email
+        // at all and a business's Facebook or Google account is rarely the
+        // address its owner signs in with, so linking may not require one.
+        trustedProviders: ['google', 'facebook', 'instagram'],
+        allowDifferentEmails: true,
       }
     }
   })
@@ -642,8 +764,106 @@ export async function findAuthUsersByIds(env: CloudflareEnv, userIds: Array<stri
   return new Map(rows.map(row => [row.id, row]))
 }
 
+/**
+ * A Better Auth linked account, as an integration refers to it: the row an
+ * organization names by `account_id`, the user it belongs to, and the scopes
+ * Better Auth recorded across every link of it.
+ */
+interface LinkedAccount {
+  id: string
+  userId: string
+  providerId: string
+  scopes: string[]
+}
+
+/** Reads a linked account through Better Auth's adapter. Null when it has been unlinked. */
+async function readLinkedAccount(env: CloudflareEnv, accountId: string): Promise<LinkedAccount | null> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findOne<T>(_input: { model: string; where: Array<{ field: string; value: string }> }): Promise<T | null>
+  }
+  const row = await adapter.findOne<{ id: string; userId: string; providerId: string; scope: string | null }>({
+    model: 'account',
+    where: [{ field: 'id', value: accountId }],
+  })
+  if (!row) return null
+  return { id: row.id, userId: row.userId, providerId: row.providerId, scopes: (row.scope ?? '').split(/[,\s]+/).filter(Boolean) }
+}
+
+/**
+ * A usable access token for a linked account, refreshed by Better Auth when
+ * it has expired.
+ *
+ * Called without request headers and with the account's own user: an
+ * organization acts through the account it selected, which may have been
+ * linked by another of its administrators, and Better Auth resolves a
+ * session's user ahead of the one named here.
+ */
+export async function linkedAccountAccessToken(
+  env: CloudflareEnv,
+  accountId: string,
+): Promise<{ accessToken: string; accessTokenExpiresAt: Date | undefined }> {
+  const account = await readLinkedAccount(env, accountId)
+  if (!account) throw new Error('The account this integration was connected through is no longer linked. Connect it again.')
+  const token = await createAuth(env).api.getAccessToken({ body: { accountId, userId: account.userId } })
+  if (!token.accessToken) throw new Error(`Better Auth returned no access token for the linked ${account.providerId} account.`)
+  return { accessToken: token.accessToken, accessTokenExpiresAt: token.accessTokenExpiresAt }
+}
+
+/**
+ * The linked account an organization may be connected through: one the
+ * caller linked themselves, or the one the organization already uses. Another
+ * member's account is never selectable by naming its id, and an account that
+ * was not granted what the integration needs is refused rather than failing
+ * later at the provider.
+ */
+export async function requireIntegrationAccount(
+  env: CloudflareEnv,
+  accountId: string,
+  expected: { userId: string; currentAccountId: string | null | undefined; providerId: string; scopes: readonly string[] },
+): Promise<LinkedAccount> {
+  const account = await readLinkedAccount(env, accountId)
+  if (!account || account.providerId !== expected.providerId
+    || (account.userId !== expected.userId && account.id !== expected.currentAccountId)) {
+    throw new HTTPError({ statusCode: 404, message: 'That account is not linked to you.' })
+  }
+  const missing = expected.scopes.filter(scope => !account.scopes.includes(scope))
+  if (missing.length) {
+    throw new HTTPError({ statusCode: 403, message: `That account has not granted ${missing.join(', ')}. Connect it again.` })
+  }
+  return account
+}
+
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
   return createAuth(env).api.getSession({
     headers: event.req.headers,
   })
+}
+
+/**
+ * The Better Auth user a public durable interaction belongs to.
+ *
+ * A request with a session keeps that user, anonymous or not. A request with
+ * none gets a new anonymous Better Auth user, and the session cookie Better Auth
+ * issues for it is forwarded on this response so the next interaction from the
+ * same browser reuses it. Call it only once the write is about to happen: a page
+ * view or a rejected submission must not mint an identity.
+ */
+export async function ensureInteractionUser(event: H3Event, env: CloudflareEnv): Promise<string> {
+  const session = await getAuthSession(event, env)
+  if (session?.user) return session.user.id
+  // createAuth's cached instance is typed as bare betterAuth, which erases
+  // plugin endpoints from `api`; anonymous() registers this one.
+  const auth = createAuth(env) as unknown as {
+    api: { signInAnonymous: (input: { headers: Headers; returnHeaders: true }) => Promise<{ headers: Headers; response: { user?: { id?: string } } | null }> }
+  }
+  const { headers, response } = await auth.api.signInAnonymous({
+    headers: event.req.headers,
+    returnHeaders: true,
+  })
+  if (!response?.user?.id) throw new Error('Better Auth did not return an anonymous user')
+  for (const cookie of headers.getSetCookie()) {
+    event.res.headers.append('set-cookie', cookie)
+  }
+  return response.user.id
 }

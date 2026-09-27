@@ -1,6 +1,5 @@
 import type { H3Event } from 'nitro';
 import { setResponseHeader } from 'nitro/h3';
-import { purgeOrganizationKvCache } from '~/server/utils/edge-cache'
 
 export function quoteChallengeValue(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -110,28 +109,6 @@ export function getCloudflareWaitUntil(event: H3Event): ((_promise: Promise<unkn
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ctx = (event.req.runtime?.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
   return ctx?.waitUntil?.bind(ctx)
-}
-
-export function scheduleMcpKvHtmlPurge(options: {
-  event: H3Event
-  kv: KVNamespace | undefined
-  hostnames: (string | null | undefined)[]
-  logPrefix: string
-}) {
-  const { event, kv, hostnames, logPrefix } = options
-  if (!kv) return
-  const uniqueHostnames = [...new Set(hostnames.filter((value): value is string => Boolean(value)))]
-  if (uniqueHostnames.length === 0) return
-
-  const purgeAsync = purgeOrganizationKvCache(kv, uniqueHostnames).catch((err: unknown) => {
-    console.warn(`[${logPrefix}] failed:`, String(err))
-  })
-
-  const waitUntil = getCloudflareWaitUntil(event)
-  if (waitUntil) {
-    waitUntil(purgeAsync)
-  }
-  // purgeAsync already runs detached whether or not waitUntil is available
 }
 
 export function isMcpMutatingTool(tool: { annotations?: { readOnlyHint?: boolean } } | undefined | null) {

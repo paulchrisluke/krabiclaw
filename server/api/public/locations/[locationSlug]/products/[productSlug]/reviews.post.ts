@@ -1,8 +1,10 @@
-import { execute } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getClientIp, hashClientIp, HOUR_MS, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail } from '~/server/utils/public-products'
+import { notifyReviewReceived } from '~/server/utils/notifications'
+import { ensureInteractionUser } from '~/server/utils/auth'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -33,13 +35,30 @@ export default defineHandler(async (event) => {
     const hourWindow = Math.floor(Date.now() / HOUR_MS)
     const rateOk = await incrementHourlyRateLimit(db, `rate:product-review:${resolved.product.id}:${ipHash}:${hourWindow}`, 5, HOUR_MS)
     if (!rateOk) return jsonResponse({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
-    const id = crypto.randomUUID()
     const status: ReviewStatus = 'pending'
     const userAgent = cleanString(event.req.headers.get('User-Agent'), 300)
-    await execute(db, `
-      INSERT INTO reviews (id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    // The owner alert follows the insert, so a failed alert answers 500 with
+    // the review already stored. The guest's identical retry is the same
+    // review: it is found again and its alert re-sent, not stored twice.
+    const resubmitted = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM reviews
+      WHERE organization_id = ? AND location_id = ? AND product_id = ? AND ip_hash = ?
+        AND author_name = ? AND rating = ? AND title = ? AND content = ?
+        AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')
+      LIMIT 1
+    `, [organizationId, resolved.location.id, resolved.product.id, ipHash, author, rating, title, content])
+    const id = resubmitted?.id ?? crypto.randomUUID()
+    if (!resubmitted) {
+      const userId = await ensureInteractionUser(event, env)
+      await execute(db, `
+        INSERT INTO reviews (id, organization_id, location_id, product_id, user_id, author_name, rating, title, content, status, ip_hash, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, organizationId, resolved.location.id, resolved.product.id, userId, author, rating, title, content, status, ipHash, userAgent])
+    }
+    const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId])
+    await notifyReviewReceived(env, db, {
+      organizationId, organizationName: organization?.name, locationId: resolved.location.id, reviewId: id, authorName: author, rating, content,
+    })
     return jsonResponse({ review: { id, product_id: resolved.product.id, author, rating, title, content, status }, message: 'Thanks. Your review is pending moderation.' }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)

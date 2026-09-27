@@ -43,7 +43,15 @@ for (const entry of NOTIFICATION_CATALOG) {
       preferencesUrl: 'https://krabiclaw.com/dashboard/account/profile/notifications',
       unsubscribeUrl: 'https://krabiclaw.com/unsubscribe?x=preview',
     })
-    if (!html.includes('krabi-claw-logo.png')) failures.push(`${entry.id} did not render through EmailFrame`)
+    if (!html.includes('email-surface')) failures.push(`${entry.id} did not render through EmailFrame`)
+    // The mark is whose mail it is. KrabiClaw's crab is on its own mail only;
+    // a tenant's carries its logo, or its name alone — never the crab.
+    const tenant = entry.message.organizationName
+    if (!tenant && !html.includes('krabi-claw-logo.png')) failures.push(`${entry.id} is KrabiClaw's mail and does not carry its mark`)
+    if (tenant && html.includes('krabi-claw-logo.png')) failures.push(`${entry.id} is ${tenant}'s mail and carries KrabiClaw's mark`)
+    if (tenant && entry.message.organizationLogoUrl && !html.includes(entry.message.organizationLogoUrl)) {
+      failures.push(`${entry.id} is ${tenant}'s mail and does not carry its logo`)
+    }
     if (!text.trim()) failures.push(`${entry.id} rendered an empty plain-text body`)
     // Against the plain-text render: the HTML escapes apostrophes and
     // ampersands, so comparing a raw title to it reports false failures.

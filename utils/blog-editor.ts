@@ -137,11 +137,8 @@ export function normalizeBlogSlug(value: string, fallback = 'post') {
 
 export function resolveBlogSeo(input: {
   title: string
-  seoTitle?: string | null
   excerpt?: string | null
-  seoDescription?: string | null
   slug: string
-  canonicalUrl?: string | null
   baseUrl: string
   pathPrefix?: string
   publicPath?: string
@@ -150,14 +147,14 @@ export function resolveBlogSeo(input: {
 }) {
   const path = input.publicPath || `${(input.pathPrefix || '/blog').replace(/\/$/, '')}/${encodeURIComponent(input.slug)}`
   const maxLength = input.descriptionMaxLength ?? 160
-  const rawDescription = input.seoDescription?.trim() || input.excerpt?.trim() || `A post from ${input.organizationName?.trim() || 'this organization'}.`
+  const rawDescription = input.excerpt?.trim() || `A post from ${input.organizationName?.trim() || 'this organization'}.`
   const description = rawDescription.length <= maxLength
     ? rawDescription
     : `${rawDescription.slice(0, maxLength - 1).replace(/\s+\S*$/, '').trim()}…`
   return {
-    title: input.seoTitle?.trim() || input.title.trim(),
+    title: input.title.trim(),
     description,
-    canonicalUrl: input.canonicalUrl?.trim() || new URL(path, input.baseUrl).toString(),
+    canonicalUrl: new URL(path, input.baseUrl).toString(),
   }
 }
 

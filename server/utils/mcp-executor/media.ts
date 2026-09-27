@@ -30,6 +30,10 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
   switch (toolName) {
     case "set_media": {
       const placement = parseMediaPlacementKey(args.placement);
+      // The favicon is set once, in the dashboard under Brand.
+      if (placement.owner_type === 'organization' && placement.slot === 'favicon') {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "The favicon is set in the dashboard under Brand › Favicon, not through MCP.");
+      }
       if (args.asset_id !== null && (typeof args.asset_id !== 'string' || !args.asset_id.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_id must be a non-empty string or null.");
       }

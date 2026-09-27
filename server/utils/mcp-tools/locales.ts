@@ -17,10 +17,10 @@ const localizationObject = { oneOf: [
     required: [...Object.keys(localizationIdentity), 'resource_type','resource_id','values','route_path','created_by_user_id','updated_by_user_id'], additionalProperties: false },
   { type: 'object', properties: { ...localizationIdentity, kind: { type: 'string', enum: CONTENT_DOCUMENT_KINDS },
       row_role: { const: 'representation' }, root_id: { type: 'string' }, title: { type: ['string','null'] }, summary: { type: ['string','null'] },
-      slug: { type: ['string','null'] }, path: { type: ['string','null'] }, seo_title: { type: ['string','null'] },
-      seo_description: { type: ['string','null'] }, seo_keywords: { type: ['string','null'] }, metadata: { type: 'object', additionalProperties: true },
+      slug: { type: ['string','null'] }, path: { type: ['string','null'] },
+      seo_keywords: { type: ['string','null'] }, metadata: { type: 'object', additionalProperties: true },
       content_blocks: { type: 'array', items: { type: 'object', additionalProperties: true } } },
-    required: [...Object.keys(localizationIdentity), 'kind','row_role','root_id','title','summary','slug','path','seo_title','seo_description','seo_keywords','metadata','content_blocks'], additionalProperties: false },
+    required: [...Object.keys(localizationIdentity), 'kind','row_role','root_id','title','summary','slug','path','seo_keywords','metadata','content_blocks'], additionalProperties: false },
 ] } as const
 
 export const LOCALES_TOOLS: McpToolDefinition[] = [

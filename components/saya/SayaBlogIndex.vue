@@ -42,8 +42,11 @@ const organizationName = computed(() => organization?.name?.trim() ?? '')
 const { blogList, error, pending } = await usePublicPageData()
 const posts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata(() => ({
   path: '/blog',
+  socialImage: organizationSocialImage,
   title: locale.value === 'en' ? `Blog | ${organizationName.value}` : t('saya.footer.blog'),
   description: t('saya.posts.meta_description', { organization: organizationName.value }),
   brand: {

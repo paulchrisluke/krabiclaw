@@ -26,6 +26,14 @@ if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
 }
 if (!previewUrl) {
   process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret
+  // The provider-ingress spec signs Resend webhooks with this and the local
+  // Worker, which inherits this process's environment, verifies them with it.
+  // The deployed secrets never leave Cloudflare.
+  process.env.RESEND_WEBHOOK_SECRET = `whsec_${Buffer.from('local-playwright-resend-webhook').toString('base64')}`
+  // The SDK cannot be built without a key even to verify a signature. The
+  // local Worker delivers log-only, so a run with no key of its own gets one
+  // that is never used to send.
+  process.env.RESEND_API_KEY ||= 're_local_playwright_log_only'
 }
 
 const localWorkerEnvironment = [
@@ -34,6 +42,7 @@ const localWorkerEnvironment = [
   'CLOUDFLARE_INCLUDE_PROCESS_ENV=true',
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
+  'ZARAZ_ANALYTICS=absent',
   'EMAIL_REPLY_SECRET=local-playwright-email-reply-secret',
   `BETTER_AUTH_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,

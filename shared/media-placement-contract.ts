@@ -1,5 +1,5 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  organization: ['logo', 'logo_dark', 'favicon', 'social_share', 'social_card', 'compliance_document'],
+  organization: ['logo', 'favicon', 'social_share', 'social_card', 'compliance_document'],
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],
@@ -100,7 +100,7 @@ export interface MediaPresentation {
 /**
  * The still picture that stands for this media — the image itself, or a
  * video's poster. Never a video file: handing an `.mp4` to an `<img>` is the
- * defect this replaces, and it reached customers in a booking email.
+ * defect this replaces, and it reached guests in a booking email.
  *
  * A record whose `kind` is missing or unrecognised has no still. Guessing one
  * from the URL's extension, or assuming an absent kind means "image", is how
@@ -116,4 +116,49 @@ export function mediaStillUrl(media: MediaPresentation | null | undefined): stri
 /** The file a player loads. Only a video has one. */
 export function mediaPlaybackUrl(media: MediaPresentation | null | undefined): string | null {
   return media?.kind === 'video' ? media.public_url || null : null
+}
+
+/**
+ * Where an owner keeps its own picture: one slot per owner type. An
+ * organization has none of its own — its picture is its `social_share`.
+ */
+const OWNER_PICTURE_SLOT: Partial<Record<MediaPlacementOwnerType, string>> = {
+  business_location: 'hero',
+  product: 'image',
+  content_document: 'cover',
+  content_block: 'media',
+  review: 'portrait',
+}
+
+export interface PlacedMedia extends MediaPresentation {
+  slot?: string
+}
+
+/**
+ * The picture for this owner. The social card generator, og:image, the
+ * notification hero and the dashboard's agenda and booking details all ask
+ * here, and nothing else decides it:
+ *
+ * 1. the owner's first image in its own slot, skipping videos — a video's
+ *    poster stands in only when that slot holds no image at all;
+ * 2. otherwise the organization's `social_share`, the image its owner chose
+ *    for exactly this;
+ * 3. otherwise nothing.
+ *
+ * `ownerMedia` and `organizationMedia` are placements in sort order; slots
+ * other than the ones named above are ignored, so a caller may pass all of an
+ * owner's placements. The result is one of the given items, so a caller that
+ * needs its asset id or its still reads them off it with `mediaStillUrl`.
+ */
+export function resolveOwnerPicture<T extends PlacedMedia>(
+  ownerType: MediaPlacementOwnerType,
+  ownerMedia: readonly T[],
+  organizationMedia: readonly T[],
+): T | null {
+  const slot = OWNER_PICTURE_SLOT[ownerType]
+  const own = slot ? ownerMedia.filter(item => item.slot === slot && mediaStillUrl(item)) : []
+  return own.find(item => item.kind === 'image')
+    ?? own[0]
+    ?? organizationMedia.find(item => item.slot === 'social_share' && mediaStillUrl(item))
+    ?? null
 }

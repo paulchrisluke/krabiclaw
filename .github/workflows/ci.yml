@@ -4,7 +4,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, staging]
+    branches: [main, staging, "epoch/**"]
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
@@ -74,6 +74,10 @@ jobs:
       # The onboarding draft endpoints sign their preview tokens with it and
       # answer 503 without it, so the wizard never got past its first save.
       PREVIEW_SECRET: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
+      # The onboarding business search is Places API (New) through the server,
+      # which answers 503 without it, and the onboarding, add-location and
+      # Settings specs pick a real Google listing.
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       # CIMD client metadata must be public HTTPS, which localhost cannot serve.
@@ -101,6 +105,8 @@ jobs:
       # already prepared: local migrations, a production snapshot into local D1,
       # development auth, and the production build.
       - run: yarn test:e2e
+      # Wrangler's own log names why the local Worker stopped serving; run
+      # 36298734414 died serving _nuxt chunks with nothing else to read.
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -109,6 +115,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            ~/.config/.wrangler/logs/
           retention-days: 14
           if-no-files-found: ignore
 

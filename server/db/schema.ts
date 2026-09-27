@@ -25,32 +25,6 @@ export const account = sqliteTable("account", {
 	index("account_userId_idx").on(table.userId),
 ]);
 
-export const customers = sqliteTable("customers", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	stripe_customer_id: text(),
-	name: text(),
-	email: text(),
-	email_normalized: text(),
-	email_hash: text(),
-	phone: text(),
-	phone_normalized: text(),
-	phone_metadata_version: text(),
-	source: text().notNull(),
-	status: text().default("active").notNull(),
-	review_request_opted_out_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	check("customers_instants_check", sql`(review_request_opted_out_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', review_request_opted_out_at, '+0 days') IS review_request_opted_out_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	uniqueIndex("idx_customers_org_email_normalized_unique").on(table.email_normalized).where(sql`email_normalized IS NOT NULL`),
-	uniqueIndex("idx_customers_stripe_customer_id_unique").on(table.stripe_customer_id).where(sql`stripe_customer_id IS NOT NULL`),
-	index("idx_customers_organization_id").on(table.organization_id),
-	index("idx_customers_org_email_hash").on(table.organization_id, table.email_hash),
-	index("idx_customers_user_id").on(table.user_id),
-]);
-
 export const business_locations = sqliteTable("business_locations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -112,7 +86,7 @@ export const business_locations = sqliteTable("business_locations", {
 //   product_sessions row, the seat claim a bookings row, and a table
 //   reservation a reservations row. Each links back here through request_id.
 //   A contact thread has neither and is not forced into the booking model.
-// Null semantics: customer_id NULL is an unmatched guest. review_id NULL means
+// Null semantics: user_id NULL is a guest with no Better Auth user. review_id NULL means
 //   no review was solicited from this thread. location_id NULL means the
 //   thread is site-wide.
 // Deletion: cascades from site; bookings and reservations survive with
@@ -128,15 +102,21 @@ export const requests = sqliteTable("requests", {
  kind: text({ enum: ["contact", "booking", "reservation", "work"] }).notNull(),
  organization_id: text().references((): AnySQLiteColumn => organization.id, { onDelete: "cascade" }),
  location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" }),
- customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
+ user_id: text().references((): AnySQLiteColumn => user.id, { onDelete: "set null" }),
  review_id: text().references((): AnySQLiteColumn => reviews.id, { onDelete: "set null" }),
  conversation_state: text({ enum: ["needs_attention", "waiting_on_guest", "resolved"] }),
  resolved_at: text(),
+ // The tenant's explicit archive action, and who took it. Past/Current is
+ // derived from the linked reservation or session's ends_at at runtime and is
+ // never stored. Archiving is not conversation activity: it does not move
+ // updated_at.
+ archived_at: text(),
+ archived_by_user_id: text().references((): AnySQLiteColumn => user.id, { onDelete: "set null" }),
  payload_json: text().notNull(),
  created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
  updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, table => [
-	check("requests_instants_check", sql`(resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	check("requests_instants_check", sql`(resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (archived_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', archived_at, '+0 days') IS archived_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
  foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "requests_location_scope_fk" }),
  check("requests_payload_check", sql`json_valid(payload_json) AND json_type(payload_json) = 'object'`),
  check("requests_guest_payload_check", sql`(json_type(payload_json, '$.guest.name') IS 'text' AND json_type(payload_json, '$.guest.email') IS 'text' AND (json_type(payload_json, '$.guest.phone') IS 'text' OR json_type(payload_json, '$.guest.phone') IS 'null'))`),
@@ -147,7 +127,8 @@ export const requests = sqliteTable("requests", {
  uniqueIndex("requests_scope_id_unique").on(table.organization_id, table.id),
  index("requests_org_activity_idx").on(table.conversation_state, table.updated_at),
  index("requests_org_kind_idx").on(table.kind, table.location_id, table.updated_at),
- index("requests_customer_idx").on(table.customer_id),
+ index("requests_org_user_idx").on(table.organization_id, table.user_id),
+ index("requests_org_archive_activity_idx").on(table.organization_id, table.archived_at, table.updated_at),
  index("requests_org_created_idx").on(table.organization_id, table.created_at)
 ]);
 
@@ -343,7 +324,7 @@ export const member = sqliteTable("member", {
 // Deletion: cascades to variants, options, publication/location rows,
 //   collection membership, metafield values, booking config, rules and
 //   sessions. A canonical page pointing at the product REFUSES the delete
-//   (content_documents_product_scope_fk is RESTRICT), and so does a booking:
+//   (content_documents_product_scope_fk), and so does a booking:
 //   the domain checks both and says which, because the cascade would otherwise
 //   take seat allocations with it.
 // Read/write: server/utils/product-management.ts (writes),
@@ -938,11 +919,13 @@ export const product_sessions = sqliteTable("product_sessions", {
 	check("product_sessions_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [product_booking_configs.organization_id, product_booking_configs.product_id], name: "product_sessions_config_scope_fk" }).onDelete("cascade"),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "product_sessions_location_scope_fk" }).onDelete("cascade"),
-	// RESTRICT for the same composite-SET-NULL reason as above. Deleting a rule
+	// Not SET NULL, for the same composite-key reason as above. Deleting a rule
 	// must not delete or move the sessions it generated, so the domain operation
 	// clears availability_rule_id on those sessions first — dropping provenance
-	// deliberately — and only then deletes the rule.
-	foreignKey({ columns: [table.organization_id, table.availability_rule_id], foreignColumns: [product_availability_rules.organization_id, product_availability_rules.id], name: "product_sessions_rule_scope_fk" }).onDelete("restrict"),
+	// deliberately — and only then deletes the rule. NO ACTION rather than
+	// RESTRICT, so a product or organization delete that cascades away both the
+	// rule and its sessions in one statement is not refused halfway.
+	foreignKey({ columns: [table.organization_id, table.availability_rule_id], foreignColumns: [product_availability_rules.organization_id, product_availability_rules.id], name: "product_sessions_rule_scope_fk" }).onDelete("no action"),
 	unique("product_sessions_org_id_unique").on(table.organization_id, table.id),
 	// Parent key for bookings: a booking matches on product_id too, so a ticket
 	// variant from another Product cannot be booked onto this session.
@@ -974,11 +957,11 @@ export const product_sessions = sqliteTable("product_sessions", {
 //   capacity, how cancellation releases it, how a pending hold expires, and
 //   the idempotency key. Concurrent claims cannot exceed capacity; that is a
 //   tested property, not an assumption about row locking.
-// Null semantics: customer_id NULL is a guest booking with contact details on
+// Null semantics: user_id NULL is a guest booking with contact details on
 //   the linked request. request_id NULL is a booking made without an inbox
 //   thread (dashboard, MCP) — the booking is still the operational truth.
-// Deletion: cascades from session; customer_id becomes NULL if the customer
-//   record goes. An inbox thread cannot be deleted while a booking links to
+// Deletion: cascades from the organization; user_id becomes NULL if the
+//   person's account goes. An inbox thread cannot be deleted while a booking links to
 //   it, so a seat record can never be lost by tidying the inbox.
 // A confirmed booking is NOT a successful payment. Money is not represented
 //   here, and no column may be widened to represent it.
@@ -988,7 +971,7 @@ export const bookings = sqliteTable("bookings", {
 	product_id: text().notNull(),
 	product_session_id: text().notNull(),
 	product_variant_id: text().notNull(),
-	customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
+	user_id: text().references((): AnySQLiteColumn => user.id, { onDelete: "set null" }),
 	request_id: text(),
 	party_size: integer().notNull(),
 	// 'pending' | 'confirmed' | 'cancelled' | 'completed' (registry in shared/).
@@ -1010,16 +993,23 @@ export const bookings = sqliteTable("bookings", {
 	// a side effect. The domain checks first so the merchant reads a sentence
 	// instead of a constraint name; this is what makes the check true under a
 	// booking that arrives between the check and the write.
-	foreignKey({ columns: [table.organization_id, table.product_id, table.product_session_id], foreignColumns: [product_sessions.organization_id, product_sessions.product_id, product_sessions.id], name: "bookings_session_scope_fk" }).onDelete("restrict"),
-	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "bookings_variant_scope_fk" }).onDelete("restrict"),
-	// RESTRICT for the same composite-SET-NULL reason. Deleting an inbox thread
-	// must not delete a seat allocation, so the domain operation unlinks the
-	// booking first. Losing the whole site cascades both away together.
-	foreignKey({ columns: [table.organization_id, table.request_id], foreignColumns: [requests.organization_id, requests.id], name: "bookings_request_scope_fk" }).onDelete("restrict"),
+	//
+	// NO ACTION, not RESTRICT: SQLite checks NO ACTION when the statement
+	// completes, so deleting the session alone is still refused while this row
+	// exists, but deleting the organization succeeds because its cascade removes
+	// the booking in the same statement. RESTRICT fires at the parent row and
+	// would refuse the organization's own cascade.
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_session_id], foreignColumns: [product_sessions.organization_id, product_sessions.product_id, product_sessions.id], name: "bookings_session_scope_fk" }).onDelete("no action"),
+	foreignKey({ columns: [table.organization_id, table.product_id, table.product_variant_id], foreignColumns: [product_variants.organization_id, product_variants.product_id, product_variants.id], name: "bookings_variant_scope_fk" }).onDelete("no action"),
+	// Not SET NULL: that would null organization_id too, because this is a
+	// composite key. Deleting an inbox thread must not delete a seat allocation,
+	// so the domain operation unlinks the booking first. Deleting the
+	// organization cascades both away together.
+	foreignKey({ columns: [table.organization_id, table.request_id], foreignColumns: [requests.organization_id, requests.id], name: "bookings_request_scope_fk" }).onDelete("no action"),
 	uniqueIndex("bookings_request_unique").on(table.request_id).where(sql`request_id IS NOT NULL`),
 	index("bookings_session_status_idx").on(table.product_session_id, table.status),
 	index("bookings_org_created_idx").on(table.created_at),
-	index("bookings_customer_idx").on(table.customer_id),
+	index("bookings_org_user_idx").on(table.organization_id, table.user_id),
 	check("bookings_party_size_check", sql`party_size > 0`),
 ]);
 
@@ -1093,7 +1083,7 @@ export const reservations = sqliteTable("reservations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	location_id: text().notNull(),
-	customer_id: text().references((): AnySQLiteColumn => customers.id, { onDelete: "set null" }),
+	user_id: text().references((): AnySQLiteColumn => user.id, { onDelete: "set null" }),
 	request_id: text(),
 	timezone: text().notNull(),
 	starts_at: text().notNull(),
@@ -1109,11 +1099,11 @@ export const reservations = sqliteTable("reservations", {
 	check("reservations_status_check", sql`status IN ('confirmed', 'cancelled')`),
 	check("reservations_instants_check", sql`(strftime('%Y-%m-%dT%H:%M:%fZ', starts_at, '+0 days') IS starts_at) AND (strftime('%Y-%m-%dT%H:%M:%fZ', ends_at, '+0 days') IS ends_at) AND (cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "reservations_location_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.request_id], foreignColumns: [requests.organization_id, requests.id], name: "reservations_request_scope_fk" }).onDelete("restrict"),
+	foreignKey({ columns: [table.organization_id, table.request_id], foreignColumns: [requests.organization_id, requests.id], name: "reservations_request_scope_fk" }).onDelete("no action"),
 	uniqueIndex("reservations_request_unique").on(table.request_id).where(sql`request_id IS NOT NULL`),
 	index("reservations_location_start_idx").on(table.location_id, table.starts_at, table.status),
 	index("reservations_org_created_idx").on(table.created_at),
-	index("reservations_customer_idx").on(table.customer_id),
+	index("reservations_org_user_idx").on(table.organization_id, table.user_id),
 	check("reservations_interval_check", sql`ends_at > starts_at`),
 	check("reservations_party_size_check", sql`party_size > 0`),
 	check("reservations_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
@@ -1390,11 +1380,6 @@ export const organization = sqliteTable("organization", {
 	metadata: text(),
 	// Better Auth Stripe plugin organization customer field.
 	stripeCustomerId: text().unique(),
-	// Set when an owner asks for the organization to be deleted. It keeps
-	// serving through the grace period so the request can be cancelled; the
-	// deletion-sweep task deletes the organization once this instant has passed,
-	// and the foreign-key cascade takes its domains and content with it.
-	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 
 	// Better Auth's organization plugin declares this column and validates its
@@ -1459,15 +1444,15 @@ export const organization = sqliteTable("organization", {
 	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
 	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
 	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
-	// One key per connected product, each checked on its own. A single `google`
-	// key discriminated by `kind` used to answer three questions at once, so a
-	// tenant who had only pasted a measurement id was stored as a credential with
-	// no credentials in it, and the CASE below it existed to say so.
-	check("organization_google_credential_check", sql`json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential') IS 'object' AND json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text') IS TRUE`),
+	// One key per connected product, each checked on its own. These keys hold
+	// only what the organization selected: which property, site, Page or
+	// professional account. The provider credential behind a selection is the
+	// connecting person's Better Auth linked account (`account_id` names it),
+	// never a token stored on the organization.
 	check("organization_google_analytics_check", sql`json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE`),
 	check("organization_google_search_console_check", sql`json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console') IS 'object' AND json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text') IS TRUE`),
-	check("organization_facebook_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE`),
-	check("organization_instagram_check", sql`json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE`),
+	check("organization_facebook_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.account_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE`),
+	check("organization_instagram_check", sql`json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.account_id') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE`),
 	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
 	index("organization_created_at_idx").on(table.createdAt),
 ]);
@@ -1531,7 +1516,6 @@ export const review_requests = sqliteTable("review_requests", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
-	customer_id: text().notNull().references(() => customers.id, { onDelete: "cascade" } ),
 	booking_type: text().notNull(),
 	booking_id: text().notNull(),
 	token_hash: text().notNull().unique(),
@@ -1543,7 +1527,6 @@ export const review_requests = sqliteTable("review_requests", {
 	revoked_at: text(),
 	send_count: integer().default(0).notNull(),
 	last_error: text(),
-	anonymous_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1562,7 +1545,6 @@ export const reviews = sqliteTable("reviews", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
-	customer_id: text().references(() => customers.id, { onDelete: "set null" } ),
 	booking_id: text(),
 	booking_type: text(),
 	review_request_id: text().references(() => review_requests.id, { onDelete: "set null" } ),
@@ -1594,14 +1576,16 @@ export const reviews = sqliteTable("reviews", {
 	uniqueIndex("reviews_google_review_scope_unique").on(table.organization_id, table.location_id, table.google_review_id),
 	// The catalog is organization-owned, so a product review scopes to
 	// (organization, product). The review's own site/location remain its
-	// display scope and are unrelated to where the Product is offered.
+	// display scope and are unrelated to where the Product is offered. NO
+	// ACTION: deleting the product alone is refused while a review names it,
+	// and deleting the organization removes both in one statement.
 	foreignKey({
 		columns: [table.organization_id, table.product_id],
 		foreignColumns: [products.organization_id, products.id],
 		name: "reviews_product_scope_fk",
-	}).onDelete("restrict"),
+	}).onDelete("no action"),
 	index("idx_reviews_request_id").on(table.review_request_id),
-	index("idx_reviews_customer_id").on(table.customer_id),
+	index("reviews_org_user_idx").on(table.organization_id, table.user_id),
 	index("idx_reviews_location_status").on(table.location_id, table.status, table.created_at),
 	index("idx_reviews_org_status").on(table.status, table.created_at).where(sql`location_id IS NULL`),
 	index("idx_reviews_product_status_created").on(table.product_id, table.status, table.created_at),
@@ -1863,10 +1847,6 @@ export const user = sqliteTable("user", {
 	// Better Auth Stripe plugin user customer field. Organization subscriptions
 	// use organization.stripeCustomerId instead.
 	stripeCustomerId: text(),
-	// Set when the account holder asks for deletion. The account stays usable
-	// through the grace period so the request can be cancelled; the
-	// deletion-sweep task removes the row once this instant has passed.
-	deletionScheduledAt: integer({ mode: "timestamp" }),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
@@ -1932,22 +1912,21 @@ export const content_documents = sqliteTable("content_documents", {
 	published_at: text(),
 	first_published_at: text(),
 	scheduled_for: text(),
-	seo_title: text(),
-	seo_description: text(),
 	seo_keywords: text(),
-	canonical_url: text(),
 	metadata_json: text().default('{}').notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	check("content_documents_instants_check", sql`(published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "content_documents_location_scope_fk" }).onDelete("cascade"),
-	// RESTRICT, not SET NULL: this is a composite key, and SQLite's SET NULL
+	// NO ACTION, not SET NULL: this is a composite key, and SQLite's SET NULL
 	// would null organization_id too, which is NOT NULL — the delete would fail
 	// with a confusing constraint error instead of unlinking. Deleting a Product
 	// that still has a canonical page is refused; the domain operation unbinds
-	// or deletes the page first, explicitly.
-	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "content_documents_product_scope_fk" }).onDelete("restrict"),
+	// or deletes the page first, explicitly. Not RESTRICT either: that fires at
+	// the product row and refuses the organization's own cascade, which removes
+	// the page in the same statement.
+	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "content_documents_product_scope_fk" }).onDelete("no action"),
 	// At most one canonical product page per organization per product. Scoped to
 	// root rows so locale representations are unaffected, and per organization so
 	// two organizations publishing one Product each get their own canonical page.
@@ -2167,25 +2146,13 @@ export const broadcasts = sqliteTable("broadcasts", {
 	id: text().primaryKey(),
 	content_document_id: text().notNull().unique().references(() => content_documents.id, { onDelete: "cascade" }),
 	category: text().$type<NotificationCategory>().notNull(),
+	// The Resend broadcast this article was sent as. NULL until the provider
+	// has created it; Resend owns per-recipient delivery state.
+	provider_broadcast_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, () => [
+}, (table) => [
+	uniqueIndex("broadcasts_provider_broadcast_id_unique").on(table.provider_broadcast_id).where(sql`provider_broadcast_id IS NOT NULL`),
 	check("broadcasts_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
 	check("broadcasts_created_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at`),
 ]);
 
-// One row per recipient per broadcast, written after the send resolves. The
-// composite primary key is what makes a run that dies halfway resumable: the
-// next tick skips whoever already has a row, the same way
-// guest_thread_deliveries claims a thread delivery.
-export const broadcast_deliveries = sqliteTable("broadcast_deliveries", {
-	broadcast_id: text().notNull().references(() => broadcasts.id, { onDelete: "cascade" }),
-	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" }),
-	status: text().$type<'sent' | 'failed'>().notNull(),
-	provider_message_id: text(),
-	error: text(),
-	sent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	primaryKey({ columns: [table.broadcast_id, table.user_id] }),
-	check("broadcast_deliveries_status_check", sql`status IN ('sent', 'failed')`),
-	check("broadcast_deliveries_sent_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at`),
-]);

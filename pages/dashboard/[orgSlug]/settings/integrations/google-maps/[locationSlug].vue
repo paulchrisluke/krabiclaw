@@ -4,47 +4,57 @@
     :title="location?.title ?? 'Google Maps'"
     :ready="integrations.summary.value !== undefined"
     :saving="saving"
-    :disabled="!candidate"
-    :error="error"
-    :footer="Boolean(candidate)"
-    save-label="Connect this place"
-    @cancel="candidate = null"
-    @save="connect"
+    :error="error || integrations.failure.value"
+    :footer="false"
   >
-    <UAlert v-if="!location" color="error" variant="soft" icon="i-lucide-map-pin-off" description="This business has no active location at this address." />
-    <div v-else class="space-y-6">
-      <UCard v-if="location.google_place_id && !searching" variant="subtle">
-        <p class="font-semibold text-highlighted">Connected to Google Maps</p>
-        <dl class="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div><dt class="text-muted">Rating</dt><dd class="mt-1 font-medium text-highlighted">{{ location.rating ?? 'No rating yet' }}</dd></div>
-          <div><dt class="text-muted">Reviews</dt><dd class="mt-1 font-medium text-highlighted">{{ location.review_count ?? 0 }}</dd></div>
-          <div class="col-span-2"><dt class="text-muted">Last updated from Google</dt><dd class="mt-1 font-medium text-highlighted">{{ location.last_synced_at ? new Date(location.last_synced_at).toLocaleString() : 'Not yet' }}</dd></div>
+    <div v-if="location" class="space-y-6">
+      <template v-if="location.google_place_id && !searching">
+        <!-- The place leads with its picture, large; a muted pin holds the footprint when it has none. -->
+        <div class="overflow-hidden rounded-2xl bg-elevated ring ring-default">
+          <img v-if="location.image" :src="location.image" alt="" class="aspect-[16/7] w-full object-cover">
+          <div v-else class="flex aspect-[16/7] w-full items-center justify-center">
+            <UIcon name="i-lucide-map-pin" class="size-10 text-dimmed" />
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <UBadge color="success" variant="subtle" size="lg" class="rounded-full">
+            <span class="size-2 rounded-full bg-success" />
+            Connected to Google Maps
+          </UBadge>
+          <p v-if="location.address" class="text-muted">{{ location.address }}</p>
+          <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+            <span v-if="location.rating !== null" class="flex items-center gap-1 font-medium text-highlighted">
+              <UIcon name="i-lucide-star" class="size-4 text-warning" />{{ location.rating }}
+            </span>
+            <span>{{ location.review_count ?? 0 }} reviews</span>
+            <span aria-hidden="true" class="text-dimmed">|</span>
+            <span>{{ location.last_synced_at ? `Updated ${new Date(location.last_synced_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}` : 'Not updated from Google yet' }}</span>
+          </p>
+        </div>
+
+        <dl v-if="location.phone || location.website_url" class="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2 border-t border-default pt-5 text-sm">
+          <template v-if="location.phone">
+            <dt class="text-muted">Phone</dt>
+            <dd class="text-highlighted">{{ location.phone }}</dd>
+          </template>
+          <template v-if="location.website_url">
+            <dt class="text-muted">Website</dt>
+            <dd class="min-w-0 truncate"><ULink :to="location.website_url" target="_blank" class="text-highlighted underline underline-offset-4">{{ location.website_url }}</ULink></dd>
+          </template>
         </dl>
-        <p class="mt-4 text-sm text-muted">Rating and reviews update from Google every week. Your address, phone, hours and timezone are yours to edit and are never changed unless you re-import them.</p>
-        <div class="mt-5 flex flex-wrap gap-3">
+
+        <div class="flex flex-wrap gap-3">
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="outline" @click="confirmingReimport = true">Re-import details from Google Maps</UButton>
           <UButton color="neutral" variant="ghost" @click="searching = true">Connect a different place</UButton>
         </div>
-      </UCard>
-
-      <template v-else>
-        <UFormField label="Find this location on Google Maps" hint="Or paste a Google Maps link">
-          <div class="flex gap-2">
-            <UInput v-model="lookup" size="xl" class="w-full" placeholder="Business name and town" @keydown.enter.prevent="find" />
-            <UButton size="xl" :loading="finding" :disabled="!lookup.trim()" @click="find">Find</UButton>
-          </div>
-        </UFormField>
-
-        <UCard v-if="candidate" variant="subtle">
-          <p class="text-sm text-muted">Is this {{ location.title }}?</p>
-          <p class="mt-2 font-semibold text-highlighted">{{ candidate.name }}</p>
-          <p v-if="candidateAddress" class="mt-1 text-sm text-default">{{ candidateAddress }}</p>
-          <p v-if="candidate.phone" class="mt-1 text-sm text-default">{{ candidate.phone }}</p>
-          <p class="mt-1 text-sm text-default">{{ candidate.rating ? `${candidate.rating} ★ · ${candidate.ratingCount ?? 0} reviews` : 'No reviews yet' }}</p>
-          <ULink v-if="candidate.mapsUrl" :to="candidate.mapsUrl" target="_blank" class="mt-2 inline-block text-sm text-primary">View on Google Maps</ULink>
-          <p class="mt-4 text-sm text-muted">Connecting imports its address, phone, opening hours, timezone, rating and reviews into this location.</p>
-        </UCard>
       </template>
+
+      <!-- Picking a prediction is the confirmation: it connects that place. -->
+      <UFormField v-else label="Find this location on Google Maps" description="Picking it connects it, and imports its address, phone, opening hours, timezone, rating and reviews into this location.">
+        <GooglePlacePicker :model-value="location.title" @select="connect" />
+        <p v-if="saving" class="mt-2 text-sm text-muted" aria-live="polite">Connecting to Google Maps…</p>
+      </UFormField>
     </div>
 
     <UModal v-model:open="confirmingReimport" title="Re-import details from Google Maps?">
@@ -62,57 +72,31 @@
 </template>
 
 <script setup lang="ts">
-import { formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
+import GooglePlacePicker from '~/lib/components/workspace/location/GooglePlacePicker.vue'
+import type { OnboardingPlacePreview } from '~/composables/useOnboardingFlow'
 import { integrationsKey } from '../../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
-interface PlacePreview {
-  placeId: string
-  name: string
-  address: unknown
-  phone: string | null
-  mapsUrl: string | null
-  rating: number | null
-  ratingCount: number | null
-}
-
 const route = useRoute()
 const integrations = inject(integrationsKey)!
 const dashboardApi = useDashboardApi()
+const level = useRouteLevel()
 const location = computed(() => integrations.summary.value?.google_maps.find(candidate => candidate.slug === route.params.locationSlug) ?? null)
+// A location the business does not have is not a page: it 404s rather than
+// drawing a leaf for it. A leaf on its way out yields and reads nothing.
+watchEffect(() => {
+  if (level.mode.value !== 'yield' && integrations.summary.value && !location.value) {
+    showError(createError({ statusCode: 404, statusMessage: 'Location not found' }))
+  }
+})
 
-const isPreview = (value: unknown): value is { preview: PlacePreview } =>
-  isRecord(value) && isRecord(value.preview) && typeof value.preview.placeId === 'string' && typeof value.preview.name === 'string'
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 
-const lookup = ref('')
-const candidate = ref<PlacePreview | null>(null)
-const candidateAddress = computed(() => formatPostalAddress(parsePostalAddress(candidate.value?.address)))
 const searching = ref(false)
-const finding = ref(false)
 const saving = ref(false)
 const confirmingReimport = ref(false)
 const error = ref('')
-
-async function find() {
-  const value = lookup.value.trim()
-  if (!value) return
-  finding.value = true
-  error.value = ''
-  candidate.value = null
-  try {
-    const isUrl = /^https?:\/\//i.test(value)
-    const response = await dashboardApi('/api/dashboard/onboarding/places-preview', {
-      method: 'POST', body: isUrl ? { mapsUrl: value } : { query: value }, validate: isPreview,
-    })
-    candidate.value = response.preview
-  } catch (cause) {
-    error.value = getErrorMessage(cause, 'Could not find that place on Google Maps.')
-  } finally {
-    finding.value = false
-  }
-}
 
 async function importPlace(placeId?: string) {
   if (!location.value) return
@@ -124,9 +108,7 @@ async function importPlace(placeId?: string) {
       body: { organizationId: integrations.organizationId, locationId: location.value.id, ...(placeId ? { placeId } : {}) },
       validate: isSuccess,
     })
-    candidate.value = null
     searching.value = false
-    lookup.value = ''
     confirmingReimport.value = false
     await integrations.refresh()
   } catch (cause) {
@@ -137,6 +119,6 @@ async function importPlace(placeId?: string) {
   }
 }
 
-const connect = () => importPlace(candidate.value?.placeId)
+const connect = (place: OnboardingPlacePreview) => importPlace(place.placeId)
 const reimport = () => importPlace()
 </script>

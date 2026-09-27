@@ -6,6 +6,7 @@ import {
   type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore, type UploadResolvedMediaInput } from '~/server/utils/media-upload'
+import { cloudflareImagesConfigured } from '~/server/utils/cloudflare-images'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { renderOgImagePng } from '~/server/utils/og-image/render'
 import {
@@ -17,22 +18,26 @@ import {
   type SocialTemplate,
 } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 
 const SOCIAL_CARD_OWNERS = {
-  organization: { table: 'organization', tenant: 'o.id', filter: "o.status = 'active'", slots: ['social_share'] },
-  business_location: { table: 'business_locations', tenant: 'o.organization_id', filter: "o.status = 'active'", slots: ['hero', 'gallery'] },
-  product: {
-    table: 'products',
-    tenant: 'o.organization_id',
-    filter: 'o.active = 1',
-    slots: ['image', 'gallery'],
-  },
-  // Articles and docs keep their picture in the leading image block, read
-  // through `loadCoverBlockId`; `cover` is the social post's own slot.
-  content_document: { table: 'content_documents', tenant: 'o.organization_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')", slots: ['cover', 'gallery'] },
-  review: { table: 'reviews', tenant: 'o.organization_id', filter: "o.status = 'approved' AND o.organization_id IS NOT NULL", slots: ['portrait', 'gallery'] },
-} satisfies Record<string, { table: string; tenant: string; filter: string; slots: string[] }>
+  organization: { table: 'organization', tenant: 'o.id', filter: "o.status = 'active'" },
+  business_location: { table: 'business_locations', tenant: 'o.organization_id', filter: "o.status = 'active'" },
+  product: { table: 'products', tenant: 'o.organization_id', filter: 'o.active = 1' },
+  content_document: { table: 'content_documents', tenant: 'o.organization_id', filter: "o.kind IN ('page','article','social_post') AND EXISTS (SELECT 1 FROM content_documents root WHERE root.id = COALESCE(o.root_id, o.id) AND (root.kind = 'page' OR root.status = 'published')) AND (o.kind != 'page' OR o.path != '/')" },
+  review: { table: 'reviews', tenant: 'o.organization_id', filter: "o.status = 'approved' AND o.organization_id IS NOT NULL" },
+} satisfies Record<string, { table: string; tenant: string; filter: string }>
+
+/**
+ * The placement writes that change a card: the slot `resolveOwnerPicture`
+ * reads for that owner. A gallery write cannot change what the card draws.
+ */
+const CARD_PICTURE_SLOT = {
+  business_location: 'hero',
+  product: 'image',
+  content_document: 'cover',
+  review: 'portrait',
+} as const
 
 export type SocialCardOwner = { owner_type: keyof typeof SOCIAL_CARD_OWNERS; owner_id: string }
 
@@ -52,7 +57,7 @@ export async function listSocialCardOwners(db: DbClient, input: { organizationId
 export type SocialCardRefreshResult =
   | { kind: 'generated'; owner: SocialCardOwner; assetId: string; publicUrl: string; generationKey: string }
   | { kind: 'reused'; owner: SocialCardOwner; assetId: string; publicUrl: string; generationKey: string }
-  | { kind: 'skipped'; owner: SocialCardOwner; reason: 'no_source' | 'owner_not_found' | 'missing_content' }
+  | { kind: 'skipped'; owner: SocialCardOwner; reason: 'no_source' | 'owner_not_found' | 'missing_content' | 'images_unavailable' }
   | { kind: 'failed'; owner: SocialCardOwner; error: string }
 
 interface OwnerRecord {
@@ -82,30 +87,32 @@ export async function socialCardRefreshOwnersForPlacement(db: DbClient, placemen
   owner_id: string
   slot: string
 }): Promise<SocialCardOwner[]> {
-  if (placement.slot === 'social_card') return []
   switch (placement.owner_type) {
     case 'organization':
+      // The logo is drawn on the card and the share image is its picture.
       return placement.slot === 'logo' || placement.slot === 'social_share'
         ? [{ owner_type: 'organization', owner_id: placement.owner_id }]
         : []
     case 'content_block': {
-      const document = await queryFirst<{ id: string; organization_id: string; kind: string; path: string | null }>(db, `
-        SELECT d.id, d.organization_id, d.kind, d.path
+      // Only a top-level block's own picture can be a document's leading
+      // picture. The home page is not a card of its own and is not the
+      // organization's either: that card draws the share image.
+      if (placement.slot !== 'media') return []
+      const document = await queryFirst<{ id: string }>(db, `
+        SELECT d.id
           FROM content_blocks cb
           JOIN content_documents d ON d.id = cb.document_id
-         WHERE cb.id = ? AND d.kind IN ('page','article','social_post')
+         WHERE cb.id = ? AND cb.parent_block_id IS NULL
+           AND d.kind IN ('page','article') AND (d.kind != 'page' OR d.path != '/')
          LIMIT 1
       `, [placement.owner_id])
-      if (!document) return []
-      return document.kind === 'page' && document.path === '/'
-        ? [{ owner_type: 'organization', owner_id: document.organization_id }]
-        : [{ owner_type: 'content_document', owner_id: document.id }]
+      return document ? [{ owner_type: 'content_document', owner_id: document.id }] : []
     }
     case 'business_location':
     case 'product':
     case 'content_document':
     case 'review':
-      return SOCIAL_CARD_OWNERS[placement.owner_type].slots.some(slot => slot === placement.slot)
+      return CARD_PICTURE_SLOT[placement.owner_type] === placement.slot
         ? [{ owner_type: placement.owner_type, owner_id: placement.owner_id }]
         : []
     default:
@@ -140,8 +147,8 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id,
-        COALESCE(NULLIF(trim(d.seo_title), ''), NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
-        COALESCE(NULLIF(trim(d.seo_description), ''), NULLIF(trim(d.summary), '')) AS description,
+        COALESCE(NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
+        NULLIF(trim(d.summary), '') AS description,
         CASE d.kind WHEN 'article' THEN 'Article' WHEN 'social_post' THEN 'Update' END AS label,
         bl.title AS location
         FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
@@ -162,84 +169,24 @@ async function loadOrganization(db: DbClient, organizationId: string): Promise<O
 }
 
 /**
- * The page's own picture: its first top-level block carrying a `media` placement.
- *
- * A site's page is its home document, which is not a content_document owner of
- * its own — without this the home page is the one page whose card never reads
- * its own content. Block type is not the test, because the block that leads a
- * page differs per template: NCLS opens with `hero`, Ember & Slice with
- * `heading` then `hero`, Kikuzuki with `markdown`, `heading`, then `hero`. An
- * article opens with `image`. Carrying a picture is what they have in common.
+ * A page's or an article's picture is its first top-level block carrying a
+ * `media` placement. Block type is not the test, because the block that leads
+ * differs per template; carrying a picture is what they have in common. A
+ * social post keeps its picture in its own `cover` and has no blocks.
  */
-async function loadCoverBlockId(db: DbClient, owner: SocialCardOwner): Promise<string | null> {
-  const documentId = owner.owner_type === 'content_document'
-    ? owner.owner_id
-    : owner.owner_type === 'organization'
-      ? (await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents
-          WHERE organization_id = ? AND kind = 'page' AND path = '/' LIMIT 1`, [owner.owner_id]))?.id ?? null
-      : null
-  if (!documentId) return null
+async function loadLeadingPictureBlockId(db: DbClient, owner: SocialCardOwner): Promise<string | null> {
+  if (owner.owner_type !== 'content_document') return null
   const block = await queryFirst<{ id: string }>(db, `SELECT cb.id FROM content_blocks cb
     JOIN media_placements mp ON mp.owner_type = 'content_block' AND mp.owner_id = cb.id
       AND mp.slot = 'media' AND mp.status = 'active'
     JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
     WHERE cb.document_id = ? AND cb.parent_block_id IS NULL
-    ORDER BY cb.position LIMIT 1`, [documentId])
+    ORDER BY cb.position LIMIT 1`, [owner.owner_id])
   return block?.id ?? null
 }
 
-async function loadPlacedAssets(db: DbClient, organizationId: string, owner: SocialCardOwner, coverBlockId: string | null): Promise<SocialCardPlacedAsset[]> {
-  const ownerAssets = (await readMediaPlacements(db, {
-    organizationId,
-    ownerType: owner.owner_type,
-    ownerIds: [owner.owner_id],
-    includePendingSocialCard: true,
-  })).get(owner.owner_id) ?? []
-  if (coverBlockId) {
-    ownerAssets.push(...(await readMediaPlacements(db, { organizationId, ownerType: 'content_block', ownerIds: [coverBlockId] })).get(coverBlockId) ?? [])
-  }
-  if (owner.owner_type === 'organization') return ownerAssets
-  const organizationAssets = (await readMediaPlacements(db, {
-    organizationId,
-    ownerType: 'organization',
-    ownerIds: [organizationId],
-  })).get(organizationId) ?? []
-  return [...ownerAssets, ...organizationAssets]
-}
-
-function firstAsset(assets: SocialCardPlacedAsset[], owner: SocialCardOwner, slots: readonly string[]): SocialCardPlacedAsset | null {
-  for (const slot of slots) {
-    const asset = assets.find(item => item.owner_type === owner.owner_type
-      && item.owner_id === owner.owner_id && item.slot === slot && mediaStillUrl(item))
-    if (asset) return asset
-  }
-  return null
-}
-
-function organizationAsset(assets: SocialCardPlacedAsset[], organizationId: string, slot: string): SocialCardPlacedAsset | null {
-  return assets.find(item => item.owner_type === 'organization' && item.owner_id === organizationId
-    && item.slot === slot && mediaStillUrl(item)) ?? null
-}
-
-export function selectSocialCardPlacements(
-  assets: SocialCardPlacedAsset[],
-  owner: SocialCardOwner,
-  organizationId: string,
-  coverBlockId: string | null = null,
-) {
-  const cover = coverBlockId
-    ? assets.find(item => item.owner_type === 'content_block' && item.owner_id === coverBlockId && item.slot === 'media' && mediaStillUrl(item)) ?? null
-    : null
-  // Every page carries a card. An owner with nothing in its own slots falls back
-  // to the site's approved share image, so the card is still page-specific in
-  // title, description and label even when the picture is the brand's.
-  const source = cover
-    ?? firstAsset(assets, owner, SOCIAL_CARD_OWNERS[owner.owner_type].slots)
-    ?? organizationAsset(assets, organizationId, 'social_share')
-  const logo = organizationAsset(assets, organizationId, 'logo')
-  const current = assets.find(item => item.owner_type === owner.owner_type
-    && item.owner_id === owner.owner_id && item.slot === 'social_card') ?? null
-  return { logo, current, source }
+async function readOwnerPlacements(db: DbClient, organizationId: string, ownerType: MediaPlacementOwnerType, ownerId: string, includePendingSocialCard = false) {
+  return (await readMediaPlacements(db, { organizationId, ownerType, ownerIds: [ownerId], includePendingSocialCard })).get(ownerId) ?? []
 }
 
 export function buildSocialCardGenerationKey(input: {
@@ -278,107 +225,109 @@ export async function refreshSocialCard(input: {
   env: SocialCardEnv
   owner: SocialCardOwner
   actorId?: string | null
-}): Promise<SocialCardRefreshResult> {
+}): Promise<Exclude<SocialCardRefreshResult, { kind: 'failed' }>> {
+  // A write that changed a card's input calls this, and a card that did not
+  // regenerate fails that write: the batch paths below record the failure.
   const { db, env, owner } = input
-  try {
-    const ownerRecord = await loadOwner(db, owner)
-    if (!ownerRecord) return await clearSocialCard(input, 'owner_not_found')
-    const organization = await loadOrganization(db, ownerRecord.organization_id)
-    if (!organization) return await clearSocialCard(input, 'owner_not_found')
-    const title = ownerRecord.title?.trim()
-    const organizationName = organization.name?.trim() || null
-    if (!title || !organizationName) return await clearSocialCard(input, 'missing_content')
+  const ownerRecord = await loadOwner(db, owner)
+  if (!ownerRecord) return await clearSocialCard(input, 'owner_not_found')
+  const organization = await loadOrganization(db, ownerRecord.organization_id)
+  if (!organization) return await clearSocialCard(input, 'owner_not_found')
+  const title = ownerRecord.title?.trim()
+  const organizationName = organization.name?.trim() || null
+  if (!title || !organizationName) return await clearSocialCard(input, 'missing_content')
 
-    const coverBlockId = await loadCoverBlockId(db, owner)
-    const assets = await loadPlacedAssets(db, organization.id, owner, coverBlockId)
-    const { logo, current, source } = selectSocialCardPlacements(assets, owner, organization.id, coverBlockId)
-    const backgroundImageUrl = mediaStillUrl(source)
-    if (!source || !backgroundImageUrl) return await clearSocialCard(input, 'no_source')
+  const [ownerMedia, organizationMedia, leadingBlockId] = await Promise.all([
+    readOwnerPlacements(db, organization.id, owner.owner_type, owner.owner_id, true),
+    readOwnerPlacements(db, organization.id, 'organization', organization.id),
+    loadLeadingPictureBlockId(db, owner),
+  ])
+  const source = leadingBlockId
+    ? resolveOwnerPicture('content_block', await readOwnerPlacements(db, organization.id, 'content_block', leadingBlockId), organizationMedia)
+    : resolveOwnerPicture(owner.owner_type, ownerMedia, organizationMedia)
+  const logo = organizationMedia.find(item => item.slot === 'logo' && mediaStillUrl(item)) ?? null
+  const current = ownerMedia.find(item => item.slot === 'social_card') ?? null
+  const backgroundImageUrl = mediaStillUrl(source)
+  if (!source || !backgroundImageUrl) return await clearSocialCard(input, 'no_source')
 
-    const payload: SocialCardRenderPayload = {
-      template: socialTemplate(organization),
-      title,
-      description: truncateForSeo(ownerRecord.description, 160),
-      organizationName,
-      label: ownerRecord.label,
-      location: ownerRecord.location,
-      logoUrl: mediaStillUrl(logo),
-      backgroundImageUrl,
-    }
-    const generationKey = buildSocialCardGenerationKey({
-      sourceAssetId: source.asset_id,
-      logoAssetId: logo?.asset_id ?? null,
-      sourceUpdatedAt: source.updated_at,
-      logoUpdatedAt: logo?.updated_at ?? null,
-      payload,
-    })
-    // A matching key says what the card would show, not that its image still
-    // exists: one deleted out from under its row served 404 forever while every
-    // reconcile reused it. The card is reused only while its image is served.
-    const currentServed = current?.generation_key === generationKey && current.public_url
-      ? (await fetch(current.public_url, { method: 'HEAD', signal: AbortSignal.timeout(10_000) })).ok
-      : false
-    if (currentServed && current?.public_url) {
-      await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'active' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card' AND asset_id = ?", params: [owner.owner_type, owner.owner_id, current.asset_id] }])
-      return { kind: 'reused', owner, assetId: current.asset_id, publicUrl: current.public_url, generationKey }
-    }
-    await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'pending' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [owner.owner_type, owner.owner_id] }])
-
-    if (!env.IMAGES) throw new Error('Cloudflare Images binding is required to render social cards')
-    const png = await renderOgImagePng(payload, { images: env.IMAGES })
-    const uploaded = await uploadResolvedMediaToAssetStore({
-      db,
-      env,
-      organizationId: organization.id,
-      userId: input.actorId ?? null,
-      buffer: Uint8Array.from(png),
-      contentType: 'image/png',
-      filename: 'social-card.png',
-      source: 'generated',
-      kind: 'image',
-      altText: ownerRecord.title,
-      fileSize: png.byteLength,
-      width: OG_IMAGE_WIDTH,
-      height: OG_IMAGE_HEIGHT,
-      generationKey,
-    })
-
-    // The card this replaces is not deleted here: an environment regenerating
-    // a card may be running on a copy of production's rows, and the previous
-    // card is then production's. The superseded card is left unplaced for
-    // social-card-cleanup, which runs where the Images credentials are.
-    try {
-      await executeBatch(db, [
-        ...buildSingleMediaPlacementQueries({
-          organizationId: organization.id,
-          placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
-          media: [{ asset_id: uploaded.assetId }],
-        }),
-        // The replaced card's retention is counted from now, when it lost its
-        // placement, not from whenever the asset was last touched.
-        ...(current && current.asset_id !== uploaded.assetId
-          ? [{ query: 'UPDATE media_assets SET updated_at = ? WHERE id = ? AND organization_id = ?', params: [new Date().toISOString(), current.asset_id, organization.id] }]
-          : []),
-      ], { operation: 'replace social card placement' })
-    } catch (placementError) {
-      try {
-        await deleteMediaAsset(db, env, uploaded.assetId, organization.id, input.actorId ?? null)
-      } catch (cleanupError) {
-        throw new AggregateError([placementError, cleanupError], 'Social card placement and cleanup failed', { cause: cleanupError })
-      }
-      throw placementError
-    }
-
-    return { kind: 'generated', owner, assetId: uploaded.assetId, publicUrl: uploaded.publicUrl, generationKey }
-  } catch (error) {
-    console.error('[social-card]', {
-      stage: 'refresh',
-      ownerType: owner.owner_type,
-      ownerId: owner.owner_id,
-      error: errorMessage(error),
-    })
-    return { kind: 'failed', owner, error: errorMessage(error) }
+  const payload: SocialCardRenderPayload = {
+    template: socialTemplate(organization),
+    title,
+    description: truncateForSeo(ownerRecord.description, 160),
+    organizationName,
+    label: ownerRecord.label,
+    location: ownerRecord.location,
+    logoUrl: mediaStillUrl(logo),
+    backgroundImageUrl,
   }
+  const generationKey = buildSocialCardGenerationKey({
+    sourceAssetId: source.asset_id,
+    logoAssetId: logo?.asset_id ?? null,
+    sourceUpdatedAt: source.updated_at,
+    logoUpdatedAt: logo?.updated_at ?? null,
+    payload,
+  })
+  // A matching key says what the card would show, not that its image still
+  // exists: one deleted out from under its row served 404 forever while every
+  // reconcile reused it. The card is reused only while its image is served.
+  const currentServed = current?.generation_key === generationKey && current.public_url
+    ? (await fetch(current.public_url, { method: 'HEAD', signal: AbortSignal.timeout(10_000) })).ok
+    : false
+  if (currentServed && current?.public_url) {
+    await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'active' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card' AND asset_id = ?", params: [owner.owner_type, owner.owner_id, current.asset_id] }])
+    return { kind: 'reused', owner, assetId: current.asset_id, publicUrl: current.public_url, generationKey }
+  }
+  // Only production can store a card. Elsewhere the rows are production's copy,
+  // so the card it already has stays exactly as it is and the result says why.
+  if (!cloudflareImagesConfigured(env)) return { kind: 'skipped', owner, reason: 'images_unavailable' }
+  await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'pending' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [owner.owner_type, owner.owner_id] }])
+
+  if (!env.IMAGES) throw new Error('Cloudflare Images binding is required to render social cards')
+  const png = await renderOgImagePng(payload, { images: env.IMAGES })
+  const uploaded = await uploadResolvedMediaToAssetStore({
+    db,
+    env,
+    organizationId: organization.id,
+    userId: input.actorId ?? null,
+    buffer: Uint8Array.from(png),
+    contentType: 'image/png',
+    filename: 'social-card.png',
+    source: 'generated',
+    kind: 'image',
+    altText: ownerRecord.title,
+    fileSize: png.byteLength,
+    width: OG_IMAGE_WIDTH,
+    height: OG_IMAGE_HEIGHT,
+    generationKey,
+  })
+
+  // The card this replaces is not deleted here: an environment regenerating
+  // a card may be running on a copy of production's rows, and the previous
+  // card is then production's. The superseded card is left unplaced for
+  // social-card-cleanup, which runs where the Images credentials are.
+  try {
+    await executeBatch(db, [
+      ...buildSingleMediaPlacementQueries({
+        organizationId: organization.id,
+        placement: { owner_type: owner.owner_type, owner_id: owner.owner_id, slot: 'social_card' },
+        media: [{ asset_id: uploaded.assetId }],
+      }),
+      // The replaced card's retention is counted from now, when it lost its
+      // placement, not from whenever the asset was last touched.
+      ...(current && current.asset_id !== uploaded.assetId
+        ? [{ query: 'UPDATE media_assets SET updated_at = ? WHERE id = ? AND organization_id = ?', params: [new Date().toISOString(), current.asset_id, organization.id] }]
+        : []),
+    ], { operation: 'replace social card placement' })
+  } catch (placementError) {
+    try {
+      await deleteMediaAsset(db, env, uploaded.assetId, organization.id, input.actorId ?? null)
+    } catch (cleanupError) {
+      throw new AggregateError([placementError, cleanupError], 'Social card placement and cleanup failed', { cause: cleanupError })
+    }
+    throw placementError
+  }
+
+  return { kind: 'generated', owner, assetId: uploaded.assetId, publicUrl: uploaded.publicUrl, generationKey }
 }
 
 export async function regenerateOrganizationSocialCards(input: {
@@ -392,6 +341,13 @@ export async function regenerateOrganizationSocialCards(input: {
   const owners = await listSocialCardOwners(input.db, { organizationId: input.organizationId, after: input.after, limit: (input.limit ?? 1) + 1 })
   const results: SocialCardRefreshResult[] = []
   const batch = owners.slice(0, input.limit ?? 1)
-  for (const { owner_type, owner_id } of batch) results.push(await refreshSocialCard({ ...input, owner: { owner_type, owner_id } }))
+  for (const { owner_type, owner_id } of batch) {
+    const owner = { owner_type, owner_id }
+    try {
+      results.push(await refreshSocialCard({ ...input, owner }))
+    } catch (error) {
+      results.push({ kind: 'failed', owner, error: errorMessage(error) })
+    }
+  }
   return { results, next_cursor: owners.length > batch.length ? batch.at(-1)!.cursor : null }
 }

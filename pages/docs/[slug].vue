@@ -67,9 +67,6 @@ interface DocsArticleDetail {
   slug: string
   excerpt?: string | null
   category?: string | null
-  seo_title?: string | null
-  seo_description?: string | null
-  canonical_url?: string | null
   robots?: string | null
   updated_at?: string | null
   social_image?: import('~/utils/social-metadata').SocialImageSource | null
@@ -148,8 +145,8 @@ const currentIndex = computed(() => articles.value.findIndex(item => item.path =
 const previousArticle = computed(() => currentIndex.value > 0 ? articles.value[currentIndex.value - 1] : null)
 const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value < articles.value.length - 1 ? articles.value[currentIndex.value + 1] : null)
 
-const seoTitle = computed(() => article.value?.seo_title || article.value?.title || 'Documentation')
-const seoDescription = computed(() => article.value?.seo_description || article.value?.excerpt
+const seoTitle = computed(() => article.value?.title || 'Documentation')
+const seoDescription = computed(() => article.value?.excerpt
   || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
 
 // The category groups the index; it is not a place, so the trail is Docs ->
@@ -172,7 +169,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   // its own generated card and nothing else — omitting the key would reach for
   // the site's card and hide a missing article card.
   pageType: 'article' as const,
-  path: resolveSeoUrl(article.value?.canonical_url || path.value, platformOrigin.value),
+  path: resolveSeoUrl(path.value, platformOrigin.value),
   socialImage: article.value?.social_image ?? null,
 }))
 

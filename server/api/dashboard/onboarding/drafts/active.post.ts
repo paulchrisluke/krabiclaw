@@ -1,7 +1,7 @@
 import { parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
+import { getPlaceDetails } from '~/server/utils/google-places'
 import { queryFirst } from '~/server/db'
 import {
   buildOnboardingDraftPayload, getDraftMedia, type DraftProductInput, parseOnboardingDraftPayload, upsertActiveOnboardingDraft, type DraftBrandInput, type DraftDetailsInput, type DraftUploadedImage, type OnboardingDraftPayload, type PlaceDetailsSnapshot, } from '~/server/utils/onboarding-drafts'
@@ -141,28 +141,25 @@ export default defineHandler(async (event) => {
   }
   const vertical = rawVertical as OrganizationVertical
 
+  // The server is authoritative for the place: the client names only the
+  // placeId the owner picked, and the full Place Details — reviews included —
+  // are fetched here unless the draft already holds that same place.
   let place: Awaited<ReturnType<typeof getPlaceDetails>> | PlaceDetailsSnapshot | null = null
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   if (sourceType === 'google_places') {
+    if (!placeId) return jsonResponse({ error: 'placeId is required for Google Places drafts' }, { status: 400 })
     const existingPlace = existingPayload?.source.place ?? null
-    if (placeId) {
-      if (existingPlace?.placeId === placeId) {
-        place = existingPlace
-      } else {
-        const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-        if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
-        try {
-          place = await getPlaceDetails(apiKey, placeId)
-        } catch (error) {
-          const status = error instanceof PlaceDetailsError ? error.statusCode : 502
-          return jsonResponse({
-            error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.', }, { status })
-        }
-      }
-    } else if (existingPlace) {
+    if (existingPlace?.placeId === placeId) {
       place = existingPlace
     } else {
-      return jsonResponse({ error: 'placeId is required for Google Places drafts' }, { status: 400 })
+      const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+      if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
+      try {
+        place = await getPlaceDetails(apiKey, placeId)
+      } catch (error) {
+        return jsonResponse({
+          error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.', }, { status: 502 })
+      }
     }
   }
 

@@ -38,6 +38,7 @@ import DashboardOrganizationLocationSelector, { type OrganizationLocationSelecto
 import { dashboardFetch } from '~/composables/dashboardFetch'
 import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 import { getErrorMessage } from '~/utils/errors'
+import { mediaStillUrl, resolveOwnerPicture } from '~/shared/media-placement-contract'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
@@ -76,12 +77,14 @@ const locationNoun = computed(() => (usesServiceAreaVocabulary.value ? 'office' 
  * and its own hero photograph. The name belongs under the tile, in text.
  */
 const tiles = computed<OrganizationLocationSelectorItem[]>(() => locations.value.map((location) => {
-  const hero = location.media.find(item => item.slot === 'hero')
   const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
   return {
     id: location.id,
     label: location.title,
-    imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
+    // The location's own photograph. The organization's share image is not
+    // passed: a tile that stood in the brand's picture would not tell two
+    // locations apart.
+    imageUrl: mediaStillUrl(resolveOwnerPicture('business_location', location.media, [])),
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
     to: `/dashboard/${orgSlug.value}/locations/${location.slug}`,

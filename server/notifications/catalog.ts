@@ -67,8 +67,12 @@ const reservation = {
 // A real tenant asset, so the preview shows what a hero actually looks like
 // rather than a message that happens to have none.
 const sampleCover = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/245066b6-926f-4dbb-e731-53ebb0e22700/public'
-// A real tenant logo asset from D1, so the preview shows the logo stack in the header.
+// A real tenant logo asset from D1, so the preview shows the tenant's mark in the header.
 const sampleLogo = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/881bb3e2-b2eb-47e0-9e05-152bfa0f1dba/thumbnail'
+
+// Owner alerts leave the event builders without a mark; notifyOwner adds the
+// organization's logo before rendering, and the preview shows what it sends.
+const ownerAlert = (message: NotificationMessage): NotificationMessage => ({ ...message, organizationLogoUrl: sampleLogo })
 
 const booking = {
   ...reservation,
@@ -102,54 +106,54 @@ const guestVisit = {
 
 export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   // Owner alerts — both channels.
-  { id: 'reservation-created', audience: 'owner', title: 'Owner — new reservation', whatsappTemplate: 'new_reservation', message: reservationCreatedMessage(reservation) },
-  { id: 'reservation-cancelled', audience: 'owner', title: 'Owner — reservation cancelled', whatsappTemplate: 'reservation_cancelled', message: reservationCancelledMessage({ ...reservation, wasConfirmed: true }) },
-  { id: 'booking-created', audience: 'owner', title: 'Owner — new experience booking', whatsappTemplate: 'new_reservation', message: bookingCreatedMessage(booking) },
-  { id: 'booking-cancelled', audience: 'owner', title: 'Owner — booking cancelled', whatsappTemplate: 'reservation_cancelled', message: bookingCancelledMessage({ ...booking, wasConfirmed: false }) },
+  { id: 'reservation-created', audience: 'owner', title: 'Owner — new reservation', whatsappTemplate: 'new_reservation', message: ownerAlert(reservationCreatedMessage(reservation)) },
+  { id: 'reservation-cancelled', audience: 'owner', title: 'Owner — reservation cancelled', whatsappTemplate: 'reservation_cancelled', message: ownerAlert(reservationCancelledMessage({ ...reservation, wasConfirmed: true })) },
+  { id: 'booking-created', audience: 'owner', title: 'Owner — new experience booking', whatsappTemplate: 'new_reservation', message: ownerAlert(bookingCreatedMessage(booking)) },
+  { id: 'booking-cancelled', audience: 'owner', title: 'Owner — booking cancelled', whatsappTemplate: 'reservation_cancelled', message: ownerAlert(bookingCancelledMessage({ ...booking, wasConfirmed: false })) },
   {
     id: 'contact-received',
     audience: 'owner',
     title: 'Owner — new contact message',
     whatsappTemplate: 'new_contact_msg',
-    message: contactReceivedMessage({
+    message: ownerAlert(contactReceivedMessage({
       guestName: 'Jordan Lee', guestEmail: 'jordan@example.com', subject: 'General',
       message: 'Hi, do you have vegan options and parking nearby?',
       productTitle: 'Pottery Wheel Class', organizationName: restaurant, consentAcknowledged: true, replyUrl: inbox,
-    }),
+    })),
   },
   {
     id: 'guest-reply',
     audience: 'owner',
     title: 'Owner — guest replied',
     whatsappTemplate: 'guest_thread_reply_whatsapp',
-    message: guestReplyMessage({
+    message: ownerAlert(guestReplyMessage({
       guestName: 'Jordan Lee', guestEmail: 'jordan@example.com', inboundChannel: 'email',
       messagePreview: 'Thanks! One more thing — is the terrace covered if it rains?',
       organizationName: restaurant, replyUrl: inbox,
-    }),
+    })),
   },
   {
     id: 'review-received',
     audience: 'owner',
     title: 'Owner — new review',
     whatsappTemplate: 'new_review',
-    message: reviewReceivedMessage({
+    message: ownerAlert(reviewReceivedMessage({
       authorName: 'Alex Carter', rating: 5,
       content: 'The wood-fired pizza was outstanding and the team could not have been kinder.',
       organizationName: restaurant, reviewsUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/reviews',
-    }),
+    })),
   },
   {
     id: 'booking-change',
     audience: 'owner',
     title: 'Owner — booking change decided',
     whatsappTemplate: 'booking_change_update',
-    message: bookingChangeMessage({
+    message: ownerAlert(bookingChangeMessage({
       recordKind: 'booking', guestName: 'Mina Park', status: 'accepted', location: 'Main Studio',
       date: 'Jul 21, 2026', time: '2:00 PM', whenLabel: 'Tue, Jul 21, 2026 at 2:00 PM',
       partySize: '2 guests', summary: 'The guest accepted. The updated details are now confirmed.',
       replyUrl: inbox, organizationName: studio,
-    }),
+    })),
   },
   {
     id: 'domain-update',
@@ -171,10 +175,10 @@ export const NOTIFICATION_CATALOG: CatalogEntry[] = [
   { id: 'guest-reservation-cancelled', audience: 'guest', title: 'Guest — reservation cancelled', message: guestReservationCancelledMessage({ ...guestVisit, wasConfirmed: true }) },
   { id: 'guest-booking-received', audience: 'guest', title: 'Guest — booking request sent', message: guestBookingReceivedMessage({ ...guestVisit, guestName: 'Mina Park', organizationName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM' }) },
   { id: 'guest-booking-cancelled', audience: 'guest', title: 'Guest — booking cancelled', message: guestBookingCancelledMessage({ ...guestVisit, guestName: 'Mina Park', organizationName: studio, productTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', wasConfirmed: false }) },
-  { id: 'guest-contact-received', audience: 'guest', title: 'Guest — message sent', message: guestContactReceivedMessage({ guestName: 'Jordan Lee', organizationName: restaurant, subject: 'General', productTitle: 'Pottery Wheel Class', message: 'Hi, do you have vegan options and parking nearby?', consentAcknowledged: true }) },
-  { id: 'guest-thread-reply', audience: 'guest', title: 'Guest — a reply from the business', message: guestThreadReplyMessage({ organizationName: restaurant, body: 'Hi Jordan,\n\nYes — we have a full vegan menu, and there is street parking on Soi 3 right outside. See you Tuesday!' }) },
-  { id: 'guest-thread-status', audience: 'guest', title: 'Guest — reservation status changed', message: guestThreadStatusMessage({ organizationName: restaurant, heading: `Your reservation at ${restaurant} is confirmed`, body: 'Your reservation is confirmed: Tue, Jul 14, 2026 at 7:00 PM for 2 guests.', actionUrl: guestVisit.cancelUrl, actionLabel: 'Manage your reservation' }) },
-  { id: 'guest-booking-change-proposal', audience: 'guest', title: 'Guest — booking change proposed', message: bookingChangeProposalMessage({ guestName: 'Mina Park', organizationName: studio, heading: 'Please review changes to your booking', intro: 'Your host has requested changes. Your booking stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/preview', actionLabel: 'Review the changes' }) },
-  { id: 'guest-review-request', audience: 'guest', title: 'Guest — review request', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', optOutUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview&optOut=1', organizationLogoUrl: sampleLogo }) },
+  { id: 'guest-contact-received', audience: 'guest', title: 'Guest — message sent', message: guestContactReceivedMessage({ guestName: 'Jordan Lee', organizationName: restaurant, organizationLogoUrl: sampleLogo, subject: 'General', productTitle: 'Pottery Wheel Class', message: 'Hi, do you have vegan options and parking nearby?', consentAcknowledged: true }) },
+  { id: 'guest-thread-reply', audience: 'guest', title: 'Guest — a reply from the business', message: guestThreadReplyMessage({ organizationName: restaurant, organizationLogoUrl: sampleLogo, body: 'Hi Jordan,\n\nYes — we have a full vegan menu, and there is street parking on Soi 3 right outside. See you Tuesday!' }) },
+  { id: 'guest-thread-status', audience: 'guest', title: 'Guest — reservation status changed', message: guestThreadStatusMessage({ organizationName: restaurant, organizationLogoUrl: sampleLogo, heading: `Your reservation at ${restaurant} is confirmed`, body: 'Your reservation is confirmed: Tue, Jul 14, 2026 at 7:00 PM for 2 guests.', actionUrl: guestVisit.cancelUrl, actionLabel: 'Manage your reservation' }) },
+  { id: 'guest-booking-change-proposal', audience: 'guest', title: 'Guest — booking change proposed', message: bookingChangeProposalMessage({ guestName: 'Mina Park', organizationName: studio, organizationLogoUrl: sampleLogo, heading: 'Please review changes to your booking', intro: 'Your host has requested changes. Your booking stays exactly as it is until you accept, and the link below expires in 7 days.', rows: [['Location', 'Main Studio'], ['When', 'Tue, Jul 21, 2026 at 2:00 PM'], ['Guests', '2']], actionUrl: 'https://demo.krabiclaw.com/booking-changes/preview', actionLabel: 'Review the changes' }) },
+  { id: 'guest-review-request', audience: 'guest', title: 'Guest — review request', message: reviewRequestMessage({ guestName: 'Alex Carter', organizationName: restaurant, locationName: 'Main Dining Room', visitAt: 'Tue, Jul 14, 2026 at 7:00 PM', partySize: '2 guests', reviewUrl: 'https://demo.krabiclaw.com/locations/main/review-submit?request=preview', organizationLogoUrl: sampleLogo }) },
   { id: 'article-announcement', audience: 'owner', title: 'KrabiClaw news — new article', message: articleAnnouncementMessage({ title: 'Turning walk-ins into repeat guests', summary: 'Three things the best-performing KrabiClaw sites do after a guest leaves.', coverImageUrl: null, articleUrl: 'https://krabiclaw.com/blog/operations/preview' }) },
 ]

@@ -145,9 +145,12 @@ const visibleCategories = computed(() => {
     .filter(group => group.posts.length > 0)
 })
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata({
   template: 'platform',
   path: '/blog',
+  socialImage: organizationSocialImage,
   title: 'Local AI Growth Notes',
   description: 'How local businesses use ChatGPT, Google Maps, social sync, and analytics to keep their web presence growing.',
   breadcrumbs: [

@@ -174,8 +174,11 @@ if (import.meta.client) {
 const DEMO_HOSTS = new Set(['demo.krabiclaw.com', 'demo.localhost'])
 const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata(() => ({
   path: route.path,
+  socialImage: organizationSocialImage,
   title: config.value?.seo_title || config.value?.name || resolvedOrganization.value?.name || '',
   description: config.value?.seo_description || config.value?.brand_description || '',
   brand: {

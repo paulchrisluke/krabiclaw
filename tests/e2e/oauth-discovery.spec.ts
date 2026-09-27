@@ -27,6 +27,11 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
 }
 
 test.describe('OAuth discovery endpoints', () => {
+  // Two cases sign in as user-e2e-oauth-cimd against the same CIMD client, and
+  // one of them rotates that user's remembered consent, so run in parallel they
+  // read each other's consent state. In order, in one worker, they cannot.
+  test.describe.configure({ mode: 'default' })
+
   test('the Kikuzuki publisher can exchange its loopback PKCE code for tenant access', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, 'user-e2e-kikuzuki-owner')
     expect(process.env.MCP_CIMD_CLIENT_URL, 'MCP_CIMD_CLIENT_URL must name a public HTTPS metadata document').toBeTruthy()

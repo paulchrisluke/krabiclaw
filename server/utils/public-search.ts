@@ -57,7 +57,6 @@ interface PlatformDocSearchRow {
   slug: string
   category: string | null
   excerpt: string | null
-  seo_description: string | null
   seo_keywords: string | null
 }
 
@@ -67,7 +66,6 @@ interface PlatformBlogSearchRow {
   slug: string
   excerpt: string | null
   category: string | null
-  seo_description: string | null
   seo_keywords: string | null
 }
 
@@ -97,7 +95,6 @@ interface TenantBlogDocRow {
   excerpt: string | null
   category: string | null
   tags_metadata: string | null
-  seo_description: string | null
   seo_keywords: string | null
 }
 
@@ -305,7 +302,7 @@ function normalizeTenantBlogSearchResults(
       type: 'blog' as const,
       title: post.title,
       path: `/blog/${post.slug}`,
-      snippet: truncateSnippet(post.excerpt || post.seo_description || post.title),
+      snippet: truncateSnippet(post.excerpt || post.title),
       surface: options.surface,
       section: post.category || 'Blog',
       icon: 'newspaper',
@@ -350,7 +347,10 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
 // exists" thrown from the create, which is what made issue #917 undiagnosable. `id` is not
 // an updatable field and is already carried by the instance handle, so it is not sent.
 export async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
-  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).update(platformKnowledgeInstanceConfig())
+  // The same transient connectivity failures withRetries absorbs per item hit
+  // this call first: production reindexes on 2026-09-23 and 2026-09-24 died
+  // here with `unable_to_connect_to_ai_search` before uploading anything.
+  await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).update(platformKnowledgeInstanceConfig()))
 }
 
 export async function listAllItems(env: CloudflareEnv) {
@@ -359,7 +359,7 @@ export async function listAllItems(env: CloudflareEnv) {
   let page = 1
 
   while (true) {
-    const response = await instance.items.list({ page, per_page: 50 })
+    const response = await withRetries(() => instance.items.list({ page, per_page: 50 }))
     const pageItems = response.result ?? []
     items.push(...pageItems)
     if (!response.result_info || page * response.result_info.per_page >= response.result_info.total_count) break
@@ -436,7 +436,7 @@ export async function buildTenantBlogDocuments(db: DbClient, platformOrganizatio
   const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
     SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
-      d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_description, d.seo_keywords, s.theme_id, s.vertical
+      d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_keywords, s.theme_id, s.vertical
     FROM content_documents d JOIN organization s ON s.id = d.organization_id
     WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.organization_id <> ? AND d.visibility = 'listed'${organizationId ? ' AND d.organization_id = ?' : ''}
     ORDER BY d.organization_id, d.published_at DESC, d.updated_at DESC
@@ -445,7 +445,7 @@ export async function buildTenantBlogDocuments(db: DbClient, platformOrganizatio
   return (posts ?? []).map((post) => {
     const tags = post.tags_metadata ? JSON.parse(post.tags_metadata) as string[] : []
     const canonicalBody = contentBodies.get(post.id) ?? ''
-    const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
+    const snippet = truncateSnippet(post.excerpt || canonicalBody || post.title)
     const body = [
       post.title,
       post.category ?? '',
@@ -707,14 +707,14 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   const platformOrganizationId = (await getPlatformOrganization(db)).id
   const [docs, posts, tenantBlogRecords, contentBodies] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
-      SELECT id, title, slug, metadata_json ->> '$.category' AS category, summary AS excerpt, seo_description, seo_keywords
+      SELECT id, title, slug, metadata_json ->> '$.category' AS category, summary AS excerpt, seo_keywords
       FROM content_documents
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?
       ORDER BY sort_order, title
     `, [platformOrganizationId]),
     queryAll<PlatformBlogSearchRow>(db, `
-      SELECT id, title, slug, summary AS excerpt, metadata_json ->> '$.category' AS category, seo_description, seo_keywords
+      SELECT id, title, slug, summary AS excerpt, metadata_json ->> '$.category' AS category, seo_keywords
       FROM content_documents
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND organization_id = ? AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'blog'
@@ -727,7 +727,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   const docRecords: PlatformKnowledgeDocument[] = (docs ?? []).flatMap((doc) => {
     const path = collectionArticlePath('docs', doc.slug)
     const canonicalBody = contentBodies.get(doc.id) ?? ''
-    const snippet = truncateSnippet(doc.excerpt || doc.seo_description || canonicalBody || doc.title)
+    const snippet = truncateSnippet(doc.excerpt || canonicalBody || doc.title)
     const body = [
       doc.title,
       doc.seo_keywords ?? '',
@@ -753,7 +753,7 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   const blogRecords: PlatformKnowledgeDocument[] = (posts ?? []).flatMap((post) => {
     const path = tenantBlogPostPath(PLATFORM_TEMPLATE, post.slug)
     const canonicalBody = contentBodies.get(post.id) ?? ''
-    const snippet = truncateSnippet(post.excerpt || post.seo_description || canonicalBody || post.title)
+    const snippet = truncateSnippet(post.excerpt || canonicalBody || post.title)
     const body = [
       post.title,
       post.category ?? '',
@@ -1188,7 +1188,7 @@ export async function searchPublicResources(
       const likePattern = `%${escapeLikePattern(normalized)}%`
       return await queryAll<TenantBlogSearchRow>(
           env.db,
-          `SELECT DISTINCT p.id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category, p.seo_description, p.seo_keywords
+          `SELECT DISTINCT p.id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category, p.seo_keywords
            FROM content_documents p
            LEFT JOIN content_blocks cb ON cb.document_id = p.id
            WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
@@ -1199,14 +1199,12 @@ export async function searchPublicResources(
                OR lower(COALESCE(cb.data_json, '')) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(p.summary, '')) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(p.metadata_json ->> '$.category', '')) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(p.seo_description, '')) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(p.seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
              )
            ORDER BY p.published_at DESC, p.updated_at DESC
            LIMIT ?`,
           [
             options.organizationId,
-            likePattern,
             likePattern,
             likePattern,
             likePattern,

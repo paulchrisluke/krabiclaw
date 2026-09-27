@@ -96,8 +96,11 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/schedule', destination)
 }
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/schedule',
+  socialImage: organizationSocialImage,
   title: `${page.value.title || 'Consultation'} | ${identity.value.name}`,
   description: page.value.summary || '',
   brand: {

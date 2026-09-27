@@ -4,6 +4,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { normalizeGoogleReview, type GoogleReview } from '~/shared/google-review'
 import { executeBatch } from '~/server/db'
 import { formatPostalAddress, parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
+import { parsePhone } from '~/utils/phone'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
@@ -34,38 +35,12 @@ export const calculateMapEmbedUrl = (loc: {
   return `https://maps.google.com/maps?q=${encodeURIComponent(String(query))}&output=embed`
 }
 
-export class PlaceDetailsError extends Error {
-  public readonly statusCode: number
-
-  constructor(
-    message: string,
-    statusCode: number = 502
-  ) {
-    super(message)
-    this.name = 'PlaceDetailsError'
-    this.statusCode = statusCode
-  }
-}
-
-const SEARCH_FIELD_MASK = [
-  'places.id',
-  'places.displayName',
-  'places.formattedAddress',
-  'places.location',
-  'places.googleMapsUri',
-  'places.nationalPhoneNumber',
-  'places.internationalPhoneNumber',
-  'places.rating',
-  'places.userRatingCount',
-].join(',')
-
 const DETAIL_FIELD_MASK = [
   'id',
   'displayName',
   'postalAddress',
   'location',
   'googleMapsUri',
-  'nationalPhoneNumber',
   'internationalPhoneNumber',
   'websiteUri',
   'rating',
@@ -74,18 +49,6 @@ const DETAIL_FIELD_MASK = [
   'timeZone',
   'reviews',
 ].join(',')
-
-export interface PlaceSearchResult {
-  placeId: string
-  name: string
-  formattedAddress: string
-  lat: number | null
-  lng: number | null
-  mapsUrl: string | null
-  phone: string | null
-  rating: number | null
-  ratingCount: number | null
-}
 
 export type PlaceReview = GoogleReview
 
@@ -108,10 +71,8 @@ export interface PlaceDetails {
 interface RawPlace {
   id?: string
   displayName?: { text?: string }
-  formattedAddress?: string
   location?: { latitude?: number; longitude?: number }
   googleMapsUri?: string
-  nationalPhoneNumber?: string
   internationalPhoneNumber?: string
   websiteUri?: string
   rating?: number
@@ -122,20 +83,6 @@ interface RawPlace {
   reviews?: unknown[]
 }
 
-function normalizeSearchResult(place: RawPlace): PlaceSearchResult {
-  return {
-    placeId: place.id ?? '',
-    name: place.displayName?.text ?? '',
-    formattedAddress: place.formattedAddress ?? '',
-    lat: place.location?.latitude ?? null,
-    lng: place.location?.longitude ?? null,
-    mapsUrl: place.googleMapsUri ?? null,
-    phone: place.nationalPhoneNumber ?? place.internationalPhoneNumber ?? null,
-    rating: place.rating ?? null,
-    ratingCount: place.userRatingCount ?? null,
-  }
-}
-
 function normalizeDetail(place: RawPlace): PlaceDetails {
   return {
     placeId: place.id ?? '',
@@ -144,7 +91,9 @@ function normalizeDetail(place: RawPlace): PlaceDetails {
     lat: place.location?.latitude ?? null,
     lng: place.location?.longitude ?? null,
     mapsUrl: place.googleMapsUri ?? null,
-    phone: place.nationalPhoneNumber ?? place.internationalPhoneNumber ?? null,
+    // A location stores E.164. Google's national format carries no country, so
+    // the international form is the one that says which number this is.
+    phone: parsePhone(place.internationalPhoneNumber ?? '').e164 ?? null,
     websiteUrl: place.websiteUri ?? null,
     rating: place.rating ?? null,
     ratingCount: place.userRatingCount ?? null,
@@ -272,253 +221,82 @@ export async function syncPlaceToLocation(
   return { place, reviewsUpserted }
 }
 
-export async function searchPlaces(
+/** Google's Autocomplete (New) session token is a UUID the client generates. */
+const SESSION_TOKEN_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export function isPlacesSessionToken(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_TOKEN_PATTERN.test(value)
+}
+
+const AUTOCOMPLETE_FIELD_MASK = [
+  'suggestions.placePrediction.placeId',
+  'suggestions.placePrediction.structuredFormat.mainText.text',
+  'suggestions.placePrediction.structuredFormat.secondaryText.text',
+  'suggestions.placePrediction.text.text',
+].join(',')
+
+/** One place prediction, as the business picker shows it. */
+export interface GooglePlaceSuggestion {
+  placeId: string
+  name: string
+  addressLabel: string
+  fullText: string
+}
+
+interface RawPlacePrediction {
+  placeId?: unknown
+  text?: { text?: unknown }
+  structuredFormat?: { mainText?: { text?: unknown }; secondaryText?: { text?: unknown } }
+}
+
+/**
+ * Places API (New) Autocomplete: the owner types their business name and picks
+ * Google's prediction. Global and unbiased, place predictions only. Every
+ * request in one search carries the same session token, and the Place Details
+ * request that follows a selection carries it too, which closes the session.
+ * https://developers.google.com/maps/documentation/places/web-service/place-autocomplete
+ */
+export async function autocompletePlaces(
   apiKey: string,
-  query: string,
-  locationBias?: { latitude: number; longitude: number; radiusMeters?: number },
-): Promise<PlaceSearchResult[]> {
-  const body: Record<string, unknown> = { textQuery: query, maxResultCount: 5, languageCode: 'en' }
-  if (locationBias) {
-    body.locationBias = {
-      circle: {
-        center: { latitude: locationBias.latitude, longitude: locationBias.longitude },
-        radius: locationBias.radiusMeters ?? 500,
-      },
-    }
-  }
-  const response = await fetch(`${PLACES_BASE}:searchText`, {
+  input: string,
+  sessionToken: string,
+): Promise<GooglePlaceSuggestion[]> {
+  const response = await fetch(`${PLACES_BASE}:autocomplete`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': SEARCH_FIELD_MASK,
+      'X-Goog-FieldMask': AUTOCOMPLETE_FIELD_MASK,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ input, sessionToken }),
   })
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`Places search failed: ${response.status} ${text.slice(0, 200)}`)
+    throw new Error(`Places autocomplete failed: ${response.status} ${text.slice(0, 200)}`)
   }
 
-  const data = await response.json() as { places?: RawPlace[] }
-  return (data.places ?? []).map(normalizeSearchResult)
-}
-
-// ---------------------------------------------------------------------------
-// Google Maps link -> place ID. The one resolver for every surface that accepts
-// a pasted link: the onboarding wizard (places-preview), add-location, and the
-// ChatGPT MCP import_from_maps tool. Every failure is a PlaceDetailsError whose
-// message is written for the owner and shown verbatim.
-// ---------------------------------------------------------------------------
-
-const MAPS_LINK_HELP = 'Open your listing in Google Maps, use Share → Copy link, and paste that link here.'
-const SHORT_LINK_HOSTS = ['maps.app.goo.gl', 'goo.gl', 'share.google']
-const MAX_CANDIDATE_DISTANCE_KM = 5
-
-export interface GoogleMapsSignals {
-  nameHint: string | null
-  lat: number | null
-  lng: number | null
-  /** A canonical `ChIJ...` place ID carried by the link, or null. */
-  placeId: string | null
-}
-
-export interface GoogleMapsPlaceCandidate {
-  placeId?: string | null
-  lat?: number | null
-  lng?: number | null
-}
-
-export interface GoogleMapsPlaceResolution {
-  placeId: string
-  resolvedUrl: string
-  usedTextSearch: boolean
-}
-
-interface GoogleMapsPlaceResolverDependencies {
-  resolveShortLink: (url: string) => Promise<{ ok: boolean; url: string }>
-  searchPlaces: (
-    query: string,
-    locationBias: { latitude: number; longitude: number },
-  ) => Promise<GoogleMapsPlaceCandidate[]>
-}
-
-// Google Maps links arrive on whichever Google domain the owner's browser was
-// on: google.com, google.de, google.co.uk, maps.google.fr. All of them are
-// Google; anything that merely ends in a Google-looking string is not.
-// The registrable domain must BE google's: `google.<tld>`, or `google.<second
-// level>.<cc>` for the country forms. Allowing any two labels after "google"
-// also matched google.ab.com — a subdomain of ab.com, which anyone can buy.
-const GOOGLE_DOMAIN_PATTERN = /^(?:[a-z0-9-]+\.)*google\.(?:[a-z]{2,3}|(?:com|co|org|net|ac)\.[a-z]{2})$/
-
-export function isAllowedGoogleMapsHost(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  if (SHORT_LINK_HOSTS.includes(h)) return true
-  return GOOGLE_DOMAIN_PATTERN.test(h)
-}
-
-export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLng = (lng2 - lng1) * (Math.PI / 180)
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function validCoordinates(
-  lat: number | null | undefined,
-  lng: number | null | undefined,
-): { lat: number; lng: number } | null {
-  if (
-    typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90
-    && typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180
-  ) {
-    return { lat, lng }
-  }
-  return null
-}
-
-// Link shapes an owner actually copies:
-//  - https://www.google.com/maps/search/?api=1&query=...&query_place_id=ChIJ...
-//  - any URL carrying a `!1sChIJ...` data segment
-//  - https://www.google.com/maps/place/<Name>/@<lat>,<lng>,17z[/data=...!1s0x...:0x...!3d<lat>!4d<lng>]
-//    (the desktop address bar, and what maps.app.goo.gl short links resolve to)
-export function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
-  let placeId: string | null
-  try {
-    placeId = new URL(resolvedUrl).searchParams.get('query_place_id')
-  } catch { placeId = null }
-  if (!placeId) {
-    // A Maps URL carries several !1s segments; only the canonical place id
-    // starts with ChIJ, and it is not always the first one.
-    const rawIdMatch = resolvedUrl.match(/!1s(ChIJ[^!&]*)/)
-    if (rawIdMatch?.[1]) {
-      try { placeId = decodeURIComponent(rawIdMatch[1]) } catch { placeId = null }
-    }
-  }
-  if (placeId && !/^ChIJ/.test(placeId)) placeId = null
-
-  const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1]
-  let nameHint: string | null = null
-  if (nameFromPath) {
-    try { nameHint = decodeURIComponent(nameFromPath.replace(/\+/g, ' ')).trim() || null } catch { nameHint = null }
-  }
-
-  // !3d/!4d are the exact business coords; @ is the map viewport (less precise)
-  const coordinatePattern = '-?\\d+(?:\\.\\d+)?'
-  const lat3d = resolvedUrl.match(new RegExp(`!3d(${coordinatePattern})`))?.[1]
-  const lng4d = resolvedUrl.match(new RegExp(`!4d(${coordinatePattern})`))?.[1]
-  const viewportMatch = resolvedUrl.match(new RegExp(`@(${coordinatePattern}),(${coordinatePattern})`))
-  const latRaw = lat3d ?? viewportMatch?.[1] ?? null
-  const lngRaw = lng4d ?? viewportMatch?.[2] ?? null
-  const lat = latRaw != null ? Number(latRaw) : null
-  const lng = lngRaw != null ? Number(lngRaw) : null
-
-  return { nameHint, lat, lng, placeId }
-}
-
-// A link without a place ID becomes a text search biased to the link's
-// coordinates. The top result is accepted only when it sits within
-// MAX_CANDIDATE_DISTANCE_KM of those coordinates; Google's locationBias is a
-// hint, and without the distance check a misspelt name returned a fuzzy match
-// 2,000 km away. Callers still show the result to the owner to confirm.
-export async function resolveGoogleMapsPlace(
-  rawUrl: string,
-  dependencies: GoogleMapsPlaceResolverDependencies,
-): Promise<GoogleMapsPlaceResolution> {
-  let parsedUrl: URL
-  try {
-    parsedUrl = new URL(rawUrl)
-  } catch {
-    throw new PlaceDetailsError(`That doesn't look like a web link. ${MAPS_LINK_HELP}`, 422)
-  }
-
-  if (parsedUrl.protocol !== 'https:' || !isAllowedGoogleMapsHost(parsedUrl.hostname)) {
-    throw new PlaceDetailsError(`That isn't a Google Maps link. ${MAPS_LINK_HELP}`, 422)
-  }
-
-  let resolvedUrl = parsedUrl.toString()
-  if (SHORT_LINK_HOSTS.includes(parsedUrl.hostname.toLowerCase())) {
-    let probe: { ok: boolean; url: string }
-    try {
-      probe = await dependencies.resolveShortLink(parsedUrl.toString())
-    } catch {
-      throw new PlaceDetailsError("We couldn't open that Google Maps share link. Try again in a moment.", 502)
-    }
-
-    let resolvedHost: string | null
-    try { resolvedHost = new URL(probe.url).hostname } catch { resolvedHost = null }
-    if (!probe.ok || !resolvedHost || !isAllowedGoogleMapsHost(resolvedHost)) {
-      throw new PlaceDetailsError(`That share link didn't lead to a place on Google Maps. ${MAPS_LINK_HELP}`, 422)
-    }
-    resolvedUrl = probe.url
-  }
-
-  const signals = extractGoogleMapsSignals(resolvedUrl)
-  if (signals.placeId) {
-    return { placeId: signals.placeId, resolvedUrl, usedTextSearch: false }
-  }
-
-  if (!signals.nameHint) {
-    throw new PlaceDetailsError(`We couldn't find a business in that link. ${MAPS_LINK_HELP}`, 422)
-  }
-  const urlCoordinates = validCoordinates(signals.lat, signals.lng)
-  if (!urlCoordinates) {
-    throw new PlaceDetailsError(`That link doesn't include where "${signals.nameHint}" is on the map. ${MAPS_LINK_HELP}`, 422)
-  }
-
-  const locationBias = { latitude: urlCoordinates.lat, longitude: urlCoordinates.lng }
-  let results: GoogleMapsPlaceCandidate[]
-  try {
-    results = await dependencies.searchPlaces(signals.nameHint, locationBias)
-  } catch (error) {
-    console.error({ event: 'google_places_search_failed', message: error instanceof Error ? error.message : String(error) })
-    throw new PlaceDetailsError('Google Maps search failed. Try again in a moment.', 502)
-  }
-
-  const candidate = results[0]
-  if (!candidate?.placeId) {
-    throw new PlaceDetailsError(`We couldn't find "${signals.nameHint}" on Google Maps near the spot in that link. ${MAPS_LINK_HELP}`, 404)
-  }
-  const candidateCoordinates = validCoordinates(candidate.lat, candidate.lng)
-  if (!candidateCoordinates) {
-    throw new PlaceDetailsError(`Google Maps returned "${signals.nameHint}" without a location, so we couldn't confirm it is the business in your link. ${MAPS_LINK_HELP}`, 422)
-  }
-
-  const distanceKm = haversineKm(locationBias.latitude, locationBias.longitude, candidateCoordinates.lat, candidateCoordinates.lng)
-  if (distanceKm > MAX_CANDIDATE_DISTANCE_KM) {
-    throw new PlaceDetailsError(`The closest match for "${signals.nameHint}" is ${Math.round(distanceKm)} km from the spot in your link, so it's probably not your business. ${MAPS_LINK_HELP}`, 404)
-  }
-
-  return { placeId: candidate.placeId, resolvedUrl, usedTextSearch: true }
-}
-
-export async function getPlaceDetailsByUrl(
-  apiKey: string,
-  mapsUrl: string,
-): Promise<PlaceDetails> {
-  const { placeId } = await resolveGoogleMapsPlace(mapsUrl, {
-    resolveShortLink: async (url) => {
-      const response = await fetch(url, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-      })
-      return { ok: response.ok, url: response.url }
-    },
-    searchPlaces: (query, locationBias) => searchPlaces(apiKey, query, locationBias),
+  const data = await response.json() as { suggestions?: Array<{ placePrediction?: RawPlacePrediction }> }
+  return (data.suggestions ?? []).flatMap((suggestion): GooglePlaceSuggestion[] => {
+    const prediction = suggestion.placePrediction
+    const placeId = prediction?.placeId
+    const name = prediction?.structuredFormat?.mainText?.text
+    const fullText = prediction?.text?.text
+    const secondary = prediction?.structuredFormat?.secondaryText?.text
+    if (typeof placeId !== 'string' || !placeId || typeof name !== 'string' || !name || typeof fullText !== 'string') return []
+    if (secondary !== undefined && typeof secondary !== 'string') return []
+    return [{ placeId, name, addressLabel: secondary ?? '', fullText }]
   })
-  return getPlaceDetails(apiKey, placeId)
 }
 
 export async function getPlaceDetails(
   apiKey: string,
   placeId: string,
+  options: { sessionToken?: string } = {},
 ): Promise<PlaceDetails> {
-  const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}?languageCode=en`, {
+  const query = new URLSearchParams({ languageCode: 'en' })
+  if (options.sessionToken) query.set('sessionToken', options.sessionToken)
+  const response = await fetch(`${PLACES_BASE}/${encodeURIComponent(placeId)}?${query}`, {
     headers: {
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': DETAIL_FIELD_MASK,

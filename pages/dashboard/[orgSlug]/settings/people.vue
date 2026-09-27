@@ -47,8 +47,8 @@ import { authClient } from '~/lib/auth-client'
 // admin has: pick a person and act as them. It sits beside Team and Billing
 // because it is about accounts rather than about a site — under a site's URL it
 // read as "this site's people", which it has never been. Menu shows the row only
-// on KrabiClaw's own site, and Menu is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+// on KrabiClaw's own site.
+definePageMeta({ layout: 'dashboard' })
 
 useSeoMeta({ title: 'Platform accounts | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 

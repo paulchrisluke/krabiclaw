@@ -361,49 +361,34 @@ interface DashboardMobileNavItem {
 }
 
 /**
- * Which tab the current route belongs to: the one reached by walking up from
- * here the way Back does, following `meta.back` where a page declares a parent
- * the URL does not nest under and cutting a segment otherwise.
+ * Which tab the current route belongs to: the root of its nested route tree,
+ * or where that root's declared `meta.back` leads when the root is a workspace
+ * reached from a tab — a location editor from Locations, a booking from Today.
  *
- * Prefix matching cannot answer this. The links page lives at `/links` but is
- * reached from Pages, under Menu, so the URL said Locations while every way out
- * of it led to Menu. Asking the same question Back asks means the lit tab is
- * always the one the walk ends at.
+ * Prefix matching cannot answer this. Pages lives at `/pages` but is nested
+ * under Menu, so the URL says nothing about Menu while every way out of it
+ * leads there. Reading the same tree Back reads means the lit tab is always
+ * the one the walk ends at.
  */
 function tabRootPath(stops: readonly string[]): string | null {
-  let path = route.path
+  let location = router.resolve(route.fullPath)
   const seen = new Set<string>()
-  while (!seen.has(path)) {
-    // The walk ends at the first tab it reaches. Menu declares no parent of its
-    // own, so without this it kept cutting segments and every page under it lit
-    // Today.
+  while (location.matched[0]) {
+    const root = location.matched[0]
+    const path = routeRecordPath(router, root, location.params)
     if (stops.includes(path)) return path
+    if (seen.has(path)) return null
     seen.add(path)
-    const resolved = router.resolve(path)
-    // A directory's `index.vue` is a second record at the same URL and the same
-    // level, and it is the one `matched` ends on. Both are asked, so the `back:`
-    // its directory declares is not missed — which is what sent every page
-    // under Menu to Locations instead.
-    const depth = (candidate: string) => candidate.split('/').filter(Boolean).length
-    const deepest = Math.max(...resolved.matched.map(candidate => depth(candidate.path)))
-    const declared = resolved.matched
-      .filter(candidate => depth(candidate.path) === deepest && candidate.meta?.passthrough !== true)
-      .map(candidate => candidate.meta?.back)
-      .find(candidate => typeof candidate === 'string')
-    if (typeof declared === 'string') {
-      const target = router.getRoutes().find(candidate => candidate.name === declared)
-      const keys = target ? [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!) : []
-      if (target && keys.every(key => resolved.params[key] !== undefined)) {
-        path = router.resolve({ name: declared, params: Object.fromEntries(keys.map(key => [key, resolved.params[key]])) }).path
-        continue
-      }
-    }
-    const above = path.split('/').filter(Boolean).slice(0, -1)
-    // `/dashboard/:orgSlug` is Today, and there is nothing above it to walk to.
-    if (above.length < 2) break
-    path = `/${above.join('/')}`
+    const declared = root.meta?.back
+    if (typeof declared !== 'string') return null
+    const target = router.getRoutes().find(candidate => candidate.name === declared)
+    if (!target) throw new Error(`Route "${declared}" named in meta.back does not exist`)
+    // Account settings carries no organization and has no tab lit.
+    const keys = [...target.path.matchAll(/:(\w+)/g)].map(match => match[1]!)
+    if (keys.some(key => location.params[key] === undefined)) return null
+    location = router.resolve(routeRecordPath(router, target, location.params))
   }
-  return stops.includes(path) ? path : null
+  return null
 }
 
 
