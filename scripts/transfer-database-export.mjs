@@ -541,6 +541,7 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
   const order = childFirstOrder(target, tables)
   const earlier = deltaFrom ? new Database(deltaFrom, { readonly: true, fileMustExist: true }) : null
   const delta = {}
+  const leftBehind = {}
   try {
     const lines = ['PRAGMA foreign_keys = OFF;', 'PRAGMA defer_foreign_keys = ON;', ...(earlier ? [] : order.map(table => `DELETE FROM ${qi(table)};`))]
     for (const table of [...order].reverse()) {
@@ -552,6 +553,19 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
         const held = new Set(earlier.prepare(`SELECT ${key.map(qi).join(', ')} FROM ${qi(table)}`).raw().all().map(values => JSON.stringify(values)))
         rows = rows.filter(row => !held.has(JSON.stringify(key.map(name => row[name]))))
         delta[table] = rows.length
+        // A delta carries creations only. What it leaves behind is every row
+        // the earlier target held whose values have changed since, or which is
+        // gone from the source. Those are named, table by table, for whoever
+        // repoints the binding to read first; nothing is updated for them.
+        const current = new Map(target.prepare(`SELECT * FROM ${qi(table)}`).all().map(row => [JSON.stringify(key.map(name => row[name])), JSON.stringify(names.map(name => row[name]))]))
+        const changed = []
+        const deleted = []
+        for (const row of earlier.prepare(`SELECT * FROM ${qi(table)}`).all()) {
+          const id = JSON.stringify(key.map(name => row[name]))
+          if (!current.has(id)) deleted.push(id)
+          else if (current.get(id) !== JSON.stringify(names.map(name => row[name]))) changed.push(id)
+        }
+        if (changed.length || deleted.length) leftBehind[table] = { changed, deleted }
       }
       for (const row of rows) {
         lines.push(`INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${names.map(name => sqlLiteral(row[name])).join(', ')});`)
@@ -594,7 +608,7 @@ export function writePayload(target, payloadPath, schemaSql, { withoutJwks = fal
     } finally {
       replay.close()
     }
-    return { tables: tables.length, statements: lines.length, ...(earlier ? { delta } : {}) }
+    return { tables: tables.length, statements: lines.length, ...(earlier ? { delta, left_behind: leftBehind } : {}) }
   } finally {
     earlier?.close()
   }
@@ -607,7 +621,7 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables: Array<{ table: string, source_rows: number }>, retired_columns: Record<string, string[]>,
  *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
- *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number> },
+ *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number>, left_behind?: Record<string, { changed: string[], deleted: string[] }> },
  *   schema?: Array<{ type: string, name: string, sql: string }> }} TransferManifest
  */
 
@@ -753,6 +767,10 @@ export function printTransferReport(manifest) {
   }
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, changes]) => `${name}=${changes}`).join(', ') || 'nothing'}`)
   console.log(`Transforms: ${manifest.transforms.filter(transform => transform.changes > 0).map(transform => `${transform.name}=${transform.changes}`).join(', ') || 'no changes'}`)
+  for (const [table, rows] of Object.entries(manifest.payload?.left_behind ?? {})) {
+    if (rows.changed.length) console.log(`Not carried, changed since the initial export: ${table} ${rows.changed.length}: ${rows.changed.join(' ')}`)
+    if (rows.deleted.length) console.log(`Not carried, deleted since the initial export: ${table} ${rows.deleted.length}: ${rows.deleted.join(' ')}`)
+  }
   if (manifest.payload?.delta) console.log(`Delta: ${Object.entries(manifest.payload.delta).filter(([, rows]) => rows > 0).map(([table, rows]) => `${table}=${rows}`).join(', ') || 'no new rows'}`)
 }
 

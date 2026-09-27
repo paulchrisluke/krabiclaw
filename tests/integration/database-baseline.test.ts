@@ -74,7 +74,8 @@ test('a pre-epoch export transfers into the #1083 baseline, and inconsistent ide
   const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-epoch-'))
   try {
     const targetPath = join(directory, 'target.sqlite')
-    const manifest = transferDatabaseExport(preEpochSource(directory), targetPath, { payloadPath: join(directory, 'payload.sql') })
+    const sourcePath = preEpochSource(directory)
+    const manifest = transferDatabaseExport(sourcePath, targetPath, { payloadPath: join(directory, 'payload.sql') })
     const target = new Database(targetPath, { readonly: true })
     const one = (sql: string) => target.prepare(sql).get() as Record<string, unknown>
     const all = (sql: string) => target.prepare(sql).all() as Array<Record<string, unknown>>
@@ -134,16 +135,28 @@ test('a pre-epoch export transfers into the #1083 baseline, and inconsistent ide
       assert.deepEqual(manifest.tables.filter(entry => entry.source_rows !== entry.target_rows),
         [{ table: 'user', source_rows: 2, target_rows: 3 }, { table: 'user_notification_preferences', source_rows: 0, target_rows: 1 }])
 
-      // A guest who books after the export arrives in the delta, and only they do.
+      // A guest who books after the export arrives in the delta, and only they
+      // do. A thread resolved and a review removed after the export are not
+      // carried, and the delta names both.
       const later = join(directory, 'later.sqlite')
-      transferDatabaseExport(preEpochSource(directory, [
+      // The same database, as it stands after the export was taken.
+      const source = new Database(sourcePath)
+      source.exec([
         "INSERT INTO customers (id,organization_id,name,source,created_at,updated_at) VALUES ('cust-late','org','Late','contact','2026-06-01T00:00:00.000Z','2026-06-01T00:00:00.000Z')",
         `INSERT INTO requests (id,kind,organization_id,customer_id,conversation_state,payload_json,created_at,updated_at) VALUES ('thread-late','contact','org','cust-late','needs_attention','{"guest":{"name":"Late","email":"late@example.test","phone":null},"message":"hi"}','2026-06-01T00:00:00.000Z','2026-06-01T00:00:00.000Z')`,
-      ]), later)
+        "UPDATE requests SET conversation_state = 'resolved', resolved_at = '2026-06-02T00:00:00.000Z', updated_at = '2026-06-02T00:00:00.000Z' WHERE id = 'thread-booking'",
+        "DELETE FROM reviews WHERE id = 'review'",
+      ].join(';\n'))
+      source.close()
+      transferDatabaseExport(sourcePath, later)
       const laterTarget = new Database(later, { readonly: true })
       const delta = writePayload(laterTarget, join(directory, 'delta.sql'), readFileSync('migrations/0000_baseline.sql', 'utf8'), { deltaFrom: targetPath })
       laterTarget.close()
       assert.deepEqual(Object.fromEntries(Object.entries(delta.delta!).filter(([, rows]) => rows > 0)), { requests: 1, user: 1 })
+      assert.deepEqual(delta.left_behind, {
+        requests: { changed: ['["thread-booking"]'], deleted: [] },
+        reviews: { changed: [], deleted: ['["review"]'] },
+      })
     } finally {
       target.close()
     }
