@@ -155,6 +155,9 @@ AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 # Analytics is intentionally disabled outside production.
 GA4_MEASUREMENT_ID = ""
+# Staging runs on a copy of production's rows and has no Zaraz zone of its own;
+# reconciling would rewrite production's tags. Production leaves this unset.
+ZARAZ_ANALYTICS = "absent"
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"
 E2E_ALLOW_DEV_ROUTES = "true"
