@@ -1,7 +1,7 @@
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, parsePostTopic, PostValidationError, type PostTopic } from '~/shared/posts'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { fireOrganizationEvent } from '~/server/utils/organization-events'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
 import type { DomainEnv } from '~/server/utils/domains'
 import { insertInitialMediaPlacements, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
@@ -351,7 +351,15 @@ export async function createPost(
         status, visibility: data.visibility ?? 'listed', source: 'manual', scheduledFor: data.scheduled_for ?? null, createdBy,
         metadata: { post_type: data.post_type, call_to_action: data.call_to_action, event: data.event,
           offer: data.offer, alert_type: data.alert_type, channels: {} },
-      }, [], { additionalQueriesAfter: postMediaPlacementQueries(organizationId, id, media) })
+      }, [], { additionalQueriesAfter: [...postMediaPlacementQueries(organizationId, id, media), organizationEventQuery({
+        organizationId,
+        locationId: data.location_id ?? null,
+        actorId: createdBy,
+        eventType: 'post.created',
+        entityType: 'post',
+        entityId: id,
+        metadata: { post_type: data.post_type, status },
+      })] })
 
       break
     } catch (err) {
@@ -366,20 +374,6 @@ export async function createPost(
 
   const createdPost = await getPost(db, organizationId, id)
   if (!createdPost) throw new Error('Post not found after creation')
-  await fireOrganizationEvent({
-    db,
-    organizationId,
-    
-    locationId: createdPost.location_id,
-    actorId: createdBy,
-    eventType: 'post.created',
-    entityType: 'post',
-    entityId: id,
-    metadata: {
-      post_type: createdPost.post_type,
-      status: createdPost.status,
-    },
-  })
   await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: id }, actorId: createdBy })
   return createdPost
 }
@@ -485,29 +479,19 @@ export async function publishPost(
               updated_at = ?
         WHERE kind = 'social_post' AND row_role = 'root' AND id = ? AND organization_id = ? AND updated_at = ?`,
       params: [slug, now, now, now, postId, organizationId, existing.updated_at],
-    }, publicResourceCacheInvalidationQuery(organizationId, 'post-publish')])
-    if (Number(updateResult?.meta.changes ?? 0) === 0) return null
-  }
-
-  const publishedChannels = channels.filter(channel => channel === 'organization')
-
-  const post = await getPost(db, organizationId, postId)
-  if (post && channels.includes('organization') && existing.status !== 'published') {
-    await fireOrganizationEvent({
-      db,
+    }, ...(existing.status === 'published' ? [] : [organizationEventQuery({
       organizationId,
-      
-      locationId: post.location_id,
+      locationId: existing.location_id,
       eventType: 'post.published',
       entityType: 'post',
       entityId: postId,
-      metadata: {
-        post_type: post.post_type,
-        channels: publishedChannels,
-      },
-    })
+      metadata: { post_type: existing.post_type, channels: ['organization'] },
+      onlyIfPreviousChangedOneRow: true,
+    })]), publicResourceCacheInvalidationQuery(organizationId, 'post-publish')])
+    if (Number(updateResult?.meta.changes ?? 0) === 0) return null
   }
 
+  const post = await getPost(db, organizationId, postId)
   if (!post) return null
 
   await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
@@ -638,19 +622,19 @@ export async function publishDuePosts(db: DbClient, now = new Date()) {
         `,
         params: [slug, updatedAt, post.id, post.scheduled_for, nowIso, post.updated_at],
       },
+      organizationEventQuery({
+        organizationId: post.organization_id,
+        locationId: post.location_id,
+        eventType: 'post.published',
+        entityType: 'post',
+        entityId: post.id,
+        metadata: { post_type: post.post_type, channels: ['organization'] },
+        onlyIfPreviousChangedOneRow: true,
+      }),
       publicResourceCacheInvalidationQuery(post.organization_id, 'post-scheduled-publish'),
     ])
     if (Number(results[0]?.meta?.changes ?? 0) !== 1) continue
     published += 1
-    await fireOrganizationEvent({
-      db,
-      organizationId: post.organization_id,
-      locationId: post.location_id,
-      eventType: 'post.published',
-      entityType: 'post',
-      entityId: post.id,
-      metadata: { post_type: post.post_type, channels: ['organization'] },
-    })
   }
   return { published }
 }

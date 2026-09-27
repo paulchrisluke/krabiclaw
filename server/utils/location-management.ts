@@ -1,7 +1,7 @@
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
-import { fireOrganizationEvent } from "~/server/utils/organization-events";
-import { executeBatch, queryFirst } from "~/server/db";
+import { organizationEventQuery } from "~/server/utils/organization-events";
+import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
 import { resolveOrganizationCmsCapabilities } from "~/server/utils/cms-capabilities";
@@ -99,9 +99,19 @@ function toSlug(value: string) {
   return `location-${hash.toString(36) || "0"}`;
 }
 
-function isUniqueConstraintError(error: unknown) {
+// The slug is the only thing a retry can change, so only a slug conflict is
+// retried. Any unique conflict used to count, and the unique dedupe_key on an
+// audit row in the same batch would have sent the loop round to try again.
+function isSlugConflict(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
-  return /UNIQUE constraint failed/i.test(message);
+  return /UNIQUE constraint failed: .*business_locations\.slug/i.test(message);
+}
+
+// A CHECK constraint is the input the caller sent failing the table's own
+// rules — a malformed address, say — and is theirs to fix. Anything else the
+// batch raises is a server failure and is not reported as a 400.
+function isCheckConstraintError(error: unknown) {
+  return error instanceof Error && /CHECK constraint failed/i.test(error.message);
 }
 
 export function serializeOpeningHours(value: unknown): string | null {
@@ -367,7 +377,7 @@ export async function createLocation(
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
     try {
-      const statements: { query: string; params: unknown[] }[] = [];
+      const statements: BatchQuery[] = [];
       statements.push({
         query: `
           INSERT INTO business_locations (
@@ -411,38 +421,31 @@ export async function createLocation(
           now,
         ],
       });
+      statements.push(organizationEventQuery({
+        organizationId,
+        locationId: id,
+        actorId: userId,
+        eventType: "location.created",
+        entityType: "business_location",
+        entityId: id,
+        metadata: {
+          title,
+        },
+      }));
 
       await executeBatch(db, statements);
       created = { id, location: await loadLocation(db, organizationId, id) };
       break;
     } catch (error) {
-      if (isUniqueConstraintError(error)) continue;
-      if (error instanceof Error) {
-        return { status: 400, data: { error: error.message } };
+      if (isSlugConflict(error)) continue;
+      if (isCheckConstraintError(error)) {
+        return { status: 400, data: { error: (error as Error).message } };
       }
       throw error;
     }
   }
 
-  // Outside the retry, because the location is committed by the time these run
-  // and neither is a slug conflict. Inside it, a failed audit write was returned
-  // to the caller as a 400 — a client error for a server failure, on a location
-  // that exists — and, worse, activity_entries.dedupe_key is unique, so a
-  // duplicate audit key matched isUniqueConstraintError and sent the loop round
-  // again to create a second location.
   if (created) {
-    await fireOrganizationEvent({
-      db,
-      organizationId,
-      locationId: created.id,
-      actorId: userId,
-      eventType: "location.created",
-      entityType: "business_location",
-      entityId: created.id,
-      metadata: {
-        title,
-      },
-    })
     if (options.refreshSocialCardAfterCreate !== false) {
       await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: created.id }, actorId: userId })
     }
@@ -624,7 +627,7 @@ export async function updateLocation(
   }
 
   const runUpdate = async (boundParams: Array<string | number | null>) => {
-    const statements: { query: string; params: unknown[] }[] = [];
+    const statements: BatchQuery[] = [];
     statements.push({
       query: `
         UPDATE business_locations
@@ -633,6 +636,18 @@ export async function updateLocation(
       `,
       params: boundParams,
     });
+    statements.push(organizationEventQuery({
+      organizationId,
+      locationId,
+      actorId: userId,
+      eventType: "location.updated",
+      entityType: "business_location",
+      entityId: locationId,
+      metadata: {
+        title: input.title?.trim() ?? existing.title ?? null,
+      },
+      onlyIfPreviousChangedOneRow: true,
+    }));
 
     await executeBatch(db, statements);
   };
@@ -654,31 +669,15 @@ export async function updateLocation(
         updated = { location };
         break;
       } catch (error) {
-        if (isUniqueConstraintError(error)) continue;
-        if (error instanceof Error) {
-          return { status: 400, data: { error: error.message } };
+        if (isSlugConflict(error)) continue;
+        if (isCheckConstraintError(error)) {
+          return { status: 400, data: { error: (error as Error).message } };
         }
         throw error;
       }
     }
 
-    // Outside the retry, for the same reason as createLocation: the row is
-    // already written, neither of these is a slug conflict, and the unique
-    // dedupe_key on an audit row matched isUniqueConstraintError and sent the
-    // loop round again.
     if (updated) {
-      await fireOrganizationEvent({
-        db,
-        organizationId,
-        locationId,
-        actorId: userId,
-        eventType: "location.updated",
-        entityType: "business_location",
-        entityId: locationId,
-        metadata: {
-          title: updated.location?.title ?? null,
-        },
-      })
       if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
       return { status: 200, data: { success: true, location: updated.location } };
     }
@@ -694,19 +693,6 @@ export async function updateLocation(
   params.push(locationId, organizationId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, locationId);
-  await fireOrganizationEvent({
-    db,
-    organizationId,
-    
-    locationId,
-    actorId: userId,
-    eventType: "location.updated",
-    entityType: "business_location",
-    entityId: locationId,
-    metadata: {
-      title: location?.title ?? null,
-    },
-  })
   if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
   return { status: 200, data: { success: true, location } };
 }

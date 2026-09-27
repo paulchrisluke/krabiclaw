@@ -4,7 +4,6 @@ import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { createSystemSubdomain, isSystemSubdomainSpent, ensureDomainAvailable, reconcileDueDomains, syncDomainWithCloudflare, deleteCustomDomain } from '../../server/utils/domains.ts'
-import { fireOrganizationEvent } from '../../server/utils/organization-events.ts'
 import { listDashboardEvents } from '../../server/utils/dashboard-events.ts'
 
 test('domain claims fence stale results and permanent subdomain reservations survive organization deletion', async (t) => {
@@ -37,10 +36,14 @@ test('domain claims fence stale results and permanent subdomain reservations sur
     assert.equal(results.reduce((total, result) => total + result.checked, 0), 1)
     assert.equal(requestsMade, 1)
     assert.equal((await db.prepare("SELECT status FROM organization_domains WHERE id='custom'").first())?.status, 'verifying')
+    const auditCount = async (eventName: string) => (await db.prepare("SELECT count(*) AS n FROM activity_entries WHERE organization_id='audit' AND event_name=?").bind(eventName).first())?.n
+    assert.equal(await auditCount('domain_state_changed'), 1)
     providerMode = 'stale'
     await db.prepare("UPDATE organization_domains SET cloudflare_hostname_id=NULL WHERE id='custom'").run()
     await assert.rejects(syncDomainWithCloudflare(env, db, 'custom'))
     assert.equal((await db.prepare("SELECT status FROM organization_domains WHERE id='custom'").first())?.status, 'disabled')
+    // The superseded reconciliation changed nothing, so it recorded nothing.
+    assert.equal(await auditCount('domain_state_changed'), 1)
     await db.prepare("UPDATE organization_domains SET status='verifying',cloudflare_hostname_id='provider-id' WHERE id='custom'").run()
     providerMode = 'delete-failed'
     await assert.rejects(deleteCustomDomain(env, db, 'custom', 'system'))
@@ -48,16 +51,18 @@ test('domain claims fence stale results and permanent subdomain reservations sur
     assert.equal(failedDelete?.desired_state, 'deleted')
     assert.equal(failedDelete?.reconciliation_token, null)
     assert.ok(failedDelete?.next_check_at)
+    assert.equal(await auditCount('cloudflare_delete_failed'), 1)
+    assert.equal(await auditCount('domain_deleted'), 0)
     providerMode = 'delete-success'
     await db.prepare("UPDATE organization_domains SET next_check_at=NULL WHERE id='custom'").run()
     assert.equal((await reconcileDueDomains(env, db)).checked, 1)
     assert.equal((await db.prepare("SELECT status FROM organization_domains WHERE id='custom'").first())?.status, 'deleted')
-    await fireOrganizationEvent({ db, organizationId: 'audit', eventType: 'content.updated', entityType: 'organization', entityId: 'audit' })
-    assert.ok((await listDashboardEvents(db, 'audit', {})).events.some(event => event.event_type === 'content.updated'))
+    // The deletion and its audit row commit together.
+    assert.ok((await listDashboardEvents(db, 'audit', {})).events.some(event => event.event_type === 'domain_deleted'))
     assert.equal((await listDashboardEvents(db, 'other', {})).events.length, 0)
     // The audit trail belongs to the organization it describes: deleting the
     // organization takes its entries with it rather than stranding them.
     await db.prepare("DELETE FROM organization WHERE id='audit'").run()
-    assert.equal((await db.prepare("SELECT count(*) AS n FROM activity_entries WHERE event_name='content.updated'").first())?.n, 0)
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM activity_entries WHERE organization_id='audit'").first())?.n, 0)
   } finally { await miniflare.dispose() }
 })

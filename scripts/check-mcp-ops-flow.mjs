@@ -14,7 +14,6 @@ const LOCATION_ID = process.argv.includes('--location-id')
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
 let failed = false
@@ -41,13 +40,15 @@ async function getAuthHeaders() {
 }
 
 async function mcp(headers, name, args = {}) {
+  // Plain JSON-RPC 2.0, as @modelcontextprotocol/server reads it: the method
+  // and tool come from the body. A `_meta['io.modelcontextprotocol/...']` key
+  // claims the modern envelope, which this request does not carry the rest of,
+  // so the server rejected every call as an invalid message.
   const res = await fetch(`${BASE_URL}/api/mcp`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': 'tools/call',
-      'mcp-name': name,
+      accept: 'application/json, text/event-stream',
       ...headers,
     },
     body: JSON.stringify({
@@ -55,14 +56,13 @@ async function mcp(headers, name, args = {}) {
       id: `${name}-${Date.now()}`,
       method: 'tools/call',
       params: { name, arguments: args },
-      _meta: {
-        'io.modelcontextprotocol/version': MCP_VERSION,
-        'io.modelcontextprotocol/method': 'tools/call',
-        'io.modelcontextprotocol/name': name,
-      },
     }),
   })
-  const text = await res.text()
+  // The transport may answer a single result as a one-event SSE stream.
+  const raw = await res.text()
+  const text = (res.headers.get('content-type') ?? '').includes('text/event-stream')
+    ? raw.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice('data:'.length).trim()).join('')
+    : raw
   let body
   try {
     body = JSON.parse(text)
@@ -83,9 +83,11 @@ function data(body) {
   }
 }
 
-function expectStatus(label, response, expected = 200) {
-  if (response.status === expected) pass(label)
-  else fail(`${label}: expected ${expected}, got ${response.status}`, response.body)
+// A tool that failed answers HTTP 200 with isError: true, so a status alone
+// would count a refused or half-finished write as success.
+function expectSuccess(label, response) {
+  if (response.status === 200 && response.body?.result && response.body.result.isError !== true) pass(label)
+  else fail(`${label}: expected a successful tool result, got HTTP ${response.status}`, response.body)
 }
 
 function expectValue(label, condition, detail) {
@@ -109,7 +111,7 @@ async function main() {
   const collectionIds = new Map()
   for (const name of ['Mains', 'Shots']) {
     const collection = await mcp(headers, 'create_collection', { organization_id: organizationId, name })
-    expectStatus(`create_collection ${name} succeeds`, collection)
+    expectSuccess(`create_collection ${name} succeeds`, collection)
     const collectionId = data(collection.body)?.collection?.id
     expectValue('create_collection returns collection id', Boolean(collectionId), collection.body)
     collectionIds.set(name, collectionId)
@@ -120,18 +122,18 @@ async function main() {
     name: 'MCP Ops Curry',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1250, currency: 'USD' }] }],
   })
-  expectStatus('create_product with price succeeds', product)
+  expectSuccess('create_product with price succeeds', product)
   const productId = data(product.body)?.product?.id
   expectValue('create_product returns Product id', Boolean(productId), product.body)
 
   // Publication and location membership are separate states; neither implies
   // the other, and a read must show both.
-  expectStatus('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { organization_id: organizationId, product_id: productId, published: true }))
-  expectStatus('set_product_location succeeds', await mcp(headers, 'set_product_location', { organization_id: organizationId, product_id: productId, location_id: locationId, active: true, published: true }))
-  expectStatus('set_collection_products succeeds', await mcp(headers, 'set_collection_products', { organization_id: organizationId, collection_id: collectionIds.get('Mains'), product_ids: [productId] }))
+  expectSuccess('set_product_publication succeeds', await mcp(headers, 'set_product_publication', { organization_id: organizationId, product_id: productId, published: true }))
+  expectSuccess('set_product_location succeeds', await mcp(headers, 'set_product_location', { organization_id: organizationId, product_id: productId, location_id: locationId, active: true, published: true }))
+  expectSuccess('set_collection_products succeeds', await mcp(headers, 'set_collection_products', { organization_id: organizationId, collection_id: collectionIds.get('Mains'), product_ids: [productId] }))
 
   const initialRead = await mcp(headers, 'get_product', { organization_id: organizationId, product_id: productId })
-  expectStatus('get_product succeeds after create', initialRead)
+  expectSuccess('get_product succeeds after create', initialRead)
   expectValue('created Product has initial Price on its variant', data(initialRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1250, initialRead.body)
 
   const batch = await mcp(headers, 'batch_create_products', {
@@ -141,7 +143,7 @@ async function main() {
       { name: 'Lemon Drop', variants: [{ name: 'Standard', prices: [{ unit_amount: 800, currency: 'USD' }] }] },
     ],
   })
-  expectStatus('batch_create_products succeeds', batch)
+  expectSuccess('batch_create_products succeeds', batch)
   expectValue('batch_create_products adds two Products atomically', data(batch.body)?.products?.length === 2, batch.body)
 
   const productUpdate = await mcp(headers, 'update_product', {
@@ -150,15 +152,15 @@ async function main() {
     name: 'MCP Ops Green Curry',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1300, currency: 'USD' }] }],
   })
-  expectStatus('update_product price succeeds', productUpdate)
+  expectSuccess('update_product price succeeds', productUpdate)
 
   const productRead = await mcp(headers, 'get_product', { organization_id: organizationId, product_id: productId })
-  expectStatus('get_product succeeds', productRead)
+  expectSuccess('get_product succeeds', productRead)
   expectValue('get_product includes updated Product', data(productRead.body)?.product?.name === 'MCP Ops Green Curry', productRead.body)
   expectValue('get_product reports where the Product is offered', (data(productRead.body)?.product?.locations ?? []).some(entry => entry.location_id === locationId && entry.published), productRead.body)
   expectValue('updated Product has replacement Price', data(productRead.body)?.product?.variants?.[0]?.prices?.[0]?.unit_amount === 1300, productRead.body)
   const productDelete = await mcp(headers, 'delete_product', { organization_id: organizationId, product_id: productId })
-  expectStatus('delete_product succeeds', productDelete)
+  expectSuccess('delete_product succeeds', productDelete)
   expectValue('delete_product returns deleted true', data(productDelete.body)?.deleted === true, productDelete.body)
 
   const post = await mcp(headers, 'create_post', {
@@ -166,7 +168,7 @@ async function main() {
     title: 'MCP Ops Post',
     body: 'Post created by MCP ops checker',
   })
-  expectStatus('create_post succeeds', post)
+  expectSuccess('create_post succeeds', post)
   const postId = data(post.body)?.id
   expectValue('create_post returns post id', Boolean(postId), post.body)
 
@@ -176,7 +178,7 @@ async function main() {
     title: 'MCP Ops Post Updated',
     body: 'Post updated by MCP ops checker',
   })
-  expectStatus('update_post succeeds', postUpdate)
+  expectSuccess('update_post succeeds', postUpdate)
   expectValue('update_post returns changed_fields', Array.isArray(data(postUpdate.body)?.changed_fields), postUpdate.body)
 
   const postPublish = await mcp(headers, 'publish_post', {
@@ -184,7 +186,7 @@ async function main() {
     post_id: postId,
     channels: ['organization'],
   })
-  expectStatus('publish_post succeeds', postPublish)
+  expectSuccess('publish_post succeeds', postPublish)
   expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
 
   const combinedPublish = await mcp(headers, 'publish_post', {
@@ -192,7 +194,7 @@ async function main() {
     post_id: postId,
     channels: ['organization', 'facebook'],
   })
-  expectStatus('publish_post keeps site success when facebook is disconnected', combinedPublish)
+  expectSuccess('publish_post keeps site success when facebook is disconnected', combinedPublish)
   const combinedOutcome = data(combinedPublish.body)?.channel_outcomes
   expectValue(
     'publish_post reports site published and facebook skipped',
@@ -202,7 +204,7 @@ async function main() {
   )
 
   const posts = await mcp(headers, 'list_posts', { organization_id: organizationId })
-  expectStatus('list_posts succeeds', posts)
+  expectSuccess('list_posts succeeds', posts)
   expectValue('list_posts includes published post', (data(posts.body)?.posts ?? []).some(post => post.id === postId), posts.body)
   const publishedPost = (data(posts.body)?.posts ?? []).find(post => post.id === postId)
   expectValue('update_post keeps updated title', publishedPost?.title === 'MCP Ops Post Updated', publishedPost)
@@ -215,12 +217,12 @@ async function main() {
     description: 'Half-day tour created by MCP ops checker',
     variants: [{ name: 'Per person', prices: [{ unit_amount: 150000, currency: 'THB' }] }],
   })
-  expectStatus('create_product (bookable) succeeds', bookable)
+  expectSuccess('create_product (bookable) succeeds', bookable)
   const bookableId = data(bookable.body)?.product?.id
   expectValue('create_product (bookable) returns Product id', Boolean(bookableId), bookable.body)
 
   const invalidProduct = await mcp(headers, 'create_product', { organization_id: organizationId, name: '' })
-  expectStatus('create_product rejects an empty name over JSON-RPC transport', invalidProduct)
+  expectValue('create_product rejects an empty name over JSON-RPC transport', invalidProduct.status === 200, invalidProduct.body)
   expectValue('create_product invalid name returns tool error', invalidProduct.body?.result?.isError === true, invalidProduct.body)
 
   const bookableUpdate = await mcp(headers, 'update_product', {
@@ -228,10 +230,10 @@ async function main() {
     product_id: bookableId,
     description: 'Updated through MCP ops checker',
   })
-  expectStatus('update_product (bookable) succeeds', bookableUpdate)
+  expectSuccess('update_product (bookable) succeeds', bookableUpdate)
 
   const listed = await mcp(headers, 'list_products', { organization_id: organizationId })
-  expectStatus('list_products succeeds', listed)
+  expectSuccess('list_products succeeds', listed)
   const listedProduct = (data(listed.body)?.products ?? []).find(item => item.id === bookableId)
   expectValue('list_products includes the created Product', Boolean(listedProduct), listed.body)
   expectValue('update_product keeps the updated description', listedProduct?.description === 'Updated through MCP ops checker', listedProduct)
