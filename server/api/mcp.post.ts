@@ -337,12 +337,10 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       ? ctxOrganizationId.trim()
       : typeof rawArgs.organization_id === "string" ? rawArgs.organization_id.trim() : null;
 
-    logMcpEventDetached(event, cfEnv.DB, {
-      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
-
     // After any mutating tool call, purge KV HTML cache for the site so the
     // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
     // Fire-and-forget — never block the MCP response on cache ops.
+    let purgeFailure: string | null = null;
     if (isMcpMutatingTool(toolDef)) {
       const organizationId = resolvedOrganizationId;
       if (organizationId) {
@@ -351,25 +349,26 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
         const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const db = (env as any).DB as D1Database | undefined;
-        if (kv) {
-          // Public resource cache is keyed by organizationId directly (not hostname), so no
-          // domain lookup is needed here — unlike the HTML purge below.
-          // Awaited inline (not waitUntil) so the MCP response never returns
-          // before the stale public resource entry is cleared — otherwise a client
-          // that reads public resources immediately after this mutation could still
-          // see stale data.
-          const cacheStartedAt = performance.now();
-          // A purge that failed is the edit not reaching the site: the tool
-          // reported the write and the reader kept being served what it replaced.
-          try {
-            await purgePublicResourceCacheNow({
-              DB: env.db,
-              ORGANIZATION_CACHE: kv,
-              NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
-            }, organizationId);
-          } finally {
-            recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
-          }
+        // Public resource cache is keyed by organizationId directly (not hostname), so no
+        // domain lookup is needed here — unlike the HTML purge below.
+        // Awaited inline (not waitUntil) so the MCP response never returns
+        // before the stale public resource entry is cleared — otherwise a client
+        // that reads public resources immediately after this mutation could still
+        // see stale data. A missing binding reaches the helper and fails there.
+        const cacheStartedAt = performance.now();
+        // A purge that failed is the edit not reaching the site. The write has
+        // landed, so this is neither success nor a transport failure: the tool
+        // result says both halves, and the client can act on it.
+        try {
+          await purgePublicResourceCacheNow({
+            DB: env.db,
+            ORGANIZATION_CACHE: kv,
+            NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
+          }, organizationId);
+        } catch (purgeError) {
+          purgeFailure = `${toolName} wrote its change to organization ${organizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
+        } finally {
+          recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
         }
         if (kv && db) {
           // Look up all active hostnames for this site (subdomain + custom domains)
@@ -406,8 +405,11 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       }
     }
 
+    logMcpEventDetached(event, cfEnv.DB, {
+      userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null,  requestId: null, method: "tools/call", toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: purgeFailure ? "error" : "success", errorMessage: purgeFailure, httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
+
     return {
-      isError: false, structuredContent, content: [{ type: "text", text: modelText }],
+      isError: purgeFailure !== null, structuredContent, content: [{ type: "text", text: purgeFailure ?? modelText }],
       ...(isRender && result.privateMeta ? { _meta: result.privateMeta } : {}),
     };
   });

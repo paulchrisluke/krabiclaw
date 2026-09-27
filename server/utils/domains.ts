@@ -1,10 +1,10 @@
 import { instantDate } from '~/utils/timezone'
 // Cloudflare for SaaS custom domain management.
 
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
-import { fireOrganizationEvent, type OrganizationEventType } from '~/server/utils/organization-events'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 
 export interface DomainEnv {
   GA4_MEASUREMENT_ID?: string
@@ -369,23 +369,6 @@ function nextCheckAt(retryCount: number, options: { recentDnsChange?: boolean } 
   return new Date(Date.now() + delayMinutes * 60_000).toISOString()
 }
 
-async function logDomainEvent(
-  db: D1Database,
-  opts: {
-    organizationId: string
-    domainId?: string | null
-    eventType: OrganizationEventType
-    actorType?: DomainActorType
-    actorId?: string | null
-    message?: string
-    beforeState?: ApiValue
-    afterState?: ApiValue
-    metadata?: ApiValue
-  }
-) {
-  await fireOrganizationEvent({ db, ...opts, entityType: 'domain', entityId: opts.domainId ?? undefined })
-}
-
 async function queueReconciliation(db: D1Database, domainId: string, runAfter?: string) {
   await execute(db, `
     UPDATE organization_domains SET next_check_at = ?, reconciliation_token = NULL, reconciliation_expires_at = NULL,
@@ -534,9 +517,10 @@ async function persistCloudflareState(
       : before.renewal_issue_started_at ?? null
   const errors = hostname.verification_errors?.join('; ') || null
 
-  const updates: D1PreparedStatement[] = []
+  const updates: BatchQuery[] = []
   if (status === 'active' && before.role === 'canonical') {
-    updates.push(db.prepare(`
+    updates.push({
+      query: `
       UPDATE organization_domains
       SET role = 'secondary', updated_at = ?
       WHERE organization_id = ?
@@ -547,113 +531,100 @@ async function persistCloudflareState(
           FROM organization_domains expected
           WHERE expected.id = ? AND expected.role = 'canonical' AND expected.reconciliation_token IS ?
         )
-    `).bind(now, before.organization_id, domainId, domainId, options.leaseToken ?? null))
+    `,
+      params: [now, before.organization_id, domainId, domainId, options.leaseToken ?? null],
+    })
   }
 
-  updates.push(db.prepare(`
-    UPDATE organization_domains
-    SET cloudflare_hostname_id = ?,
-        cloudflare_hostname_status = ?,
-        cloudflare_ssl_status = ?,
-        ownership_validation_name = ?,
-        ownership_validation_type = ?,
-        ownership_validation_value = ?,
-        ssl_validation_name = ?,
-        ssl_validation_type = ?,
-        ssl_validation_value = ?,
-        ssl_validation_name_2 = ?,
-        ssl_validation_type_2 = ?,
-        ssl_validation_value_2 = ?,
-        validation_strategy = ?,
-        dcv_delegation_name = ?,
-        dcv_delegation_type = ?,
-        dcv_delegation_value = ?,
-        dns_target = ?,
-        dns_status = ?,
-        dns_last_resolved_at = ?,
-        dns_resolved_target = ?,
-        status = ?,
-        last_synced_at = ?,
-        next_check_at = ?,
-        retry_count = ?,
-        activated_at = ?,
-        certificate_last_active_at = ?,
-        renewal_issue_started_at = ?,
-        certificate_expires_at = ?,
-        error_message = ?,
-        metadata = ?,
-        updated_at = ?, reconciliation_token = NULL, reconciliation_expires_at = NULL
-    WHERE id = ? AND reconciliation_token IS ? AND desired_state = 'active' AND status NOT IN ('disabled', 'deleted')
-  `).bind(
-    hostname.id,
-    hostname.status ?? null,
-    hostname.ssl?.status ?? null,
-    hostname.ownership_verification?.name ?? null,
-    hostname.ownership_verification?.type ?? null,
-    hostname.ownership_verification?.value ?? null,
-    sslValidation?.txt_name ?? sslValidation?.name ?? null,
-    sslValidation?.type ?? 'TXT',
-    sslValidation?.txt_value ?? sslValidation?.value ?? null,
-    sslValidation2?.txt_name ?? sslValidation2?.name ?? null,
-    sslValidation2?.type ?? 'TXT',
-    sslValidation2?.txt_value ?? sslValidation2?.value ?? null,
-    before.validation_strategy ?? 'http_auto',
-    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_name ?? null : null,
-    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_type ?? null : null,
-    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_value ?? null : null,
-    dnsTarget,
-    dnsStatus,
-    options.dnsInspection?.checked_at ?? before.dns_last_resolved_at ?? null,
-    options.dnsInspection?.records.map((record) => `${record.type}:${record.value}`).join(', ') || before.dns_resolved_target || null,
+  // One list of what this reconciliation writes, so the statement and the
+  // audit row's afterState are the same values rather than two copies.
+  const next = {
+    cloudflare_hostname_id: hostname.id,
+    cloudflare_hostname_status: hostname.status ?? null,
+    cloudflare_ssl_status: hostname.ssl?.status ?? null,
+    ownership_validation_name: hostname.ownership_verification?.name ?? null,
+    ownership_validation_type: hostname.ownership_verification?.type ?? null,
+    ownership_validation_value: hostname.ownership_verification?.value ?? null,
+    ssl_validation_name: sslValidation?.txt_name ?? sslValidation?.name ?? null,
+    ssl_validation_type: sslValidation?.type ?? 'TXT',
+    ssl_validation_value: sslValidation?.txt_value ?? sslValidation?.value ?? null,
+    ssl_validation_name_2: sslValidation2?.txt_name ?? sslValidation2?.name ?? null,
+    ssl_validation_type_2: sslValidation2?.type ?? 'TXT',
+    ssl_validation_value_2: sslValidation2?.txt_value ?? sslValidation2?.value ?? null,
+    validation_strategy: before.validation_strategy ?? 'http_auto',
+    dcv_delegation_name: before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_name ?? null : null,
+    dcv_delegation_type: before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_type ?? null : null,
+    dcv_delegation_value: before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_value ?? null : null,
+    dns_target: dnsTarget,
+    dns_status: dnsStatus,
+    dns_last_resolved_at: options.dnsInspection?.checked_at ?? before.dns_last_resolved_at ?? null,
+    dns_resolved_target: options.dnsInspection?.records.map((record) => `${record.type}:${record.value}`).join(', ') || before.dns_resolved_target || null,
     status,
-    now,
-    status === 'active' || status === 'disabled' || status === 'deleted'
+    last_synced_at: now,
+    next_check_at: status === 'active' || status === 'disabled' || status === 'deleted'
       ? null
       : nextCheckAt(retryCount, { recentDnsChange: options.triggeredRevalidation || dnsStatus === 'valid' }),
-    retryCount,
-    activatedAt,
-    certificateLastActiveAt,
-    renewalIssueStartedAt,
-    hostname.ssl?.expires_on == null ? null : instantDate(hostname.ssl.expires_on).toISOString(),
-    errors,
-    JSON.stringify({
+    retry_count: retryCount,
+    activated_at: activatedAt,
+    certificate_last_active_at: certificateLastActiveAt,
+    renewal_issue_started_at: renewalIssueStartedAt,
+    certificate_expires_at: hostname.ssl?.expires_on == null ? null : instantDate(hostname.ssl.expires_on).toISOString(),
+    error_message: errors,
+    metadata: JSON.stringify({
       cloudflare_created_at: hostname.created_at ?? null,
       ssl_validation_value2: null,
     }),
-    now,
-    domainId, options.leaseToken ?? null
-  ))
-  const updated = (await db.batch(updates)).at(-1)
+    updated_at: now,
+    reconciliation_token: null,
+    reconciliation_expires_at: null,
+  } satisfies Partial<DomainRecord>
+  const columns = Object.keys(next) as Array<keyof typeof next>
+  const updateIndex = updates.length
+  updates.push({
+    query: `
+    UPDATE organization_domains
+    SET ${columns.map(column => `${column} = ?`).join(', ')}
+    WHERE id = ? AND reconciliation_token IS ? AND desired_state = 'active' AND status NOT IN ('disabled', 'deleted')
+  `,
+    params: [...columns.map(column => next[column]), domainId, options.leaseToken ?? null],
+  })
+
+  // Both events are guarded on the update just before them: a reconciliation
+  // that was superseded changed nothing and must not record that it did. The
+  // second is guarded on the first, which inserted a row only if the update
+  // changed one.
+  const afterState = { ...before, ...next } satisfies DomainRecord
+  if (before.status !== status || before.cloudflare_ssl_status !== next.cloudflare_ssl_status) {
+    updates.push(organizationEventQuery({
+      organizationId: before.organization_id,
+      entityType: 'domain',
+      entityId: domainId,
+      eventType: 'domain_state_changed',
+      actorType: options.actorType ?? 'cloudflare',
+      actorId: options.actorId ?? null,
+      message: `${before.domain} is ${status}`,
+      beforeState: before,
+      afterState,
+      onlyIfPreviousChangedOneRow: true,
+    }))
+    if (before.status !== status && (status === 'active' || status === 'failed' || status === 'blocked')) {
+      updates.push(organizationEventQuery({
+        organizationId: before.organization_id,
+        actorId: options.actorId ?? null,
+        eventType: status === 'active' ? 'domain.verified' : 'domain.failed',
+        entityType: 'domain',
+        entityId: domainId,
+        metadata: { domain: before.domain, status },
+        onlyIfPreviousChangedOneRow: true,
+      }))
+    }
+  }
+  const updated = (await executeBatch(db, updates, { operation: 'Persist domain reconciliation' }))[updateIndex]
   if (updated?.meta?.changes !== 1) throw new Error('Domain reconciliation was superseded')
 
   const after = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId]) as DomainRecord
 
   const zarazNeedsReconcile = before.status !== after.status && (before.status === 'active' || after.status === 'active')
-
-  if (!before || before.status !== after.status || before.cloudflare_ssl_status !== after.cloudflare_ssl_status) {
-    await logDomainEvent(db, {
-      organizationId: after.organization_id,
-      domainId,
-      eventType: 'domain_state_changed',
-      actorType: options.actorType ?? 'cloudflare',
-      actorId: options.actorId ?? null,
-      message: `${after.domain} is ${after.status}`,
-      beforeState: before,
-      afterState: after
-    })
-
-    if (before.status !== after.status && (after.status === 'active' || after.status === 'failed' || after.status === 'blocked')) {
-      await fireOrganizationEvent({
-        db,
-        organizationId: after.organization_id,
-        actorId: options.actorId ?? null,
-        eventType: after.status === 'active' ? 'domain.verified' : 'domain.failed',
-        entityType: 'domain',
-        entityId: domainId,
-        metadata: { domain: after.domain, status: after.status },
-      })
-    }
-  }
 
   // promoteCanonicalIfReady can call setCanonicalDomain, which reads/writes
   // organization_domains rows for this site — callers still inserting other domain
@@ -715,23 +686,34 @@ export async function createCustomDomainPair(
       if (hostname.id) createdHostnameIds.push(hostname.id)
     }
 
-    for (const entry of entries) {
-      await execute(db, `
+    // The pair, what the owner did and what it achieved commit as one: the
+    // hostnames are provisioned by now, so these rows are the domain being
+    // connected. If a later step fails, the catch removes the rows and records
+    // that it did, so the trail reads added, connected, failed.
+    await executeBatch(db, entries.flatMap((entry) => [{
+      query: `
         INSERT INTO organization_domains
         (id, organization_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
         VALUES (?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
-      `, [entry.id, opts.organizationId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
-      insertedDomainIds.push(entry.id)
-
-      await logDomainEvent(db, {
-        organizationId: opts.organizationId,
-        domainId: entry.id,
-        eventType: 'domain_added',
-        actorType: opts.actorType ?? 'owner',
-        actorId: opts.actorId ?? null,
-        message: `${entry.domain} added`
-      })
-    }
+      `,
+      params: [entry.id, opts.organizationId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now],
+    }, organizationEventQuery({
+      organizationId: opts.organizationId,
+      entityType: 'domain',
+      entityId: entry.id,
+      eventType: 'domain_added',
+      actorType: opts.actorType ?? 'owner',
+      actorId: opts.actorId ?? null,
+      message: `${entry.domain} added`
+    }), organizationEventQuery({
+      organizationId: opts.organizationId,
+      actorId: opts.actorId ?? null,
+      eventType: 'domain.connected',
+      entityType: 'domain',
+      entityId: entry.id,
+      metadata: { domain: entry.domain, role: entry.role },
+    })]), { operation: 'Connect custom domain pair' })
+    insertedDomainIds.push(...entries.map(entry => entry.id))
 
     for (const entry of entries) {
       const hostname = cloudflareByDomainId.get(entry.id)
@@ -751,61 +733,37 @@ export async function createCustomDomainPair(
     const normalizedError = error instanceof Error ? error : new Error('Cloudflare hostname creation failed')
     const message = normalizedError.message || 'Cloudflare hostname creation failed'
 
-    // Best-effort external cleanup if any Cloudflare hostnames were already created.
+    // Every piece of cleanup is attempted before anything is raised, so one
+    // that fails does not strand the rest; whatever was left behind is named
+    // in the error this function throws.
+    const leftBehind: string[] = []
     for (const hostnameId of createdHostnameIds) {
       try {
         await deleteCloudflareHostname(env, hostnameId)
       } catch (cleanupError) {
-        const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('unknown cleanup error')
-        console.error('createCustomDomainPair: Cloudflare cleanup failed', {
-          hostnameId,
-          error: normalizedCleanupError.message
-        })
+        leftBehind.push(`Cloudflare hostname ${hostnameId} (${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)})`)
       }
     }
 
-    // Clean up partially inserted organization_domains rows to avoid blocking retries.
-    for (const domainId of insertedDomainIds) {
-      try {
-        await execute(db, 'DELETE FROM organization_domains WHERE id = ?', [domainId])
-      } catch (cleanupError) {
-        const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('unknown cleanup error')
-        console.error('createCustomDomainPair: organization_domains cleanup failed', {
-          domainId,
-          error: normalizedCleanupError.message
-        })
-      }
+    // The rows come out, so a retry is not blocked, in the same batch as the
+    // record of why.
+    try {
+      await executeBatch(db, [
+        ...insertedDomainIds.map(domainId => ({ query: 'DELETE FROM organization_domains WHERE id = ?', params: [domainId] })),
+        ...entries.map(entry => organizationEventQuery({
+          organizationId: opts.organizationId,
+          entityType: 'domain',
+          eventType: 'cloudflare_create_failed',
+          actorType: 'cloudflare',
+          message: `${entry.domain}: ${message}`,
+          metadata: { domain: entry.domain, error: message }
+        })),
+      ], { operation: 'Remove failed custom domain pair' })
+    } catch (cleanupError) {
+      leftBehind.push(`domain rows ${insertedDomainIds.join(', ') || 'none'} and their failure record (${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)})`)
     }
 
-    for (const entry of entries) {
-      await logDomainEvent(db, {
-        organizationId: opts.organizationId,
-        eventType: 'cloudflare_create_failed',
-        actorType: 'cloudflare',
-        message: `${entry.domain}: ${message}`,
-        metadata: { domain: entry.domain, error: message }
-      })
-    }
-
-    throw new Error(message, { cause: error })
-  }
-
-  // Outside the try, and that is the point. These record that the pairing above
-  // succeeded, and the catch tears down the Cloudflare hostnames and the
-  // organization_domains rows. Firing them inside it meant an audit write that
-  // failed would delete a domain pair that had provisioned correctly. The events
-  // still raise — a missing audit row is a real failure — but they raise after
-  // the work they describe is safe.
-  for (const entry of entries) {
-    await fireOrganizationEvent({
-      db,
-      organizationId: opts.organizationId,
-      actorId: opts.actorId ?? null,
-      eventType: 'domain.connected',
-      entityType: 'domain',
-      entityId: entry.id,
-      metadata: { domain: entry.domain, role: entry.role },
-    })
+    throw new Error(leftBehind.length ? `${message}; not cleaned up: ${leftBehind.join('; ')}` : message, { cause: error })
   }
 
   return records
@@ -912,15 +870,20 @@ export async function deleteCustomDomain(
   // routes to this one. Keep it active and queue a reconciliation retry
   // instead, so cleanup is retried until the Cloudflare side actually clears.
   if (cloudflareDeleteError) {
-    await execute(db, `
+    // The failure is recorded whether or not this call still holds the lease:
+    // Cloudflare refused the delete either way.
+    await executeBatch(db, [{
+      query: `
       UPDATE organization_domains
       SET error_message = ?, updated_at = ?, retry_count = MIN(12, retry_count + 1), next_check_at = ?,
           reconciliation_token = NULL, reconciliation_expires_at = NULL
       WHERE id = ? AND reconciliation_token = ?
-    `, [`Cloudflare delete failed: ${cloudflareDeleteError}`, now, nextCheckAt(Number(domain.retry_count ?? 0) + 1), domainId, token])
-    await logDomainEvent(db, {
+    `,
+      params: [`Cloudflare delete failed: ${cloudflareDeleteError}`, now, nextCheckAt(Number(domain.retry_count ?? 0) + 1), domainId, token],
+    }, organizationEventQuery({
       organizationId: domain.organization_id,
-      domainId,
+      entityType: 'domain',
+      entityId: domainId,
       eventType: 'cloudflare_delete_failed',
       actorType: 'cloudflare',
       message: cloudflareDeleteError,
@@ -928,26 +891,30 @@ export async function deleteCustomDomain(
         cloudflare_hostname_id: domain.cloudflare_hostname_id,
         error: cloudflareDeleteError
       }
-    })
+    })], { operation: 'Record failed domain deletion' })
     throw new Error(`Failed to delete domain: ${cloudflareDeleteError}`)
   }
 
-  const deleted = await execute(db, `
+  const [deleted] = await executeBatch(db, [{
+    query: `
     UPDATE organization_domains
     SET status = 'deleted', role = 'secondary', updated_at = ?, next_check_at = NULL,
         reconciliation_token = NULL, reconciliation_expires_at = NULL
     WHERE id = ? AND reconciliation_token = ?
-  `, [now, domainId, token])
-  if (deleted.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
-
-  await logDomainEvent(db, {
+  `,
+    params: [now, domainId, token],
+  }, organizationEventQuery({
     organizationId: domain.organization_id,
-    domainId,
+    entityType: 'domain',
+    entityId: domainId,
     eventType: 'domain_deleted',
     actorType,
     actorId,
     message: `${domain.domain} deleted`,
-  })
+    onlyIfPreviousChangedOneRow: true,
+  })], { operation: 'Delete custom domain' })
+  if (deleted?.meta?.changes !== 1) throw new Error('Domain deletion was superseded')
+
   await promoteCanonicalIfReady(db, domain.organization_id)
 
   // Same ordering as reconcileDomain, for the same reason: the row is already
@@ -1018,32 +985,22 @@ export async function setCanonicalDomain(
   `, [domainId, organizationId])
   if (!domain) throw new Error('Only active domains can be canonical')
 
-  const priorCanonical = await queryFirst<DomainRecord>(db, `
-    SELECT * FROM organization_domains WHERE organization_id = ? AND role = 'canonical' LIMIT 1
-  `, [organizationId])
-
+  // One batch, so the site is never left with two canonical domains or none,
+  // and the record of the change commits with it.
   const now = new Date().toISOString()
-  try {
-    await execute(db, `UPDATE organization_domains SET role = 'secondary', updated_at = ? WHERE organization_id = ? AND role = 'canonical'`, [now, organizationId])
-    await execute(db, `UPDATE organization_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, domainId])
-    await logDomainEvent(db, {
+  await executeBatch(db, [
+    { query: `UPDATE organization_domains SET role = 'secondary', updated_at = ? WHERE organization_id = ? AND role = 'canonical'`, params: [now, organizationId] },
+    { query: `UPDATE organization_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, params: [now, domainId] },
+    organizationEventQuery({
       organizationId: domain.organization_id,
-      
-      domainId,
+      entityType: 'domain',
+      entityId: domainId,
       eventType: 'canonical_domain_changed',
       actorType,
       actorId,
       message: `${domain.domain} set as primary`
-    })
-  } catch (error) {
-    if (priorCanonical) {
-      await execute(db, `UPDATE organization_domains SET role = 'canonical', updated_at = ? WHERE id = ?`, [now, priorCanonical.id])
-    }
-    if (domain.role !== 'canonical') {
-      await execute(db, `UPDATE organization_domains SET role = ?, updated_at = ? WHERE id = ?`, [domain.role, now, domainId])
-    }
-    throw error
-  }
+    }),
+  ], { operation: 'Set canonical domain' })
 
   const row = await queryFirst<DomainRecord>(db, `SELECT * FROM organization_domains WHERE id = ?`, [domainId])
   if (!row) throw new Error(`Domain not found: ${domainId}`)

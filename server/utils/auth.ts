@@ -10,7 +10,7 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, queryAll, schema } from '~/server/db'
+import { createDb, execute, executeBatch, queryAll, schema, type BatchQuery } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
@@ -18,7 +18,7 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
-import { fireOrganizationEvent } from '~/server/utils/organization-events'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
@@ -209,10 +209,12 @@ export function createAuth(env: CloudflareEnv) {
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
   // Members are indexed for the dashboard's search; a change to one is a change
-  // to every site of the organization. Never lets an auth write fail over it.
-  const recordMemberChange = async (organizationId: string) => {
-    const change = publicResourceCacheInvalidationQuery(organizationId, 'member-change')
-    await execute(db, change.query, change.params ?? []).catch((error: unknown) => console.error('member_search_invalidation_failed', error))
+  // to every site of the organization. Better Auth has already committed the
+  // member row by the time its after-hook runs, and D1 has no transaction a
+  // hook could join, so the change record and the audit row commit together
+  // with each other, and a failure of either reaches the caller.
+  const recordMemberChange = async (organizationId: string, audit: BatchQuery[] = []) => {
+    await executeBatch(db, [publicResourceCacheInvalidationQuery(organizationId, 'member-change'), ...audit])
   }
   const configuredOrganizationOptions = {
     ...organizationOptions,
@@ -320,36 +322,31 @@ export function createAuth(env: CloudflareEnv) {
         },
         update: {
           after: async (member: MemberRow) => {
-            await recordMemberChange(member.organizationId)
-            await fireOrganizationEvent({
-              db,
+            await recordMemberChange(member.organizationId, [organizationEventQuery({
               organizationId: member.organizationId,
               eventType: 'member.role_changed',
               entityType: 'member',
               entityId: member.id,
               metadata: { userId: member.userId, role: member.role },
-            })
+            })])
           }
         },
         delete: {
           after: async (member: MemberRow) => {
-            await recordMemberChange(member.organizationId)
-            await fireOrganizationEvent({
-              db,
+            await recordMemberChange(member.organizationId, [organizationEventQuery({
               organizationId: member.organizationId,
               eventType: 'member.removed',
               entityType: 'member',
               entityId: member.id,
               metadata: { userId: member.userId },
-            })
+            })])
           }
         }
       },
       invitation: {
         create: {
           after: async (invitation: InvitationRow) => {
-            await fireOrganizationEvent({
-              db,
+            const audit = organizationEventQuery({
               organizationId: invitation.organizationId,
               actorId: invitation.inviterId,
               eventType: 'member.invited',
@@ -357,6 +354,7 @@ export function createAuth(env: CloudflareEnv) {
               entityId: invitation.id,
               metadata: { role: invitation.role ?? null },
             })
+            await execute(db, audit.query, audit.params)
           }
         }
       }
