@@ -18,7 +18,7 @@ export default defineHandler(async (event) => {
       id: result.request.id, bookingType: result.request.booking_type, expiresAt: result.request.expires_at, }, organization: {
       id: result.context.organization_id, name: result.context.organization_name, }, location: {
       id: result.context.location_id, slug: result.context.location_slug, title: result.context.location_title, googleReviewUrl: resolveGoogleReviewUrl(result.context), }, customer: {
-      name: result.context.customer_name || result.context.guest_name, }, })
+      name: result.context.guest_name, }, })
 })
 import { defineHandler } from 'nitro';
 import { getQuery } from 'nitro/h3';

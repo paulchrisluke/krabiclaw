@@ -16,8 +16,7 @@ import {
   ReservationUnavailableError,
 } from '~/server/utils/reservations'
 import { getSourceLocale } from '~/server/utils/organization-locales'
-import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
-import { getAuthSession } from '~/server/utils/auth'
+import { ensureInteractionUser } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
 import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
@@ -108,7 +107,7 @@ export default defineHandler(async (event) => {
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
 
   // Rate limiting (skipped in dev so local work and E2E can submit repeatedly) — runs before
-  // customer creation so a rate-limited request never leaves behind an orphaned customer row.
+  // the guest identity is established so a rate-limited request never mints one.
   const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
@@ -121,12 +120,9 @@ export default defineHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many reservation requests from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
-  const session = await getAuthSession(event, env)
-  const userId = session?.user?.id || null
-
-  const customerInput = {
-    organizationId: organization.id, name, email, phone, source: 'reservation', userId, } as const
-  const customer = await findOrCreateCustomer(db, customerInput)
+  // The person is the Better Auth user; what they typed stays on the thread as
+  // this reservation's guest snapshot and is never copied onto that user.
+  const userId = await ensureInteractionUser(event, env)
 
   const now = new Date().toISOString()
   const payload = threadPayloadForGuest({ name, email, phone, notes: requests, ipHash, partySizeIsMinimum: guests.endsWith('+') })
@@ -139,24 +135,21 @@ export default defineHandler(async (event) => {
   try {
     await claimReservation(db, {
       organizationId: organization.id, locationId: resolvedLocationId,
-      reservationId, requestId: id, customerId: customer.id,
+      reservationId, requestId: id, userId,
       timezone: availability.timezone, startsAt: slot.starts_at,
       date, timeSlot: slot.time_slot,
       endsAt: new Date(Date.parse(slot.starts_at) + durationMinutes * 60_000).toISOString(),
       partySize,
       thread: requestInsertQueries({
         id, kind: 'reservation', organization_id: organization.id,
-        location_id: resolvedLocationId, customer_id: customer.id, review_id: null,
+        location_id: resolvedLocationId, user_id: userId, review_id: null,
         conversation_state: 'needs_attention', resolved_at: null, payload, created_at: now, updated_at: now,
       }, { query: 'SELECT 1 FROM reservations WHERE id = ?', params: [reservationId] }),
     })
   } catch (error) {
     if (!(error instanceof ReservationUnavailableError)) throw error
-    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
     return jsonResponse({ error: 'This time is no longer available. Please choose another time.' }, { status: 409 })
   }
-  await recordCustomerBooking(db, customer.id, customerInput)
-
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })
 
   // Build absolute cancel URL for the confirmation email

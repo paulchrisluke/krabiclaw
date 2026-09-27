@@ -82,7 +82,7 @@ export async function listReservationSubmissions(
     params.push(`-${opts.sinceDays} days`)
   }
   const rows = await queryAll<Record<string, unknown> & { starts_at: string; timezone: string }>(db, `
-    SELECT rs.id, rs.organization_id, res.location_id, rs.customer_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
+    SELECT rs.id, rs.organization_id, res.location_id, rs.user_id, res.status, res.starts_at, res.timezone, CAST(res.party_size AS TEXT) || CASE json_extract(rs.payload_json, '$.party_size_is_minimum') WHEN 1 THEN '+' ELSE '' END AS guests, json_extract(rs.payload_json, '$.guest.name') AS name, json_extract(rs.payload_json, '$.guest.email') AS email, json_extract(rs.payload_json, '$.guest.phone') AS phone, json_extract(rs.payload_json, '$.notes') AS requests, rs.created_at, rs.updated_at, bl.title AS location_title
     FROM requests rs
     JOIN reservations res ON res.request_id = rs.id
     LEFT JOIN business_locations bl ON bl.id = res.location_id

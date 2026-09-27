@@ -4,6 +4,7 @@ import { getClientIp, hashClientIp, HOUR_MS, incrementHourlyRateLimit } from '~/
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail } from '~/server/utils/public-products'
 import { notifyReviewReceived } from '~/server/utils/notifications'
+import { ensureInteractionUser } from '~/server/utils/auth'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -48,10 +49,11 @@ export default defineHandler(async (event) => {
     `, [organizationId, resolved.location.id, resolved.product.id, ipHash, author, rating, title, content])
     const id = resubmitted?.id ?? crypto.randomUUID()
     if (!resubmitted) {
+      const userId = await ensureInteractionUser(event, env)
       await execute(db, `
-        INSERT INTO reviews (id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+        INSERT INTO reviews (id, organization_id, location_id, product_id, user_id, author_name, rating, title, content, status, ip_hash, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, organizationId, resolved.location.id, resolved.product.id, userId, author, rating, title, content, status, ipHash, userAgent])
     }
     const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId])
     await notifyReviewReceived(env, db, {

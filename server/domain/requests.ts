@@ -37,7 +37,7 @@ const threadPayload = z.object({
 
 const threadScope = z.object({
   id: z.string(), organization_id: z.string(),  location_id: z.string().nullable(),
-  customer_id: z.string().nullable(), review_id: z.string().nullable(),
+  user_id: z.string().nullable(), review_id: z.string().nullable(),
   conversation_state: z.enum(['needs_attention', 'waiting_on_guest', 'resolved']), resolved_at: z.string().nullable(),
   created_at: z.string(), updated_at: z.string(),
 })
@@ -115,13 +115,13 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * Carrying the claim's existence into this insert is what ties them together.
  */
 export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQuery): BatchQuery[] {
-  const values = [request.id, request.kind, request.organization_id, request.location_id, request.customer_id, request.review_id,
+  const values = [request.id, request.kind, request.organization_id, request.location_id, request.user_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
     query: claimedBy
-      ? `INSERT INTO requests (id, kind, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      ? `INSERT INTO requests (id, kind, organization_id, location_id, user_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (${claimedBy.query})`
-      : `INSERT INTO requests (id, kind, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      : `INSERT INTO requests (id, kind, organization_id, location_id, user_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: claimedBy ? [...values, ...(claimedBy.params ?? [])] : values,
   }, {

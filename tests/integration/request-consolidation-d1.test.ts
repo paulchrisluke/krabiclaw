@@ -56,11 +56,11 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     async function bookSession(id: string) {
       return claimSessionCapacity(db, {
         organizationId: ORG, productId: 'product-proof', sessionId: 'session-proof',
-        productVariantId: 'variant-proof', partySize: 1, customerId: null, requestId: null,
+        productVariantId: 'variant-proof', partySize: 1, userId: null, requestId: null,
         following: bookingId => [
           ...requestInsertQueries({
             id, kind: 'booking', organization_id: ORG, location_id: LOCATION,
-            customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+            user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
             payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
             created_at: NOW, updated_at: NOW,
           }, { query: 'SELECT 1 FROM bookings WHERE id = ?', params: [bookingId] }),
@@ -106,7 +106,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
     const reservationThread = 'reservation-proof'
     await db.batch(requestInsertQueries({
       id: reservationThread, kind: 'reservation', organization_id: ORG, location_id: LOCATION,
-      customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+      user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: {
         ...threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }),
         cancellation: { token_hash: 'hash', expires_at: '2099-01-01T00:00:00.000Z', used_at: null },
@@ -117,7 +117,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
       organizationId: ORG, locationId: LOCATION, reservationId: 'reservation-row-proof',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
       date: '2099-01-06', timeSlot: '16:00',
-      partySize: 1, customerId: null, requestId: reservationThread,
+      partySize: 1, userId: null, requestId: reservationThread,
     }).then(() => true, () => false)
     assert.equal(reserved, true)
     // The location seats one party per slot, so the second claim is refused
@@ -126,7 +126,7 @@ test('a thread and the record it refers to commit and cancel as one', { timeout:
       organizationId: ORG, locationId: LOCATION, reservationId: 'reservation-row-second',
       timezone: 'Asia/Bangkok', startsAt: '2099-01-06T09:00:00.000Z', endsAt: '2099-01-06T11:00:00.000Z',
       date: '2099-01-06', timeSlot: '16:00',
-      partySize: 1, customerId: null, requestId: null,
+      partySize: 1, userId: null, requestId: null,
     }).then(() => true, () => false)
     assert.equal(secondClaim, false)
     assert.equal(await db.prepare('SELECT count(*) FROM reservations').first('count(*)'), 1)

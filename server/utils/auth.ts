@@ -10,9 +10,8 @@ import { cimd } from '@better-auth/cimd'
 import { fetchCimdMetadataResource } from '~/server/utils/cimd-metadata-fetch'
 import type { GenericEndpointContext } from '@better-auth/core'
 import { HTTPError, type H3Event } from 'nitro';
-import { createDb, execute, queryAll, schema } from '~/server/db'
+import { createDb, execute, executeBatch, queryAll, schema } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
@@ -454,24 +453,34 @@ export function createAuth(env: CloudflareEnv) {
       }),
       anonymous({
         generateRandomEmail: () => `anon-${crypto.randomUUID()}@customers.krabiclaw.local`,
+        // The anonymous user is deleted by the plugin right after this returns,
+        // and every domain FK to it is ON DELETE SET NULL. Everything that
+        // identifies the person moves to the real user first, in one batch.
         onLinkAccount: async ({ anonymousUser, newUser }) => {
+          const from = anonymousUser.user.id
+          const to = newUser.user.id
+          if (from === to) return
           const now = new Date().toISOString()
-          await linkAnonymousCustomerToUser(db, anonymousUser.user.id, newUser.user.id)
-          await execute(db, `
-            UPDATE review_requests
-            SET user_id = ?, updated_at = ?
-            WHERE anonymous_user_id = ?
-          `, [newUser.user.id, now, anonymousUser.user.id])
-          await execute(db, `
-            UPDATE reviews
-            SET user_id = ?, updated_at = ?
-            WHERE user_id = ?
-               OR review_request_id IN (
-                 SELECT id
-                 FROM review_requests
-                 WHERE anonymous_user_id = ?
-               )
-          `, [newUser.user.id, now, anonymousUser.user.id, anonymousUser.user.id])
+          await executeBatch(db, [
+            // An opt-out on either identity survives the merge.
+            {
+              query: `INSERT INTO user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
+                SELECT ?, category, email_enabled, whatsapp_enabled, ? FROM user_notification_preferences WHERE user_id = ?
+                ON CONFLICT (user_id, category) DO UPDATE SET
+                  email_enabled = user_notification_preferences.email_enabled AND excluded.email_enabled,
+                  whatsapp_enabled = user_notification_preferences.whatsapp_enabled AND excluded.whatsapp_enabled,
+                  updated_at = excluded.updated_at`,
+              params: [to, now, from],
+            },
+            { query: 'DELETE FROM user_notification_preferences WHERE user_id = ?', params: [from] },
+            // Re-pointing who a record belongs to is not activity on it, so
+            // updated_at — the version booking changes compare against — stays.
+            ...['requests', 'reservations', 'bookings', 'review_requests', 'reviews'].map(table => ({
+              query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
+              params: [to, from],
+            })),
+            { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },
+          ], { operation: 'anonymous-account-link' })
         },
       }),
       oauthProvider({
@@ -824,4 +833,32 @@ export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promis
   return createAuth(env).api.getSession({
     headers: event.req.headers,
   })
+}
+
+/**
+ * The Better Auth user a public durable interaction belongs to.
+ *
+ * A request with a session keeps that user, anonymous or not. A request with
+ * none gets a new anonymous Better Auth user, and the session cookie Better Auth
+ * issues for it is forwarded on this response so the next interaction from the
+ * same browser reuses it. Call it only once the write is about to happen: a page
+ * view or a rejected submission must not mint an identity.
+ */
+export async function ensureInteractionUser(event: H3Event, env: CloudflareEnv): Promise<string> {
+  const session = await getAuthSession(event, env)
+  if (session?.user) return session.user.id
+  // createAuth's cached instance is typed as bare betterAuth, which erases
+  // plugin endpoints from `api`; anonymous() registers this one.
+  const auth = createAuth(env) as unknown as {
+    api: { signInAnonymous: (input: { headers: Headers; returnHeaders: true }) => Promise<{ headers: Headers; response: { user?: { id?: string } } | null }> }
+  }
+  const { headers, response } = await auth.api.signInAnonymous({
+    headers: event.req.headers,
+    returnHeaders: true,
+  })
+  if (!response?.user?.id) throw new Error('Better Auth did not return an anonymous user')
+  for (const cookie of headers.getSetCookie()) {
+    event.res.headers.append('set-cookie', cookie)
+  }
+  return response.user.id
 }

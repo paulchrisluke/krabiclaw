@@ -53,7 +53,7 @@ function resolveAliasedPath(specifier) {
 // relative specifiers, so any server/utils file written the normal
 // (bundler-resolved) way fails under `node --test` the moment a test
 // transitively imports it — this hit server/utils/whatsapp.ts's import of
-// './whatsapp-delivery' via server/utils/customers.ts. Only handle bare/no
+// './whatsapp-delivery'. Only handle bare/no
 // extension relative specifiers here; leave everything Node already resolves
 // (explicit extensions, bare package specifiers) to the default resolver.
 function resolveRelativePath(specifier, parentURL) {

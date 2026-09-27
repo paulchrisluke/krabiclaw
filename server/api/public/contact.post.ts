@@ -7,6 +7,7 @@ import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/not
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
 import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { ensureInteractionUser } from '~/server/utils/auth'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -88,10 +89,13 @@ export default defineHandler(async (event) => {
     if (!emailOk) return jsonResponse({ error: 'Too many messages from this email. Please try again tomorrow.' }, { status: 429 })
   }
 
+  // The person is the Better Auth user; what they typed stays on the thread as
+  // this message's guest snapshot and is never copied onto that user.
+  const userId = await ensureInteractionUser(event, env)
   const consentAt = consentAcknowledged ? new Date().toISOString() : null
   const now = new Date().toISOString()
   await executeBatch(db, requestInsertQueries({ id, kind: 'contact', organization_id: organization.id, location_id: assignedLocationId,
-    customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+    user_id: userId, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
     payload: { guest: { name, email, phone: null }, subject: subject || topic || null, message, consent_at: consentAt, ip_hash: ipHash,
       source: source || null, route_context: routeContext || null, suggested_summary: suggestedSummary || null, agent_metadata: agentMetadata }, created_at: now, updated_at: now }))
   await publishGuestInboxThreadEvent(env, db, { threadId: id, type: 'thread.created' })

@@ -1,7 +1,6 @@
 import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { executeBatch, queryFirst } from '~/server/db'
-import { getAuthSession } from '~/server/utils/auth'
 import { buildMediaPlacementInsertQuery, deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
@@ -30,17 +29,14 @@ export default defineHandler(async (event) => {
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-    const session = await getAuthSession(event, env)
-    const sessionUser = session?.user as ({ id?: string; isAnonymous?: boolean } | undefined)
-    if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
     const token = cleanString(event.req.headers.get('x-review-token'), 300)
     if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
     const result = await getReviewRequestByToken(db, token)
     if (!result || result.request.id !== requestId) return jsonResponse({ error: 'Review request not found or expired' }, { status: 404 })
-    if (result.request.user_id && result.request.user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
-    if (result.request.anonymous_user_id && result.request.anonymous_user_id !== sessionUser.id) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
+    // The token was minted for the booking's user; the upload is theirs.
+    const uploaderUserId = result.request.user_id
+    if (!uploaderUserId) return jsonResponse({ error: 'This review request is not linked to a guest' }, { status: 409 })
 
     const existingMedia = await queryFirst<{ count: number; next_sort_order: number }>(db, `
       SELECT
@@ -89,7 +85,7 @@ export default defineHandler(async (event) => {
       db,
       env,
       organizationId: result.context.organization_id,
-      userId: sessionUser.id,
+      userId: uploaderUserId,
       buffer: videoData,
       contentType: videoContentType,
       filename,
@@ -117,16 +113,10 @@ export default defineHandler(async (event) => {
           status: 'pending',
           createdAt: now,
           updatedAt: now,
-        }), {
-          query: `
-            UPDATE review_requests
-            SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
-            WHERE id = ?
-          `, params: [
-            sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
+        }), ])
     } catch (linkError) {
       try {
-        await deleteMediaAsset(db, env, uploaded.assetId, result.context.organization_id, sessionUser.id)
+        await deleteMediaAsset(db, env, uploaded.assetId, result.context.organization_id, uploaderUserId)
       } catch (cleanupError) {
         throw new AggregateError([linkError, cleanupError], 'Review video could not be linked or cleaned up')
       }
