@@ -3,7 +3,6 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { deleteImage } from '~/server/utils/cloudflare-images'
 import { deleteOrganizationCustomDomains } from '~/server/utils/domains'
-import { releaseOrganizationIntegrations } from '~/server/utils/integration-release'
 import { organizationAdapter, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 /**
@@ -32,9 +31,11 @@ async function ownedImageIds(db: DbClient, organizationId: string): Promise<stri
  *
  * The Better Auth organization lifecycle owns authorization, subscription
  * gating and the organization/member deletion itself. This function only
- * releases external resources. The schema epoch owns tenant-cascade foreign
- * key behavior, so this path does not manually order-delete tenant rows. Any
- * cleanup failure propagates and aborts the Better Auth deletion.
+ * releases the Cloudflare resources D1 cannot cascade to. The organization's
+ * rows, including its integration selections and imported content, go with the
+ * organization through the schema's ON DELETE CASCADE. Provider credentials are
+ * the user's Better Auth linked accounts and are not the organization's to
+ * release. Any cleanup failure propagates and aborts the Better Auth deletion.
  */
 export async function cleanupOrganizationBeforeDelete(
   env: CloudflareEnv,

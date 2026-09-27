@@ -97,7 +97,7 @@ interface RecipientRow {
 /**
  * Who an announcement is for, against the broadcast aliased `b`.
  *
- * Anonymous, banned, unverified and deletion-scheduled accounts are excluded:
+ * Anonymous, banned and unverified accounts are excluded:
  * none of them is a person who asked to hear from us, and mailing an unverified
  * address is how a sending domain's reputation goes.
  *
@@ -110,7 +110,6 @@ interface RecipientRow {
 const RECIPIENT_ELIGIBILITY_SQL = `u.emailVerified = 1
        AND u.isAnonymous = 0
        AND COALESCE(u.banned, 0) = 0
-       AND u.deletionScheduledAt IS NULL
        AND u.createdAt <= unixepoch(b.created_at)`
 
 /** Tenants who have not yet been sent this broadcast and still want the category. */

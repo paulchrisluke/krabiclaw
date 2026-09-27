@@ -12,9 +12,9 @@ import { releaseMetaUserIntegrations } from '~/server/utils/integration-release'
  * authorization. Both go through the same release path.
  *
  * It deletes Meta's data, not the customer. A KrabiClaw workspace is deleted
- * through the scheduled deletion in server/utils/tenant-deletion.ts, by its
- * owner, with a grace period; a request from Meta about one person's Instagram
- * account is not that, and must never become that.
+ * by its owner through Better Auth's organization deletion; a request from
+ * Meta about one person's Instagram account is not that, and must never
+ * become that.
  *
  * Meta requires a confirmation code and a status URL. The code is a signed
  * token naming the Meta user, so `GET` below can verify it and re-check the

@@ -8,13 +8,12 @@ import { reconcileZarazAnalytics } from './zaraz-analytics'
 /**
  * Removing an organization's integration.
  *
- * An integration is the organization's selection — a GA4 property, a Search
- * Console site, a Facebook Page, an Instagram account — and the Better Auth
- * linked account it was made through. The linked account belongs to the user
- * who linked it: it may be how they sign in, and another organization may use
- * it. Releasing an organization's integration therefore removes only the
- * organization's state and never unlinks or revokes the account. Unlinking is
- * the user's own Better Auth action.
+ * Every removal path ends here: the dashboard's Disconnect and Meta's
+ * deauthorization and data-deletion callbacks. Those are
+ * different ways of *asking*; what has to happen afterwards is the same, and
+ * when it lived in each caller the answers drifted — the old Analytics
+ * disconnect wrote a disabled stub instead of removing the record, and nothing
+ * anywhere revoked a provider credential.
  *
  * Releasing one product owns:
  *
@@ -146,14 +145,9 @@ export async function releaseIntegration(
 }
 
 /**
- * Meta's deauthorize and data-deletion callbacks name a person, not a site:
- * the Facebook or Instagram user who removed KrabiClaw from their Meta
- * settings. That ends the authorization behind the Better Auth account Meta's
- * id belongs to, so every organization connected through that account loses
- * its integration and the dead account is removed from its user.
- *
- * This is the one place an account is removed rather than left to its user:
- * Meta has already revoked it.
+ * Releases the Meta products a Meta user id is connected through, wherever
+ * they are. Meta's deauthorize and data-deletion callbacks name a person, not
+ * a site, so this is how those callbacks reach the right rows.
  */
 export async function releaseMetaUserIntegrations(
   env: CloudflareEnv,

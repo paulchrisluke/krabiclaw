@@ -16,7 +16,7 @@ One screen per question, one question per URL, under `/dashboard/onboarding`: `t
 
 - The first real business identity creates an active draft through `POST /api/dashboard/onboarding/drafts/active`: manual name entry creates a manual draft, and confirming a Google listing creates a Google Places draft. That same first save also provisions the **real tenant**, pending, as a new organization named after the brand, through the same `provisionOrganization()` the only other entry point uses, `POST /api/organizations`, with `activate: false`. Both pass the target organization explicitly — `/dashboard/onboarding` is the "New Organization" entry point, so a draft never carries one and the first save creates it and records it on the draft; `POST /api/organizations` takes the organization from the dashboard route's `org` query or an explicit `organizationId`.
 - Every following save re-applies the whole draft to that site through `applyOnboardingDraftToSite()`, which is a full rebuild and idempotent. The preview pane frames the site itself, on its own subdomain, carrying the site's preview token — there is no separate draft renderer. The site's address is claimed at the first save and does not change if the brand name does.
-- `activate()` makes it public via `POST /api/dashboard/onboarding/drafts/[draftId]/activate`: it re-applies the draft, flips `onboarding_status` to `active`, makes the organization the session's active one, and closes the draft. An abandoned pending site is removed by the `deletion-sweep` task (see [Deleting a tenant](#deleting-a-tenant)).
+- `activate()` makes it public via `POST /api/dashboard/onboarding/drafts/[draftId]/activate`: it re-applies the draft, flips `onboarding_status` to `active`, makes the organization the session's active one, and closes the draft. Abandoning the draft removes the pending site through `DELETE /api/dashboard/onboarding/drafts/active` (see [Deleting a tenant](#deleting-a-tenant)).
 - Adding a location to an *existing* organization walks the same step table, as the `add-location` flow: a strict subset — `name → source → [maps → confirm] → location → contact → hours → review`, with no business type, no brand and no activation, because the organization already has all three. It is not routed; `pages/dashboard/[orgSlug]/locations/new.vue` is the whole walk and holds the current step itself. It writes nothing until the last step, and creates exclusively through `POST /api/dashboard/locations` — that endpoint owns both the Places-preview lookup and the mutation for add-location.
 
 ## Content state model
@@ -51,12 +51,14 @@ Only asked again on **add-location** (the `add-location` flow), which never re-c
 ## Deleting a tenant
 
 Onboarding creates the site before the owner has finished answering, so leaving
-the flow leaves a pending site holding a subdomain. `server/utils/tenant-deletion.ts`
-is the only path that removes one, and the `deletion-sweep` task (daily, 03:00)
-runs it: it releases the Cloudflare custom hostnames and the Cloudflare Images
-the organization is the last holder of, then Better Auth deletes the
-organization and D1's `ON DELETE CASCADE` takes the domains, locations,
-content and media with it. Owners reach the same path from Site settings →
-Delete workspace and Account → Delete account; both schedule the deletion 30
-days out and can be cancelled until then, and the site keeps serving in the
-meantime.
+the flow leaves a pending site holding a subdomain. Abandoning the draft through
+`DELETE /api/dashboard/onboarding/drafts/active` removes it at once. Owners
+delete a live workspace from Site settings → Delete workspace, and their account
+from Account → Delete account; both are Better Auth's own delete endpoints and
+take effect immediately. Every path runs `cleanupOrganizationBeforeDelete` in
+`server/utils/tenant-deletion.ts` first, which releases the Cloudflare custom
+hostnames and the Cloudflare Images the organization is the last holder of.
+Better Auth then deletes the organization, and D1's `ON DELETE CASCADE` takes
+the domains, locations, content, bookings, reservations, integration
+selections and media with it. The user's linked provider accounts belong to the
+user, not the organization, and remain.
