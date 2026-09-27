@@ -346,6 +346,14 @@ export interface ZarazAnalyticsTenant {
   hostnames: string[]
 }
 
+/** Key-order-independent serialization: the change check compares content, not the order assignments happened in. */
+function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, (v as Record<string, unknown>)[k]]))
+      : v)
+}
+
 export function reconcileZarazAnalyticsConfig(
   config: ZarazConfig,
   input: {
@@ -356,7 +364,7 @@ export function reconcileZarazAnalyticsConfig(
 ): ZarazAnalyticsConfigChanges {
   config.triggers ||= {}
   config.tools ||= {}
-  const before = JSON.stringify(config)
+  const before = stableStringify(config)
   const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.organizationId)))
   if (input.platformMeasurementId && input.platformHostnames.length) desiredKeys.add(PLATFORM_KEY)
 
@@ -372,7 +380,7 @@ export function reconcileZarazAnalyticsConfig(
   return {
     configuredTenants: input.tenants.length,
     removedAnalyticsTools,
-    updated: JSON.stringify(config) !== before,
+    updated: stableStringify(config) !== before,
   }
 }
 
