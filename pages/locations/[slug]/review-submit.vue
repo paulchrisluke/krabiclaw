@@ -223,44 +223,10 @@ async function handleMediaSelect(event: Event) {
 async function uploadImage(file: File) {
   const requestId = requestData.value?.request?.id
   if (!requestId) return
-  const upload = await publicApiMutation<{ asset_id: string; upload_url: string }>(`/api/public/review-requests/${requestId}/media/request-upload`, {
-    method: 'POST',
-    body: { token: token.value, kind: 'image', filename: file.name },
-    validate: (value): value is { asset_id: string; upload_url: string } =>
-      isRecord(value)
-      && typeof value.asset_id === 'string'
-      && typeof value.upload_url === 'string',
-  })
-  try {
-    const form = new FormData()
-    form.append('file', file)
-    const uploaded = await fetch(upload.upload_url, {
-      method: 'POST',
-      body: form,
-      signal: mediaUploadSignal(),
-    })
-    if (!uploaded.ok) throw new Error('Image upload failed.')
-    await publicApiMutation<{ asset_id: string; public_url: string; thumbnail_url: string }>(
-      `/api/public/review-requests/${requestId}/media/${upload.asset_id}/confirm`,
-      {
-        method: 'POST',
-        body: { token: token.value },
-        validate: (value): value is { asset_id: string; public_url: string; thumbnail_url: string } =>
-          isRecord(value)
-          && typeof value.asset_id === 'string'
-          && typeof value.public_url === 'string'
-          && typeof value.thumbnail_url === 'string',
-      },
-    )
-    media.value.push({ asset_id: upload.asset_id, kind: 'image', preview_url: URL.createObjectURL(file) })
-  } catch (error) {
-    try {
-      await discardReviewMedia(requestId, upload.asset_id)
-    } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], 'Image upload and cleanup failed.', { cause: cleanupError })
-    }
-    throw error
-  }
+  const form = new FormData()
+  form.append('image', file)
+  const uploaded = await postReviewMedia(requestId, form, 'image', mediaUploadSignal())
+  media.value.push({ asset_id: uploaded.asset_id, kind: 'image', preview_url: URL.createObjectURL(file) })
 }
 
 async function uploadVideo(file: File) {
@@ -270,12 +236,24 @@ async function uploadVideo(file: File) {
 
   const controller = new AbortController()
   activeVideoUploads.add(controller)
-  let assetId: string | null = null
   try {
     const poster = await generateVideoThumbnail(file)
     const form = new FormData()
     form.append('video', file)
     form.append('thumbnail', poster)
+    const uploaded = await postReviewMedia(requestId, form, 'video', mediaUploadSignal(controller.signal))
+    media.value.push({ asset_id: uploaded.asset_id, kind: 'video', preview_url: uploaded.thumbnail_url })
+  } finally {
+    activeVideoUploads.delete(controller)
+  }
+}
+
+// Photos and videos share one upload route. The asset is active and placed on
+// the review request when this returns; a response that names an asset but
+// breaks the contract is discarded so nothing is left attached.
+async function postReviewMedia(requestId: string, form: FormData, kind: 'image' | 'video', signal: AbortSignal) {
+  let assetId: string | null = null
+  try {
     const response = await fetch(`/api/public/review-requests/${encodeURIComponent(requestId)}/media/upload`, {
       method: 'POST',
       headers: { 'x-review-token': token.value },
@@ -283,7 +261,7 @@ async function uploadVideo(file: File) {
       cache: 'no-store',
       credentials: 'same-origin',
       redirect: 'error',
-      signal: mediaUploadSignal(controller.signal),
+      signal,
     })
 
     let payload: unknown
@@ -307,8 +285,8 @@ async function uploadVideo(file: File) {
       !isRecord(payload)
       || typeof payload.asset_id !== 'string'
       || typeof payload.public_url !== 'string'
-      || typeof payload.thumbnail_url !== 'string'
-      || payload.kind !== 'video'
+      || (kind === 'video' ? typeof payload.thumbnail_url !== 'string' : !(payload.thumbnail_url === null || typeof payload.thumbnail_url === 'string'))
+      || payload.kind !== kind
       || payload.status !== 'active'
     ) {
       throw normalizeApiError({
@@ -318,18 +296,16 @@ async function uploadVideo(file: File) {
         data: isRecord(payload) ? payload : {},
       })
     }
-    media.value.push({ asset_id: payload.asset_id, kind: 'video', preview_url: payload.thumbnail_url })
+    return { asset_id: payload.asset_id, thumbnail_url: payload.thumbnail_url as string | null }
   } catch (error) {
     if (assetId) {
       try {
         await discardReviewMedia(requestId, assetId)
       } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], 'Video upload and cleanup failed.', { cause: cleanupError })
+        throw new AggregateError([error, cleanupError], `${kind === 'image' ? 'Photo' : 'Video'} upload and cleanup failed.`, { cause: cleanupError })
       }
     }
-    throw normalizeApiError(error, 'Video upload failed.')
-  } finally {
-    activeVideoUploads.delete(controller)
+    throw normalizeApiError(error, `${kind === 'image' ? 'Photo' : 'Video'} upload failed.`)
   }
 }
 
