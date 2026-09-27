@@ -15,9 +15,12 @@ export default defineHandler(async (event) => {
   headers.set('x-krabiclaw-organization-id', organization.id)
   headers.set('x-krabiclaw-user-id', userId)
 
-  const response = await namespace.get(namespace.idFromName(organization.id)).fetch(new Request(event.req.url, {
+  // URL and init rather than a Request: Wrangler's platform proxy stub for a
+  // Durable Object (nuxt dev) stringifies a Request it is handed, and the
+  // upgrade failed with "Failed to parse URL from [object Request]".
+  const response = await namespace.get(namespace.idFromName(organization.id)).fetch(event.req.url, {
     method: event.req.method,
     headers,
-  }))
+  })
   return response.status === 101 ? response : new Response(response.body, response)
 })

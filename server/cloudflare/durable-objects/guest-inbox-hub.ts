@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
-import { isDashboardInvalidation, type DashboardInvalidation } from '~/shared/dashboard-invalidations'
+import { isDashboardInvalidation, type DashboardInvalidation } from '../../../shared/dashboard-invalidations'
 
 interface GuestInboxHubEnv {
   GUEST_INBOX_HUBS?: DurableObjectNamespace
