@@ -28,6 +28,12 @@ the runner supplies local URLs, test-route settings, and log-only delivery.
 There is no separate secret forwarding list to maintain. Deployed Worker
 secrets remain configured through Cloudflare and the release workflow.
 
+Local `.env` sets `ZARAZ_ANALYTICS=absent` and leaves `CF_ZONE_ID` unset, and
+the Playwright runner sets the same. The only Zaraz zone is production's, so a
+local reconcile would rewrite production's tags. With Zaraz declared absent,
+reconciliation reports `zaraz_absent` without calling Cloudflare. Declaring it
+absent while `CF_ZONE_ID` is set fails as a configuration error.
+
 `local:setup` is safe to repeat: it applies the migration chain, refreshes
 the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
 verifies the resulting D1 database. Do not replace its steps with direct

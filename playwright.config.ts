@@ -34,6 +34,7 @@ const localWorkerEnvironment = [
   'CLOUDFLARE_INCLUDE_PROCESS_ENV=true',
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
+  'ZARAZ_ANALYTICS=absent',
   'EMAIL_REPLY_SECRET=local-playwright-email-reply-secret',
   `BETTER_AUTH_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,
