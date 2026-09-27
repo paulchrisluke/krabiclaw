@@ -216,7 +216,6 @@ function integrationsSummary(integrations: OrganizationIntegrations, locations: 
     google_search_console: integrations.google_search_console
       ? { site_url: integrations.google_search_console.site_url, status: integrations.google_search_console.status }
       : null,
-    google_account: integrations.google_credential?.provider_account_email ?? null,
     facebook: integrations.facebook
       ? { page_name: integrations.facebook.page_name, status: integrations.facebook.status }
       : null,

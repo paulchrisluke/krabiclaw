@@ -15,14 +15,15 @@
 //
 // Only the resources that live outside D1 need explicit release, and they have
 // to be released *before* the rows that name them are gone: Cloudflare custom
-// hostnames, Cloudflare Images, and the OAuth authorizations the tenant granted
-// Google and Meta. Everything else is the cascade's job.
+// hostnames and Cloudflare Images. Everything else is the cascade's job.
 //
-// The integrations are released through server/utils/integration-release.ts,
-// the same path the dashboard's Disconnect and Meta's callbacks use. A
-// credential named only by a row that has already cascaded away can never be
-// revoked afterwards: the tenant would be gone from KrabiClaw while their
-// Google account still listed it as authorized.
+// Integrations are not among them. An organization's integration is its
+// selection plus a reference to a Better Auth linked account, and that
+// account belongs to the user who linked it — it may be how they sign in, or
+// what another organization uses — so deleting the organization deletes the
+// selection with the row and leaves the account linked. The one thing the
+// deletion owes afterwards is the Zaraz reconciliation, so a deleted site's
+// measurement id stops being served.
 //
 // The organization plugin's own /organization/delete route is disabled
 // (disableOrganizationDeletion in server/utils/auth.ts) so this module is the
@@ -35,7 +36,7 @@ import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { FREE_PLAN, getOrganizationPlans } from '~/server/utils/billing-access'
 import { deleteImage } from '~/server/utils/cloudflare-images'
 import { deleteOrganizationCustomDomains } from '~/server/utils/domains'
-import { releaseOrganizationIntegrations } from '~/server/utils/integration-release'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { listOrganizationMembers, listUserOrganizations, organizationAdapter, resolveOrganizationMembership, type OrganizationAdapter } from '~/server/utils/member-access'
 
 /** How long an owner has to change their mind. */
@@ -195,7 +196,6 @@ async function ownedImageIds(
 export async function deleteOrganizationNow(env: CloudflareEnv, organizationId: string): Promise<void> {
   const db = env.DB
   await deleteOrganizationCustomDomains(env, db, organizationId)
-  await releaseOrganizationIntegrations(env, organizationId)
 
   for (const imageId of await ownedImageIds(db, { column: 'organization_id', value: organizationId })) {
     await deleteImage(env, imageId)
@@ -212,6 +212,7 @@ export async function deleteOrganizationNow(env: CloudflareEnv, organizationId: 
 
   const adapter = await organizationAdapter(env)
   await adapter.deleteOrganization(organizationId)
+  await reconcileZarazAnalytics(env, db)
 }
 
 /**

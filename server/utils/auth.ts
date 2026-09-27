@@ -2,7 +2,7 @@ import { APIError, betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
-import { admin, anonymous, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, genericOAuth, getOrgAdapter, hasPermission, jwt, lastLoginMethod, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
@@ -113,8 +113,9 @@ export interface CloudflareEnv {
   E2E_DEV_ROUTE_SECRET?: string
   FACEBOOK_APP_ID?: string
   FACEBOOK_APP_SECRET?: string
-  FACEBOOK_REDIRECT_URI?: string
   FACEBOOK_CONFIG_ID?: string
+  INSTAGRAM_APP_ID?: string
+  INSTAGRAM_APP_SECRET?: string
   RESEND_API_KEY?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
@@ -552,18 +553,107 @@ export function createAuth(env: CloudflareEnv) {
           getTempName: (phone) => `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`,
         },
       }),
+      // Instagram Login for professional accounts has no built-in Better Auth
+      // provider, so it is a Generic OAuth provider on the same linkSocial path
+      // as Google and Facebook. Its code exchange is not the standard one — the
+      // grant answers a one-hour token that must be traded for the sixty-day
+      // one — so getToken performs both and Better Auth stores the result.
+      // Renewing that token is the one step Better Auth cannot perform (see
+      // instagramAccessToken in server/utils/instagram.ts).
+      genericOAuth({
+        config: [{
+          providerId: 'instagram',
+          clientId: env.INSTAGRAM_APP_ID ?? '',
+          clientSecret: env.INSTAGRAM_APP_SECRET,
+          authorizationUrl: 'https://www.instagram.com/oauth/authorize',
+          scopes: ['instagram_business_basic', 'instagram_business_content_publish'],
+          pkce: false,
+          disableSignUp: true,
+          getToken: async ({ code, redirectURI }) => {
+            if (!env.INSTAGRAM_APP_ID || !env.INSTAGRAM_APP_SECRET) throw new Error('Missing Instagram OAuth configuration')
+            const grant = await fetch('https://api.instagram.com/oauth/access_token', {
+              method: 'POST',
+              headers: { 'content-type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: env.INSTAGRAM_APP_ID,
+                client_secret: env.INSTAGRAM_APP_SECRET,
+                grant_type: 'authorization_code',
+                redirect_uri: redirectURI,
+                code,
+              }),
+            })
+            if (!grant.ok) throw new Error(`Instagram token exchange failed: ${(await grant.text()).slice(0, 300)}`)
+            // Documented as `{ data: [{ access_token, user_id, permissions }] }`
+            // (developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login).
+            type Grant = { access_token?: string; permissions?: string | string[] }
+            const body = await grant.json() as Grant & { data?: Grant[] }
+            const shortLived = body.data?.[0] ?? body
+            if (!shortLived.access_token) throw new Error('Instagram did not return an access token')
+
+            const exchange = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({
+              grant_type: 'ig_exchange_token',
+              client_secret: env.INSTAGRAM_APP_SECRET,
+              access_token: shortLived.access_token,
+            })}`)
+            if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${(await exchange.text()).slice(0, 300)}`)
+            const longLived = await exchange.json() as { access_token?: string; expires_in?: number }
+            if (!longLived.access_token || typeof longLived.expires_in !== 'number') {
+              throw new Error('Instagram did not return a long-lived access token and its lifetime')
+            }
+            const permissions = shortLived.permissions ?? []
+            return {
+              tokenType: 'bearer',
+              accessToken: longLived.access_token,
+              accessTokenExpiresAt: new Date(Date.now() + longLived.expires_in * 1000),
+              scopes: Array.isArray(permissions) ? permissions : permissions.split(',').filter(Boolean),
+            }
+          },
+          // `id` is the app-scoped id Meta's deauthorize and data-deletion
+          // callbacks name, so it is the Better Auth account id; `user_id` is
+          // the professional account publishing addresses, which the
+          // organization stores with its selection.
+          getUserInfo: async (tokens) => {
+            const response = await fetch(`https://graph.instagram.com/v23.0/me?${new URLSearchParams({
+              fields: 'id,user_id,username',
+              access_token: tokens.accessToken ?? '',
+            })}`)
+            if (!response.ok) throw new Error(`Instagram account lookup failed: ${(await response.text()).slice(0, 300)}`)
+            const account = await response.json() as { id?: string; username?: string }
+            if (!account.id || !account.username) throw new Error('Instagram did not return the connected account')
+            return { id: account.id, name: account.username, email: null, emailVerified: false }
+          },
+        }],
+      }),
     ],
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
         prompt: 'select_account',
-      }
+      },
+      // Facebook Login for Business: a configuration id carries the Page
+      // permissions and yields a system-user token that does not expire, so
+      // there is nothing to refresh. It is linked to a KrabiClaw user for Page
+      // access, never used to create one.
+      facebook: {
+        clientId: env.FACEBOOK_APP_ID ?? '',
+        clientSecret: env.FACEBOOK_APP_SECRET ?? '',
+        configId: env.FACEBOOK_CONFIG_ID,
+        disableSignUp: true,
+      },
     },
     account: {
+      // Integration tokens live on these rows; Better Auth encrypts them with
+      // BETTER_AUTH_SECRET and reads rows written before this was set as-is.
+      encryptOAuthTokens: true,
       accountLinking: {
         enabled: true,
-        trustedProviders: ['google']
+        // Facebook and Instagram are linked only from an authenticated
+        // session, for Page and publishing access. Instagram returns no email
+        // at all and a business's Facebook or Google account is rarely the
+        // address its owner signs in with, so linking may not require one.
+        trustedProviders: ['google', 'facebook', 'instagram'],
+        allowDifferentEmails: true,
       }
     }
   })
@@ -623,6 +713,76 @@ export async function findAuthUsersByIds(env: CloudflareEnv, userIds: Array<stri
     limit: uniqueIds.length,
   })
   return new Map(rows.map(row => [row.id, row]))
+}
+
+/**
+ * A Better Auth linked account, as an integration refers to it: the row an
+ * organization names by `account_id`, the user it belongs to, and the scopes
+ * Better Auth recorded across every link of it.
+ */
+interface LinkedAccount {
+  id: string
+  userId: string
+  providerId: string
+  scopes: string[]
+}
+
+/** Reads a linked account through Better Auth's adapter. Null when it has been unlinked. */
+async function readLinkedAccount(env: CloudflareEnv, accountId: string): Promise<LinkedAccount | null> {
+  const context = await createAuth(env).$context
+  const adapter = context.adapter as unknown as {
+    findOne<T>(_input: { model: string; where: Array<{ field: string; value: string }> }): Promise<T | null>
+  }
+  const row = await adapter.findOne<{ id: string; userId: string; providerId: string; scope: string | null }>({
+    model: 'account',
+    where: [{ field: 'id', value: accountId }],
+  })
+  if (!row) return null
+  return { id: row.id, userId: row.userId, providerId: row.providerId, scopes: (row.scope ?? '').split(/[,\s]+/).filter(Boolean) }
+}
+
+/**
+ * A usable access token for a linked account, refreshed by Better Auth when
+ * it has expired.
+ *
+ * Called without request headers and with the account's own user: an
+ * organization acts through the account it selected, which may have been
+ * linked by another of its administrators, and Better Auth resolves a
+ * session's user ahead of the one named here.
+ */
+export async function linkedAccountAccessToken(
+  env: CloudflareEnv,
+  accountId: string,
+): Promise<{ accessToken: string; accessTokenExpiresAt: Date | undefined }> {
+  const account = await readLinkedAccount(env, accountId)
+  if (!account) throw new Error('The account this integration was connected through is no longer linked. Connect it again.')
+  const token = await createAuth(env).api.getAccessToken({ body: { accountId, userId: account.userId } })
+  if (!token.accessToken) throw new Error(`Better Auth returned no access token for the linked ${account.providerId} account.`)
+  return { accessToken: token.accessToken, accessTokenExpiresAt: token.accessTokenExpiresAt }
+}
+
+/**
+ * The linked account an organization may be connected through: one the
+ * caller linked themselves, or the one the organization already uses. Another
+ * member's account is never selectable by naming its id, and an account that
+ * was not granted what the integration needs is refused rather than failing
+ * later at the provider.
+ */
+export async function requireIntegrationAccount(
+  env: CloudflareEnv,
+  accountId: string,
+  expected: { userId: string; currentAccountId: string | null | undefined; providerId: string; scopes: readonly string[] },
+): Promise<LinkedAccount> {
+  const account = await readLinkedAccount(env, accountId)
+  if (!account || account.providerId !== expected.providerId
+    || (account.userId !== expected.userId && account.id !== expected.currentAccountId)) {
+    throw new HTTPError({ statusCode: 404, message: 'That account is not linked to you.' })
+  }
+  const missing = expected.scopes.filter(scope => !account.scopes.includes(scope))
+  if (missing.length) {
+    throw new HTTPError({ statusCode: 403, message: `That account has not granted ${missing.join(', ')}. Connect it again.` })
+  }
+  return account
 }
 
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {

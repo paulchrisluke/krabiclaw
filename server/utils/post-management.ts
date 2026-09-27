@@ -16,7 +16,7 @@ import {
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
-import { getFacebookPagesConnection, publishToPage } from '~/server/utils/facebook-pages'
+import { facebookPageToken, getFacebookPagesConnection, publishToPage } from '~/server/utils/facebook-pages'
 import { publishToInstagram, readInstagramConnection } from '~/server/utils/instagram'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
@@ -577,15 +577,15 @@ async function publishPostChannel(
   const publish = async (): Promise<PostChannelStateOutcome> => {
     if (channel === 'facebook') {
       const connection = await getFacebookPagesConnection(env, organizationId)
-      if (!connection?.encrypted_page_token) return { kind: 'skipped', reason: 'No Facebook Page connected.' }
-      const result = await publishToPage(connection.encrypted_page_token, connection.page_id, { message: post.body })
+      if (!connection) return { kind: 'skipped', reason: 'No Facebook Page connected.' }
+      const result = await publishToPage(await facebookPageToken(env, connection), connection.page_id, { message: post.body })
       return { kind: 'published', providerPostId: result.id }
     }
     const imageUrl = post.media?.find(item => item.slot === 'cover' && item.kind === 'image')?.public_url
     if (!imageUrl) return { kind: 'skipped', reason: 'Instagram requires an image. Add a photo to this post.' }
     const connection = await readInstagramConnection(env, organizationId)
     if (!connection) return { kind: 'skipped', reason: 'No Instagram account connected.' }
-    const result = await publishToInstagram(connection, { caption: post.body, imageUrl })
+    const result = await publishToInstagram(env, connection, { caption: post.body, imageUrl })
     return { kind: 'published', providerPostId: result.id }
   }
 
