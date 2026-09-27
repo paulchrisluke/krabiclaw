@@ -311,7 +311,6 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
 })
 
 type Mailbox = 'current' | 'past'
-const potteryHouseSlug = 'pottery-house-krabi'
 
 // Both list loaders, so the mailbox vocabulary cannot survive in only one.
 async function loadMailbox(request: APIRequestContext, mailbox: Mailbox) {
@@ -436,7 +435,7 @@ for (const viewport of [
     const rowFor = (name: string) => page.locator('[data-thread-row]').filter({ hasText: name })
     const actionsFor = (name: string) => rowFor(name).getByRole('button', { name: `Conversation actions for ${name}` })
 
-    await page.goto(`${baseURL}/dashboard/${potteryHouseSlug}/messages`)
+    await page.goto(`${baseURL}/dashboard/${organizationId}/messages`)
     await expect(rowFor(guestName)).toBeVisible()
     await rowFor(guestName).hover()
     await actionsFor(guestName).click()
@@ -445,14 +444,14 @@ for (const viewport of [
     await expect(page.getByRole('menuitem', { name: 'Move to messages' })).toHaveCount(0)
     const threadId = await rowFor(guestName).getAttribute('data-thread-row')
     if (viewport.name === 'mobile') await expect(page).toHaveURL(new RegExp(`/messages(\\?.*)?$`))
-    const archived = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/guest-threads/${threadId}/operations/archive`))
+    const archived = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/guest-threads/${threadId}/operations/archive`))
     await page.getByRole('menuitem', { name: 'Archive' }).click()
     expect((await archived).status()).toBe(200)
     await expect(rowFor(guestName)).toHaveCount(0)
     // The archived conversation is not left open beside the list.
     await expect(page).not.toHaveURL(new RegExp(`/messages/${threadId}`))
 
-    await page.goto(`${baseURL}/dashboard/${potteryHouseSlug}/messages?archived=`)
+    await page.goto(`${baseURL}/dashboard/${organizationId}/messages?archived=`)
     await expect(rowFor(guestName)).toBeVisible()
 
     // A conversation Past because its booking ended offers no way back.
@@ -465,12 +464,12 @@ for (const viewport of [
     await rowFor(guestName).hover()
     await actionsFor(guestName).click()
     await expect(page.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0)
-    const moved = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`/guest-threads/${threadId}/operations/unarchive`))
+    const moved = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith(`/guest-threads/${threadId}/operations/unarchive`))
     await page.getByRole('menuitem', { name: 'Move to messages' }).click()
     expect((await moved).status()).toBe(200)
     await expect(rowFor(guestName)).toHaveCount(0)
 
-    await page.goto(`${baseURL}/dashboard/${potteryHouseSlug}/messages`)
+    await page.goto(`${baseURL}/dashboard/${organizationId}/messages`)
     await expect(rowFor(guestName)).toBeVisible()
     // Keyboard: the menu button is reachable and opens with Enter.
     await actionsFor(guestName).focus()
