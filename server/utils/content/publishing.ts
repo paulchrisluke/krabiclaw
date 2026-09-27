@@ -793,7 +793,11 @@ export async function updateBlogPost(
       await createBlogRedirect(db, postId, organizationId, current.slug)
     }
     const post = await getBlogPost(db, postId, organizationId, env)
-    if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
+    // Title, excerpt and SEO text are drawn on the card, and the blocks hold
+    // its leading picture. Slug, tags and visibility are not on it.
+    const cardInputChanged = input.title !== undefined || input.excerpt !== undefined || input.seo_title !== undefined
+      || input.seo_description !== undefined || normalizedBlocks !== undefined
+    if (env && cardInputChanged) await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
     return { success: true, admin_edit_url: post.admin_edit_url, edit_url: post.edit_url,
       public_path: post.public_path, public_url: post.public_url, preview_url: post.preview_url, post }
   } catch (error) {

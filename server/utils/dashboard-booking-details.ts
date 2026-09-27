@@ -5,13 +5,12 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { getLocationReservationConfig, reservationPolicySummarySource, renderBookingPolicySummary, type RenderedBookingPolicySummary } from '~/server/utils/reservations'
-import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
+import { loadOwnerPictures } from '~/server/notifications/hero'
 import { localPartsAt } from '~/utils/timezone'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { resolveLocationTimezone } from '~/server/utils/organization-config'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 
 export type DashboardBookingType = 'reservation' | 'booking'
@@ -154,19 +153,12 @@ function localTimeOf(row: Pick<BookingRow, 'starts_at' | 'timezone'>): string {
   return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 }
 
-function mediaImage(media: PublicSocialMedia | undefined): string | null {
-  const placed = media?.media.find(item => item.kind !== 'video' && ['hero', 'gallery'].includes(item.slot))
-  return mediaStillUrl(placed) || media?.social_image?.url || null
-}
-
+// A booking shows its experience's picture and a reservation its location's.
 async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardBookingType) {
-  if (type === 'booking' && row.experience_id) {
-    const experience = await loadPublicSocialMedia(db, row.organization_id, 'product', [row.experience_id])
-    const image = mediaImage(experience.get(row.experience_id))
-    if (image) return image
-  }
-  const location = await loadPublicSocialMedia(db, row.organization_id, 'business_location', [row.location_id])
-  return mediaImage(location.get(row.location_id))
+  const [ownerType, ownerId] = type === 'booking' && row.experience_id
+    ? ['product' as const, row.experience_id]
+    : ['business_location' as const, row.location_id]
+  return (await loadOwnerPictures(db, row.organization_id, ownerType, [ownerId])).get(ownerId)?.imageUrl ?? null
 }
 
 async function listInternalNotes(db: DbClient, threadId: string | null): Promise<DashboardBookingNote[]> {
@@ -193,7 +185,7 @@ export async function loadDashboardBookingDetails(
 
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
   const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
-  const locationMedia = await loadPublicSocialMedia(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
+  const locationPictures = await loadOwnerPictures(context.db, row.organization_id, 'business_location', visibleLocations.map(location => location.id))
 
   const [resourceImageUrl, resolvedPolicy, notes, timeZone] = await Promise.all([
     loadResourceImage(context.db, row, input.type),
@@ -242,7 +234,7 @@ export async function loadDashboardBookingDetails(
     // screen shows as such rather than inventing default terms.
     policy: resolvedPolicy ? renderBookingPolicySummary(reservationPolicySummarySource(resolvedPolicy)) : null,
     notes,
-    locations: visibleLocations.map(location => ({ ...location, imageUrl: mediaImage(locationMedia.get(location.id)) })),
+    locations: visibleLocations.map(location => ({ ...location, imageUrl: locationPictures.get(location.id)?.imageUrl ?? null })),
   }
 }
 

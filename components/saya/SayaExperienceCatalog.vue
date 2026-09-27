@@ -30,5 +30,7 @@ const experiences = computed(() => products.value.filter(isExperience))
 if (pagePayload.value && experiences.value.length === 0) throw createError({ statusCode: 404 })
 const collectionTitle = computed(() => t('saya.experiences.collection_title', { organization: brandName }))
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.experiences.meta_description', { organization: brandName }), brand: { organizationName: brandName } }))
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
+useSocialMetadata(() => ({ socialImage: organizationSocialImage, path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.experiences.meta_description', { organization: brandName }), brand: { organizationName: brandName } }))
 </script>

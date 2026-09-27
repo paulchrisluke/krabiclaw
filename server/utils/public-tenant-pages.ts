@@ -469,9 +469,16 @@ export async function getPublicTenantPageForPath(
   const localizations = page.locale === 'en'
     ? null
     : options.localizations ?? await loadExactPublicLocalizations(env, db, page.organization_id, page.locale)
+  // The home page has no card of its own: it is the organization's page, and
+  // its image is the organization's.
   const [blocks, media, sourceLocale] = await Promise.all([
     hydrateBlocks(db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
-    loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
+    page.path === '/'
+      ? loadPublicSocialMedia(db, organizationId, 'organization', [organizationId]).then(organization => new Map([[page.id, {
+          media: [],
+          social_image: organization.get(organizationId)?.social_image ?? null,
+        }]]))
+      : loadPublicSocialMedia(db, organizationId, 'content_document', [page.id]),
     queryFirst<{ locale: string }>(db, `
       SELECT locale FROM organization_locales
        WHERE organization_id = ?  AND is_source = 1

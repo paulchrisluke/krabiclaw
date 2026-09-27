@@ -107,21 +107,13 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: 'Update editable organization settings such as brand name, description, logo, contact email, currency, and website status (Live or Draft). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      description: 'Update editable organization settings such as brand name, description, contact email, currency, and website status (Live or Draft). The logo is an organization media placement, set with set_media. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },
-        media: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { asset_id: { type: 'string' }, slot: { type: 'string', enum: ['logo', 'favicon'] } },
-            required: ['asset_id', 'slot'],
-          },
-        },
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
         status: { type: 'string', enum: ['active', 'inactive'], description: 'Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.' },

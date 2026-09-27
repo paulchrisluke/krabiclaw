@@ -193,7 +193,10 @@ export async function applyOnboardingDraft(
   if (heroDraftImage) {
     await ensureMediaAsset(db, {
       id: heroDraftImage.draftAssetId, organization_id: organizationId, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: heroDraftImage.cloudflareImageId, public_url: heroDraftImage.publicUrl, thumbnail_url: heroDraftImage.thumbnailUrl, mime_type: heroDraftImage.mimeType, file_name: heroDraftImage.fileName, file_size: heroDraftImage.fileSize, category: 'other', status: 'active', created_by_user_id: userId, })
-    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'business_location', owner_id: locationRow.id, slot: 'hero' }, media: [{ asset_id: heroDraftImage.draftAssetId }] }))
+    // The photo is the home page's hero and the business's sharing image. It
+    // is not also the location's hero: the location, its card and its email
+    // resolve to the sharing image until the owner gives the location its own.
+    await executeBatch(db, insertInitialMediaPlacements({ organizationId, placement: { owner_type: 'organization', owner_id: organizationId, slot: 'social_share' }, media: [{ asset_id: heroDraftImage.draftAssetId }] }))
   }
 
   const draftLocation = payload.preview.locations.find(location => location.id === 'draft-location-main')

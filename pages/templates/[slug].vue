@@ -311,9 +311,12 @@ const organizationUrl = config.public.platformUrl
 // that builder needs a real tenant org identity and is not applicable to a
 // platform page describing the template product itself, so it is reused by
 // reference here, not duplicated.
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata({
   template: 'platform',
   path: `/templates/${template.slug}`,
+  socialImage: organizationSocialImage,
   title: template.seo.title,
   description: template.seo.description,
   schemaPageType: 'ItemPage',

@@ -13,6 +13,8 @@ export interface PublicMediaPlacement {
   thumbnail_url: string | null
   kind: string | null
   mime_type?: string | null
+  width?: number | null
+  height?: number | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -21,6 +23,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function nullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
+}
+
+function nullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value))
 }
 
 export function parsePublicMediaPlacements(mediaJson: string): PublicMediaPlacement[] {
@@ -33,7 +39,9 @@ export function parsePublicMediaPlacements(mediaJson: string): PublicMediaPlacem
       || !nullableString(value.public_url)
       || !nullableString(value.thumbnail_url)
       || !nullableString(value.kind)
-      || (value.mime_type !== undefined && !nullableString(value.mime_type))) {
+      || (value.mime_type !== undefined && !nullableString(value.mime_type))
+      || (value.width !== undefined && !nullableNumber(value.width))
+      || (value.height !== undefined && !nullableNumber(value.height))) {
       throw new Error('Public media payload contains an invalid placement')
     }
     return {
@@ -43,13 +51,16 @@ export function parsePublicMediaPlacements(mediaJson: string): PublicMediaPlacem
       thumbnail_url: value.thumbnail_url,
       kind: value.kind,
       ...(value.mime_type === undefined ? {} : { mime_type: value.mime_type }),
+      ...(value.width === undefined ? {} : { width: value.width }),
+      ...(value.height === undefined ? {} : { height: value.height }),
     }
   })
 }
 
-export function publicSocialMediaFromJson(mediaJson: string) {
+/** An organization's own placements, as the tenant row carries them. */
+export function organizationSocialMediaFromJson(mediaJson: string) {
   const placements = parsePublicMediaPlacements(mediaJson)
-  return publicSocialMediaFromPlacements(placements)
+  return publicSocialMediaFromPlacements('organization', placements, placements)
 }
 
 export async function loadPublicSocialMedia(
@@ -60,11 +71,15 @@ export async function loadPublicSocialMedia(
 ): Promise<Map<string, PublicSocialMedia>> {
   if (!ownerIds.length) return new Map()
   const uniqueOwnerIds = [...new Set(ownerIds)]
-  // Only the owner's own placements are read. The second query fetched the
-  // site's media purely to fall back to its logo, which hid missing cards.
-  const ownerPlacements = await readMediaPlacements(db, { organizationId, ownerType, ownerIds: uniqueOwnerIds })
+  // The organization's placements are read for its `social_share`, which is
+  // the picture of an owner that has none of its own — never its logo.
+  const [ownerPlacements, organizationPlacements] = await Promise.all([
+    readMediaPlacements(db, { organizationId, ownerType, ownerIds: uniqueOwnerIds }),
+    readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId] }),
+  ])
+  const organizationMedia = organizationPlacements.get(organizationId) ?? []
   return new Map(uniqueOwnerIds.map(ownerId => [
     ownerId,
-    publicSocialMediaFromPlacements(ownerPlacements.get(ownerId) ?? []),
+    publicSocialMediaFromPlacements(ownerType, ownerPlacements.get(ownerId) ?? [], organizationMedia),
   ]))
 }

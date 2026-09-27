@@ -19,8 +19,11 @@ const identity = computed(() => shell.value.identity)
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/contact',
+  socialImage: organizationSocialImage,
   title: `${page.value?.title || 'Contact'} | ${identity.value.name}`,
   description: page.value?.summary || '',
   brand: {

@@ -30,10 +30,13 @@ import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
 definePageMeta({ layout: 'access', auth: false })
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata({
   template: 'platform',
   schema: false,
   path: '/login',
+  socialImage: organizationSocialImage,
   title: 'Sign in',
   description: 'Sign in to your KrabiClaw account to manage your site, bookings and content.',
   discoverability: 'private',
