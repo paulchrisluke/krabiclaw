@@ -15,8 +15,8 @@
 import QaList from '~/components/dashboard/QaList.vue'
 import TestimonialList from '~/components/dashboard/TestimonialList.vue'
 
-// Reviews and Q&A is a row on Menu, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+// A row on Menu, nested under it so Menu is both its pane and its Back; the URL stays `/qa`.
+definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/qa' })
 
 const route = useRoute()
 

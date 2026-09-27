@@ -141,23 +141,27 @@ kinds, and each has exactly one shell:
 
 Adding a screen is therefore: drop the file in its parent's directory, pick the
 shell, and if it lists, its rows link to `` `${level.path.value}/<child>` ``; if
-it edits, it injects the parent's draft key. Add one `back:` line only where
-Back is not the URL parent. Nothing else is required, and a screen that needs
-something else is a gap in this document rather than a one-off.
+it edits, it injects the parent's draft key. A screen that belongs under a
+parent whose URL does not prefix its own is still nested as a file there, and
+names its URL with an absolute `path` (see *Nesting a level without changing its
+URL*). Nothing else is required, and a screen that needs something else is a gap
+in this document rather than a one-off.
 
 ### How a level knows which column is its own
 
-`useRouteLevel()` answers it, and it takes no arguments. Nested pages already
-say what contains what, so `route.matched` is the chain and a level finds its
-own place in it through `matchedRouteKey` — the record the `<RouterView>`
-rendering it provides. Nothing assembles a base path out of route params and
-slices the URL against it, and no level counts a depth that is not its own: the
-index column and the leaf beside it ask the same composable and get two
-different answers.
+`useRouteLevel()` answers it, and it takes no arguments. It is the single
+source for a level's depth, its mode, its parent, and where its Back goes.
+Nested pages already say what contains what, so `route.matched` is the chain and
+a level finds its own place in it through `matchedRouteKey` — the record the
+`<RouterView>` rendering it provides. Nothing assembles a base path out of route
+params and slices the URL against it, and no level counts a depth that is not
+its own: the index column and the leaf beside it ask the same composable and get
+two different answers.
 
-Depth is counted in path segments rather than matched records, because a
-directory's `index.vue` is a second record at the same URL and is one level, not
-two.
+Depth is counted in matched records, not URL segments, because a nested level
+may keep a URL its parent does not prefix — Pages is at `/:orgSlug/pages` under
+Menu at `/:orgSlug/settings`. A directory's `index.vue` is a second record at the
+same URL and is one level, not two.
 
 | Mode | When | What the level renders |
 | --- | --- | --- |
@@ -178,25 +182,45 @@ breakpoint, no `hidden lg:flex`, and no mode of its own — which is what keeps
 the two renderings of a node in one place instead of in every page that has
 children.
 
-### An index of leaves opens its first leaf; a list of records stands alone
+### Pairing and auto-selection are two rules
 
-Measured on a live Airbnb host account at 1332px (2026-09-21):
+They answer different questions and neither decides the other.
 
-| Their screen | What it does | Ours |
+**Pairing.** On desktop, every non-root level renders beside its logical
+parent. The logical parent is the same parent Back uses. Pane topology is
+independent of whether the level contains records, fields, settings, media, or
+another index.
+
+True workspace roots stand alone and use the frame: Today, Calendar, Locations,
+Messages, and Menu itself, as Airbnb's `/hosting/listings` grid does. A list of
+records is not a root merely because its rows are records — Pages, Blog,
+Reviews and Q&A, and Team are rows on Menu, so each renders as `Menu | Pages`.
+
+**Auto-selection.** Auto-selection answers whether an index may choose one of
+its own children on arrival. It does not determine whether the index has a
+parent pane.
+
+| The index's own children | `autoOpen` | Examples |
 | --- | --- | --- |
-| `/hosting/listings` | one column, full width: heading, filters, a grid of records | every list of records |
-| `…/details` (the listing editor) | opens `photo-tour` on arrival and keeps a half-width column of rows beside it | every index whose rows are leaves |
+| deterministic leaves or settings sections | its first available child | page editor, product, post, Q&A, Brand, Website, Integrations, location settings, Account settings, booking Change |
+| arbitrary records | none | Pages, Blog posts, Locations, a location's Posts, collections, products in a collection, Q&A, Team, Google Maps locations |
 
-So an index whose children are **leaves** names its first leaf as `autoOpen`,
-and an index whose children are **records** names none: which a tenant meant to
-open is not something the screen can guess, and a record is a place, not a
-field. The pair splits down the middle, as Airbnb's does (80–660 of 1332).
+Which record a tenant meant to open is not something the screen can guess, and
+a record is a place, not a field. So `Menu | Pages` is correct with no page
+chosen, and `Account settings | Personal information` is correct because
+Account settings has a deterministic first section. Measured on a live Airbnb
+host account at 1332px (2026-09-21): the listing editor opens `photo-tour` on
+arrival and keeps a half-width column of rows beside it. The pair splits down
+the middle, as Airbnb's does (80–660 of 1332).
 
-`autoOpen` is client-only and navigates with `replace`, so Back still leaves the
-index rather than landing on it again, and it is ignored when the target is the
-index's own URL — an index still loading offers itself as its first row, and
-taking that both went nowhere and used up the one open it gets. Below the pane
-width the index *is* the screen and nothing is chosen on the tenant's behalf.
+`autoOpen` navigates with `replace`, so Back still leaves the index rather than
+landing on it again. It opens only while the index is bare, the `index` mode:
+opening the child makes the level a `pair`, which is what stops it. There is no
+"already opened" state, so returning from a child to the bare index — Back from
+deeper — opens the first child again. It is ignored when the target is the
+index's own URL, which is what an index still loading offers as its first row.
+Below the pane width the index *is* the screen and nothing is chosen on the
+tenant's behalf.
 
 ### Beside its index, a leaf carries only Save
 
@@ -220,21 +244,42 @@ all answer the same thing, and a sheet you just closed can never become the
 place Back leads. Reading history is what produced the loop where closing a
 sheet and then pressing Back reopened it.
 
-The parent is the nearest matched record above with fewer path segments and no
-`meta.passthrough`. Where the dashboard is walked differently from the way the
-URL nests — the links page lives at `/:orgSlug/links` but is reached from
-Pages — the page names its own parent: `definePageMeta({ back: '<route name>' })`.
-`grep -rn "back: '" pages/` is the complete list of exceptions, and there is no
-other way to declare one.
+**There is one parent graph, and it is the nested route tree.** Any
+relationship that is expected to render as a desktop parent/child pair must
+exist in the nested route tree and therefore appear in `route.matched`. Back
+and pane layout read the same hierarchy: a level's parent is the nearest
+shallower matched level, and Back goes to that level's URL.
+
+`meta.back` exists only for a workspace root that leaves for another root which
+is not a persistent pane beside it — Account settings returning to the
+organization's Menu, a location editor returning to Locations, a booking
+returning to Today. It is never used to model CMS pane ancestry, and
+`useRouteLevel()` throws when a level that has a matched parent declares one.
+`grep -rn "back: '" pages/` is the complete list of those exits.
 
 A tab root has nothing above it, so it renders no Back at all.
 
-**The lit tab is the one this walk ends at.** Matching a tab's path as a prefix
-of the URL cannot answer it: the links page lives at `/:orgSlug/links`,
-so the URL said Locations while every way out of it led to Menu. Walking up
-asks the same question Back asks, and both records at the deepest URL are asked
-for a declared parent, because a directory's `index.vue` is the record
-`matched` ends on and it is the directory that carries the `back:`.
+**The lit tab is the root of the matched tree**, or where that root's `meta.back`
+leads. Matching a tab's path as a prefix of the URL cannot answer it: the links
+page lives at `/:orgSlug/links` under Menu, so the URL says nothing about Menu
+while every way out of it leads there.
+
+### Nesting a level without changing its URL
+
+A level whose URL must not change when it moves under its logical parent is
+nested as a file and given an absolute path:
+
+1. put the page file under its logical parent — `settings/pages.vue`,
+   `settings/pages/**`;
+2. give the moved route an absolute `path` with `definePageMeta`, e.g.
+   `definePageMeta({ path: '/dashboard/:orgSlug/pages' })`;
+3. the browser URL stays what it was, and Vue Router keeps the component nesting
+   in `route.matched`.
+
+Its children keep relative paths and extend its URL as before. This is how
+Pages, Blog, Brand, and Reviews and Q&A sit under Menu and Links sits under
+Pages. There is no second route graph, layout registry, redirect, or URL-prefix
+rule; the route tree is the whole hierarchy.
 
 **A level whose own record has left `route.matched` is `stale`** — it is being
 torn down after a navigation elsewhere — and it answers nothing: no parent, no

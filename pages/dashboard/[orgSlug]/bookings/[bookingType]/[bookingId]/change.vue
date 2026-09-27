@@ -4,7 +4,7 @@
     and nothing persists until Send. That is why the field leaves have no Save
     of their own — the commit is this level's footer.
   -->
-  <DashboardIndexPanel id="booking-change" :title="`Change ${b.noun.value}`">
+  <DashboardIndexPanel id="booking-change" :title="`Change ${b.noun.value}`" :auto-open="firstField">
     <div v-if="b.booking.value" class="mx-auto w-full max-w-md">
       <UAlert v-if="b.changeError.value" class="mb-6" color="error" variant="soft" icon="i-lucide-circle-alert" :description="b.changeError.value" />
       <h1 class="text-[32px] font-semibold leading-tight text-highlighted">What do you want to change?</h1>
@@ -16,7 +16,7 @@
         <img v-if="b.changeLocation.value?.imageUrl" :src="b.changeLocation.value.imageUrl" alt="" class="size-14 shrink-0 rounded-xl object-cover">
         <p class="min-w-0 flex-1 text-base font-medium text-highlighted">{{ b.changeLocation.value?.title }}</p>
         <UButton
-          v-if="b.bookingType === 'reservation'"
+          v-if="locationRow"
           :to="`${level.path.value}/location`"
           icon="i-lucide-pencil"
           aria-label="Change location"
@@ -63,6 +63,17 @@ definePageMeta({ layout: 'dashboard' })
 
 const level = useRouteLevel()
 const b = inject(bookingEditorKey)!
+
+// A reservation's Location row sits above the other fields, so it is the first row.
+const locationRow = computed(() => b.bookingType === 'reservation')
+
+// The rows are deterministic fields of one request, so the pane opens the first
+// one the screen shows, the way a listing editor lands on its first section.
+const firstField = computed(() => {
+  if (!b.booking.value) return null
+  const key = locationRow.value ? 'location' : b.changeFields.value[0]?.key
+  return key ? `${level.path.value}/${key}` : null
+})
 
 // Entering the request afresh: the tenant should not inherit edits they abandoned last time.
 b.resetChangeDraft()

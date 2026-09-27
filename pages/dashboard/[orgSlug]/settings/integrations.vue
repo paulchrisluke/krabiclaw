@@ -46,7 +46,7 @@ export const integrationsKey = Symbol('integrations') as InjectionKey<{
 <script setup lang="ts">
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Integrations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const route = useRoute()
