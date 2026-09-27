@@ -690,7 +690,7 @@ export function createAuth(env: CloudflareEnv) {
               sent_token_length: (sent.searchParams.get('access_token') ?? '').length,
               sent_url_redacted: exchangeUrl.replace(env.INSTAGRAM_APP_SECRET, '<secret>').replace(shortLived.access_token, '<token>'),
               http_client: 'workerd global fetch',
-              response_url: exchange.url, response_redirected: exchange.redirected, response_type: exchange.type,
+              response_url: exchange.url.replace(env.INSTAGRAM_APP_SECRET, '<secret>').replace(shortLived.access_token, '<token>'), response_redirected: exchange.redirected, response_type: exchange.type,
             }))
             if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${exchangeText.slice(0, 300)}`)
             const longLived = JSON.parse(exchangeText) as { access_token?: string; expires_in?: number }
