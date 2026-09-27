@@ -33,5 +33,7 @@ const currency = rawCurrency
 const brandName = String(organization.value?.name ?? '').trim()
 const collectionTitle = computed(() => t('saya.products.collection_title', { organization: brandName }))
 const productLocations = computed(() => locations.value.map(location => ({ id: String(location.id), slug: String(location.slug), title: String(location.title) })))
-useSocialMetadata(() => presentation && ({ path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { organization: brandName }), brand: { organizationName: brandName } }))
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
+useSocialMetadata(() => presentation && ({ socialImage: organizationSocialImage, path: presentation.collectionPath, title: collectionTitle.value, description: t('saya.products.meta_description', { organization: brandName }), brand: { organizationName: brandName } }))
 </script>

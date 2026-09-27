@@ -95,8 +95,7 @@ const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews:
 const error = ref<string | null>(null)
 
 const dashboardLocationRow = computed(() => dashboard.locations.value.find(candidate => candidate.id === locationId.value) ?? null)
-const locationImage = computed(() =>
-  dashboardLocationRow.value?.media.find(item => item.slot === 'social_card')?.public_url ?? '')
+const locationImage = computed(() => dashboardLocationRow.value?.social_image?.url ?? '')
 const addressSummary = computed(() => formatPostalAddress(location.value?.address ?? null) || 'Add the address')
 
 const capabilities = computed(() => {

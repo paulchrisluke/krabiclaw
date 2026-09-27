@@ -77,10 +77,13 @@ export async function loadOnboardingChecklist(
           OR (google_place_id IS NOT NULL AND google_place_id != '')
         )
       ) AS business_info,
+      -- The hero a visitor sees is the home page's hero block.
       EXISTS(
-        SELECT 1 FROM media_placements mp
+        SELECT 1 FROM content_documents home
+        JOIN content_blocks b ON b.document_id = home.id AND b.type = 'hero' AND b.parent_block_id IS NULL
+        JOIN media_placements mp ON mp.organization_id = home.organization_id AND mp.owner_type = 'content_block' AND mp.owner_id = b.id AND mp.slot = 'media' AND mp.status = 'active'
         JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-        WHERE mp.organization_id = s.id AND mp.owner_type = 'business_location' AND mp.slot = 'hero' AND mp.status = 'active'
+        WHERE home.organization_id = s.id AND home.kind = 'page' AND home.row_role = 'root' AND home.path = '/'
       ) AS has_hero,
       (SELECT COUNT(DISTINCT p.id) FROM products p
          JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id

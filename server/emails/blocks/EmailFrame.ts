@@ -19,7 +19,7 @@ export default defineComponent({
     preheader: { type: String, required: true },
     /** The tenant this is sent for, named in the footer. Null for platform mail. */
     organizationName: { type: String as PropType<string | null>, default: null },
-    /** The tenant's logo URL, rendered in front in the avatar stack. */
+    /** The tenant's logo. A tenant's mail carries its mark, or its name alone. */
     organizationLogoUrl: { type: String as PropType<string | null>, default: null },
     /** Where someone chooses what they receive, rather than switching it all off. */
     preferencesUrl: { type: String as PropType<string | null>, default: null },
@@ -52,7 +52,6 @@ export default defineComponent({
               .email-body hr, .email-divider { border-color: ${dark.border} !important; }
               .email-label, .email-footer { color: ${dark.textDimmed} !important; }
               .email-footer a { color: ${dark.textMuted} !important; }
-              .email-avatar-ring { border-color: ${dark.surface} !important; }
               .email-body .email-header-name { color: ${dark.text} !important; }
               /* The hero's letterbox is the page behind the picture, so it
                  follows the scheme rather than staying a light band. */
@@ -87,37 +86,32 @@ export default defineComponent({
               h('table', { role: 'presentation', cellPadding: '0', cellSpacing: '0', style: 'border-collapse:collapse' }, [
                 h('tbody', null, [
                   h('tr', null, [
-                    h('td', { style: 'vertical-align:middle;line-height:0' }, [
-                      // Avatar stack: tenant logo in front (top z-order), KrabiClaw mark overlapping behind.
-                      orgLogo
-                        ? [
-                            h(EImg, {
-                              class: 'email-avatar-ring',
-                              src: orgLogo,
-                              alt: orgName ?? 'Logo',
-                              width: '36',
-                              height: '36',
-                              style: `display:inline-block;vertical-align:middle;width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid ${light.surface};position:relative;z-index:2`,
-                            }),
-                            h(EImg, {
-                              class: 'email-avatar-ring',
-                              src: `${origin}/krabi-claw-logo.png`,
-                              alt: 'KrabiClaw',
-                              width: '26',
-                              height: '26',
-                              style: `display:inline-block;vertical-align:middle;width:26px;height:26px;border-radius:50%;border:2px solid ${light.surface};margin-left:-10px;position:relative;z-index:1`,
-                            }),
-                          ]
-                        : h(EImg, {
+                    // The mark is whose mail this is: a tenant's logo, or on
+                    // KrabiClaw's own mail the crab. A tenant with no logo is
+                    // named alone; KrabiClaw's mark never stands in for it.
+                    orgName
+                      ? (orgLogo
+                          ? h('td', { style: 'vertical-align:middle;line-height:0' }, [
+                              h(EImg, {
+                                src: orgLogo,
+                                alt: orgName,
+                                width: '36',
+                                height: '36',
+                                style: 'display:inline-block;vertical-align:middle;width:36px;height:36px;border-radius:50%;object-fit:cover',
+                              }),
+                            ])
+                          : null)
+                      : h('td', { style: 'vertical-align:middle;line-height:0' }, [
+                          h(EImg, {
                             src: `${origin}/krabi-claw-logo.png`,
                             alt: 'KrabiClaw',
                             width: '32',
                             height: '32',
                             style: 'display:inline-block;vertical-align:middle;width:32px;height:32px',
                           }),
-                    ]),
+                        ]),
                     orgName
-                      ? h('td', { style: 'vertical-align:middle;padding-left:12px' }, [
+                      ? h('td', { style: `vertical-align:middle;padding-left:${orgLogo ? '12px' : '0'}` }, [
                           h('span', {
                             class: 'email-header-name',
                             style: `font-size:15px;font-weight:700;letter-spacing:-0.2px;color:${light.text};font-family:${font.body};line-height:1`,

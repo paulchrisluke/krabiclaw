@@ -139,8 +139,11 @@ function trackLinkClick(item: PublicLinksItem) {
   recordLinkClick(item.id)
 }
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata(() => ({
   path: '/links',
+  socialImage: organizationSocialImage,
   title: linksPage.value?.page.title || brandName.value,
   description: linksPage.value?.organization.brand_description || '',
   discoverability: 'unlisted',

@@ -473,6 +473,11 @@ export async function updateLocation(
     return { status: 404, data: { error: "Location not found." } };
   }
   const locationId = existing.id;
+  // What the location's card draws: its title, its description and the
+  // locality in its address. Hours, phone and the rest cannot change it.
+  const cardInputChanged = input.title !== undefined || input.seo_title !== undefined
+    || input.seo_description !== undefined || input.short_description !== undefined
+    || input.description !== undefined || input.address !== undefined
 
   if (Object.keys(input).length === 0) {
     return { status: 400, data: { error: "No update fields provided." } };
@@ -678,7 +683,7 @@ export async function updateLocation(
     }
 
     if (updated) {
-      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
+      if (env && cardInputChanged) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
       return { status: 200, data: { success: true, location: updated.location } };
     }
 
@@ -693,7 +698,7 @@ export async function updateLocation(
   params.push(locationId, organizationId);
   await runUpdate(params);
   const location = await loadLocation(db, organizationId, locationId);
-  if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
+  if (env && cardInputChanged) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
   return { status: 200, data: { success: true, location } };
 }
 

@@ -107,9 +107,12 @@ const templates = listPublishedTemplateMarketing()
 const config = useRuntimeConfig()
 const organizationUrl = config.public.platformUrl
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata({
   template: 'platform',
   path: '/templates',
+  socialImage: organizationSocialImage,
   title: 'Templates',
   description: 'Browse KrabiClaw templates — Saya for restaurants and experiences, Blawby for professional services. Pick a template, connect ChatGPT, go live.',
   schemaPageType: 'CollectionPage',

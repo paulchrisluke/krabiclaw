@@ -5,6 +5,7 @@ import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilit
 import type { ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
+import { loadOwnerPictures } from '~/server/notifications/hero'
 
 export const AGENDA_KINDS = ['reservation', 'booking', 'session', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
@@ -77,7 +78,8 @@ interface SourceRow {
   location_title: string | null
   timezone: string | null
   guest_image_url: string | null
-  resource_image_url: string | null
+  picture_owner_type: PictureOwnerType
+  picture_owner_id: string
   resource_title: string | null
   party_size: number | null
 }
@@ -111,35 +113,16 @@ function scopeConditions(query: AgendaQuery, alias: string): string {
   ].filter(Boolean).join('\n')
 }
 
-function mediaUrlSelect(
-  alias: string,
-  ownerType: 'business_location' | 'product' | 'content_document' | 'organization',
-  ownerId: string,
-  slots: string[],
-): string {
-  const slotList = slots.map(slot => `'${slot}'`).join(', ')
-  const slotOrder = slots.map((slot, index) => `WHEN '${slot}' THEN ${index}`).join(' ')
-  return `(SELECT COALESCE(media_asset.thumbnail_url, media_asset.public_url)
-    FROM media_placements placement
-    JOIN media_assets media_asset
-      ON media_asset.id = placement.asset_id
-     AND media_asset.organization_id = placement.organization_id
-     AND media_asset.status = 'active'
-    WHERE placement.organization_id = ${alias}.organization_id
-      AND placement.owner_type = '${ownerType}'
-      AND placement.owner_id = ${ownerId}
-      AND placement.slot IN (${slotList})
-      AND placement.status = 'active'
-    ORDER BY CASE placement.slot ${slotOrder} ELSE ${slots.length} END, placement.sort_order
-    LIMIT 1)`
-}
+// The picture an agenda row shows is its owner's, as resolveOwnerPicture
+// answers it: a reservation's location, a booking's or class's experience, a
+// post's own cover. The row names the owner; the resolver decides the picture.
+type PictureOwnerType = 'business_location' | 'product' | 'content_document' | 'organization'
 
-function organizationMediaUrlSelect(alias: string): string {
-  return mediaUrlSelect(alias, 'organization', `${alias}.organization_id`, ['social_card', 'social_share', 'logo'])
-}
-
-function locationMediaUrlSelect(alias: string): string {
-  return mediaUrlSelect(alias, 'business_location', `${alias}.location_id`, ['social_card', 'hero', 'gallery'])
+function locationPictureOwner(alias: string) {
+  return {
+    type: `CASE WHEN ${alias}.location_id IS NULL THEN 'organization' ELSE 'business_location' END`,
+    id: `COALESCE(${alias}.location_id, ${alias}.organization_id)`,
+  }
 }
 
 export async function listAgenda(
@@ -185,7 +168,7 @@ export async function listAgenda(
   const broadTo = `${addLocalDays(query.to, 2)}T23:59:59.999Z`
   const commonSelect = (alias: string, kind: AgendaKind, fields: string, enrichment: {
     joins?: string
-    resourceImage?: string
+    pictureOwner?: { type: string; id: string }
     resourceTitle?: string
   } = {}) => `
     SELECT ${alias}.id, '${kind}' AS kind, ${fields}, ${alias}.organization_id,
@@ -193,7 +176,8 @@ export async function listAgenda(
            l.slug AS location_slug, l.title AS location_title,
            CASE WHEN ${alias}.location_id IS NULL THEN json_extract(s.settings_json, '$.config.default_timezone') ELSE l.timezone END AS timezone,
            NULL AS guest_image_url,
-           ${enrichment.resourceImage ?? `COALESCE(${locationMediaUrlSelect(alias)}, ${organizationMediaUrlSelect(alias)})`} AS resource_image_url,
+           ${(enrichment.pictureOwner ?? locationPictureOwner(alias)).type} AS picture_owner_type,
+           ${(enrichment.pictureOwner ?? locationPictureOwner(alias)).id} AS picture_owner_id,
            ${enrichment.resourceTitle ?? 'COALESCE(l.title, s.name, s.subdomain, s.id)'} AS resource_title
     FROM ${kind === 'post' ? 'content_documents' : 'requests'} ${alias}
     JOIN organization s ON s.id = ${alias}.organization_id
@@ -216,7 +200,7 @@ export async function listAgenda(
     joins: `JOIN bookings agenda_booking ON agenda_booking.request_id = b.id
       JOIN product_sessions agenda_session ON agenda_session.id = agenda_booking.product_session_id
       LEFT JOIN products agenda_product ON agenda_product.id = agenda_booking.product_id AND agenda_product.organization_id = agenda_booking.organization_id`,
-    resourceImage: `COALESCE(${mediaUrlSelect('b', 'product', 'agenda_booking.product_id', ['gallery'])}, ${locationMediaUrlSelect('b')}, ${organizationMediaUrlSelect('b')})`,
+    pictureOwner: { type: `'product'`, id: 'agenda_booking.product_id' },
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
   })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
   // The class itself: one row per scheduled session in the window, titled by
@@ -232,7 +216,7 @@ export async function listAgenda(
            l.slug AS location_slug, l.title AS location_title,
            agenda_session.timezone AS timezone,
            NULL AS guest_image_url,
-           COALESCE(${mediaUrlSelect('pub', 'product', 'agenda_session.product_id', ['image', 'gallery'])}, ${mediaUrlSelect('pub', 'business_location', 'agenda_session.location_id', ['social_card', 'hero', 'gallery'])}, ${organizationMediaUrlSelect('pub')}) AS resource_image_url,
+           'product' AS picture_owner_type, agenda_session.product_id AS picture_owner_id,
            agenda_product.name AS resource_title
     FROM product_sessions agenda_session
     JOIN products agenda_product ON agenda_product.id = agenda_session.product_id AND agenda_product.organization_id = agenda_session.organization_id
@@ -249,11 +233,16 @@ export async function listAgenda(
   `, [...params(), broadFrom, broadTo]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
     NULLIF(COALESCE(NULLIF(p.title, ''), json_extract(p.metadata_json, '$.event.title')), '') AS title, json_extract(p.metadata_json, '$.post_type') AS subtitle, NULL AS party_size, p.status`, {
-    resourceImage: `COALESCE(${mediaUrlSelect('p', 'content_document', 'p.id', ['cover'])}, ${locationMediaUrlSelect('p')}, ${organizationMediaUrlSelect('p')})`,
+    pictureOwner: { type: `'content_document'`, id: 'p.id' },
   })}
     AND CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
 
   const rows = (await Promise.all(sourceQueries)).flat()
+  const pictureOwnerTypes = [...new Set(rows.map(row => row.picture_owner_type))]
+  const pictures = new Map((await Promise.all(pictureOwnerTypes.map(async ownerType => [
+    ownerType,
+    await loadOwnerPictures(db, organizationId, ownerType, rows.filter(row => row.picture_owner_type === ownerType).map(row => row.picture_owner_id)),
+  ] as const))))
   const organizationSlug = query.organizationSlug ?? organizationId
   const items = rows.flatMap<AgendaItem>((row) => {
     const timeZone = row.timezone
@@ -275,7 +264,8 @@ export async function listAgenda(
       dayKey, timeZone, showTimeZone: false, title: row.title,
       subtitle: row.subtitle, status: row.status, organizationId: row.organization_id,
       locationId: row.location_id, locationTitle: row.location_title,
-      guestImageUrl: row.guest_image_url, resourceImageUrl: row.resource_image_url,
+      guestImageUrl: row.guest_image_url,
+      resourceImageUrl: pictures.get(row.picture_owner_type)?.get(row.picture_owner_id)?.imageUrl ?? null,
       resourceTitle: row.resource_title, partySize: row.party_size, to,
     }]
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt) || left.id.localeCompare(right.id))
