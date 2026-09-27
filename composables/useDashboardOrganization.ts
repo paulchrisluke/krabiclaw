@@ -14,7 +14,6 @@ export interface DashboardOrganization {
   name: string
   slug: string
   role: string
-  deletionScheduledAt: string | null
   theme_id: string
   vertical: 'restaurant' | 'experience' | 'service' | null
   subdomain: string | null
@@ -68,7 +67,6 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && typeof value.name === 'string'
   && typeof value.slug === 'string'
   && typeof value.role === 'string'
-  && (value.deletionScheduledAt === null || typeof value.deletionScheduledAt === 'string')
   && typeof value.theme_id === 'string'
   && (value.subdomain === null || typeof value.subdomain === 'string')
   && (value.public_url === null || typeof value.public_url === 'string')

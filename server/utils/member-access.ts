@@ -151,7 +151,7 @@ export async function assertRoleAllows(
 // The adapter has to be built with the same organization options the plugin
 // runs with: getOrgAdapter filters organization output through the options'
 // additionalFields, so an adapter built with {} silently drops
-// deletionScheduledAt and every role/team limit the plugin was configured with.
+// every role/team limit the plugin was configured with.
 export type OrganizationAdapter = ReturnType<typeof getOrgAdapter<typeof organizationOptions>>
 
 export async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
@@ -238,7 +238,6 @@ export async function resolveUserOrganization(
   name: string
   slug: string
   memberId: string
-  deletionScheduledAt: string | null
 }) | null> {
   const organization = input.organizationId
     ? await organizationById(env, input.organizationId, event)
@@ -256,7 +255,6 @@ export async function resolveUserOrganization(
     slug: organization.slug,
     role: String(member.role),
     memberId: member.id,
-    deletionScheduledAt: organization.deletionScheduledAt ? new Date(organization.deletionScheduledAt).toISOString() : null,
   })
 }
 
