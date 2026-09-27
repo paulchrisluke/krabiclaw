@@ -134,6 +134,18 @@ Never rewrite migration history for a production database resource in place. A s
 
 A schema replacement does not take the site down. Prepare the new database ahead of time, load it, verify it in place, deploy the candidate on the new binding, then copy over rows created after the export. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
 
+`scripts/pull-production-snapshot.ts` runs every step of it through
+`scripts/transfer-database-export.mjs`. It names the database being replaced with
+`--source`, because after the repoint `DB` means the replacement.
+
+1. Preflight, with nothing written remotely. Any refused row is fixed at its source, never in the transfer:
+   `node --experimental-strip-types scripts/pull-production-snapshot.ts --source <old database> --out initial.sqlite`
+2. Create the replacement D1, apply `migrations/0000_baseline.sql` to it, and repoint the binding in `wrangler.toml`.
+3. Load it: rerun step 1 with `--staging` instead of `--out`, or `--file initial.sqlite.payload.sql` for production.
+4. Deploy the candidate on the new binding. Run `yarn lint:schema-drift --env staging` (or `--production`) and `PRAGMA foreign_key_check`.
+5. Copy the rows created after the export. This inserts only what `initial.sqlite` did not hold, and fails rather than overwriting:
+   `--source <old database> --out final.sqlite --delta-from initial.sqlite`, then apply `final.sqlite.payload.sql`.
+
 Before dropping or retiring a legacy table or writer:
 
 - remove every runtime reader and writer;

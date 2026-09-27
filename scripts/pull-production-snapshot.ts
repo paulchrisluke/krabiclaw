@@ -3,11 +3,10 @@
  * seed definitions, so what they test against is what customers actually have.
  *
  * The row copy is transferred through scripts/transfer-database-export.mjs: every row is
- * copied into the current generated baseline, the catalog derivation and the
- * pending data transforms run, and the result is audited before anything is
- * written. Until production itself carries the baseline this is what makes a
- * production copy loadable; after that the derivation reads nothing and the
- * transforms are no-ops.
+ * copied into the current generated baseline, the schema epoch and the pending
+ * data transforms run, and the result is audited before anything is written.
+ * Until the source itself carries the baseline this is what makes its copy
+ * loadable; after that the epoch reads nothing and the transforms are no-ops.
  *
  * `jwks` is left alone — production's signing keys are encrypted under
  * production's BETTER_AUTH_SECRET, so the target keeps and mints its own. E2E
@@ -15,13 +14,23 @@
  *
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --local
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --staging
+ *   node --experimental-strip-types scripts/pull-production-snapshot.ts --out <target.sqlite> [--source <database>]
+ *
+ * The source is the top-level `DB` binding (production) unless `--source` names
+ * a D1 database. A schema replacement names it, because once the binding is
+ * repointed `DB` is the replacement, not the database being replaced.
+ *
+ * `--out` is the preflight: the transformed target, its data-only payload and
+ * its manifest are kept at that path and nothing remote is written.
+ * `--delta-from <initial target.sqlite>` writes only the rows the initial
+ * transfer did not hold, for the final copy after the binding is repointed.
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { transferDatabaseExport } from './transfer-database-export.mjs'
+import { printTransferReport, SCHEMA_OBJECTS_QUERY, transferDatabaseExport } from './transfer-database-export.mjs'
 
 // Staging is a release gate, so it has to hold what production holds. It had no
 // target here, so it was never refreshed and drifted to whatever an older
@@ -35,12 +44,16 @@ const { values } = parseArgs({
   options: {
     local: { type: 'boolean', default: false },
     staging: { type: 'boolean', default: false },
+    out: { type: 'string' },
+    source: { type: 'string', default: 'DB' },
+    'delta-from': { type: 'string' },
   },
   strict: true,
 })
-const targets = (['local', 'staging'] as const).filter(name => values[name])
-if (targets.length !== 1) throw new Error('Choose exactly one of --local or --staging.')
+const targets = (['local', 'staging', 'out'] as const).filter(name => values[name])
+if (targets.length !== 1) throw new Error('Choose exactly one of --local, --staging or --out <target.sqlite>.')
 const target = targets[0]!
+const deltaFrom = values['delta-from'] ? resolve(values['delta-from']) : null
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
 
@@ -88,9 +101,9 @@ const run = (args: string[], json = false) => {
 // transfer audit still validates the copy before either target is written.
 // https://developers.cloudflare.com/d1/best-practices/import-export-data/
 function sourceRows<T>(sql: string): T[] {
-  const output = run(['d1', 'execute', 'DB', '--remote', '--command', sql, '--json'], true)
+  const output = run(['d1', 'execute', values.source, '--remote', '--command', sql, '--json'], true)
   const results = JSON.parse(output) as Array<{ success: boolean; results: T[] }>
-  if (results.length !== 1 || !results[0]!.success) throw new Error('Production snapshot query failed')
+  if (results.length !== 1 || !results[0]!.success) throw new Error(`${values.source} snapshot query failed`)
   return results[0]!.results
 }
 
@@ -128,42 +141,51 @@ function copyProductionRows(path: string) {
   const rows = sourceRows<{ table_name: string; phase: number; statement: string; total_rows: number }>(
     `WITH ${ctes.join(', ')} SELECT *, count(*) OVER () AS total_rows FROM (${groups[0]}) ORDER BY table_name, phase`,
   )
-  if (!rows.length || rows[0]!.total_rows !== rows.length) throw new Error('Incomplete production copy; no target data was written')
+  if (!rows.length || rows[0]!.total_rows !== rows.length) throw new Error(`Incomplete ${values.source} copy; no target data was written`)
   const schema = rows.filter(row => row.phase === 0)
   if (schema.length !== tables.length || schema.some((row, index) => row.table_name !== tables[index]!.name || row.statement !== tables[index]!.sql)) {
-    throw new Error('Production schema changed during column discovery; no target data was written')
+    throw new Error(`${values.source} schema changed during column discovery; no target data was written`)
   }
   writeFileSync(path, 'PRAGMA foreign_keys=OFF;\n' + rows.map(row => row.statement + (row.phase === 0 ? ';' : '')).join('\n'), { mode: 0o600 })
   for (const table of tables) console.log(`Copied ${table.name}: ${rows.filter(row => row.phase === 1 && row.table_name === table.name).length} rows`)
 }
 
+// The baseline this transfer builds must be the one server/db/schema.ts
+// describes, or the payload is written for a schema no deploy will run.
+execFileSync(process.execPath, ['scripts/check-schema-drift.mjs'], { cwd: process.cwd(), stdio: 'inherit' })
+
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-snapshot-'))
 try {
-  const dumpPath = join(directory, 'production.sql')
+  const dumpPath = join(directory, 'source.sql')
   copyProductionRows(dumpPath)
 
-  const payloadPath = join(directory, 'payload.sql')
-  const manifest = transferDatabaseExport(dumpPath, join(directory, 'target.sqlite'), { payloadPath, withoutJwks: true })
-
-  const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
-  // The payload is data only, written for the schema the target was built
-  // from. A destination still on an earlier baseline — the file is regenerated
-  // under the same name, so `migrations apply` sees nothing new — fails half
-  // way through the import instead, on whichever column moved first.
-  const schemaSql = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name"
-  const expectedSchema = manifest.schema
-  if (!expectedSchema) throw new Error('The transfer did not report the schema it built')
-  const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', schemaSql, '--json'], true)) as Array<{ results: Array<{ name: string; sql: string }> }>
-  const actualSchema = new Map((actual?.results ?? []).map(table => [table.name, table.sql]))
-  const drift = expectedSchema.filter(table => actualSchema.get(table.name) !== table.sql).map(table => table.name)
-  if (drift.length || actualSchema.size !== expectedSchema.length) {
-    throw new Error(`${target} D1 does not carry the current baseline (${drift.length ? drift.slice(0, 5).join(', ') : 'extra tables'} differ); no data was written. ${target === 'local'
-      ? 'Delete .wrangler/state/v3/d1 and run `corepack yarn local:setup` again.'
-      : 'Replace the database through the schema replacement in docs/operations/release-and-outage-prevention.md first.'}`)
-  }
-  run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
+  const targetPath = target === 'out' ? resolve(values.out!) : join(directory, 'target.sqlite')
+  const payloadPath = target === 'out' ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
+  const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: true, deltaFrom })
+  printTransferReport(manifest)
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
-  console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from the production DB binding into ${target} D1.`)
+  if (target === 'out') {
+    console.log(`Preflight passed: ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${targetPath}; payload ${payloadPath}. Nothing remote was written.`)
+  } else {
+    const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
+    // The payload is data only, written for the schema the target was built
+    // from. A destination still on an earlier baseline — the file is regenerated
+    // under the same name, so `migrations apply` sees nothing new — fails half
+    // way through the import instead, on whichever object moved first.
+    const expectedSchema = manifest.schema
+    if (!expectedSchema) throw new Error('The transfer did not report the schema it built')
+    const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', SCHEMA_OBJECTS_QUERY, '--json'], true)) as Array<{ results: Array<{ type: string; name: string; sql: string }> }>
+    const key = (object: { type: string; name: string }) => `${object.type} ${object.name}`
+    const actualSchema = new Map((actual?.results ?? []).map(object => [key(object), object.sql]))
+    const drift = expectedSchema.filter(object => actualSchema.get(key(object)) !== object.sql).map(key)
+    if (drift.length || actualSchema.size !== expectedSchema.length) {
+      throw new Error(`${target} D1 does not carry the current baseline (${drift.length ? drift.slice(0, 5).join(', ') : 'extra objects'} differ); no data was written. ${target === 'local'
+        ? 'Delete .wrangler/state/v3/d1 and run `corepack yarn local:setup` again.'
+        : 'Replace the database through the schema replacement in docs/operations/release-and-outage-prevention.md first.'}`)
+    }
+    run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
+    console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${target} D1${deltaFrom ? ' as a delta' : ''}.`)
+  }
 } finally {
   rmSync(directory, { recursive: true, force: true })
   rmSync(logDirectory, { recursive: true, force: true })
