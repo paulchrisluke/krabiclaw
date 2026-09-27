@@ -17,7 +17,7 @@
 
       <div v-else-if="optedOut" class="mt-12 rounded-lg border border-default p-8">
         <h1 class="text-2xl font-semibold">You are opted out</h1>
-        <p class="mt-3 text-sm text-muted">You will not receive more review request emails from {{ requestData?.organization?.name || 'this business' }}.</p>
+        <p class="mt-3 text-sm text-muted">You will not receive more review request emails.</p>
       </div>
 
       <div v-else-if="submitted" class="mt-12 rounded-lg border border-default p-8">
@@ -27,7 +27,7 @@
           <button v-if="requestData?.location?.googleReviewUrl" type="button" class="inline-flex items-center justify-center gap-2 rounded-full bg-(--brand-color) px-6 py-3 text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90" @click="copyAndOpenGoogle">
             {{ copyButtonLabel }}
           </button>
-          <SayaButton variant="outline" @click="linkAccount">
+          <SayaButton v-if="linkable" variant="outline" @click="linkAccount">
             Sign in to link this review
           </SayaButton>
         </div>
@@ -134,6 +134,9 @@ const title = ref('')
 const content = ref('')
 const submitting = ref(false)
 const submitted = ref(false)
+// Whether this browser holds the anonymous identity the review belongs to, so
+// signing in here links it through Better Auth. Another browser cannot.
+const linkable = ref(false)
 const optedOut = ref(false)
 const submitError = ref('')
 const copyButtonLabel = ref('Copy my review & post on Google Maps')
@@ -160,13 +163,6 @@ onMounted(async () => {
   if (route.query.optOut === '1' || route.query.optOut === 'true') {
     await optOut()
   }
-  if (requestData.value?.request?.id) {
-    try {
-      await ensureCustomerSession()
-    } catch (error) {
-      submitError.value = error instanceof Error ? error.message : 'Could not initialize the review session.'
-    }
-  }
 })
 
 onBeforeUnmount(() => {
@@ -175,22 +171,6 @@ onBeforeUnmount(() => {
     if (item.preview_url) URL.revokeObjectURL(item.preview_url)
   }
 })
-
-async function ensureCustomerSession() {
-  if (!import.meta.client) return
-  const current = await authClient.getSession()
-  if (!current?.data?.user?.id) {
-    const anonymousSignIn = (authClient.signIn as unknown as { anonymous?: () => Promise<unknown> }).anonymous
-    if (!anonymousSignIn) throw new Error('Anonymous review sessions are not available.')
-    await anonymousSignIn()
-  }
-  await publicApiMutation<{ success: true; requestId: string }>('/api/public/review-requests/bind-session', {
-    method: 'POST',
-    body: { token: token.value },
-    validate: (value): value is { success: true; requestId: string } =>
-      isRecord(value) && value.success === true && typeof value.requestId === 'string',
-  })
-}
 
 async function handleMediaSelect(event: Event) {
   mediaError.value = ''
@@ -201,7 +181,6 @@ async function handleMediaSelect(event: Event) {
 
   uploadingMedia.value = true
   try {
-    await ensureCustomerSession()
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         if (imageCount.value >= 5) throw new Error('You can upload up to 5 photos.')
@@ -318,7 +297,6 @@ async function removeMedia(assetId: string) {
   mediaError.value = ''
   removingMediaAssetId.value = assetId
   try {
-    await ensureCustomerSession()
     await discardReviewMedia(requestId, assetId)
 
     if (item.preview_url) URL.revokeObjectURL(item.preview_url)
@@ -356,8 +334,7 @@ async function submitReview() {
   }
   submitting.value = true
   try {
-    await ensureCustomerSession()
-    await publicApiMutation<{ success: true; reviewId: string; status: 'pending' }>('/api/public/review-requests/submit', {
+    const result = await publicApiMutation<{ success: true; reviewId: string; status: 'pending'; linkable: boolean }>('/api/public/review-requests/submit', {
       method: 'POST',
       body: {
         token: token.value,
@@ -365,12 +342,14 @@ async function submitReview() {
         title: title.value,
         content: content.value,
       },
-      validate: (value): value is { success: true; reviewId: string; status: 'pending' } =>
+      validate: (value): value is { success: true; reviewId: string; status: 'pending'; linkable: boolean } =>
         isRecord(value)
         && value.success === true
         && typeof value.reviewId === 'string'
-        && value.status === 'pending',
+        && value.status === 'pending'
+        && typeof value.linkable === 'boolean',
     })
+    linkable.value = result.linkable
     submitted.value = true
   } catch (error) {
     submitError.value = (error as { data?: { error?: string } })?.data?.error || 'Could not submit your review.'
@@ -388,17 +367,16 @@ async function copyAndOpenGoogle() {
   const googleUrl = requestData.value?.location?.googleReviewUrl
   if (!googleUrl) return
 
+  // The new tab must open inside the click; a popup blocker refuses one that
+  // opens after the clipboard promise settles. Copy afterwards.
+  window.open(googleUrl, '_blank', 'noopener')
   const reviewText = [title.value, content.value].filter(Boolean).join('\n\n')
-  if (reviewText && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(reviewText)
-      copyButtonLabel.value = 'Copied! Opening Google Maps…'
-      window.open(googleUrl, '_blank', 'noopener')
-    } catch {
-      copyButtonLabel.value = 'Could not copy — click to open Google Maps directly'
-    }
-  } else {
-    window.open(googleUrl, '_blank', 'noopener')
+  if (!reviewText || !navigator.clipboard?.writeText) return
+  try {
+    await navigator.clipboard.writeText(reviewText)
+    copyButtonLabel.value = 'Copied! Google Maps is open in a new tab'
+  } catch {
+    copyButtonLabel.value = 'Could not copy — Google Maps is open in a new tab'
   }
 }
 

@@ -19,8 +19,6 @@ interface PlatformLlmDocSummary {
   category: string | null
   path: string
   excerpt?: string | null
-  canonical_url?: string | null
-  seo_description?: string | null
   updated_at?: string | null
 }
 
@@ -34,8 +32,6 @@ interface PlatformLlmBlogSummary {
   slug: string
   excerpt?: string | null
   category?: string | null
-  canonical_url?: string | null
-  seo_description?: string | null
   published_at?: string | null
   updated_at?: string | null
   author_name?: string | null
@@ -201,7 +197,7 @@ function docMarkdownPath(path: string) {
 export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: string) {
   const path = doc.path
   const markdownPath = docMarkdownPath(path)
-  const canonicalUrl = doc.canonical_url?.trim() || absoluteUrl(origin, path)
+  const canonicalUrl = absoluteUrl(origin, path)
   const body = renderContentBlocksForLlm(doc.content_blocks)
 
   return [
@@ -213,7 +209,7 @@ export function renderPlatformDocMarkdown(doc: PlatformLlmDocDetail, origin: str
       optionalFrontMatterLine('canonical_url', canonicalUrl),
       optionalFrontMatterLine('last_updated', formatDateOnly(doc.updated_at)),
       optionalFrontMatterLine('type', 'documentation'),
-      optionalFrontMatterLine('summary', doc.seo_description || doc.excerpt || ''),
+      optionalFrontMatterLine('summary', doc.excerpt || ''),
     ]),
     '',
     `# ${doc.title}`,
@@ -228,7 +224,7 @@ function renderBlogMarkdown(
   paths: { path: string; markdownPath: string },
 ) {
   const { path, markdownPath } = paths
-  const canonicalUrl = post.canonical_url?.trim() || absoluteUrl(origin, path)
+  const canonicalUrl = absoluteUrl(origin, path)
   const body = renderContentBlocksForLlm(post.content_blocks)
 
   return [
@@ -241,7 +237,7 @@ function renderBlogMarkdown(
       optionalFrontMatterLine('last_updated', formatDateOnly(post.updated_at)),
       optionalFrontMatterLine('published_at', formatDateOnly(post.published_at)),
       optionalFrontMatterLine('type', 'blog'),
-      optionalFrontMatterLine('summary', post.seo_description || post.excerpt || ''),
+      optionalFrontMatterLine('summary', post.excerpt || ''),
     ]),
     '',
     `# ${post.title}`,
@@ -257,7 +253,7 @@ export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: stri
   return renderBlogMarkdown(post, origin, { path, markdownPath })
 }
 
-const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.category') AS category, summary AS excerpt, canonical_url, seo_description, updated_at
+const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.category') AS category, summary AS excerpt, updated_at
      FROM content_documents
      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
        AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?`
@@ -283,7 +279,7 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizat
   const posts = await queryAll<TenantLlmBlogSummary & { author_id: string | null }>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at, p.author_id
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.published_at, p.updated_at, p.author_id
      FROM content_documents p
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
@@ -312,7 +308,7 @@ export async function getPublishedTenantBlogPostBySlug(db: DbClient, organizatio
   const detail = await queryFirst<Omit<TenantLlmBlogDetail, 'content_blocks'>>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.canonical_url, p.seo_description, p.published_at, p.updated_at
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.published_at, p.updated_at
      FROM content_documents p
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}`,
@@ -329,8 +325,8 @@ export function buildPlatformDocLinkEntries(docs: PlatformLlmDocSummary[], origi
       title: doc.title,
       path: doc.path,
       markdownPath: docMarkdownPath(doc.path),
-      canonicalUrl: doc.canonical_url?.trim() || absoluteUrl(origin, doc.path),
-      summary: safeSummary(doc.seo_description || doc.excerpt, 'KrabiClaw documentation.'),
+      canonicalUrl: absoluteUrl(origin, doc.path),
+      summary: safeSummary(doc.excerpt, 'KrabiClaw documentation.'),
       category: doc.category,
       updatedAt: doc.updated_at,
     }))
@@ -349,8 +345,8 @@ export function buildPlatformBlogLinkEntries(posts: PlatformLlmBlogSummary[], or
       title: post.title,
       path,
       markdownPath: `/blog-md/${post.slug}.md`,
-      canonicalUrl: post.canonical_url?.trim() || absoluteUrl(origin, path),
-      summary: safeSummary(post.seo_description || post.excerpt, 'KrabiClaw platform blog article.'),
+      canonicalUrl: absoluteUrl(origin, path),
+      summary: safeSummary(post.excerpt, 'KrabiClaw platform blog article.'),
       category: post.category,
       publishedAt: post.published_at,
       updatedAt: post.updated_at,
@@ -371,8 +367,8 @@ export function buildTenantBlogLinkEntries(posts: TenantLlmBlogSummary[], origin
       title: post.title,
       path,
       markdownPath: `/blog-md/${post.slug}.md`,
-      canonicalUrl: post.canonical_url?.trim() || absoluteUrl(origin, path),
-      summary: safeSummary(post.seo_description || post.excerpt, 'Published blog article.'),
+      canonicalUrl: absoluteUrl(origin, path),
+      summary: safeSummary(post.excerpt, 'Published blog article.'),
       category: post.category,
       publishedAt: post.published_at,
       updatedAt: post.updated_at,

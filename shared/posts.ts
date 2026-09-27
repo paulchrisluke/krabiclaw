@@ -42,7 +42,7 @@ export const postTopicJsonSchema = { anyOf: [
 ] } as const
 export const postMutationJsonSchema = {
   type: 'object', additionalProperties: false, properties: {
-    title: optionalText, body: nonblank, slug: optionalText, seo_title: optionalText, seo_description: optionalText,
+    title: optionalText, body: nonblank, slug: optionalText,
     location_id: { anyOf: [nonblank, absent] }, scheduled_for: { anyOf: [instant, absent] },
     visibility: { enum: ['listed', 'unlisted'] },
     post_type: { enum: POST_TYPES }, event: { anyOf: [postEventJsonSchema, absent] },

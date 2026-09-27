@@ -1,5 +1,7 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import type { WebhookEventPayload } from 'resend'
 import { sendReplyEmail, type ReplyEmailEnv, type SubmissionType } from '~/server/utils/submission-messages'
+import { publishGuestInboxThreadEvent, type GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 import type {
   GuestThreadDeliveryChannel,
   GuestThreadDeliveryPurpose,
@@ -128,6 +130,115 @@ export async function getDeliveryByProviderMessageId(
     WHERE provider = ? AND provider_message_id = ?
     LIMIT 1
   `, [provider, providerMessageId])
+}
+
+/**
+ * Provider delivery stages in the order they can only move forward. Meta sends
+ * accepted/sent/delivered/read; Resend events project onto sent/delivered.
+ * Webhooks are not ordered, so a later call for the same provider message must
+ * never regress a stage already observed.
+ */
+const DELIVERY_STATUS_RANK: Partial<Record<GuestThreadDeliveryStatus, number>> = {
+  accepted: 1,
+  sent: 2,
+  delivered: 3,
+  read: 4,
+}
+
+/**
+ * Whether a provider-reported status moves a delivery forward.
+ *
+ * `failed` is terminal: once recorded nothing overwrites it, and it never
+ * clobbers an already-recorded `delivered`/`read` — a late failure report for
+ * a message that arrived is not the message's state. A repeat of the current
+ * status is not a change.
+ */
+export function compareDeliveryStatus(current: string | null, incoming: GuestThreadDeliveryStatus): boolean {
+  if (!current) return true
+  if (current === 'failed') return false
+  if (incoming === 'failed') return current !== 'delivered' && current !== 'read'
+  const currentRank = DELIVERY_STATUS_RANK[current as GuestThreadDeliveryStatus] ?? 0
+  const incomingRank = DELIVERY_STATUS_RANK[incoming] ?? 0
+  return incomingRank > currentRank
+}
+
+/**
+ * Applies a provider-reported status to one delivery, forward only.
+ *
+ * Compare-and-set on the observed status, so two webhooks racing on one
+ * delivery cannot both write and a regression cannot land between the read
+ * and the write. Returns whether the stored status changed.
+ */
+export async function advanceDeliveryStatus(
+  db: DbClient,
+  delivery: { id: string; status: string },
+  incoming: GuestThreadDeliveryStatus,
+  error: string | null,
+): Promise<boolean> {
+  let observed = delivery.status
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!compareDeliveryStatus(observed, incoming)) return false
+    const result = await execute(db, `
+      UPDATE guest_thread_deliveries
+      SET status = ?, error = ?, updated_at = ?
+      WHERE id = ? AND status = ?
+    `, [incoming, error, new Date().toISOString(), delivery.id, observed])
+    if (result.meta.changes > 0) return true
+    const current = await getDeliveryById(db, delivery.id)
+    if (!current) throw new Error(`Guest thread delivery ${delivery.id} disappeared while its status was advanced`)
+    observed = current.status
+  }
+  throw new Error(`Guest thread delivery ${delivery.id} kept changing while ${incoming} was applied`)
+}
+
+/**
+ * The KrabiClaw delivery status a Resend email event means, or null for an
+ * event that says nothing about whether the message arrived. A complaint is
+ * a delivered message; the complaint itself is Resend's to keep.
+ */
+function resendProjectedStatus(event: WebhookEventPayload): GuestThreadDeliveryStatus | null {
+  switch (event.type) {
+    case 'email.sent': return 'sent'
+    case 'email.delivered': return 'delivered'
+    case 'email.complained': return 'delivered'
+    case 'email.failed':
+    case 'email.bounced':
+    case 'email.suppressed': return 'failed'
+    default: return null
+  }
+}
+
+function resendFailureReason(event: WebhookEventPayload): string | null {
+  switch (event.type) {
+    case 'email.failed': return `Resend failed: ${event.data.failed.reason}`
+    case 'email.bounced': return `Resend bounced (${event.data.bounce.type}): ${event.data.bounce.message}`
+    case 'email.suppressed': return `Resend suppressed (${event.data.suppressed.type}): ${event.data.suppressed.message}`
+    default: return null
+  }
+}
+
+/**
+ * Projects one verified Resend email event onto the guest-thread delivery it
+ * belongs to. Events for mail that is not a guest-thread delivery — every
+ * Broadcast recipient among them — match nothing and change nothing: their
+ * analytics, bounces, complaints and suppressions are Resend's. A delivery
+ * that moves forward republishes its thread to open inboxes.
+ */
+export async function applyResendEmailEvent(
+  db: DbClient,
+  env: GuestInboxPublicationEnv,
+  event: WebhookEventPayload,
+): Promise<'ignored' | 'no_delivery' | 'advanced' | 'unchanged'> {
+  const status = resendProjectedStatus(event)
+  if (!status || !('email_id' in event.data)) return 'ignored'
+  const delivery = await getDeliveryByProviderMessageId(db, 'resend', event.data.email_id)
+  if (!delivery) return 'no_delivery'
+  const changed = await advanceDeliveryStatus(db, delivery, status, status === 'failed' ? resendFailureReason(event) : null)
+  if (!changed) return 'unchanged'
+  const entry = await queryFirst<{ request_id: string }>(db, 'SELECT request_id FROM activity_entries WHERE id = ?', [delivery.entry_id])
+  if (!entry) throw new Error(`Activity entry ${delivery.entry_id} for delivery ${delivery.id} not found`)
+  await publishGuestInboxThreadEvent(env, db, { threadId: entry.request_id, type: 'delivery.changed' })
+  return 'advanced'
 }
 
 export async function claimDelivery(

@@ -471,7 +471,8 @@ export function sessionClaimQuery(input: {
   sessionId: string
   productVariantId: string
   partySize: number
-  customerId?: string | null
+  /** The Better Auth user the booking belongs to. */
+  userId?: string | null
   requestId?: string | null
   /**
    * A booking this claim replaces. Its seats are not counted against the
@@ -497,7 +498,7 @@ export function sessionClaimQuery(input: {
     query: `
       INSERT INTO bookings (
         id, organization_id, product_id, product_session_id, product_variant_id,
-        customer_id, request_id, party_size, status, created_at, updated_at
+        user_id, request_id, party_size, status, created_at, updated_at
       )
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', ?, ?
       WHERE ${input.requireUndecided
@@ -524,7 +525,7 @@ export function sessionClaimQuery(input: {
     `,
     params: [
       input.bookingId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
-      input.customerId ?? null, input.requestId ?? null, input.partySize, input.now, input.now,
+      input.userId ?? null, input.requestId ?? null, input.partySize, input.now, input.now,
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
@@ -551,7 +552,8 @@ export async function claimSessionCapacity(db: DbClient, input: {
   sessionId: string
   productVariantId: string
   partySize: number
-  customerId?: string | null
+  /** The Better Auth user the booking belongs to. */
+  userId?: string | null
   requestId?: string | null
   /**
    * The writes that belong to this claim, given the id it minted.

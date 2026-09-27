@@ -12,8 +12,7 @@ import { getProduct } from '~/server/utils/product-management'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
-import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
-import { getAuthSession } from '~/server/utils/auth'
+import { ensureInteractionUser } from '~/server/utils/auth'
 import { requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { defineHandler } from 'nitro'
@@ -126,12 +125,9 @@ export default defineHandler(async (event) => {
 
   const cancellation = createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
-  const authSession = await getAuthSession(event, env)
-  const customerInput = {
-    organizationId: organization.id, name: guestName, email: guestEmail,
-    phone: normalizedGuestPhone, source: 'booking', userId: authSession?.user?.id || null,
-  } as const
-  const customer = await findOrCreateCustomer(db, customerInput)
+  // The person is the Better Auth user; what they typed stays on the thread as
+  // this booking's guest snapshot and is never copied onto that user.
+  const userId = await ensureInteractionUser(event, env)
 
   const now = new Date().toISOString()
   const threadId = crypto.randomUUID()
@@ -145,11 +141,11 @@ export default defineHandler(async (event) => {
     // The booking takes its request id once the thread exists.
     await claimSessionCapacity(db, {
       organizationId: organization.id, productId: product.id, sessionId: session.id,
-      productVariantId, partySize, customerId: customer.id, requestId: null,
+      productVariantId, partySize, userId, requestId: null,
       following: bookingId => [
         ...requestInsertQueries({
           kind: 'booking', id: threadId, organization_id: organization.id,
-          location_id: session.location_id, customer_id: customer.id, review_id: null,
+          location_id: session.location_id, user_id: userId, review_id: null,
           conversation_state: 'needs_attention', resolved_at: null, payload,
           created_at: now, updated_at: now,
         }, { query: 'SELECT 1 FROM bookings WHERE id = ?', params: [bookingId] }),
@@ -161,14 +157,11 @@ export default defineHandler(async (event) => {
       ],
     })
   } catch (error) {
-    // Nothing to roll back: the batch either applied whole or not at all. The
-    // customer row is the exception — it was written before this.
-    if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
+    // Nothing to roll back: the batch either applied whole or not at all.
     if (!(error instanceof CapacityUnavailableError)) throw error
     return jsonResponse({ error: 'This session just filled up. Please pick another time.' }, { status: 409 })
   }
 
-  await recordCustomerBooking(db, customer.id, customerInput)
   await publishGuestInboxThreadEvent(env, db, { threadId, type: 'thread.created' })
 
   // One instant, one zone: the message the guest reads and the record the

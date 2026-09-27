@@ -29,8 +29,6 @@ type PublicPost = PostTopic & {
   published_at: string | null
   public_path: string
   canonical_url: string | null
-  seo_title?: string | null
-  seo_description?: string | null
   media: PublicPostMedia[]
   social_image: import('~/utils/social-metadata').SocialImageSource | null
   location_phone: string | null
@@ -97,8 +95,8 @@ useState<PublicPost['localeRepresentations']>('public-locale-representations', (
 
 const post = computed(() => data.value?.post ?? null)
 const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
-const seoTitle = computed(() => post.value?.seo_title || post.value?.title || `Update from ${organizationName.value}`)
-const seoDescription = computed(() => post.value?.seo_description || post.value?.summary || post.value?.body || `Latest update from ${organizationName.value}.`)
+const seoTitle = computed(() => post.value?.title || `Update from ${organizationName.value}`)
+const seoDescription = computed(() => post.value?.summary || post.value?.body || `Latest update from ${organizationName.value}.`)
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   path: post.value?.canonical_url || pagePath.value,
   title: seoTitle.value,

@@ -121,8 +121,7 @@ const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
-  title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
-  seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
+  title: post.value.title, excerpt: post.value.excerpt, slug: post.value.slug,
   baseUrl: requestURL.origin, publicPath: articlePath.value, organizationName: identity.value.name,
 }))
 const { trackConsultationClick } = useOrganizationConversionTracking(consultation)

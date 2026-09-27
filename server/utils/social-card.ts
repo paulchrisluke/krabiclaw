@@ -147,8 +147,8 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
         WHERE p.id = ? LIMIT 1`, [owner.owner_id]) ?? null
     case 'content_document':
       return await queryFirst<OwnerRecord>(db, `SELECT d.organization_id,
-        COALESCE(NULLIF(trim(d.seo_title), ''), NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
-        COALESCE(NULLIF(trim(d.seo_description), ''), NULLIF(trim(d.summary), '')) AS description,
+        COALESCE(NULLIF(trim(d.title), ''), NULLIF(trim(substr(d.summary, 1, 80)), '')) AS title,
+        NULLIF(trim(d.summary), '') AS description,
         CASE d.kind WHEN 'article' THEN 'Article' WHEN 'social_post' THEN 'Update' END AS label,
         bl.title AS location
         FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)

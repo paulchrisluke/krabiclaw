@@ -45,8 +45,6 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     title: '',
     body: '',
     slug: '',
-    seo_title: '',
-    seo_description: '',
     media: [] as PostMediaFormItem[],
   })
 
@@ -63,8 +61,6 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     form.title = ''
     form.body = ''
     form.slug = ''
-    form.seo_title = ''
-    form.seo_description = ''
     form.media = []
     originalMedia = []
     selectedChannels.value = ['organization']
@@ -80,8 +76,6 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
       title: form.title,
       body: form.body,
       slug: form.slug,
-      seo_title: form.seo_title,
-      seo_description: form.seo_description,
       // A freshly added gallery row has no asset yet; sending it would write a
       // placement with an empty asset_id.
       media: form.media
@@ -100,8 +94,6 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     form.title = String(post.title ?? '')
     form.body = String(post.body ?? '')
     form.slug = String(post.slug ?? '')
-    form.seo_title = String(post.seo_title ?? '')
-    form.seo_description = String(post.seo_description ?? '')
     form.media = normalizePostMediaForForm(post.media)
     originalMedia = form.media.map(item => ({ ...item }))
     selectedChannels.value = ['organization']
@@ -114,8 +106,6 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
       title: form.title,
       body: form.body,
       slug: form.slug || undefined,
-      seo_title: form.seo_title || null,
-      seo_description: form.seo_description || null,
       location_id: ownerLocationId,
     }
     // Creation only: post:gallery membership on an update never travels as a

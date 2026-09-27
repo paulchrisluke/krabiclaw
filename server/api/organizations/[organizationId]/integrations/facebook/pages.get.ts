@@ -1,35 +1,46 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
-import { getFacebookPagesConnection, readPendingPageSelection } from '~/server/utils/facebook-pages'
+import { requireIntegrationAccount } from '~/server/utils/auth'
+import { getFacebookPagesConnection, listLinkedFacebookPages } from '~/server/utils/facebook-pages'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
- * The Facebook leaf: the connected Page, and — when an authorization returned
- * several and is waiting on a choice — the Pages to choose between.
+ * The Facebook leaf: the connected Page, and the Pages a linked Facebook
+ * account manages to choose between.
  *
- * Only names and ids leave here. The Page tokens stay sealed in the pending
- * record until one is chosen.
+ * Which account is the caller's to say (`account_id`, one of their own linked
+ * Facebook accounts); without one, the account the organization already uses.
+ * Only names and ids leave here — Page tokens are read again whenever one is
+ * needed and never stored.
  */
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const { env, organization} = await requireOrganizationAccess(event, organizationId)
+  const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
   const connection = await getFacebookPagesConnection(env, organization.id)
+  const summary = connection
+    ? { account_id: connection.account_id, page_id: connection.page_id, page_name: connection.page_name, status: connection.status }
+    : null
+  const accountId = event.url.searchParams.get('account_id') || connection?.account_id || null
+  if (!accountId) return jsonResponse({ success: true, account_id: null, connection: summary, choices: [], error: null })
 
-  const handle = event.url.searchParams.get('handle')
-  const pending = handle ? await readPendingPageSelection(env, handle) : null
-  // A handle names a pending authorization, not a site; it must be this one's.
-  const choices = pending && pending.organizationId === organization.id
-    ? pending.pages.map(page => ({ id: page.id, name: page.name }))
-    : []
-
-  return jsonResponse({
-    success: true,
-    connection: connection
-      ? { page_id: connection.page_id, page_name: connection.page_name, status: connection.status }
-      : null,
-    choices,
-  })
+  try {
+    await requireIntegrationAccount(env, accountId, {
+      userId: session.user.id, currentAccountId: connection?.account_id, providerId: 'facebook', scopes: [],
+    })
+    const pages = await listLinkedFacebookPages(env, accountId)
+    return jsonResponse({
+      success: true, account_id: accountId, connection: summary,
+      choices: pages.map(page => ({ id: page.id, name: page.name })),
+      error: pages.length ? null : 'That Facebook account manages no Pages. Link the account that manages the business Page.',
+    })
+  } catch (error) {
+    console.error('facebook_pages_failed', { organizationId: organization.id, error })
+    return jsonResponse({
+      success: true, account_id: accountId, connection: summary, choices: [],
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';

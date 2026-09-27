@@ -32,6 +32,11 @@ export interface ThreadListItem {
   needsAttention: boolean
   imageUrl: string | null
   whenLabel: string | null
+  /** The server's mailbox resolver decides these; the client never derives them from dates. */
+  mailbox: 'current' | 'past'
+  manuallyArchived: boolean
+  canArchive: boolean
+  canUnarchive: boolean
 }
 
 // The detail API's own view model, not a copy of it. Hand-maintained twins of
@@ -70,7 +75,11 @@ export function isThreadListResponse(value: unknown): value is { threads: Thread
       && typeof thread.id === 'string'
       && typeof thread.guestName === 'string'
       && typeof thread.submissionType === 'string'
-      && typeof thread.lastActivityAt === 'string',
+      && typeof thread.lastActivityAt === 'string'
+      && (thread.mailbox === 'current' || thread.mailbox === 'past')
+      && typeof thread.manuallyArchived === 'boolean'
+      && typeof thread.canArchive === 'boolean'
+      && typeof thread.canUnarchive === 'boolean',
     )
 }
 
@@ -97,6 +106,12 @@ export function isThreadDetailResponse(value: unknown): value is { thread: Threa
     && typeof value.thread.guestName === 'string'
     && Array.isArray(value.thread.entries)
     && Array.isArray(value.thread.availableActions)
+    && (value.thread.mailbox === 'current' || value.thread.mailbox === 'past')
+    && typeof value.thread.manuallyArchived === 'boolean'
+    && (value.thread.archivedAt === null || typeof value.thread.archivedAt === 'string')
+    && (value.thread.archivedByUserId === null || typeof value.thread.archivedByUserId === 'string')
+    && typeof value.thread.canArchive === 'boolean'
+    && typeof value.thread.canUnarchive === 'boolean'
     && Array.isArray(value.thread.deliveryFailures)
     && value.thread.deliveryFailures.every(isDeliveryFailure)
 }

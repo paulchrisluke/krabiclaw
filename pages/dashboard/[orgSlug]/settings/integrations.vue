@@ -1,8 +1,8 @@
 <template>
   <!--
     What the business is connected to. Each row is one product with its own
-    connection; the two Google products share an account underneath, which is
-    not the tenant's concern and is not a row.
+    connection; the two Google products may use the same linked Google
+    account, which is not a row.
   -->
   <DashboardIndexPanel id="organization-integrations" title="Integrations" :auto-open="items[0]?.to ?? null">
     <div v-if="pending && !summary" class="space-y-4">
@@ -30,7 +30,6 @@ export interface IntegrationsSummary {
   }>
   google_analytics: { property_name: string | null; measurement_id: string; status: IntegrationStatus } | null
   google_search_console: { site_url: string; status: IntegrationStatus } | null
-  google_account: string | null
   facebook: { page_name: string; status: IntegrationStatus } | null
   instagram: { username: string; status: IntegrationStatus } | null
 }

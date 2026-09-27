@@ -144,7 +144,8 @@ interface ReviewRequestNotificationInput extends OrganizationContext {
   visitAt: string
   partySize: string
   reviewUrl: string
-  optOutUrl: string
+  /** Whose review_requests preference governs this email and its unsubscribe link. */
+  userId: string
 }
 
 interface EmailTemplate {
@@ -900,6 +901,8 @@ export async function notifyReviewRequest(
   const restaurant = organizationName(opts)
   const platformDomain = getPlatformDomain(env)
   const logoUrl = await organizationLogo(db, opts.organizationId)
+  const unsubscribe = await buildUnsubscribeUrls(env, { userId: opts.userId, category: 'review_requests' })
+  if (!unsubscribe) throw new Error('EMAIL_REPLY_SECRET is required to send a review request')
 
   const email = await renderNotificationEmail(reviewRequestMessage({
     guestName: opts.guestName,
@@ -908,9 +911,8 @@ export async function notifyReviewRequest(
     visitAt: opts.visitAt,
     partySize: opts.partySize,
     reviewUrl: opts.reviewUrl,
-    optOutUrl: opts.optOutUrl,
     organizationLogoUrl: logoUrl,
-  }), { platformDomain })
+  }), { platformDomain, unsubscribeUrl: unsubscribe.pageUrl })
 
   await sendEmailNotification(env, db, {
     ...opts,
@@ -926,9 +928,11 @@ export async function notifyReviewRequest(
       visit_at: opts.visitAt,
       party_size: opts.partySize,
       review_url: opts.reviewUrl,
-      opt_out_url: opts.optOutUrl,
+      unsubscribe_url: unsubscribe.pageUrl,
       organization_name: restaurant,
     },
+    unsubscribeUrl: unsubscribe.pageUrl,
+    unsubscribeOneClickUrl: unsubscribe.oneClickUrl,
     email: {
       subject: `How was your visit to ${restaurant}?`,
       html: email.html,

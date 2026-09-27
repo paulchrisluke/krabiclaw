@@ -100,7 +100,7 @@ export interface MediaPresentation {
 /**
  * The still picture that stands for this media — the image itself, or a
  * video's poster. Never a video file: handing an `.mp4` to an `<img>` is the
- * defect this replaces, and it reached customers in a booking email.
+ * defect this replaces, and it reached guests in a booking email.
  *
  * A record whose `kind` is missing or unrecognised has no still. Guessing one
  * from the URL's extension, or assuming an absent kind means "image", is how

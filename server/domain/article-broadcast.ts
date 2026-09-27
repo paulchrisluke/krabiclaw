@@ -3,18 +3,15 @@ import { renderNotificationEmail } from '~/server/emails/render'
 import { articleAnnouncementMessage } from '~/server/notifications/guest-events'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
-import { sendEmail, type EmailDeliveryMode } from '~/server/utils/email-delivery'
-import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
-import { wantsCategoryEmailSql } from '~/server/domain/notification-preferences'
+import { emailSender, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
+import { getResendClient, resendData } from '~/server/utils/resend'
+import { reconcileProductNewsContacts, type ProductNewsEnv, type ProductNewsReconciliation } from '~/server/domain/product-news-contacts'
 import { collectionArticlePath } from '~/utils/article-collections'
 import { coverJoinSql } from '~/server/utils/content/cover'
 
-export interface BroadcastEnv {
-  EMAIL_REPLY_SECRET?: string
+export interface BroadcastEnv extends ProductNewsEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
-  RESEND_API_KEY?: string
   EMAIL_FROM?: string
-  EMAIL_DELIVERY_MODE?: EmailDeliveryMode | string
 }
 
 /**
@@ -28,9 +25,6 @@ export interface BroadcastEnv {
  * time this ships.
  */
 const ANNOUNCEABLE_WINDOW_MS = 24 * 60 * 60 * 1000
-
-/** Sends per tick, so one run cannot exhaust the Worker's subrequest budget. */
-export const BROADCAST_SENDS_PER_RUN = 50
 
 const BROADCAST_CATEGORY = 'product_news' as const
 
@@ -71,12 +65,18 @@ export async function findAnnounceableArticle(db: DbClient, now = new Date()): P
   `, [platformOrganizationId, since])
 }
 
+interface BroadcastRow {
+  id: string
+  content_document_id: string
+  provider_broadcast_id: string | null
+}
+
 /**
  * Claims the broadcast for an article. The unique content_document_id is what
- * makes a republish, or two ticks overlapping, not mail everyone twice: the
+ * makes a republish, or two ticks overlapping, not announce it twice: the
  * second insert changes nothing and the existing row is returned.
  */
-export async function claimBroadcast(db: DbClient, contentDocumentId: string): Promise<string> {
+export async function claimBroadcast(db: DbClient, contentDocumentId: string): Promise<BroadcastRow> {
   await execute(
     db,
     `INSERT INTO broadcasts (id, content_document_id, category, created_at)
@@ -84,75 +84,12 @@ export async function claimBroadcast(db: DbClient, contentDocumentId: string): P
      ON CONFLICT (content_document_id) DO NOTHING`,
     [crypto.randomUUID(), contentDocumentId, BROADCAST_CATEGORY],
   )
-  const row = await queryFirst<{ id: string }>(db, 'SELECT id FROM broadcasts WHERE content_document_id = ?', [contentDocumentId])
+  const row = await queryFirst<BroadcastRow>(db, 'SELECT id, content_document_id, provider_broadcast_id FROM broadcasts WHERE content_document_id = ?', [contentDocumentId])
   if (!row) throw new Error(`Broadcast for ${contentDocumentId} was not claimed`)
-  return row.id
+  return row
 }
 
-interface RecipientRow {
-  id: string
-  email: string
-}
-
-/**
- * Who an announcement is for, against the broadcast aliased `b`.
- *
- * Anonymous, banned, unverified and deletion-scheduled accounts are excluded:
- * none of them is a person who asked to hear from us, and mailing an unverified
- * address is how a sending domain's reputation goes.
- *
- * The `createdAt` bound is what keeps an old broadcast from reopening: someone
- * who signs up next month has no delivery row for last month's article, and
- * without this they would look like a pending recipient of every announcement
- * ever sent. `user.createdAt` is a unix integer and `broadcasts.created_at` an
- * ISO instant, so the bound converts rather than comparing the two directly.
- */
-const RECIPIENT_ELIGIBILITY_SQL = `u.emailVerified = 1
-       AND u.isAnonymous = 0
-       AND COALESCE(u.banned, 0) = 0
-       AND u.deletionScheduledAt IS NULL
-       AND u.createdAt <= unixepoch(b.created_at)`
-
-/** Tenants who have not yet been sent this broadcast and still want the category. */
-export async function listPendingRecipients(db: DbClient, broadcastId: string, limit: number): Promise<RecipientRow[]> {
-  const wants = wantsCategoryEmailSql('u.id', BROADCAST_CATEGORY)
-  return queryAll<RecipientRow>(db, `
-    SELECT u.id, u.email
-      FROM user u
-      JOIN broadcasts b ON b.id = ?
-     WHERE ${RECIPIENT_ELIGIBILITY_SQL}
-       AND ${wants.sql}
-       AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = b.id AND d.user_id = u.id)
-     ORDER BY u.createdAt ASC
-     LIMIT ?
-  `, [broadcastId, ...wants.params, limit])
-}
-
-/**
- * A broadcast that still has someone left to mail.
- *
- * Checked before a new article is claimed. Claiming inserts the `broadcasts`
- * row, which is also what excludes the article from findAnnounceableArticle —
- * so without this, the first tick would send one batch and every recipient
- * past BROADCAST_SENDS_PER_RUN would never be mailed at all.
- */
-export async function findResumableBroadcast(db: DbClient): Promise<{ id: string; content_document_id: string } | null> {
-  const wants = wantsCategoryEmailSql('u.id', BROADCAST_CATEGORY)
-  return queryFirst<{ id: string; content_document_id: string }>(db, `
-    SELECT b.id, b.content_document_id
-      FROM broadcasts b
-     WHERE EXISTS (
-       SELECT 1 FROM user u
-        WHERE ${RECIPIENT_ELIGIBILITY_SQL}
-          AND ${wants.sql}
-          AND NOT EXISTS (SELECT 1 FROM broadcast_deliveries d WHERE d.broadcast_id = b.id AND d.user_id = u.id)
-     )
-     ORDER BY b.created_at ASC
-     LIMIT 1
-  `, wants.params)
-}
-
-/** The article a claimed broadcast refers to, for rendering the next batch. */
+/** The article a claimed broadcast refers to. */
 export async function loadBroadcastArticle(db: DbClient, contentDocumentId: string): Promise<AnnounceableArticle | null> {
   return queryFirst<AnnounceableArticle>(db, `
     SELECT p.id, p.title, p.slug, p.summary, (p.metadata_json ->> '$.category') AS category,
@@ -163,85 +100,146 @@ export async function loadBroadcastArticle(db: DbClient, contentDocumentId: stri
   `, [contentDocumentId])
 }
 
-export async function recordBroadcastDelivery(
-  db: DbClient,
-  input: { broadcastId: string; userId: string; status: 'sent' | 'failed'; providerMessageId?: string | null; error?: string | null },
-): Promise<void> {
-  await execute(
-    db,
-    `INSERT INTO broadcast_deliveries (broadcast_id, user_id, status, provider_message_id, error, sent_at)
-     VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-     ON CONFLICT (broadcast_id, user_id) DO NOTHING`,
-    [input.broadcastId, input.userId, input.status, input.providerMessageId ?? null, input.error ?? null],
-  )
+/**
+ * Claimed broadcasts inside the announceable window, oldest first. Whether one
+ * still needs sending is Resend's state, not a local column: a row with no
+ * provider id has no draft yet, and a row with one is sent exactly when
+ * Resend says its Broadcast is no longer a draft. Past the window an unsent
+ * broadcast is not retried, for the same reason an article that old is not
+ * announced at all.
+ */
+async function listRecentBroadcasts(db: DbClient, now: Date): Promise<BroadcastRow[]> {
+  const since = new Date(now.getTime() - ANNOUNCEABLE_WINDOW_MS).toISOString()
+  return queryAll<BroadcastRow>(db, `
+    SELECT id, content_document_id, provider_broadcast_id
+      FROM broadcasts
+     WHERE category = ? AND created_at >= ?
+     ORDER BY created_at ASC
+  `, [BROADCAST_CATEGORY, since])
+}
+
+function isLogOnlyBroadcastId(providerBroadcastId: string): boolean {
+  return providerBroadcastId.startsWith('log-only:')
+}
+
+async function needsSend(env: BroadcastEnv, row: BroadcastRow): Promise<boolean> {
+  if (!row.provider_broadcast_id) return true
+  // An environment that does not deliver email never sends a provider
+  // Broadcast, including one whose row was copied from production.
+  if (!shouldSendRealEmail(env)) return false
+  if (isLogOnlyBroadcastId(row.provider_broadcast_id)) return false
+  const providerBroadcastId = row.provider_broadcast_id
+  const broadcast = await resendData('broadcasts.get', () => getResendClient(env).broadcasts.get(providerBroadcastId))
+  return broadcast.status === 'draft'
 }
 
 export interface BroadcastRunResult {
   broadcast_id: string | null
   article_id: string | null
-  sent: number
-  failed: number
+  provider_broadcast_id: string | null
+  mode: 'provider' | 'log_only' | null
+  reconciliation: ProductNewsReconciliation['counts'] | null
   skipped?: string
 }
 
 /**
- * One tick: find an article worth announcing, claim it, and mail the next batch
- * of recipients. A tick that dies part-way leaves the delivery rows it already
- * wrote, so the next tick resumes rather than restarting.
+ * Persists the Resend draft's id on the claimed row, once. Two ticks that
+ * both created a draft agree on whichever id landed first; the other draft is
+ * an unsent orphan and is removed.
  */
+async function persistProviderBroadcastId(db: DbClient, env: BroadcastEnv, row: BroadcastRow, providerBroadcastId: string): Promise<string> {
+  const written = await execute(db, 'UPDATE broadcasts SET provider_broadcast_id = ? WHERE id = ? AND provider_broadcast_id IS NULL', [providerBroadcastId, row.id])
+  if (written.meta.changes > 0) return providerBroadcastId
+  const stored = await queryFirst<{ provider_broadcast_id: string | null }>(db, 'SELECT provider_broadcast_id FROM broadcasts WHERE id = ?', [row.id])
+  if (!stored?.provider_broadcast_id) throw new Error(`Broadcast ${row.id} has no provider id after a concurrent claim`)
+  if (!isLogOnlyBroadcastId(providerBroadcastId)) {
+    await resendData('broadcasts.remove', () => getResendClient(env).broadcasts.remove(providerBroadcastId))
+  }
+  return stored.provider_broadcast_id
+}
+
+/**
+ * One tick: announce one article through a native Resend Broadcast.
+ *
+ * The sequence is claim, reconcile the Product News Segment, render once,
+ * create a draft, persist its id, then send that exact Broadcast. The id is
+ * stored before the irreversible send, so a retry after an ambiguous failure
+ * addresses the same Broadcast and can never send a second campaign; at worst
+ * an ambiguous draft creation leaves an unsent orphan draft in Resend.
+ * Recipient expansion, queueing, throttling, delivery, suppressions and
+ * metrics are Resend's.
+ */
+async function findPendingBroadcast(db: DbClient, env: BroadcastEnv, now: Date): Promise<BroadcastRow | null> {
+  for (const row of await listRecentBroadcasts(db, now)) {
+    if (await needsSend(env, row)) return row
+  }
+  const article = await findAnnounceableArticle(db, now)
+  return article ? claimBroadcast(db, article.id) : null
+}
+
 export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now = new Date()): Promise<BroadcastRunResult> {
-  // Finish what is already in flight before starting anything new, so a
-  // recipient list longer than one batch is actually drained.
-  const resumable = await findResumableBroadcast(db)
-  const claimed = resumable
-    ? { broadcastId: resumable.id, article: await loadBroadcastArticle(db, resumable.content_document_id) }
-    : await (async () => {
-        const article = await findAnnounceableArticle(db, now)
-        return article ? { broadcastId: await claimBroadcast(db, article.id), article } : null
-      })()
-
-  if (!claimed) return { broadcast_id: null, article_id: null, sent: 0, failed: 0, skipped: 'no article to announce' }
-  const { broadcastId, article } = claimed
-  if (!article) throw new Error(`Broadcast ${broadcastId} refers to an article that is gone`)
-
-  const recipients = await listPendingRecipients(db, broadcastId, BROADCAST_SENDS_PER_RUN)
-  if (recipients.length === 0) {
-    return { broadcast_id: broadcastId, article_id: article.id, sent: 0, failed: 0, skipped: 'no pending recipients' }
+  const pending = await findPendingBroadcast(db, env, now)
+  if (!pending) {
+    return { broadcast_id: null, article_id: null, provider_broadcast_id: null, mode: null, reconciliation: null, skipped: 'no article to announce' }
   }
 
-  const platformDomain = getPlatformDomain(env)
-  const articleUrl = `https://${platformDomain}${collectionArticlePath('blog', article.slug)}`
+  const article = await loadBroadcastArticle(db, pending.content_document_id)
+  if (!article) throw new Error(`Broadcast ${pending.id} refers to an article that is gone`)
 
-  let sent = 0
-  let failed = 0
-  for (const recipient of recipients) {
-    const unsubscribe = await buildUnsubscribeUrls(env, { userId: recipient.id, category: BROADCAST_CATEGORY })
-    if (!unsubscribe) throw new Error('EMAIL_REPLY_SECRET is required to send a broadcast')
+  // The Segment is made to match D1 before anything is sent to it, so an
+  // account banned, deleted or unverified since the last run is not mailed.
+  const reconciliation = await reconcileProductNewsContacts(db, env)
+  if (reconciliation.failures.length > 0) {
+    throw new Error(`Product News reconciliation failed for ${reconciliation.failures.length} target(s); broadcast ${pending.id} not sent: ${reconciliation.failures.map(failure => `${failure.target}: ${failure.error}`).join('; ')}`)
+  }
 
+  const result = (providerBroadcastId: string): BroadcastRunResult => ({
+    broadcast_id: pending.id,
+    article_id: article.id,
+    provider_broadcast_id: providerBroadcastId,
+    mode: reconciliation.mode,
+    reconciliation: reconciliation.counts,
+  })
+
+  let providerBroadcastId = pending.provider_broadcast_id
+  if (!providerBroadcastId) {
+    if (!shouldSendRealEmail(env)) {
+      // Where email is not delivered the claim is still recorded, so the
+      // article is announced once, and nothing reaches the shared Resend account.
+      return result(await persistProviderBroadcastId(db, env, pending, logOnlyEmailProviderId('broadcast')))
+    }
+    const segmentId = env.RESEND_PRODUCT_NEWS_SEGMENT_ID?.trim()
+    const topicId = env.RESEND_PRODUCT_NEWS_TOPIC_ID?.trim()
+    if (!segmentId || !topicId) throw new Error('RESEND_PRODUCT_NEWS_SEGMENT_ID and RESEND_PRODUCT_NEWS_TOPIC_ID are required to send a broadcast')
+
+    const platformDomain = getPlatformDomain(env)
+    // Resend substitutes its Topic-aware unsubscribe page for this placeholder
+    // per recipient; KrabiClaw's signed unsubscribe is for mail it sends itself.
     const rendered = await renderNotificationEmail(articleAnnouncementMessage({
       title: article.title,
       summary: article.summary,
       coverImageUrl: article.cover_public_url,
-      articleUrl,
-    }), { platformDomain, preferencesUrl: `https://${platformDomain}/dashboard/account/profile/notifications`, unsubscribeUrl: unsubscribe.pageUrl })
-    const result = await sendEmail(env, {
-      to: recipient.email,
+      articleUrl: `https://${platformDomain}${collectionArticlePath('blog', article.slug)}`,
+    }), {
+      platformDomain,
+      preferencesUrl: `https://${platformDomain}/dashboard/account/profile/notifications`,
+      unsubscribeUrl: '{{{RESEND_UNSUBSCRIBE_URL}}}',
+    })
+    const draft = await resendData('broadcasts.create', () => getResendClient(env).broadcasts.create({
+      name: `Article: ${article.title}`,
+      segmentId,
+      topicId,
+      from: emailSender(env),
       subject: article.title,
+      ...(article.summary ? { previewText: article.summary } : {}),
       html: rendered.html,
       text: rendered.text,
-      unsubscribeOneClickUrl: unsubscribe.oneClickUrl,
-      idempotencyKey: `broadcast:${broadcastId}:${recipient.id}`,
-    })
-    // An 'unknown' outcome is not recorded: the send may still have landed, so
-    // the next tick retries it rather than the recipient silently losing it.
-    if (result.status === 'sent') {
-      sent += 1
-      await recordBroadcastDelivery(db, { broadcastId, userId: recipient.id, status: 'sent', providerMessageId: result.messageId })
-    } else if (result.status === 'failed') {
-      failed += 1
-      await recordBroadcastDelivery(db, { broadcastId, userId: recipient.id, status: 'failed', error: result.error })
-    }
+    }))
+    providerBroadcastId = await persistProviderBroadcastId(db, env, pending, draft.id)
   }
 
-  return { broadcast_id: broadcastId, article_id: article.id, sent, failed }
+  if (isLogOnlyBroadcastId(providerBroadcastId)) return result(providerBroadcastId)
+  const sendId = providerBroadcastId
+  await resendData('broadcasts.send', () => getResendClient(env).broadcasts.send(sendId))
+  return result(sendId)
 }

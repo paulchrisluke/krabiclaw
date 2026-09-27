@@ -1,4 +1,4 @@
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
 import type {
@@ -8,6 +8,7 @@ import type {
   ListGuestThreadsOptions,
 } from './types'
 import { formatOperationalStatusLabel, formatThreadWhenLabel } from './status-labels'
+import { resolveGuestThreadMailbox, type GuestThreadMailbox } from './mailbox'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
@@ -19,22 +20,45 @@ const SOURCE_GUEST_NAME_SQL = "json_extract(gt.payload_json, '$.guest.name')"
  * thread with no record yields NULLs, and the surface says the thread has no
  * booking rather than printing a fabricated slot.
  */
-const OPERATIONAL_RECORD_SQL = `
-  LEFT JOIN (
-    SELECT b.request_id, b.status, b.party_size, s.starts_at, s.timezone
+const OPERATIONAL_RECORDS_SQL = `(
+    SELECT b.request_id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone
       FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id
      WHERE b.request_id IS NOT NULL
     UNION ALL
-    SELECT r.request_id, r.status, r.party_size, r.starts_at, r.timezone
+    SELECT r.request_id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone
       FROM reservations r WHERE r.request_id IS NOT NULL
-  ) op ON op.request_id = gt.id`
+  )`
+const OPERATIONAL_RECORD_SQL = `
+  LEFT JOIN ${OPERATIONAL_RECORDS_SQL} op ON op.request_id = gt.id`
+
+/**
+ * `resolveGuestThreadMailbox`, said to the database. Current is not archived
+ * and not ended; Past is archived or ended. The occurrence's END decides, so a
+ * reservation stays Current while it is being served, and a thread with no
+ * occurrence is Current until someone archives it.
+ */
+function mailboxWhere(mailbox: GuestThreadMailbox, now: string): { sql: string; params: string[] } {
+  return mailbox === 'current'
+    ? { sql: ' AND gt.archived_at IS NULL AND (op.ends_at IS NULL OR op.ends_at >= ?)', params: [now] }
+    : { sql: ' AND (gt.archived_at IS NOT NULL OR op.ends_at < ?)', params: [now] }
+}
+
+function mailboxFields(row: { archived_at: string | null; record_ends_at: string | null }, now: string) {
+  const state = resolveGuestThreadMailbox(row, row.record_ends_at === null ? null : { ends_at: row.record_ends_at }, now)
+  return {
+    mailbox: state.mailbox,
+    manuallyArchived: state.manuallyArchived,
+    canArchive: state.canArchive,
+    canUnarchive: state.canUnarchive,
+  }
+}
 
 // The guest's own words where there are any. The booking line is composed in
 // TypeScript instead, because it has to read in the record's timezone and SQL
 // can only concatenate the stored UTC instant.
 const SOURCE_PREVIEW_SQL = `SUBSTR(CASE WHEN gt.kind = 'contact' THEN json_extract(gt.payload_json, '$.message') ELSE NULLIF(TRIM(json_extract(gt.payload_json, '$.notes')), '') END, 1, 160)`
 
-const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.timezone AS record_timezone, op.party_size AS record_party_size,
+const SOURCE_PREVIEW_COLUMNS = `op.starts_at AS record_starts_at, op.ends_at AS record_ends_at, op.timezone AS record_timezone, op.party_size AS record_party_size,
       json_extract(gt.payload_json, '$.party_size_is_minimum') AS party_size_is_minimum`
 
 /*
@@ -100,6 +124,12 @@ export async function getGuestThreadOperationSummary(
     where += ' AND gt.location_id = ?'
     params.push(opts.locationId)
   }
+  // The counts beside a mailbox are that mailbox's counts.
+  if (opts.mailbox) {
+    const mailbox = mailboxWhere(opts.mailbox, new Date().toISOString())
+    where += mailbox.sql
+    params.push(...mailbox.params)
+  }
 
   const counts = await queryFirst<OperationSummary>(db, `
     SELECT
@@ -153,6 +183,7 @@ type GuestThreadListRow = GuestThreadRow & {
   latest_message_kind: 'message' | null
   source_preview: string | null
   record_starts_at: string | null
+  record_ends_at: string | null
   record_timezone: string | null
   record_party_size: number | null
   party_size_is_minimum: unknown
@@ -183,13 +214,13 @@ export async function listGuestThreads(
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
   }
-  if (opts.occurrence) {
-    // A thread with no booking has no occurrence, so it is never past. It stays
-    // in the current list, the way a direct message does on Airbnb.
-    where += opts.occurrence === 'past'
-      ? ' AND op.starts_at < ?'
-      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
-    params.push(new Date().toISOString())
+  // One instant for the filter and for each row's mailbox, so a row cannot be
+  // listed as Current and labelled Past.
+  const now = new Date().toISOString()
+  if (opts.mailbox) {
+    const mailbox = mailboxWhere(opts.mailbox, now)
+    where += mailbox.sql
+    params.push(...mailbox.params)
   }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
@@ -263,6 +294,7 @@ export async function listGuestThreads(
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,
+      ...mailboxFields(row, now),
     })
   }
   return items
@@ -290,13 +322,13 @@ export async function listOrganizationGuestThreads(
     where += ' AND gt.conversation_state = ?'
     params.push(opts.conversationState)
   }
-  if (opts.occurrence) {
-    // A thread with no booking has no occurrence, so it is never past. It stays
-    // in the current list, the way a direct message does on Airbnb.
-    where += opts.occurrence === 'past'
-      ? ' AND op.starts_at < ?'
-      : ' AND (op.starts_at IS NULL OR op.starts_at >= ?)'
-    params.push(new Date().toISOString())
+  // One instant for the filter and for each row's mailbox, so a row cannot be
+  // listed as Current and labelled Past.
+  const now = new Date().toISOString()
+  if (opts.mailbox) {
+    const mailbox = mailboxWhere(opts.mailbox, now)
+    where += mailbox.sql
+    params.push(...mailbox.params)
   }
 
   const limit = Math.max(1, Math.min(opts.limit ?? 100, 200))
@@ -376,6 +408,7 @@ export async function listOrganizationGuestThreads(
       whenLabel: row.record_starts_at && row.record_timezone
         ? formatThreadWhenLabel(row.record_starts_at, row.record_timezone)
         : null,
+      ...mailboxFields(row, now),
     })
   }
   return items
@@ -436,4 +469,59 @@ export async function updateThreadProjectionIfLatestEntry(
           )
       )
   `, [update.conversationState, update.conversationState === 'resolved' ? now : null, now, threadId, entryId])
+}
+
+/**
+ * Archive or unarchive a thread, and the one operation entry that records it,
+ * as one batch.
+ *
+ * The entry is written only while the thread is still in the state the
+ * transition leaves — archived_at unset for Archive, set for Unarchive — and
+ * its occurrence has not ended, which is `resolveGuestThreadMailbox`'s
+ * canArchive/canUnarchive said to the database. The update then lands only
+ * where that entry did, so a thread that changed between the caller's read and
+ * this write gets neither. A retried key hits the entry's dedupe key and writes
+ * nothing.
+ *
+ * `updated_at` is deliberately untouched: it orders the inbox by conversation
+ * activity, and filing a conversation away is not the guest saying anything.
+ */
+export function mailboxTransitionQueries(input: {
+  transition: 'archive' | 'unarchive'
+  threadId: string
+  organizationId: string
+  actorUserId: string
+  entryId: string
+  dedupeKey: string
+  now: string
+}): [entry: BatchQuery, update: BatchQuery] {
+  const archive = input.transition === 'archive'
+  const guard = (alias: string) => `${alias}.id = ? AND ${alias}.organization_id = ?
+        AND ${alias}.archived_at IS ${archive ? 'NULL' : 'NOT NULL'}
+        AND NOT EXISTS (SELECT 1 FROM ${OPERATIONAL_RECORDS_SQL} op WHERE op.request_id = ${alias}.id AND op.ends_at < ?)`
+  const guardParams = [input.threadId, input.organizationId, input.now]
+  return [{
+    query: `
+      INSERT INTO activity_entries
+        (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, gt.id, 'operation', 'request', 'member', ?, NULL, NULL, ?, ?, ?,
+             COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = gt.id), 0) + 1,
+             ?, ?
+      FROM requests gt
+      WHERE ${guard('gt')}
+      ON CONFLICT(dedupe_key) DO NOTHING
+    `,
+    params: [
+      input.entryId, input.actorUserId, archive ? 'thread.archived' : 'thread.unarchived',
+      JSON.stringify({ action: input.transition }), input.dedupeKey, input.now, input.now,
+      ...guardParams,
+    ],
+  }, {
+    query: `
+      UPDATE requests SET archived_at = ?, archived_by_user_id = ?
+      WHERE ${guard('requests')}
+        AND EXISTS (SELECT 1 FROM activity_entries WHERE id = ? AND request_id = requests.id)
+    `,
+    params: [archive ? input.now : null, archive ? input.actorUserId : null, ...guardParams, input.entryId],
+  }]
 }

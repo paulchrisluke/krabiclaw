@@ -1,9 +1,10 @@
 import type { GoogleSearchConsoleIntegration } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
-import { googleAccessToken, type GoogleCredentialEnv } from './google-credential'
+import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 
 /**
- * Search Console as a product of its own, over the shared Google credential.
+ * Search Console as a product of its own, over a Better Auth linked Google
+ * account the organization names by `account_id`.
  *
  * The tenant never pastes a verification token. KrabiClaw controls the site's
  * public HTML, so it can do what a verification token is for: Google issues
@@ -81,11 +82,12 @@ export async function addSearchConsoleSite(accessToken: string, siteUrl: string)
 }
 
 export async function readSearchConsoleIntegration(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
 ): Promise<GoogleSearchConsoleIntegration | null> {
   const row = await queryFirst<Omit<GoogleSearchConsoleIntegration, 'verified'> & { verified: number }>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_search_console.revision') AS revision,
+           json_extract(integrations_json, '$.google_search_console.account_id') AS account_id,
            json_extract(integrations_json, '$.google_search_console.site_url') AS site_url,
            json_extract(integrations_json, '$.google_search_console.verified') AS verified,
            json_extract(integrations_json, '$.google_search_console.verification_token') AS verification_token,
@@ -106,8 +108,9 @@ export async function readSearchConsoleIntegration(
  * and the public cache purge come first and the verify call second.
  */
 export async function storeVerificationToken(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
+  accountId: string,
   siteUrl: string,
   token: string,
 ): Promise<void> {
@@ -115,6 +118,7 @@ export async function storeVerificationToken(
   const now = new Date().toISOString()
   const payload = JSON.stringify({
     revision: crypto.randomUUID(),
+    account_id: accountId,
     site_url: siteUrl,
     verified: false,
     verification_token: token,
@@ -136,8 +140,9 @@ export async function storeVerificationToken(
  * being served; one the account already owned never had a token here.
  */
 export async function storeSearchConsoleSelection(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
+  accountId: string,
   siteUrl: string,
   verificationToken: string | null,
 ): Promise<void> {
@@ -145,6 +150,7 @@ export async function storeSearchConsoleSelection(
   const now = new Date().toISOString()
   const payload = JSON.stringify({
     revision: crypto.randomUUID(),
+    account_id: accountId,
     site_url: siteUrl,
     verified: true,
     ...(verificationToken ? { verification_token: verificationToken } : {}),
@@ -160,9 +166,9 @@ export async function storeSearchConsoleSelection(
   if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before saving.')
 }
 
-/** Clears Search Console state. The shared credential is not this function's to touch. */
+/** Clears Search Console state. The linked Google account is its user's, and stays linked. */
 export async function clearSearchConsoleIntegration(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
 ): Promise<void> {
   if (!env.DB) throw new Error('Database not available')
@@ -180,14 +186,15 @@ export async function clearSearchConsoleIntegration(
  * awaited before Google is asked to fetch.
  */
 export async function verifyAndAddProperty(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
+  accountId: string,
   siteUrl: string,
   publish: () => Promise<void>,
 ): Promise<void> {
-  const accessToken = await googleAccessToken(env, organizationId)
+  const { accessToken } = await linkedAccountAccessToken(env, accountId)
   const token = await requestVerificationToken(accessToken, siteUrl)
-  await storeVerificationToken(env, organizationId, siteUrl, token)
+  await storeVerificationToken(env, organizationId, accountId, siteUrl, token)
   try {
     await publish()
     await verifySiteOwnership(accessToken, siteUrl)
@@ -199,5 +206,5 @@ export async function verifyAndAddProperty(
     await publish()
     throw error
   }
-  await storeSearchConsoleSelection(env, organizationId, siteUrl, token)
+  await storeSearchConsoleSelection(env, organizationId, accountId, siteUrl, token)
 }

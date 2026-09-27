@@ -1,25 +1,22 @@
 #!/usr/bin/env node
-// Offline transfer of a database export into the current migrated schema.
+// Offline transfer of a database export into the current generated baseline.
 // Never imported by application runtime.
 //
-//   node scripts/transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]
+//   node scripts/transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite>
+//     [--payload <payload.sql>] [--without-jwks] [--delta-from <earlier-target.sqlite>]
 //
-// The target is created from the complete ordered migration chain, every table
-// the source and the current schema share is copied column-for-column, the transforms
-// below run against the copied rows, and the result is audited. With --payload
-// the script also writes the data-only replacement that
-// `wrangler d1 execute --file` applies to a database that already carries the
-// same migration chain (its d1_migrations ledger is never touched).
+// The target is built from migrations/0000_baseline.sql. Every table the source
+// and the baseline share is copied column-for-column, the schema epoch below
+// maps what the baseline no longer has, the pending data transforms run, and
+// the result is audited under full CHECK and foreign-key enforcement. A source
+// table or column the baseline does not have fails the transfer unless the
+// epoch retires it by name, so nothing is dropped without saying so.
 //
-// The catalog epoch (#919) is a table-level reshape, not a column edit. The
-// source carries `offerings`, `product_categories` and a site- and
-// location-scoped `products`; the baseline carries an organization-level
-// Product reaching sites through publications, locations through
-// product_locations, money through variants and prices, grouping through
-// collections, description through metafields, and time through sessions,
-// bookings and reservations. Those tables are derived here rather than copied.
-// A source that already carries the catalog schema has no `offerings` table, the
-// derivation reads nothing, and the plain copy transfers it.
+// With --payload the script also writes the data-only replacement that
+// `wrangler d1 execute --file` applies to a database built from the same
+// baseline. With --delta-from that payload instead inserts only the rows whose
+// primary key the earlier transfer's target did not hold: the rows created in
+// the source after the initial export, copied onto the live replacement.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -27,15 +24,11 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { CONTENT_DOCUMENT_SCOPE_QUERY, MEDIA_PLACEMENT_OWNER_AUDIT_QUERY } from './audit-orphaned-media-placements.mjs'
-import { PROMOTE_PRODUCT_COVERS_SQL, RENUMBER_PRODUCT_GALLERIES_SQL } from './lib/product-covers.mjs'
-import { serializeMetafieldValue } from '../shared/metafields.ts'
-import { occurrenceKey } from '../shared/bookings.ts'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
 import { organizationRoles } from '../utils/organization-access.ts'
 
 /** The roles the access matrix declares. Anything else evaluates to no permissions. */
 const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
-import { localDateTimeToInstant } from '../utils/timezone.ts'
 
 const MIGRATIONS_DIRECTORY = 'migrations'
 const hash = value => createHash('sha256').update(value).digest('hex')
@@ -363,961 +356,173 @@ export function auditTargetInvariants(target) {
 }
 
 // ---------------------------------------------------------------------------
-// The catalog epoch (#919)
+// Schema epoch #1083
 // ---------------------------------------------------------------------------
 
-// Tables the catalog derivation owns outright. `products` and `prices` are
-// reshaped; `media_placements` and `resource_localizations` name products and
-// offerings in their rows. Every other table the baseline shares with the
-// source is copied, including tables that merely gained a column.
-const DERIVED_FROM_RETIRED_MODEL = new Set(['products', 'prices', 'media_placements', 'resource_localizations'])
-// The one table whose tenant lived only in `organization_id`, so its rows cannot be
-// copied column-for-column — the organization has to be read off the site
-// first. deriveOrganizations inserts them.
-const DERIVED_FROM_SITES = new Set(['public_resource_cache_invalidations'])
-// Three tables were named after the row they hung off rather than the tenant
-// they belong to. The rows are unchanged; only the table name is, so the copy
-// reads them from their old name.
-const RENAMED_FROM_SITES = new Map([
-  ['organization_locales', 'site_locales'],
-  ['organization_domains', 'site_domains'],
-  ['organization_redirects', 'site_redirects'],
-])
-const RESERVATION_DURATION_MINUTES = 120
-const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
-const EMPTY_JSON = new Set(['[]', '{}', 'null'])
-const blank = value => value === null || value === undefined || String(value).trim() === '' || EMPTY_JSON.has(String(value).trim())
-
 /**
- * The single non-empty value a merge group holds for one field: `null` when
- * nobody supplied it, `undefined` when two rows disagree. An absent value never
- * competes with a present one, so a row that says nothing does not block a
- * merge — but two rows that say different things do.
- */
-function only(values) {
-  const distinct = [...new Set(values.filter(value => !blank(value)).map(String))]
-  return distinct.length === 1 ? distinct[0] : distinct.length === 0 ? null : undefined
-}
-
-/** Authored fields whose disagreement blocks a merge. */
-const MERGE_FIELDS = ['name', 'description', 'order_url', 'seo_title', 'seo_description', 'canonical_url', 'robots', 'tags_json', 'details_json', 'experience_json']
-
-/**
- * A pre-#919 Product is scoped to one location, so a dish served at two
- * locations is two rows carrying the same dish. The baseline's Product belongs
- * to the organization and reaches locations through product_locations, so those
- * rows are one Product offered twice — but only where they actually say the
- * same thing. Where two rows disagree on authored copy there is no single
- * source for the merged value, so both survive under location-qualified slugs
- * and their old paths are redirected. Nothing is picked.
- */
-export function planProductIdentity(stage) {
-  const rows = stage.prepare(`SELECT p.id, p.organization_id, p.location_id, p.slug, ${MERGE_FIELDS.map(field => `p.${field}`).join(', ')},
-      (SELECT l.slug FROM old.business_locations l WHERE l.id = p.location_id) AS location_slug
-    FROM old.products p ORDER BY p.id`).all()
-  const localized = stage.prepare("SELECT resource_id, locale, values_json FROM old.resource_localizations WHERE resource_type = 'product'").all()
-  const localizedById = new Map(localized.map(row => [`${row.resource_id}:${row.locale}`, row.values_json]))
-
-  const groups = new Map()
-  for (const row of rows) {
-    const key = `${row.organization_id} ${row.slug}`
-    groups.set(key, [...(groups.get(key) ?? []), row])
-  }
-
-  const plan = []
-  for (const group of groups.values()) {
-    if (group.length === 1) {
-      plan.push({ old_id: group[0].id, new_id: group[0].id, new_slug: group[0].slug, merged_into: null, redirect_from: null, location_id: group[0].location_id })
-      continue
-    }
-    const conflicts = MERGE_FIELDS.filter(field => only(group.map(member => member[field])) === undefined)
-    const locales = [...new Set(localized.filter(row => group.some(member => member.id === row.resource_id)).map(row => row.locale))]
-    for (const locale of locales) {
-      const values = group.map(member => localizedById.get(`${member.id}:${locale}`)).filter(Boolean).map(value => JSON.parse(value))
-      for (const field of new Set(values.flatMap(value => Object.keys(value)))) {
-        const rendered = values.map(value => value[field] === undefined ? null : typeof value[field] === 'string' ? value[field] : JSON.stringify(value[field]))
-        if (only(rendered) === undefined) conflicts.push(`${locale}.${field}`)
-      }
-    }
-    if (conflicts.length === 0) {
-      // The surviving id is the lowest of the group: an opaque identifier,
-      // never a choice between two authored values.
-      const survivor = group.map(member => member.id).sort()[0]
-      for (const member of group) {
-        plan.push({ old_id: member.id, new_id: survivor, new_slug: member.slug, merged_into: member.id === survivor ? null : survivor, redirect_from: null, location_id: member.location_id })
-      }
-      continue
-    }
-    for (const member of group) {
-      assert(member.location_slug, `Product ${member.id} has no location slug to qualify the contested slug "${member.slug}" with`)
-      plan.push({
-        old_id: member.id, new_id: member.id, new_slug: `${member.slug}-${member.location_slug}`,
-        merged_into: null, redirect_from: member.slug, location_id: member.location_id,
-        conflicts: [...new Set(conflicts)].join(','),
-      })
-    }
-  }
-  return plan
-}
-
-/** Metafield definitions the retired columns become, by namespace and key. */
-const EXPERIENCE_METAFIELDS = {
-  tagline: { name: 'Tagline', value_type: 'single_line_text' },
-  pricing_note: { name: 'Pricing note', value_type: 'single_line_text' },
-  meeting_point: { name: 'Meeting point', value_type: 'multi_line_text' },
-  cancellation_policy: { name: 'Cancellation policy', value_type: 'multi_line_text' },
-  included_items: { name: 'What is included', value_type: 'list.single_line_text' },
-  what_to_bring: { name: 'What to bring', value_type: 'list.single_line_text' },
-}
-
-function deriveCatalog(stage, now, record) {
-  const plan = planProductIdentity(stage)
-  stage.exec('CREATE TEMP TABLE product_map (old_id TEXT PRIMARY KEY, new_id TEXT NOT NULL, new_slug TEXT NOT NULL, merged_into TEXT, redirect_from TEXT, location_id TEXT NOT NULL)')
-  const insertMap = stage.prepare('INSERT INTO temp.product_map (old_id, new_id, new_slug, merged_into, redirect_from, location_id) VALUES (?, ?, ?, ?, ?, ?)')
-  for (const row of plan) insertMap.run(row.old_id, row.new_id, row.new_slug, row.merged_into, row.redirect_from, row.location_id)
-  record('products_merged', plan.filter(row => row.merged_into).length)
-  record('products_slug_qualified', plan.filter(row => row.redirect_from).length)
-
-  // --- the Product itself, and the variant that makes it buyable
-  record('products', stage.prepare(`INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label, marketing_features, tags, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
-    SELECT m.new_id, max(p.organization_id), max(nullif(trim(p.name), '')), max(m.new_slug),
-      coalesce(max(nullif(trim(p.description), '')), ''), max(p.available), max(nullif(trim(p.order_url), '')),
-      (SELECT max(nullif(op.unit, 'item')) FROM old.prices op JOIN temp.product_map om ON om.old_id = op.product_id WHERE om.new_id = m.new_id),
-      '[]', coalesce(max(nullif(p.tags_json, '[]')), '[]'), '{}', NULL,
-      max(p.source), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id`).run().changes)
-  record('product_variants', stage.prepare(`INSERT INTO product_variants (id, organization_id, product_id, name, sku, active, sort_order, created_at, updated_at, created_by, updated_by)
-    SELECT p.id || '-default', p.organization_id, p.id, p.name, NULL, 1, 0, p.created_at, p.updated_at, p.created_by, p.updated_by FROM products p`).run().changes)
-
-  // --- money. A location-scoped price stays location-scoped; a "was" price
-  // that is not above the current price says nothing and is dropped. A zero
-  // amount on a product priced in words was a placeholder for "no amount",
-  // which is what the pricing note now says: zero here would read as free.
-  record('prices_compare_at_dropped', stage.prepare(`SELECT count(*) AS n FROM old.prices WHERE compare_at_amount_minor IS NOT NULL AND compare_at_amount_minor <= amount_minor`).get().n)
-  record('prices', stage.prepare(`INSERT INTO prices (id, organization_id, product_variant_id, location_id, active, currency, unit_amount, type, recurring_interval, recurring_interval_count, tax_behavior, compare_at_unit_amount, valid_from_at, valid_until_at, source, created_at, updated_at, created_by, updated_by)
-    SELECT op.id, op.organization_id, m.new_id || '-default', op.location_id, 1, op.currency, op.amount_minor, 'one_time', NULL, NULL, op.tax_behavior,
-      CASE WHEN op.compare_at_amount_minor > op.amount_minor THEN op.compare_at_amount_minor END,
-      op.valid_from, op.valid_until, op.provenance, op.created_at, op.created_at, op.created_by, op.created_by
-    FROM old.prices op JOIN temp.product_map m ON m.old_id = op.product_id
-    WHERE NOT (op.amount_minor = 0 AND EXISTS (
-      SELECT 1 FROM old.products p, json_each(p.details_json) j
-       WHERE p.id = op.product_id AND j.value ->> '$.key' = 'price-note'
-    ))`).run().changes)
-
-  // --- the three independent states the old `is_visible` flag stood for
-  record('product_publications', stage.prepare(`INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
-    SELECT max(p.organization_id), m.new_id, max(p.is_visible), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id`).run().changes)
-  record('product_locations', stage.prepare(`INSERT INTO product_locations (organization_id, product_id, location_id, active, published, created_at, updated_at, created_by, updated_by)
-    SELECT max(p.organization_id), m.new_id, p.location_id, max(p.available), max(p.is_visible), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id GROUP BY m.new_id, p.location_id`).run().changes)
-
-  // --- grouping
-  record('collections', stage.prepare(`INSERT INTO collections (id, organization_id, location_id, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
-    SELECT id, organization_id, location_id, name, slug, NULL, sort_order, created_at, updated_at, created_by, updated_by FROM old.product_categories`).run().changes)
-  record('collection_products', stage.prepare(`INSERT INTO collection_products (organization_id, collection_id, product_id, sort_order, created_at, updated_at, created_by, updated_by)
-    SELECT max(p.organization_id), p.category_id, m.new_id, min(p.sort_order), min(p.created_at), max(p.updated_at), max(p.created_by), max(p.updated_by)
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id
-    WHERE p.category_id IS NOT NULL GROUP BY p.category_id, m.new_id`).run().changes)
-
-  deriveDraftPayloads(stage, record)
-  deriveMetafields(stage, now, record)
-  deriveBookingCapability(stage, now, record)
-  deriveProductMedia(stage, record)
-  deriveOfferingPages(stage, now, record)
-  // After the placements exist: this renames the slots they are addressed by.
-  deriveCanonicalContentBlocks(stage, record)
-  deriveGuestRecords(stage, record)
-  deriveLocalizations(stage, record)
-  deriveSlugRedirects(stage, now, record)
-}
-
-/**
- * One shape for a content block.
+ * What this epoch retires on purpose. A source table or column outside this
+ * list that the baseline does not carry fails the transfer: it is data the copy
+ * would otherwise drop without anyone deciding to.
  *
- * The old model let a feature grid hold its items under `features`, a team
- * under `people` beside them, and its images inside `data` as asset objects.
- * The block contract names exactly one list — `items` — and says media lives
- * in placements, so every reader had to know the private spellings and the
- * CMS could not save any of these blocks at all: its writer refuses an
- * `asset_id` anywhere in `data`.
+ * `broadcast_deliveries` rows are provider-delivery bookkeeping Resend owns
+ * now (#1077); the SEO override columns are derived from title, summary and
+ * path (#1080); a pending scheduled deletion is discarded with the scheduling
+ * model (#913). None of them is copied anywhere.
+ */
+export const EPOCH_RETIRED = {
+  tables: ['customers', 'broadcast_deliveries'],
+  columns: {
+    requests: ['customer_id'],
+    reservations: ['customer_id'],
+    bookings: ['customer_id'],
+    review_requests: ['customer_id', 'anonymous_user_id'],
+    reviews: ['customer_id'],
+    content_documents: ['seo_title', 'seo_description', 'canonical_url'],
+    user: ['deletionScheduledAt'],
+    organization: ['deletionScheduledAt'],
+  },
+  // A placement whose slot the contract no longer declares renders nowhere.
+  // #1098 retired the organization's dark logo with no replacement, so its
+  // rows are dropped and each owner is listed rather than carried into a
+  // database where nothing can show them.
+  placements: ['organization:logo_dark'],
+}
+
+/** Drop placements in retired slots and name their owners. */
+function retirePlacementSlots(stage, record) {
+  const dropped = []
+  for (const key of EPOCH_RETIRED.placements) {
+    const [ownerType, slot] = key.split(':')
+    const rows = stage.prepare(`SELECT mp.id, mp.owner_id, mp.asset_id, o.slug FROM main.media_placements mp
+      LEFT JOIN main.organization o ON mp.owner_type = 'organization' AND o.id = mp.owner_id
+      WHERE mp.owner_type = ? AND mp.slot = ? ORDER BY mp.owner_id, mp.id`).all(ownerType, slot)
+    for (const row of rows) dropped.push({ owner_type: ownerType, slot, owner_id: row.owner_id, slug: row.slug ?? null, placement_id: row.id, asset_id: row.asset_id })
+    stage.prepare('DELETE FROM main.media_placements WHERE owner_type = ? AND slot = ?').run(ownerType, slot)
+  }
+  record('retired_placements', dropped.length)
+  return dropped
+}
+
+/**
+ * #1087 moves every provider credential onto the connecting person's Better
+ * Auth linked account, which the transfer cannot create from a token stored on
+ * the organization. So a `facebook` or `instagram` connection that names no
+ * `account_id`, and every `google_credential`, is removed rather than carried,
+ * and each organization that loses one is listed so its owner can reconnect.
+ * No token survives on the organization, and no account_id is invented.
+ * Selection-only keys (`google_analytics`, `google_search_console`) stay.
+ */
+function retireOrganizationProviderCredentials(stage, record) {
+  const rows = stage.prepare(`SELECT id, slug, name, integrations_json FROM main.organization
+    WHERE json_type(integrations_json, '$.google_credential') IS NOT NULL
+       OR json_type(integrations_json, '$.facebook') IS NOT NULL
+       OR json_type(integrations_json, '$.instagram') IS NOT NULL`).all()
+  const update = stage.prepare('UPDATE main.organization SET integrations_json = ? WHERE id = ?')
+  const dropped = []
+  for (const row of rows) {
+    const integrations = JSON.parse(row.integrations_json)
+    const connections = []
+    if (integrations.google_credential !== undefined) { delete integrations.google_credential; connections.push('google') }
+    for (const key of ['facebook', 'instagram']) {
+      const connection = integrations[key]
+      if (connection === undefined) continue
+      if (typeof connection?.account_id !== 'string' || !connection.account_id.trim()) { delete integrations[key]; connections.push(key); continue }
+      for (const field of Object.keys(connection).filter(name => name.startsWith('encrypted_'))) delete connection[field]
+    }
+    const serialized = JSON.stringify(integrations)
+    if (serialized !== row.integrations_json) update.run(serialized, row.id)
+    if (connections.length) dropped.push({ organization_id: row.id, slug: row.slug, name: row.name, connections })
+  }
+  record('organization_connections_to_reconnect', dropped.length)
+  return dropped
+}
+
+/** The domain rows that named a person through `customers`. */
+const CUSTOMER_REFERENCES = ['requests', 'reservations', 'bookings', 'review_requests', 'reviews']
+
+/**
+ * `customers` was a second identity beside Better Auth's `user`. Each row
+ * becomes the Better Auth user it names — or, when it names none, one
+ * anonymous user keyed by the customer's own id — and every domain row that
+ * pointed at the customer points at that user.
  *
- * Here they become what they are: a feature grid with `items`, a `team_grid`
- * with the people, and placements at `items.<index>.image`. Nothing is
- * invented — every embedded asset already has the placement it names.
+ * Every inconsistency is collected and the transfer fails with all of them at
+ * once: a transfer that stops at the first one is re-run once per bad row.
+ * Nothing here picks between two values.
  */
-/**
- * `organizations` is gone: an organization and a site were the same business wearing two
- * records, and the site's half is now the organization's own columns (#1050).
- *
- * The plain copy cannot do this. Those columns are new to `organization`, so a
- * copy gives every tenant the schema's defaults — a blank settings_json, the
- * `saya-theme-v1` theme, `restaurant` — silently replacing every tenant's real
- * configuration with a plausible-looking one. They are read across from `organizations`
- * here instead, and the source `organizations` row is the only place they exist.
- *
- * `organization.name` takes `organizations.brand_name`. The organization's own name
- * disagreed with it on four of six tenants and rendered nowhere a customer
- * looks, while `brand_name` is what every tenant's website puts in og:site_name.
- * One of them was wrong and it was not the one on the website.
- */
-function deriveOrganizations(stage, record) {
-  const SITE_COLUMNS = [
-    'settings_json', 'integrations_json', 'theme_id', 'subdomain', 'brand_description',
-    'contact_email', 'contact_phone', 'default_currency', 'status', 'onboarding_status',
-    'url_structure', 'vertical', 'updated_at', 'updated_by',
-    'seo_title', 'seo_description', 'canonical_url', 'social_facebook_url',
-    'social_instagram_url', 'social_tiktok_url', 'feature_overrides', 'analytics_data_start_at',
-  ]
+function deriveUserIdentity(stage, sourceTables, record) {
+  if (!sourceTables.includes('customers')) return
+  const problems = []
+  const refuse = (title, rows) => { if (rows.length) problems.push(`${title} (${rows.length}):\n${rows.map(row => `  ${JSON.stringify(row)}`).join('\n')}`) }
 
-  // One site per organization is what the data has always held, and the whole
-  // change rests on it. A second site would mean one of them silently losing its
-  // configuration, so this fails rather than picking.
-  const doubled = stage.prepare(`SELECT organization_id, count(*) AS n FROM old.organizations GROUP BY organization_id HAVING n > 1`).all()
-  assert(doubled.length === 0, `Organizations with more than one organization cannot be collapsed: ${doubled.map(row => row.organization_id).join(', ')}`)
-  // An organization with no site never finished provisioning: nothing claimed a
-  // subdomain for it and no website was ever served. It keeps its own name and
-  // the schema's defaults, which is what `onboarding_status = 'pending'` says.
-  // It must not go through the assignments below — every subquery would return
-  // NULL and blank the NOT NULL columns the defaults just filled.
-  const unprovisioned = stage.prepare(`SELECT id FROM main.organization WHERE id NOT IN (SELECT organization_id FROM old.organizations)`).all()
-  record('organizations_unprovisioned', unprovisioned.length)
-
-  // Its locales came from the site too, so it has none — and every read of an
-  // organization resolves its source locale, which throws when there is not
-  // exactly one. English published-as-source is what provisioning would have
-  // written; it describes no content, because there is none yet.
-  record('unprovisioned_organizations_take_a_source_locale', stage.prepare(`
-    INSERT INTO main.organization_locales (id, organization_id, locale, label, is_source, status)
-    SELECT 'locale::' || o.id || '::en', o.id, 'en', 'English', 1, 'published'
-      FROM main.organization o
-     WHERE NOT EXISTS (SELECT 1 FROM main.organization_locales l WHERE l.organization_id = o.id)`).run().changes)
-
-  const assignments = SITE_COLUMNS.map(name => `${qi(name)} = (SELECT s.${qi(name)} FROM old.organizations s WHERE s.organization_id = main.organization.id)`)
-  assignments.push(`"name" = (SELECT s."brand_name" FROM old.organizations s WHERE s.organization_id = main.organization.id)`)
-  record('organizations_absorb_their_site', stage.prepare(`UPDATE main.organization SET ${assignments.join(', ')}
-    WHERE EXISTS (SELECT 1 FROM old.organizations s WHERE s.organization_id = main.organization.id)`).run().changes)
-
-  // Three tables scoped their rows by site alone and left organization_id NULL —
-  // analytics_events for 36,605 of them. Dropping organization_id without reading the
-  // organization off it first is how those rows would lose their tenant.
-  for (const table of ['analytics_events', 'mcp_tool_call_events', 'activity_entries']) {
-    record(`${table}_take_their_organization_from_their_site`, stage.prepare(`
-      UPDATE main.${qi(table)} SET organization_id = (
-        SELECT s.organization_id FROM old.${qi(table)} t JOIN old.organizations s ON s.id = t.organization_id WHERE t.id = main.${qi(table)}.id
-      ) WHERE organization_id IS NULL`).run().changes)
+  for (const table of CUSTOMER_REFERENCES) {
+    // A reference to no customer would map to no one, silently.
+    refuse(`${table} rows naming a customer that does not exist`, stage.prepare(`SELECT t.id, t.customer_id FROM old.${qi(table)} t
+      WHERE t.customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM old.customers c WHERE c.id = t.customer_id)`).all())
+    // A customer is one organization's; a row of another organization naming it is a tenant leak.
+    refuse(`${table} rows naming another organization's customer`, stage.prepare(`SELECT t.id, t.organization_id, t.customer_id, c.organization_id AS customer_organization_id
+      FROM old.${qi(table)} t JOIN old.customers c ON c.id = t.customer_id WHERE c.organization_id IS NOT t.organization_id`).all())
   }
-  // A row that never named a tenant still does not — an MCP call made before
-  // sign-in, a global activity entry. What must not happen is a row that DID
-  // name one arriving without it, which is the whole risk of dropping organization_id.
-  for (const table of ['analytics_events', 'mcp_tool_call_events', 'activity_entries']) {
-    const stranded = stage.prepare(`
-      SELECT count(*) AS n FROM main.${qi(table)} t
-       WHERE t.organization_id IS NULL
-         AND EXISTS (SELECT 1 FROM old.${qi(table)} o WHERE o.id = t.id AND o.organization_id IS NOT NULL)`).get().n
-    assert(stranded === 0, `${table}: ${stranded} rows named a organization but have no organization after derivation`)
+  refuse('Customers linked to a user that does not exist', stage.prepare(`SELECT c.id, c.user_id FROM old.customers c
+    WHERE c.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM main.user u WHERE u.id = c.user_id)`).all())
+  refuse('Unlinked customers whose id already belongs to an unrelated Better Auth user', stage.prepare(`SELECT c.id, u.email FROM old.customers c
+    JOIN main.user u ON u.id = c.id WHERE c.user_id IS NULL`).all())
+  refuse('Unlinked customers whose migrated email already belongs to a Better Auth user', stage.prepare(`SELECT c.id, u.id AS user_id FROM old.customers c
+    JOIN main.user u ON u.email = 'anon-migrated-' || c.id || '@customers.krabiclaw.local' WHERE c.user_id IS NULL`).all())
+  // A customer no organization-scoped row refers to has nowhere to go: there is
+  // no profile table to keep it in, and dropping it is not this transfer's call.
+  refuse('Customers no domain row of their own organization refers to', stage.prepare(`SELECT c.id, c.organization_id, c.source, c.created_at, c.updated_at
+    FROM old.customers c WHERE NOT (${CUSTOMER_REFERENCES.map(table => `EXISTS (SELECT 1 FROM old.${qi(table)} t WHERE t.customer_id = c.id AND t.organization_id = c.organization_id)`).join(' OR ')})
+    ORDER BY c.organization_id, c.id`).all())
+
+  stage.exec(`CREATE TEMP TABLE customer_user AS SELECT id AS customer_id, coalesce(user_id, id) AS user_id FROM old.customers`)
+
+  // One Stripe Customer per person. Two different ones for the same person, or
+  // one shared by two people, is a billing identity nobody can pick for them.
+  const stripe = `SELECT u.id AS user_id, 'user.stripeCustomerId' AS source, u.id AS row_id, u.stripeCustomerId AS stripe_customer_id FROM main.user u WHERE u.stripeCustomerId IS NOT NULL
+    UNION SELECT m.user_id, 'customers.stripe_customer_id', c.id, c.stripe_customer_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id WHERE c.stripe_customer_id IS NOT NULL`
+  refuse('People with more than one Stripe customer', stage.prepare(`SELECT * FROM (${stripe}) WHERE user_id IN (
+    SELECT user_id FROM (${stripe}) GROUP BY user_id HAVING count(DISTINCT stripe_customer_id) > 1) ORDER BY user_id, source, row_id`).all())
+  refuse('Stripe customers shared by more than one person', stage.prepare(`SELECT * FROM (${stripe}) WHERE stripe_customer_id IN (
+    SELECT stripe_customer_id FROM (${stripe}) GROUP BY stripe_customer_id HAVING count(DISTINCT user_id) > 1) ORDER BY stripe_customer_id, user_id`).all())
+
+  // review_requests and reviews already carried a user id beside the customer.
+  // Where the two name different people there is no single identity to keep.
+  refuse('Review requests whose customer and user disagree', stage.prepare(`SELECT r.id, r.customer_id, m.user_id AS customer_user_id, r.user_id, r.anonymous_user_id
+    FROM old.review_requests r JOIN temp.customer_user m ON m.customer_id = r.customer_id
+    WHERE (r.user_id IS NOT NULL AND r.user_id <> m.user_id) OR (r.anonymous_user_id IS NOT NULL AND r.anonymous_user_id <> m.user_id)`).all())
+  refuse('Reviews whose customer and user disagree', stage.prepare(`SELECT r.id, r.customer_id, m.user_id AS customer_user_id, r.user_id
+    FROM old.reviews r JOIN temp.customer_user m ON m.customer_id = r.customer_id WHERE r.user_id IS NOT NULL AND r.user_id <> m.user_id`).all())
+
+  assert(problems.length === 0, `Customer identity preflight failed; nothing was written.\n${problems.join('\n')}`)
+
+  record('customers_linked_to_existing_users', stage.prepare('SELECT count(*) AS n FROM old.customers WHERE user_id IS NOT NULL').get().n)
+  // Better Auth's anonymous shape, with no `account` row: nobody signs in as a
+  // migrated guest, and linking a real sign-in later goes through onLinkAccount.
+  record('customers_become_anonymous_users', stage.prepare(`INSERT INTO main.user (id, name, email, emailVerified, image, phoneNumber, phoneNumberVerified, role, isAnonymous, stripeCustomerId, createdAt, updatedAt)
+    SELECT c.id, coalesce(nullif(trim(c.name), ''), 'Guest'), 'anon-migrated-' || c.id || '@customers.krabiclaw.local', 0, NULL, NULL, 0, 'user', 1, NULL,
+      unixepoch(c.created_at), unixepoch(c.updated_at)
+    FROM old.customers c WHERE c.user_id IS NULL`).run().changes)
+  record('stripe_customers_moved_to_users', stage.prepare(`UPDATE main.user SET stripeCustomerId = (
+      SELECT c.stripe_customer_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id
+       WHERE m.user_id = main.user.id AND c.stripe_customer_id IS NOT NULL LIMIT 1)
+    WHERE stripeCustomerId IS NULL AND id IN (
+      SELECT m.user_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id WHERE c.stripe_customer_id IS NOT NULL)`).run().changes)
+  // An opt-out is the person's, across every tenant, and it wins over any
+  // preference already stored.
+  record('review_request_opt_outs', stage.prepare(`INSERT INTO main.user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
+    SELECT m.user_id, 'review_requests', 0, 0, max(c.review_request_opted_out_at)
+      FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id
+     WHERE c.review_request_opted_out_at IS NOT NULL GROUP BY m.user_id
+    ON CONFLICT (user_id, category) DO UPDATE SET email_enabled = 0, whatsapp_enabled = 0, updated_at = excluded.updated_at`).run().changes)
+  for (const table of CUSTOMER_REFERENCES) {
+    record(`${table}_name_their_user`, stage.prepare(`UPDATE main.${qi(table)} SET user_id = (
+        SELECT m.user_id FROM old.${qi(table)} o JOIN temp.customer_user m ON m.customer_id = o.customer_id WHERE o.id = main.${qi(table)}.id)
+      WHERE id IN (SELECT id FROM old.${qi(table)} WHERE customer_id IS NOT NULL)`).run().changes)
   }
-
-  // The one table that carried a site and no organization, so its rows are
-  // inserted here with the organization read off the site rather than copied.
-  record('cache_invalidations_take_their_organization_from_their_site', stage.prepare(`
-    INSERT INTO main.public_resource_cache_invalidations
-      (id, organization_id, reason, status, attempt_count, claimed_at, processed_at, last_error, created_at)
-    SELECT c.id, s.organization_id, c.reason, c.status, c.attempt_count, c.claimed_at, c.processed_at, c.last_error, c.created_at
-      FROM old.public_resource_cache_invalidations c
-      JOIN old.organizations s ON s.id = c.organization_id`).run().changes)
-  const strandedInvalidations = stage.prepare(`
-    SELECT count(*) AS n FROM old.public_resource_cache_invalidations c
-     WHERE c.organization_id NOT IN (SELECT id FROM old.organizations)`).get().n
-  assert(strandedInvalidations === 0, `${strandedInvalidations} cache invalidations name a organization that does not exist`)
-
-  // Same for a localization whose resource is the `organization`: the resource is the
-  // organization, and resource_id named the site.
-  record('site_localizations_are_organization_localizations', stage.prepare(`
-    UPDATE main.resource_localizations SET resource_type = 'organization', resource_id = organization_id
-     WHERE resource_type = 'site'`).run().changes)
-
-  // A media placement owned by a `organization` is owned by the organization. Its
-  // owner_id named the site, so it is re-pointed as well as renamed — a rename
-  // alone would leave every logo, favicon and social card owned by an id that
-  // no longer exists.
-  record('site_media_placements_are_organization_placements', stage.prepare(`
-    UPDATE main.media_placements SET owner_type = 'organization', owner_id = organization_id
-     WHERE owner_type = 'site'`).run().changes)
-
-  // `organization` was the commonest activity scope. Those entries are organization
-  // entries now; the scope_kind CHECK no longer has a `organization` to name.
-  record('site_scoped_activity_is_organization_scoped', stage.prepare(
-    `UPDATE main.activity_entries SET scope_kind = 'organization' WHERE scope_kind = 'site'`).run().changes)
-
-  // A team per site existed only because a site did. The membership it carried is
-  // real access, so it expands into that organization's location teams rather
-  // than being dropped — one active editor holds a site team and no location
-  // team, and would otherwise lose every location on the day this ships.
-  record('site_team_membership_expands_to_locations', stage.prepare(`
-    INSERT OR IGNORE INTO main.teamMember (id, teamId, userId, createdAt)
-    SELECT lower(hex(randomblob(16))), lt.id, tm.userId, tm.createdAt
-      FROM old.teamMember tm
-      JOIN old.team st ON st.id = tm.teamId AND st.id LIKE 'site:%'
-      JOIN old.business_locations bl ON bl.organization_id = st.organizationId
-      JOIN old.team lt ON lt.id = 'location:' || bl.id`).run().changes)
-  const unmapped = stage.prepare(`
-    SELECT tm.userId FROM old.teamMember tm JOIN old.team st ON st.id = tm.teamId AND st.id LIKE 'site:%'
-     WHERE NOT EXISTS (SELECT 1 FROM main.teamMember m JOIN main.team lt ON lt.id = m.teamId
-                        WHERE m.userId = tm.userId AND lt.organizationId = st.organizationId AND lt.id LIKE 'location:%')`).all()
-  assert(unmapped.length === 0, `Organization-team members with nowhere to land: ${unmapped.map(row => row.userId).join(', ')}`)
-  // An invitation can name the team it grants. A *pending* one naming a site team
-  // would lose its scope the moment it were accepted, so that fails rather than
-  // being quietly widened; an accepted one is a historical record whose team is
-  // gone, and the membership it produced has already been expanded above.
-  const pendingSiteInvites = stage.prepare(`
-    SELECT email FROM main.invitation WHERE teamId LIKE 'site:%' AND status = 'pending'`).all()
-  assert(pendingSiteInvites.length === 0,
-    `Pending invitations scoped to a organization team: ${pendingSiteInvites.map(row => row.email).join(', ')}`)
-  record('accepted_site_team_invitations_lose_their_team', stage.prepare(
-    `UPDATE main.invitation SET teamId = NULL WHERE teamId LIKE 'site:%'`).run().changes)
-
-  record('site_teams_removed', stage.prepare(`DELETE FROM main.team WHERE id LIKE 'site:%'`).run().changes)
-  stage.prepare(`DELETE FROM main.teamMember WHERE teamId NOT IN (SELECT id FROM main.team)`).run()
+  stage.exec('DROP TABLE temp.customer_user')
 }
 
-/**
- * One integration key per connected product.
- *
- * `integrations_json` held a single `google` object discriminated by a `kind`
- * of 'oauth' or 'manual'. That one row answered three questions — which Google
- * account, which GA4 property, which Search Console site — so a tenant who had
- * only pasted a measurement id was stored as a credential with no credentials
- * in it, and a CHECK existed solely to assert that contradiction was allowed.
- *
- * The credential is now its own key and each product that uses it is its own
- * key beside it. Instagram gets no key here: nothing in the old shape carried
- * an Instagram token, and inventing one from the Facebook connection would be
- * claiming an authorization the tenant never granted. Existing tenants connect
- * Instagram explicitly.
- */
-function deriveIntegrations(stage, now, record) {
-  const rows = stage.prepare(`SELECT id, integrations_json FROM main.organization
-    WHERE integrations_json IS NOT NULL AND integrations_json <> '{}'`).all()
-  const update = stage.prepare(`UPDATE main.organization SET integrations_json = ? WHERE id = ?`)
-  let rewritten = 0
-  let credentials = 0
-  let analytics = 0
-  let searchConsole = 0
-  let facebook = 0
-  let manualAnalytics = 0
-  let manualDropped = 0
-
-  for (const row of rows) {
-    const source = JSON.parse(row.integrations_json)
-    const next = {}
-
-    if (source.facebook) {
-      const { kind: _kind, facebook_page_id: pageId, facebook_page_name: pageName, ...rest } = source.facebook
-      // The CHECK requires both, so a connection that names no page is not a
-      // connection this shape can hold. It is dropped rather than written with
-      // an invented page.
-      if (pageId && pageName) {
-        next.facebook = { ...rest, page_id: pageId, page_name: pageName }
-        facebook += 1
-      }
-    }
-
-    const google = source.google
-    if (google && google.kind === 'oauth') {
-      const revision = google.revision ?? crypto.randomUUID()
-      if (google.encrypted_access_token && google.encrypted_refresh_token && google.provider_account_email) {
-        next.google_credential = {
-          revision,
-          id: google.id,
-          ...(google.connected_by_user_id ? { connected_by_user_id: google.connected_by_user_id } : {}),
-          provider_account_email: google.provider_account_email,
-          encrypted_access_token: google.encrypted_access_token,
-          encrypted_refresh_token: google.encrypted_refresh_token,
-          scopes: google.scopes ?? '',
-          status: google.status,
-          ...(google.expires_at ? { expires_at: google.expires_at } : {}),
-          created_at: google.created_at,
-          updated_at: google.updated_at,
-        }
-        credentials += 1
-      }
-      // A property with no measurement id cannot be checked, and a key with
-      // neither is a key describing nothing: omitted outright.
-      if (google.ga4_measurement_id) {
-        next.google_analytics = {
-          revision,
-          ...(google.ga4_property_id ? { property_id: google.ga4_property_id } : {}),
-          ...(google.ga4_property_name ? { property_name: google.ga4_property_name } : {}),
-          measurement_id: google.ga4_measurement_id,
-          status: google.status,
-          created_at: google.created_at,
-          updated_at: google.updated_at,
-        }
-        analytics += 1
-      }
-      if (google.search_console_site_url) {
-        next.google_search_console = {
-          revision,
-          site_url: google.search_console_site_url,
-          verified: true,
-          status: google.status,
-          created_at: google.created_at,
-          updated_at: google.updated_at,
-        }
-        searchConsole += 1
-      }
-    } else if (google && google.kind === 'manual') {
-      // The pasted measurement id is what keeps this tenant's Zaraz tracking
-      // alive, so it survives as analytics with no credential behind it. A
-      // disabled one was already not tracking and becomes no key at all.
-      if (google.status === 'active' && google.ga4_measurement_id) {
-        next.google_analytics = {
-          revision: google.revision ?? crypto.randomUUID(),
-          measurement_id: google.ga4_measurement_id,
-          status: 'active',
-          created_at: google.updated_at ?? now,
-          updated_at: google.updated_at ?? now,
-        }
-        manualAnalytics += 1
-        analytics += 1
-      } else {
-        manualDropped += 1
-      }
-    }
-
-    const serialized = JSON.stringify(next)
-    if (serialized !== row.integrations_json) {
-      update.run(serialized, row.id)
-      rewritten += 1
-    }
-  }
-
-  record('integrations_rewritten', rewritten)
-  record('integrations_google_credential', credentials)
-  record('integrations_google_analytics', analytics)
-  record('integrations_google_analytics_from_manual', manualAnalytics)
-  record('integrations_google_search_console', searchConsole)
-  record('integrations_facebook', facebook)
-  record('integrations_manual_google_dropped', manualDropped)
-
-  // Nothing may still carry the old shape.
-  const legacy = stage.prepare(`SELECT id FROM main.organization
-    WHERE json_type(integrations_json, '$.google') IS NOT NULL
-       OR json_type(integrations_json, '$.facebook.kind') IS NOT NULL
-       OR json_type(integrations_json, '$.facebook.facebook_page_id') IS NOT NULL`).all()
-  assert(legacy.length === 0, `Organizations still carrying the old integration shape: ${legacy.map(r => r.id).join(', ')}`)
-
-  // Every surviving key must satisfy the CHECK the baseline declares for it.
-  const invalid = stage.prepare(`SELECT id FROM main.organization WHERE NOT (
-      (json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text'))
-  AND (json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text'))
-  AND (json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text'))
-  AND (json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active','disabled','error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text'))
-  AND (json_type(integrations_json, '$.instagram') IS NULL)
-  )`).all()
-  assert(invalid.length === 0, `Organizations whose rewritten integrations fail their CHECK: ${invalid.map(r => r.id).join(', ')}`)
-}
-
-function deriveCanonicalContentBlocks(stage, record) {
-  const rows = stage.prepare(`SELECT b.id, b.document_id, b.type, b.position, b.data_json, b.created_at, b.updated_at, d.locale
-    FROM content_blocks b JOIN content_documents d ON d.id = b.document_id ORDER BY b.document_id, b.position`).all()
-  const updateData = stage.prepare('UPDATE content_blocks SET data_json = ? WHERE id = ?')
-  const insertBlock = stage.prepare(`INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
-    VALUES (?, ?, NULL, 'team_grid', ?, NULL, ?, ?, ?)`)
-  const shiftPositions = stage.prepare('UPDATE content_blocks SET position = position + 1 WHERE document_id = ? AND position > ?')
-  const movePlacement = stage.prepare(`UPDATE media_placements SET owner_id = ?, slot = ?
-    WHERE owner_type = 'content_block' AND owner_id = ? AND slot = ?`)
-  let renamedLists = 0
-  let teamBlocks = 0
-  let liftedAssets = 0
-
-  // An asset object anywhere in `data` is a copy of a placement that already
-  // exists. It is removed, not moved: nothing here creates a placement.
-  const stripAssets = (value) => {
-    if (Array.isArray(value)) return value.map(stripAssets)
-    if (!value || typeof value !== 'object') return value
-    const out = {}
-    for (const [key, item] of Object.entries(value)) {
-      if (key === 'asset_id' || key === 'url' || key === 'public_url' || key === 'thumbnail_url' || key === 'image_url') { liftedAssets += 1; continue }
-      if (item && typeof item === 'object' && !Array.isArray(item) && 'asset_id' in item) { liftedAssets += 1; continue }
-      out[key] = stripAssets(item)
-    }
-    return out
-  }
-
-  for (const row of rows) {
-    const data = JSON.parse(row.data_json)
-    let changed = false
-
-    if (Array.isArray(data.features)) {
-      assert(row.locale === 'en', `Block ${row.id} carries a translated legacy feature list`)
-      assert(!Array.isArray(data.items), `Block ${row.id} carries both items and features`)
-      data.items = data.features
-      delete data.features
-      // The grid a Blawby page renders as its feature cards says which section
-      // it is, the way every other block on those pages does.
-      if (!data.section) data.section = 'features'
-      for (let index = 0; index < data.items.length; index += 1) {
-        movePlacement.run(row.id, `items.${index}.image`, row.id, `features.${index}.icon`)
-      }
-      renamedLists += 1
-      changed = true
-    }
-
-    if (Array.isArray(data.people)) {
-      assert(row.locale === 'en', `Block ${row.id} carries a translated legacy team list`)
-      const people = data.people
-      delete data.people
-      const teamId = `${row.id}-team`
-      shiftPositions.run(row.document_id, row.position)
-      insertBlock.run(teamId, row.document_id, row.position + 1,
-        JSON.stringify({ items: people.map(person => stripAssets(person)) }), row.created_at, row.updated_at)
-      for (let index = 0; index < people.length; index += 1) {
-        movePlacement.run(teamId, `items.${index}.image`, row.id, `people.${index}.image`)
-      }
-      teamBlocks += 1
-      changed = true
-    }
-
-    const cleaned = stripAssets(data)
-    if (changed || JSON.stringify(cleaned) !== row.data_json) updateData.run(JSON.stringify(cleaned), row.id)
-  }
-
-  record('content_block_lists_renamed', renamedLists)
-  record('content_block_team_blocks', teamBlocks)
-  record('content_block_embedded_assets_removed', liftedAssets)
-}
-
-/**
- * An onboarding draft holds the catalog its owner has typed so far, in the
- * shape the model had when they typed it. It is read back by the wizard, so it
- * moves to the new shape with everything else: a product names the collection
- * it sits in and carries the price its variant will, and the retired per-site
- * flags — visibility, featured, availability — have nothing to say here.
- */
-function deriveDraftPayloads(stage, record) {
-  // Experiences were a second catalog; a draft has no question to answer about
-  // whether the site has one.
-  record('onboarding_draft_experience_flag', stage.prepare(
-    "UPDATE onboarding_drafts SET payload_json = json_remove(payload_json, '$.preview.hasExperiences') WHERE json_type(payload_json, '$.preview.hasExperiences') IS NOT NULL",
-  ).run().changes)
-  record('onboarding_draft_products', stage.prepare(`
-    UPDATE onboarding_drafts SET payload_json = json_set(
-      payload_json,
-      '$.preview.products',
-      (SELECT json_group_array(json_object(
-        'id', p.value ->> '$.id',
-        'location_id', p.value ->> '$.location_id',
-        'collection', p.value ->> '$.category',
-        'name', p.value ->> '$.name',
-        'slug', p.value ->> '$.slug',
-        'description', coalesce(p.value ->> '$.description', ''),
-        'price', CASE WHEN json_type(p.value, '$.price') = 'object'
-          THEN json_object('unit_amount', p.value -> '$.price' ->> '$.amount_minor', 'currency', p.value -> '$.price' ->> '$.currency')
-          END,
-        'order_url', p.value ->> '$.order_url',
-        'sort_order', p.value ->> '$.sort_order',
-        'tags', coalesce(p.value -> '$.tags', json('[]')),
-        'source', coalesce(p.value ->> '$.source', 'import')
-      ))
-      FROM json_each(onboarding_drafts.payload_json, '$.preview.products') p))
-    WHERE json_type(payload_json, '$.preview.products') = 'array'
-      AND EXISTS (SELECT 1 FROM json_each(onboarding_drafts.payload_json, '$.preview.products') q
-                   WHERE json_type(q.value, '$.category') IS NOT NULL)
-  `).run().changes)
-}
-
-/**
- * The old `details_json` array and the experience blob carried descriptive
- * attributes as shapes only their own renderer understood. Each becomes a
- * definition the tenant owns and a typed value on the product.
- */
-function deriveMetafields(stage, now, record) {
-  const definitions = new Map()
-  const defineFor = (organizationId, namespace, key, name, valueType) => {
-    const id = `mf-${namespace}-${key}-${hash(`${organizationId}:${namespace}:${key}`).slice(0, 12)}`
-    if (!definitions.has(id)) definitions.set(id, { id, organization_id: organizationId, namespace, key, name, description: null, value_type: valueType, validations: {}, localizable: true })
-    return definitions.get(id)
-  }
-  const values = []
-
-  for (const row of stage.prepare(`SELECT m.new_id AS product_id, p.organization_id, p.details_json, p.experience_json, p.created_by
-      FROM old.products p JOIN temp.product_map m ON m.old_id = p.id
-     WHERE p.details_json <> '[]' OR p.experience_json IS NOT NULL`).all()) {
-    for (const detail of JSON.parse(row.details_json ?? '[]')) {
-      if (!detail?.key || !Array.isArray(detail.values) || detail.values.length === 0) continue
-      // A price stated in words is the canonical pricing note, not a detail
-      // row: the page shows it where the amount would be.
-      if (String(detail.key) === 'price-note') {
-        const definition = defineFor(row.organization_id, 'pricing', 'note', 'Pricing note', 'single_line_text')
-        values.push({ ...row, definition, value: String(detail.values[0]) })
-        continue
-      }
-      const definition = defineFor(row.organization_id, 'details', String(detail.key), String(detail.label ?? detail.key), 'list.single_line_text')
-      values.push({ ...row, definition, value: detail.values.map(String) })
-    }
-    const experience = row.experience_json ? JSON.parse(row.experience_json) : null
-    for (const [key, spec] of Object.entries(EXPERIENCE_METAFIELDS)) {
-      const raw = experience?.[key]
-      if (raw === undefined || raw === null || (Array.isArray(raw) ? raw.length === 0 : String(raw).trim() === '')) continue
-      // A pricing note is a price in words, and the catalog reads exactly one
-      // handle for it (PRICING_NOTE_HANDLE = 'pricing.note') whether it came
-      // from a dish's price-note detail or a class's experience blob. Written
-      // under 'experience', it was an attribute row the price never saw, and
-      // the product read "Unavailable" on the public card.
-      const definition = key === 'pricing_note'
-        ? defineFor(row.organization_id, 'pricing', 'note', 'Pricing note', 'single_line_text')
-        : defineFor(row.organization_id, 'experience', key, spec.name, spec.value_type)
-      values.push({ ...row, definition, value: Array.isArray(raw) ? raw.map(String) : String(raw) })
-    }
-  }
-
-  const insertDefinition = stage.prepare(`INSERT INTO metafield_definitions (id, organization_id, namespace, key, name, description, value_type, validations, localizable, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', 1, ?, ?, ?, ?)`)
-  for (const definition of definitions.values()) {
-    insertDefinition.run(definition.id, definition.organization_id, definition.namespace, definition.key, definition.name, definition.value_type, now, now, 'transfer', 'transfer')
-  }
-  const insertValue = stage.prepare(`INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (product_id, definition_id) DO NOTHING`)
-  // Several old products merge into one, so they offer the same attribute more
-  // than once. The manifest is this transfer's evidence, so it counts rows
-  // written rather than attempts made.
-  let written = 0
-  for (const entry of values) {
-    written += insertValue.run(entry.organization_id, entry.product_id, entry.definition.id,
-      serializeMetafieldValue(entry.definition, entry.value), now, now, entry.created_by, entry.created_by).changes
-  }
-  record('metafield_definitions', definitions.size)
-  record('product_metafields', written)
-}
-
-/**
- * Bookability is the existence of a config row, not a product type. The weekly
- * slot map becomes availability rules a scheduler can read, one per weekday and
- * start time.
- */
-function deriveBookingCapability(stage, now, record) {
-  const rows = stage.prepare(`SELECT m.new_id AS product_id, p.organization_id, p.location_id, p.experience_json, p.created_by,
-      (SELECT l.timezone FROM old.business_locations l WHERE l.id = p.location_id) AS timezone
-    FROM old.products p JOIN temp.product_map m ON m.old_id = p.id WHERE p.experience_json IS NOT NULL`).all()
-  const insertConfig = stage.prepare(`INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (product_id) DO NOTHING`)
-  const insertRule = stage.prepare(`INSERT INTO product_availability_rules (id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks, effective_from_date, effective_until_date, duration_minutes, capacity, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, NULL, ?, ?, ?, ?)`)
-  let rules = 0
-  for (const row of rows) {
-    const experience = JSON.parse(row.experience_json)
-    const duration = Number.isInteger(experience.duration_minutes) ? experience.duration_minutes : null
-    const capacity = Number.isInteger(experience.max_capacity) ? experience.max_capacity : null
-    insertConfig.run(row.product_id, row.organization_id, duration, capacity, now, now, row.created_by, row.created_by)
-    const slots = experience.recurring_slots ?? {}
-    for (const [day, times] of Object.entries(slots)) {
-      const weekday = WEEKDAYS.indexOf(day.toLowerCase())
-      assert(weekday >= 0, `Unknown weekday "${day}" on product ${row.product_id}`)
-      for (const time of Array.isArray(times) ? times : []) {
-        assert(row.timezone, `Product ${row.product_id} schedules slots at a location with no timezone`)
-        // A rule belongs to one product AT one location. Old products were
-        // per-location and several map onto one new product, so an id without
-        // the location collides the moment two branches run the same slot.
-        insertRule.run(`rule-${row.product_id}-${row.location_id}-${weekday}-${String(time).replace(':', '')}`, row.organization_id, row.product_id, row.location_id, row.timezone, weekday, String(time), now, now, row.created_by, row.created_by)
-        rules += 1
-      }
-    }
-  }
-  record('product_booking_configs', rows.length)
-  record('product_availability_rules', rules)
-}
-
-/**
- * Two location rows for one dish carried the same photograph and two generated
- * social cards. The photograph transfers once; the card is a render of the
- * product, so the merged Product keeps its own and the rest are regenerated
- * rather than chosen between.
- */
-function deriveProductMedia(stage, record) {
-  // Placements the catalog does not own transfer unchanged; a product's move
-  // with it, and an offering's move with its page.
-  record('media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-    SELECT id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at
-      FROM old.media_placements WHERE owner_type NOT IN ('product', 'offering')`).run().changes)
-  record('product_media_placements', stage.prepare(`INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-    SELECT id, organization_id, 'product', owner_id, slot, asset_id,
-      row_number() OVER (PARTITION BY organization_id, owner_id, slot ORDER BY sort_order, asset_id) - 1,
-      status, created_at, updated_at
-    FROM (
-      SELECT min(mp.id) AS id, max(mp.organization_id) AS organization_id, m.new_id AS owner_id,
-             mp.slot AS slot, mp.asset_id AS asset_id, min(mp.sort_order) AS sort_order,
-             max(mp.status) AS status, min(mp.created_at) AS created_at, max(mp.updated_at) AS updated_at
-        FROM old.media_placements mp JOIN temp.product_map m ON m.old_id = mp.owner_id
-       WHERE mp.owner_type = 'product' AND (mp.slot <> 'social_card' OR mp.owner_id = m.new_id)
-       GROUP BY mp.organization_id, m.new_id, mp.slot, mp.asset_id)`).run().changes)
-  record('product_social_cards_regenerated', stage.prepare(`SELECT count(*) AS n FROM old.media_placements mp JOIN temp.product_map m ON m.old_id = mp.owner_id
-    WHERE mp.owner_type = 'product' AND mp.slot = 'social_card' AND mp.owner_id <> m.new_id`).get().n)
-  const promoted = stage.prepare(PROMOTE_PRODUCT_COVERS_SQL).run().changes
-  if (promoted > 0) stage.prepare(RENUMBER_PRODUCT_GALLERIES_SQL).run()
-  record('product_covers_promoted', promoted)
-}
-
-
-
-/**
- * An Offering was a second content model for a page: prose, a feature list and
- * a question set, rendered by a route of its own. It becomes what it always
- * was — a page with blocks — at the same path, and the grids that listed
- * "every offering on this site" now name the pages they show.
- */
-function deriveOfferingPages(stage, now, record) {
-  const offerings = stage.prepare('SELECT * FROM old.offerings ORDER BY sort_order, id').all()
-  if (offerings.length === 0) return
-  const insertDocument = stage.prepare(`INSERT INTO content_documents (id, organization_id, kind, row_role, locale, location_id, product_id, scope_path, title, slug, path, summary, status, visibility, sort_order, source, created_by, updated_by, seo_title, seo_description, metadata_json, created_at, updated_at)
-    VALUES (?, ?, ?, 'root', 'en', ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-  const insertBlock = stage.prepare('INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, NULL, ?, ?, ?)')
-  const insertPlacement = stage.prepare('INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-  const sourcePlacements = stage.prepare("SELECT * FROM old.media_placements WHERE owner_type = 'offering' ORDER BY owner_id, slot, sort_order").all()
-  const placementsFor = (ownerId, slot) => sourcePlacements.filter(row => row.owner_id === ownerId && row.slot === slot)
-  let placements = 0
-  const movePlacement = (row, ownerType, ownerId, slot, sortOrder) => {
-    insertPlacement.run(row.id, row.organization_id, ownerType, ownerId, slot, row.asset_id, sortOrder, row.status, row.created_at, row.updated_at)
-    placements += 1
-  }
-  let blocks = 0
-  let questions = 0
-
-  for (const offering of offerings) {
-    const path = `/services/${offering.slug}`
-    const documentId = `page-${offering.id}`
-    insertDocument.run(documentId, offering.organization_id, 'page', offering.location_id, null,
-      offering.name, offering.slug, path, offering.summary, null, null, offering.sort_order, offering.source,
-      offering.updated_by, offering.updated_by, offering.seo_title, offering.seo_description,
-      JSON.stringify({ page_type: 'custom' }), offering.created_at, offering.updated_at)
-
-    let position = 0
-    const add = (type, data) => {
-      const id = `${documentId}-${type}-${position}`
-      insertBlock.run(id, documentId, type, position, JSON.stringify(data), offering.created_at, offering.updated_at)
-      position += 1
-      blocks += 1
-      return id
-    }
-    // The page states its own heading: a reader takes the h1 from the hero
-    // block, never from the document title behind it.
-    add('hero', { title: offering.name, ...(blank(offering.summary) ? {} : { subtitle: offering.summary }) })
-    // The banner an offering carried is the page's leading image block, the
-    // same shape every other page states a lead image in.
-    const hero = placementsFor(offering.id, 'hero')[0]
-    if (hero) movePlacement(hero, 'content_block', add('image', { caption: '' }), 'media', 0)
-    if (!blank(offering.body)) add('markdown', { markdown: offering.body })
-    // Feature order is the array's own: the icon placements are addressed by
-    // index, so re-sorting here would point each icon at another feature.
-    const features = JSON.parse(offering.features ?? '[]')
-    if (features.length > 0) {
-      // One list, one slot: `items` with its image at `items.<index>.image`,
-      // the same shape the block contract declares and the editor writes.
-      const blockId = add('feature_grid', {
-        section: 'features',
-        items: features.map(feature => ({ title: String(feature.title ?? ''), description: String(feature.description ?? '') })),
-      })
-      features.forEach((_feature, index) => {
-        const icon = placementsFor(offering.id, `features.${index}.image`)[0]
-        if (icon) movePlacement(icon, 'content_block', blockId, `items.${index}.image`, 0)
-      })
-    }
-    const faqs = JSON.parse(offering.faqs ?? '[]').filter(entry => !blank(entry?.question))
-    faqs.forEach((entry, index) => {
-      insertDocument.run(`qa-${offering.id}-${index}`, offering.organization_id, 'qa', offering.location_id, path,
-        entry.question, null, null, entry.answer ?? null, 'published', null, index, 'import',
-        offering.updated_by, offering.updated_by, null, null,
-        JSON.stringify({ is_owner_answer: 1, upvote_count: 0 }), offering.created_at, offering.updated_at)
-      questions += 1
-    })
-    if (faqs.length > 0) add('faq', { source: 'page_qa' })
-    if (!blank(offering.cta_label) && !blank(offering.cta_url)) add('contact_cta', { title: offering.cta_label, label: offering.cta_label, url: offering.cta_url })
-
-    // The card image a listing showed is the page's cover, which is the one
-    // image a page reference carries. The gallery and the generated card keep
-    // their own slots.
-    const thumbnail = placementsFor(offering.id, 'thumbnail')[0]
-    if (thumbnail) movePlacement(thumbnail, 'content_document', documentId, 'cover', 0)
-    placementsFor(offering.id, 'gallery').forEach((row, index) => movePlacement(row, 'content_document', documentId, 'gallery', index))
-    const card = placementsFor(offering.id, 'social_card')[0]
-    if (card) movePlacement(card, 'content_document', documentId, 'social_card', 0)
-  }
-  record('offering_media_placements', placements)
-  record('offering_media_placements_unmapped', sourcePlacements.length - placements)
-
-  // An offering grid said "list everything this tenant offers". A page grid
-  // names its pages, so the implicit set becomes the explicit one it stood for.
-  const grids = stage.prepare("SELECT b.id, b.data_json, d.organization_id FROM content_blocks b JOIN content_documents d ON d.id = b.document_id WHERE b.type = 'offering_grid'").all()
-  const updateGrid = stage.prepare('UPDATE content_blocks SET type = ?, data_json = ? WHERE id = ?')
-  const byOrganization = new Map()
-  for (const offering of offerings) byOrganization.set(offering.organization_id, [...(byOrganization.get(offering.organization_id) ?? []), `page-${offering.id}`])
-  let converted = 0
-  let authored = 0
-  for (const grid of grids) {
-    const data = JSON.parse(grid.data_json)
-    // A grid that listed the tenant's offerings names the pages they became.
-    // One that carried its own cards is authored page content, and keeps them.
-    if (data.source === 'site_offerings') {
-      delete data.source
-      delete data.items
-      data.page_ids = byOrganization.get(grid.organization_id) ?? []
-      updateGrid.run('page_grid', JSON.stringify(data), grid.id)
-      converted += 1
-      continue
-    }
-    updateGrid.run('feature_grid', JSON.stringify(data), grid.id)
-    authored += 1
-  }
-  record('offering_pages', offerings.length)
-  record('offering_page_blocks', blocks)
-  record('offering_page_questions', questions)
-  record('page_grids', converted)
-  record('authored_grids', authored)
-}
-
-/**
- * The booking tuple on `requests` was four nullable columns that only some
- * kinds used. A reservation is a table held at a location; a booking is a seat
- * at an occurrence of a product. Each becomes its own record, and the request
- * stays the guest conversation it always was.
- */
-function deriveGuestRecords(stage, record) {
-  // An experience booking is a booking: the second kind existed only because
-  // experiences were a second catalog.
-  record('booking_requests_renamed', stage.prepare("UPDATE requests SET kind = 'booking' WHERE kind = 'experience_booking'").run().changes)
-  const rows = stage.prepare(`SELECT r.*, (SELECT l.timezone FROM old.business_locations l WHERE l.id = r.location_id) AS timezone,
-      (SELECT m.new_id FROM temp.product_map m WHERE m.old_id = r.product_id) AS mapped_product_id
-    FROM old.requests r WHERE r.booking_date IS NOT NULL ORDER BY r.id`).all()
-  const insertReservation = stage.prepare(`INSERT INTO reservations (id, organization_id, location_id, customer_id, request_id, timezone, starts_at, ends_at, party_size, status, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
-  const insertSession = stage.prepare(`INSERT INTO product_sessions (id, organization_id, product_id, location_id, availability_rule_id, source_occurrence_key, timezone, starts_at, ends_at, capacity, status, created_at, updated_at, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, 'transfer', 'transfer') ON CONFLICT (id) DO NOTHING`)
-  const insertBooking = stage.prepare(`INSERT INTO bookings (id, organization_id, product_id, product_session_id, product_variant_id, customer_id, request_id, party_size, status, hold_expires_at, cancelled_at, completed_at, cancellation_reason, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?)`)
-  let reservations = 0
-  let bookings = 0
-
-  for (const row of rows) {
-    assert(row.timezone, `Request ${row.id} books a location with no timezone`)
-    assert(row.time_slot, `Request ${row.id} carries a date with no time`)
-    const partySize = Number(row.party_size) > 0 ? Number(row.party_size) : 1
-    const startsAt = localDateTimeToInstant(row.booking_date, row.time_slot, row.timezone, 'compatible').toISOString()
-    const cancelledAt = row.status === 'cancelled' ? (row.resolved_at ?? row.updated_at) : null
-    const completedAt = row.status === 'completed' ? (row.resolved_at ?? row.updated_at) : null
-
-    if (row.kind === 'reservation') {
-      insertReservation.run(`reservation-${row.id}`, row.organization_id, row.location_id, row.customer_id, row.id,
-        row.timezone, startsAt, new Date(Date.parse(startsAt) + RESERVATION_DURATION_MINUTES * 60_000).toISOString(),
-        partySize, row.status, cancelledAt, completedAt, row.created_at, row.updated_at)
-      reservations += 1
-      continue
-    }
-    assert(row.mapped_product_id, `Request ${row.id} books a product that no longer exists`)
-    const config = stage.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').get(row.mapped_product_id)
-    assert(config, `Request ${row.id} books product ${row.mapped_product_id}, which takes no bookings`)
-    // The location is part of the rule's identity, so it is part of the lookup:
-    // matching on product and time alone picked whichever branch's rule came
-    // back first.
-    const rule = stage.prepare(`SELECT id FROM product_availability_rules WHERE product_id = ? AND location_id IS ? AND start_time = ?
-      AND weekday = CAST(strftime('%w', ?) AS INTEGER)`).get(row.mapped_product_id, row.location_id, row.time_slot, row.booking_date)
-    const duration = config.duration_minutes ?? RESERVATION_DURATION_MINUTES
-    const sessionId = `session-${row.mapped_product_id}-${row.booking_date}-${row.time_slot.replace(':', '')}`
-    insertSession.run(sessionId, row.organization_id, row.mapped_product_id, row.location_id, rule?.id ?? null,
-      rule ? occurrenceKey(rule.id, row.booking_date, row.time_slot) : null, row.timezone, startsAt,
-      new Date(Date.parse(startsAt) + duration * 60_000).toISOString(), config.default_capacity, row.created_at, row.updated_at)
-    insertBooking.run(`booking-${row.id}`, row.organization_id, row.mapped_product_id, sessionId,
-      `${row.mapped_product_id}-default`, row.customer_id, row.id, partySize, row.status, cancelledAt, completedAt, row.created_at, row.updated_at)
-    bookings += 1
-  }
-
-  // A location's reservation policy was a JSON blob on the location row.
-  record('location_reservation_configs', stage.prepare(`INSERT INTO location_reservation_configs (location_id, organization_id, slot_capacity, advance_notice_minutes, minimum_guest_age, deposit_required, deposit_trigger_party_size, free_cancellation_until_minutes, reschedule_allowed, reschedule_cutoff_minutes, accessibility_contact_required, additional_notes_html, created_at, updated_at, created_by, updated_by)
-    SELECT l.id, l.organization_id,
-      json_extract(l.booking_json, '$.reservation.policy.slot_capacity'),
-      json_extract(l.booking_json, '$.reservation.policy.advance_notice_minutes'),
-      json_extract(l.booking_json, '$.reservation.policy.minimum_guest_age'),
-      coalesce(json_extract(l.booking_json, '$.reservation.policy.deposit_required'), 0),
-      json_extract(l.booking_json, '$.reservation.policy.deposit_trigger_party_size'),
-      json_extract(l.booking_json, '$.reservation.policy.free_cancellation_until_minutes'),
-      coalesce(json_extract(l.booking_json, '$.reservation.policy.reschedule_allowed'), 1),
-      json_extract(l.booking_json, '$.reservation.policy.reschedule_cutoff_minutes'),
-      coalesce(json_extract(l.booking_json, '$.reservation.policy.accessibility_contact_required'), 0),
-      json_extract(l.booking_json, '$.reservation.policy.additional_notes_html'),
-      coalesce(json_extract(l.booking_json, '$.reservation.policy.created_at'), l.created_at),
-      coalesce(json_extract(l.booking_json, '$.reservation.policy.updated_at'), l.updated_at),
-      'transfer', 'transfer'
-    FROM old.business_locations l WHERE json_type(l.booking_json, '$.reservation.policy') = 'object'`).run().changes)
-  record('reservations', reservations)
-  record('bookings', bookings)
-}
-
-/**
- * A localized Product answers under the baseline's field names: the tag list is
- * `tags`, and the detail array is the metafield map its definitions describe.
- * A localized category localizes the collection it became.
- */
-function deriveLocalizations(stage, record) {
-  const definitions = new Map(stage.prepare("SELECT id, organization_id, namespace, key, value_type FROM metafield_definitions WHERE namespace = 'details'")
-    .all().map(row => [`${row.organization_id}:${row.key}`, row]))
-  const rows = stage.prepare(`SELECT r.*, m.new_id AS product_id FROM old.resource_localizations r
-    LEFT JOIN temp.product_map m ON m.old_id = r.resource_id AND r.resource_type = 'product'`).all()
-  const insert = stage.prepare(`INSERT INTO resource_localizations (id, organization_id, resource_type, resource_id, locale, values_json, route_path, created_at, created_by_user_id, updated_at, updated_by_user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (organization_id, resource_type, resource_id, locale) DO NOTHING`)
-  let dropped = 0
-  let inserted = 0
-  for (const row of rows) {
-    const resourceType = row.resource_type === 'product_category' ? 'collection' : row.resource_type
-    const resourceId = row.resource_type === 'product' ? row.product_id : row.resource_id
-    if (!resourceId) { dropped += 1; continue }
-    let values = JSON.parse(row.values_json)
-    if (resourceType === 'product') {
-      const { tags_json: tags, details_json: details, seo_title: seoTitle, seo_description: seoDescription, experience, ...rest } = values
-      values = rest
-      if (tags !== undefined) values.tags = typeof tags === 'string' ? JSON.parse(tags) : tags
-      const metafields = {}
-      for (const detail of (typeof details === 'string' ? JSON.parse(details) : details) ?? []) {
-        const definition = definitions.get(`${row.organization_id}:${detail?.key}`)
-        if (!definition || !Array.isArray(detail.values) || detail.values.length === 0) continue
-        metafields[`${definition.namespace}.${definition.key}`] = detail.values.map(String)
-      }
-      if (Object.keys(metafields).length > 0) values.metafields = metafields
-      if (seoTitle !== undefined || seoDescription !== undefined || experience !== undefined) dropped += 0
-    }
-    if (Object.keys(values).length === 0) { dropped += 1; continue }
-    // A Product's localized route is derived from the location it is offered
-    // at — one Product, one row, every location it reaches.
-    const routePath = resourceType === 'product' ? null : row.route_path
-    inserted += insert.run(row.id, row.organization_id, resourceType, resourceId, row.locale, JSON.stringify(values),
-      routePath, row.created_at, row.created_by_user_id, row.updated_at, row.updated_by_user_id).changes
-  }
-  record('resource_localizations', inserted)
-  // A merged Product's twins carried the same translation — the merge rule
-  // proved it — so the surviving row is the same text, not a choice.
-  record('resource_localizations_merged', rows.length - inserted - dropped)
-  record('resource_localizations_dropped', dropped)
-}
-
-/** A Product whose slug had to be qualified keeps its old path reachable. */
-function deriveSlugRedirects(stage, now, record) {
-  // The vertical still lives on the source \`sites\` row here: this runs before
-  // the organization absorbs it, and the merge's one-site-per-organization
-  // check is what makes reading it by organization single-valued.
-  const rows = stage.prepare(`SELECT DISTINCT m.redirect_from, m.new_slug, m.location_id, p.organization_id,
-      (SELECT l.slug FROM old.business_locations l WHERE l.id = m.location_id) AS location_slug,
-      (SELECT s.vertical FROM old.organizations s WHERE s.organization_id = p.organization_id) AS vertical
-    FROM temp.product_map m JOIN products p ON p.id = m.new_id WHERE m.redirect_from IS NOT NULL`).all()
-  const insert = stage.prepare(`INSERT INTO organization_redirects (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
-    VALUES (?, ?, 'en', NULL, NULL, ?, ?, 301, 'redirect', ?, 'transfer', ?, ?)`)
-  for (const row of rows) {
-    const segment = row.vertical === 'restaurant' ? 'menu' : 'products'
-    const from = `/locations/${row.location_slug}/${segment}/${row.redirect_from}`
-    insert.run(`redirect-${hash(from).slice(0, 16)}`, row.organization_id, from,
-      `/locations/${row.location_slug}/${segment}/${row.new_slug}`,
-      'Product slug qualified by location: two location rows disagreed on authored copy', now, now)
-  }
-  record('organization_redirects', rows.length)
-}
 
 function sqlLiteral(value) {
   if (value === null || value === undefined) return 'NULL'
@@ -1340,67 +545,138 @@ function childFirstOrder(db, tables) {
   return order
 }
 
-export function writePayload(target, payloadPath, schemaSql, { withoutJwks = false } = {}) {
-  const tables = tableNames(target).filter(table => !(withoutJwks && table === 'jwks'))
-  const order = childFirstOrder(target, tables)
-  const lines = ['PRAGMA foreign_keys = OFF;', 'PRAGMA defer_foreign_keys = ON;', ...order.map(table => `DELETE FROM ${qi(table)};`)]
-  for (const table of [...order].reverse()) {
-    const names = columns(target, table)
-    for (const row of target.prepare(`SELECT * FROM ${qi(table)}`).all()) {
-      lines.push(`INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${names.map(name => sqlLiteral(row[name])).join(', ')});`)
-    }
-  }
-  lines.push('PRAGMA foreign_keys = ON;')
-  writeFileSync(payloadPath, lines.join('\n') + '\n', { mode: 0o600 })
-  // Replaying the payload onto a populated copy must reproduce the target exactly.
-  const replay = new Database(':memory:')
-  replay.exec(schemaSql)
-  replay.pragma('foreign_keys = ON')
-  replay.exec(readFileSync(payloadPath, 'utf8'))
-  replay.exec(readFileSync(payloadPath, 'utf8'))
-  for (const table of tables) {
-    const names = columns(target, table)
-    assert(digest(target.prepare(`SELECT * FROM ${qi(table)}`).all(), names) === digest(replay.prepare(`SELECT * FROM ${qi(table)}`).all(), names), `Payload replay differs: ${table}`)
-  }
-  assert(replay.pragma('foreign_key_check').length === 0, 'Payload replay has foreign key violations')
-  replay.close()
-  return { tables: tables.length, statements: lines.length }
+/** Primary-key columns in key order; a table without one cannot be copied as a delta. */
+function primaryKey(db, table) {
+  return db.prepare(`PRAGMA table_info(${qi(table)})`).all().filter(column => column.pk > 0).sort((a, b) => a.pk - b.pk).map(column => column.name)
 }
 
 /**
+ * The full replacement, or with `deltaFrom` only the rows the earlier target
+ * did not hold. A delta never deletes or updates: it is applied to a live
+ * replacement database that has taken its own writes since, and a row it
+ * cannot insert fails the import visibly rather than overwriting one.
+ */
+export function writePayload(target, payloadPath, schemaSql, { withoutJwks = false, deltaFrom = null } = {}) {
+  const tables = tableNames(target).filter(table => !(withoutJwks && table === 'jwks'))
+  const order = childFirstOrder(target, tables)
+  const earlier = deltaFrom ? new Database(deltaFrom, { readonly: true, fileMustExist: true }) : null
+  const delta = {}
+  const leftBehind = {}
+  try {
+    const lines = ['PRAGMA foreign_keys = OFF;', 'PRAGMA defer_foreign_keys = ON;', ...(earlier ? [] : order.map(table => `DELETE FROM ${qi(table)};`))]
+    for (const table of [...order].reverse()) {
+      const names = columns(target, table)
+      let rows = target.prepare(`SELECT * FROM ${qi(table)}`).all()
+      if (earlier) {
+        const key = primaryKey(target, table)
+        assert(key.length > 0, `${table} has no primary key, so its new rows cannot be told apart`)
+        const held = new Set(earlier.prepare(`SELECT ${key.map(qi).join(', ')} FROM ${qi(table)}`).raw().all().map(values => JSON.stringify(values)))
+        rows = rows.filter(row => !held.has(JSON.stringify(key.map(name => row[name]))))
+        delta[table] = rows.length
+        // A delta carries creations only. What it leaves behind is every row
+        // the earlier target held whose values have changed since, or which is
+        // gone from the source. Those are named, table by table, for whoever
+        // repoints the binding to read first; nothing is updated for them.
+        const current = new Map(target.prepare(`SELECT * FROM ${qi(table)}`).all().map(row => [JSON.stringify(key.map(name => row[name])), JSON.stringify(names.map(name => row[name]))]))
+        const changed = []
+        const deleted = []
+        for (const row of earlier.prepare(`SELECT * FROM ${qi(table)}`).all()) {
+          const id = JSON.stringify(key.map(name => row[name]))
+          if (!current.has(id)) deleted.push(id)
+          else if (current.get(id) !== JSON.stringify(names.map(name => row[name]))) changed.push(id)
+        }
+        if (changed.length || deleted.length) leftBehind[table] = { changed, deleted }
+      }
+      for (const row of rows) {
+        lines.push(`INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${names.map(name => sqlLiteral(row[name])).join(', ')});`)
+      }
+    }
+    lines.push('PRAGMA foreign_keys = ON;')
+    writeFileSync(payloadPath, lines.join('\n') + '\n', { mode: 0o600 })
+
+    const replay = new Database(':memory:')
+    try {
+      replay.exec(schemaSql)
+      replay.pragma('foreign_keys = ON')
+      if (earlier) {
+        // The delta lands on what the earlier target held and must complete it:
+        // every row of this target is then present, and nothing dangles.
+        replay.pragma('foreign_keys = OFF')
+        for (const table of tables) {
+          const names = columns(earlier, table)
+          const insert = replay.prepare(`INSERT INTO ${qi(table)} (${names.map(qi).join(', ')}) VALUES (${names.map(() => '?').join(', ')})`)
+          for (const row of earlier.prepare(`SELECT * FROM ${qi(table)}`).all()) insert.run(...names.map(name => row[name]))
+        }
+        replay.pragma('foreign_keys = ON')
+        replay.exec(readFileSync(payloadPath, 'utf8'))
+        for (const table of tables) {
+          const key = primaryKey(target, table)
+          const present = new Set(replay.prepare(`SELECT ${key.map(qi).join(', ')} FROM ${qi(table)}`).raw().all().map(values => JSON.stringify(values)))
+          const missing = target.prepare(`SELECT ${key.map(qi).join(', ')} FROM ${qi(table)}`).raw().all().filter(values => !present.has(JSON.stringify(values)))
+          assert(missing.length === 0, `Delta replay is missing ${missing.length} ${table} rows`)
+        }
+      } else {
+        // Replaying the payload onto a populated copy must reproduce the target exactly.
+        replay.exec(readFileSync(payloadPath, 'utf8'))
+        replay.exec(readFileSync(payloadPath, 'utf8'))
+        for (const table of tables) {
+          const names = columns(target, table)
+          assert(digest(target.prepare(`SELECT * FROM ${qi(table)}`).all(), names) === digest(replay.prepare(`SELECT * FROM ${qi(table)}`).all(), names), `Payload replay differs: ${table}`)
+        }
+      }
+      assert(replay.pragma('foreign_key_check').length === 0, 'Payload replay has foreign key violations')
+    } finally {
+      replay.close()
+    }
+    return { tables: tables.length, statements: lines.length, ...(earlier ? { delta, left_behind: leftBehind } : {}) }
+  } finally {
+    earlier?.close()
+  }
+}
+
+/** Every schema object, as SQLite reports it; what a destination must carry for the payload to apply. */
+export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY type, name"
+
+/**
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
- * @typedef {{ baseline_sha256: string, migration_chain_sha256: string, tables: TableTransfer[], retired_tables?: string[], retired_columns?: Record<string, string[]>,
- *   derived?: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
- *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number }, schema?: Array<{ name: string, sql: string }> }} TransferManifest
+ * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables: Array<{ table: string, source_rows: number }>, retired_columns: Record<string, string[]>,
+ *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>,
+ *   retired_placements: Array<{ owner_type: string, slot: string, owner_id: string, slug: string | null, placement_id: string, asset_id: string }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
+ *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number>, left_behind?: Record<string, { changed: string[], deleted: string[] }> },
+ *   schema?: Array<{ type: string, name: string, sql: string }> }} TransferManifest
  */
 
 /**
  * @param {string} sourcePath
  * @param {string} targetPath
- * @param {{ payloadPath?: string | null, withoutJwks?: boolean }} [options]
+ * @param {{ payloadPath?: string | null, withoutJwks?: boolean, deltaFrom?: string | null }} [options]
  * @returns {TransferManifest}
  */
-export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false } = {}) {
+export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false, deltaFrom = null } = {}) {
   assert(!existsSync(targetPath), `Target already exists: ${targetPath}`)
+  assert(!deltaFrom || payloadPath, 'A delta is a payload; pass --payload with --delta-from')
   const schemaSql = migrationChainSql()
   const source = openDatabase(resolve(sourcePath))
   const sourceFile = resolve(`${targetPath}.source.sqlite`)
   assert(!existsSync(sourceFile), `Source scratch file already exists: ${sourceFile}`)
-  // The derivation reads the retired tables through ATTACH, so the source has
-  // to be a file even when it arrived as a dump.
+  // The epoch reads retired tables and columns through ATTACH, so the source
+  // has to be a file even when it arrived as a dump.
   source.exec(`VACUUM INTO ${sqlLiteral(sourceFile)}`)
-  // Rows are copied and transformed in a staging copy of the current schema with CHECK
+  // Rows are copied and transformed in a staging copy of the baseline with CHECK
   // enforcement off: the source still holds the retired values the transforms
   // rewrite. The final target then re-inserts every row under full enforcement,
   // so nothing the transforms missed can survive into it.
   const stage = new Database(':memory:')
   const target = new Database(targetPath)
-  const now = new Date().toISOString()
   /** @type {TransferManifest} */
   const manifest = {
     baseline_sha256: hash(readFileSync(resolve(MIGRATIONS_DIRECTORY, '0000_baseline.sql'), 'utf8')),
-    migration_chain_sha256: hash(schemaSql),
     tables: [],
+    retired_tables: [],
+    retired_columns: {},
+    added_columns: {},
+    connections_to_reconnect: [],
+    retired_placements: [],
     derived: {},
     transforms: [],
     invariants: [],
@@ -1412,50 +688,42 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     stage.exec(`ATTACH ${sqlLiteral(sourceFile)} AS old`)
     const names = tableNames(stage)
     const sourceTables = tableNames(source)
-    const reshapes = sourceTables.includes('offerings')
-    const collapsesSites = sourceTables.includes('sites')
-    // Tables and columns the current schema no longer has are retired features; their
-    // rows are derived or dropped, and the manifest names them.
-    const renamedSources = new Set([...RENAMED_FROM_SITES].filter(([target]) => names.includes(target)).map(([, from]) => from))
-    manifest.retired_tables = sourceTables.filter(table => !names.includes(table) && !renamedSources.has(table))
-    manifest.renamed_tables = {}
-    manifest.retired_columns = {}
-    manifest.added_columns = {}
-    const derived = []
-    for (const table of names) {
-      // A renamed table is read from whichever name the source actually carries.
-      const renamedFrom = RENAMED_FROM_SITES.get(table)
-      const sourceTable = sourceTables.includes(table)
-        ? table
-        : renamedFrom && sourceTables.includes(renamedFrom) ? renamedFrom : null
-      if (!sourceTable || (reshapes && DERIVED_FROM_RETIRED_MODEL.has(table)) || (collapsesSites && DERIVED_FROM_SITES.has(table))) { derived.push(table); continue }
+    const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n
+
+    const retiredTables = sourceTables.filter(table => !names.includes(table))
+    const undeclaredTables = retiredTables.filter(table => !EPOCH_RETIRED.tables.includes(table))
+    assert(undeclaredTables.length === 0, `Source tables the baseline does not carry and no epoch retires: ${undeclaredTables.join(', ')}`)
+    manifest.retired_tables = retiredTables.map(table => ({ table, source_rows: count(source, table) }))
+    // The snapshot pull leaves jwks behind on purpose; any other absent table
+    // would arrive empty and look like a tenant with no data.
+    const absent = names.filter(table => !sourceTables.includes(table) && !(withoutJwks && table === 'jwks'))
+    assert(absent.length === 0, `Source is missing baseline tables: ${absent.join(', ')}`)
+
+    for (const table of names.filter(table => sourceTables.includes(table))) {
       const targetColumns = columns(stage, table)
-      const sourceColumns = columns(source, sourceTable)
+      const sourceColumns = columns(source, table)
       const retired = sourceColumns.filter(name => !targetColumns.includes(name))
+      const undeclared = retired.filter(name => !(EPOCH_RETIRED.columns[table] ?? []).includes(name))
+      assert(undeclared.length === 0, `${table}: source columns the baseline does not carry and no epoch retires: ${undeclared.join(', ')}`)
       if (retired.length) manifest.retired_columns[table] = retired
-      // A column the current schema added takes its own default. One that is NOT NULL
-      // with no default has no value to take, and the transfer says so rather
-      // than inventing one.
+      // A column the baseline added starts NULL or at its declared default. One
+      // that is NOT NULL with no default has no value to take, and the transfer
+      // says so rather than inventing one.
       const added = stage.prepare(`PRAGMA table_info(${qi(table)})`).all().filter(column => !sourceColumns.includes(column.name))
       const unfillable = added.filter(column => column.notnull === 1 && column.dflt_value === null)
-      assert(unfillable.length === 0, `${table}: current schema requires ${unfillable.map(column => column.name).join(', ')}, which the source cannot supply`)
+      assert(unfillable.length === 0, `${table}: baseline requires ${unfillable.map(column => column.name).join(', ')}, which the source cannot supply`)
       if (added.length) manifest.added_columns[table] = added.map(column => column.name)
       const shared = targetColumns.filter(name => sourceColumns.includes(name))
-      stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(sourceTable)}`).run()
-      if (sourceTable !== table) manifest.renamed_tables[table] = sourceTable
+      stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(table)}`).run()
+      manifest.tables.push({ table, source_rows: count(source, table) })
     }
-    manifest.derived_tables = derived
-    for (const table of names) manifest.tables.push({ table, source_rows: stage.prepare(`SELECT count(*) AS n FROM main.${qi(table)}`).get().n })
-    if (reshapes) deriveCatalog(stage, now, (name, count) => { manifest.derived[name] = count })
-    if (collapsesSites) deriveOrganizations(stage, (name, count) => { manifest.derived[name] = count })
-    // After the organization has absorbed its site's integrations_json: this
-    // reshapes what that column holds.
-    deriveIntegrations(stage, now, (name, count) => { manifest.derived[name] = count })
+    deriveUserIdentity(stage, sourceTables, (name, changes) => { manifest.derived[name] = changes })
+    manifest.connections_to_reconnect = retireOrganizationProviderCredentials(stage, (name, changes) => { manifest.derived[name] = changes })
+    manifest.retired_placements = retirePlacementSlots(stage, (name, changes) => { manifest.derived[name] = changes })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
-      // source. A source that never had it — a newer export, or the baseline
-      // itself — has nothing to fold, and the manifest says the transform was
-      // skipped rather than the run failing on a column that is already gone.
+      // source. A source that never had it has nothing to fold, and the
+      // manifest says the transform was skipped.
       if (transform.requires && !transform.requires.columns.every(name => columns(source, transform.requires.table).includes(name))) {
         manifest.transforms.push({ name: transform.name, changes: 0, skipped: 'source has no such column', sql_sha256: hash(transform.sql) })
         continue
@@ -1465,7 +733,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     }
     stage.exec('DETACH old')
     target.exec(schemaSql)
-    // CHECK constraints stay on: the target must reject anything the derivation
+    // CHECK constraints stay on: the target must reject anything the epoch
     // missed. Foreign keys are verified in one pass afterwards, which names
     // every violating row instead of failing the commit with no detail.
     target.pragma('foreign_keys = OFF')
@@ -1479,16 +747,22 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       }
     })
     copy()
-    for (const entry of manifest.tables) entry.target_rows = target.prepare(`SELECT count(*) AS n FROM ${qi(entry.table)}`).get().n
+    for (const entry of manifest.tables) entry.target_rows = count(target, entry.table)
     const violations = target.pragma('foreign_key_check')
     assert(violations.length === 0, `Foreign key violations after transfer (${violations.length}): ${JSON.stringify(violations.slice(0, 8))}`)
     assert(target.pragma('integrity_check', { simple: true }) === 'ok', 'Integrity check failed')
+    // The target is the baseline, object for object: nothing the copy did may
+    // have created, altered or lost a table, index, view or trigger.
+    const baseline = new Database(':memory:')
+    baseline.exec(schemaSql)
+    const expected = baseline.prepare(SCHEMA_OBJECTS_QUERY).all()
+    baseline.close()
+    manifest.schema = target.prepare(SCHEMA_OBJECTS_QUERY).all()
+    assert(JSON.stringify(manifest.schema) === JSON.stringify(expected), 'Target schema differs from the baseline')
     manifest.invariants = auditTargetInvariants(target)
     const broken = manifest.invariants.filter(result => result.violations > 0)
     assert(broken.length === 0, `Invariant violations: ${broken.map(result => `${result.name}=${result.violations}`).join(', ')}`)
-    if (payloadPath) manifest.payload = writePayload(target, payloadPath, schemaSql, { withoutJwks })
-    // What a destination must already carry for the data-only payload to apply.
-    manifest.schema = target.prepare("SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations') ORDER BY name").all()
+    if (payloadPath) manifest.payload = writePayload(target, payloadPath, schemaSql, { withoutJwks, deltaFrom })
     writeFileSync(`${targetPath}.manifest.json`, JSON.stringify(manifest, null, 2), { mode: 0o600 })
     return manifest
   } finally {
@@ -1501,17 +775,40 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
   }
 }
 
+/** The row-count comparison a cutover reads before it repoints anything. */
+export function printTransferReport(manifest) {
+  const width = Math.max(...manifest.tables.map(entry => entry.table.length), ...manifest.retired_tables.map(entry => entry.table.length))
+  console.log(`${'table'.padEnd(width)}  source  target`)
+  for (const entry of manifest.tables) {
+    console.log(`${entry.table.padEnd(width)}  ${String(entry.source_rows).padStart(6)}  ${String(entry.target_rows).padStart(6)}${entry.source_rows === entry.target_rows ? '' : '  (changed by the epoch or a transform)'}`)
+  }
+  for (const entry of manifest.retired_tables) console.log(`${entry.table.padEnd(width)}  ${String(entry.source_rows).padStart(6)}  retired`)
+  for (const [table, names] of Object.entries(manifest.retired_columns)) console.log(`Retired ${table}: ${names.join(', ')}`)
+  for (const [table, names] of Object.entries(manifest.added_columns)) console.log(`Added ${table}: ${names.join(', ')}`)
+  for (const entry of manifest.connections_to_reconnect) {
+    console.log(`Reconnect required: ${entry.slug} (${entry.organization_id}, ${entry.name}) loses ${entry.connections.join(', ')}`)
+  }
+  for (const entry of manifest.retired_placements) {
+    console.log(`Retired placement: ${entry.owner_type}:${entry.slot} of ${entry.slug ?? entry.owner_id} (${entry.owner_id}) dropped, asset ${entry.asset_id}`)
+  }
+  console.log(`Derived: ${Object.entries(manifest.derived).map(([name, changes]) => `${name}=${changes}`).join(', ') || 'nothing'}`)
+  console.log(`Transforms: ${manifest.transforms.filter(transform => transform.changes > 0).map(transform => `${transform.name}=${transform.changes}`).join(', ') || 'no changes'}`)
+  for (const [table, rows] of Object.entries(manifest.payload?.left_behind ?? {})) {
+    if (rows.changed.length) console.log(`Not carried, changed since the initial export: ${table} ${rows.changed.length}: ${rows.changed.join(' ')}`)
+    if (rows.deleted.length) console.log(`Not carried, deleted since the initial export: ${table} ${rows.deleted.length}: ${rows.deleted.join(' ')}`)
+  }
+  if (manifest.payload?.delta) console.log(`Delta: ${Object.entries(manifest.payload.delta).filter(([, rows]) => rows > 0).map(([table, rows]) => `${table}=${rows}`).join(', ') || 'no new rows'}`)
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2)
   const flag = name => { const index = args.indexOf(name); return index >= 0 ? args.splice(index, 1).length > 0 : false }
   const option = name => { const index = args.indexOf(name); return index >= 0 ? args.splice(index, 2)[1] : null }
   const withoutJwks = flag('--without-jwks')
   const payloadPath = option('--payload')
+  const deltaFrom = option('--delta-from')
   const [sourcePath, targetPath] = args
-  if (!sourcePath || !targetPath) throw new Error('Usage: transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks]')
-  const manifest = transferDatabaseExport(sourcePath, targetPath, { payloadPath, withoutJwks })
-  const rows = manifest.tables.reduce((total, entry) => total + entry.target_rows, 0)
-  console.log(`Transfer passed: ${manifest.tables.length} tables, ${rows} rows`)
-  console.log(`Derived: ${Object.entries(manifest.derived).map(([name, count]) => `${name}=${count}`).join(', ')}`)
-  console.log(`Transforms: ${manifest.transforms.map(transform => `${transform.name}=${transform.changes}`).join(', ')}`)
+  if (!sourcePath || !targetPath) throw new Error('Usage: transfer-database-export.mjs <source.sql|source.sqlite> <target.sqlite> [--payload <payload.sql>] [--without-jwks] [--delta-from <earlier-target.sqlite>]')
+  printTransferReport(transferDatabaseExport(sourcePath, targetPath, { payloadPath, withoutJwks, deltaFrom }))
+  console.log('Transfer passed.')
 }
