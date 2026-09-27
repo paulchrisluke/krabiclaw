@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import BlogPostList from '~/components/dashboard/BlogPostList.vue'
 
-// Blog is a row on Menu, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+// A row on Menu, nested under it so Menu is both its pane and its Back; the URL stays `/blog`.
+definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/blog' })
 
 </script>

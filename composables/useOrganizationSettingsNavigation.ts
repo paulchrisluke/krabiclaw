@@ -8,6 +8,7 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 // list, so a row exists in one place.
 export function useOrganizationSettingsNavigation() {
   const route = useRoute()
+  const router = useRouter()
   const { orgPaths, businessPaths } = useDashboardOrganizationLinks()
   const dashboard = useDashboardOrganization()
 
@@ -55,9 +56,10 @@ export function useOrganizationSettingsNavigation() {
 
   const groups = computed<EditorNavigationGroup[]>(() => [{ id: 'business', items: items.value }])
 
+  /** The row whose level is open, read off the matched hierarchy: Pages lives at `/pages` but is nested under Menu. */
   const activeItem = computed(() => {
-    if (!route.path.startsWith(`${settingsPath.value}/`)) return null
-    return route.path.slice(`${settingsPath.value}/`.length).split('/')[0]
+    const open = new Set(route.matched.map(record => routeRecordPath(router, record, route.params)))
+    return items.value.find(item => item.to && open.has(item.to))?.id ?? null
   })
 
   /** The open leaf's title, from the row that opened it. */

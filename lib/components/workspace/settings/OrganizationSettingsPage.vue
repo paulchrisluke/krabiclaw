@@ -3,7 +3,7 @@
     Brand is what a guest sees; Website is what a guest never sees. Each is a
     flat list of settings, and each setting is a leaf below this level.
   -->
-  <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-settings'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-website'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <div v-if="loading" class="space-y-4">
       <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
     </div>

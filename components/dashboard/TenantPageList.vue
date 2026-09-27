@@ -29,12 +29,12 @@ const organizationId = await useDashboardOrganizationId()
 const level = useRouteLevel()
 
 /**
- * The links page is a page in this list but a level of its own beside Pages,
- * so its row is resolved from the route it is rather than by assembling the
- * organization's path a second time.
+ * The links page is a page in this list and a level nested under Pages at a
+ * URL of its own, so its row is resolved from the route it is rather than by
+ * assembling the organization's path a second time.
  */
 const linksPath = computed(() => router.resolve({
-  name: 'dashboard-orgSlug-links',
+  name: 'dashboard-orgSlug-settings-pages-links',
   params: { orgSlug: route.params.orgSlug },
 }).path)
 

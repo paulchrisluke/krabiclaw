@@ -7,8 +7,8 @@
 <script setup lang="ts">
 import TenantPageList from '~/components/dashboard/TenantPageList.vue'
 
-// Pages is a row on Menu, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug-settings' })
+// A row on Menu, nested under it so Menu is both its pane and its Back; the URL stays `/pages`.
+definePageMeta({ layout: 'dashboard', path: '/dashboard/:orgSlug/pages' })
 
 useSeoMeta({ title: 'Pages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
