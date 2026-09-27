@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f8694db1ce92f2dccbe29e489cb720e36e5ca29795b12b4f8ae63b041448043a",
+  "fingerprint": "sha256:93f83bd9f708b2734c7eaf3aeb09f384848e339a9173baf9e48fe3f6cd2060c6",
   "tools": [
     {
       "name": "append_content_block",
@@ -14308,28 +14308,6 @@
               "INR"
             ],
             "type": "string"
-          },
-          "media": {
-            "items": {
-              "properties": {
-                "asset_id": {
-                  "type": "string"
-                },
-                "slot": {
-                  "enum": [
-                    "logo",
-                    "favicon"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "asset_id",
-                "slot"
-              ],
-              "type": "object"
-            },
-            "type": "array"
           },
           "name": {
             "type": "string"
