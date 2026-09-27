@@ -60,13 +60,6 @@ export const organizationOptions = {
   // owns it and calls this plugin's adapter. The plugin's own route would delete
   // immediately and leak both, so it stays closed.
   disableOrganizationDeletion: true,
-  schema: {
-    organization: {
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
-      },
-    },
-  },
 } as const
 
 async function configureCimdTenantScopes(event: {
@@ -258,16 +251,6 @@ export function createAuth(env: CloudflareEnv) {
       cookieCache: {
         enabled: true,
         maxAge: 5 * 60, // Cache duration in seconds
-      },
-    },
-    user: {
-      // Account deletion is scheduled through /api/user/delete-account and
-      // performed by the deletion-sweep task (server/utils/tenant-deletion.ts),
-      // which also removes the organizations the account owns alone. Better
-      // Auth's own /delete-user route stays disabled: it would delete the user
-      // immediately and leave those organizations with no owner, still serving.
-      additionalFields: {
-        deletionScheduledAt: { type: 'date', required: false, input: false },
       },
     },
     rateLimit: {
