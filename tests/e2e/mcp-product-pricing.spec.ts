@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
+import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 interface PriceRow {
   id: string
@@ -15,6 +16,16 @@ interface ProductRow {
   id: string
   variants: Array<{ id: string; name: string; prices: PriceRow[] }>
 }
+
+// The large-batch spec asserts the demo tenant's whole catalogue under this
+// lock, so every test that adds a Product to it takes the same lock.
+let releaseTenantMutationLock: (() => Promise<void>) | undefined
+test.beforeEach(async ({ request: _request }, testInfo) => {
+  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+})
+test.afterEach(async () => {
+  await releaseTenantMutationLock?.()
+})
 
 /**
  * What a customer buys is a variant, and a price belongs to a variant.

@@ -4,7 +4,7 @@ import { deleteFromR2 } from './cloudflare-r2'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
-import { fireOrganizationEvent } from '~/server/utils/organization-events'
+import { organizationEventQuery } from '~/server/utils/organization-events'
 import {
   isSingleMediaPlacement,
   isSupportedMediaPlacement,
@@ -446,10 +446,7 @@ export function buildMediaAssetInsertQuery(data: CreateInput, now = new Date().t
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
   const query = buildMediaAssetInsertQuery(data)
-  await executeBatch(db, [query, publicResourceCacheInvalidationQuery(data.organization_id, 'media-create')])
-
-  await fireOrganizationEvent({
-    db,
+  await executeBatch(db, [query, organizationEventQuery({
     organizationId: data.organization_id,
     locationId: null,
     actorId: data.created_by_user_id ?? null,
@@ -462,7 +459,7 @@ export async function createMediaAsset(db: DbClient, data: CreateInput): Promise
       source: data.source,
       status: data.status ?? 'active',
     },
-  })
+  }), publicResourceCacheInvalidationQuery(data.organization_id, 'media-create')])
 }
 
 export async function getMediaAsset(db: DbClient, id: string, organizationId: string): Promise<MediaAsset | null> {
@@ -661,7 +658,18 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     const [result] = await executeBatch(db, [{
       query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
       params: [new Date().toISOString(), pendingAsset.id, organizationId],
-    }, {
+    }, organizationEventQuery({
+      organizationId: pendingAsset.organization_id,
+      locationId: null,
+      actorId: deletedByUserId,
+      eventType: 'media.deleted',
+      entityType: 'media_asset',
+      entityId: pendingAsset.id,
+      metadata: {
+        provider: pendingAsset.provider,
+      },
+      onlyIfPreviousChangedOneRow: true,
+    }), {
       query: 'DELETE FROM media_placements WHERE organization_id = ? AND asset_id = ?',
       params: [organizationId, pendingAsset.id],
     }, publicResourceCacheInvalidationQuery(organizationId, 'media-delete')])
@@ -675,20 +683,6 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     ? [`${deletions[index]!.label}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
     : [])
 
-  if (claimed) {
-    await fireOrganizationEvent({
-      db,
-      organizationId: pendingAsset.organization_id,
-      locationId: null,
-      actorId: deletedByUserId,
-      eventType: 'media.deleted',
-      entityType: 'media_asset',
-      entityId: pendingAsset.id,
-      metadata: {
-        provider: pendingAsset.provider,
-      },
-    })
-  }
   if (sourcePlacements.length) {
     const { refreshSocialCard, socialCardRefreshOwnersForPlacement } = await import('~/server/utils/social-card')
     for (const placement of sourcePlacements) {
