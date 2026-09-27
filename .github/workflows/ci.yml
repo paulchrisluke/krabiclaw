@@ -105,6 +105,8 @@ jobs:
       # already prepared: local migrations, a production snapshot into local D1,
       # development auth, and the production build.
       - run: yarn test:e2e
+      # Wrangler's own log names why the local Worker stopped serving; run
+      # 36298734414 died serving _nuxt chunks with nothing else to read.
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -113,8 +115,6 @@ jobs:
           path: |
             playwright-report/
             test-results/
-            # Wrangler's own log names why the local Worker stopped serving;
-            # run 36298734414 died serving _nuxt chunks with nothing else to read.
             ~/.config/.wrangler/logs/
           retention-days: 14
           if-no-files-found: ignore
