@@ -4,7 +4,8 @@ import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
-import { updateThreadProjectionIfLatestEntry } from './repository'
+import { mailboxTransitionQueries, updateThreadProjectionIfLatestEntry } from './repository'
+import { resolveGuestThreadMailbox } from './mailbox'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
@@ -17,10 +18,12 @@ import type {
   GuestThreadSubmissionType,
 } from './types'
 
-// A thread is never archived by hand. Cancelling resolves it
-// as a consequence of the booking's own lifecycle; there is no separate
-// resolve/reopen for a member to reach for, and no surface that offered one.
-export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery'])
+// A thread is never resolved by hand. Cancelling resolves it as a consequence
+// of the booking's own lifecycle; there is no separate resolve/reopen for a
+// member to reach for. Archive and unarchive say where the conversation is
+// filed, not what state it is in, and touch neither the booking nor
+// conversation_state.
+export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery', 'archive', 'unarchive'])
 
 type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
 
@@ -526,6 +529,65 @@ async function retryDelivery(
   return await successfulOutcome(db, context)
 }
 
+const ENDED_OCCURRENCE_MESSAGE = 'This conversation is past because its booking has ended'
+
+/**
+ * File a conversation under Past, or bring a manually archived one back.
+ *
+ * Whether either is allowed is `resolveGuestThreadMailbox`'s answer, and the
+ * batch carries the same condition so a thread that changed after this read
+ * gets no entry and no write. A retried key finds its entry and changes
+ * nothing: not the timestamp, not the actor, not the order of the inbox.
+ */
+async function executeMailboxTransition(
+  db: DbClient,
+  context: ThreadContext,
+  input: ExecuteOperationInput,
+  transition: 'archive' | 'unarchive',
+): Promise<OperationOutcome> {
+  const dedupeKey = operationDedupeKey(input)
+  const eventName = transition === 'archive' ? 'thread.archived' : 'thread.unarchived'
+  const existing = await findEntryByDedupeKey(db, dedupeKey)
+  if (existing) {
+    if (!entryMatchesRequest(existing, eventName) || existing.request_id !== context.thread.id) return conflict()
+    return await successfulOutcome(db, context)
+  }
+
+  const now = new Date().toISOString()
+  const state = resolveGuestThreadMailbox(context.thread, context.record, now)
+  if (transition === 'archive' && !state.canArchive) {
+    return conflict(state.occurrenceEnded ? ENDED_OCCURRENCE_MESSAGE : 'This conversation is already archived')
+  }
+  if (transition === 'unarchive' && !state.canUnarchive) {
+    return conflict(state.occurrenceEnded ? ENDED_OCCURRENCE_MESSAGE : 'This conversation is not archived')
+  }
+
+  const [entry, update] = await executeBatch(db, mailboxTransitionQueries({
+    transition,
+    threadId: context.thread.id,
+    organizationId: context.thread.organization_id,
+    actorUserId: input.actorUserId,
+    entryId: crypto.randomUUID(),
+    dedupeKey,
+    now,
+  }), { operation: `guest thread ${eventName}` })
+  const recorded = entry?.meta?.changes ?? 0
+  const moved = update?.meta?.changes ?? 0
+  if (recorded !== moved) throw new Error(`${eventName} recorded ${recorded} entries for ${moved} thread writes`)
+  if (moved === 1) return await successfulOutcome(db, context)
+
+  // Nothing landed: either the same key won a concurrent request, or the
+  // thread moved between the read above and the batch.
+  const applied = await findEntryByDedupeKey(db, dedupeKey)
+  if (applied && entryMatchesRequest(applied, eventName) && applied.request_id === context.thread.id) {
+    return await successfulOutcome(db, context)
+  }
+  const reread = await loadThreadContext(db, input.threadId, input.organizationId)
+  if ('ok' in reread) return reread
+  const after = resolveGuestThreadMailbox(reread.thread, reread.record, new Date().toISOString())
+  return conflict(after.occurrenceEnded ? ENDED_OCCURRENCE_MESSAGE : 'This conversation changed; reload it and try again')
+}
+
 export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOperationInput): Promise<OperationOutcome> {
   if (!input.idempotencyKey) return { ok: false, status: 400, reason: 'missing_idempotency_key' }
   const context = await loadThreadContext(db, input.threadId, input.organizationId)
@@ -533,5 +595,8 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
 
   if (input.action === 'reply') return await executeReply(db, context, input)
   if (input.action === 'retry_delivery') return await retryDelivery(db, context, input)
+  if (input.action === 'archive' || input.action === 'unarchive') {
+    return await executeMailboxTransition(db, context, input, input.action)
+  }
   return await executeSourceMutation(db, context, input)
 }
