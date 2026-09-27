@@ -79,7 +79,10 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     const concurrent = await propose('concurrent-change', 4)
     const [decision, cancellation] = await Promise.allSettled([respondToBookingChange(db, env, concurrent), executeGuestThreadOperation(db, {
       threadId: 'change-proof', action: 'cancel', actorUserId: 'user-proof', idempotencyKey: 'owner-cancel', env })])
-    assert(cancellation.status === 'fulfilled' && cancellation.value.ok)
+    // Name the reason when the owner's cancel loses: a bare falsy assertion hid
+    // which side of the race failed in CI.
+    assert.equal(cancellation.status, 'fulfilled', `cancel rejected: ${cancellation.status === 'rejected' ? String(cancellation.reason) : ''}`)
+    assert(cancellation.value.ok, `cancel refused: ${JSON.stringify(cancellation.value)}`)
     if (decision.status === 'fulfilled') assert.equal(decision.value.status, 'accepted')
     else assert.match(String(decision.reason), /changed|no longer/)
     assert.equal(await db.prepare("SELECT status FROM reservations WHERE request_id='change-proof'").first('status'), 'cancelled')
