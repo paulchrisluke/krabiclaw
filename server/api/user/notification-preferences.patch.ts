@@ -33,7 +33,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: `${body.category} email cannot be switched off` }, { status: 400 })
   }
 
-  await setNotificationPreference(db, session.user.id, body.category, { email: body.email, whatsapp: body.whatsapp })
+  await setNotificationPreference(db, env, session.user.id, body.category, { email: body.email, whatsapp: body.whatsapp })
   return jsonResponse({ preferences: await getNotificationPreferences(db, session.user.id) })
 })
 import { defineHandler } from 'nitro';

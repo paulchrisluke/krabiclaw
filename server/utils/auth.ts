@@ -145,6 +145,9 @@ export interface CloudflareEnv {
   INSTAGRAM_APP_ID?: string
   INSTAGRAM_APP_SECRET?: string
   RESEND_API_KEY?: string
+  RESEND_WEBHOOK_SECRET?: string
+  RESEND_PRODUCT_NEWS_SEGMENT_ID?: string
+  RESEND_PRODUCT_NEWS_TOPIC_ID?: string
   EMAIL_FROM?: string
   EMAIL_DELIVERY_MODE?: string
   EMAIL_REPLY_SECRET?: string
