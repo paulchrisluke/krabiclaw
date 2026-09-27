@@ -3,6 +3,8 @@ import { authClient } from '~/lib/auth-client'
 export interface LinkedAccountOption {
   id: string
   label: string
+  /** The provider's picture of the account, when it has one. */
+  image: string | null
 }
 
 /**
@@ -21,7 +23,7 @@ export function useLinkedAccounts(providerId: string, scopes: readonly string[] 
     return await Promise.all(matching.map(async (account) => {
       const { data: info, error: infoError } = await authClient.accountInfo({ query: { accountId: account.id } })
       if (infoError) throw new Error(infoError.message || `The linked ${providerId} account could not be read.`)
-      return { id: account.id, label: info?.user.email || info?.user.name || account.accountId }
+      return { id: account.id, label: info?.user.email || info?.user.name || account.accountId, image: info?.user.image || null }
     }))
   }, { lazy: true, server: false })
 

@@ -6,25 +6,41 @@
       </h2>
 
       <!-- Rows: settings, where the chevron marks a push into a deeper screen. -->
-      <UCard
-        variant="subtle"
-        class="overflow-hidden rounded-2xl"
-        :ui="{ body: 'p-0! sm:p-0!' }"
-      >
+      <!-- The rows sit on the pane itself: a card around them is a second surface saying nothing. -->
+      <div>
         <component
           :is="item.to ? NuxtLink : item.action ? 'button' : 'div'"
           v-for="(item, index) in group.items"
           :key="item.id"
           v-bind="item.to ? { to: item.to } : item.action ? { type: 'button' } : {}"
-          class="group flex min-h-20 w-full items-center gap-4 text-left px-5 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
+          class="group flex min-h-20 w-full items-center gap-4 text-left px-4 py-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary"
           :class="[
             index > 0 ? 'border-t border-default' : '',
-            item.id === activeItem ? 'bg-elevated' : '',
+            item.id === activeItem ? 'bg-elevated shadow-[inset_3px_0_0_var(--ui-primary)]' : '',
             item.to || item.action ? 'hover:bg-elevated' : '',
           ]"
           :aria-current="item.id === activeItem ? 'page' : undefined"
           @click="item.action ? $emit('act', item.id) : undefined"
         >
+          <!--
+            A mark beside the label: the product's logo, or the record's own
+            picture with a muted icon in the same footprint when it has none,
+            so rows with and without one line up (DESIGN.md).
+          -->
+          <span
+            v-if="item.lead"
+            class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-elevated"
+          >
+            <img
+              v-if="item.lead.image"
+              :src="item.lead.image"
+              alt=""
+              class="size-full object-cover"
+              loading="lazy"
+              decoding="async"
+            >
+            <UIcon v-else :name="item.lead.icon" class="size-7 text-dimmed" />
+          </span>
           <span class="min-w-0 flex-1">
             <!-- The picture leads, in the row's own footprint (DESIGN.md). -->
             <img
@@ -55,7 +71,11 @@
               v-if="item.summary && !item.card"
               class="mt-1 line-clamp-2 block text-sm"
               :class="item.placeholder ? 'italic text-dimmed' : 'text-muted'"
-            >{{ item.summary }}</span>
+            ><span
+              v-if="item.status"
+              class="me-1.5 inline-block size-2 rounded-full align-middle"
+              :class="{ success: 'bg-success', error: 'bg-error', neutral: 'bg-(--ui-text-dimmed)' }[item.status]"
+            />{{ item.summary }}</span>
 
 
             <!--
@@ -93,7 +113,7 @@
           >{{ item.action.label }}</span>
           <UIcon v-else-if="item.to" name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
         </component>
-      </UCard>
+      </div>
     </section>
   </div>
 </template>
@@ -112,6 +132,14 @@ export interface EditorNavigationItem {
    * inert rather than as a control that looks clickable and is not.
    */
   to?: string
+  /**
+   * A mark in a fixed footprint ahead of the label: `image` when the record
+   * has a picture, `icon` in its place when it has none — or on its own, for
+   * a product known by its logo.
+   */
+  lead?: { image?: string | null; icon: string }
+  /** A dot ahead of the summary: the thing the row names is working, failing, or off. */
+  status?: 'success' | 'error' | 'neutral'
   /** Renders the summary as absent rather than as a value. */
   placeholder?: boolean
   /** A picture that leads the row, in the row's own footprint. */

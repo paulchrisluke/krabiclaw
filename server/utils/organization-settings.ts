@@ -12,6 +12,7 @@ import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, togglea
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { checkModuleHasLiveData } from '~/server/utils/module-content-guard'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
+import { formatPostalAddress, parsePostalAddress } from '~/utils/postal-address'
 import { buildSingleMediaPlacementQueries, hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { organizationAdapter } from '~/server/utils/member-access'
@@ -99,11 +100,15 @@ export async function loadSettingsPayload(
            social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
            vertical, theme_id, integrations_json,
-           (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title,
+           (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
+                     'phone', phone, 'website_url', website_url, 'image', image,
                      'google_place_id', google_place_id, 'rating', rating, 'review_count', review_count,
                      'last_synced_at', last_synced_at))
-              FROM (SELECT * FROM business_locations
-                     WHERE organization_id = organization.id AND status = 'active' ORDER BY title, id)) AS locations_json
+              FROM (SELECT bl.*, COALESCE(hma.thumbnail_url, hma.public_url) AS image FROM business_locations bl
+                      LEFT JOIN media_placements hmp ON hmp.owner_type = 'business_location' AND hmp.owner_id = bl.id
+                        AND hmp.slot = 'hero' AND hmp.sort_order = 0 AND hmp.status = 'active'
+                      LEFT JOIN media_assets hma ON hma.id = hmp.asset_id AND hma.status = 'active'
+                     WHERE bl.organization_id = organization.id AND bl.status = 'active' ORDER BY bl.title, bl.id)) AS locations_json
     FROM organization
     LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
       AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
@@ -196,6 +201,11 @@ interface IntegrationLocation {
   id: string
   slug: string
   title: string
+  address: string | null
+  phone: string | null
+  website_url: string | null
+  /** The location's hero, which is what the tenant recognises it by. */
+  image: string | null
   google_place_id: string | null
   rating: number | null
   review_count: number | null
@@ -208,19 +218,22 @@ interface IntegrationLocation {
  * its answer is the locations and which of them name a place.
  */
 function integrationsSummary(integrations: OrganizationIntegrations, locations: IntegrationLocation[]) {
+  // Choosing a property, Page or account writes a new record, so its
+  // `created_at` is when this connection was made.
+  const { google_analytics: analytics, google_search_console: searchConsole, facebook, instagram } = integrations
   return {
-    google_maps: locations,
-    google_analytics: integrations.google_analytics
-      ? { property_name: integrations.google_analytics.property_name ?? null, measurement_id: integrations.google_analytics.measurement_id, status: integrations.google_analytics.status }
+    google_maps: locations.map(location => ({ ...location, address: formatPostalAddress(parsePostalAddress(location.address)) || null })),
+    google_analytics: analytics
+      ? { account_id: analytics.account_id ?? null, property_name: analytics.property_name ?? null, measurement_id: analytics.measurement_id, status: analytics.status, connected_at: analytics.created_at }
       : null,
-    google_search_console: integrations.google_search_console
-      ? { site_url: integrations.google_search_console.site_url, status: integrations.google_search_console.status }
+    google_search_console: searchConsole
+      ? { account_id: searchConsole.account_id, site_url: searchConsole.site_url, status: searchConsole.status, connected_at: searchConsole.created_at }
       : null,
-    facebook: integrations.facebook
-      ? { page_name: integrations.facebook.page_name, status: integrations.facebook.status }
+    facebook: facebook
+      ? { account_id: facebook.account_id, page_name: facebook.page_name, status: facebook.status, connected_at: facebook.created_at }
       : null,
-    instagram: integrations.instagram
-      ? { username: integrations.instagram.username, status: integrations.instagram.status }
+    instagram: instagram
+      ? { account_id: instagram.account_id, username: instagram.username, status: instagram.status, connected_at: instagram.created_at }
       : null,
   }
 }

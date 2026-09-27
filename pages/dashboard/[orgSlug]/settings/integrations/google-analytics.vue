@@ -1,41 +1,45 @@
 <template>
   <DashboardLeafPanel
     id="integration-google-analytics"
+    icon="i-logos-google-analytics"
     title="Google Analytics"
-    :ready="!pending"
+    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !selected || (selected === data?.analytics?.property_id && accountId === data?.analytics?.account_id)"
-    :error="error || loadFailure"
-    :footer="Boolean(data?.account_id)"
-    @cancel="selected = data?.analytics?.property_id"
+    :error="error || integrations.failure.value || loadFailure"
+    :footer="choosing && Boolean(data?.account_id)"
+    @cancel="keep"
     @save="select"
   >
-    <div v-if="data" class="space-y-6">
-      <UCard variant="subtle">
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0">
-            <p class="font-semibold text-highlighted">{{ data.analytics ? 'Connected' : 'Not connected' }}</p>
-            <p class="mt-1 truncate text-sm text-muted">{{ data.analytics ? `${data.analytics.property_name ?? 'Property'} · ${data.analytics.measurement_id}` : 'Choose the GA4 property this website reports to.' }}</p>
-          </div>
-          <UButton v-if="data.analytics" color="error" variant="ghost" icon="i-lucide-link-2-off" :loading="disconnecting" @click="disconnect">Disconnect</UButton>
-        </div>
-      </UCard>
+    <IntegrationConnection
+      v-model:changing="changing"
+      logo="i-logos-google-analytics"
+      noun="property"
+      :connection="analytics && { name: analytics.property_name ?? analytics.measurement_id, connectedAt: analytics.connected_at, status: analytics.status }"
+      :disconnecting="disconnecting"
+      @disconnect="disconnect"
+      @keep="keep"
+    >
+      <template v-if="data">
+        <UFormField v-if="accountOptions.length" label="Google account">
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
+        </UFormField>
+        <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Google account</UButton>
+        <UButton v-else icon="i-simple-icons-google" size="xl" block :loading="linking" @click="link">Connect Google Analytics</UButton>
 
-      <UFormField v-if="accountOptions.length" label="Google account">
-        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
-      </UFormField>
-      <UButton icon="i-simple-icons-google" variant="outline" :loading="linking" @click="link">{{ accountOptions.length ? 'Link another Google account' : 'Connect Google Analytics' }}</UButton>
-
-      <UFormField v-if="data.account_id" label="Analytics property" :error="data.error ?? undefined">
-        <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" size="xl" class="w-full" />
-        <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
-      </UFormField>
-    </div>
+        <UFormField v-if="data.account_id" label="Analytics property" :error="data.error ?? undefined">
+          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" size="xl" class="w-full" />
+          <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
+        </UFormField>
+      </template>
+      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
+    </IntegrationConnection>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
+import IntegrationConnection from '~/components/dashboard/IntegrationConnection.vue'
 import { integrationsKey } from '../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -52,6 +56,7 @@ const dashboardApi = useDashboardApi()
 const route = useRoute()
 const api = `/api/organizations/${integrations.organizationId}/integrations/google-analytics`
 const linked = useLinkedAccounts('google', INTEGRATION_SCOPES['google-analytics'])
+const analytics = computed(() => integrations.summary.value?.google_analytics ?? null)
 
 const isLeaf = (value: unknown): value is AnalyticsLeaf =>
   isRecord(value) && (value.account_id === null || typeof value.account_id === 'string') && Array.isArray(value.properties)
@@ -78,6 +83,15 @@ const accountOptions = computed(() => {
 
 const selected = ref<string | undefined>()
 watch(data, value => { selected.value = value?.analytics?.property_id }, { immediate: true })
+
+// Linking another account while changing comes back with the picker still open.
+const changing = ref(route.query.change === '1')
+const choosing = computed(() => !analytics.value || changing.value)
+function keep() {
+  changing.value = false
+  accountId.value = data.value?.analytics?.account_id
+  selected.value = data.value?.analytics?.property_id
+}
 const options = computed(() => (data.value?.properties ?? []).map(property => ({ label: `${property.propertyName} (${property.accountName})`, value: property.propertyId })))
 
 const loadFailure = computed(() => loadError.value ? getErrorMessage(loadError.value, 'Could not load Google Analytics.')
@@ -94,7 +108,7 @@ async function link() {
   try {
     // Offline access with consent is what makes Google issue the refresh
     // token Better Auth keeps the connection alive with.
-    await linked.link(route.path, { access_type: 'offline', prompt: 'consent' })
+    await linked.link(changing.value ? `${route.path}?change=1` : route.path, { access_type: 'offline', prompt: 'consent' })
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not start the Google connection.')
     linking.value = false
@@ -109,6 +123,7 @@ async function select() {
   try {
     await dashboardApi(`${api}/select`, { method: 'POST', body: { account_id: accountId.value, property_id: property.propertyId, property_name: property.propertyName }, validate: isSuccess })
     await Promise.all([refresh(), integrations.refresh()])
+    changing.value = false
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not choose that property.')
   } finally {
@@ -123,6 +138,7 @@ async function disconnect() {
     await dashboardApi(`${api}/disconnect`, { method: 'POST', validate: isSuccess })
     accountId.value = undefined
     await Promise.all([refresh(), integrations.refresh()])
+    changing.value = false
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not disconnect Google Analytics.')
   } finally {
