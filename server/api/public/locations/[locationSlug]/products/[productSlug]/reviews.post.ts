@@ -34,13 +34,25 @@ export default defineHandler(async (event) => {
     const hourWindow = Math.floor(Date.now() / HOUR_MS)
     const rateOk = await incrementHourlyRateLimit(db, `rate:product-review:${resolved.product.id}:${ipHash}:${hourWindow}`, 5, HOUR_MS)
     if (!rateOk) return jsonResponse({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
-    const id = crypto.randomUUID()
     const status: ReviewStatus = 'pending'
     const userAgent = cleanString(event.req.headers.get('User-Agent'), 300)
-    await execute(db, `
-      INSERT INTO reviews (id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    // The owner alert follows the insert, so a failed alert answers 500 with
+    // the review already stored. The guest's identical retry is the same
+    // review: it is found again and its alert re-sent, not stored twice.
+    const resubmitted = await queryFirst<{ id: string }>(db, `
+      SELECT id FROM reviews
+      WHERE organization_id = ? AND product_id = ? AND ip_hash = ?
+        AND author_name = ? AND rating = ? AND title = ? AND content = ?
+        AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')
+      LIMIT 1
+    `, [organizationId, resolved.product.id, ipHash, author, rating, title, content])
+    const id = resubmitted?.id ?? crypto.randomUUID()
+    if (!resubmitted) {
+      await execute(db, `
+        INSERT INTO reviews (id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    }
     const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId])
     await notifyReviewReceived(env, db, {
       organizationId, organizationName: organization?.name, locationId: resolved.location.id, reviewId: id, authorName: author, rating, content,

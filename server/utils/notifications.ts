@@ -517,6 +517,8 @@ async function notifyOwner(
     submissionType?: 'contact' | 'reservation' | 'booking' | 'invitation' | null
     submissionId?: string | null
     notificationSource?: { threadId: string; entryId: string }
+    /** Keys the in-app notification for an event that has no guest thread. */
+    idempotencyKey?: string
   }
 ) {
   const threadContext = opts.notificationSource
@@ -531,7 +533,7 @@ async function notifyOwner(
     organizationId: opts.organizationId,
     locationId: opts.locationId ?? null,
     sourceEntryId: threadContext?.sourceEntryId ?? null,
-    idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
+    idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : opts.idempotencyKey,
     title: opts.title,
     threadId: threadContext?.guestThreadId ?? null,
     deepLink: opts.payload.deep_link || null,
@@ -861,6 +863,9 @@ export async function notifyReviewReceived(
   await notifyOwner(env, db, {
     ...opts,
     template: 'new_review',
+    // A guest retrying a submission whose alert failed re-sends it; the
+    // dashboard's notification is still one per review.
+    idempotencyKey: `notification:review:${opts.reviewId}:new_review`,
     title: ownerMessage.title,
     payload: {
       review_id: opts.reviewId,
