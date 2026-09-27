@@ -35,13 +35,13 @@ export async function sendReviewRequestForBooking(
   if (!context) throw new Error('Booking not found')
   if (!context.location_slug) throw new Error('Booking location is missing a public slug')
   if (context.review_request_sent_at) throw new Error('Review request has already been sent')
-  const recipientEmail = context.customer_email || context.guest_email || ''
-  if (!recipientEmail) throw new Error('Booking customer has no email address')
+  const recipientEmail = context.guest_email
+  if (!recipientEmail) throw new Error('Booking guest has no email address')
 
   const { request, token } = await createOrRotateReviewRequest(env as CloudflareEnv, db, context)
+  if (!request.user_id) throw new Error('Review request is not linked to a guest identity')
   const baseUrl = organizationBaseUrl(context)
   const reviewUrl = `${baseUrl}/locations/${encodeURIComponent(context.location_slug)}/review-submit?token=${encodeURIComponent(token)}`
-  const optOutUrl = `${reviewUrl}&optOut=1`
 
   try {
     await notifyReviewRequest(env, db, {
@@ -51,14 +51,14 @@ export async function sendReviewRequestForBooking(
       requestId: request.id,
       bookingType,
       bookingId,
-      guestName: context.customer_name || context.guest_name || 'there',
+      guestName: context.guest_name || 'there',
       email: recipientEmail,
       locationName: context.location_title,
       bookingPhrase: bookingPhrase(context),
       visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone),
       partySize: context.party_size === 1 ? '1 guest' : `${context.party_size} guests`,
       reviewUrl,
-      optOutUrl,
+      userId: request.user_id,
     })
     await markReviewRequestSendSuccess(db, request.id)
     return { sent: true, requestId: request.id }

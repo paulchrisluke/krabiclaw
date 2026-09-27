@@ -39,7 +39,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-proof','org-proof','user-proof','owner')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', location_id: null, customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', location_id: null, user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
     await notifyContactSubmitted(env, db, { organizationId: 'org-proof', organizationName: 'Proof', locationId: null,
       contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })
@@ -50,7 +50,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     await db.prepare("INSERT INTO business_locations (id,organization_id,slug,title,timezone,max_capacity,opening_hours) VALUES ('booking-location','org-proof','booking','Booking','Asia/Bangkok',10,?)")
       .bind(JSON.stringify({ periods: [{ open: { day: 1, hour: 16, minute: 0 }, close: { day: 1, hour: 22, minute: 0 } }] })).run()
     const booking = requestInsertQueries({ id: 'change-proof', kind: 'reservation', organization_id: 'org-proof', location_id: 'booking-location',
-      customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+      user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@proof.example', phone: '+66812345678' }), created_at: now, updated_at: now })
     await db.batch(booking.map(write => db.prepare(write.query).bind(...write.params)))
     // The seats live on the reservation, not the thread: a change proposal is
@@ -327,7 +327,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
       "INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location-status', 'org-status', 'proof', 'Proof')",
     ]) await db.prepare(statement).run()
     const now = new Date().toISOString()
-    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', location_id: 'location-status', customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
+    const opening = requestInsertQueries({ id: 'booking-status', kind: 'reservation', organization_id: 'org-status', location_id: 'location-status', user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@provider-proof.com', phone: '123' }), created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
     // The instant and the zone the guest agreed to live on the reservation; the
     // confirmation email is formatted from them, never from a server clock.
@@ -414,7 +414,7 @@ test('a booking move into a full session leaves the original booking exactly as 
       "INSERT INTO bookings (id,organization_id,product_id,product_session_id,product_variant_id,party_size,status) VALUES ('booking-other','org-move','prod-move','session-to','var-move',2,'confirmed')",
     ]) await db.prepare(statement).run()
     const thread = requestInsertQueries({ id: 'move-proof', kind: 'booking', organization_id: 'org-move', location_id: 'loc-move',
-      customer_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
+      user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null,
       payload: threadPayloadForGuest({ name: 'Guest', email: 'guest@move.example', phone: '+66812345678' }), created_at: now, updated_at: now })
     await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
     await db.prepare(`INSERT INTO bookings (id,organization_id,product_id,product_session_id,product_variant_id,request_id,party_size,status)
@@ -462,19 +462,20 @@ test('a review request reads the visit from the record that holds it', async () 
       "INSERT INTO organization (id, name, slug, subdomain) VALUES ('org-review', 'Kikuzuki', 'review', 'review')",
       "INSERT INTO organization_domains (id, organization_id, domain, role, status, type) VALUES ('domain-review','org-review','review.example','canonical','active','custom')",
       "INSERT INTO business_locations (id,organization_id,slug,title,timezone,max_capacity) VALUES ('loc-review','org-review','main','Main Room','Asia/Bangkok',40)",
-      "INSERT INTO customers (id, organization_id, name, email, source) VALUES ('cust-review','org-review','Sivan','sivan@proof.example','reservation')",
+      // The guest is an anonymous Better Auth user; what they typed is on the thread.
+      "INSERT INTO user (id, name, email, isAnonymous) VALUES ('guest-review','Anonymous','anon-guest-review@customers.krabiclaw.local',1)",
       // Better Auth's subscription table is the only store of plan entitlement.
       "INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-review','growth','org-review','active',4102444800)",
     ]) await db.prepare(statement).run()
     const thread = requestInsertQueries({ id: 'reservation-review', kind: 'reservation', organization_id: 'org-review', location_id: 'loc-review',
-      customer_id: 'cust-review', review_id: null, conversation_state: 'resolved', resolved_at: now,
+      user_id: 'guest-review', review_id: null, conversation_state: 'resolved', resolved_at: now,
       payload: { ...threadPayloadForGuest({ name: 'Sivan', email: 'sivan@proof.example', phone: null }), completion: { at: now, source: 'auto' } }, created_at: now, updated_at: now })
     await db.batch(thread.map(write => db.prepare(write.query).bind(...write.params)))
     // The visit is the reservation's, in the reservation's zone. 13:00Z in
     // Asia/Bangkok is 8:00 PM, and nothing else in the system knows that.
     // Complete is the clock: confirmed, and an end that has passed.
-    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,customer_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('res-review','org-review','loc-review','cust-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'confirmed')`).run()
+    await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,user_id,request_id,timezone,starts_at,ends_at,party_size,status)
+      VALUES ('res-review','org-review','loc-review','guest-review','reservation-review','Asia/Bangkok','2026-09-11T13:00:00.000Z','2026-09-11T15:00:00.000Z',6,'confirmed')`).run()
 
     const context = await getReviewBookingContext(db, 'reservation', 'reservation-review')
     assert(context, 'the thread and its reservation resolve to one context')
@@ -493,7 +494,7 @@ test('a review request reads the visit from the record that holds it', async () 
     const { html } = await renderNotificationEmail(reviewRequestMessage({
       guestName: 'Sivan', organizationName: 'Kikuzuki', locationName: 'Main Room',
       visitAt: formatTimestamp(context.visit_starts_at, 'en', context.visit_timezone), partySize: '6 guests',
-      reviewUrl: 'https://review.example/r', optOutUrl: 'https://review.example/r?optOut=1',
+      reviewUrl: 'https://review.example/r',
     }), { platformDomain: 'proof.example' })
     assert.match(html, /Sep 11, 2026, 8:00\s?PM/, 'the visit renders in the reservation timezone')
     assert.match(html, /6 guests/)

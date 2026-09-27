@@ -365,7 +365,8 @@ export async function claimReservation(db: DbClient, input: {
   locationId: string
   reservationId: string
   requestId: string | null
-  customerId: string | null
+  /** The Better Auth user the reservation belongs to. */
+  userId: string | null
   timezone: string
   startsAt: string
   endsAt: string
@@ -393,7 +394,7 @@ export async function claimReservation(db: DbClient, input: {
   const claim: BatchQuery = {
     query: `
       INSERT INTO reservations (
-        id, organization_id, location_id, customer_id, request_id,
+        id, organization_id, location_id, user_id, request_id,
         timezone, starts_at, ends_at, party_size, status, created_at, updated_at
       )
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
@@ -408,7 +409,7 @@ export async function claimReservation(db: DbClient, input: {
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
-      input.reservationId, input.organizationId, input.locationId, input.customerId, null,
+      input.reservationId, input.organizationId, input.locationId, input.userId, null,
       input.timezone, input.startsAt, input.endsAt, input.partySize, 'confirmed', now, now,
       input.locationId, input.organizationId,
       input.partySize, input.startsAt,

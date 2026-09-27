@@ -612,7 +612,7 @@ async function getMediaStorageReferenceState(
  *
  * Storage used to go first, so every deletion carried a window in which the
  * bytes were gone while `media_assets.status` still read `active` — a row that
- * is served to customers and returns 404. With the row claimed first, a lost
+ * is served to guests and returns 404. With the row claimed first, a lost
  * race deletes nothing, and a storage failure leaves an object that no active
  * row points at. That failure is thrown, naming the objects, and deleting the
  * same asset again retries only its storage: both storage deletes are

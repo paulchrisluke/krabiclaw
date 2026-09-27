@@ -239,7 +239,6 @@ export function reviewRequestMessage(input: {
   visitAt: string
   partySize: string
   reviewUrl: string
-  optOutUrl: string
   organizationLogoUrl?: string | null
 }): NotificationMessage {
   return {
@@ -254,8 +253,7 @@ export function reviewRequestMessage(input: {
       fact('location', 'Location', input.locationName),
     ),
     primaryAction: { url: input.reviewUrl, label: 'Leave a review' },
-    finePrint: `Would rather not be asked? Opt out: ${input.optOutUrl}`,
-    category: 'account_security',
+    category: 'review_requests',
     organizationName: input.organizationName,
   }
 }
