@@ -1,6 +1,7 @@
 import type { DbClient } from '~/server/db'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestActions } from '~/server/domain/requests'
 import { formatOperationalStatusLabel } from './status-labels'
+import { resolveGuestThreadMailbox } from './mailbox'
 import { listThreadEntries, parseEntryPayload } from './entries'
 import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
 import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
@@ -48,6 +49,8 @@ export async function getGuestThreadDetail(
 
   const summary = await requestSummary(db, thread)
   const record = await getThreadOperationalRecord(db, thread.id)
+  const now = new Date().toISOString()
+  const mailbox = resolveGuestThreadMailbox(thread, record, now)
 
   return {
     id: thread.id,
@@ -72,6 +75,7 @@ export async function getGuestThreadDetail(
         : {
             whenLabel: record ? new Intl.DateTimeFormat('en-US', { timeZone: record.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(record.starts_at)) : null,
             startsAt: record?.starts_at ?? null,
+            endsAt: record?.ends_at ?? null,
             timezone: record?.timezone ?? null,
             guests: record ? `${record.party_size}${thread.payload.party_size_is_minimum ? '+' : ''}` : null,
             partySize: record?.party_size ?? null,
@@ -81,7 +85,13 @@ export async function getGuestThreadDetail(
           },
     },
     entries,
-    availableActions: requestActions(record, new Date().toISOString()),
+    availableActions: requestActions(record, now),
+    mailbox: mailbox.mailbox,
+    manuallyArchived: mailbox.manuallyArchived,
+    archivedAt: thread.archived_at,
+    archivedByUserId: thread.archived_by_user_id,
+    canArchive: mailbox.canArchive,
+    canUnarchive: mailbox.canUnarchive,
     deliveryFailures: deliveryFailureRows.map(d => ({
       id: d.id,
       channel: d.channel,

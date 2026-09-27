@@ -1,5 +1,6 @@
 import type { GuestRequest } from '~/server/domain/requests'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
+import type { GuestThreadMailbox } from './mailbox'
 
 export type GuestThreadEntryKind = 'submission' | 'message' | 'operation' | 'assignment' | 'resolution'
 export type GuestThreadActorKind = 'guest' | 'member' | 'system'
@@ -69,6 +70,8 @@ export interface ThreadDetailSourceFields {
   message?: string | null
   whenLabel?: string | null
   startsAt?: string | null
+  /** When the occurrence ends, which is when the thread moves to Past on its own. */
+  endsAt?: string | null
   timezone?: string | null
   guests?: string | null
   partySize?: number | null
@@ -105,6 +108,11 @@ export interface GuestThreadListItemViewModel {
   imageUrl: string | null
   /** When the booking behind this thread happens, in its own timezone. A contact thread has none. */
   whenLabel: string | null
+  /** From `resolveGuestThreadMailbox`; the client never works these out from dates. */
+  mailbox: GuestThreadMailbox
+  manuallyArchived: boolean
+  canArchive: boolean
+  canUnarchive: boolean
 }
 
 /**
@@ -156,7 +164,15 @@ export interface GuestThreadDetailViewModel {
   conversationState: ConversationState
   source: ThreadDetailSourceModel
   entries: GuestThreadEntryViewModel[]
+  /** What can be done to the booking. Where the conversation lives is below, separately. */
   availableActions: string[]
+  /** From `resolveGuestThreadMailbox`. */
+  mailbox: GuestThreadMailbox
+  manuallyArchived: boolean
+  archivedAt: string | null
+  archivedByUserId: string | null
+  canArchive: boolean
+  canUnarchive: boolean
   deliveryFailures: GuestThreadDeliveryFailureViewModel[]
   createdAt: string
   updatedAt: string
@@ -171,11 +187,7 @@ export interface ListGuestThreadsOptions {
   type?: GuestThreadSubmissionType | null
   conversationState?: ConversationState | null
   unreadOnly?: boolean
-  /**
-   * Which side of now the booking behind the thread falls on. A thread with no
-   * booking has no occurrence and belongs to neither, so it stays in the
-   * unfiltered list.
-   */
-  occurrence?: 'upcoming' | 'past' | null
+  /** Current or Past, as `resolveGuestThreadMailbox` defines them. Null lists both. */
+  mailbox?: GuestThreadMailbox | null
   limit?: number
 }
