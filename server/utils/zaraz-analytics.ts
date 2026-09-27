@@ -168,6 +168,10 @@ function configureZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
   config.consent.enabled = true
   config.consent.hideModal = false
+  // Consent is keyed to the cookie name. The previous zone setup was TCF-based
+  // and its cf_consent cookies name tcf-purposes-* only, so returning visitors
+  // were never asked about kc_analytics and never counted. A new name asks once.
+  config.consent.cookieName = 'kc_analytics_consent'
   config.consent.defaultLanguage = 'en'
   config.consent.tcfCompliant = false
   config.consent.consentModalIntroHTML = 'We use optional analytics to understand site usage and improve our services. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
