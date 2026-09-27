@@ -17,7 +17,10 @@ export const INTEGRATION_SCOPES = {
     'https://www.googleapis.com/auth/webmasters',
     'https://www.googleapis.com/auth/siteverification',
   ],
-  'facebook': ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_metadata'],
+  // Facebook Login for Business: the configuration (FACEBOOK_CONFIG_ID) holds
+  // the Page permissions and Meta rejects any scope sent beside it, so nothing
+  // is requested and a linked Facebook account is matched by provider alone.
+  'facebook': [],
 } as const satisfies Record<string, readonly string[]>
 
 export interface GoogleAnalyticsIntegration {

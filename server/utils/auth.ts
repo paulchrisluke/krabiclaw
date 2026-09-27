@@ -684,6 +684,10 @@ export function createAuth(env: CloudflareEnv) {
         clientId: env.FACEBOOK_APP_ID ?? '',
         clientSecret: env.FACEBOOK_APP_SECRET ?? '',
         configId: env.FACEBOOK_CONFIG_ID,
+        // The configuration carries every permission. Meta refuses a scope
+        // list beside config_id ("Invalid Scopes"), including Better Auth's
+        // default email and public_profile, so none is sent.
+        disableDefaultScope: true,
         disableSignUp: true,
       },
     },
