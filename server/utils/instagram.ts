@@ -41,13 +41,8 @@ async function instagramAccessToken(env: CloudflareEnv, accountId: string): Prom
   if (!token.accessTokenExpiresAt) throw new Error('The linked Instagram account has no token expiry. Connect Instagram again.')
   if (token.accessTokenExpiresAt.getTime() - Date.now() > TOKEN_RENEWAL_WINDOW_MS) return token.accessToken
 
-  // POST, not the documented GET: Instagram refuses GET on this endpoint with
-  // "Unsupported request - method type: get", as on the exchange endpoint.
-  const response = await fetch('https://graph.instagram.com/refresh_access_token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: token.accessToken }),
-  })
+  const params = new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: token.accessToken })
+  const response = await fetch(`https://graph.instagram.com/refresh_access_token?${params.toString()}`)
   if (!response.ok) throw new Error(`Instagram token refresh failed: ${(await response.text()).slice(0, 300)}`)
   const renewed = await longLivedToken(response)
 
