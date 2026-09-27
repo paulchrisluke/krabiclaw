@@ -7,8 +7,6 @@ import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
  * Choosing the GA4 property. This is the only thing that writes a measurement
  * id: it is resolved from the property's web data stream rather than typed in,
  * and Zaraz is reconciled so the tag the site serves matches what was chosen.
- * `zaraz` says which happened: `reconciled`, or `zaraz_absent` where the
- * environment declares it has no Zaraz zone.
  */
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -35,6 +33,8 @@ export default defineHandler(async (event) => {
     // it rather than to a log nobody reads.
     const zaraz = await reconcileZarazAnalytics(env, env.DB)
 
+    // `zaraz` says which happened: `reconciled`, or `zaraz_absent` where the
+    // environment declares it has no Zaraz zone.
     return jsonResponse({ success: true, measurement_id: measurementId, zaraz: zaraz.status })
   } catch (error) {
     console.error('google_analytics_select_failed', { organizationId: organization.id, error })
