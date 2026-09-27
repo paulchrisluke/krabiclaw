@@ -90,28 +90,11 @@ Default order:
 
 Before adding an abstraction, find the existing implementation of the behavior.
 
-### Adding is gated
-
-Stop and say so before creating a new file, a new exported symbol, a new test,
-or a new script. Name what would be added and why deleting, reusing or
-modifying cannot do it. Wait for an answer.
-
-This is a gate, not a preference. It applies even when the addition is small,
-obviously correct, or needed to prove the work.
-
-The following are never valid reasons to add:
-
-- proving that a change works;
-- proving that a page loads, a field renders, or a response validates;
-- covering a case the existing suite does not cover;
-- making a defect visible;
-- a reviewer, a linter, or a tool suggested it.
-
 Evidence comes from running what already exists and from loading the real
 surface. A scratch spec, a temporary helper, a one-off script, or a fixture
 written to observe behaviour is not evidence and is not part of the work.
 
-A change that only deletes needs no gate. Prefer the version of the change with
+Prefer the version of the change with
 fewer files, fewer names and fewer lines than the one it replaces.
 
 A refactor removes the implementation it replaces in the same change. Do not
