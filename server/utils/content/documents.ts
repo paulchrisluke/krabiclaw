@@ -32,10 +32,7 @@ interface ContentDocumentInputFields {
   slug?: string | null
   path?: string | null
   summary?: string | null
-  seoTitle?: string | null
-  seoDescription?: string | null
   seoKeywords?: string | null
-  canonicalUrl?: string | null
   robots?: string | null
   metadata?: Record<string, unknown>
   createdBy?: string | null
@@ -98,7 +95,7 @@ export interface ContentBlockInput {
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
 export type ContentDocumentChanges = Partial<Pick<typeof content_documents.$inferInsert,
-  'title' | 'slug' | 'path' | 'summary' | 'seo_title' | 'seo_description' | 'seo_keywords' | 'canonical_url'
+  'title' | 'slug' | 'path' | 'summary' | 'seo_keywords'
   | 'status' | 'visibility' | 'sort_order' | 'location_id' | 'source' | 'scope_path' | 'published_at' | 'first_published_at' | 'scheduled_for' | 'updated_by'
 >> & { metadata?: Record<string, unknown> }
 
@@ -395,8 +392,7 @@ function buildDocumentWriteBatch(
 
   const assignments = ['updated_at = ?']
   const values: unknown[] = [now]
-  const changedColumns = ['title', 'slug', 'path', 'summary', 'seo_title', 'seo_description', 'seo_keywords',
-    'canonical_url', 'status', 'visibility', 'sort_order', 'location_id', 'source', 'scope_path',
+  const changedColumns = ['title', 'slug', 'path', 'summary', 'seo_keywords', 'status', 'visibility', 'sort_order', 'location_id', 'source', 'scope_path',
     'published_at', 'first_published_at', 'scheduled_for', 'updated_by'] as const
   for (const column of changedColumns) {
     if (opts.changes?.[column] !== undefined) {
@@ -470,15 +466,14 @@ export function prepareContentDocumentWithBlocks(
   const documentInsert: BatchQuery = {
     query: `INSERT INTO content_documents
       (id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
-       seo_title, seo_description, seo_keywords, canonical_url, metadata_json, created_by, updated_by,
+       seo_keywords, metadata_json, created_by, updated_by,
        location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at, scheduled_for,
        created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [document.id, input.organizationId, input.kind, input.rowRole, document.root_id,
       input.rowRole === 'representation' ? 'root' : null, input.locale,
       input.title ?? null, input.slug ?? null, input.path ?? null, input.summary ?? null,
-      input.seoTitle ?? null, input.seoDescription ?? null, input.seoKeywords ?? null,
-      input.canonicalUrl ?? null, JSON.stringify(input.metadata ?? {}),
+      input.seoKeywords ?? null, JSON.stringify(input.metadata ?? {}),
       input.createdBy ?? null, input.updatedBy ?? null,
       root?.locationId ?? null, root?.scopePath ?? null, root?.status ?? null, root?.visibility ?? null,
       root?.sortOrder ?? 0, root?.source ?? null, root?.authorId ?? null,

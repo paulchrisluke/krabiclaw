@@ -298,10 +298,7 @@ export const blogPostObject = {
     collection: { type: 'string', enum: ['blog', 'docs'] },
     category: { type: ['string', 'null'] },
     tags: { type: 'array', items: { type: 'string' } },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
-    canonical_url: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
@@ -320,7 +317,7 @@ export const blogPostObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
+    'seo_keywords',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
@@ -339,10 +336,7 @@ export const blogPostSummaryObject = {
     collection: { type: 'string', enum: ['blog', 'docs'] },
     category: { type: ['string', 'null'] },
     tags: { type: 'array', items: { type: 'string' } },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
     seo_keywords: { type: ['string', 'null'] },
-    canonical_url: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
@@ -360,7 +354,7 @@ export const blogPostSummaryObject = {
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
-    'seo_title', 'seo_description', 'seo_keywords', 'canonical_url',
+    'seo_keywords',
     'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
@@ -434,8 +428,6 @@ export const postObject = {
     public_url: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
-    seo_title: { type: ['string', 'null'] },
-    seo_description: { type: ['string', 'null'] },
     media: {
       type: 'array',
       items: {

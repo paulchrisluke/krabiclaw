@@ -47,8 +47,7 @@ function requiredText(value: unknown, field: string): string {
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
-export function resolvePublicArticleCanonicalUrl(value: unknown, slug: unknown): string {
-  if (typeof value === 'string' && value.trim()) return value.trim()
+export function resolvePublicArticleCanonicalUrl(slug: unknown): string {
   return `/article/${requiredText(slug, 'article.slug')}`
 }
 
@@ -82,7 +81,7 @@ export async function getActiveBlawbyOrganization(
 export async function listPublicBlogSummaries(db: DbClient, organizationId: string, limit = 50, locale = 'en'): Promise<PublicBlogSummary[]> {
   const rows = await queryAll<ApiRecord>(db, `
     SELECT root.id, p.id AS representation_id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category,
-           p.metadata_json ->> '$.tags' AS tags_json, root.published_at, p.canonical_url, p.path,
+           p.metadata_json ->> '$.tags' AS tags_json, root.published_at, p.path,
            ${COVER_SELECT}
       FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
       ${coverJoinSql('p')}
@@ -99,7 +98,7 @@ export async function listPublicBlogSummaries(db: DbClient, organizationId: stri
     category: typeof row.category === 'string' ? row.category : null,
     tags: row.tags_json ? JSON.parse(row.tags_json) as string[] : [],
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: locale === 'en' ? resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug) : `/${locale}${requiredText(row.path, 'localized article path')}`,
+    canonical_url: locale === 'en' ? resolvePublicArticleCanonicalUrl(row.slug) : `/${locale}${requiredText(row.path, 'localized article path')}`,
     cover: attachCoverMedia(row).cover,
     social_image: socialMedia.get(String(row.representation_id))?.social_image ?? null,
   }))
@@ -450,9 +449,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     category: typeof row.category === 'string' ? row.category : null,
     tags: Array.isArray(row.tags) ? row.tags.map(String) : (row.tags_json ? JSON.parse(row.tags_json) as string[] : []),
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: resolvePublicArticleCanonicalUrl(row.canonical_url, row.slug),
-    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
-    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
+    canonical_url: resolvePublicArticleCanonicalUrl(row.slug),
     visibility: row.visibility === 'unlisted' ? 'unlisted' : 'listed',
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
