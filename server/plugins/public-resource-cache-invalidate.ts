@@ -46,7 +46,7 @@ export default definePlugin((nitroApp) => {
       ORGANIZATION_CACHE?: KVNamespace
     } & OrganizationChangeDrainEnv) | undefined
     const kv = runtimeEnv?.ORGANIZATION_CACHE
-    if (!kv || !runtimeEnv?.DB) return
+    if (!kv || !runtimeEnv?.DB) throw new Error('ORGANIZATION_CACHE and DB bindings are required to purge site caches after a dashboard write')
 
     // The site's own caches are cleared before this request is done with, so a
     // read that follows the write cannot see what it replaced — CI reads public
@@ -55,7 +55,6 @@ export default definePlugin((nitroApp) => {
     // response is not made to wait on a list of index items.
     await purgeOrganizationCaches(runtimeEnv.DB, kv, organizationId, runtimeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
     const drained = drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, runtimeEnv, { limit: 100 })
-      .catch((err: unknown) => console.warn('[public-resource-cache] site change drain failed:', String(err)))
     const waitUntil = request.runtime?.cloudflare?.context?.waitUntil
     if (waitUntil) waitUntil.call(request.runtime?.cloudflare?.context, drained)
     else await drained

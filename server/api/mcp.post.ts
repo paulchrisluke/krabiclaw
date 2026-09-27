@@ -366,12 +366,14 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const env = cloudflareEnv(event);
       const kv = env.ORGANIZATION_CACHE;
       const db = env.db ?? (env.DB ? createDb(env.DB) : null);
-      if (kv && db) {
-        const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 })
-          .catch((error: unknown) => console.warn(`[ai-search] site change drain failed after tenant MCP ${toolName}: ${String(error)}`));
-        const waitUntil = getCloudflareWaitUntil(event);
-        if (waitUntil) waitUntil(drained);
-      }
+      if (!kv || !db) throw new Error("ORGANIZATION_CACHE and DB bindings are required to drain site changes after a tenant MCP write");
+      // The drain outlives the response. Its failure is a Worker exception in
+      // the logs, not a warning: the queue rows keep their own failure state
+      // and the scheduled task retries them.
+      const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 });
+      const waitUntil = getCloudflareWaitUntil(event);
+      if (waitUntil) waitUntil(drained);
+      else await drained;
     }
 
     logMcpEventDetached(event, cfEnv.DB, {
