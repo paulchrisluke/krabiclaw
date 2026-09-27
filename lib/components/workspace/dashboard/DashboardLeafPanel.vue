@@ -18,6 +18,7 @@
             data-testid="dashboard-navbar-close"
             :to="level.to.value ?? undefined"
           />
+          <UIcon v-if="icon" :name="icon" class="size-7 shrink-0" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -74,6 +75,8 @@
 withDefaults(defineProps<{
   id: string
   title: string
+  /** A mark beside the title, for a leaf known by a logo. */
+  icon?: string
   ready?: boolean
   saving?: boolean
   disabled?: boolean

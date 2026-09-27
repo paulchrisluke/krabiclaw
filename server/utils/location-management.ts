@@ -28,7 +28,11 @@ export interface CreateLocationInput {
   google_place_id?: string | null;
   description?: string | null;
   short_description?: string | null;
-  address?: PostalAddress | null;
+  /**
+   * Whatever the caller sent. Every surface — dashboard, API, MCP — reaches the
+   * table through here, so this is where it is read as a PostalAddress.
+   */
+  address?: unknown;
   opening_hours?: OpeningHours;
   special_hours?: SpecialHours;
   price_level?: string | null;
@@ -112,6 +116,17 @@ function isSlugConflict(error: unknown) {
 // batch raises is a server failure and is not reported as a 400.
 function isCheckConstraintError(error: unknown) {
   return error instanceof Error && /CHECK constraint failed/i.test(error.message);
+}
+
+// The one read of a submitted address. A malformed one is the caller's to fix,
+// so it answers 400 on every surface instead of being stored for readers to
+// throw on.
+function readSubmittedAddress(value: unknown): { ok: true; address: PostalAddress | null } | { ok: false; status: 400; data: { error: string } } {
+  try {
+    return { ok: true, address: parsePostalAddress(value) };
+  } catch (cause) {
+    return { ok: false, status: 400, data: { error: `address is invalid: ${(cause as Error).message}` } };
+  }
 }
 
 export function serializeOpeningHours(value: unknown): string | null {
@@ -301,6 +316,8 @@ export async function createLocation(
   if (!title) {
     return { status: 400, data: { error: "Location title is required." } };
   }
+  const submittedAddress = readSubmittedAddress(input.address);
+  if (!submittedAddress.ok) return submittedAddress;
 
   if (
     input.rating !== undefined &&
@@ -402,7 +419,7 @@ export async function createLocation(
           input.google_place_id ?? null,
           input.description ?? null,
           input.short_description ?? null,
-          input.address ? JSON.stringify(input.address) : null,
+          submittedAddress.address ? JSON.stringify(submittedAddress.address) : null,
           openingHours,
           specialHours,
           input.rating ?? null,
@@ -486,6 +503,8 @@ export async function updateLocation(
   if (input.title !== undefined && !input.title.trim()) {
     return { status: 400, data: { error: "title cannot be empty." } };
   }
+  const submittedAddress = input.address === undefined ? undefined : readSubmittedAddress(input.address);
+  if (submittedAddress && !submittedAddress.ok) return submittedAddress;
 
   const updateFeaturesResult = await resolveValidatedLocationFeatures(db, organizationId, input.feature_overrides, locationId);
   if (!updateFeaturesResult.ok) {
@@ -586,9 +605,9 @@ export async function updateLocation(
     }
   }
 
-  if (input.address !== undefined) {
+  if (submittedAddress) {
     sets.push("address = ?");
-    params.push(input.address ? JSON.stringify(input.address) : null);
+    params.push(submittedAddress.address ? JSON.stringify(submittedAddress.address) : null);
   }
   if (input.opening_hours !== undefined) {
     try {

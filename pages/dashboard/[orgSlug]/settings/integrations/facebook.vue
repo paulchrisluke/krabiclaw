@@ -1,41 +1,44 @@
 <template>
   <DashboardLeafPanel
     id="integration-facebook"
+    icon="i-logos-facebook"
     title="Facebook"
-    :ready="!pending"
+    :ready="integrations.summary.value !== undefined"
     :saving="saving"
     :disabled="!accountId || !chosenPage || (chosenPage === data?.connection?.page_id && accountId === data?.connection?.account_id)"
-    :error="error || loadFailure"
-    :footer="choices.length > 0"
+    :error="error || integrations.failure.value || loadFailure"
+    :footer="choosing && choices.length > 0"
     save-label="Connect this Page"
-    @cancel="chosenPage = data?.connection?.page_id"
+    @cancel="keep"
     @save="choosePage"
   >
-    <div v-if="data" class="space-y-6">
-      <UCard variant="subtle">
-        <div class="flex items-center justify-between gap-4">
-          <div class="min-w-0">
-            <p class="font-semibold text-highlighted">{{ data.connection ? 'Connected' : 'Not connected' }}</p>
-            <p class="mt-1 truncate text-sm text-muted">{{ data.connection?.page_name ?? 'Publish posts to your Facebook Page and show its posts on your website.' }}</p>
-            <p v-if="data.connection?.status === 'error'" class="mt-1 text-sm text-error">The last sync failed. It is retried every hour; reconnect if it keeps failing.</p>
-          </div>
-          <UButton v-if="data.connection" color="error" variant="ghost" icon="i-lucide-link-2-off" :loading="disconnecting" @click="disconnect">Disconnect</UButton>
-        </div>
-      </UCard>
+    <IntegrationConnection
+      v-model:changing="changing"
+      logo="i-logos-facebook"
+      noun="Page"
+      :connection="facebook && { name: facebook.page_name, connectedAt: facebook.connected_at, status: facebook.status }"
+      :disconnecting="disconnecting"
+      @disconnect="disconnect"
+      @keep="keep"
+    >
+      <template v-if="data">
+        <UFormField v-if="accountOptions.length" label="Facebook account">
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Facebook account" size="xl" class="w-full" />
+        </UFormField>
+        <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Facebook account</UButton>
+        <UButton v-else icon="i-simple-icons-facebook" size="xl" block :loading="linking" @click="link">Connect Facebook</UButton>
 
-      <UFormField v-if="accountOptions.length" label="Facebook account">
-        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Facebook account" size="xl" class="w-full" />
-      </UFormField>
-      <UButton icon="i-simple-icons-facebook" variant="outline" :loading="linking" @click="link">{{ accountOptions.length ? 'Link another Facebook account' : 'Connect Facebook' }}</UButton>
-
-      <p v-if="data.error" class="text-sm text-error">{{ data.error }}</p>
-      <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" size="xl" />
-    </div>
+        <p v-if="data.error" class="text-sm text-error">{{ data.error }}</p>
+        <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" size="xl" />
+      </template>
+      <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
+    </IntegrationConnection>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
+import IntegrationConnection from '~/components/dashboard/IntegrationConnection.vue'
 import { integrationsKey } from '../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -52,6 +55,7 @@ const dashboardApi = useDashboardApi()
 const route = useRoute()
 const api = `/api/organizations/${integrations.organizationId}/integrations/facebook`
 const linked = useLinkedAccounts('facebook', INTEGRATION_SCOPES.facebook)
+const facebook = computed(() => integrations.summary.value?.facebook ?? null)
 
 const isLeaf = (value: unknown): value is FacebookLeaf =>
   isRecord(value) && (value.account_id === null || typeof value.account_id === 'string')
@@ -80,6 +84,15 @@ const choices = computed(() => (data.value?.choices ?? []).map(page => ({ value:
 const chosenPage = ref<string | undefined>()
 watch(data, value => { chosenPage.value = value?.connection?.page_id }, { immediate: true })
 
+// Linking another account while changing comes back with the picker still open.
+const changing = ref(route.query.change === '1')
+const choosing = computed(() => !facebook.value || changing.value)
+function keep() {
+  changing.value = false
+  accountId.value = data.value?.connection?.account_id
+  chosenPage.value = data.value?.connection?.page_id
+}
+
 const loadFailure = computed(() => loadError.value ? getErrorMessage(loadError.value, 'Could not load Facebook.')
   : linked.error.value ? getErrorMessage(linked.error.value, 'Could not load your linked Facebook accounts.') : '')
 // Better Auth returns here with `?error=` when linking did not finish.
@@ -92,7 +105,7 @@ async function link() {
   linking.value = true
   error.value = ''
   try {
-    await linked.link(route.path)
+    await linked.link(changing.value ? `${route.path}?change=1` : route.path)
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not start the Facebook connection.')
     linking.value = false
@@ -106,6 +119,7 @@ async function choosePage() {
   try {
     await dashboardApi(`${api}/select`, { method: 'POST', body: { account_id: accountId.value, page_id: chosenPage.value }, validate: isSuccess })
     await Promise.all([refresh(), integrations.refresh()])
+    changing.value = false
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not connect that Page.')
   } finally {
@@ -120,6 +134,7 @@ async function disconnect() {
     await dashboardApi(`${api}/disconnect`, { method: 'POST', validate: isSuccess })
     accountId.value = undefined
     await Promise.all([refresh(), integrations.refresh()])
+    changing.value = false
   } catch (cause) {
     error.value = getErrorMessage(cause, 'Could not disconnect Facebook.')
   } finally {
