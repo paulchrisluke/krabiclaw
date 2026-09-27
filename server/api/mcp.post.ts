@@ -22,8 +22,7 @@ import {
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { createDb, queryAll } from "~/server/db";
-import { purgeOrganizationKvCache } from "~/server/utils/edge-cache";
+import { createDb } from "~/server/db";
 import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
 import {
   visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
@@ -337,58 +336,28 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       ? ctxOrganizationId.trim()
       : typeof rawArgs.organization_id === "string" ? rawArgs.organization_id.trim() : null;
 
-    // After any mutating tool call, purge KV HTML cache for the site so the
-    // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
-    // Fire-and-forget — never block the MCP response on cache ops.
+    // After any mutating tool call the site's caches are cleared before the
+    // response: its public resource entries and the SSR HTML for every active
+    // hostname and its subdomain, all through purgeOrganizationCaches. Awaited,
+    // so a client that reads right after the mutation cannot see what it
+    // replaced. A missing binding reaches the helper and fails there.
     let purgeFailure: string | null = null;
-    if (isMcpMutatingTool(toolDef)) {
-      const organizationId = resolvedOrganizationId;
-      if (organizationId) {
-        const env = cloudflareEnv(event);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const db = (env as any).DB as D1Database | undefined;
-        // Public resource cache is keyed by organizationId directly (not hostname), so no
-        // domain lookup is needed here — unlike the HTML purge below.
-        // Awaited inline (not waitUntil) so the MCP response never returns
-        // before the stale public resource entry is cleared — otherwise a client
-        // that reads public resources immediately after this mutation could still
-        // see stale data. A missing binding reaches the helper and fails there.
-        const cacheStartedAt = performance.now();
-        // A purge that failed is the edit not reaching the site. The write has
-        // landed, so this is neither success nor a transport failure: the tool
-        // result says both halves, and the client can act on it.
-        try {
-          await purgePublicResourceCacheNow({
-            DB: env.db,
-            ORGANIZATION_CACHE: kv,
-            NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
-          }, organizationId);
-        } catch (purgeError) {
-          purgeFailure = `${toolName} wrote its change to organization ${organizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
-        } finally {
-          recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
-        }
-        if (kv && db) {
-          // Look up all active hostnames for this site (subdomain + custom domains)
-          const purgeAsync = queryAll<{ domain: string }>(
-            db, `SELECT domain FROM organization_domains
-                 WHERE organization_id = ? AND status = 'active'
-                 LIMIT 20`, [organizationId], )
-            .then((results) => {
-              const hostnames = (results ?? []).map((r) => r.domain);
-              if (hostnames.length > 0) return purgeOrganizationKvCache(kv, hostnames);
-            })
-            .catch((err: unknown) => {
-              console.warn("[mcp-cache-purge] failed:", String(err));
-            });
-          // Use Cloudflare's waitUntil when available so the purge
-          // can outlive the response; fall back to a detached promise.
-          const waitUntil = getCloudflareWaitUntil(event);
-          if (waitUntil) waitUntil(purgeAsync);
-          // purgeAsync already runs detached whether or not waitUntil is available
-        }
+    if (isMcpMutatingTool(toolDef) && resolvedOrganizationId) {
+      const env = cloudflareEnv(event);
+      const cacheStartedAt = performance.now();
+      // A purge that failed is the edit not reaching the site. The write has
+      // landed, so this is neither success nor a transport failure: the tool
+      // result says both halves, and the client can act on it.
+      try {
+        await purgePublicResourceCacheNow({
+          DB: env.db,
+          ORGANIZATION_CACHE: env.ORGANIZATION_CACHE,
+          NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN,
+        }, resolvedOrganizationId);
+      } catch (purgeError) {
+        purgeFailure = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the public cache was not purged, so the site may keep serving what the write replaced: ${describeErrorForTelemetry(purgeError)}`;
+      } finally {
+        recordRequestPhase(event, "mcp_cache_purge", cacheStartedAt);
       }
     }
     // The write above queued "this site changed"; drain it now so the site's
