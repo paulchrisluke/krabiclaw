@@ -2,7 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import { bytesToHex } from '@noble/hashes/utils.js'
 
 import { robotsDirective, type RobotsVisibility } from '~/shared/robots-directive'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 
 /**
  * Shared global OG/social SEO contract (#259).
@@ -78,6 +78,13 @@ export interface SocialMediaSource {
   kind?: string | null
   public_url?: string | null
   thumbnail_url?: string | null
+  mime_type?: string | null
+  width?: number | null
+  height?: number | null
+}
+
+function isSocialImageMimeType(value: string | null | undefined): value is SocialImageMimeType {
+  return value === 'image/jpeg' || value === 'image/png' || value === 'image/gif'
 }
 
 function firstNonBlank(...values: Array<string | null | undefined>): string | null {
@@ -97,30 +104,31 @@ export function resolveSocialImageUrl(source: SocialMediaSource | null | undefin
 
 function toSocialImageSource(source: SocialMediaSource | null | undefined): SocialImageSource | null {
   const url = resolveSocialImageUrl(source)
-  if (!url) return null
+  if (!url || !source) return null
+  if (source.slot === 'social_card') return { url, width: OG_IMAGE_WIDTH, height: OG_IMAGE_HEIGHT, type: 'image/png' }
+  // Any other picture states what the asset records about itself. A video's
+  // still is its poster, whose size and type the video's record does not hold.
+  const own = source.kind === 'image'
   return {
     url,
-    width: source?.slot === 'social_card' ? OG_IMAGE_WIDTH : undefined,
-    height: source?.slot === 'social_card' ? OG_IMAGE_HEIGHT : undefined,
-    type: source?.slot === 'social_card' ? 'image/png' : undefined,
+    width: own && source.width ? source.width : undefined,
+    height: own && source.height ? source.height : undefined,
+    type: own && isSocialImageMimeType(source.mime_type) ? source.mime_type : undefined,
   }
 }
 
 /**
- * A resource's social image is its own generated `social_card`. There is no
- * second source.
- *
- * This previously fell through to the site's social card, then its share image,
- * then its logo. That hid a real failure: location social cards were not being
- * generated at all, and every location served the site logo instead — a
- * plausible-looking image that meant the Satori card was missing. A resource
- * with no card now resolves to null, so the absence is visible and gets fixed
- * at the generator rather than papered over at the reader.
+ * A resource's og:image is its own generated `social_card`. Until one exists
+ * it is the picture `resolveOwnerPicture` gives that owner — the same one the
+ * card will draw — and with neither there is no image tag at all.
  */
 export function resolveSocialImageFromMedia(
+  ownerType: MediaPlacementOwnerType,
   ownerMedia: readonly SocialMediaSource[],
+  organizationMedia: readonly SocialMediaSource[],
 ): SocialImageSource | null {
-  return toSocialImageSource(ownerMedia.find(item => item.slot === 'social_card'))
+  return toSocialImageSource(ownerMedia.find(item => item.slot === 'social_card')
+    ?? resolveOwnerPicture(ownerType, ownerMedia, organizationMedia))
 }
 
 export interface PublicSocialMedia<T extends SocialMediaSource = SocialMediaSource> {
@@ -129,11 +137,13 @@ export interface PublicSocialMedia<T extends SocialMediaSource = SocialMediaSour
 }
 
 export function publicSocialMediaFromPlacements<T extends SocialMediaSource>(
+  ownerType: MediaPlacementOwnerType,
   ownerMedia: readonly T[],
+  organizationMedia: readonly SocialMediaSource[],
 ): PublicSocialMedia<T> {
   return {
     media: ownerMedia.filter(item => item.slot !== 'social_card'),
-    social_image: resolveSocialImageFromMedia(ownerMedia),
+    social_image: resolveSocialImageFromMedia(ownerType, ownerMedia, organizationMedia),
   }
 }
 
@@ -151,7 +161,11 @@ export interface SocialPageMetadataInput {
   /** Absolute or root-relative path/URL; resolved against the correct origin by the adapter. */
   canonicalUrl: string
   brand: SocialBrand
-  socialImage?: SocialImageSource | null
+  /**
+   * The page's own image. Every page states it — a page about the business
+   * states the organization's — and null means no image tag at all.
+   */
+  socialImage: SocialImageSource | null
   author?: string | null
   /** ISO 8601 date string. Only meaningful when pageType is 'article'. */
   publishedAt?: string | null

@@ -7,6 +7,7 @@ import { findEntryByDedupeKey, getEntryById } from './entries'
 import { updateThreadProjectionIfLatestEntry } from './repository'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { guestThreadReplyMessage, guestThreadStatusMessage } from '~/server/notifications/guest-events'
+import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { isBookingComplete } from '~/shared/bookings'
 import type {
@@ -297,12 +298,14 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
  * outbound message. A member's reply leads with their own words; a status
  * update leads with what changed.
  */
-function renderMemberReply(env: ReplyEmailEnv, organizationName: string, body: string) {
-  return renderNotificationEmail(guestThreadReplyMessage({ organizationName, body }), { platformDomain: getPlatformDomain(env) })
+async function renderMemberReply(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, body: string) {
+  const organizationLogoUrl = await organizationLogo(db, organizationId)
+  return renderNotificationEmail(guestThreadReplyMessage({ organizationName, organizationLogoUrl, body }), { platformDomain: getPlatformDomain(env) })
 }
 
-function renderStatusUpdate(env: ReplyEmailEnv, organizationName: string, heading: string, body: string) {
-  return renderNotificationEmail(guestThreadStatusMessage({ organizationName, heading, body }), { platformDomain: getPlatformDomain(env) })
+async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, heading: string, body: string) {
+  const organizationLogoUrl = await organizationLogo(db, organizationId)
+  return renderNotificationEmail(guestThreadStatusMessage({ organizationName, organizationLogoUrl, heading, body }), { platformDomain: getPlatformDomain(env) })
 }
 
 function recordedEmailSubject(entry: GuestThreadEntryRow): string | null {
@@ -337,7 +340,7 @@ async function sendStatusUpdate(
     to: summary.guestEmail,
     fromName,
     subject,
-    email: await renderStatusUpdate(input.env, fromName, subject, entry.body),
+    email: await renderStatusUpdate(input.env, db, context.thread.organization_id, fromName, subject, entry.body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -459,7 +462,7 @@ async function executeReply(
     to: summary.guestEmail,
     fromName,
     subject: replySubject(context.thread.kind, fromName),
-    email: await renderMemberReply(input.env, fromName, body),
+    email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, body),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -508,7 +511,7 @@ async function retryDelivery(
         to: summary.guestEmail,
         fromName,
         subject: replySubject(context.thread.kind, fromName),
-        email: await renderMemberReply(input.env, fromName, entry.body),
+        email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, entry.body),
         submissionType: context.thread.kind,
         submissionId: context.thread.id,
       })

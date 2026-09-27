@@ -238,9 +238,12 @@ const relatedResources = computed(() => [
   },
 ].filter((resource): resource is { title: string; to: string; description: string } => Boolean(resource.to)))
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata({
   template: 'platform',
   path: '/docs',
+  socialImage: organizationSocialImage,
   title: 'Documentation',
   description: 'Launch and manage your local business site with KrabiClaw. Set up your site, edit pages, publish updates, connect tools, and manage daily operations.',
   breadcrumbs: [

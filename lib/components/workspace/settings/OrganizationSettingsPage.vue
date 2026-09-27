@@ -34,6 +34,7 @@ export interface OrganizationSettingsForm {
   name: string
   brand_description: string
   logoAssetId: string | null
+  faviconAssetId: string | null
   socialShareAssetId: string | null
   contact_email: string
   brand_color: string
@@ -238,7 +239,7 @@ const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
 const supportsOrganizationFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
-  name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
+  name: '', brand_description: '', logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, status: 'inactive',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
@@ -268,6 +269,7 @@ const domainSummary = computed(() => dashboard.organization.value?.custom_domain
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
+  { id: 'favicon', label: 'Favicon', summary: loadedSettings.value?.media?.some(item => item.slot === 'favicon') ? 'Icon selected' : 'Not set', icon: 'i-lucide-app-window', to: `${brandPath.value}/favicon` },
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
@@ -309,6 +311,7 @@ function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.name)
     case 'logo': return JSON.stringify(form.logoAssetId)
+    case 'favicon': return JSON.stringify(form.faviconAssetId)
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
@@ -348,6 +351,7 @@ function fillForm(settings: OrganizationSettingsResponse) {
   form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
+  form.faviconAssetId = settings.media?.find(item => item.slot === 'favicon')?.asset_id ?? null
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
@@ -402,6 +406,7 @@ async function saveCurrentEditor() {
     switch (detailKey.value) {
       case 'name': await patchSettings({ name: form.name.trim() }); break
       case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
+      case 'favicon': await patchSettings({ media: [{ asset_id: form.faviconAssetId, slot: 'favicon' }] }); break
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break
       case 'color': await patchSettings({ brand_color: form.brand_color }); break

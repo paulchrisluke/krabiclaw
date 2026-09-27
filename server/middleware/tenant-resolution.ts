@@ -16,7 +16,7 @@ import {
 } from "../utils/tenant-hosts";
 import { previewSecretOf, resolvePreviewAuthorization } from "../utils/preview-token";
 import { PLATFORM_TEMPLATE, resolvePublicTemplate } from "~/utils/template-registry";
-import { publicSocialMediaFromJson } from '~/server/utils/public-social-image'
+import { organizationSocialMediaFromJson } from '~/server/utils/public-social-image'
 
 interface TenantRow {
   id: string;
@@ -32,9 +32,10 @@ interface TenantRow {
 
 const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
   'asset_id', ordered.asset_id, 'slot', ordered.slot, 'public_url', ordered.public_url,
-  'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type
+  'thumbnail_url', ordered.thumbnail_url, 'kind', ordered.kind, 'mime_type', ordered.mime_type,
+  'width', ordered.width, 'height', ordered.height
 )), json('[]')) FROM (
-  SELECT mp.asset_id, mp.slot, ma.public_url, ma.thumbnail_url, ma.kind, ma.mime_type, mp.id
+  SELECT mp.asset_id, mp.slot, ma.public_url, ma.thumbnail_url, ma.kind, ma.mime_type, ma.width, ma.height, mp.id
   FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
   WHERE mp.organization_id = o.id AND mp.owner_type = 'organization' AND mp.owner_id = o.id AND mp.status = 'active'
   ORDER BY mp.slot, mp.sort_order, mp.id
@@ -63,7 +64,7 @@ async function resolvePlatformTenant(db: DbClient): Promise<TenantRow | null> {
 }
 
 function publicTenantMedia(tenant: Pick<TenantRow, 'media_json'>) {
-  return publicSocialMediaFromJson(tenant.media_json)
+  return organizationSocialMediaFromJson(tenant.media_json)
 }
 
 export interface SpentSubdomainResolution {

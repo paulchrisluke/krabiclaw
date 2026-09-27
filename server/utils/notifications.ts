@@ -12,7 +12,7 @@ import type { NotificationCategory } from '~/shared/notification-categories'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { toWhatsAppVars } from '~/server/notifications/whatsapp-mapping'
 import { NOTIFICATION_CATALOG } from '~/server/notifications/catalog'
-import { locationHero, productHero, resolveHero, organizationLogo } from '~/server/notifications/hero'
+import { loadOwnerPictures, organizationLogo } from '~/server/notifications/hero'
 import {
   guestBookingCancelledMessage,
   guestBookingReceivedMessage,
@@ -497,6 +497,15 @@ export function raiseSettledFailures(
   )
 }
 
+/**
+ * The hero for a message about a location or an experience, or — when the
+ * message names neither — about the organization itself.
+ */
+async function messageHero(db: DbClient, organizationId: string, owner: { type: 'business_location' | 'product'; id: string | null | undefined }) {
+  const [ownerType, ownerId] = owner.id ? [owner.type, owner.id] : ['organization' as const, organizationId]
+  return (await loadOwnerPictures(db, organizationId, ownerType, [ownerId])).get(ownerId) ?? null
+}
+
 async function notifyOwner(
   env: NotificationEnv,
   db: DbClient,
@@ -544,8 +553,11 @@ async function notifyOwner(
     category: opts.message.category,
   })
 
+  // The owner reads mail sent for their business, framed by its own mark.
+  const message = { ...opts.message, organizationLogoUrl: await organizationLogo(db, opts.organizationId) }
+
   const whatsappVars = opts.whatsappTemplate && recipients.some(recipient => recipient.phone)
-    ? toWhatsAppVars(opts.message, opts.whatsappTemplate)
+    ? toWhatsAppVars(message, opts.whatsappTemplate)
     : null
   if (whatsappVars?.omitted.length) {
     // Declared in WHATSAPP_MAPPINGS.cannotCarry and enforced by
@@ -561,7 +573,7 @@ async function notifyOwner(
       sends.push((async () => {
         // Rendered per person: the footer carries that recipient's own opt-out
         // link, so the same event cannot hand one member another's.
-        const rendered = await renderNotificationEmail(opts.message, {
+        const rendered = await renderNotificationEmail(message, {
           platformDomain: getPlatformDomain(env),
           preferencesUrl: `https://${getPlatformDomain(env)}/dashboard/account/profile/notifications`,
           unsubscribeUrl: recipient.unsubscribeUrl,
@@ -569,7 +581,7 @@ async function notifyOwner(
         await sendEmailNotification(env, db, {
           ...opts,
           to,
-          email: { subject: sanitizeEmailHeaderValue(opts.message.title), html: rendered.html, text: rendered.text },
+          email: { subject: sanitizeEmailHeaderValue(message.title), html: rendered.html, text: rendered.text },
           unsubscribeOneClickUrl: recipient.unsubscribeOneClickUrl,
           delivery: threadDelivery(threadContext, 'owner_alert', 'email', opts.template, to),
         })
@@ -650,7 +662,7 @@ export async function notifyReservationCreated(
   }
 
   const [hero, logoUrl] = await Promise.all([
-    resolveHero(() => locationHero(db, opts.organizationId, opts.locationId)),
+    messageHero(db, opts.organizationId, { type: 'business_location', id: opts.locationId }),
     organizationLogo(db, opts.organizationId),
   ])
   const ownerMessage = reservationCreatedMessage({
@@ -807,7 +819,7 @@ export async function notifyContactSubmitted(
     organizationName: restaurant, consentAcknowledged: Boolean(opts.consentAcknowledged), replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestContactReceivedMessage({
-    guestName: opts.guestName, organizationName: restaurant,
+    guestName: opts.guestName, organizationName: restaurant, organizationLogoUrl: await organizationLogo(db, opts.organizationId),
     subject: opts.subject ? (SUBJECT_LABELS[opts.subject] ?? opts.subject) : null,
     productTitle: opts.productTitle ?? null, message: opts.message,
     consentAcknowledged: Boolean(opts.consentAcknowledged),
@@ -961,7 +973,7 @@ export async function notifyBookingCreated(
   }
 
   const [hero, logoUrl] = await Promise.all([
-    resolveHero(() => productHero(db, opts.organizationId, opts.productId)),
+    messageHero(db, opts.organizationId, { type: 'product', id: opts.productId }),
     organizationLogo(db, opts.organizationId),
   ])
   const ownerMessage = bookingCreatedMessage({
@@ -1212,14 +1224,17 @@ async function notifyGuestThreadReplyInner(
     deepLink: payload.deep_link || null,
   })
 
-  const ownerMessage = guestReplyMessage({
-    guestName: opts.guestName,
-    guestEmail: opts.guestEmail ?? null,
-    inboundChannel: opts.inboundChannel,
-    messagePreview: opts.messagePreview,
-    organizationName: opts.organizationName ?? null,
-    replyUrl,
-  })
+  const ownerMessage = {
+    ...guestReplyMessage({
+      guestName: opts.guestName,
+      guestEmail: opts.guestEmail ?? null,
+      inboundChannel: opts.inboundChannel,
+      messagePreview: opts.messagePreview,
+      organizationName: opts.organizationName ?? null,
+      replyUrl,
+    }),
+    organizationLogoUrl: await organizationLogo(db, opts.organizationId),
+  }
 
   const recipients = await resolveOwnerRecipients(env, db, {
     organizationId: opts.organizationId,

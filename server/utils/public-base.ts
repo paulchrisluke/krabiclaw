@@ -6,8 +6,6 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { recordRequestPhase } from '~/server/utils/request-metrics'
 import type { CurrencyCode } from '~/shared/currencies'
-import { publicSocialMediaFromJson, type PublicMediaPlacement } from '~/server/utils/public-social-image'
-import type { SocialImageSource } from '~/utils/social-metadata'
 
 export interface PublicBase {
   organization: {
@@ -21,8 +19,6 @@ export interface PublicBase {
     vertical: string | null
     theme_id: string
     feature_overrides: string | null
-    media: PublicMediaPlacement[]
-    social_image: SocialImageSource | null
     seo_title: string | null
     seo_description: string | null
     canonical_url: string | null
@@ -61,16 +57,11 @@ export function loadPublicBase(
     const db = cloudflareEnv(event).DB
     if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
     try {
-      const row = await queryFirst<Omit<PublicBase['organization'], 'media'> & { media_json: string }>(
+      const organization = await queryFirst<PublicBase['organization']>(
         db,
         `SELECT s.id, s.default_currency, s.contact_email, s.contact_phone, s.name, s.vertical,
                 s.theme_id, s.feature_overrides,
                 s.brand_description,
-                (SELECT json_group_array(json_object(
-                  'asset_id', ma.id, 'slot', mp.slot, 'public_url', ma.public_url,
-                  'thumbnail_url', ma.thumbnail_url, 'kind', ma.kind
-                )) FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
-                  WHERE mp.organization_id = s.id AND mp.owner_type = 'organization' AND mp.owner_id = s.id AND mp.status = 'active') AS media_json,
                 s.seo_title, s.seo_description, s.canonical_url,
                 json_extract(s.integrations_json, '$.google_search_console.verification_token') AS search_console_verification,
                 s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
@@ -80,12 +71,8 @@ export function loadPublicBase(
           LIMIT 1`,
         [organizationId],
       )
-      if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
-      const { media_json: mediaJson, ...organization } = row
-      return { organization: {
-        ...organization,
-        ...publicSocialMediaFromJson(mediaJson),
-      } }
+      if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+      return { organization }
     } finally {
       recordRequestPhase(event, 'base', startedAt)
     }

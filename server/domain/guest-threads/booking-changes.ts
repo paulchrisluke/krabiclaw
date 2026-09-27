@@ -14,6 +14,7 @@ import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
 import { getEmailDeliveryMode } from '~/server/utils/email-delivery'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { bookingChangeProposalMessage } from '~/server/notifications/guest-events'
+import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { updateThreadProjection } from './repository'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
@@ -226,6 +227,7 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
       organizationName: organization.name,
+      organizationLogoUrl: await organizationLogo(db, thread.organization_id),
       heading: content.subject,
       intro: content.intro,
       rows: content.rows ?? [],

@@ -399,8 +399,11 @@ const handleTenantContact = async () => {
 }
 
 // ── SEO ──────────────────────────────────────────────────
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 useSocialMetadata(() => ({
   path: '/contact',
+  socialImage: organizationSocialImage,
   title: tenantPage.value?.title || businessName.value,
   description: tenantPage.value?.summary || '',
   brand: {

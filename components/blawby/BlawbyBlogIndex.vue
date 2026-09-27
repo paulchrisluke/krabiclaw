@@ -36,8 +36,11 @@ const disclaimerBlock = computed(() => page.value ? findTenantPageBlock(page.val
 const heroTitle = computed(() => String(heroBlock.value?.title ?? ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.subtitle) ? heroBlock.value.subtitle.join('\n\n') : String(heroBlock.value?.subtitle ?? ''))
 
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
 const { canonicalUrl } = useSocialMetadata(() => ({
   path: '/blog',
+  socialImage: organizationSocialImage,
   title: `${page.value?.title || 'Articles'} | ${identity.value.name}`,
   description: page.value?.summary || '',
   brand: {
