@@ -1,8 +1,9 @@
-import { execute } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getClientIp, hashClientIp, HOUR_MS, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
 import { loadPublicProductApiDetail } from '~/server/utils/public-products'
+import { notifyReviewReceived } from '~/server/utils/notifications'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 
@@ -40,6 +41,10 @@ export default defineHandler(async (event) => {
       INSERT INTO reviews (id, organization_id, location_id, product_id, author_name, rating, title, content, status, ip_hash, user_agent)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [id, organizationId, resolved.location.id, resolved.product.id, author, rating, title, content, status, ipHash, userAgent])
+    const organization = await queryFirst<{ name: string }>(db, 'SELECT name FROM organization WHERE id = ?', [organizationId])
+    await notifyReviewReceived(env, db, {
+      organizationId, organizationName: organization?.name, locationId: resolved.location.id, reviewId: id, authorName: author, rating, content,
+    })
     return jsonResponse({ review: { id, product_id: resolved.product.id, author, rating, title, content, status }, message: 'Thanks. Your review is pending moderation.' }, { status: 201 })
   } catch (error) {
     rethrowHttpError(error)

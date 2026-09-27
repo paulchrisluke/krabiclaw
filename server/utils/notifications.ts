@@ -218,13 +218,14 @@ async function buildOwnerInboxUrl(
 async function buildOwnerReviewsUrl(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; locationId?: string | null }
+  opts: { organizationId: string; locationId?: string | null; reviewId: string }
 ): Promise<string | null> {
   const slugs = await resolveDashboardSlugs(env, db, opts)
   if (!slugs) return null
 
+  // `review` opens that review's moderation sheet over the Reviews tab.
   const base = dashboardOrigin(env, slugs)
-  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews`
+  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews&review=${encodeURIComponent(opts.reviewId)}`
 }
 
 /**
@@ -846,6 +847,7 @@ export async function notifyReviewReceived(
   const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
     organizationId: opts.organizationId,
     locationId: opts.locationId,
+    reviewId: opts.reviewId,
   })
 
   const ownerMessage = reviewReceivedMessage({
