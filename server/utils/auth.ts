@@ -635,11 +635,18 @@ export function createAuth(env: CloudflareEnv) {
             const shortLived = body.data?.[0] ?? body
             if (!shortLived.access_token) throw new Error('Instagram did not return an access token')
 
-            const exchange = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({
-              grant_type: 'ig_exchange_token',
-              client_secret: env.INSTAGRAM_APP_SECRET,
-              access_token: shortLived.access_token,
-            })}`)
+            // Documented as GET, but Instagram answers a GET here with
+            // "Unsupported request - method type: get" (code 100) since late
+            // 2024 and accepts the same parameters by POST.
+            const exchange = await fetch('https://graph.instagram.com/access_token', {
+              method: 'POST',
+              headers: { 'content-type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                grant_type: 'ig_exchange_token',
+                client_secret: env.INSTAGRAM_APP_SECRET,
+                access_token: shortLived.access_token,
+              }),
+            })
             if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${(await exchange.text()).slice(0, 300)}`)
             const longLived = await exchange.json() as { access_token?: string; expires_in?: number }
             if (!longLived.access_token || typeof longLived.expires_in !== 'number') {
