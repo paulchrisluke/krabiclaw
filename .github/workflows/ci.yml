@@ -4,7 +4,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, staging]
+    branches: [main, staging, "epoch/**"]
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, staging]
