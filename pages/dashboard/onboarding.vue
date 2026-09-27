@@ -147,10 +147,6 @@ async function goNext() {
   const step = currentStep.value
   if (!step || !canAdvance.value) return
 
-  if (step.action === 'lookup') {
-    if (!await draft.lookup(state.value.mapsUrl)) return
-  }
-
   if (!step.intro && !await draft.save()) return
 
   if (step.action === 'commit') {
@@ -207,17 +203,9 @@ const PRE_DRAFT_VISUALS: Record<string, { url: string; alt: string }> = {
     url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9c594a4f-41c8-4c81-3545-fe08d9a70c00/w=800',
     alt: 'Choose your business type',
   },
-  source: {
-    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/3c0e50cb-6390-46e9-4143-e8e68fa89900/w=800',
-    alt: 'Choose how to add business details',
-  },
-  name: {
+  business: {
     url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8be9a754-ef8f-4452-3fc0-90bfa24f2600/w=800',
-    alt: 'Add your business name',
-  },
-  maps: {
-    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1952e5fa-e460-46f0-e50a-057dce7e8a00/w=800',
-    alt: 'Add business details from Google Maps',
+    alt: 'Find your business on Google Maps',
   },
 }
 // Preloading them makes each swap instant instead of a blank pane while the
@@ -295,8 +283,9 @@ onUnmounted(() => {
   stopViewportListener = null
 })
 
-// Step order changes with the answers (the Maps steps do not exist for a manual
-// draft), so a step that no longer applies redirects to the one that does.
+// Step order changes with the answers (the products step does not exist for a
+// service business), so a step that no longer applies redirects to the one
+// that does.
 //
 // A failed save belongs to the step it was attempted on. The message used to
 // outlive the step and follow the owner around the flow, so a save that failed

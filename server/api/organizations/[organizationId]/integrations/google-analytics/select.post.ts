@@ -43,9 +43,11 @@ export default defineHandler(async (event) => {
     // The property is only in effect once the tracking configuration carries
     // its measurement id, so this failure belongs to the save that asked for
     // it rather than to a log nobody reads.
-    await reconcileZarazAnalytics(env, env.DB)
+    const zaraz = await reconcileZarazAnalytics(env, env.DB)
 
-    return jsonResponse({ success: true, measurement_id: measurementId })
+    // `zaraz` says which happened: `reconciled`, or `zaraz_absent` where the
+    // environment declares it has no Zaraz zone.
+    return jsonResponse({ success: true, measurement_id: measurementId, zaraz: zaraz.status })
   } catch (error) {
     console.error('google_analytics_select_failed', { organizationId: organization.id, error })
     return jsonResponse({

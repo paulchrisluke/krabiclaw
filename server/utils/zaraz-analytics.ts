@@ -4,6 +4,13 @@ import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zar
 
 export interface ZarazEnv extends DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
+  /**
+   * `absent` declares that this environment has no Zaraz zone of its own.
+   * Staging, preview, local development and E2E run on copies of production's
+   * rows, and the only Zaraz zone is production's, so reconciling from them
+   * would rewrite production's tags. Production leaves it unset.
+   */
+  ZARAZ_ANALYTICS?: string
 }
 
 interface ZarazAction {
@@ -75,13 +82,25 @@ const PLATFORM_KEY = 'ga-platform'
 const GOOGLE_VENDOR_NAME = 'Google Analytics'
 const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
-function requireZarazEnv(env: ZarazEnv) {
+type ZarazPresence = 'present' | 'absent'
+
+function requireZarazEnv(env: ZarazEnv): ZarazPresence {
+  if (env.ZARAZ_ANALYTICS !== undefined) {
+    if (env.ZARAZ_ANALYTICS !== 'absent') {
+      throw new Error(`ZARAZ_ANALYTICS must be 'absent' or unset, not '${env.ZARAZ_ANALYTICS}'`)
+    }
+    if (env.CF_ZONE_ID) {
+      throw new Error('ZARAZ_ANALYTICS=absent declares no Zaraz zone, but CF_ZONE_ID is set')
+    }
+    return 'absent'
+  }
   if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
   if (!env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required')
+  return 'present'
 }
 
 async function zarazRequest<T>(env: ZarazEnv, init: RequestInit = {}): Promise<T> {
-  requireZarazEnv(env)
+  if (requireZarazEnv(env) === 'absent') throw new Error('Zaraz is declared absent in this environment')
   const response = await fetch(`${CF_API_BASE}/zones/${env.CF_ZONE_ID}/settings/zaraz/config`, {
     ...init,
     signal: AbortSignal.timeout(15_000),
@@ -306,10 +325,19 @@ interface ActiveTenantAnalyticsRow {
   domain: string
 }
 
-export interface ZarazAnalyticsReconciliationResult {
+export interface ZarazAnalyticsConfigChanges {
   configuredTenants: number
   removedAnalyticsTools: number
   updated: boolean
+}
+
+/**
+ * `zaraz_absent` is this environment declaring it has no Zaraz zone
+ * (ZARAZ_ANALYTICS=absent): nothing was read or written, so it carries zero
+ * changes and callers report it rather than a reconciliation.
+ */
+export type ZarazAnalyticsReconciliationResult = ZarazAnalyticsConfigChanges & {
+  status: 'reconciled' | 'zaraz_absent'
 }
 
 export interface ZarazAnalyticsTenant {
@@ -325,7 +353,7 @@ export function reconcileZarazAnalyticsConfig(
     platformHostnames: string[]
     tenants: ZarazAnalyticsTenant[]
   },
-): ZarazAnalyticsReconciliationResult {
+): ZarazAnalyticsConfigChanges {
   config.triggers ||= {}
   config.tools ||= {}
   const before = JSON.stringify(config)
@@ -352,6 +380,10 @@ export async function reconcileZarazAnalytics(
   env: ZarazEnv,
   db: D1Database,
 ): Promise<ZarazAnalyticsReconciliationResult> {
+  if (requireZarazEnv(env) === 'absent') {
+    return { status: 'zaraz_absent', configuredTenants: 0, removedAnalyticsTools: 0, updated: false }
+  }
+
   const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
     SELECT o.id AS organization_id,
            json_extract(o.integrations_json, '$.google_analytics.measurement_id') AS ga4_measurement_id,
@@ -397,7 +429,7 @@ export async function reconcileZarazAnalytics(
       })),
     })
     if (result.updated) await putZarazConfig(env, config)
-    return result
+    return { status: 'reconciled', ...result }
   } finally {
     await releaseLock(db, env.CF_ZONE_ID!, lockedAt)
   }
