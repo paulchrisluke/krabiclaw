@@ -6,6 +6,7 @@ import {
   type StoredMediaPlacementItem,
 } from '~/server/utils/media-asset-manager'
 import { uploadResolvedMediaToAssetStore, type UploadResolvedMediaInput } from '~/server/utils/media-upload'
+import { cloudflareImagesConfigured } from '~/server/utils/cloudflare-images'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { renderOgImagePng } from '~/server/utils/og-image/render'
 import {
@@ -56,7 +57,7 @@ export async function listSocialCardOwners(db: DbClient, input: { organizationId
 export type SocialCardRefreshResult =
   | { kind: 'generated'; owner: SocialCardOwner; assetId: string; publicUrl: string; generationKey: string }
   | { kind: 'reused'; owner: SocialCardOwner; assetId: string; publicUrl: string; generationKey: string }
-  | { kind: 'skipped'; owner: SocialCardOwner; reason: 'no_source' | 'owner_not_found' | 'missing_content' }
+  | { kind: 'skipped'; owner: SocialCardOwner; reason: 'no_source' | 'owner_not_found' | 'missing_content' | 'images_unavailable' }
   | { kind: 'failed'; owner: SocialCardOwner; error: string }
 
 interface OwnerRecord {
@@ -276,6 +277,9 @@ export async function refreshSocialCard(input: {
     await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'active' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card' AND asset_id = ?", params: [owner.owner_type, owner.owner_id, current.asset_id] }])
     return { kind: 'reused', owner, assetId: current.asset_id, publicUrl: current.public_url, generationKey }
   }
+  // Only production can store a card. Elsewhere the rows are production's copy,
+  // so the card it already has stays exactly as it is and the result says why.
+  if (!cloudflareImagesConfigured(env)) return { kind: 'skipped', owner, reason: 'images_unavailable' }
   await executeBatch(db, [{ query: "UPDATE media_placements SET status = 'pending' WHERE owner_type = ? AND owner_id = ? AND slot = 'social_card'", params: [owner.owner_type, owner.owner_id] }])
 
   if (!env.IMAGES) throw new Error('Cloudflare Images binding is required to render social cards')
