@@ -223,9 +223,9 @@ async function buildOwnerReviewsUrl(
   const slugs = await resolveDashboardSlugs(env, db, opts)
   if (!slugs) return null
 
-  // `review` opens that review's moderation sheet over the Reviews tab.
+  // The review's own level, beside the Reviews tab it is a row of.
   const base = dashboardOrigin(env, slugs)
-  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews&review=${encodeURIComponent(opts.reviewId)}`
+  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa/reviews/${encodeURIComponent(opts.reviewId)}`
 }
 
 /**
