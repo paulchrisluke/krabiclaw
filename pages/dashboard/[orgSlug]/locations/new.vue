@@ -161,7 +161,7 @@ const onLocationCreated = async (locationSlug: string | null) => {
 const state = startOnboardingFlow('add-location')
 const draft = useOnboardingDraft()
 const { nextOf, previousOf } = useOnboardingSteps()
-const currentStepId = ref<OnboardingStepId>('name')
+const currentStepId = ref<OnboardingStepId>('business')
 const currentStep = computed(() => onboardingStep(currentStepId.value, 'add-location'))
 const previousStep = computed(() => currentStep.value ? previousOf(currentStep.value.id) : null)
 const created = computed(() => state.value.created !== null)
@@ -183,8 +183,6 @@ function goBack() {
 async function goNext() {
   const step = currentStep.value
   if (!step || !canAdvance.value) return
-
-  if (step.action === 'lookup' && !await draft.lookup(state.value.mapsUrl)) return
 
   if (step.action === 'commit') {
     if (!await draft.addLocation()) return

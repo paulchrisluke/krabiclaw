@@ -31,6 +31,11 @@ function organizationSubdomain(origin: string): string {
 // this owner's menu section takes. A collection slug is unique within its
 // organization, so the new site gets the same slug for its own section rather
 // than failing to save it.
+// The two new-site journeys sign in as the same fixture owner, and each one
+// discards that owner's active draft before it starts. Run in parallel, one
+// discarded the draft the other was reading back, so this file runs in order.
+test.describe.configure({ mode: 'default' })
+
 const otherTenantId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
 let otherTenant: { owner: APIRequestContext; collectionId: string } | null = null
 
@@ -86,15 +91,38 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   // A single-choice step is answered by the press itself: no Next to confirm it.
   await expect(step('type')).toBeVisible()
   await page.getByRole('button', { name: 'Restaurant, café or bar' }).click()
-  await expect(step('name')).toBeVisible()
-  await page.getByPlaceholder('Your business name').fill(name)
+
+  // The business step is one Google Maps search. A name Google does not know
+  // is entered manually from under the predictions, and that path never asks
+  // Google for a place.
+  const placeDetailsRequests: string[] = []
+  page.on('request', (sent) => {
+    if (sent.url().includes('/api/dashboard/google-places/details')) placeDetailsRequests.push(sent.url())
+  })
+  await expect(step('business')).toBeVisible()
+  await page.getByPlaceholder('Search for your business on Google Maps').fill(name)
+  await page.getByRole('button', { name: 'Enter details manually' }).click()
+  await expect(step('location')).toBeVisible()
+
+  // Location: the country is asked once, and nothing proposes one — it is what
+  // the timezone and the currency are both derived from, so the owner names it.
+  await page.getByPlaceholder('123 Main Street').fill('88 Moo 2, Ao Nang Beach Road')
+  await page.getByPlaceholder('City', { exact: true }).fill('Ao Nang')
+  await step('location').getByText('Select country').click()
+  await page.getByPlaceholder('Search country...').fill('Thailand')
+  await page.getByRole('option', { name: /Thailand/ }).click()
 
   // The first save does the most work of any step in the flow: it creates the
   // organization through Better Auth and then the site itself — seeded pages, a
   // location, a team and the system subdomain — before the pane has anything to
   // frame. Dozens of statements, so it gets 90s rather than 30.
   const firstSaveTimeout = 90_000
-  await advance('Next', 'source', firstSaveTimeout)
+  await advance('Next', 'contact', firstSaveTimeout)
+
+  // The draft holds the typed name as a manual business, with no Google place.
+  const saved = await page.request.get('/api/dashboard/onboarding/drafts/active')
+  expect(saved.status(), await saved.text()).toBe(200)
+  expect((await saved.json() as { draft: unknown }).draft).toMatchObject({ sourceType: 'manual', placeId: null, details: { name } })
 
   const previewFrame = page.locator('iframe[title="Site preview"]')
   await expect(previewFrame).toHaveAttribute('src', /preview_token=/)
@@ -123,18 +151,6 @@ test('a new owner builds a draft and creates a site through the routed flow', as
     ? { url: `${organizationOrigin}/`, headers: {} }
     : { url: `${baseURL}/`, headers: { 'x-preview-tenant': organizationSubdomain(organizationOrigin) } }
   expect(await (await request.get(asAnyone.url, { headers: asAnyone.headers })).text()).not.toContain(name)
-
-  await page.getByRole('button', { name: 'Enter the details myself' }).click()
-  await expect(step('location')).toBeVisible()
-
-  // Location: the country is asked once, and nothing proposes one — it is what
-  // the timezone and the currency are both derived from, so the owner names it.
-  await page.getByPlaceholder('123 Main Street').fill('88 Moo 2, Ao Nang Beach Road')
-  await page.getByPlaceholder('City', { exact: true }).fill('Ao Nang')
-  await step('location').getByText('Select country').click()
-  await page.getByPlaceholder('Search country...').fill('Thailand')
-  await page.getByRole('option', { name: /Thailand/ }).click()
-  await advance('Next', 'contact')
 
   // Contact: the phone picker arrives seeded with that country, and the number
   // is accepted the way a Thai owner writes it, trunk zero included.
@@ -223,4 +239,150 @@ test('a new owner builds a draft and creates a site through the routed flow', as
   await expect(section).toContainText('Grilled squid')
   await expect(section).toContainText(formatMinorAmount(18000, 'THB'))
   await visitor.close()
+  expect(placeDetailsRequests).toEqual([])
+})
+
+// Kikuzuki's own listing, answered by the real Places API (New) through the
+// server. Picking Google's prediction is the confirmation: its Place Details
+// seed the screens after it, and the draft carries only its placeId.
+const KIKUZUKI = { placeId: 'ChIJi-IgEJ2VUTAR1R3W1qDnhQ8', name: 'Kikuzuki Japanese Robatayaki & Izakaya' }
+
+test('a new owner picks their Google listing and it seeds location, contact and hours', async ({ page, baseURL }) => {
+  test.setTimeout(180_000)
+  await dismissPreviewToolbar(page)
+  await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
+  const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
+  expect(discarded.status(), await discarded.text()).toBe(200)
+
+  const step = (id: string) => page.locator(`[data-onboarding-step="${id}"]`)
+
+  // The step table has one business step. The steps it replaced are not routes.
+  for (const retired of ['name', 'source', 'maps', 'confirm']) {
+    await page.goto(`/dashboard/onboarding/${retired}`)
+    await expect(page).toHaveURL(/\/dashboard\/onboarding$/)
+  }
+
+  await page.goto('/dashboard/onboarding/type')
+  await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
+  await page.getByRole('button', { name: 'Restaurant, café or bar' }).click()
+  await expect(step('business')).toBeVisible()
+
+  // Predictions appear as the owner types; each names the place and its area.
+  const autocomplete = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/autocomplete'))
+  await page.getByPlaceholder('Search for your business on Google Maps').pressSequentially('Kikuzuki Krabi')
+  const sessionToken = ((await autocomplete).postDataJSON() as { sessionToken: string }).sessionToken
+  const suggestion = page.getByRole('option', { name: new RegExp(KIKUZUKI.name.replace(/[&]/g, '\\$&')) })
+  await expect(suggestion).toContainText('Ao Nang')
+  await expect(page.locator('[data-google-maps-attribution]')).toHaveText('Google Maps')
+
+  // Selecting it closes the Google session with the same token.
+  const details = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/details'))
+  await suggestion.click()
+  expect((await details).postDataJSON()).toEqual({ placeId: KIKUZUKI.placeId, sessionToken })
+
+  // Location is seeded from the place and stays editable.
+  await expect(step('location')).toBeVisible()
+  await expect(page.getByPlaceholder('123 Main Street')).toHaveValue('325')
+  await expect(page.getByPlaceholder('City', { exact: true })).toHaveValue('KRABI')
+  await expect(step('location')).toContainText('Thailand')
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+  // Contact: Google's national number, read in the place's own country.
+  await expect(step('contact')).toBeVisible({ timeout: 90_000 })
+  await expect(page.getByPlaceholder('Phone number')).toHaveValue('095 293 2112')
+  await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+  // Hours: the place's timezone and its opening hours.
+  await expect(step('hours')).toBeVisible({ timeout: 30_000 })
+  await expect(step('hours')).toContainText('Bangkok · GMT+7')
+
+  // The saved draft names the Google place, which the server fetched itself.
+  const saved = await page.request.get('/api/dashboard/onboarding/drafts/active')
+  expect(saved.status(), await saved.text()).toBe(200)
+  const draft = (await saved.json() as { draft: { sourceType: string; placeId: string; details: { name: string; phone: string; timezone: string; openingHours: { periods: unknown[] } } } }).draft
+  expect(draft).toMatchObject({ sourceType: 'google_places', placeId: KIKUZUKI.placeId, details: { name: KIKUZUKI.name, phone: '+66952932112', timezone: 'Asia/Bangkok' } })
+  expect(draft.details.openingHours.periods.length).toBeGreaterThan(0)
+
+  const cleared = await page.request.delete('/api/dashboard/onboarding/drafts/active')
+  expect(cleared.status(), await cleared.text()).toBe(200)
+})
+
+test('the business search API refuses what the picker would never send', async ({ request, baseURL }) => {
+  const sessionToken = crypto.randomUUID()
+  const anonymous = await request.post('/api/dashboard/google-places/autocomplete', { data: { input: 'Kikuzuki', sessionToken } })
+  expect(anonymous.status()).toBe(401)
+
+  await loginAs(request, baseURL!, 'user-e2e-demo-owner')
+  const short = await request.post('/api/dashboard/google-places/autocomplete', { data: { input: 'ki ', sessionToken } })
+  expect(short.status(), await short.text()).toBe(400)
+  const malformed = await request.post('/api/dashboard/google-places/autocomplete', { data: { input: 'Kikuzuki', sessionToken: 'not-a-uuid' } })
+  expect(malformed.status(), await malformed.text()).toBe(400)
+  const detailsMalformed = await request.post('/api/dashboard/google-places/details', { data: { placeId: KIKUZUKI.placeId, sessionToken: 'not-a-uuid' } })
+  expect(detailsMalformed.status(), await detailsMalformed.text()).toBe(400)
+
+  // Add-location takes a picked placeId or a typed name, never a Maps link or
+  // a search to resolve.
+  for (const data of [{ mapsUrl: 'https://maps.app.goo.gl/abc' }, { query: 'Kikuzuki' }, { mapsUrl: 'https://maps.app.goo.gl/abc', previewOnly: true }]) {
+    const refused = await request.post('/api/dashboard/locations?org=ember-slice-demo', { data })
+    expect(refused.status(), await refused.text()).toBe(400)
+  }
+})
+
+// Add-location walks the same business step with the same picker, and Settings
+// → Google Maps connects a location by the same selection. Both run against the
+// demo tenant's local copy; the location this adds is deactivated at the end.
+test('add-location and Settings connect a location through the same business picker', async ({ page, baseURL }) => {
+  test.setTimeout(180_000)
+  await dismissPreviewToolbar(page)
+  await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
+  const org = 'ember-slice-demo'
+  const step = (id: string) => page.locator(`[data-onboarding-step="${id}"]`)
+  const next = (label = 'Next') => page.getByRole('button', { name: label, exact: true }).click()
+  const connected = async () => {
+    const settings = await page.request.get(`/api/dashboard/settings?org=${org}`)
+    expect(settings.status(), await settings.text()).toBe(200)
+    return (await settings.json() as { settings: { integrations: { google_maps: Array<{ id: string; slug: string; google_place_id: string | null }> } } }).settings.integrations.google_maps
+  }
+
+  await page.goto(`/dashboard/${org}/locations/new`)
+  await expect(step('business')).toBeVisible()
+  await page.getByPlaceholder('Search for your business on Google Maps').pressSequentially("Joe's Pizza Carmine Street")
+  const picked = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/details'))
+  await page.getByRole('option', { name: /Carmine St/ }).first().click()
+  const placeId = ((await picked).postDataJSON() as { placeId: string }).placeId
+
+  await expect(step('location')).toBeVisible()
+  await expect(page.getByPlaceholder('123 Main Street')).toHaveValue('7 Carmine St')
+  await next()
+  await expect(step('contact')).toBeVisible()
+  await expect(page.getByPlaceholder('Phone number')).not.toHaveValue('')
+  await next()
+  await expect(step('hours')).toBeVisible()
+  await expect(step('hours')).toContainText('New York')
+  await next('Save hours')
+  await expect(step('review')).toBeVisible()
+  await next('Add location')
+  await expect(page.getByRole('heading', { name: 'Location added' })).toBeVisible({ timeout: 60_000 })
+
+  const added = (await connected()).find(location => location.google_place_id === placeId)
+  expect(added, `no location connected to ${placeId}`).toBeTruthy()
+
+  // Settings: choosing another prediction is the confirmation, and connects it.
+  await page.goto(`/dashboard/${org}/settings/integrations/google-maps/${added!.slug}`)
+  await expect(page.getByText('Connected to Google Maps')).toBeVisible()
+  await page.getByRole('button', { name: 'Connect a different place' }).click()
+  const search = page.getByPlaceholder('Search for your business on Google Maps')
+  await expect(search).toHaveValue("Joe's Pizza")
+  await search.pressSequentially(' Broadway')
+  const repicked = page.waitForRequest(sent => sent.url().includes('/api/dashboard/google-places/details'))
+  const synced = page.waitForResponse(response => response.url().includes('/api/integrations/google-places/sync'))
+  await page.getByRole('option', { name: /Joe's Pizza Broadway/ }).first().click()
+  const otherPlaceId = ((await repicked).postDataJSON() as { placeId: string }).placeId
+  expect(otherPlaceId).not.toBe(placeId)
+  expect((await synced).status()).toBe(200)
+  await expect(page.getByText('Connected to Google Maps')).toBeVisible()
+  expect((await connected()).find(location => location.id === added!.id)?.google_place_id).toBe(otherPlaceId)
+
+  const deactivated = await page.request.patch(`/api/dashboard/locations/${added!.id}?org=${org}`, { data: { status: 'inactive' } })
+  expect(deactivated.status(), await deactivated.text()).toBe(200)
 })
