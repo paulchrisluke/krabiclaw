@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fe5fe0c8-2bf7-48e9-97f9-6e69951f3499",
+  "id": "b72d4f63-c6a2-4afa-9345-7dc3f4dda7e0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -5401,10 +5401,6 @@
           "name": "organization_compliance_nonprofit_check",
           "value": "json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')"
         },
-        "organization_google_credential_check": {
-          "name": "organization_google_credential_check",
-          "value": "json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential') IS 'object' AND json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text') IS TRUE"
-        },
         "organization_google_analytics_check": {
           "name": "organization_google_analytics_check",
           "value": "json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE"
@@ -5415,11 +5411,11 @@
         },
         "organization_facebook_check": {
           "name": "organization_facebook_check",
-          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
+          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.account_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
         },
         "organization_instagram_check": {
           "name": "organization_instagram_check",
-          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
+          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.account_id') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
         },
         "organization_feature_overrides_check": {
           "name": "organization_feature_overrides_check",
