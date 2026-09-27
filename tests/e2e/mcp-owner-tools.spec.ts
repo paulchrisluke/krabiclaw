@@ -269,7 +269,7 @@ test.describe('stateless MCP server', () => {
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
   })
 
-  test('Q&A and reviews are read-only through tenant MCP, and only Q&A is writable through the CMS', async ({ request, baseURL }) => {
+  test('Q&A and reviews are read-only through tenant MCP, and a review\'s words are not writable through the CMS', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
@@ -287,7 +287,8 @@ test.describe('stateless MCP server', () => {
     // #1001 gave a site the ability to edit the Q&A it wrote, so the CMS does
     // have a Q&A write route — it validates its body like any other, and a 404
     // here would mean that feature had been lost. A review is a guest's words,
-    // so it stays unwritable everywhere.
+    // so no route creates or edits one; the dashboard only moderates its status
+    // (PATCH .../reviews/:id).
     const qaWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/qa`, { data: {} })
     expect(qaWrite.status(), await qaWrite.text()).toBe(400)
     const reviewWrite = await request.post(`${baseURL}/api/editor/organizations/${organizationId}/reviews`, { data: {} })

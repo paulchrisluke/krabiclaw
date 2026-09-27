@@ -218,13 +218,14 @@ async function buildOwnerInboxUrl(
 async function buildOwnerReviewsUrl(
   env: NotificationEnv,
   db: DbClient,
-  opts: { organizationId: string; locationId?: string | null }
+  opts: { organizationId: string; locationId?: string | null; reviewId: string }
 ): Promise<string | null> {
   const slugs = await resolveDashboardSlugs(env, db, opts)
   if (!slugs) return null
 
+  // The review's own level, beside the Reviews tab it is a row of.
   const base = dashboardOrigin(env, slugs)
-  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa?tab=reviews`
+  return `${slugs.locationSlug ? `${base}/locations/${slugs.locationSlug}` : base}/qa/reviews/${encodeURIComponent(opts.reviewId)}`
 }
 
 /**
@@ -516,6 +517,8 @@ async function notifyOwner(
     submissionType?: 'contact' | 'reservation' | 'booking' | 'invitation' | null
     submissionId?: string | null
     notificationSource?: { threadId: string; entryId: string }
+    /** Keys the in-app notification for an event that has no guest thread. */
+    idempotencyKey?: string
   }
 ) {
   const threadContext = opts.notificationSource
@@ -530,7 +533,7 @@ async function notifyOwner(
     organizationId: opts.organizationId,
     locationId: opts.locationId ?? null,
     sourceEntryId: threadContext?.sourceEntryId ?? null,
-    idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : undefined,
+    idempotencyKey: threadContext ? `notification:${threadContext.sourceEntryId}:${opts.template}` : opts.idempotencyKey,
     title: opts.title,
     threadId: threadContext?.guestThreadId ?? null,
     deepLink: opts.payload.deep_link || null,
@@ -846,6 +849,7 @@ export async function notifyReviewReceived(
   const reviewsUrl = await buildOwnerReviewsUrl(env, db, {
     organizationId: opts.organizationId,
     locationId: opts.locationId,
+    reviewId: opts.reviewId,
   })
 
   const ownerMessage = reviewReceivedMessage({
@@ -859,6 +863,9 @@ export async function notifyReviewReceived(
   await notifyOwner(env, db, {
     ...opts,
     template: 'new_review',
+    // A guest retrying a submission whose alert failed re-sends it; the
+    // dashboard's notification is still one per review.
+    idempotencyKey: `notification:review:${opts.reviewId}:new_review`,
     title: ownerMessage.title,
     payload: {
       review_id: opts.reviewId,
