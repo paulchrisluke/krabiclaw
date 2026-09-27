@@ -148,6 +148,8 @@ async function select(suggestion: GooglePlaceSuggestion) {
     })
     emit('select', place)
   } catch (cause) {
+    // The input still shows the name; it must search again when retyped.
+    chosenName = null
     error.value = getErrorMessage(cause, 'Could not load that place from Google Maps. Try again.')
   } finally {
     selecting.value = false

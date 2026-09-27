@@ -367,17 +367,16 @@ async function copyAndOpenGoogle() {
   const googleUrl = requestData.value?.location?.googleReviewUrl
   if (!googleUrl) return
 
+  // The new tab must open inside the click; a popup blocker refuses one that
+  // opens after the clipboard promise settles. Copy afterwards.
+  window.open(googleUrl, '_blank', 'noopener')
   const reviewText = [title.value, content.value].filter(Boolean).join('\n\n')
-  if (reviewText && navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(reviewText)
-      copyButtonLabel.value = 'Copied! Opening Google Maps…'
-      window.open(googleUrl, '_blank', 'noopener')
-    } catch {
-      copyButtonLabel.value = 'Could not copy — click to open Google Maps directly'
-    }
-  } else {
-    window.open(googleUrl, '_blank', 'noopener')
+  if (!reviewText || !navigator.clipboard?.writeText) return
+  try {
+    await navigator.clipboard.writeText(reviewText)
+    copyButtonLabel.value = 'Copied! Google Maps is open in a new tab'
+  } catch {
+    copyButtonLabel.value = 'Could not copy — Google Maps is open in a new tab'
   }
 }
 
