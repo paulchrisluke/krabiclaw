@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
   // Unsubscribing silences the email, not the whole category: an owner who
   // still wants the WhatsApp alert keeps it. Written as one statement rather
   // than read-then-write, so a settings save landing in between is not undone.
-  await disableCategoryEmail(db, target.userId, target.category)
+  await disableCategoryEmail(db, target.userId, target.category, { origin: 'user', env })
   return jsonResponse({ success: true, category: target.category })
 })
 import { defineHandler } from 'nitro';

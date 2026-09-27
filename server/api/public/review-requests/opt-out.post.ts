@@ -21,7 +21,7 @@ export default defineHandler(async (event) => {
   if (!result) return jsonResponse({ error: 'Review request not found or expired' }, { status: 404 })
   if (!result.request.user_id) return jsonResponse({ error: 'This review request is not linked to a guest' }, { status: 409 })
 
-  await disableCategoryEmail(db, result.request.user_id, 'review_requests')
+  await disableCategoryEmail(db, result.request.user_id, 'review_requests', { origin: 'user', env })
   return jsonResponse({ optedOut: true })
 })
 import { defineHandler } from 'nitro';

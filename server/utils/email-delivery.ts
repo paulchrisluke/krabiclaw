@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { getResendClient } from '~/server/utils/resend'
 
 export type EmailDeliveryMode = 'provider' | 'log_only'
 
@@ -82,6 +83,18 @@ export function isReservedTestDomain(email: string): boolean {
   return false
 }
 
+/**
+ * The From header for mail KrabiClaw sends: the configured sender, with its
+ * display name replaced when the message is sent on a business's behalf.
+ */
+export function emailSender(env: Pick<EmailDeliveryEnv, 'EMAIL_FROM'>, fromName?: string): string {
+  const configuredFrom = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
+  if (!fromName) return configuredFrom
+  return configuredFrom.includes('<')
+    ? configuredFrom.replace(/^[^<]*(?=<)/, `${fromName} `)
+    : `${fromName} <${configuredFrom}>`
+}
+
 export async function sendEmail(
   env: EmailDeliveryEnv,
   input: {
@@ -112,50 +125,42 @@ export async function sendEmail(
   }
   if (!env.RESEND_API_KEY) return { status: 'failed', error: 'RESEND_API_KEY not configured' }
 
-  const configuredFrom = env.EMAIL_FROM || 'KrabiClaw <hello@krabiclaw.com>'
-  const from = input.fromName
-    ? configuredFrom.includes('<')
-      ? configuredFrom.replace(/^[^<]*(?=<)/, `${input.fromName} `)
-      : `${input.fromName} <${configuredFrom}>`
-    : configuredFrom
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
+  const from = emailSender(env, input.fromName)
+  const resend = getResendClient(env)
+  // The SDK takes no abort signal, so the deadline is raced rather than
+  // cancelled. Either way the outcome is 'unknown': the request may still have
+  // reached Resend, and the idempotency key is what makes a retry safe.
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<EmailSendResult>((resolve) => {
+    timeout = setTimeout(() => resolve({ status: 'unknown', error: 'Email request timed out after 10 seconds' }), 10_000)
+  })
+  const send = resend.emails.send({
+    from,
+    to: [input.to],
+    ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+    subject: input.subject,
+    html: input.html,
+    text: input.text,
+    ...(input.unsubscribeOneClickUrl
+      ? {
+          headers: {
+            'List-Unsubscribe': `<${input.unsubscribeOneClickUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        }
+      : {}),
+  }, input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined).then((response): EmailSendResult => {
+    if (!response.error) return { status: 'sent', messageId: response.data.id }
+    // The SDK reports a request that never got an answer (network failure,
+    // no response) with a null statusCode: whether Resend accepted it is
+    // unknown. Any answered rejection is a failure Resend stated.
+    return response.error.statusCode === null
+      ? { status: 'unknown', error: response.error.message }
+      : { status: 'failed', error: `${response.error.statusCode} ${response.error.name}: ${response.error.message}` }
+  })
 
   try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-        ...(input.idempotencyKey ? { 'Idempotency-Key': input.idempotencyKey } : {}),
-      },
-      body: JSON.stringify({
-        from,
-        to: [input.to],
-        ...(input.replyTo ? { reply_to: input.replyTo } : {}),
-        subject: input.subject,
-        html: input.html,
-        text: input.text,
-        ...(input.unsubscribeOneClickUrl
-          ? {
-              headers: {
-                'List-Unsubscribe': `<${input.unsubscribeOneClickUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-              },
-            }
-          : {}),
-      }),
-      signal: controller.signal,
-    })
-
-    if (!response.ok) return { status: 'failed', error: await response.text() }
-    const data = await response.json().catch(() => ({})) as { id?: string }
-    return { status: 'sent', messageId: data.id ?? null }
-  } catch (error) {
-    return {
-      status: 'unknown',
-      error: error instanceof Error ? error.message : 'Email request failed',
-    }
+    return await Promise.race([send, deadline])
   } finally {
     clearTimeout(timeout)
   }

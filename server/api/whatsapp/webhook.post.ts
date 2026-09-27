@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { compareWhatsAppDeliveryStatus, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { sendWhatsAppText } from '~/server/utils/whatsapp'
+import { advanceDeliveryStatus } from '~/server/domain/guest-threads/deliveries'
 import { parseMetaMsisdn } from '~/utils/phone'
 import {
   getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, type JsonSerializable, } from '~/server/utils/mcp-context'
@@ -570,7 +571,7 @@ async function handleStatus(db: D1Database, env: ApiRecord, status: WhatsAppStat
   const providerMessageId = status.id
   const incomingStatus = status.status
   if (!providerMessageId || !incomingStatus) return
-  if (!['sent', 'delivered', 'read', 'failed'].includes(incomingStatus)) return
+  if (incomingStatus !== 'sent' && incomingStatus !== 'delivered' && incomingStatus !== 'read' && incomingStatus !== 'failed') return
 
   const delivery = await queryFirst<{ id: string; request_id: string; status: string }>(db, `
     SELECT d.id, e.request_id, d.status
@@ -581,34 +582,14 @@ async function handleStatus(db: D1Database, env: ApiRecord, status: WhatsAppStat
   `, [providerMessageId])
   if (!delivery) return
 
-  const shouldAdvanceStatus = compareWhatsAppDeliveryStatus(delivery.status, incomingStatus)
   const errorText = formatStatusError(status.errors)
-
-  if (shouldAdvanceStatus) {
-    let observedStatus = delivery.status
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      if (!compareWhatsAppDeliveryStatus(observedStatus, incomingStatus)) break
-      const updateResult = await execute(db, `
-        UPDATE guest_thread_deliveries
-        SET status = ?, error = ?, updated_at = ?
-        WHERE id = ?
-          AND status = ?
-      `, [incomingStatus, errorText, new Date().toISOString(), delivery.id, observedStatus])
-      if (updateResult.meta.changes > 0) break
-
-      const current = await queryFirst<{ status: string }>(db, `
-        SELECT status FROM guest_thread_deliveries WHERE id = ? LIMIT 1
-      `, [delivery.id])
-      if (!current) return
-      observedStatus = current.status
-    }
-  }
+  const advanced = await advanceDeliveryStatus(db, delivery, incomingStatus, errorText)
 
   // A `failed` event arrived after a later success stage was already
   // recorded (or a same/earlier-stage replay) — never regress
   // delivery status, but still persist the raw provider error so a
   // failure is never silently lost.
-  if (!shouldAdvanceStatus && errorText) {
+  if (!advanced && errorText) {
     await execute(db, `
       UPDATE guest_thread_deliveries
       SET error = ?, updated_at = ?
