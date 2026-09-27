@@ -29,6 +29,7 @@ import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 import { timingSafeEqualText } from '~/server/utils/dev-route-auth'
 import { notifyOrganizationInvited } from '~/server/utils/notifications'
 import { cleanupOrganizationBeforeDelete } from '~/server/utils/tenant-deletion'
+import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -63,7 +64,8 @@ export const organizationOptions = {
  * Better Auth Stripe wraps the organization plugin's delete hook with its own
  * subscription guard. This plugin is deliberately registered after Stripe so
  * that provider-owned billing checks run first; only then do we release the
- * KrabiClaw resources Better Auth cannot know about.
+ * KrabiClaw resources Better Auth cannot know about. Once the organization is
+ * gone, Zaraz is reconciled so its measurement id stops being served.
  */
 function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin {
   return {
@@ -73,11 +75,16 @@ function organizationDeletionCleanupPlugin(env: CloudflareEnv): BetterAuthPlugin
       if (!orgPlugin) throw new Error('Organization plugin is required')
       const existingHooks = orgPlugin.options.organizationHooks ?? {}
       const beforeDeleteOrganization = existingHooks.beforeDeleteOrganization
+      const afterDeleteOrganization = existingHooks.afterDeleteOrganization
       orgPlugin.options.organizationHooks = {
         ...existingHooks,
         beforeDeleteOrganization: async (data, hookCtx) => {
           await beforeDeleteOrganization?.(data, hookCtx)
           await cleanupOrganizationBeforeDelete(env, data.organization.id)
+        },
+        afterDeleteOrganization: async (data, hookCtx) => {
+          await afterDeleteOrganization?.(data, hookCtx)
+          await reconcileZarazAnalytics(env, env.DB)
         },
       }
     },
