@@ -15,15 +15,18 @@
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --local
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --staging
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --out <target.sqlite> [--source <database>]
+ *   node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source <replaced database> [--delta-from <initial.sqlite>]
  *
  * The source is the top-level `DB` binding (production) unless `--source` names
  * a D1 database. A schema replacement names it, because once the binding is
  * repointed `DB` is the replacement, not the database being replaced.
  *
- * `--out` is the preflight: the transformed target, its data-only payload and
- * its manifest are kept at that path and nothing remote is written.
+ * `--out` alone is the preflight: the transformed target, its data-only payload
+ * and its manifest are kept at that path and nothing remote is written. Beside a
+ * load, `--out` keeps the loaded target there.
  * `--delta-from <initial target.sqlite>` writes only the rows the initial
- * transfer did not hold, for the final copy after the binding is repointed.
+ * transfer did not hold, for the final copy after the binding is repointed, and
+ * names every row it did hold that has changed or gone since.
  */
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -44,15 +47,22 @@ const { values } = parseArgs({
   options: {
     local: { type: 'boolean', default: false },
     staging: { type: 'boolean', default: false },
+    production: { type: 'boolean', default: false },
     out: { type: 'string' },
     source: { type: 'string', default: 'DB' },
     'delta-from': { type: 'string' },
   },
   strict: true,
 })
-const targets = (['local', 'staging', 'out'] as const).filter(name => values[name])
-if (targets.length !== 1) throw new Error('Choose exactly one of --local, --staging or --out <target.sqlite>.')
-const target = targets[0]!
+// `--out` alone is the preflight. Beside a load it keeps the transformed
+// target at that path, which is what a later `--delta-from` compares against.
+const loads = (['local', 'staging', 'production'] as const).filter(name => values[name])
+if (loads.length > 1 || (loads.length === 0 && !values.out)) throw new Error('Choose one of --local, --staging or --production, or --out <target.sqlite> alone for a preflight.')
+const target = loads[0] ?? 'out'
+// Production is only ever loaded as a schema replacement: the top-level `DB`
+// binding already names the replacement, and the database it replaces has to
+// be named, or the source would be the destination.
+if (target === 'production' && values.source === 'DB') throw new Error('--production loads a replacement database; name the database it replaces with --source <database>.')
 const deltaFrom = values['delta-from'] ? resolve(values['delta-from']) : null
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
@@ -159,15 +169,15 @@ try {
   const dumpPath = join(directory, 'source.sql')
   copyProductionRows(dumpPath)
 
-  const targetPath = target === 'out' ? resolve(values.out!) : join(directory, 'target.sqlite')
-  const payloadPath = target === 'out' ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
+  const targetPath = values.out ? resolve(values.out) : join(directory, 'target.sqlite')
+  const payloadPath = values.out ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
   const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: true, deltaFrom })
   printTransferReport(manifest)
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
   if (target === 'out') {
     console.log(`Preflight passed: ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${targetPath}; payload ${payloadPath}. Nothing remote was written.`)
   } else {
-    const destination = target === 'local' ? ['--local'] : ['--env', target, '--remote']
+    const destination = target === 'local' ? ['--local'] : target === 'production' ? ['--remote'] : ['--env', target, '--remote']
     // The payload is data only, written for the schema the target was built
     // from. A destination still on an earlier baseline — the file is regenerated
     // under the same name, so `migrations apply` sees nothing new — fails half
