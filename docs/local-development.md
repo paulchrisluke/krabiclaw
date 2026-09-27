@@ -15,6 +15,19 @@ setup. `.env` is the single local configuration for Nuxt, Wrangler, setup script
 and E2E tests; `.env.example` is the maintained template. Both `yarn dev` and
 `yarn dev:worker` use port 3000 by default.
 
+`yarn dev` also starts a second local Worker, `krabiclaw-guest-inbox-hub`, from
+`server/cloudflare/dev/wrangler.toml`. Wrangler's platform proxy cannot host a
+Durable Object whose class lives in the proxied Worker, so under `nuxt dev` the
+`GUEST_INBOX_HUBS` binding (`[env.dev]` in `wrangler.toml`) reaches that Worker
+through Wrangler's dev registry instead. The built Worker (`yarn dev:worker`,
+staging, production) exports the class itself and never uses it.
+
+That covers every server-side call to the hub, so opening a conversation with
+unread notifications works under `yarn dev`. The dashboard's live inbox socket
+does not: Nitro's dev server answers the WebSocket upgrade with a plain 200,
+so the browser client keeps reconnecting and the inbox refreshes on
+navigation only. Use `yarn dev:worker` to work on the realtime inbox.
+
 If an older checkout has `.dev.vars` or `.dev.vars.<environment>`, merge its
 needed values into `.env`, resolve conflicting values explicitly, then remove
 the old file. Do not symlink it: Wrangler gives `.dev.vars` precedence and skips
