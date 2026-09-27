@@ -347,7 +347,10 @@ function platformKnowledgeInstanceConfig(): Omit<AiSearchConfig, 'metadata'> {
 // exists" thrown from the create, which is what made issue #917 undiagnosable. `id` is not
 // an updatable field and is already carried by the instance handle, so it is not sent.
 export async function ensurePlatformKnowledgeInstance(env: CloudflareEnv) {
-  await searchNamespace(env).get(platformKnowledgeInstanceId(env)).update(platformKnowledgeInstanceConfig())
+  // The same transient connectivity failures withRetries absorbs per item hit
+  // this call first: production reindexes on 2026-09-23 and 2026-09-24 died
+  // here with `unable_to_connect_to_ai_search` before uploading anything.
+  await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).update(platformKnowledgeInstanceConfig()))
 }
 
 export async function listAllItems(env: CloudflareEnv) {
@@ -356,7 +359,7 @@ export async function listAllItems(env: CloudflareEnv) {
   let page = 1
 
   while (true) {
-    const response = await instance.items.list({ page, per_page: 50 })
+    const response = await withRetries(() => instance.items.list({ page, per_page: 50 }))
     const pageItems = response.result ?? []
     items.push(...pageItems)
     if (!response.result_info || page * response.result_info.per_page >= response.result_info.total_count) break
