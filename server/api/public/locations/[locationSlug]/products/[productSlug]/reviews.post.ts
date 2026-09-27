@@ -41,11 +41,11 @@ export default defineHandler(async (event) => {
     // review: it is found again and its alert re-sent, not stored twice.
     const resubmitted = await queryFirst<{ id: string }>(db, `
       SELECT id FROM reviews
-      WHERE organization_id = ? AND product_id = ? AND ip_hash = ?
+      WHERE organization_id = ? AND location_id = ? AND product_id = ? AND ip_hash = ?
         AND author_name = ? AND rating = ? AND title = ? AND content = ?
         AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')
       LIMIT 1
-    `, [organizationId, resolved.product.id, ipHash, author, rating, title, content])
+    `, [organizationId, resolved.location.id, resolved.product.id, ipHash, author, rating, title, content])
     const id = resubmitted?.id ?? crypto.randomUUID()
     if (!resubmitted) {
       await execute(db, `
