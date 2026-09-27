@@ -71,10 +71,7 @@ interface TenantBlogPost {
   body: string
   excerpt?: string | null
   category?: string | null
-  seo_description?: string | null
-  seo_title?: string | null
   seo_keywords?: string | null
-  canonical_url?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   updated_at?: string | null
@@ -209,8 +206,7 @@ const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.valu
 const postPath = computed(() => `${blogBasePath}/${post.value?.slug ?? ''}`)
 const requestURL = useRequestURL()
 const resolvedSeo = computed(() => resolveBlogSeo({
-  title: post.value?.title || t('saya.footer.blog'), seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
-  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  title: post.value?.title || t('saya.footer.blog'), excerpt: post.value?.excerpt, slug: post.value?.slug || '',
   baseUrl: requestURL.origin, publicPath: postPath.value, organizationName: organizationName.value,
 }))
 

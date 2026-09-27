@@ -78,7 +78,6 @@ export interface TenantBlogCardPost {
   title: string
   excerpt?: string | null
   category?: string | null
-  canonical_url?: string | null
   published_at?: string | null
   cover?: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null; width: number | null; height: number | null } | null
 }
@@ -94,7 +93,7 @@ const props = withDefaults(defineProps<{
 })
 
 const { locale, localePath, t } = useI18n()
-const postPath = computed(() => localePath(props.post.canonical_url || `${props.basePath}/${props.post.slug}`))
+const postPath = computed(() => localePath(`${props.basePath}/${props.post.slug}`))
 const isBlawby = computed(() => props.variant === 'blawby')
 const featuredMedia = computed(() => props.post.cover ?? null)
 const metaTextClass = computed(() => isBlawby.value ? 'text-gray-500' : 'text-dimmed')

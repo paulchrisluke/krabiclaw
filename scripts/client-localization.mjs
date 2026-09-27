@@ -133,9 +133,7 @@ async function publish() {
     const { page } = await call('get_tenant_page', { variant_id: actual.id })
     if (page.page_id !== intended.page_id || page.path !== intended.path || page.title !== intended.title) throw new Error(`Page metadata differs: ${intended.path}`)
     if (!isDeepStrictEqual(comparableBlocks(page.blocks), comparableBlocks(intended.blocks))) throw new Error(`Page content differs: ${intended.path}; edit the existing translation through the concurrency-aware page editor`)
-    for (const [field, key] of [['summary', 'summary'], ['seo_title', 'seoTitle'], ['seo_description', 'seoDescription']]) {
-      if (page[field] !== (intended[key] ?? null)) throw new Error(`Page ${field} differs: ${intended.path}`)
-    }
+    if (page.summary !== (intended.summary ?? null)) throw new Error(`Page summary differs: ${intended.path}`)
   }
   for (const page of bundle.pages) {
     if (existingPages.has(page.page_id)) await verifyPage(existingPages.get(page.page_id), page)

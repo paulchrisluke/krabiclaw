@@ -8,9 +8,7 @@ export interface BlogPost {
   /** Which of the site's collections the article belongs to; customer templates only have the blog. */
   collection?: ArticleCollection | null
   category?: string | null
-  seo_description?: string | null
   seo_keywords?: string | null
-  canonical_url?: string | null
   published_at?: string | null
   updated_at: string
   first_published_at?: string | null
@@ -19,7 +17,6 @@ export interface BlogPost {
   status?: 'draft' | 'published' | 'scheduled'
   visibility?: 'listed' | 'unlisted'
   tags?: string[]
-  seo_title?: string | null
   /** The leading image block's asset, or null when the article opens with text. */
   cover?: { asset_id: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null; alt_text?: string | null; width?: number | null; height?: number | null } | null
   edit_url?: string | null
@@ -54,10 +51,7 @@ export interface BlogPostCreateInput {
   collection?: ArticleCollection | null
   category?: string | null
   tags?: string[] | null
-  seo_title?: string | null
-  seo_description?: string | null
   seo_keywords?: string | null
-  canonical_url?: string | null
   visibility?: 'listed' | 'unlisted'
   scheduled_for?: string | null
 }
@@ -68,10 +62,7 @@ export interface BlogPostUpdateInput {
   collection?: ArticleCollection | null
   category?: string | null
   tags?: string[] | null
-  seo_title?: string | null
-  seo_description?: string | null
   seo_keywords?: string | null
-  canonical_url?: string | null
   visibility?: 'listed' | 'unlisted'
   slug?: string | null
   redirect_old_slug?: boolean
