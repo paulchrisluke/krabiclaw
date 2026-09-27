@@ -1,12 +1,12 @@
 import type { GoogleAnalyticsIntegration } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
-import { googleAccessToken, type GoogleCredentialEnv } from './google-credential'
+import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 
 /**
- * Google Analytics as a product of its own, over the shared Google credential
- * (server/utils/google-credential.ts). This module owns the GA4 property the
- * tenant picked and the measurement id derived from it, and nothing about the
- * account those came from.
+ * Google Analytics as a product of its own, over a Better Auth linked Google
+ * account. This module owns the GA4 property the tenant picked, the
+ * measurement id derived from it, and the `account_id` it was picked through;
+ * the account and its tokens are Better Auth's.
  *
  * The measurement id is the part that outlives the connection's details: Zaraz
  * serves it, and a site whose id was set before this flow existed keeps it
@@ -68,11 +68,12 @@ export async function getGa4MeasurementId(accessToken: string, propertyId: strin
 }
 
 export async function readAnalyticsIntegration(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
 ): Promise<GoogleAnalyticsIntegration | null> {
   return await queryFirst<GoogleAnalyticsIntegration>(env.DB, `
     SELECT json_extract(integrations_json, '$.google_analytics.revision') AS revision,
+           json_extract(integrations_json, '$.google_analytics.account_id') AS account_id,
            json_extract(integrations_json, '$.google_analytics.property_id') AS property_id,
            json_extract(integrations_json, '$.google_analytics.property_name') AS property_name,
            json_extract(integrations_json, '$.google_analytics.measurement_id') AS measurement_id,
@@ -88,15 +89,16 @@ export async function readAnalyticsIntegration(
 
 /** Records the chosen property. Refuses when the record moved since it was read. */
 export async function storeAnalyticsSelection(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
-  selection: { property_id: string; property_name: string; measurement_id: string },
+  selection: { account_id: string; property_id: string; property_name: string; measurement_id: string },
   expected: { revision: string | null },
 ): Promise<void> {
   if (!env.DB) throw new Error('Database not available')
   const now = new Date().toISOString()
   const payload = JSON.stringify({
     revision: crypto.randomUUID(),
+    account_id: selection.account_id,
     property_id: selection.property_id,
     property_name: selection.property_name,
     measurement_id: selection.measurement_id,
@@ -113,9 +115,9 @@ export async function storeAnalyticsSelection(
   if (result.meta?.changes !== 1) throw new Error('Google Analytics settings changed. Reload before saving.')
 }
 
-/** Clears Analytics state. The shared credential is not this function's to touch. */
+/** Clears Analytics state. The linked Google account is its user's, and stays linked. */
 export async function clearAnalyticsIntegration(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
 ): Promise<void> {
   if (!env.DB) throw new Error('Database not available')
@@ -128,19 +130,20 @@ export async function clearAnalyticsIntegration(
 
 /** Picks the property and resolves its measurement id in one step. */
 export async function selectAnalyticsProperty(
-  env: GoogleCredentialEnv,
+  env: CloudflareEnv,
   organizationId: string,
+  accountId: string,
   propertyId: string,
   propertyName: string,
   expected: { revision: string | null },
 ): Promise<string> {
-  const accessToken = await googleAccessToken(env, organizationId)
+  const { accessToken } = await linkedAccountAccessToken(env, accountId)
   const measurementId = await getGa4MeasurementId(accessToken, propertyId)
   if (!measurementId) {
     throw new Error('That property has no web data stream, so there is no measurement ID to collect with.')
   }
   await storeAnalyticsSelection(env, organizationId, {
-    property_id: propertyId, property_name: propertyName, measurement_id: measurementId,
+    account_id: accountId, property_id: propertyId, property_name: propertyName, measurement_id: measurementId,
   }, expected)
   return measurementId
 }

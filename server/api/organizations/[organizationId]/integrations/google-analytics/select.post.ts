@@ -1,30 +1,42 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
+import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import { jsonResponse } from '~/server/utils/api-response'
+import { requireIntegrationAccount } from '~/server/utils/auth'
 import { readAnalyticsIntegration, selectAnalyticsProperty } from '~/server/utils/google-analytics'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
 /**
- * Choosing the GA4 property. This is the only thing that writes a measurement
- * id: it is resolved from the property's web data stream rather than typed in,
- * and Zaraz is reconciled so the tag the site serves matches what was chosen.
+ * Choosing the GA4 property, through a named linked Google account. This is
+ * the only thing that writes a measurement id: it is resolved from the
+ * property's web data stream rather than typed in, and Zaraz is reconciled so
+ * the tag the site serves matches what was chosen.
  */
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ property_id?: string; property_name?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string; property_id?: string; property_name?: string }>(event).catch(() => null)
+  const accountId = body?.account_id?.trim()
   const propertyId = body?.property_id?.trim()
   const propertyName = body?.property_name?.trim()
-  if (!propertyId || !propertyName) {
-    return jsonResponse({ error: 'Choose an Analytics property.' }, { status: 400 })
+  if (!accountId || !propertyId || !propertyName) {
+    return jsonResponse({ error: 'Choose a Google account and an Analytics property.' }, { status: 400 })
   }
 
-  const { env, organization} = await requireOrganizationAccess(event, organizationId)
+  const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
   const current = await readAnalyticsIntegration(env, organization.id)
+  await requireIntegrationAccount(env, accountId, {
+    userId: session.user.id,
+    currentAccountId: current?.account_id,
+    providerId: 'google',
+    scopes: INTEGRATION_SCOPES['google-analytics'],
+  })
 
   try {
     const measurementId = await selectAnalyticsProperty(
-      env, organization.id, propertyId, propertyName,
+      env, organization.id, accountId, propertyId, propertyName,
       { revision: current?.revision ?? null },
     )
 
@@ -41,5 +53,3 @@ export default defineHandler(async (event) => {
     }, { status: 502 })
   }
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam, readBody } from 'nitro/h3';

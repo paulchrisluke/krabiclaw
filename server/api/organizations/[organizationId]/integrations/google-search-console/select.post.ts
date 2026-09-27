@@ -1,8 +1,9 @@
+import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import { jsonResponse } from '~/server/utils/api-response'
+import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { organizationPublicUrl } from '~/server/utils/domains'
-import { googleAccessToken } from '~/server/utils/google-credential'
 import {
-  listSearchConsoleSites, storeSearchConsoleSelection, verifyAndAddProperty,
+  listSearchConsoleSites, readSearchConsoleIntegration, storeSearchConsoleSelection, verifyAndAddProperty,
 } from '~/server/utils/google-search-console'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
@@ -21,17 +22,25 @@ export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ site_url?: string }>(event).catch(() => null)
+  const body = await readBody<{ account_id?: string; site_url?: string }>(event).catch(() => null)
+  const accountId = body?.account_id?.trim()
   const requested = body?.site_url?.trim()
-  if (!requested) return jsonResponse({ error: 'Choose a Search Console property.' }, { status: 400 })
+  if (!accountId || !requested) return jsonResponse({ error: 'Choose a Google account and a Search Console property.' }, { status: 400 })
 
-  const { env, db, organization} = await requireOrganizationAccess(event, organizationId)
+  const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
+  const current = await readSearchConsoleIntegration(env, organization.id)
+  await requireIntegrationAccount(env, accountId, {
+    userId: session.user.id,
+    currentAccountId: current?.account_id,
+    providerId: 'google',
+    scopes: INTEGRATION_SCOPES['google-search-console'],
+  })
 
   try {
-    const accessToken = await googleAccessToken(env, organization.id)
+    const { accessToken } = await linkedAccountAccessToken(env, accountId)
     const owned = await listSearchConsoleSites(accessToken)
     if (owned.some(property => property.siteUrl === requested)) {
-      await storeSearchConsoleSelection(env, organization.id, requested, null)
+      await storeSearchConsoleSelection(env, organization.id, accountId, requested, null)
       return jsonResponse({ success: true, site_url: requested, verified: true })
     }
 
@@ -43,7 +52,7 @@ export default defineHandler(async (event) => {
       }, { status: 400 })
     }
 
-    await verifyAndAddProperty(env, organization.id, ownUrl, async () => {
+    await verifyAndAddProperty(env, organization.id, accountId, ownUrl, async () => {
       // The tag has to be on the live page before Google fetches it, and the
       // public HTML is cached.
       await purgePublicResourceCacheNow(env, organization.id)
