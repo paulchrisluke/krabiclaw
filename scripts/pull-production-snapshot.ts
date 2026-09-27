@@ -183,6 +183,18 @@ try {
         ? 'Delete .wrangler/state/v3/d1 and run `corepack yarn local:setup` again.'
         : 'Replace the database through the schema replacement in docs/operations/release-and-outage-prevention.md first.'}`)
     }
+    // Every deploy runs `d1 migrations apply` before it ships. A destination
+    // whose ledger does not already record each migration file would have the
+    // baseline applied again on top of the rows loaded here, so it is refused
+    // until it was built with `wrangler d1 migrations apply`.
+    const query = <T>(sql: string) => (JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', sql, '--json'], true)) as Array<{ results: T[] }>)[0]?.results ?? []
+    const ledgered = query<{ n: number }>("SELECT count(*) AS n FROM sqlite_schema WHERE type = 'table' AND name = 'd1_migrations'")[0]?.n === 1
+      ? query<{ name: string }>('SELECT name FROM d1_migrations ORDER BY name').map(row => row.name)
+      : []
+    const migrationFiles = readdirSync('migrations').filter(name => name.endsWith('.sql')).sort()
+    if (JSON.stringify(ledgered) !== JSON.stringify(migrationFiles)) {
+      throw new Error(`${target} D1 records migrations [${ledgered.join(', ')}] but the repository has [${migrationFiles.join(', ')}]; no data was written. Build it with \`wrangler d1 migrations apply\`, not by executing the baseline file.`)
+    }
     run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
     console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${target} D1${deltaFrom ? ' as a delta' : ''}.`)
   }

@@ -140,8 +140,8 @@ A schema replacement does not take the site down. Prepare the new database ahead
 
 1. Preflight, with nothing written remotely. Any refused row is fixed at its source, never in the transfer:
    `node --experimental-strip-types scripts/pull-production-snapshot.ts --source <old database> --out initial.sqlite`
-2. Create the replacement D1, apply `migrations/0000_baseline.sql` to it, and repoint the binding in `wrangler.toml`.
-3. Load it: rerun step 1 with `--staging` instead of `--out`, or `--file initial.sqlite.payload.sql` for production.
+2. Create the replacement D1 and repoint the binding in `wrangler.toml`. Build its schema with `wrangler d1 migrations apply DB --env staging --remote`, or `DB --remote` for production. Never execute `0000_baseline.sql` directly. `migrations apply` records the baseline in `d1_migrations`, so the one every deploy runs next applies nothing. The load refuses a destination whose ledger does not match `migrations/`.
+3. Load it: rerun step 1 with `--staging` instead of `--out`. For production, run `wrangler d1 execute DB --remote --file initial.sqlite.payload.sql`. The payload never touches `d1_migrations`.
 4. Deploy the candidate on the new binding. Run `yarn lint:schema-drift --env staging` (or `--production`) and `PRAGMA foreign_key_check`.
 5. Copy the rows created after the export. This inserts only what `initial.sqlite` did not hold, and fails rather than overwriting:
    `--source <old database> --out final.sqlite --delta-from initial.sqlite`, then apply `final.sqlite.payload.sql`.
