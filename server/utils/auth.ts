@@ -666,15 +666,31 @@ export function createAuth(env: CloudflareEnv) {
             const shortLived = body.data?.[0] ?? body
             if (!shortLived.access_token) throw new Error('Instagram did not return an access token')
 
-            const exchange = await fetch(`https://graph.instagram.com/access_token?${new URLSearchParams({
+            const exchangeUrl = `https://graph.instagram.com/access_token?${new URLSearchParams({
               grant_type: 'ig_exchange_token',
               client_secret: env.INSTAGRAM_APP_SECRET,
               access_token: shortLived.access_token,
-            })}`)
+            })}`
+            const exchangeRequest = new Request(exchangeUrl)
+            const exchange = await fetch(exchangeRequest)
             const exchangeText = await exchange.text()
+            const sent = new URL(exchangeRequest.url)
             console.info('instagram_oauth_trace', await instagramTrace('step3_long_lived_exchange', exchange, exchangeText, {
-              method: 'GET', params: ['grant_type=ig_exchange_token', 'client_secret', 'access_token'],
-              short_lived_fingerprint: await fingerprint(shortLived.access_token), short_lived_length: shortLived.access_token.length,
+              request_method: exchangeRequest.method, request_body: exchangeRequest.body === null ? null : 'present',
+              request_origin_path: sent.origin + sent.pathname,
+              query_keys: [...sent.searchParams.keys()],
+              grant_type_count: sent.searchParams.getAll('grant_type').length, grant_type_decoded: sent.searchParams.get('grant_type'),
+              client_secret_count: sent.searchParams.getAll('client_secret').length,
+              client_secret_equals_step2_secret: sent.searchParams.get('client_secret') === env.INSTAGRAM_APP_SECRET,
+              client_secret_fingerprint: await fingerprint(sent.searchParams.get('client_secret') ?? ''),
+              access_token_count: sent.searchParams.getAll('access_token').length,
+              access_token_equals_step2_token: sent.searchParams.get('access_token') === shortLived.access_token,
+              step2_token_fingerprint: await fingerprint(shortLived.access_token), step2_token_length: shortLived.access_token.length,
+              sent_token_fingerprint: await fingerprint(sent.searchParams.get('access_token') ?? ''),
+              sent_token_length: (sent.searchParams.get('access_token') ?? '').length,
+              sent_url_redacted: exchangeUrl.replace(env.INSTAGRAM_APP_SECRET, '<secret>').replace(shortLived.access_token, '<token>'),
+              http_client: 'workerd global fetch',
+              response_url: exchange.url, response_redirected: exchange.redirected, response_type: exchange.type,
             }))
             if (!exchange.ok) throw new Error(`Instagram long-lived token exchange failed: ${exchangeText.slice(0, 300)}`)
             const longLived = JSON.parse(exchangeText) as { access_token?: string; expires_in?: number }
