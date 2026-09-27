@@ -63,6 +63,8 @@ function preEpochSource(directory: string, extra: string[] = []): string {
     "INSERT INTO content_documents (id,organization_id,kind,row_role,locale,title,slug,status,visibility,seo_title,seo_description,canonical_url,metadata_json) VALUES ('article','org','article','root','en','Title','title','published','listed','Override','Override description','https://elsewhere.example/','{}')",
     "INSERT INTO broadcasts (id,content_document_id,category,created_at) VALUES ('broadcast','article','product_news','2026-05-01T00:00:00.000Z')",
     "INSERT INTO broadcast_deliveries (broadcast_id,user_id,status,sent_at) VALUES ('broadcast','linked-user','sent','2026-05-01T00:00:00.000Z')",
+    "INSERT INTO media_assets (id,organization_id,kind,provider,source) VALUES ('asset-dark','org','image','cloudflare_images','uploaded')",
+    "INSERT INTO media_placements (id,organization_id,owner_type,owner_id,slot,asset_id) VALUES ('placement-dark','org','organization','org','logo_dark','asset-dark')",
     ...extra,
   ].join(';\n'))
   db.close()
@@ -127,13 +129,15 @@ test('a pre-epoch export transfers into the #1083 baseline, and inconsistent ide
       assert.deepEqual(JSON.parse(String(one("SELECT integrations_json FROM organization WHERE id = 'org'").integrations_json)),
         { google_analytics: { revision: 'r', status: 'active', measurement_id: 'G-TEST' } })
       assert.deepEqual(manifest.connections_to_reconnect, [{ organization_id: 'org', slug: 'org', name: 'Org', connections: ['google', 'facebook'] }])
+      assert.equal(one("SELECT count(*) AS n FROM media_placements WHERE slot = 'logo_dark'").n, 0)
+      assert.deepEqual(manifest.retired_placements, [{ owner_type: 'organization', slot: 'logo_dark', owner_id: 'org', slug: 'org', placement_id: 'placement-dark', asset_id: 'asset-dark' }])
       // 10: an existing broadcast has not been created at Resend yet.
       assert.deepEqual(all('SELECT id, provider_broadcast_id FROM broadcasts'), [{ id: 'broadcast', provider_broadcast_id: null }])
       // 12
       assert.deepEqual(target.pragma('foreign_key_check'), [])
       // Every surviving table's rows are accounted for.
       assert.deepEqual(manifest.tables.filter(entry => entry.source_rows !== entry.target_rows),
-        [{ table: 'user', source_rows: 2, target_rows: 3 }, { table: 'user_notification_preferences', source_rows: 0, target_rows: 1 }])
+        [{ table: 'media_placements', source_rows: 1, target_rows: 0 }, { table: 'user', source_rows: 2, target_rows: 3 }, { table: 'user_notification_preferences', source_rows: 0, target_rows: 1 }])
 
       // A guest who books after the export arrives in the delta, and only they
       // do. A thread resolved and a review removed after the export are not

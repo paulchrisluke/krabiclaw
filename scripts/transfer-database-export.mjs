@@ -381,6 +381,26 @@ export const EPOCH_RETIRED = {
     user: ['deletionScheduledAt'],
     organization: ['deletionScheduledAt'],
   },
+  // A placement whose slot the contract no longer declares renders nowhere.
+  // #1098 retired the organization's dark logo with no replacement, so its
+  // rows are dropped and each owner is listed rather than carried into a
+  // database where nothing can show them.
+  placements: ['organization:logo_dark'],
+}
+
+/** Drop placements in retired slots and name their owners. */
+function retirePlacementSlots(stage, record) {
+  const dropped = []
+  for (const key of EPOCH_RETIRED.placements) {
+    const [ownerType, slot] = key.split(':')
+    const rows = stage.prepare(`SELECT mp.id, mp.owner_id, mp.asset_id, o.slug FROM main.media_placements mp
+      LEFT JOIN main.organization o ON mp.owner_type = 'organization' AND o.id = mp.owner_id
+      WHERE mp.owner_type = ? AND mp.slot = ? ORDER BY mp.owner_id, mp.id`).all(ownerType, slot)
+    for (const row of rows) dropped.push({ owner_type: ownerType, slot, owner_id: row.owner_id, slug: row.slug ?? null, placement_id: row.id, asset_id: row.asset_id })
+    stage.prepare('DELETE FROM main.media_placements WHERE owner_type = ? AND slot = ?').run(ownerType, slot)
+  }
+  record('retired_placements', dropped.length)
+  return dropped
 }
 
 /**
@@ -620,7 +640,8 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
 /**
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables: Array<{ table: string, source_rows: number }>, retired_columns: Record<string, string[]>,
- *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
+ *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>,
+ *   retired_placements: Array<{ owner_type: string, slot: string, owner_id: string, slug: string | null, placement_id: string, asset_id: string }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
  *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number>, left_behind?: Record<string, { changed: string[], deleted: string[] }> },
  *   schema?: Array<{ type: string, name: string, sql: string }> }} TransferManifest
  */
@@ -655,6 +676,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     retired_columns: {},
     added_columns: {},
     connections_to_reconnect: [],
+    retired_placements: [],
     derived: {},
     transforms: [],
     invariants: [],
@@ -697,6 +719,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     }
     deriveUserIdentity(stage, sourceTables, (name, changes) => { manifest.derived[name] = changes })
     manifest.connections_to_reconnect = retireOrganizationProviderCredentials(stage, (name, changes) => { manifest.derived[name] = changes })
+    manifest.retired_placements = retirePlacementSlots(stage, (name, changes) => { manifest.derived[name] = changes })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
       // source. A source that never had it has nothing to fold, and the
@@ -764,6 +787,9 @@ export function printTransferReport(manifest) {
   for (const [table, names] of Object.entries(manifest.added_columns)) console.log(`Added ${table}: ${names.join(', ')}`)
   for (const entry of manifest.connections_to_reconnect) {
     console.log(`Reconnect required: ${entry.slug} (${entry.organization_id}, ${entry.name}) loses ${entry.connections.join(', ')}`)
+  }
+  for (const entry of manifest.retired_placements) {
+    console.log(`Retired placement: ${entry.owner_type}:${entry.slot} of ${entry.slug ?? entry.owner_id} (${entry.owner_id}) dropped, asset ${entry.asset_id}`)
   }
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, changes]) => `${name}=${changes}`).join(', ') || 'nothing'}`)
   console.log(`Transforms: ${manifest.transforms.filter(transform => transform.changes > 0).map(transform => `${transform.name}=${transform.changes}`).join(', ') || 'no changes'}`)
