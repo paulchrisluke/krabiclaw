@@ -297,7 +297,129 @@
           >. After you revoke access, Krabiclaw can no longer call Google APIs
           for your account. To have Krabiclaw delete Google user data it holds
           about you, delete your account or organization in the dashboard, or
-          email <a href="mailto:hello@krabiclaw.com">hello@krabiclaw.com</a>.
+          email <a href="mailto:privacy@krabiclaw.com">privacy@krabiclaw.com</a>.
+        </p>
+        <h2 id="facebook-instagram"><strong>Facebook and Instagram integrations</strong></h2>
+        <p>
+          A merchant can connect a Facebook Page and an Instagram professional
+          account to Krabiclaw from Settings &rarr; Integrations in the
+          dashboard. This section explains what Krabiclaw receives from Meta
+          through those connections, how it is used, stored, and shared, and
+          how to have it deleted.
+        </p>
+        <h3><strong>What Krabiclaw accesses</strong></h3>
+        <ul>
+          <li>
+            <strong>Facebook:</strong> the identifier and name of the Facebook
+            account you connect; the Pages that account manages (Page ID, name,
+            category, follower count, and picture) so you can choose one; and,
+            for the Page you choose, its posts (post ID, message text, the time
+            it was posted, the post's image, and its link).
+          </li>
+          <li>
+            <strong>Instagram:</strong> the identifiers and username of the
+            Instagram professional account you connect, and its posts (post ID,
+            caption, media type, the image or video thumbnail, the time it was
+            posted, and its link). Krabiclaw requests the Instagram permissions
+            <code>instagram_business_basic</code> and
+            <code>instagram_business_content_publish</code>.
+          </li>
+          <li>
+            <strong>Authorization tokens</strong> that Meta issues for the
+            connected Facebook account and Instagram account.
+          </li>
+        </ul>
+        <h3><strong>How Krabiclaw uses it</strong></h3>
+        <ul>
+          <li>
+            To connect the Facebook Page and Instagram account that you select,
+            and to show which ones are connected.
+          </li>
+          <li>
+            To import your recent posts onto your Krabiclaw website. While a
+            Page or account is connected and your plan includes social sync,
+            Krabiclaw checks for new posts about once an hour and imports each
+            post that has an image: its text or caption becomes a post on your
+            website and its image is copied into Krabiclaw's media storage.
+            Imported posts are published on your website as soon as they are
+            imported, where anyone can see them, and you can edit or delete them
+            in the dashboard like any other post.
+          </li>
+          <li>
+            To publish to your Facebook Page or Instagram account when you
+            publish a post in Krabiclaw and choose that channel: the post's text
+            goes to your Page, and its caption and cover image go to Instagram.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw does not use Facebook or Instagram data for advertising,
+          does not sell it, and does not use it to train artificial intelligence
+          or machine learning models.
+        </p>
+        <h3><strong>How it is stored and shared</strong></h3>
+        <ul>
+          <li>
+            Authorization tokens are stored on your linked account by
+            Krabiclaw's authentication system, encrypted with a server-side
+            secret, and used only on Krabiclaw's servers. A Facebook Page's own
+            token is not stored; Krabiclaw obtains it from Meta each time it
+            imports or publishes.
+          </li>
+          <li>
+            Krabiclaw stores the connected Page's ID and name, or the connected
+            Instagram account's ID and username, with your organization. Only
+            members of your organization with organization-wide access can view
+            or change the connection, and only the person who linked a Facebook
+            or Instagram account can use it to connect an organization.
+          </li>
+          <li>
+            Imported posts and their images are stored as your organization's
+            content. Members of your organization, and AI assistants they
+            connect to Krabiclaw, can read and edit them like any other post.
+            Once published on your website they are public.
+          </li>
+          <li>
+            Cloudflare hosts Krabiclaw's application, database, and media
+            storage and processes this data on Krabiclaw's behalf. Meta receives
+            the requests Krabiclaw makes to Facebook and Instagram, including
+            content you choose to publish there.
+          </li>
+        </ul>
+        <h3><strong>Disconnecting</strong></h3>
+        <p>
+          Pressing Disconnect on the Facebook or Instagram page in the
+          dashboard removes the connected Page or account from your
+          organization and stops importing and publishing. Disconnecting does
+          not delete posts already imported onto your website or their images,
+          which stay until you delete them. It also does not unlink the Facebook
+          or Instagram account from your Krabiclaw account; that link, including
+          its encrypted tokens, is deleted when you delete your Krabiclaw
+          account. You can also remove Krabiclaw from your Facebook or Instagram
+          settings at any time, after which Krabiclaw can no longer access that
+          account.
+        </p>
+        <h3 id="facebook-instagram-data-deletion"><strong>Deleting your Facebook or Instagram data</strong></h3>
+        <p>
+          To have Krabiclaw delete the data it holds from your Facebook Page or
+          Instagram account, email
+          <a href="mailto:privacy@krabiclaw.com">privacy@krabiclaw.com</a> from
+          the email address on your Krabiclaw account, and include:
+        </p>
+        <ul>
+          <li>the name or web address of your Krabiclaw workspace; and</li>
+          <li>
+            the Facebook Page name or Instagram username the request is about.
+          </li>
+        </ul>
+        <p>
+          Never send your password, or your Facebook or Instagram login
+          details; Krabiclaw will never ask for them. After verifying the
+          request, Krabiclaw deletes the posts and images imported from that
+          Page or account, removes the connection from your workspace, and
+          deletes the linked Facebook or Instagram account and its tokens, and
+          confirms by email. Posts you wrote in Krabiclaw and published to
+          Facebook or Instagram remain on Facebook or Instagram; delete them
+          there.
         </p>
         <h2><strong>1. Our role when merchants use Krabiclaw</strong></h2>
         <p>
