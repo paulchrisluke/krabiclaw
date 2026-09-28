@@ -15,7 +15,7 @@
         <time v-if="post.published_at" :datetime="post.published_at" class="mr-8">{{ formatDate(post.published_at) }}</time>
       </div>
       <h3 class="mt-3 text-lg font-semibold leading-6 text-white">
-        <NuxtLink :to="post.canonical_url" class="text-white no-underline focus-visible:outline-none">
+        <NuxtLink :to="post.path" class="text-white no-underline focus-visible:outline-none">
           <span class="absolute inset-0" />
           {{ post.title }}
         </NuxtLink>
@@ -31,9 +31,16 @@ function coverImage(post: { cover?: { kind?: string | null; public_url?: string 
   if (!cover) return null
   return mediaStillUrl(cover)
 }
-import type { PublicBlogSummary } from '~/types/blawby'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
-withDefaults(defineProps<{ posts: PublicBlogSummary[], compact?: boolean }>(), { compact: false })
+export interface BlawbyArticleCard {
+  id: string
+  title: string
+  path: string
+  published_at?: string | null
+  cover?: { kind?: string | null; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null } | null
+}
+
+withDefaults(defineProps<{ posts: BlawbyArticleCard[], compact?: boolean }>(), { compact: false })
 const { formatDate } = useLocaleDate()
 </script>

@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
+import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderDocs, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { mcpPageWindow } from '~/server/utils/mcp-pagination'
@@ -7,20 +7,6 @@ import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredS
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
 
 const ARTICLE_COLLECTIONS_SET = new Set(['blog', 'docs'])
-
-const UPDATE_BLOG_MUTATION_FIELDS = [
-  'title',
-  'excerpt',
-  'collection',
-  'category',
-  'tags',
-  'content_blocks',
-  'seo_keywords',
-  'visibility',
-  'slug',
-  'redirect_old_slug',
-  'reset_slug_override',
-]
 
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
@@ -67,6 +53,11 @@ function responseNullableNumber(value: unknown, path: string) {
   return value
 }
 
+
+function responseInteger(value: unknown, path: string) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) invalidBlogResponse(path, 'an integer')
+  return value
+}
 
 function responseBoolean(value: unknown, path: string) {
   if (typeof value !== 'boolean') invalidBlogResponse(path, 'a boolean')
@@ -134,6 +125,7 @@ function toBlogPostSummary(post: Record<string, unknown>, organization: McpExecu
     excerpt: responseNullableString(post.excerpt, 'post.excerpt'),
     collection: responseEnumString(post.collection ?? 'blog', 'post.collection', ARTICLE_COLLECTIONS_SET),
     category: responseNullableString(post.category, 'post.category'),
+    sort_order: responseInteger(post.sort_order, 'post.sort_order'),
     tags: responseStringArray(post.tags, 'post.tags'),
     seo_keywords: responseNullableString(post.seo_keywords, 'post.seo_keywords'),
     published: responseBoolean(post.published, 'post.published'),
@@ -197,7 +189,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       );
     }
     case "update_blog_post": {
-      requireAtLeastOneField(args, UPDATE_BLOG_MUTATION_FIELDS, "At least one blog mutation field is required.")
+      requireAtLeastOneField(args, BLOG_UPDATE_MUTATION_FIELDS, "At least one blog mutation field is required.")
       const result = await updateBlogPost(
         organization.db,
         requiredString(args, "post_id"),
@@ -220,6 +212,21 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         { post: projectBlogPostForMcp(result, organization) },
         lifecycle.changed ? `Published blog article "${result.title}".` : `Blog article "${result.title}" was already published; nothing changed.`,
       )
+    }
+    case "reorder_docs": {
+      if (!Array.isArray(args.post_ids) || args.post_ids.some(id => typeof id !== 'string' || !id.trim())) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'post_ids must contain non-empty post ids.')
+      }
+      await reorderDocs(organization.db, organization.organizationId, args.post_ids.map(id => String(id).trim()))
+      // The order that was set, read back whole: every documentation article, in it.
+      const posts: Awaited<ReturnType<typeof listBlogPosts>>['posts'] = []
+      const resource = { resource: `docs-order:${organization.organizationId}` }
+      for (let offset = 0, more = true; more; offset += 100) {
+        const page = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, { limit: 100, offset }, resource, 'docs')
+        posts.push(...page.posts)
+        more = page.page_info.has_more
+      }
+      return { posts: posts.map(post => toBlogPostSummary(post, organization)) }
     }
     case "delete_blog_post": {
       const postId = requiredString(args, "post_id");

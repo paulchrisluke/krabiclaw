@@ -680,6 +680,18 @@
         "destructive_justification": "Overwrites the order collections are presented in on the selected organization. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reorder_docs": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in.",
+        "open_world_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "reorder_media": {
       "annotations": {
         "readOnlyHint": false,

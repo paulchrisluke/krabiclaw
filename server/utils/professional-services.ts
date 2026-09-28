@@ -5,7 +5,6 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import { getPublishedBlogPost } from '~/server/utils/content/publishing'
-import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import {
   loadExactPublicLocalizations,
   type ExactPublicLocalization,
@@ -28,7 +27,6 @@ import type {
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
-  PublicBlogSummary,
   PublicBlogPost,
   PublicCompliance,
   PublicComplianceContactPoint,
@@ -76,32 +74,6 @@ export async function getActiveBlawbyOrganization(
   return organizationSupportsBlawbyTemplate({ vertical: organization?.vertical, themeId: organization?.theme_id })
     ? organization
     : null
-}
-
-export async function listPublicBlogSummaries(db: DbClient, organizationId: string, limit = 50, locale = 'en'): Promise<PublicBlogSummary[]> {
-  const rows = await queryAll<ApiRecord>(db, `
-    SELECT root.id, p.id AS representation_id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category,
-           p.metadata_json ->> '$.tags' AS tags_json, root.published_at, p.path,
-           ${COVER_SELECT}
-      FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
-      ${coverJoinSql('p')}
-     WHERE root.organization_id = ? AND root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.visibility = 'listed'
-     ORDER BY root.published_at IS NULL, root.published_at DESC, root.id DESC
-     LIMIT ?
-  `, [locale, organizationId, Math.max(1, Math.min(50, Math.trunc(limit)))])
-  const socialMedia = await loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => String(row.representation_id)))
-  return rows.map(row => ({
-    id: String(row.id),
-    title: String(row.title),
-    slug: String(row.slug),
-    excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
-    category: typeof row.category === 'string' ? row.category : null,
-    tags: row.tags_json ? JSON.parse(row.tags_json) as string[] : [],
-    published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: locale === 'en' ? resolvePublicArticleCanonicalUrl(row.slug) : `/${locale}${requiredText(row.path, 'localized article path')}`,
-    cover: attachCoverMedia(row).cover,
-    social_image: socialMedia.get(String(row.representation_id))?.social_image ?? null,
-  }))
 }
 
 export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, organizationId: string): Promise<PublicTenantPage[]> {
@@ -478,12 +450,11 @@ export async function getPublicBlawbyRouteData(
   env: CloudflareEnv,
 ): Promise<PublicBlawbyRouteData> {
   const needsReviews = ['home', 'about', 'contact', 'schedule'].includes(recipe)
-  const postLimit = recipe === 'home' ? 3 : recipe === 'blog' ? 50 : 0
   // Declared once, per template, in utils/template-registry.ts.
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   const localized = options.locale !== undefined && options.locale !== 'en'
 
-  const [page, reviewRows, initialPosts, postRow] = await Promise.all([
+  const [page, reviewRows, postRow] = await Promise.all([
     pagePath
       ? getPublicTenantPageByPath(env, db, organizationId, pagePath, {
           locale: options.locale,
@@ -491,23 +462,10 @@ export async function getPublicBlawbyRouteData(
         })
       : Promise.resolve(null),
     needsReviews ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
-    postLimit ? listPublicBlogSummaries(db, organizationId, postLimit, options.locale ?? 'en') : Promise.resolve([]),
     recipe === 'article' && options.slug
       ? getPublishedBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
       : Promise.resolve(null),
   ])
-  let posts = initialPosts
-  if (recipe === 'article' && postRow) {
-    if (localized) posts = []
-    else {
-      const postTags = Array.isArray(postRow.tags) ? postRow.tags.map(String) : (postRow.tags_json ? JSON.parse(postRow.tags_json) as string[] : [])
-      const summaries = await listPublicBlogSummaries(db, organizationId, 50)
-      posts = summaries
-        .filter(summary => summary.id !== postRow.id && summary.tags.some(tag => postTags.includes(tag)))
-        .slice(0, 3)
-    }
-  }
-
   // The Blawby layouts render one FAQ section, from the page's FAQ block; the
   // route data carries that block's items, as its declared source resolved them.
   const qa = faqBlockQa(page)
@@ -518,7 +476,6 @@ export async function getPublicBlawbyRouteData(
     page,
     qa,
     reviews: mapPublicReviews(reviewRows),
-    posts,
     post: resolvedPost,
   }
 }

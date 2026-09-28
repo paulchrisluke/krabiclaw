@@ -11,8 +11,10 @@
       empty-icon="i-lucide-newspaper"
       add-label="Write a post"
       :removing-id="removingId"
+      :reorderable="activeTab === 'docs'"
       @add="openNew"
       @remove="removePost"
+      @move="moveDoc"
     >
       <template #filters>
         <UTabs v-model="activeTab" :items="statusTabs" :content="false" aria-label="Post status" />
@@ -40,6 +42,7 @@
     <div v-if="nextCursor" class="mt-4 flex justify-center">
       <UButton color="neutral" variant="outline" :loading="loadingMore" @click="loadMore">Load more posts</UButton>
     </div>
+    <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" />
 
     <!--
       Creating asks for the headline and nothing else. A blog post's category,
@@ -84,6 +87,7 @@ import type { BlogPost } from '~/lib/components/workspace/blog/types'
 import { initialBlogEditorBlocks } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 
 // The blog index. Rendered by `blog.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
@@ -96,11 +100,20 @@ const repository = tenantBlogRepository({ organizationId, orgSlug })
 
 // A post's life in order, so the tabs read as the pipeline they are. Drafts
 // exist as a status now, and a post created from this list starts as one.
-const statusTabs = [
+// Krabiclaw's own site also publishes documentation, which is read in an
+// order someone chose rather than by date; its tab is where that order is set.
+const dashboard = useDashboardOrganization()
+const isPlatformOrganization = computed(() => {
+  const organization = dashboard.organization.value
+  if (!organization) return false
+  return resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).slug === 'platform'
+})
+const statusTabs = computed(() => [
   { value: 'all', label: 'All' },
   { value: 'draft', label: 'Drafts' },
   { value: 'published', label: 'Live' },
-]
+  ...(isPlatformOrganization.value ? [{ value: 'docs', label: 'Docs' }] : []),
+])
 const activeTab = ref<string | number>('all')
 const editing = ref(false)
 const removingId = ref<string | null>(null)
@@ -114,16 +127,35 @@ const isPostsResponse = (value: unknown): value is BlogPage =>
   && typeof value.page_info.has_more === 'boolean'
   && (value.page_info.next_cursor === null || typeof value.page_info.next_cursor === 'string')
 
-// The tab is a filter the database applies, a page at a time.
-const statusFilter = computed(() => (activeTab.value === 'all' ? undefined : String(activeTab.value)))
+// The tab is a filter the database applies, a page at a time. The docs tab
+// reads every documentation article, in its set order, because a new order
+// names all of them.
+const docsTab = computed(() => activeTab.value === 'docs')
+const statusFilter = computed(() => (activeTab.value === 'all' || docsTab.value ? undefined : String(activeTab.value)))
 const fetchPage = (cursor?: string) => dashboardApi<BlogPage>(`/api/editor/organizations/${organizationId}/blog/posts`, {
-  query: { ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
+  query: {
+    ...(statusFilter.value ? { status: statusFilter.value } : {}),
+    ...(docsTab.value ? { collection: 'docs', limit: 100 } : {}),
+    ...(cursor ? { cursor } : {}),
+  },
   validate: isPostsResponse,
 })
+async function fetchFirst(): Promise<BlogPage> {
+  const first = await fetchPage()
+  if (!docsTab.value) return first
+  const posts = [...first.posts]
+  let info = first.page_info
+  while (info.has_more && info.next_cursor) {
+    const next = await fetchPage(info.next_cursor)
+    posts.push(...next.posts)
+    info = next.page_info
+  }
+  return { posts, page_info: info }
+}
 const { data, pending, error, refresh } = await useAsyncData(
-  () => `dashboard-blog-posts:${organizationId}:${statusFilter.value ?? 'all'}`,
-  () => fetchPage(),
-  { lazy: true, watch: [statusFilter] },
+  () => `dashboard-blog-posts:${organizationId}:${docsTab.value ? 'docs' : statusFilter.value ?? 'all'}`,
+  fetchFirst,
+  { lazy: true, watch: [statusFilter, docsTab] },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
@@ -145,7 +177,9 @@ async function loadMore() {
     loadingMore.value = false
   }
 }
-const visiblePosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
+const loadedPosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
+const docsOrder = computed(() => localDocsOrder.value ?? (docsTab.value ? loadedPosts.value : []))
+const visiblePosts = computed(() => (docsTab.value ? docsOrder.value : loadedPosts.value))
 
 const listItems = computed(() => visiblePosts.value.map(row => ({
   id: row.id,
@@ -155,7 +189,7 @@ const listItems = computed(() => visiblePosts.value.map(row => ({
   row,
 })))
 
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', published: 'Live' }
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', published: 'Live' }
 
 /** Where it is in its life, then what it is filed under, then one date. */
 function postSummary(post: BlogPost): string {
@@ -223,11 +257,52 @@ async function createPost() {
 }
 
 
+// ── Docs order ──────────────────────────────────────────
+// Moves are held on the list while it is in its edit state and written, whole,
+// when the edit state closes — the way a menu's collections are reordered.
+const localDocsOrder = ref<BlogPost[] | null>(null)
+const orderError = ref<string | null>(null)
+
+function moveDoc(item: { row: BlogPost }, direction: -1 | 1) {
+  const order = [...docsOrder.value]
+  const from = order.findIndex(post => post.id === item.row.id)
+  const to = from + direction
+  if (from < 0 || to < 0 || to >= order.length) return
+  ;[order[from], order[to]] = [order[to]!, order[from]!]
+  localDocsOrder.value = order
+}
+
+async function commitDocsOrder() {
+  if (!localDocsOrder.value) return
+  const postIds = localDocsOrder.value.map(post => post.id)
+  orderError.value = null
+  try {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/blog/order`, {
+      method: 'PUT',
+      body: { post_ids: postIds },
+      validate: isRecord,
+    })
+    await refresh()
+  } catch (error) {
+    orderError.value = getErrorMessage(error, 'Failed to save the new order')
+    await refresh()
+  } finally {
+    localDocsOrder.value = null
+  }
+}
+
+watch(editing, (value, previous) => {
+  if (previous && !value) void commitDocsOrder()
+})
+
 /** Removal lives in the list's edit state, the way every other list does it. */
 async function removePost(item: { id: string }) {
   removingId.value = item.id
   try {
     await repository.delete(item.id)
+    // A deleted doc leaves the order being edited too, or the order written on
+    // Done would name an article that no longer exists and be refused whole.
+    if (localDocsOrder.value) localDocsOrder.value = localDocsOrder.value.filter(post => post.id !== item.id)
     await refresh()
   } finally {
     removingId.value = null

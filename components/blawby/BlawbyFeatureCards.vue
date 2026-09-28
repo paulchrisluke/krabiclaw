@@ -75,7 +75,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import type { PublicBlogSummary } from '~/types/blawby'
+import type { BlawbyArticleCard } from '~/components/blawby/BlawbyArticleGrid.vue'
 import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 // The cards a Blawby page shows for a feature_grid: what the firm does, on the
 // About page and on each practice area. One markup, because it is one thing —
@@ -117,29 +117,20 @@ const tableRows = computed(() => (Array.isArray(table.value.rows) ? table.value.
 
 const isArticles = computed(() => blockText(props.block.data.source) === 'organization_posts')
 const heading = computed(() => blockText(props.block.data.title))
-const posts = computed<PublicBlogSummary[]>(() => blockRecords(props.block.data.items).map((item) => {
+const posts = computed<BlawbyArticleCard[]>(() => blockRecords(props.block.data.items).map((item) => {
   const media = Array.isArray(item.media) ? item.media[0] as Record<string, unknown> | undefined : undefined
   return {
     id: blockText(item.id),
     title: blockText(item.title),
-    slug: blockText(item.url).split('/').pop() ?? '',
-    excerpt: blockText(item.description) || null,
-    category: null,
-    tags: [],
-    published_at: null,
-    canonical_url: blockText(item.url),
+    path: blockText(item.url),
     cover: media
       ? {
-          asset_id: blockText(media.asset_id),
           public_url: blockTextOrNull(media.public_url),
           thumbnail_url: blockTextOrNull(media.thumbnail_url),
           kind: blockTextOrNull(media.kind),
           alt_text: blockTextOrNull(media.alt_text),
-          width: null,
-          height: null,
         }
       : null,
-    social_image: null,
   }
 }).filter(post => post.title))
 

@@ -1,5 +1,5 @@
 <template>
-  <NuxtLink :to="postPath" class="group block h-full no-underline">
+  <NuxtLink :to="post.path" class="group block h-full no-underline">
     <div
       v-if="featured"
       :class="[
@@ -78,13 +78,14 @@ export interface TenantBlogCardPost {
   title: string
   excerpt?: string | null
   category?: string | null
+  tags?: string[] | null
+  path: string
   published_at?: string | null
   cover?: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null; width: number | null; height: number | null } | null
 }
 
 const props = withDefaults(defineProps<{
   post: TenantBlogCardPost
-  basePath: string
   variant?: 'blawby' | 'saya'
   featured?: boolean
 }>(), {
@@ -92,8 +93,7 @@ const props = withDefaults(defineProps<{
   featured: false,
 })
 
-const { locale, localePath, t } = useI18n()
-const postPath = computed(() => localePath(`${props.basePath}/${props.post.slug}`))
+const { locale, t } = useI18n()
 const isBlawby = computed(() => props.variant === 'blawby')
 const featuredMedia = computed(() => props.post.cover ?? null)
 const metaTextClass = computed(() => isBlawby.value ? 'text-gray-500' : 'text-dimmed')

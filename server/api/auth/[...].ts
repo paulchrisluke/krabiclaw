@@ -75,7 +75,6 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   const shouldNormalizePhone = [
     '/api/auth/phone-number/send-otp',
     '/api/auth/phone-number/verify',
-    '/api/auth/sign-in/phone-number',
   ].includes(pathname)
   if (!shouldNormalizePhone) {
     if (url === request.url) return request as unknown as Request

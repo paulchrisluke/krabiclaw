@@ -179,7 +179,6 @@ export interface PublicBlawbyRouteData {
   page: PublicTenantPage | null
   qa: PublicOrganizationQa[]
   reviews: PublicOrganizationReview[]
-  posts: PublicBlogSummary[]
   post: PublicBlogPost | null
 }
 

@@ -1,4 +1,5 @@
 import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
+import { createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
@@ -271,6 +272,18 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    // A phone number is a notification channel a signed-in person verifies, never
+    // a way to sign in. The phone plugin's password sign-in and reset are off, and
+    // its verify is accepted only as an update of the caller's own number: without
+    // updatePhoneNumber it signs in whoever holds that number.
+    disabledPaths: ['/sign-in/phone-number', '/phone-number/request-password-reset', '/phone-number/reset-password'],
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/phone-number/verify' && ctx.body?.updatePhoneNumber !== true) {
+          throw new APIError('BAD_REQUEST', { message: 'A phone number is verified from your account profile, not used to sign in.' })
+        }
+      }),
+    },
     // Better Auth reads the session from the database on every getSession call,
     // and a dashboard render makes several: the route middleware, the capability
     // check, the SSR context loader and the page's own loader each ask
@@ -320,15 +333,7 @@ export function createAuth(env: CloudflareEnv) {
             // Signup itself must not assume why the user is here: they may be
             // accepting an invitation into an existing org, in which case a
             // personal org here would just be an orphaned, siteless duplicate.
-            // Persist the canonical event before the auth hook completes. Delivery failures
-            // are recorded by the dispatcher and must never fail account creation.
-            //
-            // The catch here is intentional and must stay this way: a signup can never
-            // be allowed to fail because this notification write failed.
-            await notifyNewUserSignup(db, {
-              id: user.id,
-              email: user.email,
-            }).catch((err) => console.error('signup_notification_failed', err))
+            await notifyNewUserSignup(db)
           }
         }
       },
@@ -587,15 +592,6 @@ export function createAuth(env: CloudflareEnv) {
           } catch {
             return false
           }
-        },
-        // phoneNumberValidator above has already rejected anything unparseable, so
-        // these cannot fail on a real sign-up. They are left to throw because the
-        // fallbacks were worse than an error: every unparseable number produced
-        // the same phone-unknown@phone.krabiclaw.local, which is an account key,
-        // so two people signing in by WhatsApp would have shared one account.
-        signUpOnVerification: {
-          getTempEmail: (phone) => `phone-${parsePhoneOrThrow(phone, { defaultCountry: 'TH' }).replace(/\D/g, '')}@phone.krabiclaw.local`,
-          getTempName: (phone) => `WhatsApp ${parsePhoneOrThrow(phone, { defaultCountry: 'TH' })}`,
         },
       }),
       // Instagram Login for professional accounts has no built-in Better Auth

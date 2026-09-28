@@ -37,7 +37,7 @@ const SECTION_LABELS: Record<string, string> = {
   settings: 'Settings', items: 'Items', steps: 'Steps', tiers: 'Amounts', headline: 'Headline',
   pages: 'Pages', locations: 'Locations', products: 'Products', materials: 'Tools and supplies',
   destination: 'Destination', calculator: 'Calculator', image: 'Image',
-  icon: 'Icon', link: 'Link', posts: 'Posts',
+  icon: 'Icon', link: 'Link', posts: 'Posts', video: 'Video', search: 'Search results',
 }
 
 const COLLECTIONS = new Set<TenantPageBlockCollection>(['items', 'buttons', 'steps', 'tiers'])

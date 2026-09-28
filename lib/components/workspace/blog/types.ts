@@ -8,6 +8,8 @@ export interface BlogPost {
   /** Which of the site's collections the article belongs to; customer templates only have the blog. */
   collection?: ArticleCollection | null
   category?: string | null
+  /** Documentation only: its place in the docs, lowest first. */
+  sort_order?: number
   seo_keywords?: string | null
   published_at?: string | null
   updated_at: string

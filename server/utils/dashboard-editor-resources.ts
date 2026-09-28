@@ -228,13 +228,13 @@ export async function loadDashboardLocationOverview(
 export async function loadDashboardBlogPosts(
   event: H3Event,
   organizationId: string,
-  input: { status?: string | null; limit?: number; cursor?: string },
+  input: { status?: string | null; collection?: string | null; limit?: number; cursor?: string },
 ) {
   const { env, db } = await requireBlogAccess(event, organizationId)
-  const resource = { resource: `blog-posts:${organizationId}:${input.status ?? ''}` }
+  const resource = { resource: `blog-posts:${organizationId}:${input.status ?? ''}:${input.collection ?? ''}` }
   return await listBlogPosts(db, organizationId, input.status, env, mcpPageWindow({
     ...(input.limit === undefined ? {} : { limit: input.limit }), ...(input.cursor ? { cursor: input.cursor } : {}),
-  }, resource), resource)
+  }, resource), resource, input.collection ?? null)
 }
 
 export async function loadDashboardBlogPost(

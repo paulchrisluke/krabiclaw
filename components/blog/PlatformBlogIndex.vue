@@ -5,16 +5,15 @@
       <p class="text-xl text-muted">
         How local businesses use ChatGPT, Google Maps, social sync, and analytics to keep their web presence growing.
       </p>
+      <p v-if="activeTag" class="mt-6 flex items-center gap-3 text-sm text-muted">
+        {{ t('saya.posts.tagged') }} <span class="rounded-full bg-inverted px-3 py-1 font-medium text-inverted">{{ activeTag }}</span>
+        <NuxtLink :to="{ query: {} }" class="font-medium underline">Show all posts</NuxtLink>
+      </p>
     </div>
 
     <div v-if="pending" class="py-24 text-center text-muted">
       <p class="mb-2 text-xl">Loading posts...</p>
       <p class="text-sm">Fetching the latest blog content.</p>
-    </div>
-
-    <div v-else-if="error" class="py-24 text-center text-muted">
-      <p class="mb-2 text-xl">Blog unavailable</p>
-      <p class="text-sm">We couldn’t load the blog right now. Please try again soon.</p>
     </div>
 
     <div v-else-if="posts.length === 0" class="py-24 text-center text-muted">
@@ -23,7 +22,7 @@
     </div>
 
     <div v-else class="space-y-16">
-      <NuxtLink v-if="featuredPostPath && featuredPost" :to="featuredPostPath" class="block">
+      <NuxtLink v-if="featuredPost" :to="featuredPost.path" class="block">
         <div class="overflow-hidden rounded-2xl bg-elevated shadow-lg transition-shadow hover:shadow-xl">
           <div v-if="featuredMedia.url" class="h-64 overflow-hidden">
             <video
@@ -76,7 +75,7 @@
           <NuxtLink
             v-for="post in group.posts"
             :key="post.id"
-            :to="postPath(post.slug)"
+            :to="post.path"
             class="block"
           >
             <div class="h-full overflow-hidden rounded-xl border border-default bg-elevated shadow-sm transition-shadow hover:shadow-md">
@@ -120,26 +119,25 @@
 </template>
 
 <script setup lang="ts">
-import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
-import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 
 const { resolveMedia } = useMedia()
+const { t } = useI18n()
 
-const { posts, categories, pending, error } = useBlogNav()
+const { posts: allPosts, categories, pending } = await usePublishedArticles('blog')
+const { activeTag, taggedPosts: posts } = useBlogTagFilter(allPosts)
 
-const postPath = (slug: string) => tenantBlogPostPath(PLATFORM_TEMPLATE, slug)
 const featuredPost = computed(() => posts.value[0] ?? null)
-const featuredPostPath = computed(() => (featuredPost.value ? postPath(featuredPost.value.slug) : null))
 const featuredMedia = computed(() => resolveMedia(featuredPost.value?.cover))
 // The sections are the categories the articles actually carry, in the order
 // the grouping returns them — not a fixed taxonomy the authors cannot add to.
 const visibleCategories = computed(() => {
   const featuredId = featuredPost.value?.id ?? null
+  const shown = new Set(posts.value.map(post => post.id))
   return categories.value
     .map(group => ({
       ...group,
       posts: group.posts
-        .filter(post => post.id !== featuredId)
+        .filter(post => post.id !== featuredId && shown.has(post.id))
         .map(post => ({ ...post, media: resolveMedia(post.cover) })),
     }))
     .filter(group => group.posts.length > 0)

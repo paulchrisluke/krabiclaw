@@ -222,7 +222,7 @@ async function loadPublicPageSource(
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
     'content', 'location', 'products', 'reviews', 'photos', 'qa',
-    'blog', 'blogPost', 'reservationPolicies',
+    'blogPost', 'reservationPolicies',
   ]);
   // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
   // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
@@ -362,8 +362,7 @@ async function loadPublicPageSource(
     idxQa = -1;
   let idxProducts = -1, idxProductMedia = -1;
 
-  let idxBlogList = -1,
-    idxBlogPost = -1;
+  let idxBlogPost = -1;
 
   const push = (q: string, params: unknown[]) => {
     const i = batchStmts.length;
@@ -458,28 +457,9 @@ async function loadPublicPageSource(
       locationId ? [organizationId, locationId] : [organizationId],
     );
 
-  if (requestedDatasets.has("blog"))
-    idxBlogList = push(
-      `SELECT p.id, root.id AS root_id, root.slug AS source_slug, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, (p.metadata_json ->> '$.nav_title') AS nav_title, p.seo_keywords,
-              root.published_at, p.updated_at,
-              ${COVER_SELECT},
-              CAST(MAX(1, ROUND((COALESCE((
-                SELECT SUM(LENGTH(COALESCE(json_extract(cb.data_json, '$.markdown'), json_extract(cb.data_json, '$.text'), '')))
-                FROM content_documents cd
-                JOIN content_blocks cb ON cb.document_id = cd.id
-                WHERE cd.id = p.id
-              ), 0) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
-       FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
-       ${coverJoinSql('p')}
-       WHERE root.row_role = 'root' AND root.kind = 'article' AND root.status = 'published' AND p.organization_id = ? AND root.visibility = 'listed'
-       ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
-       LIMIT ?`,
-      [localizedLocale ?? "en", organizationId, page === "home" ? 3 : 50],
-    );
-
   if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
-      `SELECT p.id, root.id AS root_id, root.slug AS source_slug, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, (p.metadata_json ->> '$.nav_title') AS nav_title, p.seo_keywords,
+      `SELECT p.id, root.id AS root_id, root.slug AS source_slug, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, (p.metadata_json ->> '$.nav_title') AS nav_title, p.seo_keywords,
               root.published_at, p.created_at, p.updated_at,
               ${COVER_SELECT}
        FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
@@ -791,15 +771,6 @@ async function loadPublicPageSource(
     ? projectLocalizedMediaAlt(sourceMedia, publicLocalizations)
     : sourceMedia
 
-  // Shape blog list
-  const sourceBlogList =
-    idxBlogList >= 0
-      ? (
-          (batchResults[idxBlogList] as { results: ApiRecord[] })?.results ?? []
-        ).map(attachCover)
-      : [];
-  const blogList = sourceBlogList
-
   let blogPost: ApiRecord | null = null;
   let sourceBlogPostIdentity: { id: string; slug: string } | null = null
   if (idxBlogPost >= 0) {
@@ -866,7 +837,6 @@ async function loadPublicPageSource(
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     media: requestedDatasets.has("photos") ? media : [],
     qaList,
-    blogList: requestedDatasets.has("blog") ? blogList : [],
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
     reservationPolicyByLocation,
     localeRepresentations,

@@ -15,6 +15,7 @@ export default defineHandler(async (event) => {
   try {
     return jsonResponse(await loadDashboardBlogPosts(event, organizationId, {
       status,
+      collection: typeof query.collection === 'string' && query.collection ? query.collection : null,
       ...(typeof query.limit === 'string' ? { limit: Number(query.limit) } : {}),
       ...(typeof query.cursor === 'string' ? { cursor: query.cursor } : {}),
     }));

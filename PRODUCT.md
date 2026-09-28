@@ -185,7 +185,6 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 | Integration | Status |
 |-------------|--------|
 | Google OAuth (login) | ✅ Live |
-| WhatsApp OTP login | ✅ Built — blocked on real number registration |
 | Stripe billing | ✅ Live |
 | WhatsApp Business API | ✅ Built — blocked on real number |
 | Facebook / Instagram Graph API | ✅ Better Auth linked accounts; hourly import; publish to the named Page or professional account |

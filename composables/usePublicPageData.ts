@@ -165,7 +165,6 @@ export const usePublicPageData = async (options: {
   const reviewsList = computed(() => (data.value?.reviewsList ?? []) as ApiRecord[]);
   const media = computed(() => (data.value?.media ?? []) as ApiRecord[]);
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
-  const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
   const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
   const tenantPage = computed(() => data.value?.tenant_page ?? null);
 
@@ -298,7 +297,6 @@ export const usePublicPageData = async (options: {
     reviewsList,
     media,
     qaList,
-    blogList,
     blogPost,
     tenantPage,
     locales,

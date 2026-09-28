@@ -181,7 +181,7 @@ useProfessionalServiceSchema(() => {
     donationUrl,
   }
 })
-useSocialMetadata(() => page.value && ({
+const { canonicalUrl } = useSocialMetadata(() => page.value && ({
   path: page.value.path,
   // Krabiclaw's own brand name is the platform name: its layout's title
   // template and useSocialMetadata already state it once for every platform
@@ -191,4 +191,6 @@ useSocialMetadata(() => page.value && ({
   ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),
   socialImage: page.value.social_image,
 }))
+
+useVideoSchema(() => page.value?.blocks, canonicalUrl)
 </script>

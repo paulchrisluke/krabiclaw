@@ -14,6 +14,7 @@ export const PUBLICATION_CONTENT_BLOCK_TYPES = [
   'markdown',
   'image',
   'gallery',
+  'video',
   'faq',
   'how_to',
   'divider',
@@ -185,9 +186,11 @@ function describeStructuralFields(type: ContentBlockType): string {
     ? Object.entries(field.of).map(([child, value]) => [`${key}.${child}`, value] as const)
     : [[key, field] as const])
   const described = flattened
-    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference' || field.kind === 'number')
+    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference' || field.kind === 'number'
+      || (field.kind === 'text' && field.translatable === false))
     .map(([key, field]) => {
       if (field.kind === 'number') return `${key} (whole number ${field.min ?? ''}–${field.max ?? ''}${field.default ? `, default ${field.default}` : ''})`
+      if (field.kind === 'text') return `${key} (${field.label})`
       if (field.kind === 'enum' && field.options?.length) {
         return `${key} (one of ${field.options.map(option => option.value).join(', ')})`
       }

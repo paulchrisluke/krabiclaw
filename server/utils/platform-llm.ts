@@ -9,6 +9,7 @@ import { findAuthUsersByIds, type CloudflareEnv } from './auth.ts'
 import { collectionArticlePath } from '../../utils/article-collections.ts'
 import { tenantBlogPostPath } from '../../utils/tenant-blog-route.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
+import { blockVideo, youTubeVideoId, youTubeWatchUrl } from '../../shared/youtube-video.ts'
 import { getPlatformOrganization } from './platform-organization.ts'
 
 /** A documentation page: an ordinary site page whose path starts with /docs. */
@@ -176,6 +177,12 @@ export function renderContentBlocksForLlm(blocks: LlmContentBlock[]) {
     if (block.type === 'how_to') return serializeHowToMarkdown(block)
     if (block.type === 'ai_assistance') return serializeAiAssistanceMarkdown(block)
     if (block.type === 'image' || block.type === 'gallery') return block.media.map(item => item.public_url ? `![${item.alt_text || ''}](${item.public_url})${item.caption ? `\n\n${item.caption}` : ''}` : '').filter(Boolean).join('\n\n')
+    const video = blockVideo(block)
+    if (video) {
+      const videoId = youTubeVideoId(video.url)
+      const name = typeof video.name === 'string' ? video.name.trim() : ''
+      return videoId ? `${name ? `[${name}](${youTubeWatchUrl(videoId)})` : youTubeWatchUrl(videoId)}${typeof video.description === 'string' && video.description.trim() ? `\n\n${video.description.trim()}` : ''}` : ''
+    }
     if (block.type === 'cta') return block.data.url ? `[${String(block.data.label || block.data.title || 'Learn more')}](${String(block.data.url)})` : ''
     return String(block.data.markdown || block.data.text || '')
   }).filter(Boolean).join('\n\n'))

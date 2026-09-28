@@ -4,13 +4,17 @@ export default {
     "reviews": "Guest reviews & ratings."
   },
   "legal": {
+    "analytics_notice": "We use cookies to improve your experience. By using our site, you agree to our use of cookies. Learn more in our",
+    "analytics_notice_link": "Privacy Policy",
+    "analytics_notice_label": "Analytics notice",
     "cookie_preferences": "Cookie preferences",
+    "dismiss": "Dismiss",
     "privacy": "Privacy",
+    "reject": "Reject",
     "terms": "Terms"
   },
   "blawby": {
     "article": {
-      "browse_topics": "Browse topics",
       "from_the": "From the"
     },
     "navigation": {
@@ -173,6 +177,11 @@ export default {
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
+      "browse_topics": "Browse topics",
+      "tagged": "Tagged",
+      "read_time": "{count} min read",
+      "published_from": "Published from {name}",
+      "updated_on": "Updated {date}",
       "title": "Latest Updates",
       "featured": "Featured",
       "subtitle": "News & Events",

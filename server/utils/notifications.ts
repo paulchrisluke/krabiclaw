@@ -1223,6 +1223,9 @@ async function notifyGuestThreadReplyInner(
     organizationId: opts.organizationId,
     locationId: opts.locationId ?? null,
     sourceEntryId: opts.sourceEntryId,
+    // Keyed by the guest's entry, so a redelivered email that resolves to the
+    // same entry does not notify the owner a second time.
+    idempotencyKey: `notification:${opts.sourceEntryId}:${template}`,
     title,
     threadId: threadContext.guestThreadId,
     deepLink: payload.deep_link || null,

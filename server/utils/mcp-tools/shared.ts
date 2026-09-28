@@ -296,6 +296,7 @@ export const blogPostObject = {
     excerpt: { type: ['string', 'null'] },
     collection: { type: 'string', enum: ['blog', 'docs'] },
     category: { type: ['string', 'null'] },
+    sort_order: { type: 'integer' },
     tags: { type: 'array', items: { type: 'string' } },
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
@@ -314,7 +315,7 @@ export const blogPostObject = {
     content_blocks: { type: 'array', items: blogContentBlockObject },
   },
   required: [
-    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
+    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order', 'tags',
     'seo_keywords',
     'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
@@ -333,6 +334,7 @@ export const blogPostSummaryObject = {
     excerpt: { type: ['string', 'null'] },
     collection: { type: 'string', enum: ['blog', 'docs'] },
     category: { type: ['string', 'null'] },
+    sort_order: { type: 'integer' },
     tags: { type: 'array', items: { type: 'string' } },
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
@@ -350,7 +352,7 @@ export const blogPostSummaryObject = {
     view_url: { type: ['string', 'null'] },
   },
   required: [
-    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
+    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order', 'tags',
     'seo_keywords',
     'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
@@ -914,6 +916,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
   reorder_collections: D,
+  reorder_docs: D,
   list_metafield_definitions: R,
   create_metafield_definition: W,
   delete_metafield_definition: D,

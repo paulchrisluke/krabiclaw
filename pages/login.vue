@@ -5,12 +5,8 @@
     <UAlert v-if="notice" color="success" variant="soft" :description="notice" class="mt-4" />
     <UAlert v-if="operationError" color="error" variant="soft" :description="operationError" class="mt-4" />
 
-    <AuthPhoneOtpForm v-if="isWhatsAppMode" default-country="TH" class="mt-6" @verified="finishPhoneSignIn" />
-
-    <div v-else class="mt-6 space-y-3">
+    <div class="mt-6 space-y-3">
       <AuthGoogleButton label="Sign in with Google" :loading="googleLoading" :last-used="lastUsedMethod === 'google'" @activate="signInWithGoogle(postLoginUrl)" />
-      <AuthWhatsAppButton label="Sign in with WhatsApp" :last-used="lastUsedMethod === 'whatsapp'" @activate="showPhone = !showPhone" />
-      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" @verified="finishPhoneSignIn" />
       <USeparator label="or" />
       <AuthEmailSignInForm :key="queryEmail" :callback-url="postLoginUrl" :initial-email="queryEmail" :last-used="lastUsedMethod === 'email'" @verification-required="showVerification" />
 
@@ -21,7 +17,7 @@
       </UAlert>
     </div>
 
-    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">Don't have an account? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Sign up</NuxtLink></p>
+    <p class="mt-6 text-center text-sm text-muted">Don't have an account? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Sign up</NuxtLink></p>
   </div>
 </template>
 
@@ -44,13 +40,9 @@ useSocialMetadata({
 
 const route = useRoute()
 const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''
-const isWhatsAppMode = computed(() => route.query.mode === 'whatsapp')
 const redirect = computed(() => validatedInternalPath(route.query.redirect))
 const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: redirect.value }))
 const signupUrl = computed(() => redirect.value ? { path: '/signup', query: { redirect: redirect.value } } : '/signup')
-const showPhone = ref(false)
-const interactive = ref(false)
-onMounted(() => { interactive.value = true })
 // Which button they pressed last, from Better Auth's lastLoginMethod plugin.
 // It is a method name only — never an identity — so nothing here remembers who
 // the previous person was. Client-only: the cookie is not read during SSR.
@@ -76,10 +68,6 @@ const session = await applicationFetch<{ user?: { id?: string } } | null>('/api/
 })
 const isAuthenticated = computed(() => Boolean(session?.user?.id))
 if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true, redirectCode: 302 })
-
-function finishPhoneSignIn() {
-  window.location.href = postLoginUrl.value
-}
 
 function showVerification(email: string) {
   verificationEmail.value = email

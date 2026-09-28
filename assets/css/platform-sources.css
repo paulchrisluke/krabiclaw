@@ -10,8 +10,7 @@
 @source "../../layouts/default.vue";
 @source "../../layouts/access.vue";
 @source "../../layouts/account.vue";
-@source "../../layouts/blog.vue";
-@source "../../layouts/docs.vue";
+@source "../../layouts/articles.vue";
 @source "../../layouts/platform.vue";
 @source "../../components/*.vue";
 @source "../../components/blog";

@@ -1,4 +1,5 @@
 import { FAQ_BLOCK_SOURCES } from '../shared/faq-block'
+import { videoUploadDate, youTubeVideoId } from '../shared/youtube-video'
 
 export const TENANT_PAGE_SCHEMA_VERSION = 1 as const
 
@@ -7,6 +8,7 @@ export type TenantPageBlockType =
   | 'markdown'
   | 'image'
   | 'gallery'
+  | 'video'
   | 'faq'
   | 'how_to'
   | 'divider'
@@ -210,6 +212,15 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     caption: text('Caption', { section: 'content' }),
   }),
 
+  // A YouTube video, embedded. Its url may be any address YouTube gives out;
+  // the upload date is what lets the page describe it to search engines.
+  video: blockDefinitionWithMetadata('video', 'Video', 'A YouTube video.', ALL_RECIPES, {
+    url: link('YouTube URL', { required: true, section: 'content' }),
+    title: text('Video title', { required: true, section: 'content' }),
+    caption: text('Caption', { section: 'content' }),
+    upload_date: { kind: 'text', label: 'Upload date (YYYY-MM-DD)', translatable: false, section: 'search' },
+  }, { accessibility: 'required', seo: 'structured' }),
+
   faq: blockDefinitionWithMetadata('faq', 'Questions & answers', 'The questions published for this page or site.', ALL_RECIPES, {
     title: text('Title', { section: 'settings' }),
     source: {
@@ -359,7 +370,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
     video_title: text('Video title', { section: 'video' }),
-    video_url: link('Video URL', { section: 'video' }),
+    video_url: link('YouTube URL', { section: 'video' }),
+    upload_date: { kind: 'text', label: 'Upload date (YYYY-MM-DD)', translatable: false, section: 'video' },
     items: {
       kind: 'list', label: 'Points', section: 'items',
       of: { title: text('Title', { required: true }), description: prose('Description') },
@@ -555,6 +567,7 @@ const STRING_FIELDS = new Set([
   'eyebrow', 'title', 'subtitle', 'text', 'markdown', 'caption', 'description',
   'label', 'url', 'body', 'tone', 'cta_label', 'cta_url', 'source',
   'source_url', 'effective_date', 'field', 'section', 'destination',
+  'video_url', 'video_title', 'upload_date',
 ])
 const ARRAY_FIELDS = new Set(['page_ids', 'product_ids', 'location_ids'])
 
@@ -606,6 +619,16 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
         throw new Error('social_posts.call_to_action must carry a label and a url.')
       }
     }
+  }
+  if (type === 'video') {
+    if (!youTubeVideoId(data.url)) throw new Error('video.url must be a YouTube video URL.')
+    if (typeof data.title !== 'string' || !data.title.trim()) throw new Error('video.title is required.')
+  }
+  if (type === 'video_feature' && data.video_url && !youTubeVideoId(data.video_url)) {
+    throw new Error('video_feature.video_url must be a YouTube video URL.')
+  }
+  if ((type === 'video' || type === 'video_feature') && data.upload_date && !videoUploadDate(data.upload_date)) {
+    throw new Error(`${type}.upload_date must be a date written YYYY-MM-DD.`)
   }
   if (type === 'how_to' && Array.isArray(data.steps)) {
     for (const [index, step] of data.steps.entries()) {

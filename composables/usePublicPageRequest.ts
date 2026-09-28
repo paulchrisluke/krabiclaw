@@ -16,7 +16,6 @@ export type PublicPageDataset =
   | 'reviews'
   | 'photos'
   | 'qa'
-  | 'blog'
   | 'blogPost'
   | 'reservationPolicies'
 
@@ -73,7 +72,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      datasets: ['blog', 'blogPost'],
+      datasets: ['blogPost'],
       blogSlug: blogMatch[1] ?? null,
     };
   }
@@ -83,7 +82,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      datasets: ['blog', 'blogPost'],
+      datasets: ['blogPost'],
       blogSlug: articleMatch[1] ?? null,
     };
   }
@@ -181,7 +180,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "blog",
       location: null,
-      datasets: ['blog'],
+      datasets: [],
       blogSlug: null,
     };
 
