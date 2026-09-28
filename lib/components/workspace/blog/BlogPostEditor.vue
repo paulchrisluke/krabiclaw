@@ -416,7 +416,8 @@ function isSavable(block: BlogEditorBlock) {
 }
 const INCOMPLETE_VIDEO = 'Finish the video block: it needs a YouTube link and a title.'
 function assertVideosComplete() {
-  const incomplete = blocks.value.some(block => block.type === 'video' && isSavable(block)
+  const incomplete = blocks.value.some(block => block.type === 'video'
+    && Object.values(block.data).some(value => String(value ?? '').trim())
     && (!youTubeVideoId(block.data.url) || !String(block.data.title ?? '').trim()))
   if (!incomplete) return
   actionError.value = INCOMPLETE_VIDEO

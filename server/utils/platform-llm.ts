@@ -180,7 +180,8 @@ export function renderContentBlocksForLlm(blocks: LlmContentBlock[]) {
     const video = blockVideo(block)
     if (video) {
       const videoId = youTubeVideoId(video.url)
-      return videoId ? `[${String(video.name).trim()}](${youTubeWatchUrl(videoId)})${typeof video.description === 'string' && video.description.trim() ? `\n\n${video.description.trim()}` : ''}` : ''
+      const name = typeof video.name === 'string' ? video.name.trim() : ''
+      return videoId ? `${name ? `[${name}](${youTubeWatchUrl(videoId)})` : youTubeWatchUrl(videoId)}${typeof video.description === 'string' && video.description.trim() ? `\n\n${video.description.trim()}` : ''}` : ''
     }
     if (block.type === 'cta') return block.data.url ? `[${String(block.data.label || block.data.title || 'Learn more')}](${String(block.data.url)})` : ''
     return String(block.data.markdown || block.data.text || '')
