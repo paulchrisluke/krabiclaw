@@ -24,7 +24,7 @@ export function useOrganizationSchema() {
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'KrabiClaw',
+    name: 'Krabiclaw',
     url: 'https://krabiclaw.com',
     logo: 'https://krabiclaw.com/krabi-claw-logo.png',
     description: 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.',
@@ -40,7 +40,7 @@ export function useWebSiteSchema() {
   useSchemaOrg({
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'KrabiClaw',
+    name: 'Krabiclaw',
     url: 'https://krabiclaw.com',
     description: 'AI-powered website builder for local businesses'
   })
@@ -59,7 +59,7 @@ export function useBreadcrumbSchema(items: Array<{ name: string; url: string }>)
 
   // Resolve relative breadcrumb URLs against the current SSR request. This keeps
   // tenant structured data on the tenant's canonical custom domain instead of
-  // hardcoding the KrabiClaw platform origin.
+  // hardcoding the Krabiclaw platform origin.
   const requestURL = useRequestURL()
   // The breadcrumb urls are ours, built from the route. One that will not resolve
   // against the request origin is a path this app constructed wrongly, and
@@ -122,7 +122,7 @@ export function useArticleSchema(title: string, description: string, publishedAt
     },
     publisher: {
       '@type': 'Organization',
-      name: 'KrabiClaw',
+      name: 'Krabiclaw',
       logo: 'https://krabiclaw.com/krabi-claw-logo.png'
     }
   }

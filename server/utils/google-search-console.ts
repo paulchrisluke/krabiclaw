@@ -6,7 +6,7 @@ import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
  * Search Console as a product of its own, over a Better Auth linked Google
  * account the organization names by `account_id`.
  *
- * The tenant never pastes a verification token. KrabiClaw controls the site's
+ * The tenant never pastes a verification token. Krabiclaw controls the site's
  * public HTML, so it can do what a verification token is for: Google issues
  * the token, the site serves it as `<meta name="google-site-verification">`,
  * Google fetches the page and confirms, and the property is added. The token
@@ -135,7 +135,7 @@ export async function storeVerificationToken(
 }
 
 /**
- * Records the connected property. A property KrabiClaw verified keeps its
+ * Records the connected property. A property Krabiclaw verified keeps its
  * token, because Google re-checks the tag and drops ownership if it stops
  * being served; one the account already owned never had a token here.
  */

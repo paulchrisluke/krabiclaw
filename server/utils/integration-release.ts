@@ -147,7 +147,7 @@ export async function releaseIntegration(
 
 /**
  * Meta's deauthorize and data-deletion callbacks name a person, not a site:
- * the Facebook or Instagram user who removed KrabiClaw from their Meta
+ * the Facebook or Instagram user who removed Krabiclaw from their Meta
  * settings. That ends the authorization behind the Better Auth account Meta's
  * id belongs to, so every organization connected through that account loses
  * its integration and the dead account is removed from its user.

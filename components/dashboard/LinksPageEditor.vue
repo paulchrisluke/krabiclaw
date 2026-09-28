@@ -340,5 +340,5 @@ provide(linksEditorKey, {
   organizationLocalizationSettingsPath,
 })
 
-useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Links page | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

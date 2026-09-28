@@ -32,7 +32,7 @@ export default defineHandler(async (event) => {
     status: complete ? 'complete' : 'incomplete',
     requested_at: payload?.timestamp ? new Date(payload.timestamp).toISOString() : null,
     description: complete
-      ? 'The Meta authorization and everything KrabiClaw imported from it have been deleted.'
+      ? 'The Meta authorization and everything Krabiclaw imported from it have been deleted.'
       : 'A Meta connection for this account still exists. Contact support@krabiclaw.com.',
   })
 })

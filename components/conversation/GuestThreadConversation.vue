@@ -178,7 +178,7 @@ export interface GuestThreadEntryMessage {
   deliveries: GuestThreadEntryDelivery[]
 }
 
-/** An entry as this stream renders it: `platform` marks KrabiClaw's own message. */
+/** An entry as this stream renders it: `platform` marks Krabiclaw's own message. */
 type StreamEntry = GuestThreadEntryMessage & { platform?: boolean }
 
 const DELIVERY_PURPOSE_LABELS = {
@@ -314,7 +314,7 @@ function dayLabel(iso: string) {
 }
 
 function actorLabel(entry: StreamEntry) {
-  if (entry.platform) return 'KrabiClaw'
+  if (entry.platform) return 'Krabiclaw'
   if (entry.actorKind === 'guest') return props.guestName
   if (entry.actorKind === 'member') return entry.actorLabel || 'Owner'
   return 'System'

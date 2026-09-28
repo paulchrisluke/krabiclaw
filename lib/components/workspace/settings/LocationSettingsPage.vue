@@ -566,5 +566,5 @@ function onRowAction(id: string) {
   if (id === 'languages') localizeOpen.value = true
 }
 
-useSeoMeta({ title: 'Settings | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Settings | Krabiclaw', robots: 'noindex, nofollow' })
 </script>

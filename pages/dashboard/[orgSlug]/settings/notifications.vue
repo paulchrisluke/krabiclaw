@@ -68,7 +68,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
 
-useSeoMeta({ title: 'Notifications | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Notifications | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 const dashboardApi = useDashboardApi()
 const realtime = useDashboardInvalidations()

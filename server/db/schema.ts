@@ -1192,7 +1192,7 @@ export const stripe_connected_accounts = sqliteTable("stripe_connected_accounts"
 	// Accounts v2 merchant.card_payments capability status.
 	card_payments_status: text(),
 	// Normalized requirements needed by the dashboard. Stripe remains the
-	// authority; KrabiClaw never collects or stores the requested KYC values.
+	// authority; Krabiclaw never collects or stores the requested KYC values.
 	requirements_json: text().default("[]").notNull(),
 	stripe_refreshed_at: text(),
 	last_error: text(),

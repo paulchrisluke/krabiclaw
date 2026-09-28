@@ -2,7 +2,7 @@ import { collectionArticlePath } from '~/utils/article-collections'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 
 /**
- * Documentation is KrabiClaw's `docs` article collection, one article per slug.
+ * Documentation is Krabiclaw's `docs` article collection, one article per slug.
  * The category groups the sidebar and the index; it is the author's own word,
  * slugified for an anchor, not a path segment and not a fixed list. Order
  * within a category is the article's editorial sort order.

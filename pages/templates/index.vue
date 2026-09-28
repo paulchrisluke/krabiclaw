@@ -114,7 +114,7 @@ useSocialMetadata({
   path: '/templates',
   socialImage: organizationSocialImage,
   title: 'Templates',
-  description: 'Browse KrabiClaw templates — Saya for restaurants and experiences, Blawby for professional services. Pick a template, connect ChatGPT, go live.',
+  description: 'Browse Krabiclaw templates — Saya for restaurants and experiences, Blawby for professional services. Pick a template, connect ChatGPT, go live.',
   schemaPageType: 'CollectionPage',
   breadcrumbs: [
     { name: 'Home', url: '/' },
@@ -124,7 +124,7 @@ useSocialMetadata({
     {
       '@type': 'ItemList',
       '@id': `${organizationUrl}/templates#themes`,
-      name: 'KrabiClaw Templates',
+      name: 'Krabiclaw Templates',
       itemListElement: templates.map((template, index) => ({
         '@type': 'ListItem',
         position: index + 1,

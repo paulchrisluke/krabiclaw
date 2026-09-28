@@ -32,7 +32,7 @@
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-semibold text-white">{{ template.displayName }}</p>
-                <p class="truncate text-xs text-white/50">by KrabiClaw · {{ template.priceLabel }}</p>
+                <p class="truncate text-xs text-white/50">by Krabiclaw · {{ template.priceLabel }}</p>
               </div>
             </div>
             <div class="ml-auto">

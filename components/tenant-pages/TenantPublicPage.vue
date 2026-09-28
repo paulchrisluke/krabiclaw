@@ -2,8 +2,8 @@
   <!--
     One renderer per template, chosen here. Every Blawby page is a Blawby page:
     the practice areas were the only ones an allowlist of seven paths left out,
-    so they rendered in the Saya markup on a Blawby site. KrabiClaw's own pages
-    are KrabiClaw pages for the same reason — rendered through the Saya block
+    so they rendered in the Saya markup on a Blawby site. Krabiclaw's own pages
+    are Krabiclaw pages for the same reason — rendered through the Saya block
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
@@ -22,7 +22,7 @@ const props = defineProps<{ path: string; locale?: string | null }>()
 const { organizationId, isPlatform, previewAuthorized, organization } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
 const { locale: i18nLocale } = useI18n()
-// Page ownership is a resolved site, not a tenant type. KrabiClaw's own site is
+// Page ownership is a resolved site, not a tenant type. Krabiclaw's own site is
 // a site row with page documents like any other, and requiring `isTenant` here
 // is what forced its marketing pages to be hardcoded components (#903).
 if (!organizationId) throw showNotFound('Organization context is unavailable')
@@ -183,10 +183,11 @@ useProfessionalServiceSchema(() => {
 })
 useSocialMetadata(() => page.value && ({
   path: page.value.path,
-  title: `${page.value.title} | ${organization?.name || ''}`,
+  // Krabiclaw's own brand name is the platform name: its layout's title
+  // template and useSocialMetadata already state it once for every platform
+  // surface, so the page names only itself. A tenant states its own name.
+  title: isPlatform ? page.value.title : `${page.value.title} | ${organization?.name || ''}`,
   description: page.value.summary || '',
-  // KrabiClaw's own brand name is the platform name, which useSocialMetadata
-  // already states once for every platform surface; a tenant states its own.
   ...(isPlatform ? {} : { brand: { organizationName: organization?.name || '' } }),
   socialImage: page.value.social_image,
 }))

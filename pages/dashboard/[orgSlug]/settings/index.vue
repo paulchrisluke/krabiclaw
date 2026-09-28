@@ -9,5 +9,5 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Organization Settings | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Organization Settings | Krabiclaw', robots: 'noindex, nofollow' })
 </script>

@@ -1,4 +1,4 @@
-# KrabiClaw — Product Context
+# Krabiclaw — Product Context
 
 ## What It Is
 
@@ -8,8 +8,8 @@
 
 ## MCP
 
-KrabiClaw ships one MCP app, the ChatGPT app for site management. Every site is
-managed through it, KrabiClaw's own included.
+Krabiclaw ships one MCP app, the ChatGPT app for site management. Every site is
+managed through it, Krabiclaw's own included.
 
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
@@ -28,9 +28,9 @@ See `docs/mcp.md` for the auth model and catalog contract.
 
 ---
 
-## KrabiClaw's own site
+## Krabiclaw's own site
 
-KrabiClaw's marketing site (`krabiclaw.com`) is an ordinary site row in the
+Krabiclaw's marketing site (`krabiclaw.com`) is an ordinary site row in the
 `platform` organization running the **platform template** (`krabiclaw-theme-v1`
 in `utils/template-registry.ts`). The platform host resolves it through the same
 middleware as every tenant, and its owner works in the same dashboard:
@@ -53,7 +53,7 @@ no reserved sentinel identity in code.
 
 ## Verticals
 
-KrabiClaw supports multiple business verticals. Site creation happens in the dashboard onboarding wizard or multi-site "Add a site" picker, which offer these three choices; MCP manages existing sites.
+Krabiclaw supports multiple business verticals. Site creation happens in the dashboard onboarding wizard or multi-site "Add a site" picker, which offer these three choices; MCP manages existing sites.
 
 | Vertical (app-level) | Description | DB-stored as |
 |----------|-------------|-------------|
@@ -87,7 +87,7 @@ found no customer purchase, fulfillment, or outstanding-obligation history for
 those products. The active schema removes their unused tables and columns;
 immutable applied migrations retain the historical definitions only.
 
-**Upgrade modal** triggers on: Google Places import, custom domain setup, removing KrabiClaw branding.
+**Upgrade modal** triggers on: Google Places import, custom domain setup, removing Krabiclaw branding.
 
 **Starter and Growth are the complete runtime plan model.** Managed and SEO
 Accelerator were created as Stripe catalog products but were never purchased or
@@ -98,7 +98,7 @@ obligations.
 Growth includes Facebook and Instagram publishing. The internal `managed_service`
 entitlement is the capability key that gates those Growth features; it is not a
 plan identity and must never appear as one in a checkout, upsell, or catalog
-surface. Support for every plan is the `/help` form, which files into KrabiClaw's
+surface. Support for every plan is the `/help` form, which files into Krabiclaw's
 own inbox like any tenant contact form.
 
 Pending site handoffs do not pause or delete the source owner's custom domains.
@@ -251,7 +251,7 @@ The central mapping from a tenant's selected public template to its layouts, rou
 _Avoid_: page-level template branching, hardcoded tenant routes
 
 **Blawby**:
-The first KrabiClaw public template for professional-service tenants, beginning with legal-service sites such as NCLS. Blawby is a reusable template, not NCLS-specific behavior.
+The first Krabiclaw public template for professional-service tenants, beginning with legal-service sites such as NCLS. Blawby is a reusable template, not NCLS-specific behavior.
 _Avoid_: legal template, NCLS template, professional template
 
 **Theme token**:
@@ -271,7 +271,7 @@ A guest order intended for on-site fulfillment at a restaurant location, associa
 _Avoid_: restaurant reservation, delivery order, payment
 
 **Anonymous ordering session**:
-The Better Auth Anonymous user/session used to provide guest identity and continuity for native ordering without requiring sign-in or PII. Cart and Order records may reference that Better Auth user; KrabiClaw does not create a second guest-session principal or session table. A QR credential separately authorizes the service point and is not the guest identity.
+The Better Auth Anonymous user/session used to provide guest identity and continuity for native ordering without requiring sign-in or PII. Cart and Order records may reference that Better Auth user; Krabiclaw does not create a second guest-session principal or session table. A QR credential separately authorizes the service point and is not the guest identity.
 _Avoid_: custom guest session, ordering context, QR as authentication
 
 **Ordering QR credential**:
@@ -318,12 +318,12 @@ _Avoid_: an application projection of subscription state, site billing, site ent
 An auditable organization-owned action stored in `organization_events`. `organization_id` is required; `location_id` is nullable so membership, invitations, and organization-only work can be represented without assigning an arbitrary primary site. Site dashboards show their scoped activity, while the organization feed includes both organization-only and site events.
 _Avoid_: site event for organization-only work, arbitrary primary-site resolution, conversion click duplicated into activity
 
-**KrabiClaw's own site**:
+**Krabiclaw's own site**:
 The site row running the platform template, owned by the `platform` organization and resolved for the platform host through the ordinary site lookup. Its blog, documentation, redirects and analytics use the same site-scoped tables and code paths as every tenant.
 _Avoid_: sentinel site ids, a null platform scope, a parallel admin content model, a second MCP surface
 
 **Article collection**:
-The group an article belongs to on a site: `blog` everywhere, plus `docs` on KrabiClaw's own site. The collection decides the URL prefix and the fixed category list; the article model, editor, feeds and markdown routes are shared.
+The group an article belongs to on a site: `blog` everywhere, plus `docs` on Krabiclaw's own site. The collection decides the URL prefix and the fixed category list; the article model, editor, feeds and markdown routes are shared.
 _Avoid_: a documentation document kind, pages standing in for documentation, per-collection editors
 
 **Order round**:
@@ -335,11 +335,11 @@ The canonical running commercial record that groups Order rounds, line items, ta
 _Avoid_: payment transaction as the order, payment pending as the invoice lifecycle, separate check for each round
 
 **Merchant handoff**:
-The boundary where KrabiClaw delivers a canonical restaurant order to one configured external operational receiver and mirrors the receiver’s status. It follows the Uber Eats restaurant integration pattern—notify/fetch, accept or deny, ready-time, ready, cancel, complete—and stops before the receiver’s POS/KDS/kitchen workflow.
+The boundary where Krabiclaw delivers a canonical restaurant order to one configured external operational receiver and mirrors the receiver’s status. It follows the Uber Eats restaurant integration pattern—notify/fetch, accept or deny, ready-time, ready, cancel, complete—and stops before the receiver’s POS/KDS/kitchen workflow.
 _Avoid_: native KDS, station router, fallback kitchen queue, automatic alternate receiver
 
 **Integration destination**:
-One location-scoped, Better Auth-authorized external receiver for native order handoff. A location has one active merchant handoff destination and fails closed when it cannot receive orders; KrabiClaw does not silently fail over to another destination.
+One location-scoped, Better Auth-authorized external receiver for native order handoff. A location has one active merchant handoff destination and fails closed when it cannot receive orders; Krabiclaw does not silently fail over to another destination.
 _Avoid_: provider enum as the order model, multiple automatic receivers, fallback routing
 
 **Tenant page**:
@@ -351,11 +351,11 @@ Editorial content owned by either the platform or one tenant. A blog post has a 
 _Avoid_: platform blog input for shared post data, tenant page, documentation page
 
 **Redirect manifest**:
-A reviewable import artifact that maps legacy tenant URLs to their intended KrabiClaw destination or retirement behavior. It is the source of truth for preserving SEO and conversion paths during a tenant cutover.
+A reviewable import artifact that maps legacy tenant URLs to their intended Krabiclaw destination or retirement behavior. It is the source of truth for preserving SEO and conversion paths during a tenant cutover.
 _Avoid_: ad-hoc redirects, implicit route compatibility
 
 **Conversion event**:
-A tenant-owned visitor action that indicates commercial or operational intent, such as clicking a consultation CTA. Conversion events are first-party KrabiClaw analytics concepts and may be mirrored to configured external analytics destinations.
+A tenant-owned visitor action that indicates commercial or operational intent, such as clicking a consultation CTA. Conversion events are first-party Krabiclaw analytics concepts and may be mirrored to configured external analytics destinations.
 _Avoid_: tenant-specific tracking hook, custom script snippet
 
 **Site-level review**:
@@ -363,15 +363,15 @@ Approved customer feedback about a tenant as a whole rather than one location. A
 _Avoid_: testimonial, locationless location review, synthetic review
 
 **Owner-entered review**:
-A review collected outside KrabiClaw and entered by an authorized tenant owner with its collection method, attribution, and publication-authority attestation. It is not a verified review unless KrabiClaw collected it directly.
+A review collected outside Krabiclaw and entered by an authorized tenant owner with its collection method, attribution, and publication-authority attestation. It is not a verified review unless Krabiclaw collected it directly.
 _Avoid_: verified review, unattributed testimonial, ghost review
 
 **Site-level Q&A**:
-An owner-maintained question and answer that applies to the tenant as a whole rather than one location. It shares KrabiClaw's Q&A workflow but has no location association.
+An owner-maintained question and answer that applies to the tenant as a whole rather than one location. It shares Krabiclaw's Q&A workflow but has no location association.
 _Avoid_: location FAQ, Blawby FAQ, static testimonial question
 
 **Consultation**:
-A professional-service intake or appointment path for a prospective client. A consultation may be handled by KrabiClaw-native booking or by an external URL, but it is not a restaurant reservation or an experience booking.
+A professional-service intake or appointment path for a prospective client. A consultation may be handled by Krabiclaw-native booking or by an external URL, but it is not a restaurant reservation or an experience booking.
 _Avoid_: table reservation, experience booking, Calendly-specific booking
 
 **Confirmation page**:
@@ -391,11 +391,11 @@ An optional configured content component that helps visitors estimate eligibilit
 _Avoid_: custom script, hidden NCLS logic, payment calculation
 
 **Cutover gate**:
-A required verification boundary before moving a tenant's production DNS to KrabiClaw. Passing the cutover gate means the agreed route, SEO, media, tracking, content, redirect, and editing checks have passed.
+A required verification boundary before moving a tenant's production DNS to Krabiclaw. Passing the cutover gate means the agreed route, SEO, media, tracking, content, redirect, and editing checks have passed.
 _Avoid_: smoke test, visual approval, soft launch
 
 **Structured data**:
-Machine-readable schema.org metadata generated from KrabiClaw's tenant, location, Product, article, compliance, and template models. Professional-service structured data may render legal-service concepts, but it is generated from platform data rather than copied as raw tenant JSON-LD. `utils/professional-service-schema.ts` is the single canonical graph builder for professional-service tenants (see ADR 0016): every route emits a linked `@graph` with stable, canonical-origin `Organization`/`WebSite` `@id`s, `nonprofit_status` is normalized to schema.org's enum (e.g. `https://schema.org/Nonprofit501c3`) at the write layer rather than stored as free text, and a `PostalAddress` is only included when `tenant_compliance.address_visibility` explicitly allows it — resolved from the page's explicit `business_locations` owner. The shared Organization node has no postal address.
+Machine-readable schema.org metadata generated from Krabiclaw's tenant, location, Product, article, compliance, and template models. Professional-service structured data may render legal-service concepts, but it is generated from platform data rather than copied as raw tenant JSON-LD. `utils/professional-service-schema.ts` is the single canonical graph builder for professional-service tenants (see ADR 0016): every route emits a linked `@graph` with stable, canonical-origin `Organization`/`WebSite` `@id`s, `nonprofit_status` is normalized to schema.org's enum (e.g. `https://schema.org/Nonprofit501c3`) at the write layer rather than stored as free text, and a `PostalAddress` is only included when `tenant_compliance.address_visibility` explicitly allows it — resolved from the page's explicit `business_locations` owner. The shared Organization node has no postal address.
 _Avoid_: pasted JSON-LD blob, restaurant schema fallback, template-only metadata, free-text nonprofit status, a second address field on `tenant_compliance`
 
 ---
@@ -408,4 +408,4 @@ Professional-service tenants get a schema.org graph generated from canonical dat
 
 ### Restaurant ordering stops at the merchant handoff
 
-Native ordering follows the Uber Eats restaurant integration model (issue #248). KrabiClaw owns the guest QR experience, the published Product/Price catalog, the ordering menu, cart, order rounds, invoice/check, payment records and inventory/availability. Each location has one active, Better Auth-authorized integration destination; if it cannot receive orders, checkout fails closed. The handoff flow is notification → authoritative order retrieval → accept/deny → ready-time update → ready → cancel/complete, delivered as verified, idempotent, version-aware push events (no polling). Native KDS, station routing, printers, kitchen tickets, POS replacement, automatic failover and retail-style substitutions are outside the boundary. Sellable amounts come only from immutable, scoped `prices` rows in integer minor units; experiences are one-to-one Product extensions sharing the stable ID.
+Native ordering follows the Uber Eats restaurant integration model (issue #248). Krabiclaw owns the guest QR experience, the published Product/Price catalog, the ordering menu, cart, order rounds, invoice/check, payment records and inventory/availability. Each location has one active, Better Auth-authorized integration destination; if it cannot receive orders, checkout fails closed. The handoff flow is notification → authoritative order retrieval → accept/deny → ready-time update → ready → cancel/complete, delivered as verified, idempotent, version-aware push events (no polling). Native KDS, station routing, printers, kitchen tickets, POS replacement, automatic failover and retail-style substitutions are outside the boundary. Sellable amounts come only from immutable, scoped `prices` rows in integer minor units; experiences are one-to-one Product extensions sharing the stable ID.

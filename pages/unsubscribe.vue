@@ -76,5 +76,5 @@ async function submit() {
   }
 }
 
-useSeoMeta({ title: 'Unsubscribe | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Unsubscribe | Krabiclaw', robots: 'noindex, nofollow' })
 </script>

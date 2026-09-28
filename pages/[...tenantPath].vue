@@ -22,7 +22,7 @@ definePageMeta({ layout: false })
 const route = useRoute()
 const { isPlatform, organizationId } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
-// An unclaimed path is a page document on whichever site resolved, KrabiClaw's
+// An unclaimed path is a page document on whichever site resolved, Krabiclaw's
 // own included: its marketing pages are ordinary documents now, and this is the
 // route that serves the ones no named route owns (#903). A path with no
 // published document still 404s here — there is nothing to fall back to.

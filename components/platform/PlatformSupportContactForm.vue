@@ -33,7 +33,7 @@
       <label class="flex items-start gap-3 rounded-xl border border-default bg-elevated/60 px-4 py-3 text-sm">
         <input v-model="form.consent" type="checkbox" class="mt-0.5 size-4 rounded border-default" />
         <span class="leading-relaxed text-muted">
-          I consent to KrabiClaw storing and using these details to respond to my support request.
+          I consent to Krabiclaw storing and using these details to respond to my support request.
         </span>
       </label>
       <p v-if="fieldError('consent')" class="text-sm text-red-500">{{ fieldError('consent') }}</p>
@@ -79,7 +79,7 @@ const emit = defineEmits<{
 }>()
 
 const inputClass = FORM_INPUT_CLASS
-// The help form is the KrabiClaw site's contact form: it files into that site's inbox like every tenant's.
+// The help form is the Krabiclaw site's contact form: it files into that site's inbox like every tenant's.
 const { organizationId } = useTenantOrganization()
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const form = ref({
@@ -125,7 +125,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    if (!organizationId) throw new Error('This form is only available on the KrabiClaw site.')
+    if (!organizationId) throw new Error('This form is only available on the Krabiclaw site.')
     await $fetch<unknown>(`/api/public/contact`, {
       method: 'POST',
       body: {

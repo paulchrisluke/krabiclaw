@@ -225,5 +225,5 @@ watch([overview, overviewError], ([resource, cause]) => {
 }, { immediate: true })
 
 
-useSeoMeta({ title: () => `${location.value?.title || 'Location'} | KrabiClaw`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${location.value?.title || 'Location'} | Krabiclaw`, robots: 'noindex, nofollow' })
 </script>

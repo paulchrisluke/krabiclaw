@@ -160,7 +160,7 @@ const moveTargets = computed(() =>
   collectionsOnSurface(vertical, collectionsWithProducts.value, segment)
     .filter(row => row.id !== collectionId.value))
 
-useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${collection.value?.name ?? presentation.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
 /** The offer this location shows, resolved through the one selection contract. */
 function priceLabel(product: Product) {

@@ -7,7 +7,7 @@ import BookingDetails from '~/components/dashboard/BookingDetails.vue'
 
 // A booking is reached from Today, which is where Back goes.
 definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug', key: route => `${route.params.orgSlug}:${route.params.bookingType}:${route.params.bookingId}` })
-useSeoMeta({ title: 'Booking details | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Booking details | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const level = useRouteLevel()

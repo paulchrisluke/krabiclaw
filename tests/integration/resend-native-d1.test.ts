@@ -394,7 +394,7 @@ test('an article is announced once as a native Broadcast whose id is stored befo
     const creates = resend.calls.filter(call => call.method === 'POST' && call.path === '/broadcasts')
     assert.equal(creates.length, 1)
     const draft = creates[0]!.body as Record<string, string>
-    assert.deepEqual([draft.segment_id, draft.topic_id, draft.subject, draft.from, draft.send], [SEGMENT, TOPIC, 'Proof article', 'KrabiClaw <hello@krabiclaw.com>', undefined])
+    assert.deepEqual([draft.segment_id, draft.topic_id, draft.subject, draft.from, draft.send], [SEGMENT, TOPIC, 'Proof article', 'Krabiclaw <hello@krabiclaw.com>', undefined])
     assert.ok(draft.html.includes('{{{RESEND_UNSUBSCRIBE_URL}}}'))
     assert.ok(!draft.html.includes('/api/public/notifications/unsubscribe'))
     // The reconciliation ran before the draft was created.

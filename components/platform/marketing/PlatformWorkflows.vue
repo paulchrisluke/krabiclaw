@@ -47,7 +47,7 @@ export interface PlatformWorkflow {
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
-/** KrabiClaw's verticals each carry their own accent; the page says which. */
+/** Krabiclaw's verticals each carry their own accent; the page says which. */
 const accent = computed<'primary' | 'teal' | 'navy'>(() => (
   props.page.path === '/experiences' ? 'teal' : props.page.path === '/legal' ? 'navy' : 'primary'))
 
