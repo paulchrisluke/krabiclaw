@@ -23,6 +23,7 @@
           <span class="text-default">{{ title }}</span>
           <template v-if="titleMuted"><br><span class="text-muted font-bold">{{ titleMuted }}</span></template>
         </h2>
+        <TenantPageMarkdown v-if="description" :content="description" class="text-lg leading-relaxed text-muted m-0 [&_a]:text-primary [&_a]:underline" />
       </div>
       <div class="grid md:grid-cols-3 gap-5">
         <div
@@ -137,6 +138,7 @@ const isPlans = computed(() => blockText(props.block.data.source) === 'billing_p
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const titleMuted = computed(() => blockTextOrNull(props.block.data.title_muted))
+const description = computed(() => blockTextOrNull(props.block.data.description))
 const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.data.items).map(item => ({
   title: blockText(item.title),
   description: blockText(item.description),
