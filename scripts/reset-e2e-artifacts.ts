@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnYarn } from './utils/spawn-yarn.mjs'
 
-// 'platform' is KrabiClaw's own organization in the fixture snapshot.
+// 'platform' is Krabiclaw's own organization in the fixture snapshot.
 const FIXTURE_ORG_IDS = [
   'platform',
   'org-demo',

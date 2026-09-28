@@ -1,8 +1,8 @@
 <template>
   <div class="min-h-screen flex items-center justify-center bg-default px-6 py-12">
     <div class="w-full max-w-sm text-center">
-      <!-- KrabiClaw's mark is its own error page's; a tenant's is its own. -->
-      <img v-if="isPlatform" src="/krabi-claw-logo.png" alt="KrabiClaw Logo" class="h-8 mb-6 mx-auto">
+      <!-- Krabiclaw's mark is its own error page's; a tenant's is its own. -->
+      <img v-if="isPlatform" src="/krabi-claw-logo.png" alt="Krabiclaw Logo" class="h-8 mb-6 mx-auto">
 
       <p class="text-sm font-medium text-dimmed uppercase tracking-[0.18em] mb-2">
         Error {{ errorStatusCode }}

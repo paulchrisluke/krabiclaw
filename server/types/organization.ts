@@ -32,7 +32,7 @@ export interface UpdateOrganizationSettingsRequest {
   name?: string
   /**
    * The website's publication state, and the only one there is. A tenant moves
-   * between 'active' (Live) and 'inactive' (Draft); 'suspended' is KrabiClaw's
+   * between 'active' (Live) and 'inactive' (Draft); 'suspended' is Krabiclaw's
    * and is rejected here. server/utils/organization-settings.ts enforces it.
    */
   status?: 'active' | 'inactive'

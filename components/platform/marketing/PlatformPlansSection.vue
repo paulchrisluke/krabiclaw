@@ -28,7 +28,7 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { Plan } from '~/composables/usePlans'
 
 /**
- * KrabiClaw's plans, published on KrabiClaw's own pages.
+ * Krabiclaw's plans, published on Krabiclaw's own pages.
  *
  * The block that places this section stores a heading and `source:
  * billing_plans`, nothing else. Every amount, interval, price id and
@@ -84,7 +84,7 @@ useSchemaOrg(() => {
     '@context': 'https://schema.org',
     '@type': 'OfferCatalog',
     '@id': `${pageUrl}#offers`,
-    name: 'KrabiClaw Pricing Plans',
+    name: 'Krabiclaw Pricing Plans',
     itemListElement: offers,
   }
 })

@@ -10,5 +10,5 @@ import OrganizationMembersList from '~/components/dashboard/OrganizationMembersL
 
 definePageMeta({ layout: 'dashboard' })
 
-useSeoMeta({ title: 'Members | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Members | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

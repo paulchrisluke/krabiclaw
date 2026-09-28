@@ -20,7 +20,7 @@
           </div>
           <div>
             <p class="text-xs font-semibold text-muted uppercase tracking-wide">From Paul & Julia</p>
-            <p class="text-xs text-dimmed">Your KrabiClaw team</p>
+            <p class="text-xs text-dimmed">Your Krabiclaw team</p>
           </div>
           <UButton
             icon="i-lucide-x"

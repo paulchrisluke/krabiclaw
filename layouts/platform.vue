@@ -23,7 +23,7 @@ useHead(() => ({
 usePlatformTheme().bootstrap()
 
 useHead({
-  titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'
+  titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
 })
 </script>
 

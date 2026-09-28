@@ -161,5 +161,5 @@ onMounted(async () => {
   }
 })
 
-useSeoMeta({ title: 'Billing | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Billing | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

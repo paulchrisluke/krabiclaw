@@ -285,7 +285,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         { value: 'organization_posts', label: 'Published articles' },
         { value: 'organization_updates', label: 'Social posts' },
         { value: 'calculator', label: 'Pricing calculator' },
-        { value: 'billing_plans', label: 'KrabiClaw plans', platformOnly: true },
+        { value: 'billing_plans', label: 'Krabiclaw plans', platformOnly: true },
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },

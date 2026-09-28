@@ -26,5 +26,5 @@ const route = useRoute()
 const pastOnly = computed(() => route.query.archived !== undefined)
 const firstThread = ref<RouteLocationRaw | null>(null)
 
-useSeoMeta({ title: 'Messages | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Messages | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

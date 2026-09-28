@@ -64,7 +64,7 @@ interface ContentPageSchemaInput {
   breadcrumbs: ContentBreadcrumb[]
   proficiencyLevel?: string | null
   components?: ContentComponent[] | null
-  /** Publisher identity for the Organization/WebSite nodes. Defaults to KrabiClaw (the platform blog's own identity) — tenant callers must pass their own site name/logo/description so a tenant's blog post doesn't get stamped with KrabiClaw as its publisher. */
+  /** Publisher identity for the Organization/WebSite nodes. Defaults to Krabiclaw (the platform blog's own identity) — tenant callers must pass their own site name/logo/description so a tenant's blog post doesn't get stamped with Krabiclaw as its publisher. */
   organizationName?: string | null
   organizationLogoUrl?: string | null
   organizationDescription?: string | null
@@ -104,7 +104,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     if (!value?.url || !value.title) return null
 
     // A tenant's article belongs to the tenant's own site; only a platform
-    // page is KrabiClaw's.
+    // page is Krabiclaw's.
     const origin = isPlatform ? config.public.platformUrl : requestURL.origin
     const pageUrl = normalizeAbsoluteUrl(value.url, origin)
     const organizationRoot = normalizeAbsoluteUrl('/', origin).replace(/\/$/, '')
@@ -175,7 +175,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     }
 
     const tenantPublisherFields = Boolean(value.organizationName?.trim() || value.organizationLogoUrl?.trim() || value.organizationDescription?.trim())
-    const organizationName = value.organizationName?.trim() || 'KrabiClaw'
+    const organizationName = value.organizationName?.trim() || 'Krabiclaw'
     const organizationLogoUrl = value.organizationLogoUrl?.trim()
       ? normalizeAbsoluteUrl(value.organizationLogoUrl.trim(), origin)
       : (tenantPublisherFields ? undefined : `${organizationRoot}/krabi-claw-logo.png`)

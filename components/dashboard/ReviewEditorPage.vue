@@ -125,5 +125,5 @@ function revert() {
 
 provide(reviewEditorKey, { form, saving, saveDisabled, errorMessage, revert, save })
 
-useSeoMeta({ title: 'Review | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Review | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

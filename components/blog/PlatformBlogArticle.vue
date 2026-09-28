@@ -13,7 +13,7 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" organization-name="KrabiClaw" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" organization-name="Krabiclaw" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -190,7 +190,7 @@ const runtimeConfig = useRuntimeConfig()
 const platformOrigin = computed(() => runtimeConfig.public.platformUrl)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value?.title || 'Blog', excerpt: post.value?.excerpt, slug: post.value?.slug || '',
-  baseUrl: platformOrigin.value, publicPath: postPath.value, organizationName: 'KrabiClaw',
+  baseUrl: platformOrigin.value, publicPath: postPath.value, organizationName: 'Krabiclaw',
 }))
 const { canonicalUrl } = useSocialMetadata(() => ({
   template: 'platform' as const,
@@ -199,7 +199,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   title: resolvedSeo.value.title,
   description: resolvedSeo.value.description,
   path: resolvedSeo.value.canonicalUrl,
-  brand: { organizationName: 'KrabiClaw' },
+  brand: { organizationName: 'Krabiclaw' },
   author: authorName.value,
   publishedAt: post.value?.published_at || null,
   discoverability: post.value?.visibility === 'unlisted' ? 'unlisted' : 'listed',

@@ -1,4 +1,4 @@
-// Tenant resolution middleware: every host, KrabiClaw's own included, resolves
+// Tenant resolution middleware: every host, Krabiclaw's own included, resolves
 // to an organization. The organization's template decides whether it renders as
 // the platform (marketing, docs, blog) or as a customer site.
 
@@ -44,7 +44,7 @@ const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
 const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onboarding_status,
              o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical`
 
-// KrabiClaw's own tenant is the one active organization running the platform
+// Krabiclaw's own tenant is the one active organization running the platform
 // template. Platform hosts differ per environment (localhost, staging, the
 // apex), so the host itself is not the key; the template is.
 async function resolvePlatformTenant(db: DbClient): Promise<TenantRow | null> {
@@ -133,7 +133,7 @@ async function resolveRegisteredSubdomainTenant(
  * on its real host, rendered by the real templates, with unpublished content
  * and no caching.
  *
- * `suspended` is KrabiClaw's own hold and is nobody's to look past, the owner's
+ * `suspended` is Krabiclaw's own hold and is nobody's to look past, the owner's
  * preview token included.
  *
  * Returns false when the request may not see this tenant at all.
@@ -201,7 +201,7 @@ export default defineHandler(async (event) => {
   if (previewSlug !== null) {
     // The header names a tenant, so this request is that tenant's or it is
     // nothing. Falling through on an unresolvable slug reached the platform-host
-    // branch below and answered 200 with KrabiClaw's own homepage — a request
+    // branch below and answered 200 with Krabiclaw's own homepage — a request
     // for one site served a different site. Same refusal as an environment
     // alias that does not resolve.
     const tenant = env.db && /^[a-z0-9-]+$/.test(previewSlug)
@@ -230,7 +230,7 @@ export default defineHandler(async (event) => {
     return
   }
 
-  // A platform host serves KrabiClaw's own tenant. Tenant hosts own their public
+  // A platform host serves Krabiclaw's own tenant. Tenant hosts own their public
   // route families.
   if (isPlatformHost(host, env)) {
     const tenant = env.db ? await resolvePlatformTenant(env.db) : null

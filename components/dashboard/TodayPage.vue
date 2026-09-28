@@ -128,7 +128,7 @@ import { bookingCountLabel, resolveAggregateBookingPresentation, type BookingKin
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload, TodayAgendaPayload } from '~/server/utils/dashboard-agenda'
 
-useSeoMeta({ title: 'Today | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Today | Krabiclaw', robots: 'noindex, nofollow' })
 
 type TodayRange = 'today' | 'upcoming'
 

@@ -32,7 +32,7 @@ export interface PublicTemplateDefinition {
    * file claims the path, because a claimed path is one the catch-all cannot
    * reach. `prefixes` are subtrees served as documents. `catchAll` says whether
    * pages/[...tenantPath].vue renders unclaimed paths for this template; every
-   * template sets it, KrabiClaw's own included, because KrabiClaw is a site row
+   * template sets it, Krabiclaw's own included, because Krabiclaw is a site row
    * like any other (#903).
    */
   pageDocuments: {
@@ -103,7 +103,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       catchAll: true,
     },
   },
-  // KrabiClaw's own site: the marketing pages, documentation and blog. It is an
+  // Krabiclaw's own site: the marketing pages, documentation and blog. It is an
   // ordinary site row rendered by the platform layout; the platform host resolves
   // to whichever site owns the apex domain (see server/middleware/tenant-resolution.ts).
   platform: {
@@ -126,7 +126,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       dynamicPrefixes: ['/blog/', '/docs/'],
     },
     nonIndexableExactPaths: [],
-    // KrabiClaw's own marketing pages are ordinary page documents on the
+    // Krabiclaw's own marketing pages are ordinary page documents on the
     // platform site, read by the same loader every customer site uses (#903).
     // The routes that are not editorial — /blog, /docs, /help, /templates,
     // /privacy, /terms — are absent on purpose: they render their own data or
@@ -135,8 +135,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
     pageDocuments: {
       recipes: { home: '/', about: '/about', pricing: '/pricing' },
       // Only a path a route file still claims needs naming here. /experiences is
-      // the Saya catalog's route on a customer host and KrabiClaw's own page on
-      // this one. Everything else KrabiClaw publishes is an unclaimed path the
+      // the Saya catalog's route on a customer host and Krabiclaw's own page on
+      // this one. Everything else Krabiclaw publishes is an unclaimed path the
       // catch-all serves, the same as any tenant's.
       paths: ['/experiences'],
       prefixes: [],
@@ -166,7 +166,7 @@ export function resolvePublicTemplate(input: {
     throw new Error('resolvePublicTemplate() requires a themeId or vertical selector.')
   }
 
-  // KrabiClaw's own template is only ever selected by its theme id; a vertical
+  // Krabiclaw's own template is only ever selected by its theme id; a vertical
   // alone always names a customer template.
   const definitions = Object.values(publicTemplateRegistry).filter(definition => themeId || definition.slug !== 'platform')
   const match = definitions.find((definition) =>
@@ -303,7 +303,7 @@ export const publicTemplateMarketing: Record<MarketedTemplateSlug, TemplateMarke
     displayName: 'Saya',
     tagline: 'Elegant & minimal, built for local businesses',
     summary: 'Editorial restaurant and experience websites with Google Places imports.',
-    description: 'The flagship KrabiClaw theme. Editorial typography, location-centric navigation, and Google Places imports — designed for local businesses that want to look as good online as they do in person.',
+    description: 'The flagship Krabiclaw theme. Editorial typography, location-centric navigation, and Google Places imports — designed for local businesses that want to look as good online as they do in person.',
     supportedVerticals: ['Restaurants', 'Experiences'],
     status: 'available',
     published: true,

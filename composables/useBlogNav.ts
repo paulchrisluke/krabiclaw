@@ -46,7 +46,7 @@ export function useBlogNav() {
   const posts = computed<PublicBlogPost[]>(() => data.value?.posts ?? [])
 
   // Grouped by the category each article carries, the same way every other
-  // site's blog groups: KrabiClaw's used to read a fixed list of six labels,
+  // site's blog groups: Krabiclaw's used to read a fixed list of six labels,
   // so an article filed under anything else was listed nowhere.
   const labelled = computed(() => posts.value.map(post => ({ ...post, label: post.title })))
   const { categories: grouped } = useTenantBlogNav(labelled)

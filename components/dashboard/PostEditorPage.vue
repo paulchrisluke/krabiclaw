@@ -552,7 +552,7 @@ function localizedPostPath(locale: string): string {
 }
 
 useSeoMeta({
-  title: () => `${isNew.value ? 'New post' : editor.form.title || 'Post'} | KrabiClaw Dashboard`,
+  title: () => `${isNew.value ? 'New post' : editor.form.title || 'Post'} | Krabiclaw Dashboard`,
   robots: 'noindex, nofollow',
 })
 provide(postEditorKey, {

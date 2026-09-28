@@ -414,7 +414,7 @@ async function confirmDeleteAccount() {
   }
 }
 
-useSeoMeta({ title: 'Account settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Account settings | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 provide(accountEditorKey, {
   sessionData,
   editing, toggleEdit,

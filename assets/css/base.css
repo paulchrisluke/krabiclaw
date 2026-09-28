@@ -106,7 +106,7 @@
   --divide-color-inverted: var(--ui-border-inverted);
 }
 
-/* ── KrabiClaw brand palette ──────────────────────────────── */
+/* ── Krabiclaw brand palette ──────────────────────────────── */
 :root {
   /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
   font-size: 106%;

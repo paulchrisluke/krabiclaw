@@ -63,7 +63,7 @@ const loading = computed(() => catalog.pending.value && !catalog.collections.val
 const counts = computed(() => countCatalog(catalog.products.value))
 const catalogTitle = computed(() => catalogLabel(vertical, counts.value))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${catalogTitle.value.toLowerCase()}`) : null))
-useSeoMeta({ title: () => `${catalogTitle.value} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${catalogTitle.value} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
 // One row per surface the catalog actually reaches, so a restaurant that sells
 // only food opens straight onto its Menu and never meets an Experiences row it

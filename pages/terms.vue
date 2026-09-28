@@ -2507,7 +2507,7 @@ useSocialMetadata({
   path: '/terms',
   title: 'Terms and Conditions',
   description:
-    'Terms and Conditions for KrabiClaw website builder platform. Read our terms of service for using our SaaS platform.',
+    'Terms and Conditions for Krabiclaw website builder platform. Read our terms of service for using our SaaS platform.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Terms and Conditions', url: '/terms' },

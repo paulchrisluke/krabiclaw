@@ -405,7 +405,7 @@ empty are a modelling error.
 Airbnb has no equivalent, so these are additions rather than parity, and each
 one says so where it lives:
 
-- **Platform accounts.** KrabiClaw runs on KrabiClaw, so its own business's Menu
+- **Platform accounts.** Krabiclaw runs on Krabiclaw, so its own business's Menu
   carries a row no tenant sees: every account on the platform, and
   impersonation. It is gated on the site's template being `platform`, and it
   sits beside Team and Billing because it is about accounts rather than about a

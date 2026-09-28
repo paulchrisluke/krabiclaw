@@ -70,7 +70,7 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   ))
 }
 
-test('KrabiClaw home retains its billing plans after hydration', async ({ page }) => {
+test('Krabiclaw home retains its billing plans after hydration', async ({ page }) => {
   const baseURL = testBaseUrl()
   const response = await openTenantPage(page, `${baseURL}/`, {})
   expect(response?.status()).toBe(200)

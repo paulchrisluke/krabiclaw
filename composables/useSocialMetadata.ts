@@ -58,7 +58,7 @@ export type PageSocialMetadataInput = Omit<SocialPageMetadataInput, 'template' |
   schema?: boolean
 }
 
-const PLATFORM_NAME = 'KrabiClaw'
+const PLATFORM_NAME = 'Krabiclaw'
 const PLATFORM_DESCRIPTION = 'The AI-powered website builder for local businesses. Build your web presence through conversation with ChatGPT.'
 
 function requireMetadata<T>(resolved: T | null): T {
