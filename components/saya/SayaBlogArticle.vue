@@ -1,5 +1,5 @@
 <template>
-  <div v-if="pending" class="mx-auto max-w-3xl space-y-4 px-4 py-16 sm:px-6 lg:px-8">
+  <div v-if="pending" class="mx-auto max-w-3xl space-y-4">
     <div class="h-6 w-1/4 animate-pulse rounded bg-elevated" />
     <div class="h-12 w-3/4 animate-pulse rounded bg-elevated" />
     <div class="mt-8 space-y-3">
@@ -7,15 +7,9 @@
     </div>
   </div>
 
-  <div v-else-if="post" class="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8">
-    <aside class="mb-8 lg:sticky lg:top-28 lg:mb-0 lg:h-fit">
-      <PlatformCommandSearchTrigger v-if="locale === 'en'" surface="tenant_blog" variant="saya" :label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" :aria-label="t('saya.search.dialog_title', { surface: t('saya.footer.blog') })" class="mb-6" />
-      <BlogCategoryNav :categories="categories" :base-path="blogBasePath" :active-slug="post?.slug" />
-    </aside>
-
-    <article class="min-w-0">
+  <article v-else-if="post">
     <div class="mx-auto max-w-4xl">
-    <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" :organization-name="organizationName" :read-minutes="readTime" :blocks="post.content_blocks" template="saya" />
+    <BlogArticleRenderer :title="post.title" :excerpt="post.excerpt" :tags="post.tags" :tag-index-path="blogBasePath" :published-at="post.published_at" :updated-at="post.updated_at" :author-name="authorName" :author-image="authorImage" :organization-name="organizationName" :blocks="post.content_blocks" template="saya" />
 
     <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
       <div>
@@ -32,7 +26,7 @@
         <NuxtLink
           v-for="relatedPost in relatedPosts"
           :key="relatedPost.id"
-          :to="localePath(`${sourceBlogBasePath}/${relatedPost.slug}`)"
+          :to="relatedPost.path"
           class="block rounded-xl border border-default bg-elevated p-5 no-underline transition-shadow hover:shadow-md"
         >
           <h3 class="text-base font-semibold text-default">{{ relatedPost.title }}</h3>
@@ -40,21 +34,18 @@
         </NuxtLink>
       </div>
     </div>
-    </article>
-  </div>
+  </article>
 
-  <div v-else class="mx-auto max-w-3xl px-4 py-32 text-center">
+  <div v-else class="mx-auto max-w-3xl py-32 text-center">
     <h1 class="text-2xl font-bold text-default">{{ t('saya.posts.empty_title') }}</h1>
     <p class="mt-3 text-muted">{{ t('saya.posts.empty_desc') }}</p>
     <PlatformButton :to="blogBasePath" variant="outline" size="sm" class="mt-6">{{ t('saya.posts.view_all') }}</PlatformButton>
   </div>
 
-  <PlatformCommandSearchModal v-if="locale === 'en'" surface="tenant_blog" variant="saya" />
 </template>
 
 <script setup lang="ts">
-import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import { relatedArticles } from '~/composables/usePublishedArticles'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
@@ -62,7 +53,7 @@ import type { PublicLocaleRepresentation } from '~/utils/public-resource-contrac
 const { isTenant, organizationId, organization } = useTenantOrganization()
 if (!isTenant || !organizationId) throw createError({ statusCode: 404 })
 
-const { localePath, t } = useI18n()
+const { t } = useI18n()
 
 interface TenantBlogPost {
   id: string
@@ -71,6 +62,7 @@ interface TenantBlogPost {
   body: string
   excerpt?: string | null
   category?: string | null
+  tags?: string[] | null
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
@@ -79,7 +71,7 @@ interface TenantBlogPost {
   cover?: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null; width: number | null; height: number | null } | null
   social_image?: import('~/utils/social-metadata').SocialImageSource | null
   components?: ContentComponent[]
-  content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
+  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -169,32 +161,13 @@ useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []
 const post = computed(() => data.value?.post ?? null)
 const shell = useOrganizationShellState()
 await shell.ready
-const sourceBlogData = await usePublicPageData({ datasets: ['blog'], routeOwned: false })
-const allPosts = computed(() => (sourceBlogData.blogList.value ?? []) as unknown as TenantBlogPost[])
-const { categories } = useTenantBlogNav(allPosts)
-const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
+const { posts: publishedArticles } = await usePublishedArticles('blog')
+const relatedPosts = computed(() => post.value ? relatedArticles(publishedArticles.value, post.value) : [])
 const organizationName = computed(() => locale === 'en'
   ? (shell.organization.value?.name?.trim() ?? organization?.name?.trim() ?? '')
   : (shell.organization.value?.name?.trim() ?? ''))
 const authorName = computed(() => post.value?.author?.name ?? null)
 const authorImage = computed(() => post.value?.author?.image ?? null)
-const readTime = computed(() => {
-  const words = (post.value?.content_blocks ?? [])
-    .map(block => block.type === 'heading' ? block.data.text : block.data.markdown)
-    .filter(value => typeof value === 'string')
-    .join(' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length
-  return Math.max(1, Math.ceil(words / 200))
-})
-const wasUpdated = computed(() => {
-  if (!post.value?.updated_at || !post.value?.published_at) return false
-  const updatedDate = new Date(post.value.updated_at)
-  const publishedDate = new Date(post.value.published_at)
-  if (Number.isNaN(updatedDate.getTime()) || Number.isNaN(publishedDate.getTime())) return false
-  return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
-})
 
 const renderableComponents = computed(() =>
   structuredComponentsFromBlocks(post.value?.content_blocks ?? []),
@@ -229,6 +202,8 @@ useHead(() => ({
     ...(post.value?.seo_keywords?.trim() ? [{ name: 'keywords', content: post.value.seo_keywords.trim() }] : []),
   ],
 }))
+
+useVideoSchema(() => post.value?.content_blocks, canonicalUrl)
 
 useContentPageSchema(computed(() => {
   if (!post.value) return null

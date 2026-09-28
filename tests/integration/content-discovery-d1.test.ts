@@ -6,7 +6,8 @@ import * as schema from '../../server/db/schema.ts'
 import { createContentDocumentWithBlocks, updateContentDocument } from '../../server/utils/content/documents.ts'
 import { buildPlatformKnowledgeDocuments, buildTenantBlogDocuments } from '../../server/utils/public-search.ts'
 import { listSocialCardOwners } from '../../server/utils/social-card.ts'
-import { listPublicBlogSummaries } from '../../server/utils/professional-services.ts'
+import { listPublishedArticles } from '../../server/utils/content/publishing.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('public discovery resolves translations through current publication owners', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
@@ -16,6 +17,8 @@ test('public discovery resolves translations through current publication owners'
   } }] })
   try {
     const db = await runtime.getD1Database('DB')
+    const env = { ...await runtime.getBindings<CloudflareEnv>(), BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example',
+      STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example' }
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
     for (const id of ['platform', 'tenant', 'other']) {
@@ -55,14 +58,16 @@ test('public discovery resolves translations through current publication owners'
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'guide'))
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'about'))
     assert(!cards.some(owner => owner.owner_type === 'content_document' && ['home', 'future'].includes(owner.owner_id)))
-    const translated = await listPublicBlogSummaries(db, 'tenant', 50, 'th')
-    assert.deepEqual(translated.map(row => [row.id, row.title, row.excerpt, row.canonical_url]), [
-      ['tenant-story', 'Translated story', 'Translated summary', '/th/blog/translated'],
+    // A translated list is readable only where the language is published on a Growth site.
+    await db.prepare("INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-tenant','growth','tenant','active',4102444800)").run()
+    const translated = await listPublishedArticles(db, env, 'tenant', 'blog', 'th')
+    assert.deepEqual(translated.map(row => [row.root_id, row.title, row.excerpt, row.slug]), [
+      ['tenant-story', 'Translated story', 'Translated summary', 'translated'],
     ])
     const source = await db.prepare("SELECT updated_at FROM content_documents WHERE id = 'tenant-story'").first<string>('updated_at')
     assert(source)
     await updateContentDocument(db, 'tenant-story', { expected_updated_at: source, changes: { visibility: 'unlisted' } })
-    assert.deepEqual(await listPublicBlogSummaries(db, 'tenant', 50, 'th'), [])
+    assert.deepEqual(await listPublishedArticles(db, env, 'tenant', 'blog', 'th'), [])
     assert(!(await buildTenantBlogDocuments(db)).some(record => record.id === 'tenant-blog:tenant-story'))
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])
   } finally {

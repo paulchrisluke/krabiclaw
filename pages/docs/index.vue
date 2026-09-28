@@ -47,10 +47,6 @@
         Loading documentation...
       </div>
 
-      <div v-else-if="docsError" class="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-600">
-        Failed to load documentation.
-      </div>
-
       <div v-else-if="startSetupDocs.length" class="grid gap-4 md:grid-cols-2">
         <NuxtLink
           v-for="doc in startSetupDocs"
@@ -181,13 +177,11 @@
 
 <script setup lang="ts">
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
-definePageMeta({ layout: 'docs' })
+definePageMeta({ layout: 'articles', articleCollection: 'docs' })
 
-const { articles, pending, error: docsError } = await useDocsArticles()
-
-if (docsError.value) {
-  throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation' })
-}
+// Only Krabiclaw's own site publishes documentation.
+if (usePublicTemplate().template.value.slug !== 'platform') throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+const { posts: articles, pending } = await usePublishedArticles('docs')
 
 // The index cards read from the same article list as the sidebar; each card is the
 // article's title, excerpt and category.

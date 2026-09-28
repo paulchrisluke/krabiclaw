@@ -22,16 +22,8 @@
           </dl>
         </div>
         <div>
-          <div ref="videoFrame" class="aspect-video overflow-hidden rounded-lg bg-gray-100">
-            <iframe
-              v-if="showVideo && videoUrl"
-              :title="videoTitle || title"
-              :src="videoUrl"
-              loading="lazy"
-              allow="encrypted-media"
-              allowfullscreen
-              class="size-full object-cover object-center"
-            />
+          <div class="overflow-hidden rounded-lg bg-gray-100">
+            <ContentVideoEmbed v-if="block.data.video_url" :url="block.data.video_url" :title="videoTitle || title" />
           </div>
           <div v-if="images.length" class="mt-4 grid grid-cols-2 gap-4 sm:mt-6 sm:gap-6 lg:mt-8 lg:gap-8">
             <div v-for="image in images" :key="image.url" class="aspect-square overflow-hidden rounded-lg bg-gray-100">
@@ -48,12 +40,11 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockRecords, blockMedia } from '~/utils/tenant-page-block-data'
-import { shallowRef } from 'vue'
+import ContentVideoEmbed from '~/components/content/ContentVideoEmbed.vue'
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 const title = computed(() => blockText(props.block.data.title))
 const accent = computed(() => blockTextOrNull(props.block.data.accent))
-const videoUrl = computed(() => blockTextOrNull(props.block.data.video_url))
 const videoTitle = computed(() => blockTextOrNull(props.block.data.video_title))
 const features = computed(() => blockRecords(props.block.data.items)
   .map(item => ({ name: blockText(item.title), desc: blockText(item.description) }))
@@ -61,24 +52,4 @@ const features = computed(() => blockRecords(props.block.data.items)
 const images = computed(() => blockMedia(props.block, 'gallery')
   .map(item => ({ url: item.public_url ?? '', alt: item.alt_text ?? null }))
   .filter(image => image.url))
-
-const videoFrame = shallowRef<Element | null>(null)
-const showVideo = ref(false)
-let videoObserver: IntersectionObserver | null = null
-
-onMounted(() => {
-  if (!videoUrl.value || !videoFrame.value) return
-  videoObserver = new IntersectionObserver((entries) => {
-    if (!entries.some(entry => entry.isIntersecting)) return
-    showVideo.value = true
-    videoObserver?.disconnect()
-    videoObserver = null
-  }, { rootMargin: '200px 0px' })
-  videoObserver.observe(videoFrame.value)
-})
-
-onUnmounted(() => {
-  videoObserver?.disconnect()
-  videoObserver = null
-})
 </script>

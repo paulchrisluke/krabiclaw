@@ -110,6 +110,20 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       outputSchema: blogPostMutationResultObject,
     }),
   organizationTool({
+      name: 'reorder_docs',
+      description: "KrabiClaw's own site only: set the order documentation is read in, which also orders its categories (a category sits where its first article does). Send every docs article id exactly once, drafts included, in the intended order; a partial order is rejected. Blog articles are ordered by publish date and have no order to set.",
+      domain: 'blog',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: { post_ids: { type: 'array', items: { type: 'string' }, minItems: 1 } },
+      required: ['post_ids'],
+      outputSchema: {
+        type: 'object',
+        properties: { posts: { type: 'array', items: blogPostSummaryObject } },
+        required: ['posts'],
+      },
+    }),
+  organizationTool({
       name: 'delete_blog_post',
       description: 'Delete a blog post.',
       domain: 'blog',

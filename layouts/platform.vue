@@ -1,11 +1,12 @@
 <template>
   <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
-    <PlatformHeader />
+    <PlatformHeader :section="section" />
     <main class="grow">
       <slot />
     </main>
     <LazyPlatformFooter />
-    <PlatformCommandSearchModal surface="public" />
+    <!-- An article page searches its own collection; the articles layout mounts that one. -->
+    <PlatformCommandSearchModal v-if="section === 'platform'" surface="public" />
   </div>
 </template>
 
@@ -19,6 +20,11 @@ const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 useHead(() => ({
   link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
 }))
+
+// Krabiclaw's blog and docs pages name their collection; the header says which.
+const route = useRoute()
+const section = computed(() => route.meta.articleCollection === 'docs' ? 'docs' as const
+  : route.meta.articleCollection === 'blog' ? 'blog' as const : 'platform' as const)
 
 usePlatformTheme().bootstrap()
 

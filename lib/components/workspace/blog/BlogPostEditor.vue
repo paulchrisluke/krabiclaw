@@ -20,15 +20,9 @@
       <template v-else>
       <div class="overflow-hidden rounded-lg bg-[var(--editor-canvas,#fff)] text-[var(--editor-ink,#1f2937)]" :style="editorCanvasStyle">
         <div class="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-          <BlogArticleView
+          <BlogArticleRenderer
             v-model:title="form.title"
             :excerpt="form.excerpt || null"
-            :category="form.category || null"
-            :published-at="post?.published_at || post?.created_at || null"
-            :updated-at="post?.updated_at || null"
-            :author-name="resolvedOrganizationName"
-            :organization-name="resolvedOrganizationName"
-            :read-minutes="readMinutes"
             :blocks="blocks"
             :template="templateName"
             editable
@@ -61,7 +55,7 @@
               -->
               <UInput class="mt-2 w-full" :model-value="String(block.data.caption || '')" placeholder="Caption" @update:model-value="value => setBlockData(index, 'caption', value)" />
             </template>
-          </BlogArticleView>
+          </BlogArticleRenderer>
         </div>
       </div>
 
@@ -120,11 +114,12 @@ export const blogEditorKey = Symbol('blog-editor') as InjectionKey<BlogEditor>
 
 <script setup lang="ts">
 import { instantDate } from '~/utils/timezone'
-import BlogArticleView from '~/components/blog/BlogArticleView.vue'
+import BlogArticleRenderer from '~/components/blog/BlogArticleRenderer.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'
+import { youTubeVideoId } from '~/shared/youtube-video'
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
 import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogSeo, scheduledLifecycleValue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
@@ -204,7 +199,6 @@ const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statu
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedOrganizationName = computed(() => post.value?.editor_organization_name || '')
-const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => tenantBlogPostPath({ themeId: publicTemplateRegistry[templateName.value].themeId }, slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, form.collection))
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, excerpt: form.excerpt || resolvedExcerpt.value, slug: form.slug || generatedSlug.value, baseUrl: windowOrigin(), publicPath: publicPath.value, organizationName: resolvedOrganizationName.value }))
 /**
@@ -295,7 +289,7 @@ const saveLabel = computed(() => {
   if (saveState.value === 'conflict') return 'Conflict — reload to reconcile'
   return dirtyState.value ? 'Unsaved changes' : 'Saved'
 })
-type InserterBlockType = 'image' | 'faq' | 'how_to' | 'cta' | 'divider'
+type InserterBlockType = 'image' | 'video' | 'faq' | 'how_to' | 'cta' | 'divider'
 
 /**
  * Writes the article as the canvas holds it and takes back what the canvas
@@ -304,6 +298,10 @@ type InserterBlockType = 'image' | 'faq' | 'how_to' | 'cta' | 'divider'
  */
 async function saveArticle() {
   if (!post.value || !contentDirty.value) return post.value
+  // A started video block is written with the rest, so it has to be finished first:
+  // the server refuses the whole document for one video without a link or a title.
+  assertVideosComplete()
+  actionError.value = ''
   saveState.value = 'saving'
   const payload = buildSavePayload()
   try {
@@ -331,7 +329,7 @@ async function saveArticle() {
  * picker open on an image block was unmounted mid-choice, which read as "the
  * picker just goes away". Only the id of a block saved for the first time is
  * taken from the server. Blocks the payload did not carry (an image still
- * waiting for its picture) are left exactly as they are.
+ * waiting for its picture, a video for its link) are left exactly as they are.
  */
 function adoptServerBlockIds(sent: BlogEditorBlock[], saved: BlogEditorBlock[]) {
   if (sent.length !== saved.length) return
@@ -342,7 +340,7 @@ function adoptServerBlockIds(sent: BlogEditorBlock[], saved: BlogEditorBlock[]) 
   if (!unsentIds.size) return
   let sentIndex = 0
   for (const [index, block] of blocks.value.entries()) {
-    if (block.type === 'image' && !block.media?.length) continue
+    if (!isSavable(block)) continue
     const id = unsentIds.get(sentIndex)
     if (id && !block.id) blocks.value[index] = { ...block, id }
     sentIndex++
@@ -412,9 +410,22 @@ function markLifecycleDirty() {
 function addCover() {
   blocks.value.unshift({ type: 'image', data: { caption: '' }, media: [] })
 }
-/** What is written: an image block waiting for its picture stays on the canvas and out of the document. */
+/** What is written: an image block waiting for its picture, or a video block for its link, stays on the canvas and out of the document. */
+function isSavable(block: BlogEditorBlock) {
+  return block.type === 'image' ? Boolean(block.media?.length) : block.type === 'video' ? Boolean(block.data.url) : true
+}
+const INCOMPLETE_VIDEO = 'Finish the video block: it needs a YouTube link and a title.'
+function assertVideosComplete() {
+  const incomplete = blocks.value.some(block => block.type === 'video'
+    && Object.values(block.data).some(value => String(value ?? '').trim())
+    && (!youTubeVideoId(block.data.url) || !String(block.data.title ?? '').trim()))
+  if (!incomplete) return
+  actionError.value = INCOMPLETE_VIDEO
+  saveState.value = 'failed'
+  throw new Error(INCOMPLETE_VIDEO)
+}
 function savedBlocks() {
-  return cloneEditorBlocks(toRaw(blocks.value)).filter(block => block.type !== 'image' || block.media?.length)
+  return cloneEditorBlocks(toRaw(blocks.value)).filter(isSavable)
 }
 function buildSavePayload(): BlogPostUpdateInput {
   return { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, visibility: form.visibility, content_blocks: savedBlocks() }
@@ -480,6 +491,7 @@ async function publish() {
   publishing.value = true
   try {
     if (!isArticleValid()) throw new Error('Complete the title and article body before publishing.')
+    assertVideosComplete()
     if (!post.value) {
       const created = await props.repository.create({
         title: form.title,
@@ -530,7 +542,7 @@ function handleInsertBlock(index: number, _cursorPosition: number) {
 // every freshly inserted image block unsavable. `changeImage` writes the chosen
 // asset to `media`; only alt and caption belong here.
 function structuralBlockData(type: string) {
-  return type === 'faq' ? { source: 'page_qa' } : type === 'how_to' ? { steps: [{ text: '' }] } : type === 'image' ? { caption: '' } : type === 'cta' ? { title: '', description: null, label: null, url: null } : {}
+  return type === 'faq' ? { source: 'page_qa' } : type === 'how_to' ? { steps: [{ text: '' }] } : type === 'image' ? { caption: '' } : type === 'video' ? { url: '', title: '', caption: '' } : type === 'cta' ? { title: '', description: null, label: null, url: null } : {}
 }
 // A non-text block (image/FAQ/how-to/divider/etc.) left as the last block in
 // the post is a dead end — there's no textarea or rich editor to click into

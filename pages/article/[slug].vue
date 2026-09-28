@@ -1,95 +1,42 @@
 <template>
-  <NuxtLayout name="blawby">
-    <div v-if="post" data-parity-root>
-      <div class="mx-auto max-w-7xl px-6 pb-12 pt-20 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8 lg:pt-12" data-parity-section="article-content">
-        <!--
-          Sidebar is removed from the mobile document flow entirely (`hidden lg:block`), not
-          just visually collapsed — it used to render above the article on mobile with no
-          breakpoint gate, delaying the headline by roughly a full screen and reading as the
-          page's primary content. It only reappears once the grid actually puts it side by
-                 side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/base.css).
-        -->
-        <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
-          <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="mb-6" />
-          <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" />
-        </aside>
-
-        <div class="min-w-0 text-base leading-6 text-gray-700">
-          <div class="mx-auto max-w-3xl">
-            <!-- Mobile-only compact control replacing the sidebar: search + a drawer with
-                 the same category nav shown in the desktop sidebar. -->
-            <div class="flex items-center gap-3 lg:hidden">
-              <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="flex-1" />
-              <button
-                type="button"
-                class="group flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--blawby-border)] bg-[var(--blawby-surface)] px-3 py-2.5 text-sm font-medium transition hover:border-[var(--blawby-primary)] hover:bg-[var(--blawby-accent-100)]"
-                aria-haspopup="dialog"
-                :aria-expanded="browseTopicsOpen"
-                @click="browseTopicsOpen = true"
-              >
-                <PlatformIcon name="list" class="size-4 shrink-0 text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100" />
-                <span class="text-[var(--blawby-ink)] opacity-60 transition group-hover:opacity-100">{{ t('blawby.article.browse_topics') }}</span>
-              </button>
-            </div>
-            <h3 v-if="displayTags.length" class="mt-6 inline-block rounded bg-[var(--blawby-accent)] px-2 text-sm font-semibold uppercase text-white">
-              <template v-for="(tag, index) in displayTags" :key="tag">
-                <span v-if="index" aria-hidden="true"> · </span>
-                <NuxtLink :to="localePath(`/blog?tags[]=${encodeURIComponent(tag)}`)" class="text-white no-underline">{{ tag }}</NuxtLink>
-              </template>
-            </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="t('saya.search.article')" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author?.name" :author-image="post.author?.image" :organization-name="identity.name" :blocks="post.content_blocks" template="blawby" />
-            <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
-          </div>
-
-          <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
-            <BlawbySectionHeading :title="`${t('blawby.article.from_the')} ${t('saya.footer.blog')}`" :accent="t('saya.footer.blog')" centered />
-            <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
-          </div>
-          <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">
-            <BlawbyButton :to="localePath('/blog')">{{ t('saya.common.view_all') }}</BlawbyButton>
-          </div>
-        </div>
+  <div v-if="post" data-parity-root>
+    <div class="text-base leading-6 text-gray-700" data-parity-section="article-content">
+      <div class="mx-auto max-w-3xl">
+        <BlogArticleRenderer :title="post.title" :excerpt="post.excerpt" :tags="post.tags" :tag-index-path="localePath('/blog')" :published-at="post.published_at" :updated-at="post.updated_at" :author-name="post.author?.name" :author-image="post.author?.image" :organization-name="identity.name" :blocks="post.content_blocks" template="blawby" />
+        <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
       </div>
 
-      <BlawbyConsultationCta
-        v-if="ctaBlockRaw"
-        :block="ctaBlockRaw"
-        :page="articlePage!"
-        :destination-override="consultation.external_url || null"
-        @click="trackConsultation"
-      />
-      <ClientOnly v-if="searchSupportsLocale">
-        <PlatformCommandSearchModal surface="tenant_blog" variant="blawby" />
-      </ClientOnly>
-
-      <!-- Mobile "Browse topics" drawer — same search trigger + category nav as the
-           desktop sidebar, just reachable from the compact control instead of always
-           occupying document flow. -->
-      <PlatformDrawer v-model="browseTopicsOpen" :title="t('blawby.article.browse_topics')">
-        <PlatformCommandSearchTrigger v-if="searchSupportsLocale" surface="tenant_blog" variant="blawby" :label="articleSearchLabel" :aria-label="articleSearchLabel" class="mb-6" @click="browseTopicsOpen = false" />
-        <BlogCategoryNav :categories="categories" base-path="/article" :active-slug="slug" @click="browseTopicsOpen = false" />
-      </PlatformDrawer>
+      <div v-if="relatedPosts.length" class="my-8" data-parity-section="related-articles">
+        <BlawbySectionHeading :title="`${t('blawby.article.from_the')} ${t('saya.footer.blog')}`" :accent="t('saya.footer.blog')" centered />
+        <BlawbyArticleGrid :posts="relatedPosts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+      </div>
+      <div v-if="relatedPosts.length" class="my-4 mb-8 flex justify-center" data-parity-section="related-articles-more">
+        <BlawbyButton :to="localePath('/blog')">{{ t('saya.common.view_all') }}</BlawbyButton>
+      </div>
     </div>
-  </NuxtLayout>
+
+    <BlawbyConsultationCta
+      v-if="ctaBlockRaw"
+      :block="ctaBlockRaw"
+      :page="articlePage!"
+      :destination-override="consultation.external_url || null"
+      @click="trackConsultation"
+    />
+  </div>
 </template>
 
 <script setup lang="ts">
-import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
-import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
+import { relatedArticles } from '~/composables/usePublishedArticles'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
 const { isTenant } = useTenantOrganization()
 if (!isTenant) throw createError({ statusCode: 404 })
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'articles', articleCollection: 'blog' })
 
 const slug = String(useRoute().params.slug || '')
 const { localePath, t } = useI18n()
-const publicLocale = useState<string>('public-locale', () => 'en')
-const searchSupportsLocale = computed(() => publicLocale.value === 'en')
-const articleSearchLabel = computed(() => t('saya.search.dialog_title', { surface: t('saya.search.articles') }))
 const { data, error, shell } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
@@ -101,23 +48,13 @@ const identity = computed(() => shell.value.identity)
 const consultation = computed(() => shell.value.consultation)
 const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
-const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
-if (blogIndexError.value) throw blogIndexError.value
+const { posts: publishedArticles } = await usePublishedArticles('blog')
 const post = computed(() => data.value.post!)
 const articleSocialMedia = computed(() => post.value.cover ?? null)
 const articleSocialImage = computed(() => resolveSocialImageUrl(articleSocialMedia.value))
 const articlePage = computed(() => data.value.page ?? null)
 const ctaBlockRaw = computed(() => articlePage.value?.blocks.find(block => block.type === 'contact_cta') ?? null)
-const displayTags = computed(() => Array.isArray(post.value.tags) ? post.value.tags.slice(1) : [])
-const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
-const relatedPosts = computed(() => {
-  const tags = Array.isArray(post.value.tags) ? post.value.tags : []
-  return blogIndexData.value.posts
-    .filter(item => item.slug !== slug && item.tags.some(tag => tags.includes(tag)))
-    .slice(0, 3)
-})
-const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
-const browseTopicsOpen = ref(false)
+const relatedPosts = computed(() => relatedArticles(publishedArticles.value, post.value))
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
@@ -146,6 +83,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
 
 const blogUrl = useSeoUrl(() => localePath('/blog'))
 const homeUrl = useSeoUrl(() => localePath('/'))
+
+useVideoSchema(() => post.value.content_blocks, canonicalUrl)
 
 useProfessionalServiceSchema(() => ({
   recipe: 'article',
