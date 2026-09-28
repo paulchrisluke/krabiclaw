@@ -29,7 +29,7 @@
         </NuxtLink>
         
         <div class="text-sm text-stone-500">
-          Sign in to your KrabiClaw dashboard to retry site setup.
+          Sign in to your Krabiclaw dashboard to retry site setup.
         </div>
       </div>
 

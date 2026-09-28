@@ -38,7 +38,7 @@ useSocialMetadata({
   path: '/login',
   socialImage: organizationSocialImage,
   title: 'Sign in',
-  description: 'Sign in to your KrabiClaw account to manage your site, bookings and content.',
+  description: 'Sign in to your Krabiclaw account to manage your site, bookings and content.',
   discoverability: 'private',
 })
 

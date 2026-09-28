@@ -195,7 +195,7 @@ useSocialMetadata(() => ({
 /* Saya theme CSS variables */
 .saya-theme {
   /* A site that has not chosen a colour yet wears the platform's, so the first
-     preview in onboarding already looks like KrabiClaw rather than a green
+     preview in onboarding already looks like Krabiclaw rather than a green
      nobody picked. themeStyles above replaces both values the moment the owner
      answers the brand step. */
   --brand-color: var(--kc-coral);

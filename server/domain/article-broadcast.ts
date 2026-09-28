@@ -26,6 +26,18 @@ const ANNOUNCEABLE_WINDOW_MS = 24 * 60 * 60 * 1000
 
 const BROADCAST_CATEGORY = 'product_news' as const
 
+/**
+ * Resend caps a Broadcast's `name` at 70 characters and refuses the draft
+ * past that, which is how the first real announcement never left D1: its
+ * title alone was 67. The name is the label in Resend's dashboard, nothing a
+ * reader sees, so it is cut; the subject carries the whole title.
+ */
+const RESEND_BROADCAST_NAME_MAX = 70
+
+export function broadcastName(title: string): string {
+  return `Article: ${title}`.slice(0, RESEND_BROADCAST_NAME_MAX)
+}
+
 export interface AnnounceableArticle {
   id: string
   title: string
@@ -212,7 +224,7 @@ export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now =
 
     const platformDomain = getPlatformDomain(env)
     // Resend substitutes its Topic-aware unsubscribe page for this placeholder
-    // per recipient; KrabiClaw's signed unsubscribe is for mail it sends itself.
+    // per recipient; Krabiclaw's signed unsubscribe is for mail it sends itself.
     const rendered = await renderNotificationEmail(articleAnnouncementMessage({
       title: article.title,
       summary: article.summary,
@@ -224,7 +236,7 @@ export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now =
       unsubscribeUrl: '{{{RESEND_UNSUBSCRIBE_URL}}}',
     })
     const draft = await resendData('broadcasts.create', () => getResendClient(env).broadcasts.create({
-      name: `Article: ${article.title}`,
+      name: broadcastName(article.title),
       segmentId,
       topicId,
       from: emailSender(env),

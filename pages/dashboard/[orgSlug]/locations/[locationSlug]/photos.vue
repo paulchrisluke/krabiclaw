@@ -417,5 +417,5 @@ watch([photosResource, photosPending, photosError], ([resource, pending, error])
   }
 }, { immediate: true })
 
-useSeoMeta({ title: 'Photos | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Photos | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

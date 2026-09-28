@@ -158,7 +158,7 @@ function postSummary(post: BlogPost): string {
   // Read from the status rather than treating anything unscheduled as live: a
   // draft was announcing itself as published on the row and in the index.
   const parts: string[] = [post.status ? STATUS_LABELS[post.status] ?? post.status : 'Live']
-  // KrabiClaw's own site publishes two collections; the blog is implied everywhere else.
+  // Krabiclaw's own site publishes two collections; the blog is implied everywhere else.
   if (post.collection && post.collection !== 'blog') parts.push(ARTICLE_COLLECTIONS[post.collection].label)
   if (post.category) parts.push(post.category)
   parts.push(postWhen(post))

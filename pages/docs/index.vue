@@ -9,15 +9,15 @@
       />
       <div class="relative max-w-3xl space-y-6">
         <span class="inline-flex items-center rounded-full border border-default px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted">
-          KrabiClaw Docs
+          Krabiclaw Docs
         </span>
         <div class="space-y-4">
           <h1 class="text-4xl font-bold tracking-tight text-default sm:text-5xl">
-            Launch and manage your local business site with KrabiClaw.
+            Launch and manage your local business site with Krabiclaw.
           </h1>
           <p class="max-w-2xl text-lg leading-8 text-muted">
             Set up your site, edit pages, publish updates, connect tools, and manage daily operations from ChatGPT,
-            the KrabiClaw dashboard, or your live website.
+            the Krabiclaw dashboard, or your live website.
           </p>
         </div>
         <div class="flex flex-wrap gap-3">
@@ -39,7 +39,7 @@
         <p class="text-sm font-semibold uppercase tracking-[0.18em] text-muted">Start with setup</p>
         <h2 class="text-3xl font-bold tracking-tight text-default">Get your first version live.</h2>
         <p class="text-base leading-7 text-muted">
-          Connect KrabiClaw to ChatGPT, create your site, choose a template, add your business details, and publish.
+          Connect Krabiclaw to ChatGPT, create your site, choose a template, add your business details, and publish.
         </p>
       </div>
 
@@ -234,7 +234,7 @@ const relatedResources = computed(() => [
   {
     title: 'ChatGPT app setup',
     to: findDocPath('/docs/mcp-setup'),
-    description: 'Connect KrabiClaw in ChatGPT and start editing through conversation.',
+    description: 'Connect Krabiclaw in ChatGPT and start editing through conversation.',
   },
 ].filter((resource): resource is { title: string; to: string; description: string } => Boolean(resource.to)))
 
@@ -245,7 +245,7 @@ useSocialMetadata({
   path: '/docs',
   socialImage: organizationSocialImage,
   title: 'Documentation',
-  description: 'Launch and manage your local business site with KrabiClaw. Set up your site, edit pages, publish updates, connect tools, and manage daily operations.',
+  description: 'Launch and manage your local business site with Krabiclaw. Set up your site, edit pages, publish updates, connect tools, and manage daily operations.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Documentation', url: '/docs' },

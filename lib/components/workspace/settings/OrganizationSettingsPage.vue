@@ -46,7 +46,7 @@ export interface OrganizationSettingsForm {
   social_tiktok_url: string
 }
 
-/** Live and Draft are the tenant's; Suspended is KrabiClaw's hold. */
+/** Live and Draft are the tenant's; Suspended is Krabiclaw's hold. */
 export type OrganizationStatus = 'active' | 'inactive' | 'suspended'
 
 export interface OrganizationSettingsResponse {
@@ -134,7 +134,7 @@ const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 
 // Better Auth owns organization authorization, Stripe delete gating and the
-// organization deletion itself. KrabiClaw contributes only its registered
+// organization deletion itself. Krabiclaw contributes only its registered
 // external-resource cleanup hook.
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
 const deletionConfirmText = ref('')

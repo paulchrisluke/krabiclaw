@@ -48,5 +48,5 @@ const recordTo = computed(() => {
   return search ? `${threadPath.value}/details?${search}` : `${threadPath.value}/details`
 })
 
-useSeoMeta({ title: 'Conversation | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Conversation | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -1,4 +1,5 @@
 import type Stripe from 'stripe'
+import { useRuntimeConfig } from 'nitro/runtime-config'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { getPlanEntitlements } from './billing-entitlements'
 import {
@@ -70,7 +71,7 @@ const STARTER_PLAN: Plan = {
   highlighted: false,
   prices: [],
   features: [
-    'Free KrabiClaw ChatGPT app — build & edit your site by chatting',
+    'Free Krabiclaw ChatGPT app — build & edit your site by chatting',
     'Bookings, ticketed experiences & consultation requests',
     'Email notifications for reservations & bookings',
     'Structured SEO schema for restaurants, experiences & legal practices',
@@ -364,10 +365,15 @@ export async function fetchStripeProducts(
 
 const PLANS_CACHE_TTL_SECONDS = 3600
 
-// The customer-facing catalog has one sales model. A versioned key prevents
-// stale flag-specific snapshots from the retired toggle from being served.
+// The cached catalog carries copy written in this file — the Starter plan's
+// feature lines — as well as Stripe's, so it is the build's to invalidate:
+// keyed by the build id, as the HTML cache is, a deploy that changes the copy
+// is read at once rather than served stale for the hour the TTL allows, which
+// is how the home page kept the old product name after the rename shipped.
 function plansCacheKey(_env: EnvWithOrganizationCache): string {
-  return 'stripe-plans:v5'
+  const buildId = useRuntimeConfig().app?.buildId
+  if (!buildId) throw new BillingPlansError('BILLING_PLANS_UNAVAILABLE', 'Billing plans cache has no build id to key on')
+  return `stripe-plans:v5:${buildId}`
 }
 
 // Single-instance in-flight guard — prevents a cache stampede where multiple

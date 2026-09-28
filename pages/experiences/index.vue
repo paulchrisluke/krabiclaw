@@ -8,7 +8,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
-// On KrabiClaw's own host /experiences sells the product and is a published
+// On Krabiclaw's own host /experiences sells the product and is a published
 // platform page document (#903). On a customer host it is that site's bookable
 // catalog, unchanged, in the Saya markup it has always used.
 const { isPlatform } = useTenantOrganization()

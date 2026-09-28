@@ -34,8 +34,13 @@ export interface PublicProductLocation {
   feature_overrides: string | null
   /** The zone this branch states its times in — what turns a session into a wall clock. */
   timezone: string | null
-  /** Where a guest turns up: the branch's own address, phone and map, as the row stores them. */
-  address: string | null
+  /**
+   * Where a guest turns up. Parsed at the row boundary, because a localized
+   * page lays its translated address parts over this one and needs an object
+   * to lay them on: handed the stored string, the translation replaced it
+   * whole and every /th product page lost its regionCode and 500'd.
+   */
+  address: PostalAddress | null
   phone: string | null
   maps_url: string | null
   latitude: number | null
@@ -44,14 +49,17 @@ export interface PublicProductLocation {
 
 /** The branch as the product page sends it to the browser. */
 export function publicLocationPayload(location: PublicProductLocation): PublicProductLocationPayload {
-  return {
-    id: location.id, slug: location.slug, title: location.title, timezone: location.timezone,
-    address: parsePostalAddress(location.address), phone: location.phone, maps_url: location.maps_url,
-    latitude: location.latitude, longitude: location.longitude,
-  }
+  const { feature_overrides: _featureOverrides, ...payload } = location
+  return payload
 }
 
-export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides' | 'address'> & { address: PostalAddress | null }
+export type PublicProductLocationPayload = Omit<PublicProductLocation, 'feature_overrides'>
+
+type PublicProductLocationRow = Omit<PublicProductLocation, 'address'> & { address: string | null }
+
+function publicProductLocation(row: PublicProductLocationRow): PublicProductLocation {
+  return { ...row, address: parsePostalAddress(row.address) }
+}
 
 export interface PublicProductCollection {
   organization: PublicProductOrganizationRow
@@ -149,13 +157,13 @@ export async function loadPublicProductCollection(
 ): Promise<PublicProductCollection | null> {
   const resolved = await loadProductOrganization(db, organizationId, routeKind, previewAuthorized)
   if (!resolved) return null
-  const locationRows = await queryAll<PublicProductLocation>(db, `
+  const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ? AND status = 'active'
        ${locationSlug ? 'AND slug = ?' : ''}
      ORDER BY title, id
-  `, [organizationId, ...(locationSlug ? [locationSlug] : [])])
+  `, [organizationId, ...(locationSlug ? [locationSlug] : [])])).map(publicProductLocation)
   if (locationSlug && locationRows.length !== 1) return null
   const locations = locationRows.filter(location => locationHasProducts(resolved.organization, location))
   if (locationSlug && locations.length !== 1) return null
@@ -225,7 +233,7 @@ export async function loadPublicProductDetail(
   const localizedLocationPath = `/${locale}/locations/${locationSlug}`
   const locationId = resolveLocalizedRouteResourceId(localizations, 'business_location', localizedLocationPath)
   if (!locationId) return null
-  const sourceLocation = await queryFirst<PublicProductLocation>(db, `
+  const sourceLocation = await queryFirst<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude FROM business_locations
      WHERE organization_id = ?  AND id = ? AND status = 'active' LIMIT 1
   `, [resolved.organization.id, locationId])
@@ -296,12 +304,12 @@ export async function loadPublicExperienceDetail(
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
-  const locationRows = await queryAll<PublicProductLocation>(db, `
+  const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
      WHERE organization_id = ?  AND status = 'active'
      ORDER BY title, id
-  `, [resolved.organization.id])
+  `, [resolved.organization.id])).map(publicProductLocation)
   const locations = locationRows.filter(location => offeredAt.has(location.id) && locationHasProducts(resolved.organization, location))
   if (locations.length !== 1) return null
   const location = locations[0]!

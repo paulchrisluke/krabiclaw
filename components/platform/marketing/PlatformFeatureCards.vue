@@ -1,6 +1,6 @@
 <template>
   <!--
-    A grid whose rows are KrabiClaw's plans is the plans section. `source` is a
+    A grid whose rows are Krabiclaw's plans is the plans section. `source` is a
     declared field on this block and the component reads it, the same way a
     Saya grid reads its own: the map keys presentation on the template and the
     block type, and what the block says about its own rows stays the block's.
@@ -23,6 +23,7 @@
           <span class="text-default">{{ title }}</span>
           <template v-if="titleMuted"><br><span class="text-muted font-bold">{{ titleMuted }}</span></template>
         </h2>
+        <TenantPageMarkdown v-if="description" :content="description" class="text-lg leading-relaxed text-muted m-0 [&_a]:text-primary [&_a]:underline" />
       </div>
       <div class="grid md:grid-cols-3 gap-5">
         <div
@@ -124,7 +125,7 @@ export interface PlatformFeatureCard {
 }
 
 /**
- * A grid of features, in the three shapes KrabiClaw's pages draw it: the
+ * A grid of features, in the three shapes Krabiclaw's pages draw it: the
  * homepage band, the Features page's detailed cards, and the vertical pages'
  * plain grid.
  */
@@ -132,11 +133,12 @@ const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 import PlatformPlansSection from '~/components/platform/marketing/PlatformPlansSection.vue'
 
-/** KrabiClaw's own plans, read from billing rather than written into a page. */
+/** Krabiclaw's own plans, read from billing rather than written into a page. */
 const isPlans = computed(() => blockText(props.block.data.source) === 'billing_plans')
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const titleMuted = computed(() => blockTextOrNull(props.block.data.title_muted))
+const description = computed(() => blockTextOrNull(props.block.data.description))
 const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.data.items).map(item => ({
   title: blockText(item.title),
   description: blockText(item.description),

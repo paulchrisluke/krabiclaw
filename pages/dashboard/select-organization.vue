@@ -53,7 +53,7 @@ import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
 
 // No organization scope yet, so no dashboard chrome and no scoped context.
 definePageMeta({ layout: 'standalone' })
-useSeoMeta({ title: 'Choose a business | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Choose a business | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()
 const session = authClient.useSession()

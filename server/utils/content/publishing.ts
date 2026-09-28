@@ -374,7 +374,7 @@ async function contentReviewUrls(
   env?: CloudflareEnv,
 ) {
   const id = String(record.id ?? '')
-  // Every site's articles, KrabiClaw's included, are edited in the shared dashboard CMS.
+  // Every site's articles, Krabiclaw's included, are edited in the shared dashboard CMS.
   const adminEditUrl = context ? `/dashboard/${context.orgSlug}/blog/${id}` : null
   const isPublished = typeof record.status === 'string' ? record.status === 'published' : Boolean(record.published_at)
 
@@ -413,10 +413,10 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
   return { orgSlug: organization.slug }
 }
 
-// KrabiClaw's own collections have fixed category taxonomies because the category
+// Krabiclaw's own collections have fixed category taxonomies because the category
 // shapes the URL; a tenant's blog category is free text.
 function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: boolean, operation: 'create' | 'update') {
-  if (isTenant && input.collection !== undefined && input.collection !== null && input.collection !== 'blog') badRequest('Only KrabiClaw\'s own site publishes collections other than the blog')
+  if (isTenant && input.collection !== undefined && input.collection !== null && input.collection !== 'blog') badRequest('Only Krabiclaw\'s own site publishes collections other than the blog')
   const writable = new Set<string>([...BLOG_UPDATE_MUTATION_FIELDS, ...(operation === 'create' ? [] : ['expected_updated_at'])])
   if (operation === 'create') { writable.delete('redirect_old_slug'); writable.delete('reset_slug_override') }
   const unknown = Object.keys(input).find(field => !writable.has(field))
@@ -433,7 +433,7 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
 }
 
 /**
- * KrabiClaw's published articles in one collection. The blog reads newest first;
+ * Krabiclaw's published articles in one collection. The blog reads newest first;
  * documentation reads in its editorial order (sort_order, then title).
  */
 export async function listPublicPlatformBlogPosts(db: DbClient, collection: ArticleCollection = 'blog') {

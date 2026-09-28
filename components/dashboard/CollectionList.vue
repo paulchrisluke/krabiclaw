@@ -120,7 +120,7 @@ const orderError = ref<string | null>(null)
 
 const listItems = computed(() => onSurface.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
 const loadError = computed(() => (catalog.error.value ? getErrorMessage(catalog.error.value, `Failed to load ${presentation.value.collectionGroupLabelPlural.toLowerCase()}`) : null))
-useSeoMeta({ title: () => `${presentation.value.collectionLabel} | KrabiClaw Dashboard`, robots: 'noindex, nofollow' })
+useSeoMeta({ title: () => `${presentation.value.collectionLabel} | Krabiclaw Dashboard`, robots: 'noindex, nofollow' })
 
 const load = catalog.refresh
 

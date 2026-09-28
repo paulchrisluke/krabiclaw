@@ -501,5 +501,5 @@ watch(addModalOpen, (open) => {
 
 await loadDomains()
 
-useSeoMeta({ title: 'Domains | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Domains | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>

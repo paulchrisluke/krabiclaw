@@ -9,7 +9,7 @@
     @save="editor.save"
   >
     <div class="space-y-6">
-      <!-- KrabiClaw's own site publishes two collections; a category is the author's own word in both. -->
+      <!-- Krabiclaw's own site publishes two collections; a category is the author's own word in both. -->
       <UFormField v-if="editor.isPlatformTemplate.value" label="Collection">
         <USelect v-model="editor.form.collection" :items="editor.collectionOptions" value-key="value" class="w-full" />
       </UFormField>

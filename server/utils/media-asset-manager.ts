@@ -559,7 +559,7 @@ export async function updateMediaAssetMetadata(
 
   params.push(id, organizationId)
   const [result] = await executeBatch(db, [
-    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? `, params },
+    { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND organization_id = ?`, params },
     publicResourceCacheInvalidationQuery(organizationId, 'media-update'),
   ])
   return Number(result?.meta?.changes ?? 0) > 0

@@ -14,8 +14,10 @@ import { configuredMetaApps, verifyMetaSignedRequest } from '~/server/utils/meta
  * and the linked account are gone. The tenant's own posts, including ones
  * published to that Page, stay; only their link to it goes.
  *
- * It deletes Meta's data, not the customer: a workspace is deleted by its
- * owner through Better Auth's organization deletion, never by this request.
+ * It deletes Meta's data, not the customer. A Krabiclaw workspace is deleted
+ * by its owner through Better Auth's organization deletion; a request from
+ * Meta about one person's Instagram account is not that, and must never
+ * become that.
  *
  * The confirmation code is a signed token naming the verified app and
  * subject, so the status URL re-checks the real remaining state. A cleanup

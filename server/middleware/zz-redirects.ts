@@ -24,7 +24,7 @@ const redirects: Record<string, string> = {
 }
 
 /**
- * KrabiClaw's own articles used to carry their category between the prefix and
+ * Krabiclaw's own articles used to carry their category between the prefix and
  * the slug — /blog/{category}/{slug}, /docs/{category}/{slug}, and the same
  * shape for both markdown mirrors. They are addressed by slug now, so any URL
  * published under the old shape keeps working by dropping the segment that

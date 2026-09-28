@@ -2,7 +2,7 @@ import { PLATFORM_TEMPLATE, isBlawbyTemplate, resolvePublicTemplate } from '~/ut
 
 export function usePublicTemplate() {
   const { isPlatform, organization, themeId } = useTenantOrganization()
-  // KrabiClaw's own site has a template like any other site: it renders page
+  // Krabiclaw's own site has a template like any other site: it renders page
   // documents at the paths that template declares (#903). Returning null here
   // made every platform route ask a template that did not exist, which is why
   // the marketing pages had to be hardcoded Vue instead of CMS documents.

@@ -139,7 +139,7 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
   locationVocabularyDefault: 'office/service area',
 }
 
-// KrabiClaw's own site. Its documentation is ordinary page documents under /docs,
+// Krabiclaw's own site. Its documentation is ordinary page documents under /docs,
 // so the pages index lists them without a catalog entry per page. The platform
 // owner's operations (organizations, every domain, platform analytics, staff) are
 // dashboard pages gated on this template, not content managers.

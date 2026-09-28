@@ -87,8 +87,8 @@ export default defineComponent({
                 h('tbody', null, [
                   h('tr', null, [
                     // The mark is whose mail this is: a tenant's logo, or on
-                    // KrabiClaw's own mail the crab. A tenant with no logo is
-                    // named alone; KrabiClaw's mark never stands in for it.
+                    // Krabiclaw's own mail the crab. A tenant with no logo is
+                    // named alone; Krabiclaw's mark never stands in for it.
                     orgName
                       ? (orgLogo
                           ? h('td', { style: 'vertical-align:middle;line-height:0' }, [
@@ -104,7 +104,7 @@ export default defineComponent({
                       : h('td', { style: 'vertical-align:middle;line-height:0' }, [
                           h(EImg, {
                             src: `${origin}/krabi-claw-logo.png`,
-                            alt: 'KrabiClaw',
+                            alt: 'Krabiclaw',
                             width: '32',
                             height: '32',
                             style: 'display:inline-block;vertical-align:middle;width:32px;height:32px',
@@ -126,11 +126,11 @@ export default defineComponent({
             h(ESection, { class: 'email-gutter', style: `padding:40px ${layout.gutter} 40px` }, () => [
               h('div', { class: 'email-divider', style: `border-top:1px solid ${light.border};padding-top:24px` }, [
                 h(EText, { class: 'email-footer', style: `margin:0;${type.footer};color:${light.textDimmed}` }, () => [
-                  `© ${year} KrabiClaw · `,
+                  `© ${year} Krabiclaw · `,
                   h(ELink, { href: origin, style: `color:${light.textMuted};text-decoration:underline` }, () => 'krabiclaw.com'),
                 ]),
                 props.organizationName
-                  ? h(EText, { class: 'email-footer', style: `margin:6px 0 0;${type.footer};color:${light.textDimmed}` }, () => `Sent by ${props.organizationName} via KrabiClaw.`)
+                  ? h(EText, { class: 'email-footer', style: `margin:6px 0 0;${type.footer};color:${light.textDimmed}` }, () => `Sent by ${props.organizationName} via Krabiclaw.`)
                   : null,
                 // Preferences first: someone who only wants less of one thing
                 // should not have to switch the category off to get it.

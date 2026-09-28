@@ -32,7 +32,7 @@ export const PUBLIC_SUPPORT_ROUTE_CARDS: PublicSupportRouteCard[] = [
 ]
 
 export const PUBLIC_SUPPORT_TOPICS: PublicSupportTopic[] = [
-  { label: 'KrabiClaw Platform', value: 'platform' },
+  { label: 'Krabiclaw Platform', value: 'platform' },
   { label: 'ChowBot', value: 'chowbot' },
 ]
 

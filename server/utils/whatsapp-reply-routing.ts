@@ -118,7 +118,7 @@ export function buildReplyFailedMessage(error: string): string {
 }
 
 export const PROMPT_QUOTE_NOTIFICATION_MESSAGE =
-  'To reply to a guest, please quote their notification message. To manage your site, please open your KrabiClaw dashboard.'
+  'To reply to a guest, please quote their notification message. To manage your site, please open your Krabiclaw dashboard.'
 
 export function buildCollectReplyPrompt(guestEmailMasked: string): string {
   return `Type your reply now — it will be emailed to ${guestEmailMasked}.`
