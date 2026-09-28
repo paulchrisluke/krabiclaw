@@ -34,8 +34,6 @@
 
     <div class="mt-6 space-y-3">
       <AuthGoogleButton label="Sign up with Google" :loading="loading" @activate="googleSignup" />
-      <AuthWhatsAppButton label="Sign up with WhatsApp" :disabled="loading" @activate="showPhone = !showPhone" />
-      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" verify-label="Continue with WhatsApp" @verified="whatsAppSignupComplete" />
       <USeparator label="or use email" />
       <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
     </div>
@@ -74,7 +72,6 @@ const verificationCallback = computed(() => {
   return url.toString()
 })
 const { loading, error, signInWithGoogle } = useAuthOperation()
-const showPhone = ref(false)
 const pendingEmail = ref('')
 const resending = ref(false)
 const resendNotice = ref<string | null>(null)
@@ -120,10 +117,5 @@ async function resendVerification() {
   } finally {
     resending.value = false
   }
-}
-
-function whatsAppSignupComplete() {
-  trackSignUp('whatsapp')
-  window.location.href = postLoginUrl.value
 }
 </script>

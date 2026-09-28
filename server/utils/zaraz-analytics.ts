@@ -1,6 +1,6 @@
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
-import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
+import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME, ZARAZ_CONSENT_MODAL_INTRO_HTML } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
@@ -167,14 +167,17 @@ export function platformPageLocationRegex(hostnames: string[]): string {
 function configureZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
   config.consent.enabled = true
-  config.consent.hideModal = false
+  // Analytics is on by default: ZarazConsentNotice grants the purpose on a
+  // first visit and offers Reject, so Zaraz never shows its modal on its own.
+  // The Cookie preferences link still opens it to change the answer.
+  config.consent.hideModal = true
   // Consent is keyed to the cookie name. The previous zone setup was TCF-based
   // and its cf_consent cookies name tcf-purposes-* only, so returning visitors
   // were never asked about kc_analytics and never counted. A new name asks once.
-  config.consent.cookieName = 'kc_analytics_consent'
+  config.consent.cookieName = ZARAZ_CONSENT_COOKIE_NAME
   config.consent.defaultLanguage = 'en'
   config.consent.tcfCompliant = false
-  config.consent.consentModalIntroHTML = 'We use optional analytics to understand site usage and improve our services. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
+  config.consent.consentModalIntroHTML = ZARAZ_CONSENT_MODAL_INTRO_HTML
   config.consent.customCSS = ''
   config.consent.buttonTextTranslations = {
     accept_all: { en: 'Accept all' },

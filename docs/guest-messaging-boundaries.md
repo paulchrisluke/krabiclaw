@@ -4,7 +4,7 @@
 
 This note exists so future sessions do not collapse three different systems into one. References to future sessions are for clarity, not authorization to implement changes.
 
-- **WhatsApp OTP** is owner authentication for using **ChowBot on WhatsApp**.
+- **WhatsApp OTP** verifies a signed-in member's own phone number from their profile, so notifications can reach them on WhatsApp. It is not a way to sign in.
 - **Notifications** are system-generated owner/guest sends from `server/utils/notifications.ts`.
 - **Guest messaging** is the reservation/contact/booking reply flow backed by the canonical `guest_thread_entries` ledger and guest-thread operation service.
 
@@ -17,7 +17,7 @@ This note exists so future sessions do not collapse three different systems into
 
 ## Cleanup direction now
 
-- Do not imply that signing in with WhatsApp OTP enables replying to guests over WhatsApp.
+- Do not imply that a verified WhatsApp number enables replying to guests over WhatsApp.
 - Do not expose owner-side outbound WhatsApp reply for guest submissions until guest delivery is trustworthy.
 - Keep notification CTAs pointing owners into the dashboard inbox, where freeform owner replies are sent by email through the canonical guest-thread operation endpoint.
 

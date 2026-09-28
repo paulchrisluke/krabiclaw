@@ -964,9 +964,11 @@
         </p>
         <p>
           <span style="font-weight: 400"
-            >Krabiclaw uses Cloudflare Zaraz to manage certain consent-gated
-            analytics or advertising tools. Cookie-preference controls govern
-            the technologies presented through that consent system. Certain
+            >Krabiclaw uses Cloudflare Zaraz to load Google Analytics on
+            Krabiclaw and Krabiclaw-powered sites. Google Analytics is on by
+            default; a visitor can turn it off with Reject on the site's
+            analytics notice or through the Cookie Preferences control, and
+            that choice is remembered. Certain
             first-party security, account, session, fraud-prevention, and
             service analytics may continue where permitted by law because they
             are separate from optional third-party advertising or analytics
@@ -1051,9 +1053,9 @@
           <li style="font-weight: 400">
             <strong>MCP telemetry:</strong
             ><span style="font-weight: 400">
-              MCP tool-call telemetry is retained only as reasonably necessary
-              for security, reliability, debugging, and auditing. Krabiclaw does
-              not currently delete it on a fixed schedule.</span
+              MCP tool-call telemetry is retained for security, reliability,
+              debugging, and auditing for up to 180 days from the time the
+              record is created.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -2169,7 +2171,7 @@
           >
         </p>
         <h1><strong>Cookie and Tracking Technologies Notice</strong></h1>
-        <p><strong>Last updated: September 25, 2026</strong></p>
+        <p><strong>Last updated: September 28, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >Krabiclaw and Krabiclaw-powered merchants use cookies and similar
@@ -2226,10 +2228,14 @@
         <h2><strong>Cookie preferences</strong></h2>
         <p>
           <span style="font-weight: 400"
-            >Where the Zaraz consent interface is available, use the site's </span
+            >Google Analytics is on by default. A notice on the site's first
+            page offers Reject, which turns Google Analytics off; the choice is
+            stored in a cookie so the site does not ask again. To change it
+            later, use the site's </span
           ><strong>Cookie Preferences</strong
           ><span style="font-weight: 400">
-            control to review or change available consent choices. You can also
+            control. Either choice leaves Krabiclaw's first-party analytics
+            unchanged. You can also
             restrict or delete cookies through your browser settings, although
             doing so may affect site functionality.</span
           >
