@@ -12,6 +12,7 @@ import { getOrganizationPlan } from '~/server/utils/billing-access'
 import { parsePostalAddress } from '~/utils/postal-address'
 import { readMediaPlacements } from '~/server/utils/media-asset-manager'
 import { loadPublicSocialMedia, type PublicSocialMedia } from '~/server/utils/public-social-image'
+import { mediaStillUrl, resolveOwnerPicture } from '~/shared/media-placement-contract'
 
 /**
  * The tenant's own configuration, read from the `organization` row.
@@ -320,16 +321,25 @@ export async function listDashboardLocations(
     WHERE organization_id = ? AND status = 'active'
     ORDER BY title ASC
   `, [organizationId])
-  const media = await loadPublicSocialMedia(db, organizationId, 'business_location', locations.map(location => location.id))
+  const [media, organizationPlacements] = await Promise.all([
+    loadPublicSocialMedia(db, organizationId, 'business_location', locations.map(location => location.id)),
+    readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId], slot: 'social_share' }),
+  ])
+  const organizationMedia = organizationPlacements.get(organizationId) ?? []
 
   return locations.map((location) => {
     const locationMedia = media.get(location.id)
     if (!locationMedia) throw new Error(`Location ${location.id} media was not loaded`)
+    const hero = locationMedia.media.filter(item => item.slot === 'hero')
     return {
       ...location,
       address: parsePostalAddress(location.address),
       // The location tile shows its hero; the rest of its media is its own screens'.
-      media: locationMedia.media.filter(item => item.slot === 'hero'),
+      media: hero,
+      // The tile's picture, decided by resolveOwnerPicture like every other
+      // owner picture: a hero photo, else the brand's share image, else a
+      // video's poster frame.
+      picture_url: mediaStillUrl(resolveOwnerPicture('business_location', hero, organizationMedia)),
       social_image: locationMedia.social_image,
     }
   })

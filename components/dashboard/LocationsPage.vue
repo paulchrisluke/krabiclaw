@@ -38,7 +38,6 @@ import DashboardOrganizationLocationSelector, { type OrganizationLocationSelecto
 import { dashboardFetch } from '~/composables/dashboardFetch'
 import type { DashboardLocation } from '~/composables/useDashboardOrganization'
 import { getErrorMessage } from '~/utils/errors'
-import { mediaStillUrl, resolveOwnerPicture } from '~/shared/media-placement-contract'
 import { resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type OrganizationVertical } from '~/utils/vertical-copy'
@@ -81,10 +80,7 @@ const tiles = computed<OrganizationLocationSelectorItem[]>(() => locations.value
   return {
     id: location.id,
     label: location.title,
-    // The location's own photograph. The organization's share image is not
-    // passed: a tile that stood in the brand's picture would not tell two
-    // locations apart.
-    imageUrl: mediaStillUrl(resolveOwnerPicture('business_location', location.media, [])),
+    imageUrl: location.picture_url,
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
     to: `/dashboard/${orgSlug.value}/locations/${location.slug}`,

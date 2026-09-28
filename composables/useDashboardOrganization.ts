@@ -35,6 +35,7 @@ export interface DashboardLocation {
   city: string | null
   address: PostalAddress | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
+  picture_url: string | null
   social_image: { url: string; width?: number; height?: number; type?: string } | null
   feature_overrides: string | null
 }
@@ -81,6 +82,7 @@ const isDashboardLocation = (value: unknown): value is DashboardLocation =>
   && typeof value.title === 'string'
   && typeof value.status === 'string'
   && isSocialImage(value.social_image)
+  && (value.picture_url === null || typeof value.picture_url === 'string')
   && isMediaList(value.media)
 
 const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
