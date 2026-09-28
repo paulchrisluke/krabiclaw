@@ -162,7 +162,7 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
         SELECT COALESCE(MAX(sort_order), -1) + 1 FROM content_documents
         WHERE row_role = 'root' AND kind = 'qa' AND organization_id = ? AND ${scoped.clause} AND id <> ?
       ) WHERE id = ?`,
-      params: [scope.organizationId, scope.organizationId, ...scoped.params, id, id],
+      params: [scope.organizationId, ...scoped.params, id, id],
     }] : [],
   })
   const inserted = await queryFirst<{ sort_order: number }>(db, 'SELECT sort_order FROM content_documents WHERE id = ?', [id])
@@ -232,7 +232,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   if (sets.length === 1) throw new Error('No update fields provided')
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
-  params.push(qaId, scope.organizationId, scope.organizationId, ...scoped.params)
+  params.push(qaId, scope.organizationId, ...scoped.params)
   const result = await execute(db, `
     UPDATE content_documents
     SET ${sets.join(', ')}
@@ -244,7 +244,7 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
   const scoped = scopeSql(scope.locationId, scope.pagePath)
-  const params = [qaId, scope.organizationId, scope.organizationId, ...scoped.params]
+  const params = [qaId, scope.organizationId, ...scoped.params]
   const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}`
   const document = await queryFirst<{ id: string }>(db, `SELECT id FROM content_documents WHERE ${where}`, params)
   if (!document) return { status: 404, data: { error: 'Q&A not found' } }
@@ -270,7 +270,7 @@ export async function reorderQa(
     SELECT COUNT(*) AS valid_count
     FROM content_documents
     WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND ${scoped.clause}
-  `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, scope.organizationId, ...scoped.params])
+  `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, ...scoped.params])
   if (Number(validation?.valid_count ?? 0) !== updates.length) {
     throw new Error('Q&A reorder contains records outside the requested scope')
   }
@@ -282,7 +282,7 @@ export async function reorderQa(
       SET sort_order = ?, updated_at = ?
       WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
     `,
-    params: [update.sort_order, now, update.id, scope.organizationId, scope.organizationId, ...scoped.params],
+    params: [update.sort_order, now, update.id, scope.organizationId, ...scoped.params],
   })))
   const changed = results.reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
   if (changed !== updates.length) {
