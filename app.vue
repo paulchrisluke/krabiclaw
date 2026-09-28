@@ -3,6 +3,7 @@
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+  <ZarazConsentNotice />
 </template>
 
 <script setup lang="ts">

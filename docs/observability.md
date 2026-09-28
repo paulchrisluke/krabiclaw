@@ -171,6 +171,10 @@ MCP requests against `server/api/mcp.post.ts` write rows to `mcp_tool_call_event
 
 Captured per row: surface, organization/site/location/user id (best-effort), request id, method, tool name + domain, HTTP status, JSON-RPC error code/message, protocol version, hashed session id, hashed OAuth client id, user agent, Cloudflare ray id, catalog fingerprint, redacted summaries of arguments and result, unknown-tool fields, status (`success` / `error` / `auth_required` / `blocked`), and duration in ms.
 
+Rows are deleted 180 days after `created_at` by `cleanupMcpToolCallEvents()`, which the daily `analytics-aggregate-daily` task (`0 3 * * *`) runs beside the pageview cleanup. This is the limit the Privacy Policy states.
+
+Each `tools/call` with an organization also writes a `usage_events` row (`resource = 'mcp_operation'`). Its `provider` is `mcp_client` for every external MCP client and `krabiclaw` for the public help agent; rows written before this change say `chatgpt`.
+
 ### Redaction
 
 `summarizeForTelemetry()` in `server/utils/mcp-telemetry.ts` is a single generic redactor applied uniformly to every tool's arguments and result. It:

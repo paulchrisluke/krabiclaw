@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Request, type Response } from '@playwright/test'
+import { test, type Page, type Request, type Response } from '@playwright/test'
 import { blawbyTestBaseUrl, blawbyTestExtraHeaders, tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
@@ -12,8 +12,7 @@ export const blawbyExtraHeaders = blawbyTestExtraHeaders()
 
 interface ZarazConsentApi {
   APIReady: boolean
-  modal: boolean
-  getAll: () => Record<string, boolean>
+  get: (_purposeId: string) => boolean | undefined
 }
 
 // Inject extra headers ONLY into requests targeting the tenant's base hostname.
@@ -26,20 +25,6 @@ export async function openTenantPage(page: Page, url: string, headers: Record<st
   if (Object.keys(headers).length) {
     await page.route(`${origin}/**`, async (route) => {
       await route.continue({ headers: { ...route.request().headers(), ...headers } })
-    })
-  }
-
-  if (usesZarazConsent) {
-    await page.addInitScript(() => {
-      const showConsent = () => {
-        const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
-        if (!consent?.APIReady) return
-        const choices = Object.values(consent.getAll())
-        if (!choices.length || !choices.every(Boolean)) consent.modal = true
-      }
-      const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
-      if (consent?.APIReady) showConsent()
-      else document.addEventListener('zarazConsentAPIReady', showConsent, { once: true })
     })
   }
 
@@ -80,22 +65,13 @@ export async function openTenantPage(page: Page, url: string, headers: Record<st
     const response = await page.goto(url, { waitUntil: 'load' })
     stage = 'consent'
     report('loaded')
+    // Analytics is on by default: a visitor who has not rejected has the
+    // Google Analytics purpose granted without clicking anything.
     if (usesZarazConsent) {
       await page.waitForFunction(() => {
         const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
-        return consent?.APIReady === true
+        return consent?.APIReady === true && consent.get('kc_analytics') === true
       })
-      const alreadyAccepted = await page.evaluate(() => {
-        const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
-        if (!consent?.APIReady) return false
-        const choices = Object.values(consent.getAll())
-        return choices.length > 0 && choices.every(Boolean)
-      })
-      if (!alreadyAccepted) {
-        const consentModal = page.getByRole('dialog', { name: 'Cookie Settings' })
-        await consentModal.getByRole('button', { name: 'Accept All' }).click()
-        await expect(consentModal).toBeHidden()
-      }
     }
 
     report('finished')

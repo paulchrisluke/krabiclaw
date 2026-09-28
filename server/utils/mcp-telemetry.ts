@@ -179,7 +179,7 @@ export async function logMcpToolCallEvent(
         organizationId: input.organizationId,
         resource: "mcp_operation",
         source: input.mcpSurface ?? "client",
-        provider: input.mcpSurface === "client" ? "chatgpt" : "krabiclaw",
+        provider: input.mcpSurface === "client" ? "mcp_client" : "krabiclaw",
         channel: "tools/call",
         quantity: 1,
         unit: "tool_call",
@@ -192,4 +192,12 @@ export async function logMcpToolCallEvent(
         idempotencyKey: `mcp:${input.mcpSurface ?? "client"}:${input.requestId == null ? crypto.randomUUID() : String(input.requestId)}`,
     });
   }
+}
+
+// The Privacy Policy's MCP telemetry limit: a row is deleted 180 days after it
+// was created. Runs in the daily analytics task beside the pageview cleanup.
+export async function cleanupMcpToolCallEvents(db: DbClient, now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - 180 * 86_400_000).toISOString();
+  const result = await execute(db, "DELETE FROM mcp_tool_call_events WHERE created_at < ?", [cutoff]);
+  return Number(result.meta.changes);
 }
