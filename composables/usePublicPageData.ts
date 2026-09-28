@@ -124,9 +124,9 @@ export const usePublicPageData = async (options: {
     ...(shell.googleMaps.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
   }))
-  // The site's own published social posts. They were carried under the Google
-  // key, which described neither where they come from nor what they are.
-  const socialPosts = computed(() => data.value?.globalPosts ?? [])
+  // The first page of the route's short-post feed — the location's on a
+  // location route — and the cursor to the next.
+  const postsFeed = computed(() => data.value?.postsFeed ?? null)
   const products = computed(() => data.value?.products ?? []);
   const collections = computed(() => data.value?.collections ?? []);
   /**
@@ -168,7 +168,6 @@ export const usePublicPageData = async (options: {
   const reviewsList = computed(() => (data.value?.reviewsList ?? []) as ApiRecord[]);
   const media = computed(() => (data.value?.media ?? []) as ApiRecord[]);
   const qaList = computed(() => (data.value?.qaList ?? []) as ApiRecord[]);
-  const postsList = computed(() => (data.value?.postsList ?? []) as ApiRecord[]);
   const blogList = computed(() => (data.value?.blogList ?? []) as ApiRecord[]);
   const blogPost = computed(() => (data.value?.blogPost ?? null) as ApiRecord | null);
   const tenantPage = computed(() => data.value?.tenant_page ?? null);
@@ -297,13 +296,12 @@ export const usePublicPageData = async (options: {
     location,
     config,
     googleMaps,
-    socialPosts,
+    postsFeed,
     locationReviews,
     reviewsAggregate,
     reviewsList,
     media,
     qaList,
-    postsList,
     blogList,
     blogPost,
     tenantPage,

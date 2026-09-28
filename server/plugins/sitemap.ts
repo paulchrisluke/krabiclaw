@@ -43,6 +43,14 @@ export default definePlugin((nitroApp) => {
     ctx.sources = []
   })
 
+  /** The organization's listed, published short posts and their feed, on every template. */
+  const socialPostEntries = async (db: DbClient, organizationId: string): Promise<SitemapEntry[]> => {
+    const posts = await queryAll<{ slug: string; updated_at: string }>(db, `SELECT slug, updated_at FROM content_documents
+      WHERE organization_id = ? AND kind = 'social_post' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
+      ORDER BY published_at DESC`, [organizationId])
+    return posts.length ? [{ loc: '/posts' }, ...posts.map(post => ({ loc: `/posts/${post.slug}`, lastmod: post.updated_at }))] : []
+  }
+
   nitroApp.hooks.hook('sitemap:input', async (ctx) => {
     const event = ctx.event
     const hostname = event.url.hostname
@@ -95,6 +103,7 @@ export default definePlugin((nitroApp) => {
         })
       }
 
+      entries.push(...await socialPostEntries(db, platformOrganizationId))
       ctx.urls.length = 0
       addUniqueEntries(ctx.urls, entries)
       return
@@ -229,6 +238,7 @@ export default definePlugin((nitroApp) => {
           lastmod: post.updated_at as string | undefined,
         })
       }
+      entries.push(...await socialPostEntries(db, organizationId))
 
       ctx.urls.length = 0
       addUniqueEntries(ctx.urls, entries)
@@ -349,6 +359,7 @@ export default definePlugin((nitroApp) => {
       ...tenantPages
         .filter(page => page.path)
         .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),
+      ...await socialPostEntries(db, organizationId),
     )
 
     ctx.urls.length = 0

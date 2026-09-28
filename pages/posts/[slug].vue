@@ -1,110 +1,81 @@
 <template>
-  <div v-if="post" class="min-h-screen bg-default text-default">
-    <SayaPostDetail :post="post" :brand="postBrand" />
-  </div>
+  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
+    <template v-if="post">
+      <PlatformPostDetail v-if="isPlatform" :post="post" />
+      <BlawbyPostDetail v-else-if="isBlawby" :post="post" :brand="postBrand" />
+      <div v-else class="min-h-screen bg-default text-default">
+        <SayaPostDetail :post="post" :brand="postBrand" />
+      </div>
+    </template>
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
-import type { PostTopic } from '~/shared/posts'
-definePageMeta({ layout: 'saya' })
+import PlatformPostDetail from '~/components/platform/PlatformPostDetail.vue'
+import { isPublicSocialPost, type PublicSocialPost } from '~/utils/public-resource-contracts'
+import { publicApiRequest, isRecord } from '~/utils/api-clients'
 
-interface PublicPostMedia {
-  asset_id: string
-  public_url: string
-  thumbnail_url: string | null
-  kind: 'image' | 'video'
-  slot: 'cover' | 'gallery'
-  sort_order: number
-  alt_text: string | null
-  width: number | null
-  height: number | null
-}
+definePageMeta({ layout: false })
 
-type PublicPost = PostTopic & {
-  id: string
-  slug: string
-  title: string
-  body: string
-  summary: string
-  published_at: string | null
-  public_path: string
-  canonical_url: string | null
-  media: PublicPostMedia[]
-  social_image: import('~/utils/social-metadata').SocialImageSource | null
-  location_phone: string | null
-  location?: { id: string; title: string | null; slug: string | null } | null
-  localeRepresentations: Array<{ locale: string; label: string; route_path: string; source: 'source' | 'localized' }>
-}
+type DetailPost = PublicSocialPost & { localeRepresentations: Array<{ locale: string; label: string; route_path: string; source: 'source' | 'localized' }> }
 
-const isPublicPostResponse = (value: unknown): value is { post: PublicPost } =>
-  isRecord(value)
-  && isRecord(value.post)
-  && typeof value.post.id === 'string'
-  && typeof value.post.slug === 'string'
-  && typeof value.post.title === 'string'
-  && typeof value.post.body === 'string'
-  && Array.isArray(value.post.localeRepresentations)
-  && value.post.localeRepresentations.every(item => isRecord(item)
-    && typeof item.locale === 'string'
-    && typeof item.label === 'string'
-    && typeof item.route_path === 'string'
-    && (item.source === 'source' || item.source === 'localized'))
+const isPublicPostResponse = (value: unknown): value is { post: DetailPost } =>
+  isRecord(value) && isPublicSocialPost(value.post) && Array.isArray((value.post as unknown as Record<string, unknown>).localeRepresentations)
 
 const route = useRoute()
 const requestEvent = useRequestEvent()
-const { organizationId, organization } = useTenantOrganization()
+const { organizationId, organization, isPlatform, previewAuthorized } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
+const { isBlawby } = usePublicTemplate()
 const { organization: publicOrganization } = useOrganizationShellState()
 const { locale } = useI18n()
 
 const slug = computed(() => String(route.params.slug))
 const organizationName = computed(() => organization?.name?.trim() ?? '')
-const postBrand = computed(() => ({
-  name: organizationName.value,
-  logoUrl: publicOrganization.value?.media.find(item => item.slot === 'logo')?.public_url || null,
-}))
+const logoUrl = computed(() => publicOrganization.value?.media.find(item => item.slot === 'logo')?.public_url || null)
+const postBrand = computed(() => ({ name: organizationName.value, logoUrl: logoUrl.value }))
 
+// One reader for the server render and client navigation: the SSR path calls
+// it directly and the client asks the public API, which calls the same one.
 const { data, error } = await useAsyncData(
-  () => `public-post-${organizationId}-${locale.value}-${slug.value}`,
+  () => `public-post-${organizationId}-${locale.value}-${slug.value}-${previewAuthorized ? 'preview' : 'published'}`,
   async () => {
-    let post: PublicPost | null | undefined
+    let post: DetailPost | null
     if (import.meta.server) {
-      if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
-      const [{ cloudflareEnv }, { getPublishedPostByPublicRoute }] = await Promise.all([
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { getPublicSocialPost }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/post-management'),
       ])
       const env = cloudflareEnv(requestEvent)
-      const db = env.DB
-      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      post = await getPublishedPostByPublicRoute(env, db, organizationId, slug.value, locale.value) as PublicPost | null
+      if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
+      post = await getPublicSocialPost(env, env.DB, organizationId, slug.value, locale.value, previewAuthorized)
     } else {
-      const payload = await publicApiRequest<{ post: PublicPost }>(
-        `/api/public/posts/${encodeURIComponent(slug.value)}`,
-        { query: { locale: locale.value }, validate: isPublicPostResponse },
-      )
-      post = payload.post
+      post = (await publicApiRequest<{ post: DetailPost }>(`/api/public/posts/${encodeURIComponent(slug.value)}`, {
+        query: { locale: locale.value }, validate: isPublicPostResponse,
+      })).post
     }
     if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
     return { post }
   },
 )
-
 if (error.value) throw error.value
-useState<PublicPost['localeRepresentations']>('public-locale-representations', () => []).value = data.value?.post.localeRepresentations ?? []
+useState<DetailPost['localeRepresentations']>('public-locale-representations', () => []).value = data.value?.post.localeRepresentations ?? []
 
 const post = computed(() => data.value?.post ?? null)
-const pagePath = computed(() => post.value?.public_path || `/posts/${slug.value}`)
-const seoTitle = computed(() => post.value?.title || `Update from ${organizationName.value}`)
-const seoDescription = computed(() => post.value?.summary || post.value?.body || `Latest update from ${organizationName.value}.`)
+// A post without a title is described by its own words, and titled by the
+// business that wrote it; nothing is invented for it.
+const seoTitle = computed(() => post.value?.title || post.value?.body?.split('\n').find(line => line.trim())?.slice(0, 70) || organizationName.value)
+const seoDescription = computed(() => post.value?.body || post.value?.title || '')
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
-  path: post.value?.canonical_url || pagePath.value,
+  path: post.value?.url || post.value?.path || `/posts/${slug.value}`,
   title: seoTitle.value,
   description: seoDescription.value,
   pageType: 'article',
   brand: { organizationName: organizationName.value },
   socialImage: post.value?.social_image ?? null,
   publishedAt: post.value?.published_at || null,
+  discoverability: post.value?.status === 'draft' ? 'private' : post.value?.visibility,
 }))
 
 useSchemaOrg([
@@ -116,13 +87,7 @@ useSchemaOrg([
     image: ogImageUrl.value,
     url: canonicalUrl.value,
     author: { '@type': 'Organization', name: organizationName.value },
-    publisher: {
-      '@type': 'Organization',
-      name: organizationName.value,
-      logo: publicOrganization.value?.media.find(item => item.slot === 'logo')?.public_url
-        ? { '@type': 'ImageObject', url: publicOrganization.value.media.find(item => item.slot === 'logo')!.public_url }
-        : undefined,
-    },
+    publisher: { '@type': 'Organization', name: organizationName.value, logo: logoUrl.value ? { '@type': 'ImageObject', url: logoUrl.value } : undefined },
   })),
 ])
 </script>

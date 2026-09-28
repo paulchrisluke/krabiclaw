@@ -9,6 +9,12 @@ export default {
     "terms": "Terms"
   },
   "blawby": {
+    "posts": {
+      "title": "Updates",
+      "view_update": "Read the update",
+      "back": "All updates",
+      "empty": "No updates have been posted yet."
+    },
     "article": {
       "browse_topics": "Browse topics",
       "from_the": "From the"
@@ -26,6 +32,21 @@ export default {
       "legal": "Legal",
       "copyright": "Copyright © {year} {name}. All rights reserved."
     }
+  },
+  "social_posts": {
+    "media_label": "Photos and video ({count})",
+    "play_video": "Play video",
+    "also_on": "Also posted on",
+    "view_on_facebook": "View on Facebook",
+    "view_on_instagram": "View on Instagram",
+    "posted_on_facebook": "Posted on Facebook",
+    "posted_on_instagram": "Posted on Instagram",
+    "share": "Share",
+    "link_copied": "Link copied",
+    "share_unavailable": "Sharing isn't supported on this browser",
+    "share_failed": "Couldn't share this post",
+    "load_more": "Show more updates",
+    "load_failed": "More updates could not be loaded. Try again."
   },
   "saya": {
     "hero": {
@@ -152,21 +173,11 @@ export default {
       "title": "Latest Updates",
       "featured": "Featured",
       "subtitle": "News & Events",
-      "no_preview": "No preview available",
-      "image_alt": "Restaurant update",
-      "business_update": "Business Update",
-      "event_details_label": "Event Details:",
-      "special_offer_label": "Special Offer:",
-      "code_label": "Code:",
       "read_full_story": "Read Full Story",
+      "view_update": "View update",
       "back_to_updates": "Back to updates",
       "view_all": "View All Updates",
       "show_more": "Show more",
-      "show_less": "Show less",
-      "share": "Share",
-      "link_copied": "Link copied",
-      "share_unavailable": "Sharing isn't supported on this browser",
-      "share_failed": "Couldn't share this post",
       "cta_default": "Learn more",
       "remaining": "remaining",
       "empty_title": "Nothing posted yet.",

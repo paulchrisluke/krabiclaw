@@ -84,8 +84,7 @@ export interface PublicPagePayload {
   reviewsList: ApiRecord[]
   media: ApiRecord[]
   qaList: ApiRecord[]
-  postsList: ApiRecord[]
-  globalPosts: ApiRecord[]
+  postsFeed: { posts: PublicSocialPost[]; page_info: { has_more: boolean; next_cursor: string | null } } | null
   blogList: ApiRecord[]
   blogPost: ApiRecord | null
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
@@ -170,9 +169,8 @@ export const isPublicPagePayload = (
   && Array.isArray(value.reviewsList)
   && Array.isArray(value.media)
   && Array.isArray(value.qaList)
-  && Array.isArray(value.postsList)
-  && Array.isArray(value.globalPosts)
-  && value.globalPosts.every(item => isRecord(item) && typeof item.id === 'string')
+  && (value.postsFeed === null || (isRecord(value.postsFeed) && Array.isArray(value.postsFeed.posts)
+    && value.postsFeed.posts.every(isPublicSocialPost) && isRecord(value.postsFeed.page_info)))
   && Array.isArray(value.blogList)
   && (value.blogPost === null || isRecord(value.blogPost))
   && isRecord(value.reservationPolicyByLocation)
@@ -187,3 +185,13 @@ export const isPublicPagePayload = (
     && typeof item.label === 'string'
     && typeof item.route_path === 'string'
     && (item.source === 'source' || item.source === 'localized'))
+
+export type PublicSocialPost = import('~/server/utils/post-management').PublicSocialPost
+
+/** The template-neutral post every social template draws. */
+export function isPublicSocialPost(value: unknown): value is PublicSocialPost {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.slug === 'string' && typeof value.path === 'string'
+    && (value.title === null || typeof value.title === 'string') && (value.body === null || typeof value.body === 'string')
+    && Array.isArray(value.media) && Array.isArray(value.publications)
+    && value.publications.every(item => isRecord(item) && (item.channel === 'facebook' || item.channel === 'instagram') && (item.url === null || typeof item.url === 'string'))
+}

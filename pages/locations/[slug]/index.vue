@@ -169,14 +169,12 @@
       />
 
       <!-- Location posts preview -->
-      <LazySayaPosts
-        v-if="postsList.length"
-        :posts="postsList"
-        :limit="3"
-        :show-view-more="true"
-        :show-empty-state="false"
-        :view-more-to="localePath(`/locations/${slug}/posts`)"
-      />
+      <template v-if="locationPosts.length">
+        <SayaSocialPosts :posts="locationPosts" />
+        <div class="pb-20 text-center">
+          <SayaButton :to="localePath(`/locations/${slug}/posts`)" variant="outline">{{ t('saya.posts.view_all') }}</SayaButton>
+        </div>
+      </template>
 
       <!-- Reviews preview -->
       <section v-if="reviewsPreview.length">
@@ -310,8 +308,9 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
-  postsList,
+  postsFeed,
 } = await usePublicPageData()
+const locationPosts = computed(() => (postsFeed.value?.posts ?? []).slice(0, 3))
 // A slug naming no location is a URL that does not exist. Rendering the page
 // around a null location answered 200 with an empty shell — a soft 404 a
 // crawler indexes. The sibling menu and product indexes already refuse it.

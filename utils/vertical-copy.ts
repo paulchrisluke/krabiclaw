@@ -30,12 +30,10 @@ type VerticalCopy = {
   experiencesPageTitle: string
   experiencesPageSubtitle: string
   locationGroupLine: (_count: number) => string
-  postsEyebrow: string
   bookingNotesPlaceholder: string
   contactLocationsByHeading: string
   contactLocationsByNote: string
   otherLocationsHeading: string
-  highlightsSectionHeading: string
   seoReservationDescription: (_name: string) => string
   seoExperiencesDescription: (_name: string) => string
   viewMenuCta: string
@@ -47,9 +45,7 @@ type VerticalCopy = {
   connectGoogleAddressNote: string
   addSecondLocationNote: string
   connectGoogleCta: string
-  latelyKicker: string
   ourStoryKicker: string
-  readMoreCta: string
   reviewsKicker: string
   guestReviewsLabel: string
   whatGuestsSayLabel: string
@@ -136,14 +132,12 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
         const count = _count
         return `${count} location${count === 1 ? "" : "s"}, one kitchen philosophy.`
       },
-      postsEyebrow: "From the kitchen",
       bookingNotesPlaceholder:
         "Dietary needs, accessibility requests, preferred seating, or celebration notes.",
       contactLocationsByHeading: "Hours, address, phone, for each room.",
       contactLocationsByNote:
         'For full parking, accessibility and policy details, follow the "Plan a visit" link on each card.',
       otherLocationsHeading: "Sister rooms",
-      highlightsSectionHeading: "Posts, reviews & dishes from across the brand.",
       seoReservationDescription: (_name: string) => `Reserve a table at ${_name}.`,
       seoExperiencesDescription: (_name: string) =>
         `Explore classes, tasting nights, and bookable experiences at ${_name}.`,
@@ -156,9 +150,7 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
       connectGoogleAddressNote: "Import your address, hours, ratings, and reviews from Google Places.",
       addSecondLocationNote: "Add a second location once your first is connected.",
       connectGoogleCta: "Import from Google Maps →",
-      latelyKicker: "Lately",
       ourStoryKicker: "Our story",
-      readMoreCta: "Read more →",
       reviewsKicker: "Reviews",
       guestReviewsLabel: "Guest reviews & ratings.",
       whatGuestsSayLabel: "What your guests say.",
@@ -242,14 +234,12 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
         const count = _count
         return `${count} location${count === 1 ? "" : "s"}, one hands-on experience.`
       },
-      postsEyebrow: "From the studio",
       bookingNotesPlaceholder:
         "Accessibility requests, group details, or other notes.",
       contactLocationsByHeading: "Hours, address, phone, for each studio.",
       contactLocationsByNote:
         'For full parking, accessibility and booking policies, follow the "Plan a visit" link on each card.',
       otherLocationsHeading: "Other spaces",
-      highlightsSectionHeading: "Posts, reviews & classes from across the studio.",
       seoReservationDescription: (_name: string) => `Book a class at ${_name}.`,
       seoExperiencesDescription: (_name: string) =>
         `Browse classes and bookable experiences at ${_name}.`,
@@ -262,9 +252,7 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
       connectGoogleAddressNote: "Import your address, hours, ratings, and reviews from Google Places.",
       addSecondLocationNote: "Add a second studio once your first is connected.",
       connectGoogleCta: "Import from Google Maps →",
-      latelyKicker: "Lately",
       ourStoryKicker: "Our story",
-      readMoreCta: "Read more →",
       reviewsKicker: "Reviews",
       guestReviewsLabel: "Guest reviews & ratings.",
       whatGuestsSayLabel: "What your guests say.",
@@ -350,14 +338,12 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
         const count = _count
         return `${count} สาขา ปรัชญาครัวเดียว`
       },
-      postsEyebrow: "จากครัว",
       bookingNotesPlaceholder:
         "ความต้องการด้านอาหาร คำขอเรื่องการเข้าถึง ที่นั่งที่ชอบ หรือบันทึกสำหรับการฉลอง",
       contactLocationsByHeading: "เวลาทำการ ที่อยู่ โทรศัพท์ สำหรับแต่ละพื้นที่",
       contactLocationsByNote:
         'สำหรับรายละเอียดที่จอดรถ การเข้าถึง และนโยบายต่าง ๆ ให้กดลิงก์ "วางแผนการมาเยือน" ในแต่ละการ์ด',
       otherLocationsHeading: "ห้องพี่น้อง",
-      highlightsSectionHeading: "โพสต์ รีวิว และเมนูจากทั่วทั้งแบรนด์",
       seoReservationDescription: (_name: string) => `จองโต๊ะที่ ${_name}`,
       seoExperiencesDescription: (_name: string) =>
         `สำรวจคลาส ชิมอาหารค่ำ และประสบการณ์ที่จองได้ที่ ${_name}`,
@@ -370,9 +356,7 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
       connectGoogleAddressNote: "นำเข้าที่อยู่ เวลาทำการ คะแนน และรีวิวจาก Google Places",
       addSecondLocationNote: "เพิ่มสาขาที่สองเมื่อสาขาแรกเชื่อมต่อแล้ว",
       connectGoogleCta: "นำเข้าจาก Google Maps →",
-      latelyKicker: "ล่าสุด",
       ourStoryKicker: "เรื่องราวของเรา",
-      readMoreCta: "อ่านต่อ →",
       reviewsKicker: "รีวิว",
       guestReviewsLabel: "รีวิวและคะแนนจากแขก",
       whatGuestsSayLabel: "สิ่งที่แขกพูดถึง",
@@ -456,14 +440,12 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
         const count = _count
         return `${count} สาขา ประสบการณ์ลงมือทำแบบเดียวกัน`
       },
-      postsEyebrow: "จากสตูดิโอ",
       bookingNotesPlaceholder:
         "คำขอเรื่องการเข้าถึง รายละเอียดกลุ่ม หรือหมายเหตุอื่น ๆ",
       contactLocationsByHeading: "เวลาทำการ ที่อยู่ โทรศัพท์ สำหรับแต่ละสตูดิโอ",
       contactLocationsByNote:
         'สำหรับรายละเอียดที่จอดรถ การเข้าถึง และนโยบายการจอง ให้กดลิงก์ "วางแผนการมาเยือน" ในแต่ละการ์ด',
       otherLocationsHeading: "พื้นที่อื่น ๆ",
-      highlightsSectionHeading: "โพสต์ รีวิว และคลาสจากทั่วทั้งสตูดิโอ",
       seoReservationDescription: (_name: string) => `จองคลาสที่ ${_name}`,
       seoExperiencesDescription: (_name: string) =>
         `เลือกดูคลาสและประสบการณ์ที่จองได้ที่ ${_name}`,
@@ -476,9 +458,7 @@ const registry: Record<LocaleCode, Partial<Record<OrganizationVertical, Vertical
       connectGoogleAddressNote: "นำเข้าที่อยู่ เวลาทำการ คะแนน และรีวิวจาก Google Places",
       addSecondLocationNote: "เพิ่มสตูดิโอที่สองเมื่อสตูดิโอแรกเชื่อมต่อแล้ว",
       connectGoogleCta: "นำเข้าจาก Google Maps →",
-      latelyKicker: "ล่าสุด",
       ourStoryKicker: "เรื่องราวของเรา",
-      readMoreCta: "อ่านต่อ →",
       reviewsKicker: "รีวิว",
       guestReviewsLabel: "รีวิวและคะแนนจากแขก",
       whatGuestsSayLabel: "สิ่งที่แขกพูดถึง",
@@ -566,14 +546,12 @@ registry.en.service = {
     const count = _count
     return `${count} service presence${count === 1 ? "" : "s"}, one team.`
   },
-  postsEyebrow: "Updates",
   bookingNotesPlaceholder:
     "Tell us what kind of help you need, preferred contact times, or accessibility notes.",
   contactLocationsByHeading: "Contact details and service-area information.",
   contactLocationsByNote:
     "Some professional-service locations may represent a service area or remote contact point rather than a public office.",
   otherLocationsHeading: "Other service areas",
-  highlightsSectionHeading: "Services, articles, and updates from the organization.",
   seoReservationDescription: (_name: string) => `Request a consultation with ${_name}.`,
   seoExperiencesDescription: (_name: string) =>
     `Explore professional services from ${_name}.`,
@@ -586,9 +564,7 @@ registry.en.service = {
   connectGoogleAddressNote: "Optionally import public office details and hours from Google Places.",
   addSecondLocationNote: "Add another office or service-area presence when needed.",
   connectGoogleCta: "Import from Google Maps",
-  latelyKicker: "Latest",
   ourStoryKicker: "About",
-  readMoreCta: "Read more",
   reviewsKicker: "Reviews",
   guestReviewsLabel: "Client reviews and ratings.",
   whatGuestsSayLabel: "What clients say.",
@@ -650,12 +626,10 @@ registry.ja.restaurant = {
   experiencesPageTitle: "体験",
   experiencesPageSubtitle: "通常のお席のご予約に加え、料理教室や特別なディナーなどをお楽しみいただけます。",
   locationGroupLine: (_count: number) => `${_count}店舗で、料理への同じ想いを。`,
-  postsEyebrow: "厨房からのお知らせ",
   bookingNotesPlaceholder: "食事制限、バリアフリー対応、ご希望のお席、お祝いなどについてお知らせください。",
   contactLocationsByHeading: "各店舗の営業時間・住所・電話番号。",
   contactLocationsByNote: "駐車場、バリアフリー対応、各種方針の詳細は、各店舗の「来店情報」からご確認ください。",
   otherLocationsHeading: "姉妹店",
-  highlightsSectionHeading: "各店舗の投稿・レビュー・料理。",
   seoReservationDescription: (_name: string) => `${_name}のお席をご予約いただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}の料理教室、テイスティング、各種体験をご覧ください。`,
   viewMenuCta: "メニューを見る",
@@ -667,9 +641,7 @@ registry.ja.restaurant = {
   connectGoogleAddressNote: "Google Placesから住所、営業時間、評価、レビューをインポートします。",
   addSecondLocationNote: "最初の店舗を接続した後、2店舗目を追加できます。",
   connectGoogleCta: "Google マップからインポート →",
-  latelyKicker: "最新情報",
   ourStoryKicker: "私たちのストーリー",
-  readMoreCta: "続きを読む →",
   reviewsKicker: "レビュー",
   guestReviewsLabel: "お客様のレビューと評価。",
   whatGuestsSayLabel: "お客様の声。",
@@ -746,12 +718,10 @@ registry.ja.experience = {
   reservationExploreRoute: "/experiences",
   experiencesPageSubtitle: "ご予約可能なクラス、ワークショップ、特別なセッションをご覧ください。",
   locationGroupLine: (_count: number) => `${_count}か所で、同じ体験を。`,
-  postsEyebrow: "スタジオからのお知らせ",
   bookingNotesPlaceholder: "バリアフリー対応、グループの詳細、その他のご要望をお知らせください。",
   contactLocationsByHeading: "各スタジオの営業時間・住所・電話番号。",
   contactLocationsByNote: "駐車場、バリアフリー対応、ご予約の詳細は、各スタジオの「来店情報」からご確認ください。",
   otherLocationsHeading: "その他のスタジオ",
-  highlightsSectionHeading: "各スタジオの投稿・レビュー・クラス。",
   seoReservationDescription: (_name: string) => `${_name}のクラスをご予約いただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}のクラスや各種体験をご覧ください。`,
   viewMenuCta: "体験を見る",
@@ -786,12 +756,10 @@ registry.ja.service = {
   experiencesPageTitle: "サービス",
   experiencesPageSubtitle: "お問い合わせの前に、専門サービスや対応分野をご覧ください。",
   locationGroupLine: (_count: number) => `${_count}の拠点で、ひとつのチームが対応します。`,
-  postsEyebrow: "お知らせ",
   bookingNotesPlaceholder: "ご相談内容、ご希望の連絡時間、バリアフリー対応などについてお知らせください。",
   contactLocationsByHeading: "連絡先と対応地域。",
   contactLocationsByNote: "拠点には、ご来訪いただける事務所以外に、対応地域やオンライン窓口が含まれる場合があります。",
   otherLocationsHeading: "その他の対応地域",
-  highlightsSectionHeading: "サービス・記事・最新情報。",
   seoReservationDescription: (_name: string) => `${_name}へのご相談をお申し込みいただけます。`,
   seoExperiencesDescription: (_name: string) => `${_name}の専門サービスをご覧ください。`,
   viewMenuCta: "サービスを見る",

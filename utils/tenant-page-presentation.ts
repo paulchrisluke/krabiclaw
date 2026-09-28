@@ -29,6 +29,7 @@ import PlatformPluginSections from '~/components/platform/marketing/PlatformPlug
 import PlatformProseCard from '~/components/platform/marketing/PlatformProseCard.vue'
 import PlatformFaqAccordion from '~/components/platform/marketing/PlatformFaqAccordion.vue'
 import PlatformBottomCta from '~/components/platform/marketing/PlatformBottomCta.vue'
+import PlatformSocialPosts from '~/components/platform/PlatformSocialPosts.vue'
 import BlawbyPageHero from '~/components/blawby/BlawbyPageHero.vue'
 import BlawbyFeatureCards from '~/components/blawby/BlawbyFeatureCards.vue'
 import BlawbyTeamSection from '~/components/blawby/BlawbyTeamSection.vue'
@@ -42,6 +43,7 @@ import BlawbyDonationChoices from '~/components/blawby/BlawbyDonationChoices.vue
 import BlawbyVideoFeature from '~/components/blawby/BlawbyVideoFeature.vue'
 import BlawbyButtonRow from '~/components/blawby/BlawbyButtonRow.vue'
 import BlawbyContactForm from '~/components/blawby/BlawbyContactForm.vue'
+import BlawbySocialPosts from '~/components/blawby/BlawbySocialPosts.vue'
 import SayaHeroBlock from '~/components/saya/SayaHeroBlock.vue'
 import SayaProductGridBlock from '~/components/saya/SayaProductGridBlock.vue'
 import SayaLocationsGrid from '~/components/saya/SayaLocationsGrid.vue'
@@ -49,6 +51,7 @@ import SayaFeatureGridBlock from '~/components/saya/SayaFeatureGridBlock.vue'
 import SayaBrandStory from '~/components/saya/SayaBrandStory.vue'
 import SayaReviewsBlock from '~/components/saya/SayaReviewsBlock.vue'
 import SayaCTA from '~/components/saya/SayaCTA.vue'
+import SayaSocialPosts from '~/components/saya/SayaSocialPosts.vue'
 
 // The components themselves, not their names: `<component :is>` resolves a
 // string only against what the calling file imported, so a name here rendered
@@ -64,6 +67,11 @@ import SayaCTA from '~/components/saya/SayaCTA.vue'
 // fails `typecheck` rather than a customer's eye.
 type BlockPresentation = Component<{ block: TenantPageBlock, page: PublicTenantPage }>
 
+// The social posts components also draw the /posts feed from a list of posts,
+// so they take the block and the page as optional props; as a page block they
+// always receive both.
+const feedOrBlock = (component: unknown) => component as BlockPresentation
+
 const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   // KrabiClaw's own marketing template. One component per block type, and the
   // component reads its block — no dispatcher, and nothing in the document
@@ -78,6 +86,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:markdown': PlatformProseCard,
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
+  'platform:social_posts': feedOrBlock(PlatformSocialPosts),
 
   // The Blawby template, for professional-services sites.
   'blawby:hero': BlawbyPageHero,
@@ -93,6 +102,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'blawby:video_feature': BlawbyVideoFeature,
   'blawby:button_group': BlawbyButtonRow,
   'blawby:contact_form': BlawbyContactForm,
+  'blawby:social_posts': feedOrBlock(BlawbySocialPosts),
 
   // Saya, for restaurants and experience businesses. Its home was a 577-line
   // component that read no blocks at all and composed a fixed list of
@@ -105,6 +115,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'saya:media_text': SayaBrandStory,
   'saya:testimonial_grid': SayaReviewsBlock,
   'saya:cta': SayaCTA,
+  'saya:social_posts': feedOrBlock(SayaSocialPosts),
 }
 
 /** The component this template draws this block with, or null for the default. */
