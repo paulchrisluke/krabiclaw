@@ -20,6 +20,10 @@
         Go back home
       </PlatformButton>
     </div>
+    <!-- Nuxt renders this page outside app.vue, so the notice that grants
+         analytics and offers Reject has to be mounted here as well: a visitor
+         whose first page is a 404 was otherwise never granted and never asked. -->
+    <ZarazConsentNotice />
   </div>
 </template>
 
