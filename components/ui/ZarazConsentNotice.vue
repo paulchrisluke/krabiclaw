@@ -11,17 +11,19 @@
     :aria-label="t('legal.analytics_notice_label')"
     class="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4"
   >
-    <div class="flex max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-inverted px-4 py-3 text-sm text-inverted shadow-lg">
+    <div class="flex max-w-full flex-wrap items-center gap-x-6 gap-y-3 rounded-lg bg-inverted px-5 py-3 text-sm text-inverted shadow-lg">
       <p class="m-0">
         {{ t('legal.analytics_notice') }}
-        <a :href="privacyUrl" class="underline underline-offset-2">{{ t('legal.privacy') }}</a>
+        <a :href="privacyUrl" class="underline underline-offset-2">{{ t('legal.analytics_notice_link') }}</a>.
       </p>
-      <button type="button" class="cursor-pointer rounded border border-current px-3 py-1 font-medium hover:opacity-80" @click="reject">
-        {{ t('legal.reject') }}
-      </button>
-      <button type="button" class="cursor-pointer px-1 text-lg leading-none opacity-70 hover:opacity-100" :aria-label="t('legal.dismiss')" @click="visible = false">
-        ×
-      </button>
+      <div class="flex items-center gap-x-3">
+        <button type="button" class="cursor-pointer rounded border border-current px-4 py-1.5 font-medium hover:opacity-80" @click="reject">
+          {{ t('legal.reject') }}
+        </button>
+        <button type="button" class="cursor-pointer px-2 text-lg leading-none opacity-70 hover:opacity-100" :aria-label="t('legal.dismiss')" @click="visible = false">
+          ×
+        </button>
+      </div>
     </div>
   </div>
 </template>
