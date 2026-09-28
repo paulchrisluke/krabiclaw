@@ -200,7 +200,7 @@ async function main() {
     && data(postPublish.body)?.outcomes?.length === 1
     && data(postPublish.body)?.outcomes?.[0]?.status === 'published', postPublish.body)
 
-  if (!facebook.connected) {
+  if (facebook && !facebook.connected) {
     const facebookPublish = await mcp(headers, 'publish_post', {
       organization_id: organizationId,
       post_id: postId,

@@ -31,7 +31,7 @@ export default defineHandler(async (event) => {
   await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: targetLocationId })
 
   try {
-    const { post, replayed } = await createPost(db, env, organization.id, { post: fields, idempotencyKey: idempotencyKey ?? '' }, session.user.id)
+    const { post, replayed } = await createPost(db, env, organization.id, { post: fields, idempotencyKey }, session.user.id)
     return jsonResponse({ success: true, post, replayed }, { status: replayed ? 200 : 201 })
   } catch (error) {
     if (error instanceof PostValidationError) return jsonResponse({ error: error.message }, { status: error.statusCode })

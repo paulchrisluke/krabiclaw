@@ -292,6 +292,18 @@ async function instagramTargetFor(env: CloudflareEnv, organizationId: string): P
   return { userId: connection.instagram_user_id, accessToken: await instagramAccessToken(env, connection.account_id) }
 }
 
+/**
+ * The final call starts only with time left for it and its read-back; with
+ * less, the saved preparation is handed to the next call instead, so a budget
+ * that ran out is `processing`, never an `unknown` the owner has to resolve.
+ */
+const FINAL_RESERVE_MS = 15_000
+async function deferFinalWithoutTime(context: ChannelContext, fence: ReturnType<typeof claimed>): Promise<ChannelResult | null> {
+  if (context.deadline.remaining() >= FINAL_RESERVE_MS) return null
+  await fence.release()
+  return outcome(context, 'processing', { code: 'budget_exhausted', message: `${context.publication.channel} is prepared; call publish_post again to publish this same post.` })
+}
+
 function outcome(context: ChannelContext, status: PublishOutcomeStatus, extra: Partial<PublishOutcome> = {}): ChannelResult {
   return { channel: context.publication.channel, target_id: context.publication.provider_target_id, status, publication_id: context.publication.id, ...extra }
 }
@@ -327,6 +339,8 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
       await fence.release()
       return outcome(context, 'processing', { code: 'video_processing', message: 'Facebook is still processing the video. Call publish_post again to finish it; it will publish this same video.' })
     }
+    const deferred = await deferFinalWithoutTime(context, fence)
+    if (deferred) return deferred
     await fence.beginFinal()
     return await finalize(context, async () => { await publishVideo(target, handles.video_id!, deadline); return null }, async () => {
       const read = await readVideo(target, handles.video_id!, deadline)
@@ -346,6 +360,8 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
     // The Page post's identity is saved before anything can make it public.
     await fence.saveHandles(handles, handles.post_id)
   }
+  const deferred = await deferFinalWithoutTime(context, fence)
+  if (deferred) return deferred
   await fence.beginFinal()
   return await finalize(context, async () => { await publishPagePost(target, handles.post_id!, deadline); return handles.post_id! }, async () => {
     const read = await readPagePost(target, handles.post_id!, deadline)
@@ -408,6 +424,8 @@ async function publishToInstagram(context: ChannelContext, target: InstagramTarg
     return outcome(context, 'published', { public_url: null })
   }
   if (status !== 'FINISHED') return await notReady(status)
+  const deferred = await deferFinalWithoutTime(context, fence)
+  if (deferred) return deferred
   await fence.beginFinal()
   let mediaId: string | null = null
   return await finalize(context, async () => { mediaId = await publishContainer(target, handles.container_id!, deadline); return mediaId }, async () => {
@@ -604,7 +622,16 @@ export async function publishPost(
       continue
     }
     const existing = post.publications.find(publication => publication.channel === target.channel)
-    const record = existing ? await readPublication(db, organizationId, { id: existing.id }) : null
+    let record = existing ? await readPublication(db, organizationId, { id: existing.id }) : null
+    // An invocation that died after its final call began left `publishing`
+    // behind; once its claim is stale that is an unconfirmed final call, and
+    // only reconciliation may say what became of it.
+    if (record?.state === 'publishing' && Date.parse(record.updated_at) < Date.now() - CLAIM_STALE_MS) {
+      await execute(db, `UPDATE post_publications SET state = 'unknown', attempt_id = NULL, error_code = 'final_unconfirmed',
+          error_message = 'The call that was publishing this stopped before it confirmed the result', updated_at = ?
+        WHERE id = ? AND state = 'publishing' AND updated_at = ?`, [nowIso(), record.id, record.updated_at])
+      record = await readPublication(db, organizationId, { id: record.id })
+    }
     if (record && record.provider_target_id !== target.target_id) {
       outcomes.push({ channel: target.channel, target_id: target.target_id, status: 'failed', publication_id: record.id, code: 'target_conflict',
         message: `This post's ${target.channel} publication is to ${record.provider_target_id}; a post is published to one ${target.channel} target. Create a new post for another.` })

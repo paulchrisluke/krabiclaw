@@ -653,7 +653,7 @@ function transformSocialPublishingEpoch(stage, source, record, { publicationIden
   const taken = new Set(stage.prepare("SELECT organization_id || ':' || slug AS key FROM main.content_documents WHERE kind = 'social_post' AND row_role IN ('root', 'representation') AND locale = 'en' AND slug IS NOT NULL").all().map(row => row.key))
   const setSlug = stage.prepare('UPDATE main.content_documents SET slug = ? WHERE id = ?')
   for (const post of stage.prepare("SELECT id, organization_id, title, summary FROM main.content_documents WHERE kind = 'social_post' AND row_role = 'root' AND slug IS NULL ORDER BY organization_id, id").all()) {
-    const base = normalizePostSlug(post.title ?? post.summary?.slice(0, 80) ?? '') || `update-${post.id}`
+    const base = normalizePostSlug(post.title || post.summary?.slice(0, 80) || '') || `update-${post.id}`
     let slug = base
     for (let attempt = 2; taken.has(`${post.organization_id}:${slug}`); attempt += 1) slug = `${base}-${attempt}`
     taken.add(`${post.organization_id}:${slug}`)

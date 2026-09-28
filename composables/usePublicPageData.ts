@@ -124,8 +124,6 @@ export const usePublicPageData = async (options: {
     ...(shell.googleMaps.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
   }))
-  // The first page of the route's short-post feed — the location's on a
-  // location route — and the cursor to the next.
   const products = computed(() => data.value?.products ?? []);
   const collections = computed(() => data.value?.collections ?? []);
   /**

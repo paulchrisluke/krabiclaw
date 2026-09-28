@@ -408,6 +408,12 @@ export async function updatePost(
   if (existing.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'The post changed since it was read; read it again' })
   const data: PostMutation = parsePostInput(input.changes, 'update')
   if (!Object.keys(data).length) throw new PostValidationError('Name at least one field to change')
+  // A field sent with the value it already has is not a change: it neither
+  // makes an imported post the tenant's own nor waits on a publication.
+  if (data.title !== undefined && data.title === existing.title) delete data.title
+  if (data.body !== undefined && data.body === existing.body) delete data.body
+  if (data.call_to_action !== undefined && JSON.stringify(data.call_to_action) === JSON.stringify(callToActionOf(existing.metadata_json))) delete data.call_to_action
+  if (!Object.keys(data).length) return await getPost(db, env, organizationId, postId)
   if (data.location_id !== undefined) await validatePostLocation(db, organizationId, data.location_id)
   const contentChanged = data.title !== undefined || data.body !== undefined || data.call_to_action !== undefined
   const payloadChanged = data.body !== undefined || data.call_to_action !== undefined
