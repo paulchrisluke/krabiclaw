@@ -44,6 +44,8 @@ test('a Q&A can be edited and deleted through the scoped writers', async () => {
     assert.deepEqual(updated, { updated: true, qa_id: qaId })
     const [row] = await listQa(db, ORG, null, false, '/pricing')
     assert.equal(row?.answer, 'Yes, on a Krabiclaw subdomain.')
+    const purges = async () => Number((await db.prepare("SELECT count(*) AS n FROM public_resource_cache_invalidations WHERE organization_id = ? AND reason IN ('qa-update', 'qa-reorder')").bind(ORG).first('n')) ?? 0)
+    assert.equal(await purges(), 1, 'an edited answer queues a purge of the cached pages')
 
     await assert.rejects(
       updateQa(db, { ...scope, organizationId: OTHER_ORG }, qaId, { answer: 'stolen' }),
@@ -54,6 +56,7 @@ test('a Q&A can be edited and deleted through the scoped writers', async () => {
     const secondId = (second.data as { id: string }).id
     await reorderQa(db, scope, [{ id: secondId, sort_order: 0 }, { id: qaId, sort_order: 1 }])
     assert.deepEqual((await listQa(db, ORG, null, false, '/pricing')).map(item => item.id), [secondId, qaId])
+    assert.equal(await purges(), 2, 'a reorder queues a purge too')
     await deleteQa(db, scope, secondId)
 
     const deletedElsewhere = await deleteQa(db, { ...scope, organizationId: OTHER_ORG }, qaId)

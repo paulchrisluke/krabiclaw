@@ -1,7 +1,8 @@
 import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'
 import { getPersistedSourceLocale } from '~/server/utils/localization'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion } from '~/server/utils/content/documents'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { d1JsonStringSet } from '../db/d1-limits.ts'
 
 export interface QaScope {
@@ -233,12 +234,18 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   params.push(qaId, scope.organizationId, ...scoped.params)
-  const result = await execute(db, `
+  // The purge rides in the same batch as the write, as it does for a page, an
+  // article and a picture: an answer edited on its own stayed on the cached
+  // page until something else happened to purge it.
+  const [result] = await executeBatch(db, [{
+    query: `
     UPDATE content_documents
     SET ${sets.join(', ')}
     WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
-  `, params)
-  if (!Number(result.meta.changes ?? 0)) throw new Error('Q&A not found')
+  `,
+    params,
+  }, publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-update')])
+  if (!Number(result?.meta.changes ?? 0)) throw new Error('Q&A not found')
   return { updated: true, qa_id: qaId }
 }
 
@@ -276,15 +283,15 @@ export async function reorderQa(
   }
 
   const now = new Date().toISOString()
-  const results = await executeBatch(db, updates.map(update => ({
+  const results = await executeBatch(db, [...updates.map(update => ({
     query: `
       UPDATE content_documents
       SET sort_order = ?, updated_at = ?
       WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
     `,
     params: [update.sort_order, now, update.id, scope.organizationId, ...scoped.params],
-  })))
-  const changed = results.reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
+  })), publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-reorder')])
+  const changed = results.slice(0, updates.length).reduce((sum: number, result: { meta: { changes?: number } }) => sum + Number(result.meta.changes ?? 0), 0)
   if (changed !== updates.length) {
     throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${changed} matched. Reload and try again.`)
   }
