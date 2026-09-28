@@ -15,9 +15,6 @@ export default defineHandler(async (event) => {
   if (!organizationId || !recipe || !RECIPES.has(recipe) || typeof locale !== 'string') {
     return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_REQUIRED', 'Valid organization ID and Blawby route recipe required')
   }
-  if (recipe === 'article' && !slug) {
-    return apiErrorResponse(event, 400, 'BLAWBY_DOCUMENT_SLUG_REQUIRED', 'Route slug required')
-  }
 
   try {
     const previewAuthorized = await resolvePreviewAuthorization(event, organizationId, previewSecretOf(cloudflareEnv(event)))

@@ -18,7 +18,7 @@ export function decodeHtmlEntities(value: string): string {
     .replace(/&nbsp;/gi, " ");
 }
 
-// Slugifies h2/h3 text so DocsToc.vue can build "on this page" anchors that
+// Slugifies h2/h3 text so ArticleToc.vue can build "on this page" anchors that
 // always match the rendered article body — both read from this one renderer.
 // Reset per renderMarkdownToHtml() call so duplicate headings across separate
 // renders (e.g. FAQ/How-To sections) don't bleed into each other's numbering.

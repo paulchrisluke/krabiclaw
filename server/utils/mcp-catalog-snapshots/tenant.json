@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:ee8f2eee4192e946718f8e3830aa4bf0873a04f5a8cfe768b8bc472dedd6378c",
+  "fingerprint": "sha256:265b8b49c0785db26718c0b80945bc95fbb8c5da99497e6911a75a5606448554",
   "tools": [
     {
       "name": "append_content_block",
@@ -1128,7 +1128,7 @@
             "type": "string"
           },
           "collection": {
-            "description": "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog.",
+            "description": "Which of the site's collections the article belongs to: its blog, or its documentation. Defaults to the blog.",
             "enum": [
               "blog",
               "docs"
@@ -6797,6 +6797,13 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
@@ -10880,91 +10887,17 @@
       }
     },
     {
-      "name": "reorder_collections",
+      "name": "reorder_blog_posts",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "collection_ids": {
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "type": "array"
-          },
-          "location_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
             "type": "string"
-          }
-        },
-        "required": [
-          "collection_ids"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "collections": {
-            "items": {
-              "properties": {
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "location_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": "string"
-                },
-                "organization_id": {
-                  "type": "string"
-                },
-                "slug": {
-                  "type": "string"
-                },
-                "sort_order": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "id",
-                "organization_id",
-                "location_id",
-                "name",
-                "slug",
-                "description",
-                "sort_order"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "collections"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "reorder_docs",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
+          },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
@@ -10978,6 +10911,7 @@
           }
         },
         "required": [
+          "collection",
           "post_ids"
         ],
         "type": "object"
@@ -11196,6 +11130,87 @@
         },
         "required": [
           "posts"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "reorder_collections",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "collection_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "collections": {
+            "items": {
+              "properties": {
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "organization_id": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "organization_id",
+                "location_id",
+                "name",
+                "slug",
+                "description",
+                "sort_order"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "collections"
         ],
         "type": "object"
       }
@@ -13304,7 +13319,7 @@
             "type": "string"
           },
           "collection": {
-            "description": "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog.",
+            "description": "Move the article to the site's blog or its documentation. Omit to leave it where it is.",
             "enum": [
               "blog",
               "docs"

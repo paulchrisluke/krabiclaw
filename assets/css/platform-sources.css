@@ -14,7 +14,6 @@
 @source "../../components/*.vue";
 @source "../../components/blog";
 @source "../../components/content";
-@source "../../components/docs";
 @source "../../components/platform";
 @source "../../components/booking";
 @source "../../components/ui/AppBreadcrumb.vue";

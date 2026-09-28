@@ -1,4 +1,4 @@
-import { collectionArticlePath } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, collectionArticlePath, isArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { PLATFORM_TEMPLATE } from '~/utils/template-registry'
 import { sha256 } from '@noble/hashes/sha2.js'
@@ -96,6 +96,7 @@ interface TenantBlogDocRow {
   category: string | null
   tags_metadata: string | null
   seo_keywords: string | null
+  collection: string | null
 }
 
 interface ContentBlockBodyRow { id: string; type: string; position: number; level: number | null; data_json: string }
@@ -436,13 +437,15 @@ export async function buildTenantBlogDocuments(db: DbClient, platformOrganizatio
   const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
     SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
-      d.metadata_json ->> '$.tags' AS tags_metadata, d.seo_keywords, s.theme_id, s.vertical
+      d.metadata_json ->> '$.tags' AS tags_metadata, d.metadata_json ->> '$.collection' AS collection, d.seo_keywords, s.theme_id, s.vertical
     FROM content_documents d JOIN organization s ON s.id = d.organization_id
     WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.organization_id <> ? AND d.visibility = 'listed'${organizationId ? ' AND d.organization_id = ?' : ''}
     ORDER BY d.organization_id, d.published_at DESC, d.updated_at DESC
   `, [platformId, ...(organizationId ? [organizationId] : [])]), loadContentBodies(db, platformId, false, organizationId)])
 
   return (posts ?? []).map((post) => {
+    if (!isArticleCollection(post.collection)) throw new Error(`Article ${post.id} has no valid collection`)
+    const collection = post.collection
     const tags = post.tags_metadata ? JSON.parse(post.tags_metadata) as string[] : []
     const canonicalBody = contentBodies.get(post.id) ?? ''
     const snippet = truncateSnippet(post.excerpt || canonicalBody || post.title)
@@ -462,10 +465,10 @@ export async function buildTenantBlogDocuments(db: DbClient, platformOrganizatio
       key: `tenant-blog/${post.id}.md`,
       type: 'blog' as const,
       title: post.title,
-      // Each template decides its article prefix (/blog or /article).
-      path: tenantBlogPostPath({ themeId: post.theme_id, vertical: post.vertical }, post.slug),
+      // Each template decides its blog prefix (/blog or /article); docs are at /docs.
+      path: tenantBlogPostPath({ themeId: post.theme_id, vertical: post.vertical }, post.slug, collection),
       snippet,
-      section: post.category || 'Blog',
+      section: post.category || ARTICLE_COLLECTIONS[collection].label,
       icon: 'newspaper',
       body,
       surfaces: ['tenant_blog' as const],

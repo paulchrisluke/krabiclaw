@@ -23,11 +23,11 @@ const blogContentBlockSchema = {
 export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_blog_posts',
-      description: 'List this organization\'s draft, published and scheduled blog articles. This is the organization\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
+      description: 'List this organization\'s draft, published and scheduled articles, in the order each collection is read in publicly (sort_order, then newest first). The blog and the documentation are two collections of the same articles; pass collection to list one. This is the organization\'s own long-form content — distinct from list_posts, which is the social-update feed.',
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
-      inputSchema: { status: { type: 'string', enum: ['draft', 'published', 'scheduled'] }, ...paginationInputSchema },
+      inputSchema: { status: { type: 'string', enum: ['draft', 'published', 'scheduled'] }, collection: { type: 'string', enum: ['blog', 'docs'] }, ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: { posts: { type: 'array', items: blogPostSummaryObject }, page_info: pageInfoObject },
@@ -61,7 +61,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         title: { type: 'string' },
         excerpt: { type: 'string' },
-        collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
+        collection: { type: 'string', enum: ['blog', 'docs'], description: "Which of the site's collections the article belongs to: its blog, or its documentation. Defaults to the blog." },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
         content_blocks: { type: 'array', minItems: 1, description: 'The article, in order. Any number of blocks of any type, images wherever they belong. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
@@ -83,7 +83,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
         excerpt: { type: 'string' },
-        collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
+        collection: { type: 'string', enum: ['blog', 'docs'], description: "Move the article to the site's blog or its documentation. Omit to leave it where it is." },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
         content_blocks: { type: 'array', minItems: 1, description: 'The whole article, in order, replacing every block. Blocks read back keep their id. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
@@ -110,13 +110,16 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       outputSchema: blogPostMutationResultObject,
     }),
   organizationTool({
-      name: 'reorder_docs',
-      description: "KrabiClaw's own site only: set the order documentation is read in, which also orders its categories (a category sits where its first article does). Send every docs article id exactly once, drafts included, in the intended order; a partial order is rejected. Blog articles are ordered by publish date and have no order to set.",
+      name: 'reorder_blog_posts',
+      description: "Set the order one collection (the blog or the documentation) is read in on the public site, which also orders its categories (a category sits where its first article does). Send every article id in that collection exactly once, drafts included, in the intended order; a partial order is rejected. Each article's sort_order is its position from 1; an article written afterwards has sort_order 0 and leads, newest first, until it is placed.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
-      inputSchema: { post_ids: { type: 'array', items: { type: 'string' }, minItems: 1 } },
-      required: ['post_ids'],
+      inputSchema: {
+        collection: { type: 'string', enum: ['blog', 'docs'] },
+        post_ids: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      },
+      required: ['collection', 'post_ids'],
       outputSchema: {
         type: 'object',
         properties: { posts: { type: 'array', items: blogPostSummaryObject } },

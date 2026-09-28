@@ -12,6 +12,8 @@
     <BlawbyHeader :organization="identity" :consultation="consultation" :page-links="pageLinks" />
     <main>
       <slot />
+      <!-- A firm's articles carry its legal disclaimer, under every article and index. -->
+      <p v-if="route.meta.articleCollection && compliance?.disclaimer" class="blawby-container mb-12 whitespace-pre-line text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
     </main>
     <BlawbyFooter
       :organization="identity"
@@ -54,7 +56,7 @@ const blawbyRoutePath = computed(() => resolveTenantLocalePath(
   route.path,
   publicLocale.value === 'en' ? [] : [publicLocale.value],
 ).sourcePath)
-const target = resolveBlawbyRouteTarget(blawbyRoutePath.value, route.params)
+const target = resolveBlawbyRouteTarget(blawbyRoutePath.value)
 const { data: document } = await useBlawbyDocument(target.recipe, target.slug)
 if (target.recipe !== 'links') {
   useState<PublicBlawbyRouteData['localeRepresentations']>('public-locale-representations', () => []).value = document.value.route.localeRepresentations
