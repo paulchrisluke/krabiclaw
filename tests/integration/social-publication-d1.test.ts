@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
-import { createPost, deletePost, getPost, listPublicSocialPosts, updatePost } from '../../server/utils/post-management.ts'
+import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { syncSocialPosts } from '../../server/utils/social-sync.ts'
 import { eraseMetaSubjectData, remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
@@ -87,7 +87,8 @@ class FakeMeta {
       return json({ data: page, paging: next ? { cursors: { after: String(offset + limit) }, next: `https://graph.facebook.com/next?access_token=secret&after=${offset + limit}` } : { cursors: {} } })
     }
     const post = this.fbPosts.get(path)
-    if (post && method === 'POST') { if (body.is_published === 'true') post.published = true; return json({ success: true }) }
+    // Facebook does not publish an unpublished feed post later (production answered this on 2026-09-28).
+    if (post && method === 'POST') return json({ error: { message: '(#10) Failed to publish post', code: 10, fbtrace_id: 'trace-10' } }, 400)
     if (post && method === 'GET') return json({ id: path, is_published: post.published, permalink_url: `https://www.facebook.com/${path}`, created_time: '2026-09-28T10:00:00+0000' })
     const video = this.fbVideos.get(path)
     if (video && method === 'GET') {
@@ -227,15 +228,15 @@ test('publication: one result, one external post per target, and no blind resend
     const all = await publishPost(env, 'org-a', first.post.id, { expectedUpdatedAt: first.post.updated_at, targets: [targets.website, targets.facebook(), targets.instagram()] }, 'owner')
     assert.equal(all.ok, true, JSON.stringify(all.outcomes))
     assert.deepEqual(all.outcomes.map(outcome => [outcome.channel, outcome.status]), [['organization', 'published'], ['facebook', 'published'], ['instagram', 'published']])
-    // What Facebook received: two unpublished photos in order, one unpublished post attaching them with the caption and link line, then publication of that same post.
+    // What Facebook received: two unpublished photos in order, then one published post attaching them with the caption and link line.
     const photos = meta.sent(request => request.path.endsWith(`${PAGE}/photos`))
     assert.deepEqual(photos.map(request => [request.body.url, request.body.published]), [['https://imagedelivery.example.test/hash/a1/public', 'false'], ['https://imagedelivery.example.test/hash/a2/public', 'false']])
     const [feed] = meta.sent(request => request.path.endsWith(`${PAGE}/feed`))
     assert.equal(feed!.body.message, 'Pizza night Friday\n\nBook: https://example.test/book')
-    assert.equal(feed!.body.published, 'false')
+    assert.equal(feed!.body.published, undefined)
     assert.equal(feed!.body.link, undefined)
     assert.deepEqual([...meta.fbPosts.values()][0]!.attached, ['photo-1', 'photo-2'])
-    assert.equal(meta.sent(request => request.body.is_published === 'true').length, 1)
+    assert.equal(meta.sent(request => request.body.is_published !== undefined).length, 0)
     // What Instagram received: two carousel children, one carousel container with the caption, one media_publish.
     const containers = meta.sent(request => request.method === 'POST' && request.path.endsWith(`${IG}/media`))
     assert.deepEqual(containers.map(request => [request.body.media_type ?? 'IMAGE', request.body.is_carousel_item ?? '', request.body.caption ?? '']), [
@@ -287,40 +288,44 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal(retried.outcomes[0]!.status, 'published')
     await publishedOnMeta(third.post.id, 'facebook')
 
-    // Loss after the native draft: the saved photo is reused, never re-created.
+    // The final call timed out before Facebook applied it: unknown, never sent again; its photos stay saved.
     const fourth = await create('key-4', { body: 'Lost feed', media: [{ asset_id: 'a2', slot: 'cover' }] })
     meta.fault('timeout', request => request.path.endsWith(`${PAGE}/feed`))
     const lost = await publishPost(env, 'org-a', fourth.post.id, { expectedUpdatedAt: fourth.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.deepEqual([lost.outcomes[0]!.status, lost.outcomes[0]!.code], ['failed', 'provider_unreachable'])
-    const photosBefore = meta.sent(request => request.path.endsWith(`${PAGE}/photos`)).length
-    assert.equal((await publishPost(env, 'org-a', fourth.post.id, { expectedUpdatedAt: fourth.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/photos`)).length, photosBefore)
-    await publishedOnMeta(fourth.post.id, 'facebook')
+    assert.deepEqual([lost.ok, lost.outcomes[0]!.status, lost.outcomes[0]!.code], [false, 'unknown', 'final_unconfirmed'])
+    const pinned = (await getPost(db, env, 'org-a', fourth.post.id))!
+    await assert.rejects(updatePost(db, cardless, 'org-a', fourth.post.id, { changes: { body: 'Edited' }, expectedUpdatedAt: pinned.updated_at }, 'owner'), /unresolved/)
+    await assert.rejects(deletePost(db, 'org-a', fourth.post.id, 'owner'), /unresolved/)
+    const feedsBefore = meta.sent(request => request.path.endsWith(`${PAGE}/feed`)).length
+    assert.equal((await publishPost(env, 'org-a', fourth.post.id, { expectedUpdatedAt: pinned.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'unknown')
+    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/feed`)).length, feedsBefore)
 
-    // Loss after the final call, with the read-back also failing: unknown. It pins the content, a repeat sends nothing, and reconciliation reads the same post.
-    const fifth = await create('key-5', { body: 'Lost final' })
-    meta.fault('timeout', request => request.body.is_published === 'true')
-    meta.fault('timeout', request => request.method === 'GET' && request.query.get('fields') === 'id,is_published,permalink_url,created_time')
-    const unknown = await publishPost(env, 'org-a', fifth.post.id, { expectedUpdatedAt: fifth.post.updated_at, targets: [targets.facebook()] }, 'owner')
-    assert.deepEqual([unknown.ok, unknown.outcomes[0]!.status], [false, 'unknown'])
-    const pinned = (await getPost(db, env, 'org-a', fifth.post.id))!
-    await assert.rejects(updatePost(db, cardless, 'org-a', fifth.post.id, { changes: { body: 'Edited' }, expectedUpdatedAt: pinned.updated_at }, 'owner'), /unresolved/)
-    await assert.rejects(deletePost(db, 'org-a', fifth.post.id, 'owner'), /unresolved/)
-    const feedsBefore = meta.sent(request => request.path.endsWith(`${PAGE}/feed`) || request.body.is_published === 'true').length
-    const draftsBefore = meta.sent(request => request.path.endsWith(`${PAGE}/feed`)).length
-    assert.equal((await publishPost(env, 'org-a', fifth.post.id, { expectedUpdatedAt: pinned.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'unknown')
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/feed`) || request.body.is_published === 'true').length, feedsBefore)
-    const fifthPublication = pinned.publications[0]!
-    // The earlier final call did not reach Facebook (the fixture timed it out before it applied), so the post reads as unpublished: back to preparing, never re-created.
-    assert.equal((await reconcilePostPublication(env, 'org-a', fifthPublication.id, null)).state, 'preparing')
-    assert.equal((await publishPost(env, 'org-a', fifth.post.id, { expectedUpdatedAt: pinned.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
-    assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/feed`)).length, draftsBefore)
+    // The final call took effect but its answer was lost: unknown until reconciliation is told the post it became, which it reads on the Page.
+    const fifth = await create('key-5', { body: 'Answer lost' })
+    let createdId: string | null = null
+    meta.fault('timeout', request => {
+      if (request.method !== 'POST' || !request.path.endsWith(`${PAGE}/feed`)) return false
+      createdId = `${PAGE}_answer-lost`
+      meta.fbPosts.set(createdId, { published: true, message: request.body.message, link: request.body.link, attached: [] })
+      return true
+    })
+    const answerLost = await publishPost(env, 'org-a', fifth.post.id, { expectedUpdatedAt: fifth.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(answerLost.outcomes[0]!.status, 'unknown')
+    const fifthPublication = (await getPost(db, env, 'org-a', fifth.post.id))!.publications[0]!
+    assert.equal((await reconcilePostPublication(env, 'org-a', fifthPublication.id, createdId)).state, 'published')
     await publishedOnMeta(fifth.post.id, 'facebook')
 
-    // A timed-out final call that did take effect reads back as published.
-    const sixth = await create('key-6', { body: 'Timed out but published' })
-    meta.fault('timeout', request => { if (request.body.is_published === 'true') { const post = meta.fbPosts.get(request.path.replace('/v25.0/', '')); if (post) post.published = true; return true } return false })
-    assert.equal((await publishPost(env, 'org-a', sixth.post.id, { expectedUpdatedAt: sixth.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+    // A publication an earlier version prepared as an unpublished feed post: that draft is deleted and the post is published once with the saved photos.
+    const sixth = await create('key-6', { body: 'Prepared the old way', media: [{ asset_id: 'a1', slot: 'cover' }] })
+    const draftId = `${PAGE}_legacy-draft`
+    meta.fbPosts.set(draftId, { published: false, attached: ['photo-legacy'] })
+    await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, provider_post_id, provider_handles_json, payload_hash, error_code, error_message)
+      VALUES ('legacy', 'org-a', '${sixth.post.id}', 'facebook', 'fb-app', 'fb-subject', '${PAGE}', 'publish', 'failed', '${draftId}', '${JSON.stringify({ photo_ids: ['photo-legacy'], post_id: draftId })}',
+        '${await postPayloadFingerprint((await getPost(db, env, 'org-a', sixth.post.id))!, { channel: 'facebook', target_id: PAGE })}', 'connection_error', '(#10) Failed to publish post')`)
+    const republished = await publishPost(env, 'org-a', sixth.post.id, { expectedUpdatedAt: sixth.post.updated_at, targets: [targets.facebook()] }, 'owner')
+    assert.equal(republished.outcomes[0]!.status, 'published', JSON.stringify(republished.outcomes))
+    assert.equal(meta.fbPosts.has(draftId), false)
+    assert.deepEqual(meta.sent(request => request.method === 'POST' && request.path.endsWith(`${PAGE}/feed`)).at(-1)!.body['attached_media[0]'], JSON.stringify({ media_fbid: 'photo-legacy' }))
     await publishedOnMeta(sixth.post.id, 'facebook')
 
     // A Reel still processing returns processing, keeps its container, and a later call finishes that same container.

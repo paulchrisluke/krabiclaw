@@ -8,7 +8,7 @@ import { getPost, postPayloadFingerprint, type Post, type PostMedia } from '~/se
 import { providerCaption } from '~/shared/posts'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import {
-  createUnpublishedPagePost, createUnpublishedPhoto, createUnpublishedVideo, deleteUnpublishedObject, facebookPageToken,
+  createUnpublishedPhoto, createUnpublishedVideo, deleteUnpublishedObject, facebookPageToken,
   getFacebookPagesConnection, publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
 } from '~/server/utils/facebook-pages'
 import {
@@ -242,6 +242,8 @@ function claimed(db: DbClient, publicationId: string, attemptId: string) {
   return {
     saveHandles: (handles: Handles, providerPostId?: string) =>
       write('provider_handles_json = ?, provider_post_id = COALESCE(?, provider_post_id)', [JSON.stringify(handles), providerPostId ?? null]),
+    /** The prepared object named as the provider post is gone; the row stops naming it. */
+    forgetProviderPost: (handles: Handles) => write('provider_handles_json = ?, provider_post_id = NULL', [JSON.stringify(handles)]),
     /** The boundary: after this commits, an interruption is `unknown`, never a retryable failure. */
     beginFinal: () => write("state = 'publishing'", []),
     published: (input: { providerPostId: string | null; permalink: string | null; publishedAt: string; handles: Handles }) =>
@@ -254,6 +256,12 @@ function claimed(db: DbClient, publicationId: string, attemptId: string) {
     /** Hand the saved preparation to the next call: nothing is public, and nothing is lost. */
     release: (states: readonly string[] = ['preparing']) => write("state = 'preparing', attempt_id = NULL", [], states),
   }
+}
+
+/** Meta's times (`2026-09-28T10:00:00+0000`) as the canonical UTC instant the schema stores; now when Meta gave none. */
+function instantOf(value: string | null | undefined): string {
+  const parsed = value ? new Date(value) : null
+  return parsed && Number.isFinite(parsed.getTime()) ? parsed.toISOString() : nowIso()
 }
 
 /** A permalink is stored only as Meta returned it, and only when it is a public https URL. */
@@ -354,18 +362,32 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
     handles.photo_ids[index] = await createUnpublishedPhoto(target, { url: image.public_url, altText: image.alt_text }, deadline)
     await fence.saveHandles(handles)
   }
-  if (!handles.post_id) {
-    const link = post.call_to_action && /^https?:/.test(post.call_to_action.url) ? post.call_to_action.url : null
-    handles.post_id = await createUnpublishedPagePost(target, { message: context.caption, link, photoIds: handles.photo_ids }, deadline)
-    // The Page post's identity is saved before anything can make it public.
-    await fence.saveHandles(handles, handles.post_id)
+  // An unpublished feed post an earlier version prepared can never be
+  // published; it goes, and the photos it carried are attached to the real post.
+  if (handles.post_id) {
+    try {
+      await deleteUnpublishedObject(target, handles.post_id, deadline)
+    } catch (error) {
+      // Already gone is the state this wants.
+      if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
+    }
+    delete handles.post_id
+    await fence.forgetProviderPost(handles)
   }
   const deferred = await deferFinalWithoutTime(context, fence)
   if (deferred) return deferred
   await fence.beginFinal()
-  return await finalize(context, async () => { await publishPagePost(target, handles.post_id!, deadline); return handles.post_id! }, async () => {
-    const read = await readPagePost(target, handles.post_id!, deadline)
-    return { published: read.isPublished, providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime, retryable: !read.isPublished }
+  const link = post.call_to_action && /^https?:/.test(post.call_to_action.url) ? post.call_to_action.url : null
+  let postId: string | null = null
+  return await finalize(context, async () => {
+    postId = await publishPagePost(target, { message: context.caption, link, photoIds: handles.photo_ids! }, deadline)
+    return postId
+  }, async () => {
+    // Without the answer there is no id to read: what happened is unknown.
+    if (!postId) throw new Error('Facebook did not answer with the post it created')
+    const read = await readPagePost(target, postId, deadline)
+    // Calling again would create a second post: a created post is never sent again.
+    return { published: read.isPublished, providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime, retryable: false, createsAnother: true }
   })
 }
 
@@ -447,7 +469,7 @@ async function publishToInstagram(context: ChannelContext, target: InstagramTarg
 async function finalize(
   context: ChannelContext,
   call: () => Promise<string | null>,
-  read: () => Promise<{ published: boolean; providerPostId: string | null; permalink: string | null; publishedAt?: string | null; retryable?: boolean }>,
+  read: () => Promise<{ published: boolean; providerPostId: string | null; permalink: string | null; publishedAt?: string | null; retryable?: boolean; createsAnother?: boolean }>,
 ): Promise<ChannelResult> {
   const fence = claimed(context.db, context.publication.id, context.attemptId)
   let callError: unknown = null
@@ -464,13 +486,18 @@ async function finalize(
         await fence.published({ providerPostId: confirmedId, permalink: null, publishedAt: nowIso(), handles: context.handles })
         return outcome(context, 'published', { public_url: null, code: 'details_unavailable', message: messageOf(readError) })
       }
+      if (callError instanceof MetaGraphError && callError.failure !== 'transport') {
+        // Meta answered the final call with an error: it did not take effect.
+        const failure = failureOf(callError)
+        await fence.failed(failure.code, failure.message, context.handles)
+        return outcome(context, 'failed', failure)
+      }
       const message = `The final ${context.publication.channel} call was not confirmed (${messageOf(callError)}) and the post could not be read back (${messageOf(readError)}). Reconcile it; it is not sent again.`
       await fence.unknown('final_unconfirmed', message)
       return outcome(context, 'unknown', { code: 'final_unconfirmed', message })
     }
     if (state.published) {
-      const canonical = state.publishedAt ? new Date(state.publishedAt) : null
-      const publishedAt = canonical && Number.isFinite(canonical.getTime()) ? canonical.toISOString() : nowIso()
+      const publishedAt = instantOf(state.publishedAt)
       await fence.published({ providerPostId: state.providerPostId, permalink: state.permalink, publishedAt, handles: context.handles })
       return outcome(context, 'published', { public_url: validPermalink(state.permalink) })
     }
@@ -479,6 +506,13 @@ async function finalize(
       const failure = failureOf(callError)
       await fence.failed(failure.code, failure.message, context.handles)
       return outcome(context, 'failed', failure)
+    }
+    if (state.createsAnother) {
+      // The call created a post that does not read as published, and calling
+      // again would create another: only reconciliation may say what it is.
+      const message = `${context.publication.channel} answered the final call with ${state.providerPostId ?? 'an object'} that does not read as published. Reconcile it; it is not sent again.`
+      await fence.unknown('final_unconfirmed', message)
+      return outcome(context, 'unknown', { code: 'final_unconfirmed', message })
     }
     if (!state.retryable || context.deadline.remaining() < 5_000) break
   }
@@ -716,7 +750,7 @@ export async function reconcilePostPublication(env: CloudflareEnv, organizationI
         provider_permalink = COALESCE(?, provider_permalink), published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END,
         error_code = ?, error_message = ?, updated_at = ?
       WHERE id = ? AND updated_at = ?`,
-    [state, fields.providerPostId ?? null, validPermalink(fields.permalink ?? null), state, fields.publishedAt ?? nowIso(),
+    [state, fields.providerPostId ?? null, validPermalink(fields.permalink ?? null), state, instantOf(fields.publishedAt),
       state === 'failed' ? fields.code ?? 'provider_rejected' : null, state === 'failed' ? fields.message ?? null : null, nowIso(), publication.id, publication.updated_at])
     if (Number(result.meta?.changes ?? 0) !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'The publication changed while it was being reconciled; read it again' })
   }
