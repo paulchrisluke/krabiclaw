@@ -33,7 +33,9 @@
   -->
   <div v-else-if="isArticles && posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
     <BlawbySectionHeading v-if="heading" :title="heading" accent="" centered />
-    <BlawbyArticleGrid :posts="posts" class="mx-auto my-16 max-w-2xl sm:mt-20 lg:mx-0 lg:max-w-none" />
+    <div class="mx-auto my-16 grid max-w-2xl gap-6 sm:mt-20 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+      <ArticleCard v-for="post in posts" :key="post.id" :article="post" />
+    </div>
     <div v-if="ctaLabel && ctaUrl" class="mt-10 flex justify-center">
       <BlawbyButton :to="ctaUrl">{{ ctaLabel }}</BlawbyButton>
     </div>
@@ -75,7 +77,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import type { BlawbyArticleCard } from '~/components/blawby/BlawbyArticleGrid.vue'
+import ArticleCard, { type ArticleCardData } from '~/components/blog/ArticleCard.vue'
 import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
 // The cards a Blawby page shows for a feature_grid: what the firm does, on the
 // About page and on each practice area. One markup, because it is one thing —
@@ -117,7 +119,7 @@ const tableRows = computed(() => (Array.isArray(table.value.rows) ? table.value.
 
 const isArticles = computed(() => blockText(props.block.data.source) === 'organization_posts')
 const heading = computed(() => blockText(props.block.data.title))
-const posts = computed<BlawbyArticleCard[]>(() => blockRecords(props.block.data.items).map((item) => {
+const posts = computed<Array<ArticleCardData & { id: string }>>(() => blockRecords(props.block.data.items).map((item) => {
   const media = Array.isArray(item.media) ? item.media[0] as Record<string, unknown> | undefined : undefined
   return {
     id: blockText(item.id),

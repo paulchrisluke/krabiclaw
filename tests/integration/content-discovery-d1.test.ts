@@ -6,7 +6,7 @@ import * as schema from '../../server/db/schema.ts'
 import { createContentDocumentWithBlocks, updateContentDocument } from '../../server/utils/content/documents.ts'
 import { buildPlatformKnowledgeDocuments, buildTenantBlogDocuments } from '../../server/utils/public-search.ts'
 import { listSocialCardOwners } from '../../server/utils/social-card.ts'
-import { listPublishedArticles } from '../../server/utils/content/publishing.ts'
+import { getPublishedBlogPost, listPublishedArticles } from '../../server/utils/content/publishing.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 test('public discovery resolves translations through current publication owners', { timeout: 60_000 }, async () => {
@@ -59,10 +59,15 @@ test('public discovery resolves translations through current publication owners'
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'guide'))
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'about'))
     assert(!cards.some(owner => owner.owner_type === 'content_document' && ['home', 'unpublished'].includes(owner.owner_id)))
+    // An article belongs to one collection: the doc is read, listed and addressed only as a doc.
+    assert.deepEqual((await listPublishedArticles(db, env, 'platform', 'docs', 'en')).map(row => row.id), ['guide'])
+    assert.deepEqual((await listPublishedArticles(db, env, 'platform', 'blog', 'en')).map(row => row.id), ['news'])
+    assert.equal((await getPublishedBlogPost(db, 'platform', 'docs', 'guide', 'en', env))?.id, 'guide')
+    assert.equal(await getPublishedBlogPost(db, 'platform', 'blog', 'guide', 'en', env), null)
     // A translated list is readable only where the language is published on a Growth site.
     await db.prepare("INSERT INTO subscription (id, plan, referenceId, status, periodEnd) VALUES ('sub-tenant','growth','tenant','active',4102444800)").run()
     const translated = await listPublishedArticles(db, env, 'tenant', 'blog', 'th')
-    assert.deepEqual(translated.map(row => [row.root_id, row.title, row.excerpt, row.slug]), [
+    assert.deepEqual(translated.map(row => [row.id, row.title, row.excerpt, row.slug]), [
       ['tenant-story', 'Translated story', 'Translated summary', 'translated'],
     ])
     const source = await db.prepare("SELECT updated_at FROM content_documents WHERE id = 'tenant-story'").first<string>('updated_at')

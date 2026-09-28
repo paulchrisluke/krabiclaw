@@ -351,10 +351,6 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/docs',
-      pathPrefix: false,
-    },
-    {
       path: '~/components/blog',
       pathPrefix: false,
     },

@@ -17,7 +17,7 @@
 </template>
 
 <script setup lang="ts">
-interface DocsBreadcrumbEntry {
+interface ArticleBreadcrumbEntry {
   name: string
   url: string
 }
@@ -25,5 +25,5 @@ interface DocsBreadcrumbEntry {
 // Takes the exact same { name, url }[] array passed to useContentPageSchema's
 // `breadcrumbs` option, so the visible trail and the BreadcrumbList JSON-LD
 // can never drift apart.
-defineProps<{ crumbs: DocsBreadcrumbEntry[] }>()
+defineProps<{ crumbs: ArticleBreadcrumbEntry[] }>()
 </script>

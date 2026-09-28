@@ -19,6 +19,7 @@ import { getProduct, hydrateProductMedia, summarizeLocationProducts } from '~/se
 import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getBlogPost, listBlogPosts } from '~/server/utils/content/publishing'
+import { isArticleCollection } from '~/utils/article-collections'
 import { createPreviewToken, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getEditablePages } from '~/config/content-registry'
@@ -231,10 +232,12 @@ export async function loadDashboardBlogPosts(
   input: { status?: string | null; collection?: string | null; limit?: number; cursor?: string },
 ) {
   const { env, db } = await requireBlogAccess(event, organizationId)
-  const resource = { resource: `blog-posts:${organizationId}:${input.status ?? ''}:${input.collection ?? ''}` }
+  const collection = input.collection ?? null
+  if (collection !== null && !isArticleCollection(collection)) throw new HTTPError({ statusCode: 400, statusMessage: 'collection must be blog or docs' })
+  const resource = { resource: `blog-posts:${organizationId}:${input.status ?? ''}:${collection ?? ''}` }
   return await listBlogPosts(db, organizationId, input.status, env, mcpPageWindow({
     ...(input.limit === undefined ? {} : { limit: input.limit }), ...(input.cursor ? { cursor: input.cursor } : {}),
-  }, resource), resource, input.collection ?? null)
+  }, resource), resource, collection)
 }
 
 export async function loadDashboardBlogPost(

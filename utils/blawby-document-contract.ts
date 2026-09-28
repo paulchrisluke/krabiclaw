@@ -1,5 +1,6 @@
 import {
   BLAWBY_ROUTE_RECIPES,
+  isBlawbyShellOnlyRouteRecipe,
   type PublicBlawbyRouteData,
   type PublicBlawbyShellData,
 } from '~/types/blawby'
@@ -48,8 +49,7 @@ function hasValidThemeTokens(value: unknown) {
 }
 
 function hasRequiredRouteContent(route: Record<string, unknown>) {
-  if (route.recipe === 'links' || route.recipe === 'confirmation' || route.recipe === 'posts') return true
-  if (route.recipe === 'article') return isRecord(route.post)
+  if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe as PublicBlawbyRouteData['recipe'])) return true
   return isRecord(route.page)
 }
 

@@ -916,7 +916,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   // the collection, which is a removal the caller must mean.
   set_collection_products: D,
   reorder_collections: D,
-  reorder_docs: D,
+  reorder_blog_posts: D,
   list_metafield_definitions: R,
   create_metafield_definition: W,
   delete_metafield_definition: D,

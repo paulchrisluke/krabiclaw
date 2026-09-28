@@ -50,7 +50,7 @@ export async function loadPublicBlawbyDocument(
   if (!RECIPES.has(recipe)) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Valid Blawby route recipe required' })
   }
-  if ((recipe === 'article' || recipe === 'page') && !slug) {
+  if (recipe === 'page' && !slug) {
     throw new HTTPError({ statusCode: 400, statusMessage: 'Blawby route slug required' })
   }
   // A generic page is addressed by its path; every other recipe by a slug.

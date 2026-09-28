@@ -2,9 +2,7 @@ import { parseGoogleReviewMetadata } from '~/shared/google-review'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { parseSocialImageSource } from '~/utils/social-metadata'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
-import { getPublishedBlogPost } from '~/server/utils/content/publishing'
 import {
   loadExactPublicLocalizations,
   type ExactPublicLocalization,
@@ -27,7 +25,6 @@ import type {
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
-  PublicBlogPost,
   PublicCompliance,
   PublicComplianceContactPoint,
   PublicConsultationSettings,
@@ -43,10 +40,6 @@ function asBoolean(value: unknown) {
 function requiredText(value: unknown, field: string): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
   throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
-}
-
-export function resolvePublicArticleCanonicalUrl(slug: unknown): string {
-  return `/article/${requiredText(slug, 'article.slug')}`
 }
 
 /**
@@ -404,44 +397,6 @@ function mapPublicReviews(rows: OrganizationReviewRow[]): PublicOrganizationRevi
   }))
 }
 
-function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
-  if (!row) return null
-  return {
-    id: String(row.id),
-    title: String(row.title),
-    slug: String(row.slug),
-    body: requiredText(row.body, `article ${row.id}.body`),
-    author: row.author && typeof row.author === 'object' && !Array.isArray(row.author)
-      ? {
-          id: String((row.author as ApiRecord).id),
-          name: typeof (row.author as ApiRecord).name === 'string' ? String((row.author as ApiRecord).name) : null,
-          image: typeof (row.author as ApiRecord).image === 'string' ? String((row.author as ApiRecord).image) : null,
-        }
-      : null,
-    excerpt: typeof row.excerpt === 'string' ? row.excerpt : null,
-    category: typeof row.category === 'string' ? row.category : null,
-    tags: Array.isArray(row.tags) ? row.tags.map(String) : (row.tags_json ? JSON.parse(row.tags_json) as string[] : []),
-    published_at: typeof row.published_at === 'string' ? row.published_at : null,
-    canonical_url: resolvePublicArticleCanonicalUrl(row.slug),
-    visibility: row.visibility === 'unlisted' ? 'unlisted' : 'listed',
-    created_at: typeof row.created_at === 'string' ? row.created_at : null,
-    updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
-    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
-    cover: row.cover && typeof row.cover === 'object' && !Array.isArray(row.cover)
-      ? {
-          asset_id: String((row.cover as ApiRecord).asset_id),
-          public_url: typeof (row.cover as ApiRecord).public_url === 'string' ? String((row.cover as ApiRecord).public_url) : null,
-          thumbnail_url: typeof (row.cover as ApiRecord).thumbnail_url === 'string' ? String((row.cover as ApiRecord).thumbnail_url) : null,
-          kind: typeof (row.cover as ApiRecord).kind === 'string' ? String((row.cover as ApiRecord).kind) : null,
-          alt_text: typeof (row.cover as ApiRecord).alt_text === 'string' ? String((row.cover as ApiRecord).alt_text) : null,
-          width: typeof (row.cover as ApiRecord).width === 'number' && Number.isFinite((row.cover as ApiRecord).width) ? Number((row.cover as ApiRecord).width) : null,
-          height: typeof (row.cover as ApiRecord).height === 'number' && Number.isFinite((row.cover as ApiRecord).height) ? Number((row.cover as ApiRecord).height) : null,
-        }
-      : null,
-    social_image: parseSocialImageSource(row.social_image),
-  }
-}
-
 export async function getPublicBlawbyRouteData(
   db: DbClient,
   organizationId: string,
@@ -454,7 +409,7 @@ export async function getPublicBlawbyRouteData(
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
   const localized = options.locale !== undefined && options.locale !== 'en'
 
-  const [page, reviewRows, postRow] = await Promise.all([
+  const [page, reviewRows] = await Promise.all([
     pagePath
       ? getPublicTenantPageByPath(env, db, organizationId, pagePath, {
           locale: options.locale,
@@ -462,27 +417,21 @@ export async function getPublicBlawbyRouteData(
         })
       : Promise.resolve(null),
     needsReviews ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
-    recipe === 'article' && options.slug
-      ? getPublishedBlogPost(db, organizationId, options.slug, options.locale ?? 'en', env, options.previewAuthorized)
-      : Promise.resolve(null),
   ])
   // The Blawby layouts render one FAQ section, from the page's FAQ block; the
   // route data carries that block's items, as its declared source resolved them.
   const qa = faqBlockQa(page)
-  const resolvedPost = mapPublicBlogPost(postRow)
   return {
     recipe,
-    localeRepresentations: postRow?.localeRepresentations ?? [],
+    localeRepresentations: [],
     page,
     qa,
     reviews: mapPublicReviews(reviewRows),
-    post: resolvedPost,
   }
 }
 
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
-  if (route.recipe === 'confirmation' || route.recipe === 'posts' || isBlawbyShellOnlyRouteRecipe(route.recipe)) return true
-  if (route.recipe === 'article') return Boolean(route.post)
+  if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe)) return true
   return Boolean(route.page)
 }
 

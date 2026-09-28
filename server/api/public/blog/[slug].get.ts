@@ -28,7 +28,9 @@ export default defineHandler(async (event) => {
   if (requested !== undefined && !isArticleCollection(requested)) {
     return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
   }
-  const collection = requested === undefined ? null : requested
+  // Absent means the blog, as on the list route: an article is served only by
+  // its own collection's route.
+  const collection = requested === undefined ? 'blog' : requested
   const locale = assertExactCanonicalLocale(query.locale ?? 'en')
 
   const env = cloudflareEnv(event)
@@ -38,6 +40,7 @@ export default defineHandler(async (event) => {
   const post = await getPublishedBlogPost(
     db,
     organizationId,
+    collection,
     slug,
     locale,
     env,

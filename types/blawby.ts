@@ -109,38 +109,6 @@ export interface PublicOrganizationReview {
   verified: boolean
 }
 
-export interface PublicBlogSummary {
-  id: string
-  title: string
-  slug: string
-  excerpt: string | null
-  category: string | null
-  tags: string[]
-  published_at: string | null
-  canonical_url: string
-  /** The leading image block of the article, or null when the article opens with text. */
-  cover: {
-    asset_id: string
-    public_url: string | null
-    thumbnail_url: string | null
-    kind: string | null
-    alt_text: string | null
-    width: number | null
-    height: number | null
-  } | null
-  social_image: SocialImageSource | null
-}
-
-export interface PublicBlogPost extends PublicBlogSummary {
-  body: string
-  author: { id: string; name: string | null; image: string | null } | null
-  canonical_url: string
-  visibility: 'listed' | 'unlisted'
-  created_at: string | null
-  updated_at: string | null
-  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
-}
-
 export const BLAWBY_ROUTE_RECIPES = [
   'home',
   'links',
@@ -156,7 +124,7 @@ export const BLAWBY_ROUTE_RECIPES = [
   'privacy',
   'terms',
   'third-party-notices',
-  // The short-post feed and a post: the posts are the content, not a page.
+  // The short-post feed and a post, which read the posts themselves.
   'posts',
   // Any other page this site publishes, addressed by its own path. The named
   // recipes above are pages with branded sections; this one is the page.
@@ -165,7 +133,10 @@ export const BLAWBY_ROUTE_RECIPES = [
 
 export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
 
-export const BLAWBY_SHELL_ONLY_ROUTE_RECIPES = ['links'] as const
+// 'article' is every article-collection route — an article, the docs index and
+// a doc. The article page reads the article itself, the same way on every
+// template, so the Blawby document carries only the site's chrome for it.
+export const BLAWBY_SHELL_ONLY_ROUTE_RECIPES = ['links', 'article', 'posts'] as const
 
 export type BlawbyShellOnlyRouteRecipe = typeof BLAWBY_SHELL_ONLY_ROUTE_RECIPES[number]
 
@@ -179,7 +150,6 @@ export interface PublicBlawbyRouteData {
   page: PublicTenantPage | null
   qa: PublicOrganizationQa[]
   reviews: PublicOrganizationReview[]
-  post: PublicBlogPost | null
 }
 
 export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage

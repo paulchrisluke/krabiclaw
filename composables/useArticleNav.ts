@@ -1,4 +1,5 @@
 import type { PublishedArticleCategory } from '~/composables/usePublishedArticles'
+import { ARTICLE_COLLECTIONS } from '~/utils/article-collections'
 
 export interface ArticleNav {
   categories: PublishedArticleCategory[]
@@ -23,8 +24,8 @@ export async function useArticleNav() {
 
   return computed<ArticleNav>(() => ({
     categories: categories.value,
-    indexPath: collection.value === 'docs' ? '/docs' : localePath('/blog'),
-    indexLabel: collection.value === 'docs' ? 'Docs' : t('saya.footer.blog'),
+    indexPath: localePath(ARTICLE_COLLECTIONS[collection.value].pathPrefix),
+    indexLabel: collection.value === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'),
     // Krabiclaw searches its own blog and docs; a site searches its articles, in English only.
     search: template.value.slug === 'platform'
       ? { surface: collection.value, variant: 'platform' }

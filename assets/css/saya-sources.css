@@ -1,6 +1,8 @@
 /* Shared public route templates plus Saya tenant components. */
 @source "../../pages/*.vue";
+@source "../../pages/article";
 @source "../../pages/blog";
+@source "../../pages/docs";
 @source "../../pages/contact";
 @source "../../pages/experiences";
 @source "../../pages/locations";
@@ -8,6 +10,7 @@
 @source "../../pages/posts";
 @source "../../pages/reservations";
 @source "../../pages/services";
+@source "../../layouts/articles.vue";
 @source "../../layouts/default.vue";
 @source "../../layouts/saya.vue";
 @source "../../components/*.vue";
@@ -16,7 +19,9 @@
 @source "../../components/content";
 @source "../../components/menu";
 @source "../../components/platform/PlatformButton.vue";
+@source "../../components/platform/PlatformDrawer.vue";
 @source "../../components/platform/PlatformIcon.vue";
+@source "../../components/platform/search";
 @source "../../components/products";
 @source "../../components/saya";
 @source "../../components/tenant-pages";

@@ -1,6 +1,8 @@
 /* Shared public route templates plus Blawby tenant components. */
 @source "../../pages/*.vue";
+@source "../../pages/article";
 @source "../../pages/blog";
+@source "../../pages/docs";
 @source "../../pages/contact";
 @source "../../pages/experiences";
 @source "../../pages/locations";
@@ -9,6 +11,7 @@
 @source "../../pages/reservations";
 @source "../../pages/services";
 @source "../../pages/policies";
+@source "../../layouts/articles.vue";
 @source "../../layouts/default.vue";
 @source "../../layouts/blawby.vue";
 @source "../../components/*.vue";
@@ -19,7 +22,9 @@
 @source "../../components/menu";
 @source "../../components/tenant-pages";
 @source "../../components/platform/PlatformButton.vue";
+@source "../../components/platform/PlatformDrawer.vue";
 @source "../../components/platform/PlatformIcon.vue";
+@source "../../components/platform/search";
 @source "../../components/products";
 @source "../../components/ui/AppBreadcrumb.vue";
 @source "../../components/ui/AppSection.vue";

@@ -10,7 +10,7 @@
 @source "../../components/blawby/BlawbyVideoFeature.vue";
 @source "../../components/blawby/BlawbyFaqSection.vue";
 @source "../../components/blawby/BlawbyReviewsSection.vue";
-@source "../../components/blawby/BlawbyArticleGrid.vue";
+@source "../../components/blog/ArticleCard.vue";
 @source "../../components/blawby/BlawbyConsultationCta.vue";
 @source "../../components/blawby/BlawbyRichText.vue";
 @source "../../components/blawby/BlawbySocialIcon.vue";

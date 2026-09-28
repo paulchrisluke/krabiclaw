@@ -21,9 +21,8 @@ import {
   projectLocalizedMediaAlt,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations } from '~/server/utils/public-locale-representations'
-import { normalizeVertical } from '~/utils/vertical-copy'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { normalizeBlogSlug, resolveSlugMutation } from '~/utils/blog-editor'
 import { creationDedupeKey, creationRequestHash, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
@@ -42,6 +41,7 @@ import { refreshSocialCard } from '~/server/utils/social-card'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { createPreviewToken, PREVIEW_TOKEN_QUERY, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
+import { getPublishedTenantPage } from '~/server/utils/content/pages'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
@@ -111,7 +111,7 @@ export interface PlatformBlogCreateInput {
   slug?: string | null
   content_blocks: Array<ContentBlockInput & { id?: string }>
   excerpt?: string | null
-  /** Platform template only: which collection the article belongs to. Defaults to the blog. */
+  /** Which of the site's collections the article belongs to. Defaults to the blog. */
   collection?: ArticleCollection | null
   category?: string | null
   tags?: string[] | null
@@ -413,10 +413,7 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
   return { orgSlug: organization.slug }
 }
 
-// Krabiclaw's own collections have fixed category taxonomies because the category
-// shapes the URL; a tenant's blog category is free text.
-function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: boolean, operation: 'create' | 'update') {
-  if (isTenant && input.collection !== undefined && input.collection !== null && input.collection !== 'blog') badRequest('Only Krabiclaw\'s own site publishes collections other than the blog')
+function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, operation: 'create' | 'update') {
   const writable = new Set<string>([...BLOG_UPDATE_MUTATION_FIELDS, ...(operation === 'create' ? [] : ['expected_updated_at'])])
   if (operation === 'create') { writable.delete('redirect_old_slug'); writable.delete('reset_slug_override') }
   const unknown = Object.keys(input).find(field => !writable.has(field))
@@ -433,18 +430,25 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: b
 }
 
 /**
+ * The order every article collection is read in, public and in the dashboard:
+ * the order its owner set, and among articles never placed (a new one, or a
+ * collection nobody has ordered) newest first.
+ */
+const ARTICLE_ORDER_SQL = (alias: string) => `${alias}.sort_order, ${alias}.published_at IS NULL, ${alias}.published_at DESC, ${alias}.created_at DESC, ${alias}.id DESC`
+
+/**
  * A site's published, listed articles in one collection and one language — the
- * public read of what list_blog_posts returns, tags included. A translated
- * article is read through its representation, and slug, title and path are
- * the representation's own. The blog reads newest first; documentation reads
- * in its editorial order (sort_order, then title).
+ * public read of what list_blog_posts returns, in the same order. A translated
+ * article is read through its representation, so slug and title are the
+ * representation's own; `id` is always the article's, the id MCP and the
+ * dashboard name it by.
  */
 export async function listPublishedArticles(db: DbClient, env: CloudflareEnv, organizationId: string, collection: ArticleCollection, locale: string) {
   // A language the site has not published is not readable, here or anywhere public.
   if (locale !== 'en') await assertPublicOrganizationLanguageEntitlement(env, db, organizationId, locale)
   const sql = `
     SELECT
-      p.id, root.id AS root_id, p.title, p.slug, p.summary AS excerpt, (root.metadata_json ->> '$.collection') AS collection,
+      root.id, p.title, p.slug, p.summary AS excerpt, (root.metadata_json ->> '$.collection') AS collection,
       (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_keywords,
       root.published_at, p.updated_at, root.sort_order, ${COVER_SELECT}
     FROM content_documents root
@@ -452,52 +456,67 @@ export async function listPublishedArticles(db: DbClient, env: CloudflareEnv, or
     ${coverJoinSql('p')}
     WHERE root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.organization_id = ? AND root.visibility = 'listed'
       AND (root.metadata_json ->> '$.collection') = ?
-    ORDER BY ${collection === 'docs' ? 'root.sort_order, p.title' : 'root.published_at IS NULL, root.published_at DESC, root.id DESC'}
+    ORDER BY ${ARTICLE_ORDER_SQL('root')}
     LIMIT 200
   `
   return (await queryAll<ApiRecord>(db, sql, [locale, organizationId, collection])).map(attachCover)
 }
 
 /**
- * Krabiclaw's documentation, in the order it is read. The blog reads newest
- * first; only the docs have an order someone chose, and it is chosen whole:
- * every article named once, like a menu's collections. A partial order would
- * leave the unnamed articles wherever they were, which is not an order anyone
- * picked. Reordering is not an edit to any article, so no article's
- * updated_at — its published "modified" date — moves.
+ * What a collection's index says about itself: the title and summary of the
+ * page the site publishes at the index's own path (/blog, /docs), when it
+ * publishes one. A site that publishes none has an index titled by its
+ * collection's name alone.
  */
-export async function reorderDocs(db: DbClient, organizationId: string, postIds: string[]) {
-  if (!(await loadOrganizationTemplate(db, organizationId)).isPlatform) badRequest('Only Krabiclaw\'s own site publishes documentation')
+export async function getArticleCollectionIndex(db: DbClient, organizationId: string, collection: ArticleCollection, locale: string) {
+  const page = await getPublishedTenantPage(db, organizationId, ARTICLE_COLLECTIONS[collection].pathPrefix, locale)
+  return page ? { title: page.title, summary: page.summary } : null
+}
+
+/**
+ * Sets the order a collection is read in. It is chosen whole — every article
+ * in the collection named once, drafts included, like a menu's collections: a
+ * partial order would leave the unnamed articles wherever they were, which is
+ * not an order anyone picked. Positions start at 1, so an article written
+ * after the order was set (sort_order 0) leads until it is placed. Reordering
+ * is not an edit to any article, so no article's updated_at — its published
+ * "modified" date — moves.
+ */
+export async function reorderArticles(db: DbClient, organizationId: string, collection: ArticleCollection, postIds: string[]) {
   const existing = await queryAll<{ id: string }>(db, `SELECT id FROM content_documents
-    WHERE kind = 'article' AND row_role = 'root' AND organization_id = ? AND (metadata_json ->> '$.collection') = 'docs'`, [organizationId])
+    WHERE kind = 'article' AND row_role = 'root' AND organization_id = ? AND (metadata_json ->> '$.collection') = ?`, [organizationId, collection])
   const intended = new Set(postIds)
   if (intended.size !== postIds.length || intended.size !== existing.length || existing.some(row => !intended.has(row.id))) {
-    badRequest('post_ids must list every documentation article exactly once')
+    badRequest(`post_ids must list every ${collection} article exactly once`)
   }
-  const results = await executeBatch(db, [
-    ...postIds.map((id, index) => ({
-      query: `UPDATE content_documents SET sort_order = ? WHERE id = ? AND organization_id = ? AND kind = 'article' AND row_role = 'root'
-        AND (metadata_json ->> '$.collection') = 'docs'`,
-      params: [index, id, organizationId],
-    })),
-    publicResourceCacheInvalidationQuery(organizationId, 'docs-reordered'),
+  // One statement, so the order is applied whole or not at all: it changes no
+  // row unless the ids are still exactly the collection's articles. An article
+  // deleted or moved to the other collection since the check above leaves every
+  // position as it was. Positions come from the JSON array, which keeps the bind
+  // count constant however long the collection is.
+  const order = JSON.stringify(postIds)
+  const inCollection = `organization_id = ? AND kind = 'article' AND row_role = 'root' AND (metadata_json ->> '$.collection') = ?`
+  const [result] = await executeBatch(db, [
+    {
+      query: `UPDATE content_documents SET sort_order = (SELECT j.key + 1 FROM json_each(?) j WHERE j.value = content_documents.id)
+        WHERE ${inCollection}
+          AND (SELECT COUNT(*) FROM content_documents WHERE ${inCollection}) = json_array_length(?)
+          AND (SELECT COUNT(*) FROM content_documents d JOIN json_each(?) j ON j.value = d.id
+                WHERE d.organization_id = ? AND d.kind = 'article' AND d.row_role = 'root' AND (d.metadata_json ->> '$.collection') = ?) = json_array_length(?)`,
+      params: [order, organizationId, collection, organizationId, collection, order, order, organizationId, collection, order],
+    },
+    publicResourceCacheInvalidationQuery(organizationId, 'articles-reordered'),
   ])
-  // An article deleted or moved to the blog since the check above is an order
-  // that was not applied, whatever the batch returned.
-  const changed = results.slice(0, postIds.length).reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
-  if (changed !== postIds.length) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'The documentation changed while it was being reordered; reload and try again' })
+  if (Number(result?.meta.changes ?? 0) !== postIds.length) {
+    throw new HTTPError({ statusCode: 409, statusMessage: `The ${collection} changed while it was being reordered; reload and try again` })
   }
 }
 
 export async function listBlogPosts(
   db: DbClient, organizationId: string, status: string | null | undefined, env: CloudflareEnv | undefined,
-  window: { limit: number; offset: number }, resource: { resource: string }, collection: string | null = null,
+  window: { limit: number; offset: number }, resource: { resource: string }, collection: ArticleCollection | null = null,
 ): Promise<{ posts: ApiRecord[]; page_info: McpPageInfo }> {
   if (status && status !== 'draft' && status !== 'published') badRequest('status must be draft or published')
-  if (collection && !isArticleCollection(collection)) badRequest(`collection must be one of: ${ARTICLE_COLLECTION_SLUGS.join(', ')}`)
-  // Documentation is read in the order someone set; everything else newest first.
-  const order = collection === 'docs' ? 'p.sort_order, p.title, p.id' : 'p.published_at IS NULL, p.published_at DESC, p.created_at DESC, p.id DESC'
   const rows = await queryAll<ApiRecord>(db, `SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility,
       p.seo_keywords, p.sort_order,
@@ -506,8 +525,8 @@ export async function listBlogPosts(
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ? ${status ? 'AND p.status = ?' : ''}
-      ${collection ? "AND coalesce(p.metadata_json ->> '$.collection', 'blog') = ?" : ''}
-    ORDER BY ${order} LIMIT ? OFFSET ?`,
+      ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
+    ORDER BY ${ARTICLE_ORDER_SQL('p')} LIMIT ? OFFSET ?`,
   [organizationId, ...(status ? [status] : []), ...(collection ? [collection] : []), window.limit + 1, window.offset])
   const page = rows.slice(0, window.limit)
   const [context, organization] = await Promise.all([resolveTenantContext(db, organizationId, env), loadOrganizationTemplate(db, organizationId)])
@@ -573,7 +592,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   }
 }
 
-export async function getPublicOrganizationBlogPost(db: DbClient, organizationId: string, slug: string, env: CloudflareEnv, previewAuthorized = false) {
+async function getPublicOrganizationBlogPost(db: DbClient, organizationId: string, collection: ArticleCollection, slug: string, env: CloudflareEnv, previewAuthorized = false) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_keywords, p.visibility,
@@ -582,10 +601,10 @@ export async function getPublicOrganizationBlogPost(db: DbClient, organizationId
       ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.organization_id = ?
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.organization_id = ? AND (p.metadata_json ->> '$.collection') = ?
       ${previewAuthorized ? "AND p.status IN ('draft', 'published')" : "AND p.status = 'published'"}
     LIMIT 1
-  `, [slug, organizationId])
+  `, [slug, organizationId, collection])
 
   if (!post) return null
 
@@ -596,7 +615,7 @@ export async function getPublicOrganizationBlogPost(db: DbClient, organizationId
     listBlocksForDocument(db, contentDocument.id),
     loadOrganizationTemplate(db, organizationId),
   ])
-  const articlePath = tenantBlogPostPath(organization.template, slug)
+  const articlePath = tenantBlogPostPath(organization.template, slug, collection)
   const contentBlocks = loadedBlocks ? await attachPageQa(db, organizationId, articlePath, loadedBlocks) : loadedBlocks
   const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'content_document', [String(post.id)])).get(String(post.id))
   const { author_id: authorId, ...postRecord } = post
@@ -610,28 +629,32 @@ export async function getPublicOrganizationBlogPost(db: DbClient, organizationId
   }
 }
 
-/** One published article, by slug, in the locale asked for. */
+/**
+ * One published article of a collection, by slug, in the locale asked for —
+ * the read behind every article page on every template. An article is found
+ * only in its own collection, so a doc is not also served under /blog.
+ */
 export async function getPublishedBlogPost(
   db: DbClient,
   organizationId: string,
+  collection: ArticleCollection,
   slug: string,
   locale: string,
   env: CloudflareEnv,
   previewAuthorized = false,
 ) {
-  const organization = await queryFirst<{ vertical: string }>(db, `
-    SELECT vertical FROM organization WHERE id = ? AND status = 'active' LIMIT 1
-  `, [organizationId])
-  if (!organization) return null
-  const prefix = normalizeVertical(organization.vertical) === 'service' ? 'article' : 'blog'
+  const active = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  if (!active) return null
+  const { template } = await loadOrganizationTemplate(db, organizationId)
+  const pathOf = (articleSlug: string) => tenantBlogPostPath(template, articleSlug, collection)
   if (locale === 'en') {
-    const post = await getPublicOrganizationBlogPost(db, organizationId, slug, env, previewAuthorized)
+    const post = await getPublicOrganizationBlogPost(db, organizationId, collection, slug, env, previewAuthorized)
     if (!post || typeof post.id !== 'string') return post
     return {
       ...post,
       localeRepresentations: await listPublicLocaleRepresentations(env, db, {
         organizationId,
-        sourcePath: `/${prefix}/${slug}`,
+        sourcePath: pathOf(slug),
         documentId: post.id,
       }),
     }
@@ -645,18 +668,18 @@ export async function getPublishedBlogPost(
            d.updated_at, root.slug AS source_slug
       FROM content_documents d JOIN content_documents root ON root.id = d.root_id
      WHERE d.organization_id = ? AND d.locale = ? AND d.path = ? AND d.row_role = 'representation'
-       AND root.kind = 'article' AND root.row_role = 'root'
+       AND root.kind = 'article' AND root.row_role = 'root' AND (root.metadata_json ->> '$.collection') = ?
        ${previewAuthorized ? '' : "AND root.status = 'published'"} LIMIT 1
-  `, [organizationId, locale, '/' + prefix + '/' + slug])
+  `, [organizationId, locale, pathOf(slug), collection])
   if (!row) return null
-  const canonical = await getPublicOrganizationBlogPost(db, organizationId, row.source_slug, env, previewAuthorized)
+  const canonical = await getPublicOrganizationBlogPost(db, organizationId, collection, row.source_slug, env, previewAuthorized)
   if (!canonical) return null
   const metadata = JSON.parse(row.metadata_json) as Record<string, unknown>
   const [outlineBlocks, rawBlocks, social] = await Promise.all([
     getContentOutline(db, row.id), listBlocksForDocument(db, row.id),
     loadPublicSocialMedia(db, organizationId, 'content_document', [row.id]),
   ])
-  const contentBlocks = await attachPageQa(db, organizationId, '/' + prefix + '/' + row.source_slug, outlineBlocks, locale)
+  const contentBlocks = await attachPageQa(db, organizationId, pathOf(row.source_slug), outlineBlocks, locale)
   return { ...canonical, id: row.id, title: row.title, excerpt: row.summary, slug,
     seo_keywords: row.seo_keywords,
     category: metadata.category ?? null, tags: metadata.tags ?? [],
@@ -665,7 +688,7 @@ export async function getPublishedBlogPost(
     media: projectLocalizedMediaAlt(social.get(row.id)?.media ?? [], localizations),
     social_image: social.get(row.id)?.social_image ?? null,
     localeRepresentations: await listPublicLocaleRepresentations(env, db, { organizationId,
-      sourcePath: '/' + prefix + '/' + row.source_slug, documentId: row.root_id }),
+      sourcePath: pathOf(row.source_slug), documentId: row.root_id }),
   }
 }
 
@@ -688,9 +711,8 @@ export async function createBlogPost(
   const organizationId = scope.organization_id
   if (!organizationId) badRequest('organization_id is required')
   if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
-  const organization = await loadOrganizationTemplate(db, organizationId)
-  const isTenant = !organization.isPlatform
-  validateBlogCommon(article, isTenant, 'create')
+  await loadOrganizationTemplate(db, organizationId)
+  validateBlogCommon(article, 'create')
   const requestHash = await creationRequestHash(article)
   const dedupeKey = creationDedupeKey('article', organizationId, idempotencyKey)
   const replay = async () => {
@@ -800,8 +822,7 @@ export async function updateBlogPost(
 ) {
   if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) badRequest('At least one blog mutation field is required')
   const postId = await resolvePlatformContentId(db, 'article', postIdOrSlug, 'Post not found', organizationId)
-  const isTenant = !(await loadOrganizationTemplate(db, organizationId)).isPlatform
-  validateBlogCommon(input, isTenant, 'update')
+  validateBlogCommon(input, 'update')
   const current = await queryFirst<{ organization_id: string; collection: string | null; category: string | null; title: string; slug: string;
     first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, `
     SELECT organization_id, metadata_json ->> '$.collection' AS collection, metadata_json ->> '$.category' AS category, title, slug, first_published_at,

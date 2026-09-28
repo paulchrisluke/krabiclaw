@@ -5,11 +5,11 @@ export interface BlogPost {
   title: string
   slug?: string | null
   excerpt?: string | null
-  /** Which of the site's collections the article belongs to; customer templates only have the blog. */
+  /** Which of the site's collections the article belongs to: its blog or its docs. */
   collection?: ArticleCollection | null
   category?: string | null
-  /** Documentation only: its place in the docs, lowest first. */
-  sort_order?: number
+  /** Its place in its collection, from 1; 0 until the collection is ordered with it in it. */
+  sort_order: number
   seo_keywords?: string | null
   published_at?: string | null
   updated_at: string

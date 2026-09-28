@@ -1,12 +1,19 @@
 import type { McpExecutorContext } from './shared'
-import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderDocs, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
+import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderArticles, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
 
 const ARTICLE_COLLECTIONS_SET = new Set(['blog', 'docs'])
+
+function optionalArticleCollection(args: Record<string, unknown>): ArticleCollection | null {
+  if (args.collection === undefined || args.collection === null) return null
+  if (!isArticleCollection(args.collection)) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection must be blog or docs.')
+  return args.collection
+}
 
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
@@ -159,8 +166,9 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     case "list_blog_posts":
       {
         const status = optionalString(args, "status");
-        const resource = { resource: `blog-posts:${organization.organizationId}:${status ?? ''}` };
-        const page = await listBlogPosts(organization.db, organization.organizationId, status, organization.env, mcpPageWindow(args, resource), resource);
+        const collection = optionalArticleCollection(args);
+        const resource = { resource: `blog-posts:${organization.organizationId}:${status ?? ''}:${collection ?? ''}` };
+        const page = await listBlogPosts(organization.db, organization.organizationId, status, organization.env, mcpPageWindow(args, resource), resource, collection);
         return { posts: page.posts.map((post) => toBlogPostSummary(post, organization)), page_info: page.page_info };
       }
     case "get_blog_post":
@@ -213,16 +221,18 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         lifecycle.changed ? `Published blog article "${result.title}".` : `Blog article "${result.title}" was already published; nothing changed.`,
       )
     }
-    case "reorder_docs": {
+    case "reorder_blog_posts": {
+      const collection = optionalArticleCollection(args)
+      if (!collection) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection is required.')
       if (!Array.isArray(args.post_ids) || args.post_ids.some(id => typeof id !== 'string' || !id.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'post_ids must contain non-empty post ids.')
       }
-      await reorderDocs(organization.db, organization.organizationId, args.post_ids.map(id => String(id).trim()))
-      // The order that was set, read back whole: every documentation article, in it.
+      await reorderArticles(organization.db, organization.organizationId, collection, args.post_ids.map(id => String(id).trim()))
+      // The order that was set, read back whole: every article in the collection, in it.
       const posts: Awaited<ReturnType<typeof listBlogPosts>>['posts'] = []
-      const resource = { resource: `docs-order:${organization.organizationId}` }
+      const resource = { resource: `article-order:${organization.organizationId}:${collection}` }
       for (let offset = 0, more = true; more; offset += 100) {
-        const page = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, { limit: 100, offset }, resource, 'docs')
+        const page = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, { limit: 100, offset }, resource, collection)
         posts.push(...page.posts)
         more = page.page_info.has_more
       }
