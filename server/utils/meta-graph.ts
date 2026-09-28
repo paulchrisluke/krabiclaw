@@ -16,15 +16,16 @@
 
 export type MetaGraphFailure = 'rejected' | 'authorization' | 'transport'
 
+export interface MetaGraphErrorDetails { status: number | null; code: number | null; subcode: number | null; fbtraceId: string | null }
+
 export class MetaGraphError extends Error {
-  constructor(
-    readonly failure: MetaGraphFailure,
-    message: string,
-    readonly details: { status: number | null; code: number | null; subcode: number | null; fbtraceId: string | null } = { status: null, code: null, subcode: null, fbtraceId: null },
-    options?: { cause?: unknown },
-  ) {
+  readonly failure: MetaGraphFailure
+  readonly details: MetaGraphErrorDetails
+  constructor(failure: MetaGraphFailure, message: string, details: MetaGraphErrorDetails = { status: null, code: null, subcode: null, fbtraceId: null }, options?: { cause?: unknown }) {
     super(message, options)
     this.name = 'MetaGraphError'
+    this.failure = failure
+    this.details = details
   }
 
   /** Graph code 100 / subcode 33: the object named does not exist (or is not visible to this token). */

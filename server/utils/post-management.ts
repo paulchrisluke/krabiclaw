@@ -24,7 +24,6 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
  * route from the moment it exists.
  */
 
-export { normalizePostSlug, postPublicPath, PostValidationError }
 
 const MAX_SLUG_ATTEMPTS = 20
 
@@ -132,8 +131,8 @@ async function validatePostLocation(db: DbClient, organizationId: string, locati
  * generated identifier, allocated once, never a reader's fallback.
  */
 async function allocatePostSlug(db: DbClient, organizationId: string, postId: string, requested: string | null, title: string | null, body: string | null) {
-  const base = (requested ? normalizePostSlug(requested) : '') || normalizePostSlug(title ?? body?.slice(0, 80) ?? '') || `update-${postId}`
   if (requested && !normalizePostSlug(requested)) throw new PostValidationError('slug must contain letters or numbers')
+  const base = (requested ? normalizePostSlug(requested) : '') || normalizePostSlug(title || body?.slice(0, 80) || '') || `update-${postId}`
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? base : `${base}-${attempt + 1}`
     const existing = await queryFirst<{ id: string }>(db,
@@ -488,6 +487,8 @@ export interface PublicSocialPost {
   publications: Array<{ channel: 'facebook' | 'instagram'; url: string | null }>
   social_image: SocialImageSource | null
   status: 'draft' | 'published'
+  /** Whether the post is in feeds; an unlisted one answers at its own address only. */
+  visibility: 'listed' | 'unlisted'
 }
 
 interface PublicPostRow {
@@ -500,6 +501,7 @@ interface PublicPostRow {
   metadata_json: string
   published_at: string | null
   status: 'draft' | 'published'
+  visibility: 'listed' | 'unlisted'
   location_id: string | null
   location_title: string | null
   location_slug: string | null
@@ -538,12 +540,13 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
       publications: publications.filter(item => item.post_id === row.id).map(item => ({ channel: item.channel, url: item.provider_permalink })),
       social_image: social.get(row.representation_id)?.social_image ?? null,
       status: row.status,
+      visibility: row.visibility,
     }
   })
 }
 
 const PUBLIC_POST_SELECT = `SELECT root.id, p.id AS representation_id, COALESCE(p.slug, root.slug) AS slug, p.title, p.summary AS body,
-    root.metadata_json AS root_metadata_json, p.metadata_json, root.published_at, root.status,
+    root.metadata_json AS root_metadata_json, p.metadata_json, root.published_at, root.status, root.visibility,
     root.location_id, bl.title AS location_title, bl.slug AS location_slug
   FROM content_documents root
   JOIN content_documents p ON COALESCE(p.root_id, p.id) = root.id AND p.locale = ?

@@ -405,16 +405,22 @@ export const EPOCH_ADDED_TABLES = ['post_publications']
  */
 export const EPOCH_PUBLICATION_IDENTITIES = {}
 
-const { default: EN_MESSAGES } = await import('../i18n/locales/en.ts')
-const LOCALE_CATALOGS = Object.fromEntries(readdirSync(resolve('i18n/catalogs')).filter(name => name.endsWith('.json'))
-  .map(name => [name.slice(0, -'.json'.length), JSON.parse(readFileSync(resolve('i18n/catalogs', name), 'utf8'))]))
+/**
+ * The labels the post detail drew beside an event and an offer, in each locale
+ * the site carried when this epoch was written. They are copied here rather
+ * than read from the runtime catalogs because the runtime no longer renders
+ * structured events or offers, and so no longer carries these strings.
+ */
+const FACT_LABELS = {
+  en: { event: 'Event Details:', offer: 'Special Offer:', code: 'Code:' },
+  th: { event: 'รายละเอียดกิจกรรม:', offer: 'โปรโมชั่นพิเศษ:', code: 'รหัส:' },
+  ja: { event: 'イベント詳細:', offer: '特別オファー:', code: 'コード:' },
+}
 
-/** A message in a locale, as the renderer that showed these facts looked it up. None is generated. */
+/** A label in a locale, as the renderer that showed these facts had it. None is generated. */
 function localeMessage(locale, key) {
-  const value = locale === 'en'
-    ? key.split('.').reduce((node, segment) => node?.[segment], EN_MESSAGES)
-    : LOCALE_CATALOGS[locale]?.[key]
-  if (typeof value !== 'string' || !value.trim()) throw new Error(`No ${locale} message for ${key}; a caption is never written in a language the tenant's site does not already carry`)
+  const value = FACT_LABELS[locale]?.[key]
+  if (!value) throw new Error(`No ${locale} label for ${key}; a caption is never written in a language the site did not already carry`)
   return value
 }
 
@@ -450,10 +456,10 @@ function eventDescription(event, locale) {
  */
 function literalPostFacts({ event, offer, alert_type: alertType }, locale) {
   const sections = []
-  if (event) sections.push(`${localeMessage(locale, 'saya.posts.event_details_label')} ${event.title.trim()}\n${eventDescription(event, locale)}`)
+  if (event) sections.push(`${localeMessage(locale, 'event')} ${event.title.trim()}\n${eventDescription(event, locale)}`)
   if (offer && ['coupon_code', 'redeem_online_url', 'terms_conditions'].some(key => typeof offer[key] === 'string' && offer[key].trim())) {
-    const lines = [localeMessage(locale, 'saya.posts.special_offer_label')]
-    if (offer.coupon_code?.trim()) lines.push(`${localeMessage(locale, 'saya.posts.code_label')} ${offer.coupon_code.trim()}`)
+    const lines = [localeMessage(locale, 'offer')]
+    if (offer.coupon_code?.trim()) lines.push(`${localeMessage(locale, 'code')} ${offer.coupon_code.trim()}`)
     if (offer.redeem_online_url?.trim()) lines.push(offer.redeem_online_url.trim())
     if (offer.terms_conditions?.trim()) lines.push(offer.terms_conditions.trim())
     sections.push(lines.join('\n'))

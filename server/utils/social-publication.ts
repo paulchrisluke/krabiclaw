@@ -489,10 +489,11 @@ async function claimPublication(
   if (!existing) {
     const id = crypto.randomUUID()
     try {
-      await execute(db, `INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id,
+      // A batch, so the unique index's refusal reaches here as D1 states it.
+      await executeBatch(db, [{ query: `INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id,
           origin, state, payload_hash, attempt_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'publish', 'preparing', ?, ?, ?, ?)`,
-      [id, organizationId, post.id, target.channel, identity.appId, identity.subjectId, target.target_id, payloadHash, attemptId, nowIso(), nowIso()])
+      params: [id, organizationId, post.id, target.channel, identity.appId, identity.subjectId, target.target_id, payloadHash, attemptId, nowIso(), nowIso()] }])
     } catch (error) {
       if (!/UNIQUE constraint failed/.test(messageOf(error))) throw error
       // A concurrent call claimed it first; it does the work.

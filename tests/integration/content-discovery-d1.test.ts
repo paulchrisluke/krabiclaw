@@ -27,12 +27,12 @@ test('public discovery resolves translations through current publication owners'
     }
     // Documentation is the platform organization's docs article collection.
     await createContentDocumentWithBlocks(db, { id: 'guide', organizationId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
-      title: 'guide', slug: 'guide', summary: 'guide summary', status: 'published', visibility: 'listed',
+      title: 'guide', slug: 'guide', summary: 'guide summary', status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
       metadata: { collection: 'docs', category: 'Getting Started', tags: [] },
     }, [{ id: 'guide-body', type: 'markdown', data: { markdown: 'guide exact body', editor_mode: 'rich' } }])
     for (const [id, org] of [['news', 'platform'], ['tenant-story', 'tenant'], ['other-story', 'other']] as const) {
       await createContentDocumentWithBlocks(db, { id, organizationId: org, kind: 'article', rowRole: 'root', locale: 'en',
-        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing', tags: ['shared'] }, status: 'published', visibility: 'listed',
+        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing', tags: ['shared'] }, status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
       }, [{ id: id + '-body', type: 'markdown', data: { markdown: id + ' exact body', editor_mode: 'rich' } }])
     }
     for (const [id, path] of [['home', '/'], ['about', '/about']]) await createContentDocumentWithBlocks(db, {
@@ -40,9 +40,9 @@ test('public discovery resolves translations through current publication owners'
       metadata: { page_type: 'custom' },
     }, [])
     const { document: hidden } = await createContentDocumentWithBlocks(db, { id: 'hidden', organizationId: 'tenant',
-      kind: 'article', rowRole: 'root', locale: 'en', title: 'Hidden', slug: 'hidden', status: 'published', visibility: 'unlisted' }, [])
-    await createContentDocumentWithBlocks(db, { id: 'future', organizationId: 'tenant', kind: 'article', rowRole: 'root',
-      locale: 'en', title: 'Future', slug: 'future', status: 'scheduled', visibility: 'listed', scheduledFor: '2099-01-01T00:00:00.000Z' }, [])
+      kind: 'article', rowRole: 'root', locale: 'en', title: 'Hidden', slug: 'hidden', status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'unlisted' }, [])
+    await createContentDocumentWithBlocks(db, { id: 'unpublished', organizationId: 'tenant', kind: 'article', rowRole: 'root',
+      locale: 'en', title: 'Unpublished', slug: 'unpublished', status: 'draft', visibility: 'listed' }, [])
     await createContentDocumentWithBlocks(db, { id: 'story-th', organizationId: 'tenant', kind: 'article', rowRole: 'representation',
       rootId: 'tenant-story', locale: 'th', title: 'Translated story', slug: 'translated', path: '/blog/translated', summary: 'Translated summary' }, [])
     const tenantRecords = await buildTenantBlogDocuments(db)
@@ -50,11 +50,11 @@ test('public discovery resolves translations through current publication owners'
     assert(tenantRecords.find(record => record.id === 'tenant-blog:tenant-story')?.body.includes('tenant story exact body'))
     const platformRecords = await buildPlatformKnowledgeDocuments(db)
     assert(platformRecords.find(record => record.id === 'doc:guide')?.body.includes('guide exact body'))
-    assert(!platformRecords.some(record => record.id.includes(hidden.id) || record.id.includes('future')))
+    assert(!platformRecords.some(record => record.id.includes(hidden.id) || record.id.includes('unpublished')))
     const cards = await listSocialCardOwners(db)
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'guide'))
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'about'))
-    assert(!cards.some(owner => owner.owner_type === 'content_document' && ['home', 'future'].includes(owner.owner_id)))
+    assert(!cards.some(owner => owner.owner_type === 'content_document' && ['home', 'unpublished'].includes(owner.owner_id)))
     const translated = await listPublicBlogSummaries(db, 'tenant', 50, 'th')
     assert.deepEqual(translated.map(row => [row.id, row.title, row.excerpt, row.canonical_url]), [
       ['tenant-story', 'Translated story', 'Translated summary', '/th/blog/translated'],

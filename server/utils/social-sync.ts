@@ -8,7 +8,6 @@ import { MAX_IMAGE_BYTES, MAX_POSTER_BYTES, MAX_VIDEO_BYTES, POSTER_IMAGE_MIME_T
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import { organizationEventQuery } from '~/server/utils/organization-events'
-import { postPublicPath } from '~/server/utils/post-management'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { normalizePostSlug } from '~/utils/post-slugs'
@@ -561,4 +560,3 @@ export async function syncAllSocialPosts(env: CloudflareEnv) {
   return details
 }
 
-export { postPublicPath }
