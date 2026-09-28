@@ -109,11 +109,8 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       // page can be added that forgets to.
       discoverability: tenant.previewAuthorized ? 'private' : value.discoverability,
     }
-    const sourceImage = Object.hasOwn(value, 'socialImage')
-      ? value.socialImage ?? null
-      : tenant.organization?.social_image ?? null
-    const resolvedImage = sourceImage
-      ? { ...sourceImage, url: resolveSeoUrl(sourceImage.url, origin), alt: sourceImage.alt || value.title }
+    const resolvedImage = value.socialImage
+      ? { ...value.socialImage, url: resolveSeoUrl(value.socialImage.url, origin), alt: value.socialImage.alt || value.title }
       : null
     return { value, origin, template, tags: composeSocialMetadata(socialInput, resolvedImage) }
   })

@@ -14,6 +14,7 @@ import { createDeliveryReceipt, deliverGuestThreadEmail } from './deliveries'
 import { getEmailDeliveryMode } from '~/server/utils/email-delivery'
 import { renderNotificationEmail } from '~/server/emails/render'
 import { bookingChangeProposalMessage } from '~/server/notifications/guest-events'
+import { organizationLogo } from '~/server/notifications/hero'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { updateThreadProjection } from './repository'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary } from '~/server/domain/requests'
@@ -145,8 +146,8 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     })
       .then(sessions => sessions.filter(session => session.id === after.sessionId))
     if (!target) throw new HTTPError({ statusCode: 409, message: 'That session is not open for booking' })
-    const booking = await queryFirst<{ product_variant_id: string; customer_id: string | null }>(db,
-      'SELECT product_variant_id, customer_id FROM bookings WHERE id = ?', [before.recordId])
+    const booking = await queryFirst<{ product_variant_id: string; user_id: string | null }>(db,
+      'SELECT product_variant_id, user_id FROM bookings WHERE id = ?', [before.recordId])
     if (!booking) throw new HTTPError({ statusCode: 409, message: 'The original booking is missing' })
     const location = target.location_id
       ? await queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE id = ? AND organization_id = ?', [target.location_id, thread.organization_id])
@@ -161,7 +162,7 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       claim: (bookingId, now) => sessionClaimQuery({
         bookingId, organizationId: thread.organization_id, productId: before.productId!,
         sessionId: target.id, productVariantId: booking.product_variant_id, partySize: after.partySize,
-        customerId: booking.customer_id, requestId: null, replacingBookingId: before.recordId,
+        userId: booking.user_id, requestId: null, replacingBookingId: before.recordId,
         requireUndecided: {
           requestId: thread.id, organizationId: thread.organization_id, updatedAt: before.updatedAt,
           decisionDedupeKey: decisionDedupeKey ?? '',
@@ -226,6 +227,7 @@ async function deliverEmail(db: DbClient, env: ChangeEnv, thread: GuestThreadRow
     email: await renderNotificationEmail(bookingChangeProposalMessage({
       guestName: summary.guestName,
       organizationName: organization.name,
+      organizationLogoUrl: await organizationLogo(db, thread.organization_id),
       heading: content.subject,
       intro: content.intro,
       rows: content.rows ?? [],

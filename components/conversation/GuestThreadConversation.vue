@@ -325,6 +325,8 @@ function systemEventIcon(entry: StreamEntry) {
   if (entry.kind === 'resolution') {
     return entry.eventName === 'thread.resolved' ? 'i-lucide-check-check' : 'i-lucide-rotate-ccw'
   }
+  if (entry.eventName === 'thread.archived') return 'i-lucide-archive'
+  if (entry.eventName === 'thread.unarchived') return 'i-lucide-inbox'
   return 'i-lucide-circle-check'
 }
 
@@ -339,6 +341,8 @@ function systemEventLabel(entry: StreamEntry) {
     const action = String(payload.action ?? '')
     if (entry.eventName === 'migration_snapshot') return 'Imported from previous system'
     if (action === 'cancel') return `${actor}cancelled the ${noun}`.trim()
+    if (entry.eventName === 'thread.archived') return `${actor}archived this conversation`.trim()
+    if (entry.eventName === 'thread.unarchived') return `${actor}moved this conversation to messages`.trim()
     return entry.eventName ?? 'Operation recorded'
   }
 

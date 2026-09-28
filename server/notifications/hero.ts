@@ -1,76 +1,50 @@
 import type { DbClient } from '~/server/db'
-import { getMediaPlacements } from '~/server/utils/media-placement'
-import { mediaStillUrl } from '~/shared/media-placement-contract'
+import { readMediaPlacements } from '~/server/utils/media-asset-manager'
+import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 
 /**
- * The picture a notification leads with.
+ * The picture a surface leads with for an owner: a notification's hero, an
+ * agenda row, a booking's detail. `resolveOwnerPicture` decides it; this reads
+ * the placements it needs. An experience booking leads with the experience and
+ * a table reservation with its location, because that is what the guest is
+ * looking at.
  *
- * An experience booking leads with the experience's own photo and a table
- * reservation with the location's, because that is the thing the guest is
- * actually looking at. Null is a first-class answer: nothing is substituted,
- * and no stock or placeholder image is invented — tenant surfaces render the
- * tenant's own content or none.
- *
- * Placements are site-scoped while the catalog is org-scoped, so the site is
- * required rather than inferred.
+ * Null is a first-class answer: nothing is substituted, and no stock or
+ * placeholder image is invented — tenant surfaces render the tenant's own
+ * content or none.
  */
 export interface HeroImage {
   imageUrl: string
   alt: string
 }
 
-async function firstPlacement(
+export async function loadOwnerPictures(
   db: DbClient,
-  input: { organizationId: string; ownerType: 'product' | 'business_location'; ownerId: string; slot: string },
-): Promise<HeroImage | null> {
-  const placements = await getMediaPlacements(db, {
-    organizationId: input.organizationId,
-    ownerType: input.ownerType,
-    ownerIds: [input.ownerId],
-    slot: input.slot,
-  })
-  const item = placements.get(input.ownerId)?.[0]
-  // An email shows a picture. A video's picture is its poster: handing the
-  // `.mp4` in `public_url` to an `<img>` is what sent a broken hero to guests.
-  const imageUrl = mediaStillUrl(item)
-  if (!imageUrl) return null
-  return { imageUrl, alt: item?.alt_text ?? '' }
+  organizationId: string,
+  ownerType: MediaPlacementOwnerType,
+  ownerIds: readonly string[],
+): Promise<Map<string, HeroImage | null>> {
+  const ids = [...new Set(ownerIds)]
+  if (!ids.length) return new Map()
+  const [ownerPlacements, organizationPlacements] = await Promise.all([
+    readMediaPlacements(db, { organizationId, ownerType, ownerIds: ids }),
+    readMediaPlacements(db, { organizationId, ownerType: 'organization', ownerIds: [organizationId] }),
+  ])
+  const organizationMedia = organizationPlacements.get(organizationId) ?? []
+  return new Map(ids.map((id) => {
+    const picture = resolveOwnerPicture(ownerType, ownerPlacements.get(id) ?? [], organizationMedia)
+    const imageUrl = mediaStillUrl(picture)
+    return [id, picture && imageUrl ? { imageUrl, alt: picture.alt_text ?? '' } : null]
+  }))
 }
 
-/** An experience's cover. */
-export async function productHero(db: DbClient, organizationId: string, productId: string | null | undefined): Promise<HeroImage | null> {
-  if (!productId) return null
-  return firstPlacement(db, { organizationId, ownerType: 'product', ownerId: productId, slot: 'image' })
-}
-
-/** A location's hero, for a reservation with no product of its own. */
-export async function locationHero(db: DbClient, organizationId: string, locationId: string | null | undefined): Promise<HeroImage | null> {
-  if (!locationId) return null
-  return firstPlacement(db, { organizationId, ownerType: 'business_location', ownerId: locationId, slot: 'hero' })
-}
-
-/** An organization's brand logo mark. */
-export async function organizationLogo(db: DbClient, organizationId: string | null | undefined): Promise<string | null> {
-  if (!organizationId) return null
-  const placements = await getMediaPlacements(db, {
+/** An organization's brand mark: its `logo`, or none. */
+export async function organizationLogo(db: DbClient, organizationId: string): Promise<string | null> {
+  const placements = await readMediaPlacements(db, {
     organizationId,
     ownerType: 'organization',
     ownerIds: [organizationId],
     slot: 'logo',
   })
-  const item = placements.get(organizationId)?.[0]
-  return mediaStillUrl(item) ?? null
-}
-
-/**
- * Never lets a missing picture break a notification. An email that arrives
- * without its hero is a smaller problem than one that does not arrive.
- */
-export async function resolveHero(load: () => Promise<HeroImage | null>): Promise<HeroImage | null> {
-  try {
-    return await load()
-  } catch (error) {
-    console.error('notification_hero_lookup_failed', { error: error instanceof Error ? error.message : String(error) })
-    return null
-  }
+  return mediaStillUrl(placements.get(organizationId)?.[0]) ?? null
 }

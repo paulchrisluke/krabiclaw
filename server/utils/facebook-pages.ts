@@ -1,26 +1,25 @@
-import type { IntegrationVersion, FacebookIntegration } from '~/shared/organization-settings'
-import type { D1Database } from '@cloudflare/workers-types'
+import type { FacebookIntegration } from '~/shared/organization-settings'
 import { prepareContentDocumentWithBlocks } from './content/documents'
 import { parsePostInput } from '~/shared/posts'
 import { execute, executeBatch, queryFirst } from '~/server/db'
-import { encryptSecret, decryptSecret, encryptionEnv } from './encryption'
+import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { uploadToR2, buildR2Key } from './cloudflare-r2'
 import { buildMediaAssetInsertQuery, buildMediaPlacementInsertQuery } from './media-asset-manager'
+
+/**
+ * A Facebook Page as an organization's integration.
+ *
+ * The Facebook identity and its user token are a Better Auth linked account;
+ * the organization stores which of those accounts it acts through and which
+ * Page it chose. A Page token is never stored: it is read from the Pages the
+ * linked account manages each time one is needed, so a Page the account stops
+ * managing stops working rather than carrying on with a copied credential.
+ */
 
 const GRAPH_API_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
 
-export interface FacebookEnv {
-  DB: D1Database
-  ORGANIZATION_CACHE?: KVNamespace
-  FACEBOOK_APP_ID?: string
-  FACEBOOK_APP_SECRET?: string
-  FACEBOOK_REDIRECT_URI?: string
-  FACEBOOK_CONFIG_ID?: string
-  CONNECTOR_TOKEN_ENCRYPTION_KEY?: string
-}
-
-export interface FacebookPagesConnection extends Omit<FacebookIntegration, 'revision'>, IntegrationVersion {
+export interface FacebookPagesConnection extends FacebookIntegration {
   organization_id: string
 }
 
@@ -30,28 +29,6 @@ export interface FacebookPage {
   access_token: string
   category?: string
   fan_count?: number
-  picture?: { data: { url: string } }
-}
-
-export interface FacebookPageInfo {
-  id: string
-  name: string
-  about?: string
-  description?: string
-  emails?: string[]
-  phone?: string
-  website?: string
-  location?: {
-    street?: string
-    city?: string
-    country?: string
-    zip?: string
-    latitude?: number
-    longitude?: number
-  }
-  hours?: Record<string, string>
-  fan_count?: number
-  cover?: { source: string }
   picture?: { data: { url: string } }
 }
 
@@ -91,97 +68,13 @@ async function graphFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data
 }
 
-export const getFacebookAuthUrl = (env: FacebookEnv, state: string): string => {
-  const appId = env.FACEBOOK_APP_ID
-  const redirectUri = env.FACEBOOK_REDIRECT_URI
-
-  if (!appId || !redirectUri) {
-    throw new Error('Missing FACEBOOK_APP_ID or FACEBOOK_REDIRECT_URI')
-  }
-
-  const params = new URLSearchParams({
-    client_id: appId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    state,
-  })
-
-  if (env.FACEBOOK_CONFIG_ID) {
-    params.set('config_id', env.FACEBOOK_CONFIG_ID)
-  } else {
-    params.set('scope', [
-      'pages_show_list',
-      'pages_read_engagement',
-      'pages_manage_posts',
-      'pages_manage_metadata',
-    ].join(','))
-  }
-
-  return `https://www.facebook.com/dialog/oauth?${params.toString()}`
-}
-
-export const exchangeFacebookCode = async (
-  env: FacebookEnv,
-  code: string
-): Promise<string> => {
-  if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET || !env.FACEBOOK_REDIRECT_URI) {
-    throw new Error('Missing Facebook OAuth configuration')
-  }
-
-  const params = new URLSearchParams({
-    client_id: env.FACEBOOK_APP_ID,
-    client_secret: env.FACEBOOK_APP_SECRET,
-    redirect_uri: env.FACEBOOK_REDIRECT_URI,
-    code,
-  })
-
-  const data = await graphFetch<{ access_token: string }>(
-    `${GRAPH_BASE}/oauth/access_token?${params.toString()}`
-  )
-  return data.access_token
-}
-
-export const getLongLivedUserToken = async (
-  env: FacebookEnv,
-  shortLivedToken: string
-): Promise<{ token: string; expiresIn: number }> => {
-  if (!env.FACEBOOK_APP_ID || !env.FACEBOOK_APP_SECRET) {
-    throw new Error('Missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET')
-  }
-
-  const params = new URLSearchParams({
-    grant_type: 'fb_exchange_token',
-    client_id: env.FACEBOOK_APP_ID,
-    client_secret: env.FACEBOOK_APP_SECRET,
-    fb_exchange_token: shortLivedToken,
-  })
-
-  const data = await graphFetch<{ access_token: string; expires_in?: number }>(
-    `${GRAPH_BASE}/oauth/access_token?${params.toString()}`
-  )
-  return { token: data.access_token, expiresIn: data.expires_in ?? 5183944 }
-}
-
-export const getFacebookUserInfo = async (
-  userToken: string
-): Promise<{ id: string; name: string; email?: string }> => {
-  const params = new URLSearchParams({ access_token: userToken, fields: 'id,name,email' })
-  return graphFetch(`${GRAPH_BASE}/me?${params.toString()}`)
-}
-
-export const getFacebookPages = async (userToken: string): Promise<FacebookPage[]> => {
+const getFacebookPages = async (userToken: string): Promise<FacebookPage[]> => {
   const params = new URLSearchParams({
     access_token: userToken,
     fields: 'id,name,access_token,category,fan_count,picture',
   })
   const data = await graphFetch<{ data: FacebookPage[] }>(`${GRAPH_BASE}/me/accounts?${params.toString()}`)
   return data.data ?? []
-}
-
-export const getPageInfo = async (pageToken: string, pageId: string): Promise<FacebookPageInfo> => {
-  const fields = 'id,name,about,description,emails,phone,website,location,hours,fan_count,cover,picture'
-  const params = new URLSearchParams({ access_token: pageToken, fields })
-  return graphFetch(`${GRAPH_BASE}/${pageId}?${params.toString()}`)
 }
 
 export const getPagePosts = async (
@@ -222,26 +115,19 @@ export const publishToPage = async (
 }
 
 export const storeFacebookPagesConnection = async (
-  env: FacebookEnv,
-  connection: Omit<FacebookPagesConnection, 'id' | 'created_at' | 'updated_at' | keyof IntegrationVersion>,
-  expected: IntegrationVersion
-): Promise<string> => {
-  if (!env.DB) throw new Error('Database not available')
-
-  const connectionId = `fb-connection-${connection.organization_id}-${connection.organization_id}`
+  env: CloudflareEnv,
+  connection: { organization_id: string; account_id: string; page_id: string; page_name: string },
+  expected: { revision: string | null },
+): Promise<void> => {
   const now = new Date().toISOString()
-  const tokenEnv = encryptionEnv(env)
-
-  const encryptedUserToken = await encryptSecret(connection.encrypted_user_token, tokenEnv)
-  const encryptedPageToken = connection.encrypted_page_token
-    ? await encryptSecret(connection.encrypted_page_token, tokenEnv)
-    : null
-
-  const { organization_id: organizationId, ...providerState } = connection
   const payload = JSON.stringify({
-    ...providerState, id: connectionId, revision: crypto.randomUUID(),
-    encrypted_user_token: encryptedUserToken,
-    encrypted_page_token: encryptedPageToken, updated_at: now,
+    revision: crypto.randomUUID(),
+    account_id: connection.account_id,
+    page_id: connection.page_id,
+    page_name: connection.page_name,
+    status: 'active',
+    created_at: now,
+    updated_at: now,
   })
   const result = await execute(env.DB, `
     UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook',
@@ -249,50 +135,42 @@ export const storeFacebookPagesConnection = async (
         '$.created_at', COALESCE(json_extract(integrations_json, '$.facebook.created_at'), ?)))
     WHERE id = ?
       AND json_extract(integrations_json, '$.facebook.revision') IS ?
-  `, [payload, now, organizationId, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('The facebook connection changed during authorization')
-
-  return connectionId
+  `, [payload, now, connection.organization_id, expected.revision])
+  if (result.meta?.changes !== 1) throw new Error('The Facebook connection changed. Reload before saving.')
 }
 
 export const getFacebookPagesConnection = async (
-  env: FacebookEnv,
+  env: CloudflareEnv,
   organizationId: string,
 ): Promise<FacebookPagesConnection | null> => {
-  const connection = await queryFirst<FacebookPagesConnection>(env.DB, `
+  return await queryFirst<FacebookPagesConnection>(env.DB, `
     SELECT id AS organization_id,
-           json_extract(integrations_json, '$.facebook.id') AS id,
            json_extract(integrations_json, '$.facebook.revision') AS revision,
-           json_extract(integrations_json, '$.facebook.connected_by_user_id') AS connected_by_user_id,
-           json_extract(integrations_json, '$.facebook.facebook_user_id') AS facebook_user_id,
+           json_extract(integrations_json, '$.facebook.account_id') AS account_id,
            json_extract(integrations_json, '$.facebook.page_id') AS page_id,
            json_extract(integrations_json, '$.facebook.page_name') AS page_name,
-           json_extract(integrations_json, '$.facebook.encrypted_user_token') AS encrypted_user_token,
-           json_extract(integrations_json, '$.facebook.encrypted_page_token') AS encrypted_page_token,
-           json_extract(integrations_json, '$.facebook.user_token_expires_at') AS user_token_expires_at,
-           json_extract(integrations_json, '$.facebook.scopes') AS scopes,
            json_extract(integrations_json, '$.facebook.status') AS status,
            json_extract(integrations_json, '$.facebook.created_at') AS created_at,
            json_extract(integrations_json, '$.facebook.updated_at') AS updated_at
       FROM organization WHERE id = ?
        AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'error')
      LIMIT 1
-  `, [organizationId])
+  `, [organizationId]) ?? null
+}
 
-  if (!connection) return null
+/** The Pages a linked Facebook account manages, each with its Page token. */
+export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: string): Promise<FacebookPage[]> =>
+  await getFacebookPages((await linkedAccountAccessToken(env, accountId)).accessToken)
 
-  const tokenEnv = encryptionEnv(env)
-
-  connection.encrypted_user_token = await decryptSecret(connection.encrypted_user_token, tokenEnv)
-  if (connection.encrypted_page_token) {
-    connection.encrypted_page_token = await decryptSecret(connection.encrypted_page_token, tokenEnv)
-  }
-
-  return connection
+/** The connected Page's token, read through the linked account that manages it. */
+export const facebookPageToken = async (env: CloudflareEnv, connection: FacebookPagesConnection): Promise<string> => {
+  const page = (await listLinkedFacebookPages(env, connection.account_id)).find(candidate => candidate.id === connection.page_id)
+  if (!page) throw new Error(`The linked Facebook account no longer manages the Page ${connection.page_name}. Connect Facebook again.`)
+  return page.access_token
 }
 
 export const syncFacebookPosts = async (
-  env: FacebookEnv,
+  env: CloudflareEnv,
   organizationId: string,
   pageToken: string,
   pageId: string,
@@ -378,25 +256,6 @@ export const syncFacebookPosts = async (
 }
 
 /**
- * Tells Meta to forget this app's authorization for the connected user. Best
- * effort at the call site: a token Meta has already invalidated, or a user who
- * revoked from their own Facebook settings, must not stop the connection being
- * released here.
- */
-export const revokeFacebookAuthorization = async (
-  facebookUserId: string,
-  userToken: string,
-): Promise<void> => {
-  const params = new URLSearchParams({ access_token: userToken })
-  const response = await fetch(`${GRAPH_BASE}/${facebookUserId}/permissions?${params.toString()}`, {
-    method: 'DELETE',
-  })
-  if (!response.ok) {
-    throw new Error(`Facebook authorization revoke failed: ${(await response.text()).slice(0, 200)}`)
-  }
-}
-
-/**
  * Meta signs the payload it posts to the deauthorize and data-deletion
  * callbacks rather than authenticating the request any other way, so verifying
  * this signature *is* the authorization check for those endpoints.
@@ -451,58 +310,4 @@ export const parseMetaSignedRequest = async (
   } catch {
     return null
   }
-}
-
-/**
- * A Facebook connection always names a Page — the schema requires it — so the
- * Page has to be chosen before anything is stored. When the authorization
- * returns more than one, the tokens wait here between the callback and the
- * tenant's choice: encrypted, in the cache namespace, under an opaque handle,
- * for ten minutes.
- *
- * The handle travels in the redirect URL and the tokens never do, and there is
- * no half-connected row for a tenant to find, because a Page nobody picked is
- * not a connection.
- */
-const PENDING_SELECTION_TTL_SECONDS = 600
-const pendingSelectionKey = (handle: string) => `facebook-page-selection:${handle}`
-
-export interface PendingPageSelection {
-  organizationId: string
-  userId: string
-  facebookUserId: string
-  userToken: string
-  revision: string | null
-  pages: FacebookPage[]
-}
-
-export const storePendingPageSelection = async (
-  env: FacebookEnv,
-  selection: PendingPageSelection,
-): Promise<string> => {
-  if (!env.ORGANIZATION_CACHE) throw new Error('Cache namespace unavailable for Facebook page selection')
-  const handle = crypto.randomUUID()
-  const sealed = await encryptSecret(JSON.stringify(selection), encryptionEnv(env))
-  await env.ORGANIZATION_CACHE.put(pendingSelectionKey(handle), sealed, {
-    expirationTtl: PENDING_SELECTION_TTL_SECONDS,
-  })
-  return handle
-}
-
-export const readPendingPageSelection = async (
-  env: FacebookEnv,
-  handle: string,
-): Promise<PendingPageSelection | null> => {
-  if (!env.ORGANIZATION_CACHE) return null
-  const sealed = await env.ORGANIZATION_CACHE.get(pendingSelectionKey(handle))
-  if (!sealed) return null
-  try {
-    return JSON.parse(await decryptSecret(sealed, encryptionEnv(env))) as PendingPageSelection
-  } catch {
-    return null
-  }
-}
-
-export const clearPendingPageSelection = async (env: FacebookEnv, handle: string): Promise<void> => {
-  await env.ORGANIZATION_CACHE?.delete(pendingSelectionKey(handle))
 }

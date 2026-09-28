@@ -3,7 +3,7 @@
     Brand is what a guest sees; Website is what a guest never sees. Each is a
     flat list of settings, and each setting is a leaf below this level.
   -->
-  <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-settings'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
+  <DashboardIndexPanel :id="surface === 'brand' ? 'organization-brand' : 'organization-website'" :title="navbarTitle" :auto-open="navigationGroups[0]?.items.find(item => item.to)?.to ?? null">
     <div v-if="loading" class="space-y-4">
       <USkeleton v-for="i in 4" :key="i" class="h-32 rounded-xl" />
     </div>
@@ -34,6 +34,7 @@ export interface OrganizationSettingsForm {
   name: string
   brand_description: string
   logoAssetId: string | null
+  faviconAssetId: string | null
   socialShareAssetId: string | null
   contact_email: string
   brand_color: string
@@ -99,14 +100,10 @@ export interface OrganizationSettingsEditor {
   publishLanguage: (locale: string) => Promise<void>
   disableLanguage: (locale: string) => Promise<void>
   deleteLanguage: (locale: string) => Promise<void>
-  deletionScheduledAt: ComputedRef<Date | null>
-  deletionDateLabel: ComputedRef<string>
-  deletionGraceDays: Ref<number>
   deletionConfirmText: Ref<string>
   deletionSaving: Ref<boolean>
   deletionError: Ref<string>
-  scheduleWorkspaceDeletion: () => Promise<void>
-  keepWorkspace: () => Promise<void>
+  deleteWorkspace: () => Promise<void>
   revert: () => void
   save: () => Promise<void>
 }
@@ -119,6 +116,7 @@ import DashboardResourceLocalization from '~/components/dashboard/DashboardResou
 import EditorNavigationList, { type EditorNavigationItem } from '~/components/dashboard/EditorNavigationList.vue'
 import { isCurrencyCode } from '~/shared/currencies'
 import { MALI_FONT_CSS, isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
+import { authClient } from '~/lib/auth-client'
 
 const props = withDefaults(defineProps<{ surface?: 'brand' | 'settings' }>(), { surface: 'settings' })
 const surface = computed(() => props.surface)
@@ -135,77 +133,28 @@ const level = useRouteLevel()
 
 const organizationId = await useDashboardOrganizationId()
 
-// Workspace deletion is scheduled, never immediate: the organization carries a
-// due instant and the deletion-sweep task performs the deletion once it passes.
-// server/utils/tenant-deletion.ts owns both ends.
+// Better Auth owns organization authorization, Stripe delete gating and the
+// organization deletion itself. KrabiClaw contributes only its registered
+// external-resource cleanup hook.
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
-const deletionGraceDays = ref(30)
 const deletionConfirmText = ref('')
 const deletionSaving = ref(false)
 const deletionError = ref('')
-const deletionScheduledAt = computed(() => {
-  const scheduled = dashboard.organization.value?.deletionScheduledAt
-  if (!scheduled) return null
-  const at = new Date(scheduled)
-  return Number.isNaN(at.getTime()) ? null : at
-})
-const deletionDateLabel = computed(() => deletionScheduledAt.value
-  ? deletionScheduledAt.value.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-  : '')
 
-async function scheduleWorkspaceDeletion() {
+async function deleteWorkspace() {
   if (deletionConfirmText.value !== 'DELETE') return
   deletionSaving.value = true
   deletionError.value = ''
   try {
-    const response = await dashboardApi<{ success?: boolean; scheduled_at?: string; grace_days?: number }>('/api/dashboard/organizations/deletion', {
-      method: 'POST',
-      validate: (value): value is { success?: boolean; scheduled_at?: string; grace_days?: number } => isRecord(value),
-    })
-    if (response?.success !== true) throw new Error('Scheduling the deletion failed. Please try again.')
-    if (typeof response?.grace_days === 'number') deletionGraceDays.value = response.grace_days
-    deletionConfirmText.value = ''
+    const { error } = await authClient.organization.delete({ organizationId })
+    if (error) throw new Error(error.message || 'Deletion failed. Please try again.')
+    await navigateTo('/dashboard', { replace: true })
   } catch (error) {
-    deletionError.value = error instanceof Error ? error.message : 'Scheduling the deletion failed. Please try again.'
-    deletionSaving.value = false
-    return
-  }
-  // The deletion is scheduled. Reloading the workspace is what the date in the
-  // message is read from, and a failure there is a failure to REFRESH: saying
-  // "Scheduling the deletion failed" for a deletion that happened is how an
-  // owner schedules it twice, or believes their workspace is safe.
-  try {
-    await dashboard.refresh()
-  } catch {
-    // Ignore refresh error; deletion has already scheduled
+    deletionError.value = error instanceof Error ? error.message : 'Deletion failed. Please try again.'
   } finally {
     deletionSaving.value = false
   }
 }
-
-async function keepWorkspace() {
-  deletionSaving.value = true
-  deletionError.value = ''
-  try {
-    const response = await dashboardApi<{ success?: boolean }>('/api/dashboard/organizations/deletion', {
-      method: 'DELETE',
-      validate: (value): value is { success?: boolean } => isRecord(value),
-    })
-    if (response?.success !== true) throw new Error('Cancelling the deletion failed. Please try again.')
-  } catch (error) {
-    deletionError.value = error instanceof Error ? error.message : 'Cancelling the deletion failed. Please try again.'
-    deletionSaving.value = false
-    return
-  }
-  // Cancelled. As above, the refresh that follows is a separate thing to fail.
-  try {
-    await dashboard.refresh()
-  } finally {
-    deletionSaving.value = false
-  }
-}
-
-
 
 interface SettingsPageResource {
   settings: { success: boolean; settings: OrganizationSettingsResponse }
@@ -238,7 +187,7 @@ const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
 const supportsOrganizationFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
-  name: '', brand_description: '', logoAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
+  name: '', brand_description: '', logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, status: 'inactive',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
@@ -268,6 +217,7 @@ const domainSummary = computed(() => dashboard.organization.value?.custom_domain
 const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'name', label: 'Brand name', summary: explicitSummary(loadedSettings.value?.name), icon: 'i-lucide-type', to: `${brandPath.value}/name` },
   { id: 'logo', label: 'Logo', summary: loadedSettings.value?.media?.some(item => item.slot === 'logo') ? 'Logo selected' : 'Not set', icon: 'i-lucide-image', to: `${brandPath.value}/logo` },
+  { id: 'favicon', label: 'Favicon', summary: loadedSettings.value?.media?.some(item => item.slot === 'favicon') ? 'Icon selected' : 'Not set', icon: 'i-lucide-app-window', to: `${brandPath.value}/favicon` },
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
@@ -290,7 +240,7 @@ const settingsItems = computed<EditorNavigationItem[]>(() => [
   // Deleting the site deletes the organization, so only an owner is
   // offered it — the same permission Better Auth enforces on the delete itself.
   ...(isOwner.value
-    ? [{ id: 'delete', label: 'Delete site', summary: deletionScheduledAt.value ? `Scheduled for ${deletionDateLabel.value}` : 'Removes this organization, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
+    ? [{ id: 'delete', label: 'Delete site', summary: 'Permanently removes this organization, its locations and its content', icon: 'i-lucide-trash-2', to: `${settingsPath.value}/delete` }]
     : []),
 ])
 
@@ -309,6 +259,7 @@ function editorSignature(key: string | null) {
   switch (key) {
     case 'name': return JSON.stringify(form.name)
     case 'logo': return JSON.stringify(form.logoAssetId)
+    case 'favicon': return JSON.stringify(form.faviconAssetId)
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
     case 'color': return JSON.stringify(form.brand_color)
@@ -348,6 +299,7 @@ function fillForm(settings: OrganizationSettingsResponse) {
   form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
+  form.faviconAssetId = settings.media?.find(item => item.slot === 'favicon')?.asset_id ?? null
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
@@ -402,6 +354,7 @@ async function saveCurrentEditor() {
     switch (detailKey.value) {
       case 'name': await patchSettings({ name: form.name.trim() }); break
       case 'logo': await patchSettings({ media: [{ asset_id: form.logoAssetId, slot: 'logo' }] }); break
+      case 'favicon': await patchSettings({ media: [{ asset_id: form.faviconAssetId, slot: 'favicon' }] }); break
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break
       case 'color': await patchSettings({ brand_color: form.brand_color }); break
@@ -503,14 +456,10 @@ provide(organizationSettingsEditorKey, {
   publishLanguage,
   disableLanguage,
   deleteLanguage,
-  deletionScheduledAt,
-  deletionDateLabel,
-  deletionGraceDays,
   deletionConfirmText,
   deletionSaving,
   deletionError,
-  scheduleWorkspaceDeletion,
-  keepWorkspace,
+  deleteWorkspace,
   // A cancelled leaf puts the loaded settings back before it closes.
   revert: resetDraft,
   save: saveCurrentEditor,

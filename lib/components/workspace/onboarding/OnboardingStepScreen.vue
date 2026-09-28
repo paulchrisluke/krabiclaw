@@ -12,33 +12,20 @@
       @update:model-value="choose(() => { state.vertical = $event as OrganizationVertical })"
     />
 
-    <OnboardingChoiceRows
-      v-else-if="step.id === 'source'"
-      :choices="SOURCE_CHOICES"
-      :model-value="state.source"
-      @update:model-value="choose(() => { state.source = $event as 'google_places' | 'manual' })"
-    />
-
-    <UFormField v-else-if="step.id === 'name'" label="Business name">
-      <UInput v-model="state.details.name" class="w-full" placeholder="Your business name" autofocus />
-    </UFormField>
-
-    <UFormField v-else-if="step.id === 'maps'" label="Google Maps link">
-      <UInput v-model="state.mapsUrl" class="w-full" placeholder="maps.app.goo.gl/…" autofocus />
-    </UFormField>
-
-    <div v-else-if="step.id === 'confirm' && state.place" class="rounded-xl border border-default p-4">
-      <p class="font-semibold text-highlighted">{{ state.place.name }}</p>
-      <p class="mt-1 text-sm text-toned">{{ state.place.address }}</p>
-      <p v-if="state.place.phone" class="mt-1 text-sm text-toned">{{ state.place.phone }}</p>
-      <a
-        v-if="state.place.mapsUrl"
-        :href="state.place.mapsUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="mt-3 inline-block text-sm underline"
-      >View on Google Maps</a>
-    </div>
+    <GooglePlacePicker v-else-if="step.id === 'business'" v-model="businessSearch" @select="choosePlace">
+      <template #actions>
+        <UButton
+          v-if="businessSearch.trim()"
+          block
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-pencil"
+          class="justify-start border-t border-default"
+          label="Enter details manually"
+          @click="enterManually"
+        />
+      </template>
+    </GooglePlacePicker>
 
     <IntakeDetailsCard
       v-else-if="step.id === 'location'"
@@ -80,10 +67,11 @@ import IntakeDetailsCard from '~/lib/components/workspace/onboarding/IntakeDetai
 import DraftBrandCard from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 import LocationHoursCard from '~/lib/components/workspace/location/LocationHoursCard.vue'
 import OnboardingChoiceGrid from '~/lib/components/workspace/onboarding/OnboardingChoiceGrid.vue'
-import OnboardingChoiceRows from '~/lib/components/workspace/onboarding/OnboardingChoiceRows.vue'
+import GooglePlacePicker from '~/lib/components/workspace/location/GooglePlacePicker.vue'
 import OnboardingProductsCard from '~/lib/components/workspace/onboarding/OnboardingProductsCard.vue'
 import OnboardingReviewCard from '~/lib/components/workspace/onboarding/OnboardingReviewCard.vue'
-import { useOnboardingState, type OnboardingStep } from '~/composables/useOnboardingFlow'
+import { useOnboardingState, type OnboardingPlacePreview, type OnboardingStep } from '~/composables/useOnboardingFlow'
+import { useOnboardingDraft } from '~/composables/useOnboardingDraft'
 import { currencyForCountry } from '~/shared/currencies'
 import { singleTimezoneForCountry } from '~/utils/timezone'
 import type { OrganizationVertical } from '~/utils/vertical-copy'
@@ -107,16 +95,32 @@ const VERTICAL_CHOICES = [
   { value: 'service', label: 'Professional services', icon: 'i-lucide-briefcase' },
 ]
 
-const SOURCE_CHOICES = [
-  { value: 'google_places', label: 'Import from Google Maps', description: 'Your address, hours, phone and reviews come with the listing.', icon: 'i-lucide-globe' },
-  { value: 'manual', label: 'Enter the details myself', description: 'Type your address and hours — about two minutes.', icon: 'i-lucide-pencil' },
-]
-
 // A single-choice step has nothing left to confirm once the card is pressed, so
 // the press is the answer and the flow moves on.
 function choose(answer: () => void) {
   answer()
   emit('advance')
+}
+
+// The business search starts from the name already given, so Back to this step
+// shows what the owner picked rather than an empty box. Both shells keep this
+// screen mounted across steps, so it is read each time the step is entered.
+const businessSearch = ref('')
+watch(() => props.step.id, (id) => {
+  if (id === 'business') businessSearch.value = state.value.details.name
+}, { immediate: true })
+const { seedFromPlace } = useOnboardingDraft()
+
+function choosePlace(place: OnboardingPlacePreview) {
+  choose(() => seedFromPlace(place))
+}
+
+function enterManually() {
+  choose(() => {
+    state.value.source = 'manual'
+    state.value.placeId = null
+    state.value.details.name = businessSearch.value.trim()
+  })
 }
 
 // IntakeDetailsCard owns its own form object; the flow's details are that

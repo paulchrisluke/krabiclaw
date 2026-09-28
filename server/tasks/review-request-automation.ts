@@ -5,6 +5,7 @@ import { sendReviewRequestForBooking } from '~/server/utils/review-request-deliv
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import { filterEntitledRows } from '~/server/utils/billing-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import { wantsCategoryEmailSql } from '~/server/domain/notification-preferences'
 
 interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -24,9 +25,10 @@ interface TaskResult {
 }
 
 async function sendDue(db: D1Database, env: ApiRecord): Promise<{ sent: number; failures: string[] }> {
+  const wantsReviewRequests = wantsCategoryEmailSql('r.user_id', 'review_requests')
   const candidates = await queryAllPages<SendDueRow>(db, `
       SELECT r.id, r.organization_id, r.kind AS booking_type
-        FROM requests r JOIN customers c ON c.id = r.customer_id
+        FROM requests r
         JOIN (
           SELECT b.request_id, b.status, ps.ends_at FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id
           UNION ALL
@@ -38,11 +40,12 @@ async function sendDue(db: D1Database, env: ApiRecord): Promise<{ sent: number; 
        WHERE r.kind IN ('reservation', 'booking') AND record.status = 'confirmed'
          AND datetime(record.ends_at) <= datetime('now')
          AND json_extract(r.payload_json, '$.review.submitted_at') IS NULL
-         AND c.review_request_opted_out_at IS NULL
+         AND r.user_id IS NOT NULL
+         AND ${wantsReviewRequests.sql}
          AND json_extract(r.payload_json, '$.review.request_sent_at') IS NULL
          AND datetime(record.ends_at) <= datetime('now', '-24 hours')
        ORDER BY booking_type, r.id
-    `, [])
+    `, wantsReviewRequests.params)
   const rows = await filterEntitledRows(env as CloudflareEnv, candidates, 'review_requests')
 
   let sent = 0

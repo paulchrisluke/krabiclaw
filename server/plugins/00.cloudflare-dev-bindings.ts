@@ -1,13 +1,34 @@
 import { definePlugin } from 'nitro'
-import type { PlatformProxy } from 'wrangler'
+import type { PlatformProxy, Unstable_DevWorker } from 'wrangler'
 
 let platformProxy: Promise<PlatformProxy> | undefined
+let guestInboxHubWorker: Promise<Unstable_DevWorker> | undefined
+
+async function loadWrangler() {
+  const packageName = 'wrangler'
+  return await import(/* @vite-ignore */ packageName) as typeof import('wrangler')
+}
+
+// The Durable Object cannot run inside the platform proxy (it proxies an empty
+// script), so its class is served by a second local Worker that `[env.dev]`
+// reaches by script_name through Wrangler's dev registry. It must be up before
+// the proxy resolves the binding.
+async function startGuestInboxHubWorker() {
+  const { unstable_dev } = await loadWrangler()
+  return await unstable_dev('server/cloudflare/dev/guest-inbox-hub.worker.ts', {
+    config: 'server/cloudflare/dev/wrangler.toml',
+    local: true,
+    logLevel: 'warn',
+    experimental: { disableExperimentalWarning: true },
+  })
+}
 
 async function createPlatformProxy() {
-  const packageName = 'wrangler'
-  const { getPlatformProxy } = await import(/* @vite-ignore */ packageName) as typeof import('wrangler')
+  await (guestInboxHubWorker ??= startGuestInboxHubWorker())
+  const { getPlatformProxy } = await loadWrangler()
   return await getPlatformProxy({
     configPath: 'wrangler.toml',
+    environment: 'dev',
     persist: true,
     remoteBindings: false,
   })
@@ -35,5 +56,7 @@ export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('close', async () => {
     if (platformProxy) await (await platformProxy).dispose()
     platformProxy = undefined
+    if (guestInboxHubWorker) await (await guestInboxHubWorker).stop()
+    guestInboxHubWorker = undefined
   })
 })

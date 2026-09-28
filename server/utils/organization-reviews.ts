@@ -1,5 +1,7 @@
+import { HTTPError } from 'nitro'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
-import { queryAll, type DbClient } from '../db/index.ts'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
+import { publicResourceCacheInvalidationQuery } from './public-resource-cache.ts'
 import { loadPublicSocialMedia } from './public-social-image.ts'
 
 
@@ -31,4 +33,22 @@ export async function attachReviewMedia<T extends Record<string, unknown>>(db: D
     const socialMedia = placements.get(String(review.id)) ?? { media: [], social_image: null }
     return { ...review, ...socialMedia }
   })
+}
+
+/**
+ * The one moderation write. `approved` publishes a review on the tenant's
+ * public site; `rejected` is what the dashboard calls Archived and hides it.
+ * `pending` is only ever the state a guest submission arrives in.
+ */
+export async function setReviewStatus(db: DbClient, organizationId: string, reviewId: string, status: unknown) {
+  if (status !== 'approved' && status !== 'rejected') throw new HTTPError({ statusCode: 400, statusMessage: 'status must be approved or rejected' })
+  const review = await queryFirst<{ id: string }>(db, 'SELECT id FROM reviews WHERE id = ? AND organization_id = ?', [reviewId, organizationId])
+  if (!review) throw new HTTPError({ statusCode: 404, statusMessage: 'Review not found' })
+  const updatedAt = new Date().toISOString()
+  const [update] = await executeBatch(db, [
+    { query: 'UPDATE reviews SET status = ?, updated_at = ? WHERE id = ? AND organization_id = ?', params: [status, updatedAt, reviewId, organizationId] },
+    publicResourceCacheInvalidationQuery(organizationId, 'review-status'),
+  ])
+  if (Number(update?.meta.changes ?? 0) !== 1) throw new Error(`Review ${reviewId} status update changed ${update?.meta.changes ?? 0} rows`)
+  return { review_id: reviewId, status, updated_at: updatedAt }
 }

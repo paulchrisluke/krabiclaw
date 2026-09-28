@@ -76,12 +76,11 @@ const locationNoun = computed(() => (usesServiceAreaVocabulary.value ? 'office' 
  * and its own hero photograph. The name belongs under the tile, in text.
  */
 const tiles = computed<OrganizationLocationSelectorItem[]>(() => locations.value.map((location) => {
-  const hero = location.media.find(item => item.slot === 'hero')
   const lines = location.address?.addressLines?.filter(line => line.trim()) ?? []
   return {
     id: location.id,
     label: location.title,
-    imageUrl: hero ? (hero.kind === 'video' ? hero.thumbnail_url : hero.public_url) : null,
+    imageUrl: location.picture_url,
     eyebrow: '',
     summary: lines.length ? lines.join(', ') : 'Address not set',
     to: `/dashboard/${orgSlug.value}/locations/${location.slug}`,

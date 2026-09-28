@@ -1,4 +1,4 @@
-import { execute, type DbClient } from '~/server/db'
+import type { BatchQuery } from '~/server/db'
 
 export type OrganizationEventType =
   | 'post.created' | 'post.published'
@@ -13,8 +13,7 @@ export type OrganizationEventType =
   | 'domain_added' | 'domain_deleted' | 'domain_state_changed'
   | 'member.invited' | 'member.role_changed' | 'member.removed' | 'member.access_scope_revoked'
 
-export interface FireOrganizationEventParams {
-  db: DbClient
+export interface OrganizationEvent {
   organizationId: string
   locationId?: string | null
   actorId?: string | null
@@ -26,20 +25,41 @@ export interface FireOrganizationEventParams {
   message?: string
   beforeState?: unknown
   afterState?: unknown
+  /**
+   * Record the event only when the statement just before it in the batch
+   * changed exactly one row. A compare-and-set write that lost its guard
+   * changed nothing, and an audit row for it would describe a change that
+   * never happened. A guarded event that is skipped changes no rows itself,
+   * so a second guarded event after it is skipped too.
+   */
+  onlyIfPreviousChangedOneRow?: boolean
 }
 
-export async function fireOrganizationEvent(params: FireOrganizationEventParams): Promise<void> {
-  const { db, organizationId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = params
+/**
+ * The audit row for a write, as a statement for that write's own batch.
+ *
+ * It is a statement rather than a function that runs it so that it commits
+ * with the change it describes: neither exists without the other. Written
+ * separately, an audit that failed after the change committed left a change
+ * with no record and an error for a caller whose write had in fact landed.
+ */
+export function organizationEventQuery(event: OrganizationEvent): BatchQuery {
+  const { organizationId, locationId, actorId, eventType, entityType, entityId, metadata, actorType, message, beforeState, afterState } = event
   const id = crypto.randomUUID()
   const actorKind = actorType === 'cloudflare' ? 'cloudflare' : actorId ? 'member' : 'system'
-  await execute(db, `
-    INSERT INTO activity_entries
-      (id, kind, scope_kind, organization_id, location_id, actor_kind, actor_user_id,
-       event_name, body, payload_json, occurred_at, created_at, dedupe_key)
-    VALUES (?, 'audit', 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, organizationId, locationId ?? null,
-    actorKind, actorId ?? null, eventType, message ?? null,
-    JSON.stringify({ entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
-      beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),
-    new Date().toISOString(), new Date().toISOString(), 'audit:' + id])
+  const now = new Date().toISOString()
+  return {
+    query: `
+      INSERT INTO activity_entries
+        (id, kind, scope_kind, organization_id, location_id, actor_kind, actor_user_id,
+         event_name, body, payload_json, occurred_at, created_at, dedupe_key)
+      SELECT ?, 'audit', 'organization', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      ${event.onlyIfPreviousChangedOneRow ? 'WHERE changes() = 1' : ''}
+    `,
+    params: [id, organizationId, locationId ?? null,
+      actorKind, actorId ?? null, eventType, message ?? null,
+      JSON.stringify({ entityType: entityType ?? null, entityId: entityId ?? null, actorType: actorType ?? actorKind,
+        beforeState: beforeState ?? null, afterState: afterState ?? null, metadata: metadata ?? null }),
+      now, now, 'audit:' + id],
+  }
 }

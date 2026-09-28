@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4783da4d-63f9-4373-96b2-cb475db2f051",
+  "id": "b72d4f63-c6a2-4afa-9345-7dc3f4dda7e0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -798,8 +798,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "customer_id": {
-          "name": "customer_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -882,10 +882,11 @@
           ],
           "isUnique": false
         },
-        "bookings_customer_idx": {
-          "name": "bookings_customer_idx",
+        "bookings_org_user_idx": {
+          "name": "bookings_org_user_idx",
           "columns": [
-            "customer_id"
+            "organization_id",
+            "user_id"
           ],
           "isUnique": false
         }
@@ -904,12 +905,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "bookings_customer_id_customers_id_fk": {
-          "name": "bookings_customer_id_customers_id_fk",
+        "bookings_user_id_user_id_fk": {
+          "name": "bookings_user_id_user_id_fk",
           "tableFrom": "bookings",
-          "tableTo": "customers",
+          "tableTo": "user",
           "columnsFrom": [
-            "customer_id"
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -931,7 +932,7 @@
             "product_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "bookings_variant_scope_fk": {
@@ -948,7 +949,7 @@
             "product_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "bookings_request_scope_fk": {
@@ -963,7 +964,7 @@
             "organization_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -981,103 +982,6 @@
         "bookings_party_size_check": {
           "name": "bookings_party_size_check",
           "value": "party_size > 0"
-        }
-      }
-    },
-    "broadcast_deliveries": {
-      "name": "broadcast_deliveries",
-      "columns": {
-        "broadcast_id": {
-          "name": "broadcast_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider_message_id": {
-          "name": "provider_message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "broadcast_deliveries_broadcast_id_broadcasts_id_fk": {
-          "name": "broadcast_deliveries_broadcast_id_broadcasts_id_fk",
-          "tableFrom": "broadcast_deliveries",
-          "tableTo": "broadcasts",
-          "columnsFrom": [
-            "broadcast_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "broadcast_deliveries_user_id_user_id_fk": {
-          "name": "broadcast_deliveries_user_id_user_id_fk",
-          "tableFrom": "broadcast_deliveries",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "broadcast_deliveries_broadcast_id_user_id_pk": {
-          "columns": [
-            "broadcast_id",
-            "user_id"
-          ],
-          "name": "broadcast_deliveries_broadcast_id_user_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "broadcast_deliveries_status_check": {
-          "name": "broadcast_deliveries_status_check",
-          "value": "status IN ('sent', 'failed')"
-        },
-        "broadcast_deliveries_sent_at_check": {
-          "name": "broadcast_deliveries_sent_at_check",
-          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', sent_at, '+0 days') IS sent_at"
         }
       }
     },
@@ -1105,6 +1009,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "provider_broadcast_id": {
+          "name": "provider_broadcast_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -1121,6 +1032,14 @@
             "content_document_id"
           ],
           "isUnique": true
+        },
+        "broadcasts_provider_broadcast_id_unique": {
+          "name": "broadcasts_provider_broadcast_id_unique",
+          "columns": [
+            "provider_broadcast_id"
+          ],
+          "isUnique": true,
+          "where": "provider_broadcast_id IS NOT NULL"
         }
       },
       "foreignKeys": {
@@ -1143,7 +1062,7 @@
       "checkConstraints": {
         "broadcasts_category_check": {
           "name": "broadcasts_category_check",
-          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')"
+          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'review_requests', 'organization_and_billing', 'product_news')"
         },
         "broadcasts_created_at_check": {
           "name": "broadcasts_created_at_check",
@@ -2140,29 +2059,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "seo_title": {
-          "name": "seo_title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "seo_description": {
-          "name": "seo_description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "seo_keywords": {
           "name": "seo_keywords",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "canonical_url": {
-          "name": "canonical_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2368,7 +2266,7 @@
             "organization_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "content_documents_root_scope_fk": {
@@ -2500,202 +2398,6 @@
         "content_documents_channel_instagram_check": {
           "name": "content_documents_channel_instagram_check",
           "value": "kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.instagram') IS NULL OR (json_type(metadata_json, '$.channels.instagram') IS 'object' AND json_type(metadata_json, '$.channels.instagram.created_at') IS 'text' AND (((metadata_json ->> '$.channels.instagram.status') = 'pending' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') = 'published' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NOT NULL))) IS 1)"
-        }
-      }
-    },
-    "customers": {
-      "name": "customers",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "stripe_customer_id": {
-          "name": "stripe_customer_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "email_normalized": {
-          "name": "email_normalized",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "email_hash": {
-          "name": "email_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone_normalized": {
-          "name": "phone_normalized",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "phone_metadata_version": {
-          "name": "phone_metadata_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'active'"
-        },
-        "review_request_opted_out_at": {
-          "name": "review_request_opted_out_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "idx_customers_org_email_normalized_unique": {
-          "name": "idx_customers_org_email_normalized_unique",
-          "columns": [
-            "email_normalized"
-          ],
-          "isUnique": true,
-          "where": "email_normalized IS NOT NULL"
-        },
-        "idx_customers_stripe_customer_id_unique": {
-          "name": "idx_customers_stripe_customer_id_unique",
-          "columns": [
-            "stripe_customer_id"
-          ],
-          "isUnique": true,
-          "where": "stripe_customer_id IS NOT NULL"
-        },
-        "idx_customers_organization_id": {
-          "name": "idx_customers_organization_id",
-          "columns": [
-            "organization_id"
-          ],
-          "isUnique": false
-        },
-        "idx_customers_org_email_hash": {
-          "name": "idx_customers_org_email_hash",
-          "columns": [
-            "organization_id",
-            "email_hash"
-          ],
-          "isUnique": false
-        },
-        "idx_customers_user_id": {
-          "name": "idx_customers_user_id",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "customers_organization_id_organization_id_fk": {
-          "name": "customers_organization_id_organization_id_fk",
-          "tableFrom": "customers",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "customers_user_id_user_id_fk": {
-          "name": "customers_user_id_user_id_fk",
-          "tableFrom": "customers",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "customers_instants_check": {
-          "name": "customers_instants_check",
-          "value": "(review_request_opted_out_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', review_request_opted_out_at, '+0 days') IS review_request_opted_out_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
         }
       }
     },
@@ -5403,13 +5105,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "deletionScheduledAt": {
-          "name": "deletionScheduledAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "integer",
@@ -5706,10 +5401,6 @@
           "name": "organization_compliance_nonprofit_check",
           "value": "json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')"
         },
-        "organization_google_credential_check": {
-          "name": "organization_google_credential_check",
-          "value": "json_type(integrations_json, '$.google_credential') IS NULL OR (json_type(integrations_json, '$.google_credential') IS 'object' AND json_type(integrations_json, '$.google_credential.revision') IS 'text' AND json_extract(integrations_json, '$.google_credential.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_credential.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.google_credential.encrypted_refresh_token') IS 'text' AND json_type(integrations_json, '$.google_credential.scopes') IS 'text' AND json_type(integrations_json, '$.google_credential.provider_account_email') IS 'text') IS TRUE"
-        },
         "organization_google_analytics_check": {
           "name": "organization_google_analytics_check",
           "value": "json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE"
@@ -5720,11 +5411,11 @@
         },
         "organization_facebook_check": {
           "name": "organization_facebook_check",
-          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.encrypted_user_token') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
+          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.account_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
         },
         "organization_instagram_check": {
           "name": "organization_instagram_check",
-          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.encrypted_access_token') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
+          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.account_id') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
         },
         "organization_feature_overrides_check": {
           "name": "organization_feature_overrides_check",
@@ -7961,7 +7652,7 @@
             "organization_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -8691,8 +8382,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "customer_id": {
-          "name": "customer_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -8714,6 +8405,20 @@
         },
         "resolved_at": {
           "name": "resolved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "archived_by_user_id": {
+          "name": "archived_by_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -8778,10 +8483,20 @@
           ],
           "isUnique": false
         },
-        "requests_customer_idx": {
-          "name": "requests_customer_idx",
+        "requests_org_user_idx": {
+          "name": "requests_org_user_idx",
           "columns": [
-            "customer_id"
+            "organization_id",
+            "user_id"
+          ],
+          "isUnique": false
+        },
+        "requests_org_archive_activity_idx": {
+          "name": "requests_org_archive_activity_idx",
+          "columns": [
+            "organization_id",
+            "archived_at",
+            "updated_at"
           ],
           "isUnique": false
         },
@@ -8821,12 +8536,12 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "requests_customer_id_customers_id_fk": {
-          "name": "requests_customer_id_customers_id_fk",
+        "requests_user_id_user_id_fk": {
+          "name": "requests_user_id_user_id_fk",
           "tableFrom": "requests",
-          "tableTo": "customers",
+          "tableTo": "user",
           "columnsFrom": [
-            "customer_id"
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -8840,6 +8555,19 @@
           "tableTo": "reviews",
           "columnsFrom": [
             "review_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "requests_archived_by_user_id_user_id_fk": {
+          "name": "requests_archived_by_user_id_user_id_fk",
+          "tableFrom": "requests",
+          "tableTo": "user",
+          "columnsFrom": [
+            "archived_by_user_id"
           ],
           "columnsTo": [
             "id"
@@ -8868,7 +8596,7 @@
       "checkConstraints": {
         "requests_instants_check": {
           "name": "requests_instants_check",
-          "value": "(resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+          "value": "(resolved_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', resolved_at, '+0 days') IS resolved_at) AND (archived_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', archived_at, '+0 days') IS archived_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
         },
         "requests_payload_check": {
           "name": "requests_payload_check",
@@ -8916,8 +8644,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "customer_id": {
-          "name": "customer_id",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -9022,10 +8750,11 @@
           ],
           "isUnique": false
         },
-        "reservations_customer_idx": {
-          "name": "reservations_customer_idx",
+        "reservations_org_user_idx": {
+          "name": "reservations_org_user_idx",
           "columns": [
-            "customer_id"
+            "organization_id",
+            "user_id"
           ],
           "isUnique": false
         }
@@ -9044,12 +8773,12 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "reservations_customer_id_customers_id_fk": {
-          "name": "reservations_customer_id_customers_id_fk",
+        "reservations_user_id_user_id_fk": {
+          "name": "reservations_user_id_user_id_fk",
           "tableFrom": "reservations",
-          "tableTo": "customers",
+          "tableTo": "user",
           "columnsFrom": [
-            "customer_id"
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -9084,7 +8813,7 @@
             "organization_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -9295,13 +9024,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "customer_id": {
-          "name": "customer_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "booking_type": {
           "name": "booking_type",
           "type": "text",
@@ -9375,13 +9097,6 @@
         },
         "last_error": {
           "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "anonymous_user_id": {
-          "name": "anonymous_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -9474,32 +9189,6 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "review_requests_customer_id_customers_id_fk": {
-          "name": "review_requests_customer_id_customers_id_fk",
-          "tableFrom": "review_requests",
-          "tableTo": "customers",
-          "columnsFrom": [
-            "customer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "review_requests_anonymous_user_id_user_id_fk": {
-          "name": "review_requests_anonymous_user_id_user_id_fk",
-          "tableFrom": "review_requests",
-          "tableTo": "user",
-          "columnsFrom": [
-            "anonymous_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "review_requests_user_id_user_id_fk": {
           "name": "review_requests_user_id_user_id_fk",
           "tableFrom": "review_requests",
@@ -9559,13 +9248,6 @@
         },
         "location_id": {
           "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "customer_id": {
-          "name": "customer_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -9770,10 +9452,11 @@
           ],
           "isUnique": false
         },
-        "idx_reviews_customer_id": {
-          "name": "idx_reviews_customer_id",
+        "reviews_org_user_idx": {
+          "name": "reviews_org_user_idx",
           "columns": [
-            "customer_id"
+            "organization_id",
+            "user_id"
           ],
           "isUnique": false
         },
@@ -9839,19 +9522,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "reviews_customer_id_customers_id_fk": {
-          "name": "reviews_customer_id_customers_id_fk",
-          "tableFrom": "reviews",
-          "tableTo": "customers",
-          "columnsFrom": [
-            "customer_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "reviews_review_request_id_review_requests_id_fk": {
           "name": "reviews_review_request_id_review_requests_id_fk",
           "tableFrom": "reviews",
@@ -9903,7 +9573,7 @@
             "organization_id",
             "id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -11084,13 +10754,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "deletionScheduledAt": {
-          "name": "deletionScheduledAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "createdAt": {
           "name": "createdAt",
           "type": "integer",
@@ -11198,7 +10861,7 @@
       "checkConstraints": {
         "user_notification_preferences_category_check": {
           "name": "user_notification_preferences_category_check",
-          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'organization_and_billing', 'product_news')"
+          "value": "category IN ('account_security', 'reservations_bookings', 'guest_messages', 'reviews', 'review_requests', 'organization_and_billing', 'product_news')"
         },
         "user_notification_preferences_updated_at_check": {
           "name": "user_notification_preferences_updated_at_check",

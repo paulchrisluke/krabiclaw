@@ -21,7 +21,6 @@ export default defineHandler(async (event) => {
 
   const body = await readStrictBody<PostMutation>(event, {
     title: 'string', body: 'string', slug: 'nullable-string',
-    seo_title: 'nullable-string', seo_description: 'nullable-string',
     scheduled_for: 'nullable-string', location_id: 'nullable-string', post_type: 'string',
     event: 'unknown', offer: 'unknown', call_to_action: 'unknown', alert_type: 'nullable-string',
   })

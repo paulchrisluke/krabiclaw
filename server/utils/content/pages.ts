@@ -791,10 +791,9 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   await createContentDocumentWithBlocks(db, representation, blocksAsInputs(blocks), {
     additionalQueriesAfter: [...placementQueries, publicResourceCacheInvalidationQuery(input.organizationId, 'tenant-page-create')],
   })
-  if (path === '/') {
-    // The homepage is represented by the site card. Refresh the site card only.
-    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'organization', owner_id: input.organizationId }, actorId: input.userId })
-  } else {
+  // The home page has no card of its own, and the organization's card draws
+  // the share image rather than anything on the page.
+  if (path !== '/') {
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId) }
@@ -983,10 +982,9 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
     blocks: blocksAsInputs(blocks), expected_updated_at: input.data.expectedUpdatedAt,
     additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.organizationId, 'tenant-page-update')],
   })
-  if (row.path === '/' || path === '/') {
-    // The homepage is represented by the site card. Refresh the site card only.
-    await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'organization', owner_id: input.scope.organizationId }, actorId: input.userId })
-  } else {
+  // The home page has no card of its own, and the organization's card draws
+  // the share image rather than anything on the page.
+  if (path !== '/') {
     await refreshSocialCard({ db, env: input.env, owner: { owner_type: 'content_document', owner_id: variantId }, actorId: input.userId })
   }
   return { page: await getTenantPageForEditor(db, variantId, input.scope) }

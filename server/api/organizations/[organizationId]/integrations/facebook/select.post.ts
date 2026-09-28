@@ -1,53 +1,43 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam, readBody } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
+import { requireIntegrationAccount } from '~/server/utils/auth'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import {
-  clearPendingPageSelection, readPendingPageSelection, storeFacebookPagesConnection,
+  getFacebookPagesConnection, listLinkedFacebookPages, storeFacebookPagesConnection,
 } from '~/server/utils/facebook-pages'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
  * The tenant's answer to "which Page". This is the only thing that writes a
- * Facebook connection when the authorization returned more than one, so a Page
- * is connected because somebody chose it.
+ * Facebook connection, so a Page is connected because somebody chose it, and
+ * through the linked Facebook account they named.
  */
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
-  const body = await readBody<{ handle?: string; page_id?: string }>(event).catch(() => null)
-  const handle = body?.handle?.trim()
+  const body = await readBody<{ account_id?: string; page_id?: string }>(event).catch(() => null)
+  const accountId = body?.account_id?.trim()
   const pageId = body?.page_id?.trim()
-  if (!handle || !pageId) return jsonResponse({ error: 'Choose a Facebook Page.' }, { status: 400 })
+  if (!accountId || !pageId) return jsonResponse({ error: 'Choose a Facebook account and Page.' }, { status: 400 })
 
-  const { env, organization} = await requireOrganizationAccess(event, organizationId)
-
-  const pending = await readPendingPageSelection(env, handle)
-  if (!pending || pending.organizationId !== organization.id) {
-    return jsonResponse({ error: 'That Facebook authorization has expired. Connect again.' }, { status: 410 })
+  const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
+  if (!await hasOrganizationEntitlement(env, organization.id, 'managed_service')) {
+    return jsonResponse({ error: 'Facebook requires the Growth plan.' }, { status: 403 })
   }
 
-  const page = pending.pages.find(candidate => candidate.id === pageId)
-  if (!page) return jsonResponse({ error: 'That Page was not part of this authorization.' }, { status: 400 })
+  const current = await getFacebookPagesConnection(env, organization.id)
+  await requireIntegrationAccount(env, accountId, {
+    userId: session.user.id, currentAccountId: current?.account_id, providerId: 'facebook', scopes: [],
+  })
 
-  try {
-    await storeFacebookPagesConnection(env, {
-      organization_id: pending.organizationId,
-      connected_by_user_id: pending.userId,
-      facebook_user_id: pending.facebookUserId,
-      page_id: page.id,
-      page_name: page.name,
-      encrypted_user_token: pending.userToken,
-      encrypted_page_token: page.access_token,
-      user_token_expires_at: undefined,
-      scopes: undefined,
-      status: 'active',
-    }, { revision: pending.revision })
-  } finally {
-    // The tokens are spent either way: a failed write must not leave them
-    // sitting in the cache for the rest of the window.
-    await clearPendingPageSelection(env, handle)
-  }
+  const page = (await listLinkedFacebookPages(env, accountId)).find(candidate => candidate.id === pageId)
+  if (!page) return jsonResponse({ error: 'That Facebook account does not manage that Page.' }, { status: 400 })
+
+  await storeFacebookPagesConnection(env, {
+    organization_id: organization.id, account_id: accountId, page_id: page.id, page_name: page.name,
+  }, { revision: current?.revision ?? null })
 
   return jsonResponse({ success: true, page_id: page.id, page_name: page.name })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam, readBody } from 'nitro/h3';

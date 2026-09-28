@@ -19,8 +19,12 @@ function accountId(env: CloudflareImagesEnv): string {
  * public) but cannot store or delete one, and this says so rather than failing
  * somewhere further down.
  */
+export function cloudflareImagesConfigured(env: CloudflareImagesEnv): boolean {
+  return Boolean(accountId(env) && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE)
+}
+
 export function assertCloudflareImagesConfigured(env: CloudflareImagesEnv): void {
-  if (accountId(env) && env.CLOUDFLARE_IMAGES_API_TOKEN && env.CLOUDFLARE_IMAGES_VARIANT_BASE) return
+  if (cloudflareImagesConfigured(env)) return
   throw new HTTPError({
     statusCode: 503,
     statusMessage: 'Cloudflare Images is not configured in this environment, by design',

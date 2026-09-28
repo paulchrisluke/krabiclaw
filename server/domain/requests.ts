@@ -37,8 +37,9 @@ const threadPayload = z.object({
 
 const threadScope = z.object({
   id: z.string(), organization_id: z.string(),  location_id: z.string().nullable(),
-  customer_id: z.string().nullable(), review_id: z.string().nullable(),
+  user_id: z.string().nullable(), review_id: z.string().nullable(),
   conversation_state: z.enum(['needs_attention', 'waiting_on_guest', 'resolved']), resolved_at: z.string().nullable(),
+  archived_at: z.string().nullable(), archived_by_user_id: z.string().nullable(),
   created_at: z.string(), updated_at: z.string(),
 })
 
@@ -89,7 +90,7 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
  * must surface, never paper over with placeholder times.
  */
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
-  return queryFirst<ThreadOperationalRecord>(db, `
+  return (await queryFirst<ThreadOperationalRecord>(db, `
     SELECT 'booking' AS kind, b.id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone,
            s.location_id, b.product_id, p.name AS product_name
       FROM bookings b
@@ -102,7 +103,7 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
       FROM reservations r
      WHERE r.request_id = ?
      LIMIT 1
-  `, [requestId, requestId]) ?? null
+  `, [requestId, requestId])) ?? null
 }
 
 /**
@@ -113,15 +114,17 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * finds no room inserts zero rows WITHOUT raising, so a thread written before
  * it would commit anyway and leave a conversation about a seat nobody holds.
  * Carrying the claim's existence into this insert is what ties them together.
+ *
+ * A new thread has not been archived by anyone, so it carries no archive state.
  */
-export function requestInsertQueries(request: GuestRequest, claimedBy?: BatchQuery): BatchQuery[] {
-  const values = [request.id, request.kind, request.organization_id, request.location_id, request.customer_id, request.review_id,
+export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' | 'archived_by_user_id'>, claimedBy?: BatchQuery): BatchQuery[] {
+  const values = [request.id, request.kind, request.organization_id, request.location_id, request.user_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
     query: claimedBy
-      ? `INSERT INTO requests (id, kind, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      ? `INSERT INTO requests (id, kind, organization_id, location_id, user_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (${claimedBy.query})`
-      : `INSERT INTO requests (id, kind, organization_id, location_id, customer_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
+      : `INSERT INTO requests (id, kind, organization_id, location_id, user_id, review_id, conversation_state, resolved_at, payload_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: claimedBy ? [...values, ...(claimedBy.params ?? [])] : values,
   }, {

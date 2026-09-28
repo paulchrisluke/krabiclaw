@@ -1,7 +1,6 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { cleanString, cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
@@ -13,16 +12,12 @@ export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  const session = await getAuthSession(event, env)
-  const userId = session?.user?.id
-  if (!userId) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   const token = cleanString((await readRequiredBody<ApiRecord>(event)).token, 300)
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
   const result = await getReviewRequestByToken(db, token)
   if (!result || result.request.id !== requestId) return jsonResponse({ error: 'Review request not found or expired' }, { status: 404 })
-  if (result.request.user_id !== userId && result.request.anonymous_user_id !== userId) {
-    return jsonResponse({ error: 'Forbidden' }, { status: 403 })
-  }
+  // The token was minted for the booking's user; the deletion is theirs.
+  const userId = result.request.user_id
   const placement = await queryFirst<{ id: string; asset_status: string }>(db, `
     SELECT mp.id, ma.status AS asset_status
       FROM media_placements mp JOIN media_assets ma ON ma.id = mp.asset_id

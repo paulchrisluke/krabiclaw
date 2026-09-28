@@ -134,6 +134,26 @@ Never rewrite migration history for a production database resource in place. A s
 
 A schema replacement does not take the site down. Prepare the new database ahead of time, load it, verify it in place, deploy the candidate on the new binding, then copy over rows created after the export. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
 
+`scripts/pull-production-snapshot.ts` runs every step of it through
+`scripts/transfer-database-export.mjs`. It names the database being replaced with
+`--source`, because after the repoint `DB` means the replacement.
+
+Staging and production run the same command. `--staging` or `--production` is
+the only difference, and both check the destination's schema and
+`d1_migrations` ledger before writing anything. `--production` refuses to run
+without `--source`.
+
+1. Preflight, with nothing written remotely. Fix any refused row at its source, never in the transfer. Read the `Reconnect required` lines:
+   `node --experimental-strip-types scripts/pull-production-snapshot.ts --source <old database> --out preflight.sqlite`
+2. On the repoint branch, create the replacement D1 and name it in `wrangler.toml`. Build its schema with `wrangler d1 migrations apply DB --env staging --remote`, or `DB --remote` for production. Never execute `0000_baseline.sql` directly. `migrations apply` records the baseline in `d1_migrations`, so the apply every deploy runs next does nothing.
+3. Load the replacement immediately before the repoint pull request merges. The time between this export and the repoint is the window in which an edit on the old database is not carried over, so it should be minutes, not hours. Keep `initial.sqlite`; step 5 compares against it.
+   `node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source <old database> --out initial.sqlite` (or `--production`)
+4. Merge the repoint and deploy on the new binding. Run `yarn lint:schema-drift --env staging` (or `--production`) and `PRAGMA foreign_key_check`.
+5. Copy the rows created after the export, through the same checked load:
+   `node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source <old database> --out final.sqlite --delta-from initial.sqlite` (or `--production`)
+   The delta only inserts rows whose primary key `initial.sqlite` lacked. It never updates or deletes, and a row it cannot insert fails the load instead of being overwritten.
+   Before writing, the run prints `Not carried, changed since the initial export` and `Not carried, deleted since the initial export`, with the primary keys, for each table. These are rows that already existed at the export and were edited or removed on the old database before the repoint. Read that list, and run the delta first with `--out` alone to read it without writing. If it names bookings, reservations, requests or activity entries, carry those rows deliberately before the old database is retired. Nothing updates them automatically.
+
 Before dropping or retiring a legacy table or writer:
 
 - remove every runtime reader and writer;

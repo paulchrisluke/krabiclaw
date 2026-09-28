@@ -100,7 +100,7 @@ export function useOnboardingDraft() {
         method: 'POST',
         body: {
           sourceType: state.value.source ?? 'manual',
-          placeId: state.value.place?.placeId,
+          placeId: state.value.placeId,
           name: state.value.details.name.trim(),
           vertical: state.value.vertical,
           details: serializeDetails(),
@@ -129,40 +129,13 @@ export function useOnboardingDraft() {
   }
 
   /**
-   * Read a Google Maps link into the flow's place snapshot. POST
-   * /api/dashboard/locations owns both the preview and the mutation for an
-   * existing site's locations, so add-location reads its listing from there;
-   * new-site has no site yet and reads from the onboarding preview endpoint.
+   * The owner picked this place in the business picker. Its Place Details seed
+   * the screens after it, which stay editable; only the placeId is sent on, and
+   * the server fetches the place itself when it saves or adds the location.
    */
-  async function lookup(mapsUrl: string): Promise<boolean> {
-    busy.value = true
-    error.value = null
-    state.value.mapsUrl = mapsUrl
-    const request = {
-      method: 'POST' as const,
-      body: { mapsUrl, previewOnly: true },
-      validate: (value: unknown): value is Record<string, unknown> => isRecord(value),
-    }
-    try {
-      const res = state.value.flow === 'add-location'
-        ? await locationsAddFetch<Record<string, unknown>>(request)
-        : await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/places-preview', request)
-      const preview = isRecord(res.preview) ? res.preview as unknown as OnboardingPlacePreview : null
-      if (res.success !== true || !preview?.placeId) {
-        throw new Error(typeof res.error === 'string' ? res.error : 'Could not find your business. Check the link and try again.')
-      }
-      state.value.place = preview
-      seedFromPlace(preview)
-      return true
-    } catch (cause) {
-      error.value = cause instanceof Error ? cause.message : 'Something went wrong. Please try again.'
-      return false
-    } finally {
-      busy.value = false
-    }
-  }
-
   function seedFromPlace(preview: OnboardingPlacePreview) {
+    state.value.source = 'google_places'
+    state.value.placeId = preview.placeId
     const details = state.value.details
     details.name = preview.name ?? ''
     // Places answers with the address already split, so every field seeds from
@@ -174,8 +147,7 @@ export function useOnboardingDraft() {
     details.region = address?.administrativeArea ?? ''
     details.postalCode = address?.postalCode ?? ''
     details.country = address?.regionCode ?? ''
-    // Google returns the national format, which carries no country and cannot be
-    // stored at the E.164 boundary. Seed it only when it parses on its own.
+    // The server hands the place's number over in E.164.
     details.phone = parsePhone(preview.phone ?? '').e164 ?? ''
     state.value.hours.hours = parseOpeningHours((preview.openingHours ?? null) as OpeningHours)
     state.value.hours.specialHours = null
@@ -223,11 +195,11 @@ export function useOnboardingDraft() {
     busy.value = true
     error.value = null
     try {
-      const place = state.value.place
+      const placeId = state.value.source === 'google_places' ? state.value.placeId : null
       const res = await locationsAddFetch<Record<string, unknown>>({
         method: 'POST',
-        body: place
-          ? { placeId: place.placeId, details: serializeDetails() }
+        body: placeId
+          ? { placeId, details: serializeDetails() }
           : { name: state.value.details.name.trim(), details: serializeDetails() },
         validate: (value): value is Record<string, unknown> => isRecord(value),
       })
@@ -328,6 +300,7 @@ export function useOnboardingDraft() {
       state.value.draftId = draft.draftId
       state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
       state.value.source = draft.sourceType === 'google_places' ? 'google_places' : 'manual'
+      state.value.placeId = typeof draft.placeId === 'string' && draft.placeId ? draft.placeId : null
       state.value.details.name = text(details.name)
       state.value.details.city = text(details.city)
       state.value.details.streetAddress = text(details.streetAddress)
@@ -373,5 +346,5 @@ export function useOnboardingDraft() {
     }
   }
 
-  return { busy, error, save, lookup, activate, addLocation, restore, activeDraftOrganizationId, discard, addressSummary }
+  return { busy, error, save, seedFromPlace, activate, addLocation, restore, activeDraftOrganizationId, discard, addressSummary }
 }

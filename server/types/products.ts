@@ -194,9 +194,9 @@ export interface ReorderCollectionsInput {
 export type ReconcileProductInput = CreateProductInput & { product_id?: string }
 
 /**
- * The public surfaces a catalog reaches customers through.
+ * The public surfaces a catalog reaches guests through.
  *
- * Three, because customers read three different things: a restaurant's dishes
+ * Three, because guests read three different things: a restaurant's dishes
  * are its Menu, anything a guest books a seat on is an Experience, and the
  * goods a merchant sells are Products. One Product model, named on the page
  * the way the customer says it.

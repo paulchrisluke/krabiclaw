@@ -23,5 +23,7 @@ const currency = rawCurrency
 const brandName = organization.value?.name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Organization brand is unavailable' })
 const productLocations = computed(() => locations.value.map(location => ({ id: location.id, slug: location.slug, title: location.title })))
-useSocialMetadata(() => ({ path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { organizationName: brandName } }))
+// A page about the business: its image is the organization's.
+const organizationSocialImage = useTenantOrganization().organization?.social_image ?? null
+useSocialMetadata(() => ({ socialImage: organizationSocialImage, path: presentation.collectionPath, title: `${brandName} Menu`, description: `Full menu at ${brandName}.`, brand: { organizationName: brandName } }))
 </script>

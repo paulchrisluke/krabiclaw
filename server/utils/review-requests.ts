@@ -1,5 +1,6 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
+import { wantsNotification } from '~/server/domain/notification-preferences'
 
 export type ReviewBookingType = 'reservation' | 'booking'
 export type CompletionSource = 'manual' | 'auto'
@@ -8,7 +9,7 @@ export interface ReviewRequestRow {
   id: string
   organization_id: string
   location_id: string | null
-  customer_id: string
+  user_id: string | null
   booking_type: ReviewBookingType
   booking_id: string
   token_hash: string
@@ -20,8 +21,6 @@ export interface ReviewRequestRow {
   revoked_at: string | null
   send_count: number
   last_error: string | null
-  anonymous_user_id: string | null
-  user_id: string | null
   created_at: string
   updated_at: string
 }
@@ -33,10 +32,7 @@ export interface ReviewBookingContext {
   location_id: string | null
   /** The product a booking was for; a reservation has none. */
   product_id: string | null
-  customer_id: string | null
-  customer_name: string | null
-  customer_email: string | null
-  customer_opted_out_at: string | null
+  user_id: string | null
   guest_name: string | null
   guest_email: string | null
   status: string
@@ -100,8 +96,7 @@ export async function getReviewBookingContext(
   bookingType: ReviewBookingType,
   bookingId: string,
 ): Promise<ReviewBookingContext | null> {
-  return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.location_id, r.customer_id,
-    c.name AS customer_name, c.email AS customer_email, c.review_request_opted_out_at AS customer_opted_out_at,
+  return queryFirst<ReviewBookingContext>(db, `SELECT r.kind AS booking_type, r.id AS booking_id, r.organization_id, r.location_id, r.user_id,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, record.status,
     record.ends_at AS completed_at,
     json_extract(r.payload_json, '$.review.request_sent_at') AS review_request_sent_at,
@@ -110,7 +105,7 @@ export async function getReviewBookingContext(
     s.name AS organization_name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = s.id AND role = 'canonical' AND status = 'active') AS organization_public_url,
     s.subdomain AS organization_subdomain, bl.slug AS location_slug, bl.title AS location_title, bl.google_place_id, bl.google_review_url,
     record.starts_at AS visit_starts_at, record.timezone AS visit_timezone, record.party_size, record.product_id
-    FROM requests r JOIN organization s ON s.id = r.organization_id LEFT JOIN customers c ON c.id = r.customer_id LEFT JOIN business_locations bl ON bl.id = r.location_id
+    FROM requests r JOIN organization s ON s.id = r.organization_id LEFT JOIN business_locations bl ON bl.id = r.location_id
     -- The visit itself lives on the operational record, never on the thread. A
     -- review request only exists once that visit has ended, and its end is on
     -- the record: same UNION shape the automation sweep uses.
@@ -140,7 +135,7 @@ export async function getReviewRequestByToken(
 
   if (!request) return null
   const context = await getReviewBookingContext(db, request.booking_type, request.booking_id)
-  if (!context || context.customer_id !== request.customer_id) return null
+  if (!context || context.user_id !== request.user_id) return null
 
   if (opts.markClicked && !request.clicked_at) {
     const now = new Date().toISOString()
@@ -162,11 +157,11 @@ export async function createOrRotateReviewRequest(
   context: ReviewBookingContext,
   now = new Date().toISOString(),
 ): Promise<{ request: ReviewRequestRow; token: string; created: boolean }> {
-  if (!context.customer_id) throw new Error('Booking is not linked to a customer')
+  if (!context.user_id) throw new Error('Booking is not linked to a guest identity')
   if (!context.completed_at || context.completed_at > now) throw new Error('Booking is not complete yet')
   if (context.status === 'cancelled') throw new Error('Cancelled bookings cannot receive review requests')
   if (context.review_submitted_at || context.review_id) throw new Error('Booking already has a submitted review')
-  if (context.customer_opted_out_at) throw new Error('Customer has opted out of review requests')
+  if (!await wantsNotification(db, context.user_id, 'review_requests', 'email')) throw new Error('Guest has opted out of review requests')
 
   const entitled = await hasOrganizationEntitlement(env, context.organization_id, 'review_requests')
   if (!entitled) throw new Error('Review requests are not enabled for this organization')
@@ -178,7 +173,7 @@ export async function createOrRotateReviewRequest(
 
   const insertResult = await execute(db, `
     INSERT OR IGNORE INTO review_requests (
-      id, organization_id, location_id, customer_id, booking_type, booking_id,
+      id, organization_id, location_id, user_id, booking_type, booking_id,
       token_hash, expires_at, send_count, created_at, updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
@@ -186,7 +181,7 @@ export async function createOrRotateReviewRequest(
     id,
     context.organization_id,
     context.location_id,
-    context.customer_id,
+    context.user_id,
     context.booking_type,
     context.booking_id,
     tokenHash,
@@ -287,16 +282,4 @@ export async function markReviewSubmittedForRequest(
   `, [submittedAt, reviewId, submittedAt, request.booking_id])
 
 
-}
-
-export async function optOutCustomerReviewRequests(
-  db: DbClient,
-  request: ReviewRequestRow,
-): Promise<void> {
-  const now = new Date().toISOString()
-  await execute(db, `
-    UPDATE customers
-    SET review_request_opted_out_at = COALESCE(review_request_opted_out_at, ?), updated_at = ?
-    WHERE id = ?
-  `, [now, now, request.customer_id])
 }

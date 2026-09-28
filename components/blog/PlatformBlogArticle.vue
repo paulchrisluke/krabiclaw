@@ -60,10 +60,7 @@ interface BlogPost {
   body: string
   excerpt?: string | null
   category?: string | null
-  seo_description?: string | null
-  seo_title?: string | null
   seo_keywords?: string | null
-  canonical_url?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
   created_at?: string | null
@@ -192,8 +189,7 @@ const breadcrumbs = computed(() => [
 const runtimeConfig = useRuntimeConfig()
 const platformOrigin = computed(() => runtimeConfig.public.platformUrl)
 const resolvedSeo = computed(() => resolveBlogSeo({
-  title: post.value?.title || 'Blog', seoTitle: post.value?.seo_title, excerpt: post.value?.excerpt,
-  seoDescription: post.value?.seo_description, slug: post.value?.slug || '', canonicalUrl: post.value?.canonical_url,
+  title: post.value?.title || 'Blog', excerpt: post.value?.excerpt, slug: post.value?.slug || '',
   baseUrl: platformOrigin.value, publicPath: postPath.value, organizationName: 'KrabiClaw',
 }))
 const { canonicalUrl } = useSocialMetadata(() => ({

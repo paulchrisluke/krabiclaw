@@ -5,7 +5,7 @@ import type { OrganizationVertical } from '~/utils/vertical-copy'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 
 export type OnboardingStepId =
-  | 'type' | 'name' | 'source' | 'maps' | 'confirm'
+  | 'type' | 'business'
   | 'location' | 'contact' | 'hours'
   | 'currency' | 'products' | 'look'
   | 'review'
@@ -26,6 +26,7 @@ export interface OnboardingProductDraft {
   amountMinor: number | null
 }
 
+/** The place the business picker hands back: Place Details for the chosen prediction. */
 export interface OnboardingPlacePreview {
   placeId: string
   name: string
@@ -48,6 +49,8 @@ export interface OnboardingFlowState {
   flow: OnboardingFlowId
   vertical: OrganizationVertical
   source: 'google_places' | 'manual' | null
+  /** The Google place the owner picked; null on the manual path. */
+  placeId: string | null
   details: {
     name: string
     city: string
@@ -63,8 +66,6 @@ export interface OnboardingFlowState {
   hours: { timezone: string; hours: OpeningHours; specialHours: SpecialHours }
   brand: DraftBrandForm
   products: OnboardingProductDraft[]
-  place: OnboardingPlacePreview | null
-  mapsUrl: string
   draftId: string | null
   preview: OnboardingDraftPreview | null
   created: { orgSlug: string | null; organizationSlug: string | null; locationSlug: string | null } | null
@@ -98,7 +99,7 @@ export interface OnboardingStep {
    * needs a server call before moving on names it here rather than reaching
    * into the footer.
    */
-  action?: 'lookup' | 'commit'
+  action?: 'commit'
 }
 
 export const ONBOARDING_SECTIONS: Array<{ id: OnboardingSectionId; label: string }> = [
@@ -116,36 +117,15 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     complete: state => Boolean(state.vertical),
   },
   {
-    id: 'name', section: 'business', flows: ['new-site', 'add-location'],
+    // One search. Picking Google's prediction is the confirmation and seeds the
+    // screens after it; "Enter details manually" keeps the typed name instead.
+    id: 'business', section: 'business', flows: ['new-site', 'add-location'],
     title: state => state.flow === 'add-location'
-      ? "What's this location called?"
-      : "What's the name of your business?",
-    lede: state => state.flow === 'add-location'
-      ? 'Guests see it alongside your other locations.'
-      : 'It becomes your site address, and reserves it the moment you continue. You can change the address later.',
-    complete: state => state.details.name.trim().length > 0,
-  },
-  {
-    id: 'source', section: 'business', flows: ['new-site', 'add-location'],
-    advanceOnChoice: true,
-    title: () => 'How should we fill in the rest?',
-    lede: () => 'Your address, hours, phone and reviews can come from Google, or you can type them yourself.',
-    complete: state => state.source !== null,
-  },
-  {
-    id: 'maps', section: 'business', flows: ['new-site', 'add-location'],
-    title: () => 'Paste your Google Maps link',
-    lede: () => 'Your address, hours, phone and reviews come with it.',
-    applies: state => state.source === 'google_places',
-    complete: state => state.mapsUrl.trim().length > 0,
-    action: 'lookup',
-    nextLabel: () => 'Find my listing',
-  },
-  {
-    id: 'confirm', section: 'business', flows: ['new-site', 'add-location'],
-    title: () => 'Does this look right?',
-    applies: state => state.source === 'google_places' && state.place !== null,
-    complete: state => state.details.name.trim().length > 0,
+      ? 'Find this location on Google Maps'
+      : 'Find your business on Google Maps',
+    lede: () => 'Pick your listing and its address, phone and hours come with it. You can change any of them on the next screens.',
+    complete: state => state.details.name.trim().length > 0 && (
+      state.source === 'google_places' ? state.placeId !== null : state.source === 'manual'),
   },
   {
     id: 'location', section: 'place', flows: ['new-site', 'add-location'],
@@ -222,6 +202,7 @@ function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
     // restaurant ended up priced in dollars without being asked.
     vertical: 'restaurant',
     source: null,
+    placeId: null,
     details: {
       name: '', city: '', streetAddress: '', addressLine2: '', region: '', postalCode: '',
       country: '', phone: '', currency: null,
@@ -233,8 +214,6 @@ function emptyState(flow: OnboardingFlowId): OnboardingFlowState {
       heroHeadline: '', heroSubtitle: '',
     },
     products: [],
-    place: null,
-    mapsUrl: '',
     draftId: null,
     preview: null,
     created: null,

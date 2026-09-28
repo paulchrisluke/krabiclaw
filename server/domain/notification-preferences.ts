@@ -7,6 +7,7 @@ import {
   type NotificationCategorySetting,
   type NotificationChannel,
 } from '~/shared/notification-categories'
+import { syncProductNewsContact, type ProductNewsEnv } from '~/server/domain/product-news-contacts'
 
 interface PreferenceRow {
   category: string
@@ -15,6 +16,14 @@ interface PreferenceRow {
 }
 
 export type NotificationPreferences = Record<NotificationCategory, NotificationCategorySetting>
+
+/**
+ * Who changed a preference. A person's own change is projected to the email
+ * provider after the D1 write; a change the provider reported (a Resend
+ * unsubscribe) is only recorded, because sending it back would be an echo of
+ * the provider's own state.
+ */
+type PreferenceChange = { origin: 'user'; env: ProductNewsEnv } | { origin: 'provider' }
 
 function defaults(): NotificationPreferences {
   return Object.fromEntries(
@@ -47,8 +56,16 @@ export async function getNotificationPreferences(db: DbClient, userId: string): 
   return preferences
 }
 
+/**
+ * A person's own settings change for one category.
+ *
+ * Every Product News save is that person's explicit statement of the email
+ * setting they see, so the Resend projection is brought to it each time — an
+ * earlier save whose provider sync failed is repaired by saving again.
+ */
 export async function setNotificationPreference(
   db: DbClient,
+  env: ProductNewsEnv,
   userId: string,
   category: NotificationCategory,
   setting: NotificationCategorySetting,
@@ -66,6 +83,9 @@ export async function setNotificationPreference(
        updated_at = excluded.updated_at`,
     [userId, category, setting.email ? 1 : 0, setting.whatsapp ? 1 : 0],
   )
+  if (category === 'product_news') {
+    await syncProductNewsContact(db, env, userId, setting.email ? 'user_opt_in' : 'user_opt_out')
+  }
 }
 
 /**
@@ -80,6 +100,7 @@ export async function disableCategoryEmail(
   db: DbClient,
   userId: string,
   category: NotificationCategory,
+  change: PreferenceChange,
 ): Promise<void> {
   if (isMandatoryEmailCategory(category)) {
     throw new Error(`${category} email cannot be disabled`)
@@ -93,6 +114,9 @@ export async function disableCategoryEmail(
        updated_at = excluded.updated_at`,
     [userId, category, NOTIFICATION_CATEGORY_DEFAULTS[category].whatsapp ? 1 : 0],
   )
+  if (category === 'product_news' && change.origin === 'user') {
+    await syncProductNewsContact(db, change.env, userId, 'user_opt_out')
+  }
 }
 
 /**

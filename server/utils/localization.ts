@@ -317,8 +317,8 @@ export async function getLocalizationForAuthoring(
   const document = await getContentRepresentation(db, { rootId: resourceId, locale })
   if (!document || document.organization_id !== organizationId || document.organization_id !== organizationId) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Document representation was not found')
   const copy = await queryFirst<{ title: string | null; summary: string | null; slug: string | null; path: string | null;
-    seo_title: string | null; seo_description: string | null; seo_keywords: string | null; metadata_json: string }>(db,
-    'SELECT title, summary, slug, path, seo_title, seo_description, seo_keywords, metadata_json FROM content_documents WHERE id = ?', [document.id])
+    seo_keywords: string | null; metadata_json: string }>(db,
+    'SELECT title, summary, slug, path, seo_keywords, metadata_json FROM content_documents WHERE id = ?', [document.id])
   if (!copy) throw new HTTPError({ statusCode: 500, statusMessage: 'Document representation disappeared during reading' })
   const { metadata_json, ...fields } = copy
   return { ...document, ...fields, metadata: JSON.parse(metadata_json) as Record<string, unknown>,
@@ -557,7 +557,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   if (root.kind === 'qa') localizationError(403, 'LOCALIZATION_READ_ONLY', 'Q&A is read-only')
   if (!input.values || typeof input.values !== 'object' || Array.isArray(input.values)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'values must be an object')
   const copy = input.values as Record<string, unknown>
-  const textFields = ['title', 'summary', 'slug', 'seo_title', 'seo_description', 'seo_keywords'] as const
+  const textFields = ['title', 'summary', 'slug', 'seo_keywords'] as const
   if (Object.keys(copy).some(key => key !== 'metadata' && !textFields.some(field => field === key))) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Unknown translated document field')
   const changes: ContentDocumentChanges = { updated_by: input.userId,
     metadata: Object.fromEntries(DOCUMENT_LOCALIZED_METADATA[root.kind].map(key => [key, null])) }
@@ -608,7 +608,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
     await createContentDocumentWithBlocks(db, { organizationId: input.organizationId,
       kind: root.kind, rowRole: 'representation', rootId: root.id, locale,
       title: changes.title, summary: changes.summary, slug: changes.slug, path: changes.path,
-      seoTitle: changes.seo_title, seoDescription: changes.seo_description, seoKeywords: changes.seo_keywords,
+      seoKeywords: changes.seo_keywords,
       metadata: changes.metadata, createdBy: input.userId, updatedBy: input.userId,
     }, prepared?.blocks ?? [], { additionalQueriesAfter: after })
   }

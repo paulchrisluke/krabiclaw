@@ -134,8 +134,6 @@ export interface PublicBlogSummary {
 export interface PublicBlogPost extends PublicBlogSummary {
   body: string
   author: { id: string; name: string | null; image: string | null } | null
-  seo_title: string | null
-  seo_description: string | null
   canonical_url: string
   visibility: 'listed' | 'unlisted'
   created_at: string | null

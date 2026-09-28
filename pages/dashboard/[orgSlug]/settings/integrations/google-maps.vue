@@ -20,11 +20,20 @@ const route = useRoute()
 const level = useRouteLevel()
 const integrations = inject(integrationsKey)!
 
+// A row reads the way Google Maps shows the place: its picture, its rating, where it is.
 const items = computed<EditorNavigationItem[]>(() => (integrations.summary.value?.google_maps ?? []).map(location => ({
   id: location.slug,
   label: location.title,
-  summary: location.google_place_id ? 'Connected' : 'Not connected',
-  icon: 'i-lucide-map-pin',
+  lead: { image: location.image, icon: 'i-lucide-map-pin' },
+  ...(location.google_place_id
+    ? {
+        status: 'success' as const,
+        summary: [
+          location.rating === null ? 'No rating yet' : `★ ${location.rating} · ${location.review_count ?? 0} reviews`,
+          location.address,
+        ].filter(Boolean).join(' · '),
+      }
+    : { summary: 'Not connected', status: 'neutral' as const }),
   to: `/dashboard/${String(route.params.orgSlug)}/settings/integrations/google-maps/${location.slug}`,
 })))
 </script>

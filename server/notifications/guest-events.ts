@@ -158,6 +158,7 @@ export function guestBookingCancelledMessage(input: GuestBookingInput & { produc
 export function guestContactReceivedMessage(input: {
   guestName: string
   organizationName: string
+  organizationLogoUrl: string | null
   subject: string | null
   productTitle: string | null
   message: string
@@ -176,10 +177,11 @@ export function guestContactReceivedMessage(input: {
     sections: [{ title: 'Your message', body: input.message }],
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
-export function guestThreadReplyMessage(input: { organizationName: string; body: string }): NotificationMessage {
+export function guestThreadReplyMessage(input: { organizationName: string; organizationLogoUrl: string | null; body: string }): NotificationMessage {
   return {
     title: `Reply from ${input.organizationName}`,
     preheader: input.body.slice(0, 120),
@@ -189,11 +191,13 @@ export function guestThreadReplyMessage(input: { organizationName: string; body:
     finePrint: 'Reply to this email and your message goes straight back to the same conversation.',
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
 export function guestThreadStatusMessage(input: {
   organizationName: string
+  organizationLogoUrl: string | null
   heading: string
   body: string
   actionUrl?: string | null
@@ -208,12 +212,14 @@ export function guestThreadStatusMessage(input: {
     primaryAction: input.actionUrl && input.actionLabel ? { url: input.actionUrl, label: input.actionLabel } : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
 export function bookingChangeProposalMessage(input: {
   guestName: string
   organizationName: string
+  organizationLogoUrl: string | null
   heading: string
   intro: string
   rows: Array<[string, string]>
@@ -229,6 +235,7 @@ export function bookingChangeProposalMessage(input: {
     primaryAction: input.actionUrl && input.actionLabel ? { url: input.actionUrl, label: input.actionLabel } : undefined,
     category: 'account_security',
     organizationName: input.organizationName,
+    organizationLogoUrl: input.organizationLogoUrl,
   }
 }
 
@@ -239,7 +246,6 @@ export function reviewRequestMessage(input: {
   visitAt: string
   partySize: string
   reviewUrl: string
-  optOutUrl: string
   organizationLogoUrl?: string | null
 }): NotificationMessage {
   return {
@@ -254,8 +260,7 @@ export function reviewRequestMessage(input: {
       fact('location', 'Location', input.locationName),
     ),
     primaryAction: { url: input.reviewUrl, label: 'Leave a review' },
-    finePrint: `Would rather not be asked? Opt out: ${input.optOutUrl}`,
-    category: 'account_security',
+    category: 'review_requests',
     organizationName: input.organizationName,
   }
 }

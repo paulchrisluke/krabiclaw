@@ -44,10 +44,13 @@
   grandchild owns both columns — Nuxt UI's own two-panel idiom, decided here
   from the route tree so no page carries a breakpoint.
 
-  `autoOpen` is the child an index opens on arrival where there is a pane to
-  put it in, the way a listing editor lands on its first section. Below the
-  pane width the index is the screen and nothing is chosen for the tenant.
-  Client-only and `replace`, so Back still leaves the index.
+  Pairing and auto-selection are separate. Beside its parent the index is a
+  column because the route tree nests it there, whatever its rows are.
+  `autoOpen` only answers whether it may choose one of its own children on
+  arrival: an index of deterministic settings or fields names its first one, the
+  way a listing editor lands on its first section; a list of records names none.
+  Below the pane width the index is the screen and nothing is chosen for the
+  tenant. `replace`, so Back still leaves the index.
 */
 import type { RouteLocationRaw } from 'vue-router'
 
@@ -65,17 +68,13 @@ const pair = computed(() => level.mode.value === 'pair')
 
 const pane = useDashboardPane()
 const router = useRouter()
-let opened = false
-onMounted(() => {
-  watch([() => props.autoOpen, pane, level.mode], ([target, wide, mode]) => {
-    // An index on its way out after a navigation elsewhere yields, so it opens nothing.
-    if (opened || !target || !wide || mode !== 'index') return
-    // A target that is this level's own URL opens nothing. An index whose rows
-    // are still loading offers itself as the first row, and taking that as the
-    // child both navigated nowhere and used up the one open this index gets.
-    if (router.resolve(target).path === level.path.value) return
-    opened = true
-    void navigateTo(target, { replace: true })
-  }, { immediate: true })
-})
+// Every arrival at the bare index opens the child again — Back from deeper
+// included. Opening it makes this level a pair, which is what stops the watch.
+watch((): [RouteLocationRaw | null | undefined, boolean, RouteLevelMode] => [props.autoOpen, pane.value, level.mode.value], ([target, wide, mode]) => {
+  // An index on its way out after a navigation elsewhere yields, so it opens nothing.
+  if (!target || !wide || mode !== 'index') return
+  // An index whose rows are still loading offers itself as the first row; its own URL opens nothing.
+  if (router.resolve(target).path === level.path.value) return
+  void navigateTo(target, { replace: true })
+}, { immediate: true })
 </script>

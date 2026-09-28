@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import { getFacebookPagesConnection, syncFacebookPosts } from '~/server/utils/facebook-pages'
+import { facebookPageToken, getFacebookPagesConnection, syncFacebookPosts } from '~/server/utils/facebook-pages'
 import { readInstagramConnection, syncInstagramPosts } from '~/server/utils/instagram'
 import { execute, queryAllPages } from '~/server/db'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
@@ -32,7 +32,8 @@ interface TaskResult {
 
 /**
  * Hourly import of each Growth organization's Facebook Page and Instagram
- * account posts. They are separate connections with separate tokens, so each
+ * account posts. They are separate connections through separate linked
+ * accounts, so each
  * syncs on its own and one failing says nothing about the other.
  */
 export default defineScheduledTask({
@@ -84,8 +85,8 @@ export default defineScheduledTask({
 async function syncFacebook(env: CloudflareEnv, db: D1Database, organizationId: string): Promise<SyncResult> {
   try {
     const connection = await getFacebookPagesConnection(env, organizationId)
-    if (!connection?.encrypted_page_token) throw new Error('The Facebook connection has no Page token')
-    const counts = await syncFacebookPosts(env, organizationId, connection.encrypted_page_token, connection.page_id)
+    if (!connection) throw new Error('The Facebook connection could not be read')
+    const counts = await syncFacebookPosts(env, organizationId, await facebookPageToken(env, connection), connection.page_id)
     await execute(db, `
       UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'active',
         '$.facebook.updated_at', ?)

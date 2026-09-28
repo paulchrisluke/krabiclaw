@@ -47,7 +47,7 @@ const resuming = computed(() => state.value.draftId !== null)
 const POINTS = [
   {
     title: 'Tell us about your business',
-    body: 'The name, what kind of business it is, and your Google listing if you have one.',
+    body: 'What kind of business it is, and your Google Maps listing if you have one.',
     icon: 'i-lucide-store',
   },
   {
