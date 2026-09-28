@@ -1,15 +1,9 @@
 <template>
-  <div v-if="post">
-    <PlatformPostDetail v-if="isPlatform" :post="post" />
-    <BlawbyPostDetail v-else-if="isBlawby" :post="post" :brand="postBrand" />
-    <div v-else class="min-h-screen bg-default text-default">
-      <SayaPostDetail :post="post" :brand="postBrand" />
-    </div>
-  </div>
+  <SocialPostDetail v-if="post" :post="post" :brand="postBrand" />
 </template>
 
 <script setup lang="ts">
-import PlatformPostDetail from '~/components/platform/PlatformPostDetail.vue'
+import SocialPostDetail from '~/components/social/SocialPostDetail.vue'
 import { isPublicSocialPost, type PublicSocialPost } from '~/utils/public-resource-contracts'
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 
@@ -24,7 +18,6 @@ const route = useRoute()
 const requestEvent = useRequestEvent()
 const { organizationId, organization, isPlatform, previewAuthorized } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
-const { isBlawby } = usePublicTemplate()
 const { organization: publicOrganization } = useOrganizationShellState()
 const { locale } = useI18n()
 

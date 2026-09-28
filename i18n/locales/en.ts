@@ -9,12 +9,6 @@ export default {
     "terms": "Terms"
   },
   "blawby": {
-    "posts": {
-      "title": "Updates",
-      "view_update": "Read the update",
-      "back": "All updates",
-      "empty": "No updates have been posted yet."
-    },
     "article": {
       "browse_topics": "Browse topics",
       "from_the": "From the"
@@ -35,6 +29,11 @@ export default {
   },
   "social_posts": {
     "title": "Updates",
+    "meta_description": "Stories, news, and updates from {organization}.",
+    "by_location": "Updates by location",
+    "view_update": "Read the update",
+    "back": "All updates",
+    "empty": "No updates have been posted yet.",
     "media_label": "Photos and video ({count})",
     "media_position": "{position} of {count}",
     "previous_media": "Previous photo or video",
@@ -178,8 +177,6 @@ export default {
       "featured": "Featured",
       "subtitle": "News & Events",
       "read_full_story": "Read Full Story",
-      "view_update": "View update",
-      "back_to_updates": "Back to updates",
       "view_all": "View All Updates",
       "show_more": "Show more",
       "cta_default": "Learn more",

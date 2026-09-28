@@ -170,7 +170,7 @@
 
       <!-- Location posts preview -->
       <template v-if="locationPosts.length">
-        <SayaSocialPosts :posts="locationPosts" />
+        <SocialPosts :posts="locationPosts" />
         <div class="pb-20 text-center">
           <SayaButton :to="localePath(`/locations/${slug}/posts`)" variant="outline">{{ t('saya.posts.view_all') }}</SayaButton>
         </div>
@@ -274,6 +274,7 @@
 </template>
 
 <script setup lang="ts">
+import SocialPosts from '~/components/social/SocialPosts.vue'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'

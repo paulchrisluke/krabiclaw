@@ -17,6 +17,10 @@
   color-scheme: light;
   background-color: var(--saya-bg);
 
+  /* The heading face shared components set their headings in. */
+  --font-heading:        var(--font-saya);
+  --font-heading-weight: 400;
+
   --saya-primary:       var(--brand-color, #8F1D21);
 
   /* Mirror saya-primary into Tailwind's --color-primary so that

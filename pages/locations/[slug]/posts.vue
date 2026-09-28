@@ -22,7 +22,7 @@
       </header>
     </template>
 
-    <SayaSocialPosts :posts="feed.posts.value" />
+    <SocialPosts :posts="feed.posts.value" />
     <div v-if="feed.hasMore.value || feed.failed.value" class="flex flex-col items-center gap-3 pb-20">
       <p v-if="feed.failed.value" role="alert" class="text-sm text-error">{{ t('social_posts.load_failed') }}</p>
       <button v-if="feed.hasMore.value" type="button" class="rounded-full border border-default px-6 py-2.5 text-sm font-medium text-default transition hover:bg-muted disabled:opacity-60" :disabled="feed.loading.value" :aria-busy="feed.loading.value" @click="feed.loadMore">{{ t('social_posts.load_more') }}</button>
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import SocialPosts from '~/components/social/SocialPosts.vue'
 const { localePath, t } = useI18n()
 
 definePageMeta({ layout: 'saya' })

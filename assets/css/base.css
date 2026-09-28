@@ -160,6 +160,10 @@
 
 /* ── Platform theme ───────────────────────────────────────── */
 .platform-theme {
+  /* The heading face shared components set their headings in. */
+  --font-heading:         var(--font-display);
+  --font-heading-weight:  600;
+
   --ui-primary:           var(--kc-coral);
 
   --primary-foreground:   #FFF;
