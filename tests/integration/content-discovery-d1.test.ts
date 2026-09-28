@@ -50,7 +50,8 @@ test('public discovery resolves translations through current publication owners'
     assert(tenantRecords.find(record => record.id === 'tenant-blog:tenant-story')?.body.includes('tenant story exact body'))
     const platformRecords = await buildPlatformKnowledgeDocuments(db)
     assert(platformRecords.find(record => record.id === 'doc:guide')?.body.includes('guide exact body'))
-    assert(!platformRecords.some(record => record.id.includes(hidden.id) || record.id.includes('unpublished')))
+    // The unlisted platform article stays out; the tenant's unpublished draft is absent from the tenant records above.
+    assert(!platformRecords.some(record => record.id.includes(hidden.id)))
     const cards = await listSocialCardOwners(db)
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'guide'))
     assert(cards.some(owner => owner.owner_type === 'content_document' && owner.owner_id === 'about'))

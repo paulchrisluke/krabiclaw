@@ -79,6 +79,8 @@ const isPostsResponse = (value: unknown): value is { posts: ApiRecord[]; page_in
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.status === 'string')
   && isRecord(value.page_info)
+  && typeof value.page_info.has_more === 'boolean'
+  && (value.page_info.next_cursor === null || typeof value.page_info.next_cursor === 'string')
 
 // The tab is a filter the database applies, a page at a time.
 const statusFilter = computed(() => (activeTab.value === 'all' ? undefined : String(activeTab.value)))

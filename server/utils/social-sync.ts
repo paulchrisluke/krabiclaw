@@ -550,20 +550,32 @@ export async function syncSocialPosts(env: CloudflareEnv, organizationId: string
   return [await syncChannel(env, organizationId, 'facebook', budgetMs), await syncChannel(env, organizationId, 'instagram', budgetMs)]
 }
 
-/** Every Growth organization with a connection: what the hourly task runs. */
-export async function syncAllSocialPosts(env: CloudflareEnv) {
+/** How long one scheduled run may spend across organizations before it stops starting new ones. */
+export const SYNC_ALL_BUDGET_MS = 10 * 60_000
+
+/**
+ * Every Growth organization with a connection: what the hourly task runs.
+ * The least recently synced go first, and an organization is started only
+ * while the run has time for its budget; the ones left are reported as
+ * skipped, and they lead the next run.
+ */
+export async function syncAllSocialPosts(env: CloudflareEnv, runBudgetMs = SYNC_ALL_BUDGET_MS) {
+  const endsAt = Date.now() + runBudgetMs
   const candidates = await queryAllPages<{ organization_id: string }>(env.DB as DbClient, `
     SELECT id AS organization_id FROM organization
      WHERE json_extract(integrations_json, '$.facebook.status') IN ('active', 'error')
         OR json_extract(integrations_json, '$.instagram.status') IN ('active', 'error')
-     ORDER BY id`, [])
+     ORDER BY min(coalesce(json_extract(integrations_json, '$.facebook.sync.last_success_at'), ''),
+                  coalesce(json_extract(integrations_json, '$.instagram.sync.last_success_at'), '')), id`, [])
   const organizations = await filterEntitledRows(env, candidates, 'managed_service')
   const details: Array<SyncChannelResult & { organization_id: string }> = []
+  const skipped: string[] = []
   for (const row of organizations) {
+    if (endsAt - Date.now() < 2 * SYNC_BUDGET_MS) { skipped.push(row.organization_id); continue }
     for (const result of await syncSocialPosts(env, row.organization_id)) {
       if (result.status !== 'not_connected') details.push({ organization_id: row.organization_id, ...result })
     }
   }
-  return details
+  return { details, skipped }
 }
 
