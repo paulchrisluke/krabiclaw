@@ -85,12 +85,7 @@ export async function createCanonicalNotification(db: DbClient, input: CreateNot
   return statement.id
 }
 
-export async function notifyNewUserSignup(
-  db: DbClient,
-  user: { id: string; email: string },
-): Promise<void> {
-  if (user.email.endsWith('@phone.krabiclaw.local')) return
-
+export async function notifyNewUserSignup(db: DbClient): Promise<void> {
   await createCanonicalNotification(db, {
     scope: 'global',
     template: NOTIFICATION_EVENT_TYPES.PLATFORM_USER_SIGNUP,

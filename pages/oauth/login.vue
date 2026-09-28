@@ -61,8 +61,6 @@
         <!-- No session / switch mode — show sign-in options -->
         <div v-else class="space-y-3 py-1">
           <AuthGoogleButton label="Sign in with Google" :loading="loading || authLoading" @activate="handleGoogleSignIn" />
-          <AuthWhatsAppButton label="Sign in with WhatsApp" :disabled="loading || authLoading" @activate="showPhone = !showPhone" />
-          <AuthPhoneOtpForm v-if="showPhone" verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
 
           <USeparator label="or" />
 
@@ -123,7 +121,6 @@ onMounted(async () => {
 // ── Existing session state ────────────────────────────────────────────────────
 const loading = ref(false)
 const switching = ref(false)
-const showPhone = ref(false)
 const accountInitial = computed(() =>
   (existingSession.value?.name || existingSession.value?.email || '?').charAt(0).toUpperCase()
 )
@@ -202,11 +199,6 @@ const { loading: authLoading, error: authError, signInWithGoogle } = useAuthOper
 watch(authError, value => { error.value = value })
 async function handleGoogleSignIn() {
   await signInWithGoogle()
-}
-
-function finishOAuthPhoneSignIn() {
-  // The OAuth Provider plugin resumes its signed authorization state when the
-  // phone verification response creates the session.
 }
 
 // ── Email verification recovery (mirrors pages/login.vue) ───────────────────
