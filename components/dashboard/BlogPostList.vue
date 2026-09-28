@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
-import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, isArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import { tenantBlogRepository } from '~/lib/components/workspace/blog/tenantBlogRepository'
 import type { BlogPost } from '~/lib/components/workspace/blog/types'
@@ -132,7 +132,9 @@ const posts = computed(() => data.value?.posts ?? [])
 // loaded in full, in the order the site reads it, so a tab press should not
 // cost a round trip.
 const orderedCollection = computed(() => isArticleCollection(activeTab.value) ? activeTab.value : null)
-const collectionOrder = computed(() => localOrder.value ?? posts.value.filter(post => (post.collection ?? 'blog') === orderedCollection.value))
+const collectionOrder = computed(() => localOrder.value?.collection === orderedCollection.value
+  ? localOrder.value.posts
+  : posts.value.filter(post => (post.collection ?? 'blog') === orderedCollection.value))
 const visiblePosts = computed(() => {
   if (activeTab.value === 'all') return posts.value
   if (orderedCollection.value) return collectionOrder.value
@@ -216,7 +218,8 @@ async function createPost() {
 // ── Collection order ────────────────────────────────────
 // Moves are held on the list while it is in its edit state and written, whole,
 // when the edit state closes — the way a menu's collections are reordered.
-const localOrder = ref<BlogPost[] | null>(null)
+// The moves not yet written, and the collection they belong to.
+const localOrder = ref<{ collection: ArticleCollection; posts: BlogPost[] } | null>(null)
 const orderError = ref<string | null>(null)
 
 function moveArticle(item: { row: BlogPost }, direction: -1 | 1) {
@@ -225,21 +228,21 @@ function moveArticle(item: { row: BlogPost }, direction: -1 | 1) {
   const to = from + direction
   if (from < 0 || to < 0 || to >= order.length) return
   ;[order[from], order[to]] = [order[to]!, order[from]!]
-  localOrder.value = order
+  if (orderedCollection.value) localOrder.value = { collection: orderedCollection.value, posts: order }
 }
 
-async function commitOrder(collection: string | number | null) {
-  const order = localOrder.value
-  // Released before the write, so the tab being opened lists its own collection.
-  localOrder.value = null
-  if (!order || !isArticleCollection(collection)) return
+// A failed write keeps the moves, still shown on their own tab, for the next Done to retry.
+async function commitOrder() {
+  const pending = localOrder.value
+  if (!pending) return
   orderError.value = null
   try {
     await dashboardApi(`/api/editor/organizations/${organizationId}/blog/order`, {
       method: 'PUT',
-      body: { collection, post_ids: order.map(post => post.id) },
+      body: { collection: pending.collection, post_ids: pending.posts.map(post => post.id) },
       validate: isRecord,
     })
+    if (localOrder.value === pending) localOrder.value = null
   } catch (error) {
     orderError.value = getErrorMessage(error, 'Failed to save the new order')
   }
@@ -247,10 +250,10 @@ async function commitOrder(collection: string | number | null) {
 }
 
 watch(editing, (value, previous) => {
-  if (previous && !value) void commitOrder(activeTab.value)
+  if (previous && !value) void commitOrder()
 })
 // Leaving a collection's tab mid-edit writes the moves made there, rather than dropping them.
-watch(activeTab, (_, previousTab) => { void commitOrder(previousTab) })
+watch(activeTab, () => { void commitOrder() })
 
 /** Removal lives in the list's edit state, the way every other list does it. */
 async function removePost(item: { id: string }) {
@@ -259,7 +262,7 @@ async function removePost(item: { id: string }) {
     await repository.delete(item.id)
     // A deleted article leaves the order being edited too, or the order written
     // on Done would name an article that no longer exists and be refused whole.
-    if (localOrder.value) localOrder.value = localOrder.value.filter(post => post.id !== item.id)
+    if (localOrder.value) localOrder.value = { ...localOrder.value, posts: localOrder.value.posts.filter(post => post.id !== item.id) }
     await refresh()
   } finally {
     removingId.value = null

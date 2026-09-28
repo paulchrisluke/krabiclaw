@@ -498,18 +498,25 @@ export async function reorderArticles(db: DbClient, organizationId: string, coll
   if (intended.size !== postIds.length || intended.size !== existing.length || existing.some(row => !intended.has(row.id))) {
     badRequest(`post_ids must list every ${collection} article exactly once`)
   }
-  const results = await executeBatch(db, [
-    ...postIds.map((id, index) => ({
-      query: `UPDATE content_documents SET sort_order = ? WHERE id = ? AND organization_id = ? AND kind = 'article' AND row_role = 'root'
-        AND (metadata_json ->> '$.collection') = ?`,
-      params: [index + 1, id, organizationId, collection],
-    })),
+  // One statement, so the order is applied whole or not at all: it changes no
+  // row unless the ids are still exactly the collection's articles. An article
+  // deleted or moved to the other collection since the check above leaves every
+  // position as it was. Positions come from the JSON array, which keeps the bind
+  // count constant however long the collection is.
+  const order = JSON.stringify(postIds)
+  const inCollection = `organization_id = ? AND kind = 'article' AND row_role = 'root' AND (metadata_json ->> '$.collection') = ?`
+  const [result] = await executeBatch(db, [
+    {
+      query: `UPDATE content_documents SET sort_order = (SELECT j.key + 1 FROM json_each(?) j WHERE j.value = content_documents.id)
+        WHERE ${inCollection}
+          AND (SELECT COUNT(*) FROM content_documents WHERE ${inCollection}) = json_array_length(?)
+          AND (SELECT COUNT(*) FROM content_documents d JOIN json_each(?) j ON j.value = d.id
+                WHERE d.organization_id = ? AND d.kind = 'article' AND d.row_role = 'root' AND (d.metadata_json ->> '$.collection') = ?) = json_array_length(?)`,
+      params: [order, organizationId, collection, organizationId, collection, order, order, organizationId, collection, order],
+    },
     publicResourceCacheInvalidationQuery(organizationId, 'articles-reordered'),
   ])
-  // An article deleted or moved to the other collection since the check above
-  // is an order that was not applied, whatever the batch returned.
-  const changed = results.slice(0, postIds.length).reduce((sum, result) => sum + Number(result.meta.changes ?? 0), 0)
-  if (changed !== postIds.length) {
+  if (Number(result?.meta.changes ?? 0) !== postIds.length) {
     throw new HTTPError({ statusCode: 409, statusMessage: `The ${collection} changed while it was being reordered; reload and try again` })
   }
 }
