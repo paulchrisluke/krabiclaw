@@ -132,6 +132,7 @@ export async function logMcpToolCallEvent(
   db: DbClient,
   input: LogMcpToolCallEventInput,
 ): Promise<void> {
+  const mcpSurface = input.mcpSurface ?? "client";
   await execute(
       db,
       `
@@ -149,7 +150,7 @@ export async function logMcpToolCallEvent(
         input.organizationId ?? null,
         input.locationId ?? null,
         input.userId ?? null,
-        input.mcpSurface ?? "client",
+        mcpSurface,
         input.requestId == null ? null : String(input.requestId),
         input.method,
         input.toolName ?? null,
@@ -178,8 +179,8 @@ export async function logMcpToolCallEvent(
     await recordUsageEvent(db, {
         organizationId: input.organizationId,
         resource: "mcp_operation",
-        source: input.mcpSurface ?? "client",
-        provider: input.mcpSurface === "client" ? "mcp_client" : "krabiclaw",
+        source: mcpSurface,
+        provider: mcpSurface === "client" ? "mcp_client" : "krabiclaw",
         channel: "tools/call",
         quantity: 1,
         unit: "tool_call",
@@ -189,7 +190,7 @@ export async function logMcpToolCallEvent(
           status: input.status,
           httpStatus: input.httpStatus ?? null,
         },
-        idempotencyKey: `mcp:${input.mcpSurface ?? "client"}:${input.requestId == null ? crypto.randomUUID() : String(input.requestId)}`,
+        idempotencyKey: `mcp:${mcpSurface}:${input.requestId == null ? crypto.randomUUID() : String(input.requestId)}`,
     });
   }
 }

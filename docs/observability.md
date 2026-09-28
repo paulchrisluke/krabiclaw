@@ -173,7 +173,7 @@ Captured per row: surface, organization/site/location/user id (best-effort), req
 
 Rows are deleted 180 days after `created_at` by `cleanupMcpToolCallEvents()`, which the daily `analytics-aggregate-daily` task (`0 3 * * *`) runs beside the pageview cleanup. This is the limit the Privacy Policy states.
 
-Each `tools/call` with an organization also writes a `usage_events` row (`resource = 'mcp_operation'`). Its `provider` is `mcp_client` for every external MCP client and `krabiclaw` for the public help agent; rows written before this change say `chatgpt`.
+Each `tools/call` with an organization also writes a `usage_events` row (`resource = 'mcp_operation'`). Its `provider` is `mcp_client` for every external MCP client and `krabiclaw` for the public help agent. Rows written before this change say `krabiclaw` for external clients too, because the surface default was applied after the provider was chosen.
 
 ### Redaction
 
