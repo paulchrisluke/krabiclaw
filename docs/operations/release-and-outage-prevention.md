@@ -143,7 +143,7 @@ the only difference, and both check the destination's schema and
 `d1_migrations` ledger before writing anything. `--production` refuses to run
 without `--source`.
 
-1. Preflight, with nothing written remotely. Fix any refused row at its source, never in the transfer. Read the `Reconnect required` lines:
+1. Preflight, with nothing written remotely. Fix any refused row at its source, never in the transfer. Read the epoch's report lines — for the social publishing epoch (#1115): `Scheduled … is now a draft`, `Post facts written into its words`, `Call to action`, `Publication`, `Not a publication, dropped`, `Post route allocated` and `Block … is now social_posts`. A channel entry needs its verified provider identity in `EPOCH_PUBLICATION_IDENTITIES` before the preflight passes:
    `node --experimental-strip-types scripts/pull-production-snapshot.ts --source <old database> --out preflight.sqlite`
 2. On the repoint branch, create the replacement D1 and name it in `wrangler.toml`. Build its schema with `wrangler d1 migrations apply DB --env staging --remote`, or `DB --remote` for production. Never execute `0000_baseline.sql` directly. `migrations apply` records the baseline in `d1_migrations`, so the apply every deploy runs next does nothing.
 3. Load the replacement immediately before the repoint pull request merges. The time between this export and the repoint is the window in which an edit on the old database is not carried over, so it should be minutes, not hours. Keep `initial.sqlite`; step 5 compares against it.
