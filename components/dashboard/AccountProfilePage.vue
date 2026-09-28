@@ -370,9 +370,10 @@ async function verifyPhone() {
   otpVerifying.value = true
   verifyError.value = ''
   try {
-    const res = await authClient.phoneNumber.verify({ 
-      phoneNumber: phoneInput.value.trim(), 
-      code: otpCode.value.trim() 
+    const res = await authClient.phoneNumber.verify({
+      phoneNumber: phoneInput.value.trim(),
+      code: otpCode.value.trim(),
+      updatePhoneNumber: true,
     })
     if (res.error) throw new Error(res.error.message || 'Invalid code')
     
