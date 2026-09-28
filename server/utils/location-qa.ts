@@ -291,7 +291,7 @@ export async function reorderQa(
     `,
     params: [update.sort_order, now, update.id, scope.organizationId, ...scoped.params],
   })), publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-reorder')])
-  const changed = results.slice(0, updates.length).reduce((sum: number, result) => sum + Number(result.meta.changes ?? 0), 0)
+  const changed = results.slice(0, updates.length).reduce((sum: number, result: { meta: { changes?: number } }) => sum + Number(result.meta.changes ?? 0), 0)
   if (changed !== updates.length) {
     throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${changed} matched. Reload and try again.`)
   }
