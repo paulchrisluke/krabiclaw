@@ -1,3 +1,5 @@
+import EmailReplyParser from 'email-reply-parser'
+import { compile } from 'html-to-text'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
@@ -12,6 +14,28 @@ export interface InboundGuestEmail {
   token: string
   body: string
   messageId: string
+}
+
+// A single-part HTML reply has no text/plain alternative. Quoted containers are
+// skipped here; the reply parser below removes whatever quoting remains, so the
+// HTML and plain-text paths share one quote parser.
+const htmlToText = compile({
+  wordwrap: false,
+  selectors: [
+    { selector: 'blockquote', format: 'skip' },
+    { selector: '.gmail_quote', format: 'skip' },
+    { selector: 'img', format: 'skip' },
+  ],
+})
+
+/**
+ * The text the guest newly wrote in an inbound email: the mail client's quoted
+ * copy of the thread and the guest's signature are removed. An empty result
+ * means the email carried no new text.
+ */
+export function guestReplyText(mime: { text?: string, html?: string }): string {
+  const text = mime.text || (mime.html ? htmlToText(mime.html) : '')
+  return new EmailReplyParser().read(text).getVisibleText().trim()
 }
 
 export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestEmail): Promise<void> {

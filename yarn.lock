@@ -4904,6 +4904,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/html-to-text@npm:9.0.4":
+  version: 9.0.4
+  resolution: "@types/html-to-text@npm:9.0.4"
+  checksum: 10c0/8e0e548f280d1c1107f70db01ff6331a295f3097f535f4d07c30ced271818fc3803a8f03bb2117c1207c46a3d40da256a03a17bd05fc9f5f1b4821c5bcbf98d8
+  languageName: node
+  linkType: hard
+
 "@types/jsesc@npm:^2.5.0":
   version: 2.5.1
   resolution: "@types/jsesc@npm:2.5.1"
@@ -7363,6 +7370,18 @@ __metadata:
   version: 1.5.416
   resolution: "electron-to-chromium@npm:1.5.416"
   checksum: 10c0/d69c0fef4fc18f4a01f7c1dfda2e7e648e4e8c6e60072dde693643a9725ba19c99353d0f5f6ba75a214c7fd7410817a518342281ee638461accb6cf24aa254ca
+  languageName: node
+  linkType: hard
+
+"email-reply-parser@npm:2.3.9":
+  version: 2.3.9
+  resolution: "email-reply-parser@npm:2.3.9"
+  peerDependencies:
+    re2: 1.x
+  peerDependenciesMeta:
+    re2:
+      optional: true
+  checksum: 10c0/9d7682c8c1b9448fcab0fbaef65ca84453b57070c02765e21cc9cdf38a778696b357fce9752c8bb458962d344344b553138bc284ec75eb08e5417b3dc9b53ede
   languageName: node
   linkType: hard
 
@@ -10724,6 +10743,7 @@ __metadata:
     "@playwright/test": "npm:^1.62.1"
     "@resvg/resvg-wasm": "npm:^2.6.2"
     "@tailwindcss/typography": "npm:^0.5.20"
+    "@types/html-to-text": "npm:9.0.4"
     "@types/node": "npm:^25.9.5"
     "@types/react": "npm:^19.2.18"
     "@vue-email/body": "npm:0.0.3"
@@ -10747,8 +10767,10 @@ __metadata:
     cross-env: "npm:^10.1.0"
     drizzle-kit: "npm:0.31.10"
     drizzle-orm: "npm:^0.45.2"
+    email-reply-parser: "npm:2.3.9"
     eslint: "npm:^10.9.1"
     h3: "npm:2.0.1-rc.26"
+    html-to-text: "npm:9.0.5"
     isomorphic-dompurify: "npm:^3.23.0"
     libphonenumber-js: "npm:^1.13.12"
     lighthouse: "npm:^13.4.1"

@@ -1,7 +1,7 @@
 import type { ForwardableEmailMessage } from '@cloudflare/workers-types'
 import { definePlugin } from 'nitro'
 import PostalMime from 'postal-mime'
-import { receiveGuestEmail } from '~/server/domain/guest-threads/inbound-email'
+import { guestReplyText, receiveGuestEmail } from '~/server/domain/guest-threads/inbound-email'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseReplyToAddress } from '~/server/utils/submission-messages'
 
@@ -53,10 +53,7 @@ async function processEmail(message: ForwardableEmailMessage, env: unknown): Pro
   const rawEmail = await readEmailBytes(message.raw)
   const messageId = message.headers.get('Message-ID')?.trim()
     || `content-sha256:${await sha256Hex(rawEmail)}`
-  const parsedMime = await PostalMime.parse(rawEmail)
-  const body = (parsedMime.text || (parsedMime.html
-    ? parsedMime.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-    : '')).trim()
+  const body = guestReplyText(await PostalMime.parse(rawEmail))
   if (!body) return
 
   const reply = parseReplyToAddress(env, message.to)
