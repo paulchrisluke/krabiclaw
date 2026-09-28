@@ -5,7 +5,8 @@ import { definePlugin, HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
-import { collectionArticlePath, isArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, isArticleCollection } from '~/utils/article-collections'
+import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { presentationForSurface, resolveProductPresentation } from '~/utils/product-presentation'
@@ -23,6 +24,27 @@ async function listPublishedTenantSitemapPages(db: DbClient, organizationId: str
      WHERE v.organization_id = ? AND v.kind = 'page' AND v.row_role = 'root'
      ORDER BY lastmod ASC, path ASC
   `, [organizationId])
+}
+
+/**
+ * A site's listed articles, on every template, and the index of each
+ * collection that has one: the blog at its template's prefix, the docs at
+ * /docs. One query for Krabiclaw's site and every customer's.
+ */
+async function listSitemapArticleEntries(db: DbClient, organizationId: string, template: Parameters<typeof tenantBlogPostPath>[0]): Promise<SitemapEntry[]> {
+  const articles = await queryAll<{ slug: string | null; collection: string | null; updated_at: string | null }>(db, `
+    SELECT slug, (metadata_json ->> '$.collection') AS collection, updated_at
+      FROM content_documents
+     WHERE organization_id = ? AND kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
+  `, [organizationId])
+  const entries: SitemapEntry[] = []
+  for (const article of articles) {
+    if (!article.slug) continue
+    if (!isArticleCollection(article.collection)) throw new Error(`Article ${article.slug} has no valid collection`)
+    entries.push({ loc: ARTICLE_COLLECTIONS[article.collection].pathPrefix })
+    entries.push({ loc: tenantBlogPostPath(template, article.slug, article.collection), lastmod: article.updated_at ?? undefined })
+  }
+  return entries
 }
 
 function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
@@ -71,29 +93,7 @@ export default definePlugin((nitroApp) => {
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
 
-      const articles = await queryAll<ApiRecord>(
-        db,
-        `SELECT slug, (metadata_json ->> '$.collection') AS collection, (metadata_json ->> '$.category') AS category, updated_at
-         FROM content_documents
-         WHERE kind = 'article' AND row_role = 'root' AND status = 'published'
-           AND organization_id = ?
-           AND visibility = 'listed'`,
-        [platformOrganizationId],
-      )
-
-      // Blog posts and documentation are both article collections, each at its
-      // own prefix and addressed by slug. Documentation used to contribute a
-      // /docs/{category} entry per category as well; that URL only ever
-      // resolved when some article's slug happened to equal the category slug,
-      // and 404'd for every category where none did.
-      for (const article of articles ?? []) {
-        const slug = typeof article.slug === 'string' ? article.slug : ''
-        if (!slug || !isArticleCollection(article.collection)) continue
-        entries.push({
-          loc: collectionArticlePath(article.collection, slug),
-          lastmod: article.updated_at as string | undefined,
-        })
-      }
+      entries.push(...await listSitemapArticleEntries(db, platformOrganizationId, { themeId: event.context.themeId as string | null | undefined }))
 
       ctx.urls.length = 0
       addUniqueEntries(ctx.urls, entries)
@@ -205,16 +205,9 @@ export default definePlugin((nitroApp) => {
       // Practice areas are pages, so they are already in the page list. There
       // is no separate offering query, and no canonical_path to prefer over
       // the route the document actually publishes at.
-      const [tenantPages, posts] = await Promise.all([
+      const [tenantPages, articles] = await Promise.all([
         listPublishedTenantSitemapPages(db, organizationId),
-        queryAll<ApiRecord>(
-          db,
-          `SELECT slug, updated_at
-           FROM content_documents
-           WHERE organization_id = ? AND kind = 'article' AND row_role = 'root' AND status = 'published'
-             AND visibility = 'listed'`,
-          [organizationId],
-        ),
+        listSitemapArticleEntries(db, organizationId, template),
       ])
 
       for (const loc of template.sitemap.exactPaths) entries.push({ loc })
@@ -222,13 +215,7 @@ export default definePlugin((nitroApp) => {
         if (!page.path) continue
         entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
-      for (const post of posts ?? []) {
-        if (!post.slug) continue
-        entries.push({
-          loc: `${template.serviceRoutes.articleDetailPrefix}/${post.slug}`,
-          lastmod: post.updated_at as string | undefined,
-        })
-      }
+      entries.push(...articles)
 
       ctx.urls.length = 0
       addUniqueEntries(ctx.urls, entries)
@@ -261,15 +248,7 @@ export default definePlugin((nitroApp) => {
          ORDER BY pl.location_id, p.name, p.id`,
         [organizationId],
       ),
-      queryAll<ApiRecord>(
-        db,
-        `SELECT slug, updated_at
-         FROM content_documents
-         WHERE organization_id = ? AND kind = 'article' AND row_role = 'root'
-           AND status = 'published'
-           AND visibility = 'listed'`,
-        [organizationId],
-      ),
+      listSitemapArticleEntries(db, organizationId, template),
       listPublishedTenantSitemapPages(db, organizationId),
     ])
 
@@ -287,7 +266,6 @@ export default definePlugin((nitroApp) => {
     const surfaceProducts = products.filter(product => !isBookable(product))
     if (productPresentation && surfaceProducts.length > 0) entries.push({ loc: productPresentation.collectionPath })
     if (productPresentation && bookableProducts.length > 0) entries.push({ loc: presentationForSurface(organization.vertical, 'experiences').collectionPath })
-    if (posts.length > 0) entries.push({ loc: '/blog' })
 
     const countByLocation = (rows: ApiRecord[]) => {
       const counts = new Map<string, number>()
@@ -343,9 +321,7 @@ export default definePlugin((nitroApp) => {
               lastmod: product.updated_at as string | undefined,
             }))
         : []),
-      ...posts
-        .filter(post => post.slug)
-        .map(post => ({ loc: `/blog/${post.slug}`, lastmod: post.updated_at as string | undefined })),
+      ...posts,
       ...tenantPages
         .filter(page => page.path)
         .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),

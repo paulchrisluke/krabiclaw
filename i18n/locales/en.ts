@@ -14,9 +14,6 @@ export default {
     "terms": "Terms"
   },
   "blawby": {
-    "article": {
-      "from_the": "From the"
-    },
     "navigation": {
       "main": "Main navigation",
       "toggle": "Toggle navigation"
@@ -137,6 +134,7 @@ export default {
       "heading_discover": "Discover",
       "heading_connect": "Connect",
       "blog": "Blog",
+      "docs": "Docs",
       "menu": "Menu",
       "products": "Products",
       "experiences": "Experiences",
@@ -154,6 +152,9 @@ export default {
     },
     "posts": {
       "browse_topics": "Browse topics",
+      "previous": "Previous",
+      "next": "Next",
+      "docs_meta_description": "Documentation from {organization}.",
       "tagged": "Tagged",
       "read_time": "{count} min read",
       "published_from": "Published from {name}",

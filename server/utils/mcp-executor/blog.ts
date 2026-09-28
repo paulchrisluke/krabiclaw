@@ -1,12 +1,19 @@
 import type { McpExecutorContext } from './shared'
-import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderDocs, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
+import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPost, listBlogPosts, reorderArticles, updateBlogLifecycle, updateBlogPost } from '~/server/utils/content/publishing'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
+import { isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
 
 const ARTICLE_COLLECTIONS_SET = new Set(['blog', 'docs'])
+
+function optionalArticleCollection(args: Record<string, unknown>): ArticleCollection | null {
+  if (args.collection === undefined || args.collection === null) return null
+  if (!isArticleCollection(args.collection)) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection must be blog or docs.')
+  return args.collection
+}
 
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
@@ -164,6 +171,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           organization.organizationId,
           optionalString(args, "status"),
           organization.env,
+          optionalArticleCollection(args),
         )).map((post) => toBlogPostSummary(post, organization));
         const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${organization.organizationId}` });
         return { posts: items, page_info };
@@ -228,14 +236,14 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         `${result.status === 'scheduled' ? 'Rescheduled' : 'Published'} blog article "${result.title}".`,
       )
     }
-    case "reorder_docs": {
+    case "reorder_blog_posts": {
+      const collection = optionalArticleCollection(args)
+      if (!collection) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection is required.')
       if (!Array.isArray(args.post_ids) || args.post_ids.some(id => typeof id !== 'string' || !id.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'post_ids must contain non-empty post ids.')
       }
-      await reorderDocs(organization.db, organization.organizationId, args.post_ids.map(id => String(id).trim()))
-      const posts = (await listBlogPosts(organization.db, organization.organizationId, null, organization.env))
-        .filter(post => post.collection === 'docs')
-        .sort((a, b) => Number(a.sort_order) - Number(b.sort_order) || String(a.title).localeCompare(String(b.title)))
+      await reorderArticles(organization.db, organization.organizationId, collection, args.post_ids.map(id => String(id).trim()))
+      const posts = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, collection)
       return { posts: posts.map(post => toBlogPostSummary(post, organization)) }
     }
     case "delete_blog_post": {

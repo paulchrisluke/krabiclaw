@@ -71,7 +71,7 @@ function allows(slug: 'saya' | 'blawby' | 'platform', path: string) {
 }
 
 test('/blog is a page document on blawby and never one on saya', () => {
-  // The saya route asks for blog articles and renders SayaBlogIndex; a document
+  // The saya route asks for blog articles and renders the article index; a document
   // stored there would never be shown, so it may not be created.
   assert.equal(allows('blawby', '/blog'), true)
   assert.equal(allows('saya', '/blog'), false)

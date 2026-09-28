@@ -269,10 +269,10 @@ function withDocPath<T extends { slug: string }>(row: T): T & { path: string } {
   return { ...row, path: collectionArticlePath('docs', row.slug) }
 }
 
-/** Documentation is Krabiclaw's `docs` article collection, in editorial order. */
-export async function listPublishedPlatformDocsForLlm(db: DbClient): Promise<PlatformLlmDocSummary[]> {
+/** A site's documentation: its `docs` article collection, in the order it is read. */
+export async function listPublishedDocsForLlm(db: DbClient, organizationId: string): Promise<PlatformLlmDocSummary[]> {
   const rows = await queryAll<Omit<PlatformLlmDocSummary, 'path'>>(
-    db, `${DOC_SUMMARY_SELECT} ORDER BY sort_order, title`, [(await getPlatformOrganization(db)).id],
+    db, `${DOC_SUMMARY_SELECT} ORDER BY sort_order, published_at IS NULL, published_at DESC, created_at DESC, id DESC`, [organizationId],
   )
   return rows.map(withDocPath)
 }
@@ -300,9 +300,9 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizat
   }))
 }
 
-export async function getPublishedPlatformDocBySlug(db: DbClient, slug: string): Promise<PlatformLlmDocDetail | null> {
+export async function getPublishedDocBySlug(db: DbClient, organizationId: string, slug: string): Promise<PlatformLlmDocDetail | null> {
   const row = await queryFirst<Omit<PlatformLlmDocSummary, 'path'>>(
-    db, `${DOC_SUMMARY_SELECT} AND slug = ?`, [(await getPlatformOrganization(db)).id, slug],
+    db, `${DOC_SUMMARY_SELECT} AND slug = ?`, [organizationId, slug],
   )
   if (!row) return null
   const detail = withDocPath(row)

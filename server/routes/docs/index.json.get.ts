@@ -1,6 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
-  buildDocsIndexJson, buildPlatformDocLinkEntries, listPublishedPlatformDocsForLlm, resolvePublicOrigin, } from '~/server/utils/platform-llm'
+  buildDocsIndexJson, buildPlatformDocLinkEntries, listPublishedDocsForLlm, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
 export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -8,7 +8,9 @@ export default defineHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const origin = resolvePublicOrigin(event)
-  const docs = await listPublishedPlatformDocsForLlm(db)
+  const organizationId = event.context.organizationId as string | undefined
+  if (!organizationId) return jsonResponse({ error: 'Unknown site' }, { status: 404 })
+  const docs = await listPublishedDocsForLlm(db, organizationId)
   return jsonResponse(buildDocsIndexJson(buildPlatformDocLinkEntries(docs ?? [], origin)))
 })
 import { defineHandler } from 'nitro';
