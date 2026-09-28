@@ -12,7 +12,7 @@
 // tenant-resolution sets from the host, so krabiclaw.com gets Krabiclaw's
 // articles and a tenant domain gets that tenant's, by the same code.
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { listPublishedArticles } from '~/server/utils/content/publishing'
+import { getArticleCollectionIndex, listPublishedArticles } from '~/server/utils/content/publishing'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { isArticleCollection } from '~/utils/article-collections'
 import { defineHandler } from 'nitro'
@@ -40,7 +40,11 @@ export default defineHandler(async (event) => {
   const locale = assertExactCanonicalLocale(query.locale ?? 'en')
 
   try {
-    return jsonResponse({ posts: await listPublishedArticles(db, env, organizationId, collection, locale) })
+    const [posts, index] = await Promise.all([
+      listPublishedArticles(db, env, organizationId, collection, locale),
+      getArticleCollectionIndex(db, organizationId, collection, locale),
+    ])
+    return jsonResponse({ posts, index })
   } catch (err) {
     rethrowHttpError(err)
     console.error('Failed to fetch public blog posts:', err)

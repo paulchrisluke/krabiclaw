@@ -56,8 +56,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/blog',
     },
     sitemap: {
-      exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
-      dynamicPrefixes: ['/blog/', '/experiences/', '/locations/', '/posts/'],
+      exactPaths: ['/', '/menu', '/products', '/experiences', '/contact', '/blog', '/docs', '/locations', '/reservations', '/posts', '/photos', '/qa', '/reviews'],
+      dynamicPrefixes: ['/blog/', '/docs/', '/experiences/', '/locations/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed', '/reservations/cancel', '/reservations/confirmed'],
     // Saya reads a document on the routes that request the 'content' dataset.
@@ -83,8 +83,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/article',
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/policies/privacy', '/policies/terms', '/third-party-notices'],
-      dynamicPrefixes: ['/services/', '/article/'],
+      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/policies/privacy', '/policies/terms', '/third-party-notices'],
+      dynamicPrefixes: ['/services/', '/article/', '/docs/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed'],
     // The Blawby route loader looks a recipe up here. 'links', 'confirmation',

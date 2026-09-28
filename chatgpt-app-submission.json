@@ -644,6 +644,18 @@
         "destructive_justification": "Removes a product from a location, so the location no longer offers it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reorder_blog_posts": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the order one of the selected organization's article collections (blog or documentation) is presented in.",
+        "open_world_justification": "Overwrites the order one of the selected organization's article collections (blog or documentation) is presented in. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the order one of the selected organization's article collections (blog or documentation) is presented in. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "reorder_collections": {
       "annotations": {
         "readOnlyHint": false,
@@ -654,18 +666,6 @@
         "read_only_justification": "Overwrites the order collections are presented in on the selected organization.",
         "open_world_justification": "Overwrites the order collections are presented in on the selected organization. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites the order collections are presented in on the selected organization. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "reorder_docs": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in.",
-        "open_world_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the order Krabiclaw's own documentation articles are presented in. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "reorder_media": {

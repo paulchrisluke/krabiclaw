@@ -1,5 +1,4 @@
 {
-  "blawby.article.from_the": "จาก",
   "blawby.footer.company": "บริษัท",
   "blawby.footer.copyright": "ลิขสิทธิ์ © {year} {name} สงวนลิขสิทธิ์",
   "blawby.footer.document": "เอกสาร",
@@ -350,5 +349,9 @@
   "saya.subnav.posts": "ข่าวสาร",
   "saya.subnav.qa": "ถาม-ตอบ",
   "saya.subnav.reviews": "รีวิว",
-  "saya.subnav.visit": "เยี่ยมชม"
+  "saya.subnav.visit": "เยี่ยมชม",
+  "saya.footer.docs": "เอกสาร",
+  "saya.posts.previous": "ก่อนหน้า",
+  "saya.posts.next": "ถัดไป",
+  "saya.posts.docs_meta_description": "เอกสารจาก {organization}"
 }

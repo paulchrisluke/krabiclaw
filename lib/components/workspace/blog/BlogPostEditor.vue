@@ -95,7 +95,6 @@ export interface BlogEditor {
   loadError: Ref<string>
   actionError: Ref<string>
   saving: ComputedRef<boolean>
-  isPlatformTemplate: ComputedRef<boolean>
   collectionOptions: Array<{ label: string; value: ArticleCollection }>
   lifecycleLabel: ComputedRef<string>
   generatedSlug: ComputedRef<string>
@@ -159,7 +158,6 @@ const form = reactive({ title: '', collection: 'blog' as ArticleCollection, cate
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || 'saya')
-const isPlatformTemplate = computed(() => templateName.value === 'platform')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
 const editorCanvasStyle = computed(() => {
   const tokens = post.value?.editor_theme_tokens ?? {}
@@ -234,7 +232,7 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
       id: 'about',
       label: 'About this post',
       items: [
-        row('category', isPlatformTemplate.value ? `${ARTICLE_COLLECTIONS[form.collection].label} · Category` : 'Category', form.category),
+        row('category', `${ARTICLE_COLLECTIONS[form.collection].label} · Category`, form.category),
         row('tags', 'Tags', tagsText.value, 'None'),
         {
           id: 'excerpt',
@@ -634,7 +632,6 @@ provide(blogEditorKey, {
   loadError,
   actionError,
   saving: computed(() => savingExplicitly.value || publishing.value),
-  isPlatformTemplate,
   collectionOptions,
   lifecycleLabel,
   generatedSlug,

@@ -1,5 +1,4 @@
 {
-  "blawby.article.from_the": "提供",
   "blawby.footer.company": "会社情報",
   "blawby.footer.copyright": "© {year} {name} 無断転載を禁じます。",
   "blawby.footer.document": "ドキュメント",
@@ -350,5 +349,9 @@
   "saya.subnav.posts": "お知らせ",
   "saya.subnav.qa": "Q&A",
   "saya.subnav.reviews": "レビュー",
-  "saya.subnav.visit": "来店情報"
+  "saya.subnav.visit": "来店情報",
+  "saya.footer.docs": "ドキュメント",
+  "saya.posts.previous": "前へ",
+  "saya.posts.next": "次へ",
+  "saya.posts.docs_meta_description": "{organization} のドキュメント"
 }

@@ -11,10 +11,10 @@
       empty-icon="i-lucide-newspaper"
       add-label="Write a post"
       :removing-id="removingId"
-      :reorderable="activeTab === 'docs'"
+      :reorderable="orderedCollection !== null"
       @add="openNew"
       @remove="removePost"
-      @move="moveDoc"
+      @move="moveArticle"
     >
       <template #filters>
         <UTabs v-model="activeTab" :items="statusTabs" :content="false" aria-label="Post status" />
@@ -77,14 +77,13 @@
 
 <script setup lang="ts">
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
-import { ARTICLE_COLLECTIONS } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS, isArticleCollection } from '~/utils/article-collections'
 import DashboardListItemDialog from '~/components/dashboard/DashboardListItemDialog.vue'
 import { tenantBlogRepository } from '~/lib/components/workspace/blog/tenantBlogRepository'
 import type { BlogPost } from '~/lib/components/workspace/blog/types'
 import { initialBlogEditorBlocks } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
-import { resolvePublicTemplate } from '~/utils/template-registry'
 
 // The blog index. Rendered by `blog.vue`, which owns the frame.
 const dashboardApi = useDashboardApi()
@@ -97,21 +96,15 @@ const repository = tenantBlogRepository({ organizationId, orgSlug })
 
 // A post's life in order, so the tabs read as the pipeline they are. Drafts
 // exist as a status now, and a post created from this list starts as one.
-// Krabiclaw's own site also publishes documentation, which is read in an
-// order someone chose rather than by date; its tab is where that order is set.
-const dashboard = useDashboardOrganization()
-const isPlatformOrganization = computed(() => {
-  const organization = dashboard.organization.value
-  if (!organization) return false
-  return resolvePublicTemplate({ themeId: organization.theme_id, vertical: organization.vertical }).slug === 'platform'
-})
-const statusTabs = computed(() => [
+// Then the site's two collections, its blog and its docs: each is read in the
+// order it lists in, and its tab is where that order is set.
+const statusTabs = [
   { value: 'all', label: 'All' },
   { value: 'draft', label: 'Drafts' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'published', label: 'Live' },
-  ...(isPlatformOrganization.value ? [{ value: 'docs', label: 'Docs' }] : []),
-])
+  ...ARTICLE_COLLECTION_SLUGS.map(slug => ({ value: slug, label: ARTICLE_COLLECTIONS[slug].label })),
+]
 const activeTab = ref<string | number>('all')
 const editing = ref(false)
 const removingId = ref<string | null>(null)
@@ -136,13 +129,13 @@ const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Fa
 const posts = computed(() => data.value?.posts ?? [])
 
 // Filtering happens here rather than by refetching per tab: the list is already
-// loaded in full, so a tab press should not cost a round trip.
-const docsOrder = computed(() => localDocsOrder.value ?? posts.value
-  .filter(post => post.collection === 'docs')
-  .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.title.localeCompare(b.title)))
+// loaded in full, in the order the site reads it, so a tab press should not
+// cost a round trip.
+const orderedCollection = computed(() => isArticleCollection(activeTab.value) ? activeTab.value : null)
+const collectionOrder = computed(() => localOrder.value ?? posts.value.filter(post => (post.collection ?? 'blog') === orderedCollection.value))
 const visiblePosts = computed(() => {
   if (activeTab.value === 'all') return posts.value
-  if (activeTab.value === 'docs') return docsOrder.value
+  if (orderedCollection.value) return collectionOrder.value
   return posts.value.filter(post => post.status === activeTab.value)
 })
 
@@ -161,7 +154,7 @@ function postSummary(post: BlogPost): string {
   // Read from the status rather than treating anything unscheduled as live: a
   // draft was announcing itself as published on the row and in the index.
   const parts: string[] = [post.status ? STATUS_LABELS[post.status] ?? post.status : 'Live']
-  // Krabiclaw's own site publishes two collections; the blog is implied everywhere else.
+  // The blog is implied; a doc says it is one.
   if (post.collection && post.collection !== 'blog') parts.push(ARTICLE_COLLECTIONS[post.collection].label)
   if (post.category) parts.push(post.category)
   parts.push(postWhen(post))
@@ -220,52 +213,53 @@ async function createPost() {
 }
 
 
-// ── Docs order ──────────────────────────────────────────
+// ── Collection order ────────────────────────────────────
 // Moves are held on the list while it is in its edit state and written, whole,
 // when the edit state closes — the way a menu's collections are reordered.
-const localDocsOrder = ref<BlogPost[] | null>(null)
+const localOrder = ref<BlogPost[] | null>(null)
 const orderError = ref<string | null>(null)
 
-function moveDoc(item: { row: BlogPost }, direction: -1 | 1) {
-  const order = [...docsOrder.value]
+function moveArticle(item: { row: BlogPost }, direction: -1 | 1) {
+  const order = [...collectionOrder.value]
   const from = order.findIndex(post => post.id === item.row.id)
   const to = from + direction
   if (from < 0 || to < 0 || to >= order.length) return
   ;[order[from], order[to]] = [order[to]!, order[from]!]
-  localDocsOrder.value = order
+  localOrder.value = order
 }
 
-async function commitDocsOrder() {
-  if (!localDocsOrder.value) return
-  const postIds = localDocsOrder.value.map(post => post.id)
+async function commitOrder(collection: string | number | null) {
+  const order = localOrder.value
+  // Released before the write, so the tab being opened lists its own collection.
+  localOrder.value = null
+  if (!order || !isArticleCollection(collection)) return
   orderError.value = null
   try {
     await dashboardApi(`/api/editor/organizations/${organizationId}/blog/order`, {
       method: 'PUT',
-      body: { post_ids: postIds },
+      body: { collection, post_ids: order.map(post => post.id) },
       validate: isRecord,
     })
-    await refresh()
   } catch (error) {
     orderError.value = getErrorMessage(error, 'Failed to save the new order')
-    await refresh()
-  } finally {
-    localDocsOrder.value = null
   }
+  await refresh()
 }
 
 watch(editing, (value, previous) => {
-  if (previous && !value) void commitDocsOrder()
+  if (previous && !value) void commitOrder(activeTab.value)
 })
+// Leaving a collection's tab mid-edit writes the moves made there, rather than dropping them.
+watch(activeTab, (_, previousTab) => { void commitOrder(previousTab) })
 
 /** Removal lives in the list's edit state, the way every other list does it. */
 async function removePost(item: { id: string }) {
   removingId.value = item.id
   try {
     await repository.delete(item.id)
-    // A deleted doc leaves the order being edited too, or the order written on
-    // Done would name an article that no longer exists and be refused whole.
-    if (localDocsOrder.value) localDocsOrder.value = localDocsOrder.value.filter(post => post.id !== item.id)
+    // A deleted article leaves the order being edited too, or the order written
+    // on Done would name an article that no longer exists and be refused whole.
+    if (localOrder.value) localOrder.value = localOrder.value.filter(post => post.id !== item.id)
     await refresh()
   } finally {
     removingId.value = null
