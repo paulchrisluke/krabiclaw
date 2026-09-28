@@ -188,8 +188,8 @@ function revert() {
 const viewUrl = computed(() => {
   const record = post.value
   if (!record) return null
-  const url = record.status === 'published' ? record.canonical_url ?? record.public_path : record.preview_url
-  return typeof url === 'string' ? url : null
+  // Both are absolute on the site's own domain; the dashboard is another host.
+  return record.status === 'published' ? record.canonical_url : record.preview_url
 })
 
 const organizationLocalizationSettingsPath = computed(() => `/dashboard/${route.params.orgSlug}/settings/website/localization`)

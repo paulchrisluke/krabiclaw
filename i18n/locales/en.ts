@@ -34,6 +34,7 @@ export default {
     }
   },
   "social_posts": {
+    "title": "Updates",
     "media_label": "Photos and video ({count})",
     "play_video": "Play video",
     "also_on": "Also posted on",

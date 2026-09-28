@@ -229,7 +229,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
   try {
     results = await executeBatch(db, [...postQueries, {
       query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?,
+        SELECT ?, ?, ?, ?, ?, ?,
           COALESCE((SELECT MAX(sort_order) + 1 FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?), 0),
           'active', ?, ?
         WHERE (SELECT COUNT(*) FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) < ?

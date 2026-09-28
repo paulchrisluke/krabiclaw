@@ -159,6 +159,7 @@ async function setUp() {
   const run = (sql: string) => db.prepare(sql).run()
   for (const organization of ['org-a', 'org-b']) {
     await run(`INSERT INTO organization (id, name, slug, subdomain) VALUES ('${organization}', '${organization}', '${organization}', '${organization}')`)
+    await run(`INSERT INTO organization_domains (id, organization_id, domain, type, role, status) VALUES ('domain-${organization}', '${organization}', '${organization}.krabiclaw.test', 'subdomain', 'canonical', 'active')`)
     await run(`INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('${organization}-en', '${organization}', 'en', 1, 'published')`)
     await run(`INSERT INTO subscription (id, plan, referenceId, status) VALUES ('sub-${organization}', 'growth', '${organization}', 'active')`)
   }
@@ -197,13 +198,21 @@ test('publication: one result, one external post per target, and no blind resend
     await asset('a3', 'image/png')
     await asset('v1', 'video/mp4', 'video')
     const create = (key: string, post: Record<string, unknown>) => createPost(db, cardless, 'org-a', { post, idempotencyKey: key }, 'owner')
+    // What a receipt claims, read back from the database and from the fake provider's own state.
+    const publishedOnMeta = async (postId: string, channel: 'facebook' | 'instagram') => {
+      const row = await db.prepare('SELECT state, provider_post_id FROM post_publications WHERE post_id = ? AND channel = ?').bind(postId, channel).first<{ state: string; provider_post_id: string | null }>()
+      assert.equal(row?.state, 'published')
+      assert.ok(row!.provider_post_id)
+      if (channel === 'instagram') assert.ok(meta.igMedia.has(row!.provider_post_id!))
+      else assert.equal(meta.fbPosts.get(row!.provider_post_id!)?.published ?? meta.fbVideos.get(row!.provider_post_id!)?.published, true)
+    }
 
     // Creation is idempotent by key, and a reused key for other words conflicts.
     const first = await create('key-1', { body: 'Pizza night Friday', media: [{ asset_id: 'a1', slot: 'cover' }, { asset_id: 'a2', slot: 'gallery' }], call_to_action: { label: 'Book', url: 'https://example.test/book' } })
     assert.equal(first.replayed, false)
     assert.equal(first.post.status, 'draft')
     assert.equal(first.post.slug, 'pizza-night-friday')
-    assert.match(first.post.preview_url ?? '', /^\/posts\/pizza-night-friday\?preview_token=/)
+    assert.match(first.post.preview_url ?? '', /^https:\/\/org-a\.krabiclaw\.test\/posts\/pizza-night-friday\?preview_token=/)
     assert.equal((await create('key-1', { body: 'Pizza night Friday', media: [{ asset_id: 'a1', slot: 'cover' }, { asset_id: 'a2', slot: 'gallery' }], call_to_action: { label: 'Book', url: 'https://example.test/book' } })).post.id, first.post.id)
     await assert.rejects(create('key-1', { body: 'Something else' }), /different post/)
     assert.equal(await db.prepare("SELECT count(*) FROM content_documents WHERE kind = 'social_post'").first('count(*)'), 1)
@@ -212,6 +221,7 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal(empty.post.slug, `update-${empty.post.id}`)
     const emptyResult = await publishPost(env, 'org-a', empty.post.id, { expectedUpdatedAt: empty.post.updated_at, targets: [targets.website] }, 'owner')
     assert.deepEqual([emptyResult.ok, emptyResult.outcomes[0]!.code], [false, 'empty_post'])
+    assert.deepEqual(await db.prepare('SELECT status, published_at FROM content_documents WHERE id = ?').bind(empty.post.id).first(), { status: 'draft', published_at: null })
 
     // Website, Facebook photos and an Instagram carousel in one call.
     const all = await publishPost(env, 'org-a', first.post.id, { expectedUpdatedAt: first.post.updated_at, targets: [targets.website, targets.facebook(), targets.instagram()] }, 'owner')
@@ -275,6 +285,7 @@ test('publication: one result, one external post per target, and no blind resend
     assert.deepEqual([rejected.ok, rejected.outcomes[0]!.status, rejected.outcomes[0]!.code], [false, 'failed', 'provider_rejected'])
     const retried = await publishPost(env, 'org-a', third.post.id, { expectedUpdatedAt: third.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.equal(retried.outcomes[0]!.status, 'published')
+    await publishedOnMeta(third.post.id, 'facebook')
 
     // Loss after the native draft: the saved photo is reused, never re-created.
     const fourth = await create('key-4', { body: 'Lost feed', media: [{ asset_id: 'a2', slot: 'cover' }] })
@@ -284,6 +295,7 @@ test('publication: one result, one external post per target, and no blind resend
     const photosBefore = meta.sent(request => request.path.endsWith(`${PAGE}/photos`)).length
     assert.equal((await publishPost(env, 'org-a', fourth.post.id, { expectedUpdatedAt: fourth.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
     assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/photos`)).length, photosBefore)
+    await publishedOnMeta(fourth.post.id, 'facebook')
 
     // Loss after the final call, with the read-back also failing: unknown. It pins the content, a repeat sends nothing, and reconciliation reads the same post.
     const fifth = await create('key-5', { body: 'Lost final' })
@@ -303,11 +315,13 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal((await reconcilePostPublication(env, 'org-a', fifthPublication.id, null)).state, 'preparing')
     assert.equal((await publishPost(env, 'org-a', fifth.post.id, { expectedUpdatedAt: pinned.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
     assert.equal(meta.sent(request => request.path.endsWith(`${PAGE}/feed`)).length, draftsBefore)
+    await publishedOnMeta(fifth.post.id, 'facebook')
 
     // A timed-out final call that did take effect reads back as published.
     const sixth = await create('key-6', { body: 'Timed out but published' })
     meta.fault('timeout', request => { if (request.body.is_published === 'true') { const post = meta.fbPosts.get(request.path.replace('/v25.0/', '')); if (post) post.published = true; return true } return false })
     assert.equal((await publishPost(env, 'org-a', sixth.post.id, { expectedUpdatedAt: sixth.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+    await publishedOnMeta(sixth.post.id, 'facebook')
 
     // A Reel still processing returns processing, keeps its container, and a later call finishes that same container.
     meta.reelProcessingReads = 10
@@ -319,6 +333,7 @@ test('publication: one result, one external post per target, and no blind resend
     for (const container of meta.igContainers.values()) container.inProgressReads = 0
     assert.equal((await publishPost(env, 'org-a', reel.post.id, { expectedUpdatedAt: reel.post.updated_at, targets: [targets.instagram()] }, 'owner')).outcomes[0]!.status, 'published')
     assert.equal(meta.sent(request => request.body.media_type === 'REELS').length, 1)
+    await publishedOnMeta(reel.post.id, 'instagram')
 
     // An expired container is a definite non-publication; the next call prepares new ones.
     const expiring = await create('key-expire', { media: [{ asset_id: 'a2', slot: 'cover' }] })
@@ -327,6 +342,7 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal(expired.outcomes[0]!.code, 'container_expired')
     meta.expireNewContainers = false
     assert.equal((await publishPost(env, 'org-a', expiring.post.id, { expectedUpdatedAt: expiring.post.updated_at, targets: [targets.instagram()] }, 'owner')).outcomes[0]!.status, 'published')
+    await publishedOnMeta(expiring.post.id, 'instagram')
 
     // Concurrent calls for one new target: one claim, one media_publish.
     const racing = await create('key-race', { media: [{ asset_id: 'a1', slot: 'cover' }] })
@@ -483,11 +499,17 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     assert.deepEqual((await db.prepare("SELECT id FROM content_blocks WHERE document_id = 'page-reuse'").all()).results, [{ id: 'keep-text' }])
     assert.equal(await db.prepare("SELECT count(*) FROM content_documents WHERE source = 'facebook'").first('count(*)'), 0)
     // Instagram imports, and the other app's identical id, are untouched.
-    assert.ok(Number(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'instagram'").first('count(*)')) > 1)
+    assert.equal(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'instagram'").first('count(*)'), 7)
     assert.equal(await db.prepare("SELECT count(*) FROM post_publications WHERE id = 'other-app'").first('count(*)'), 1)
     // A repeated callback succeeds with nothing left to do.
     assert.deepEqual(await eraseMetaSubjectData(env, subject), { erased_documents: 0, erased_media: 0, detached_publications: 0, remaining: 0 })
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0)
+    // With nothing in flight, the tenant adds a gallery picture; it advances the post's revision.
+    const beforeGallery = (await getPost(db, env, 'org-a', own.post.id))!
+    await attachMediaPlacement(db, { organizationId: 'org-a', env: cardless, placement: { owner_type: 'content_document', owner_id: own.post.id, slot: 'gallery' }, assetId: 'own' })
+    const afterGallery = (await getPost(db, env, 'org-a', own.post.id))!
+    assert.deepEqual(afterGallery.media.map(item => `${item.slot}:${item.asset_id}`), [...beforeGallery.media.map(item => `${item.slot}:${item.asset_id}`), 'gallery:own'])
+    assert.notEqual(afterGallery.updated_at, beforeGallery.updated_at)
     // A post whose publication is unresolved pins its media placements too.
     await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, payload_hash, error_code, error_message)
       VALUES ('pin', 'org-a', '${own.post.id}', 'instagram', 'ig-app', 'ig-subject', '${IG}', 'publish', 'unknown', 'h', 'final_unconfirmed', 'lost')`)

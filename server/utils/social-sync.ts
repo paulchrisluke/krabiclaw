@@ -461,6 +461,13 @@ async function syncChannel(env: CloudflareEnv, organizationId: string, channel: 
     if (blocker) return 'blocked' as const
     return await importNativePost(env, organizationId, reader, post, deadline)
   }
+  // One post Krabiclaw cannot import is that post's problem; Meta refusing the
+  // token is the connection's.
+  let authorizationFailed = false
+  const itemFailed = (item: string, error: unknown) => {
+    if (error instanceof MetaGraphError && error.failure === 'authorization') authorizationFailed = true
+    result.errors.push({ item, message: messageOf(error) })
+  }
   /** Applies one page; false when the budget ran out before the page was finished. */
   const apply = async (items: NativePost[], errors: Array<{ item: string; message: string }>) => {
     result.errors.push(...errors)
@@ -472,7 +479,7 @@ async function syncChannel(env: CloudflareEnv, organizationId: string, channel: 
         else if (outcome === 'updated') result.updated += 1
         else if (outcome === 'unchanged') result.unchanged += 1
       } catch (error) {
-        result.errors.push({ item: post.id, message: messageOf(error) })
+        itemFailed(post.id, error)
       }
     }
     return true
@@ -512,7 +519,7 @@ async function syncChannel(env: CloudflareEnv, organizationId: string, channel: 
             await markRemoved(env, organizationId, reader, association)
             result.removed += 1
           } else {
-            result.errors.push({ item: association.provider_post_id, message: messageOf(error) })
+            itemFailed(association.provider_post_id, error)
             probesLeft = true
           }
         }
@@ -530,7 +537,7 @@ async function syncChannel(env: CloudflareEnv, organizationId: string, channel: 
       last_error: lastError?.message ?? null,
       last_error_item: lastError?.item ?? null,
       blocked_by_publication_id: blocker?.id ?? null,
-    }, result.errors.length ? 'error' : 'active')
+    }, authorizationFailed ? 'error' : 'active')
     return result
   } catch (error) {
     await saveProgress(db, organizationId, channel, connectionRow.revision, { ...progress, last_error: messageOf(error), last_error_item: null, blocked_by_publication_id: blocker?.id ?? null }, 'error')

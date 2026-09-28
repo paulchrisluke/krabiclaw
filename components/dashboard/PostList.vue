@@ -99,9 +99,12 @@ watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_
 const loadingMore = ref(false)
 async function loadMore() {
   if (!nextCursor.value) return
+  // A page fetched for the list that was showing is dropped if the filter changed meanwhile.
+  const base = data.value
   loadingMore.value = true
   try {
     const page = await fetchPage(nextCursor.value)
+    if (data.value !== base) return
     more.value = [...more.value, ...page.posts]
     nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
   } finally {

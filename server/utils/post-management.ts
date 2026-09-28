@@ -222,7 +222,7 @@ async function attachPostFields(db: DbClient, env: CloudflareEnv | null, rows: P
       ...post,
       public_path: publicPath,
       canonical_url: row.status === 'published' ? absoluteUrl(origin, publicPath) : null,
-      preview_url: row.status === 'draft' && previewToken ? `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(previewToken)}` : null,
+      preview_url: row.status === 'draft' && previewToken ? absoluteUrl(origin, `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(previewToken)}`) : null,
       social_image: social.get(row.id)?.social_image ?? null,
       publications: await Promise.all((publications.get(row.id) ?? []).map(async publication => ({
         id: publication.id, channel: publication.channel, target_id: publication.provider_target_id, origin: publication.origin,

@@ -391,12 +391,13 @@ function buildDocumentWriteBatch(
   ]
 
   // A social_posts block that names a location names one of this
-  // organization's; the write refuses anything else in the same batch.
+  // organization's active ones, as the public page requires; the write refuses
+  // anything else in the same batch.
   const blockLocationGuards: BatchQuery[] = snapshots
     .filter(block => block.type === 'social_posts' && typeof block.data.location_id === 'string' && block.data.location_id)
     .map(block => ({
       query: `INSERT INTO content_blocks (id, document_id, type, position, data_json) SELECT NULL, ?, 'markdown', 0, '{}'
-        WHERE NOT EXISTS (SELECT 1 FROM business_locations WHERE id = ? AND organization_id = ?)`,
+        WHERE NOT EXISTS (SELECT 1 FROM business_locations WHERE id = ? AND organization_id = ? AND status = 'active')`,
       params: [document.id, block.data.location_id as string, document.organization_id],
     }))
 

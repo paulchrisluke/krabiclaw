@@ -19,7 +19,7 @@
         <div class="blawby-container"><h1 class="blawby-display text-4xl font-bold">{{ t('blawby.posts.title') }}</h1></div>
       </header>
       <header v-else class="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8">
-        <h1 class="m-0 text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight text-default">Updates</h1>
+        <h1 class="m-0 text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight text-default">{{ t('social_posts.title') }}</h1>
       </header>
 
       <component :is="feedComponent" :posts="feed.posts.value" />
