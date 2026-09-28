@@ -80,6 +80,10 @@ test('an ordinary HTML-only email keeps its paragraphs and line breaks', () => {
   assert.equal(guestReplyText({ html }), 'Hello,\n\nDo you have a table for two?\nFriday at 7pm.\n\nAlex')
 })
 
+test('a whitespace-only text part yields to the HTML reply', () => {
+  assert.equal(guestReplyText({ text: ' \r\n\r\n ', html: '<div dir="ltr">See you at 8.</div><div class="gmail_quote"><blockquote>Earlier</blockquote></div>' }), 'See you at 8.')
+})
+
 test('an email with only quoted history and a signature has no new text', () => {
   assert.equal(guestReplyText({ text: `\n\n${gmailQuote}\n\n--\nSent from my iPhone` }), '')
   assert.equal(guestReplyText({ html: '<div class="gmail_quote"><blockquote>Yo heads up</blockquote></div>' }), '')

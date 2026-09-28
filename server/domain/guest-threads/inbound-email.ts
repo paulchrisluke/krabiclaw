@@ -43,7 +43,10 @@ const htmlToText = compile({
  * means the email carried no new text.
  */
 export function guestReplyText(mime: { text?: string, html?: string }): string {
-  const text = mime.text || (mime.html ? htmlToText(mime.html) : '')
+  // A text/plain part holding only whitespace is not the message; the HTML part
+  // is. A text part with any content stays the source, so a quote-only plain
+  // part never falls through to HTML quoting the selectors above may not know.
+  const text = mime.text?.trim() ? mime.text : (mime.html ? htmlToText(mime.html) : '')
   return new EmailReplyParser().read(text).getVisibleText().trim()
 }
 
