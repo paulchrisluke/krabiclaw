@@ -1,183 +1,95 @@
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
-import { HTTPError } from 'nitro';
-import { createPost, deletePost, getPost, listPosts, PostValidationError, publishPost, updatePost } from '~/server/utils/post-management'
+import { HTTPError } from 'nitro'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
+import { createPost, deletePost, getPost, listPosts, PostValidationError, updatePost, type Post } from '~/server/utils/post-management'
+import { getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication } from '~/server/utils/social-publication'
+import { syncSocialPosts } from '~/server/utils/social-sync'
+import { dashboardOrigin } from '~/server/utils/dashboard-notification-links'
+import { findOrganizationById } from '~/server/utils/member-access'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
-import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requiredString } from './shared'
+import { mcpPageWindow } from '~/server/utils/mcp-pagination'
+import { absolutizeOrganizationUrl, attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, omit, optionalString, requiredString } from './shared'
+
+/**
+ * The MCP adapter for short posts: it authorizes nothing the domain does not,
+ * and serializes the domain's own results. Every rule lives in
+ * post-management, social-publication and social-sync, which the dashboard
+ * calls too.
+ */
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work()
   } catch (error) {
-    if (error instanceof PostValidationError) {
-      throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
-    }
+    if (error instanceof PostValidationError) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
     throw error
   }
 }
 
+function forMcp(post: Post, organization: McpExecutorContext['organization']) {
+  return { ...attachViewUrlToRecord(post, organization, {}), preview_url: absolutizeOrganizationUrl(organization, post.preview_url) }
+}
+
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
+  const env = organization.env as CloudflareEnv
   switch (toolName) {
-    case "list_posts":
-      {
-        const posts = (await listPosts(
-          organization.db,
-          organization.organizationId,
-          optionalString(args, "status") ?? undefined,
-          optionalString(args, "location_id") ?? undefined,
-        )).map((post) => attachViewUrlToRecord(post, organization, {}));
-        const page = paginateMcpCollection(posts, args, { resource: `posts:${organization.organizationId}:${optionalString(args, 'status') ?? ''}:${optionalString(args, 'location_id') ?? ''}` });
-        return { posts: page.items, page_info: page.page_info };
-      }
-    case "get_post":
-      {
-        const post = await getPost(
-          organization.db,
-          organization.organizationId,
-          requiredString(args, "post_id"),
-        );
-        return {
-          post: post ? attachViewUrlToRecord(post, organization, {}) : null,
-        };
-      }
-    case "create_post":
-      {
-        const post = await asMcpValidationError(() => createPost(
-          organization.db,
-          organization.organizationId,
-          omit(args, ["organization_id"]),
-          organization.userId,
-          organization.env,
-        ));
-        const hydratedPost = attachViewUrlToRecord(post, organization, {});
-        const createPostContext = await mutationContextPayload(organization, {
-          locationId: post && typeof post.location_id === "string" ? post.location_id : null,
-        });
-        return renderStructuredResponse(
-          {
-            ok: true,
-            entity: "post",
-            id: post.id,
-            slug: post.slug,
-            public_url: hydratedPost.public_url,
-            updated_at: post.updated_at,
-            context: createPostContext,
-          },
-          `Created post "${post.title ?? post.id}".`,
-          { post: hydratedPost },
-        );
-      }
-    case "update_post":
-      {
-        const post = await asMcpValidationError(() => updatePost(
-          organization.db,
-          organization.organizationId,
-          requiredString(args, "post_id"),
-          omit(args, ["post_id", "organization_id"]),
-          organization.userId,
-          organization.env,
-        ));
-        if (!post) {
-          return renderStructuredResponse(
-            { ok: false, entity: "post", id: requiredString(args, "post_id") },
-            "No post found with that id — nothing was changed.",
-          );
-        }
-        const hydratedPost = attachViewUrlToRecord(post, organization, {});
-        const updatePostContext = await mutationContextPayload(organization, {
-          locationId: typeof post.location_id === "string" ? post.location_id : null,
-        });
-        return renderStructuredResponse(
-          {
-            ok: true,
-            entity: "post",
-            id: post.id,
-            slug: post.slug,
-            changed_fields: Object.keys(omit(args, ["post_id"])),
-            updated_at: post.updated_at,
-            context: updatePostContext,
-          },
-          `Updated post "${post.title ?? post.id}".`,
-          { post: hydratedPost },
-        );
-      }
-    case "publish_post": {
-      const channels = normalizeChannelsInput(args);
-      const postId = requiredString(args, "post_id");
-      const wantsSocial = channels.includes("facebook") || channels.includes("instagram");
-      const socialDisabledReason = wantsSocial && !isConversationalToolGroupEnabled(organization.env, "social_publishing")
-        ? "social_publishing_disabled"
-        : null;
-      const post = await publishPost(
-        organization.db,
-        organization.organizationId,
-        postId,
-        channels,
-        organization.env as CloudflareEnv,
-        socialDisabledReason,
-      );
-      if (!post)
-        throw new HTTPError({ statusCode: 404, statusMessage: "Post not found" });
-      const channelJobs = post.channels.filter(job => channels.includes(job.channel));
-
-      const publishedChannels = [
-        ...(channels.includes('organization') ? ['organization'] : []),
-        ...channelJobs.filter(j => j.status === 'published').map(j => j.channel),
-      ];
-      const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
-      const skippedChannels = channelJobs.filter(j => j.status === 'skipped').map(j => ({ channel: j.channel, error: j.error }));
-      const pendingChannels = channelJobs.filter(j => j.status === 'pending').map(j => j.channel);
-      const channelOutcomes = {
-        ...Object.fromEntries(channelJobs
-          .map(job => [job.channel, { status: job.status, ...(job.error ? { reason: job.error } : {}) }])),
-        ...(channels.includes('organization') ? { organization: { status: 'published' } } : {}),
-      };
-
-      const publishContext = await mutationContextPayload(organization, {
-        locationId: post && typeof post.location_id === "string" ? post.location_id : null,
-      });
-
-      const hydratedPublishedPost = attachViewUrlToRecord(post, organization, {});
-
-      const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;
-      const successMessage = hasFailures || pendingChannels.length > 0
-        ? `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ") || 'no channels'}${failedChannels.length > 0 ? `; failed: ${failedChannels.map(f => f.channel).join(", ")}` : ''}${skippedChannels.length > 0 ? `; skipped: ${skippedChannels.map(s => s.channel).join(", ")}` : ''}${pendingChannels.length > 0 ? `; pending: ${pendingChannels.join(", ")}` : ''}.`
-        : `Published "${post.title ?? post.id}" to ${publishedChannels.join(", ")}.`;
-
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "post",
-          id: post.id,
-          slug: post.slug,
-          public_url: hydratedPublishedPost.public_url,
-          channels: publishedChannels,
-          channel_outcomes: channelOutcomes,
-          context: publishContext,
-          ...(hasFailures ? {
-            failed_channels: failedChannels,
-            skipped_channels: skippedChannels,
-          } : {}),
-        },
-        successMessage,
-        { post: hydratedPublishedPost },
-      );
+    case 'get_social_connections': {
+      const record = await findOrganizationById(env, organization.organizationId)
+      if (!record) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
+      return await getSocialConnections(env, organization.organizationId, { dashboardBase: dashboardOrigin(env, { orgSlug: record.slug, locationSlug: null }) })
     }
-    case "delete_post": {
-      const postId = requiredString(args, "post_id");
-      return {
-        post_id: postId,
-        deleted: await deletePost(
-          organization.db,
-          organization.organizationId,
-          postId,
-        ),
-        context: await mutationContextPayload(organization),
-      };
+    case 'list_posts': {
+      const status = optionalString(args, 'status')
+      const locationId = optionalString(args, 'location_id')
+      const resource = { resource: `posts:${organization.organizationId}:${status ?? ''}:${locationId ?? ''}` }
+      const page = await asMcpValidationError(() => listPosts(organization.db, env, organization.organizationId, { status, locationId },
+        mcpPageWindow(args, resource), resource))
+      return { posts: page.posts.map(post => forMcp(post, organization)), page_info: page.page_info }
+    }
+    case 'get_post': {
+      const post = await getPost(organization.db, env, organization.organizationId, requiredString(args, 'post_id'))
+      if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
+      return { post: forMcp(post, organization) }
+    }
+    case 'create_post': {
+      const { post, replayed } = await asMcpValidationError(() => createPost(organization.db, env, organization.organizationId,
+        { post: omit(args, ['organization_id', 'idempotency_key']), idempotencyKey: requiredString(args, 'idempotency_key') }, organization.userId))
+      return renderStructuredResponse(
+        { ok: true, post: forMcp(post, organization), replayed, context: await mutationContextPayload(organization, { locationId: post.location_id }) },
+        replayed ? `This idempotency_key already created the draft post ${post.id}.` : `Created draft post ${post.id}. It is not public until publish_post.`,
+      )
+    }
+    case 'update_post': {
+      const post = await asMcpValidationError(() => updatePost(organization.db, env, organization.organizationId, requiredString(args, 'post_id'),
+        { changes: omit(args, ['post_id', 'organization_id', 'expected_updated_at']), expectedUpdatedAt: requiredString(args, 'expected_updated_at') }, organization.userId))
+      if (!post) throw new HTTPError({ statusCode: 404, statusMessage: 'Post not found' })
+      return renderStructuredResponse(
+        { ok: true, post: forMcp(post, organization), context: await mutationContextPayload(organization, { locationId: post.location_id }) },
+        `Updated post ${post.id}.`,
+      )
+    }
+    case 'publish_post': {
+      let targets
+      try { targets = parsePublishTargets(args.targets) } catch (error) {
+        if (error instanceof HTTPError) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
+        throw error
+      }
+      const result = await publishPost(env, organization.organizationId, requiredString(args, 'post_id'),
+        { expectedUpdatedAt: requiredString(args, 'expected_updated_at'), targets }, organization.userId)
+      const summary = result.outcomes.map(outcome => `${outcome.channel}: ${outcome.status}${outcome.code ? ` (${outcome.code})` : ''}`).join('; ')
+      return renderStructuredResponse(result as unknown as Record<string, unknown>, `${result.ok ? 'Published' : 'Not every target is published'} — ${summary}.`)
+    }
+    case 'reconcile_post_publication': {
+      return await reconcilePostPublication(env, organization.organizationId, requiredString(args, 'publication_id'), optionalString(args, 'provider_post_id') ?? null)
+    }
+    case 'sync_social_posts': {
+      return { results: await syncSocialPosts(env, organization.organizationId) }
+    }
+    case 'delete_post': {
+      const postId = requiredString(args, 'post_id')
+      return { post_id: postId, deleted: await deletePost(organization.db, organization.organizationId, postId, organization.userId) }
     }
     default:
       return NOT_HANDLED

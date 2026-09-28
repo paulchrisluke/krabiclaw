@@ -24,8 +24,6 @@ import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { createDb } from "~/server/db";
 import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from "~/server/utils/public-resource-cache";
-import {
-  visibleConversationalMcpTools, } from "~/server/utils/conversational-tool-surface";
 import { resolveMissingMcpCredential, type McpToolMeta } from "~/server/utils/mcp-runtime";
 import {
   buildMcpAuthChallengeForError, describeMcpAuthTelemetryError, getCloudflareWaitUntil, isMcpMutatingTool, mcpAuthRequiredResult, mcpToolErrorResult, setMcpAuthChallenge, } from "~/server/utils/mcp-route-helpers";
@@ -221,7 +219,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
     const organizationId = organizationIdHeader?.trim() || null;
     const organizationCtx = organizationId ? await getVisibleOrganizationContext(event, organizationId) : null;
 
-    const visibleSurfaceTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS, cfEnv);
+    const visibleSurfaceTools = MCP_PUBLIC_TOOLS;
 
     const entitlementKeys = organizationCtx
       ? [...new Set(visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(Boolean) as string[])]

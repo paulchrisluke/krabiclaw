@@ -1,5 +1,4 @@
-import { instantSchema, calendarDateSchema, timezoneSchema } from '~/utils/timezone'
-import { postMutationJsonSchema } from '~/shared/posts'
+import { calendarDateSchema, timezoneSchema } from '~/utils/timezone'
 import { openingHoursSchema, specialHoursSchema } from '~/shared/reservation-hours'
 import type { McpToolRole } from '~/server/utils/mcp-auth'
 import { SUPPORTED_CURRENCIES } from '~/shared/currencies'
@@ -301,9 +300,8 @@ export const blogPostObject = {
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
+    status: { type: 'string', enum: ['draft', 'published'] },
     visibility: { type: 'string', enum: ['listed', 'unlisted'] },
-    scheduled_for: { ...instantSchema, type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     cover: blogCoverObject,
@@ -318,7 +316,7 @@ export const blogPostObject = {
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
     'seo_keywords',
-    'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
     'content_blocks',
@@ -339,9 +337,8 @@ export const blogPostSummaryObject = {
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
+    status: { type: 'string', enum: ['draft', 'published'] },
     visibility: { type: 'string', enum: ['listed', 'unlisted'] },
-    scheduled_for: { ...instantSchema, type: ['string', 'null'] },
     created_at: { type: 'string' },
     updated_at: { type: 'string' },
     cover: blogCoverObject,
@@ -355,7 +352,7 @@ export const blogPostSummaryObject = {
   required: [
     'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'tags',
     'seo_keywords',
-    'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
   ],
@@ -371,65 +368,48 @@ export const blogPostMutationResultObject = {
   additionalProperties: false,
 }
 
-export const postMutationResultObject = {
+const postPublicationObject = {
   type: 'object',
+  description: 'One external publication of this post. Private to the organization.',
   properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['post'] },
-    id: { type: 'string' },
-    slug: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    changed_fields: { type: 'array', items: { type: 'string' } },
-    updated_at: { type: 'string' },
-    context: { type: 'object' },
+    id: { type: 'string', description: 'The publication_id reconcile_post_publication takes.' },
+    channel: { type: 'string', enum: ['facebook', 'instagram'] },
+    target_id: { type: 'string' },
+    origin: { type: 'string', enum: ['import', 'publish'] },
+    state: { type: 'string', enum: ['preparing', 'publishing', 'published', 'failed', 'unknown', 'removed'] },
+    provider_post_id: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'], description: 'The provider\'s own permalink, when it returned one.' },
+    code: { type: ['string', 'null'] },
+    message: { type: ['string', 'null'] },
+    published_at: { type: ['string', 'null'] },
+    local_content_changed: { type: 'boolean', description: 'The website copy changed after this was sent. The external post was not edited.' },
   },
-  required: ['ok', 'entity', 'id'],
-}
-
-export const postPublishResultObject = {
-  type: 'object',
-  properties: {
-    ok: { type: 'boolean' },
-    entity: { type: 'string', enum: ['post'] },
-    id: { type: 'string' },
-    slug: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
-    channels: { type: 'array', items: { type: 'string' } },
-    channel_outcomes: {
-      type: 'object',
-      additionalProperties: {
-        type: 'object',
-        properties: {
-          status: { type: 'string', enum: ['pending', 'published', 'skipped', 'failed'] },
-          reason: { type: ['string', 'null'] },
-        },
-        required: ['status'],
-      },
-    },
-    context: { type: 'object' },
-  },
-  required: ['ok', 'entity', 'id'],
+  required: ['id', 'channel', 'target_id', 'origin', 'state', 'provider_post_id', 'public_url', 'code', 'message', 'published_at', 'local_content_changed'],
+  additionalProperties: false,
 }
 
 export const postObject = {
   type: 'object',
   properties: {
-    ...postMutationJsonSchema.properties,
-    location_phone: { type: ['string', 'null'] },
     id: { type: 'string' },
-    slug: { type: ['string', 'null'] },
-    title: { type: ['string', 'null'] },
-    body: { type: 'string' },
+    organization_id: { type: 'string' },
     location_id: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['draft', 'published', 'scheduled'] },
-    scheduled_for: { ...instantSchema, type: ['string', 'null'] },
+    slug: { type: 'string' },
+    title: { type: ['string', 'null'] },
+    body: { type: ['string', 'null'] },
+    call_to_action: { anyOf: [{ type: 'object', properties: { label: { type: 'string' }, url: { type: 'string' } }, required: ['label', 'url'], additionalProperties: false }, { type: 'null' }] },
+    status: { type: 'string', enum: ['draft', 'published'] },
+    visibility: { type: 'string', enum: ['listed', 'unlisted'] },
+    source: { type: 'string', enum: ['manual', 'template', 'facebook', 'instagram'], description: 'Who owns the words: the organization, or the provider it was imported from until someone edits it.' },
     published_at: { type: ['string', 'null'] },
-    public_path: { type: ['string', 'null'] },
-    public_url: { type: ['string', 'null'] },
+    public_path: { type: 'string' },
     canonical_url: { type: ['string', 'null'] },
+    preview_url: { type: ['string', 'null'], description: 'A signed link to the draft as visitors will see it.' },
+    public_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
     media: {
       type: 'array',
+      description: 'Cover, then gallery, in order.',
       items: {
         type: 'object',
         properties: {
@@ -442,28 +422,56 @@ export const postObject = {
           alt_text: { type: ['string', 'null'] },
           width: { type: ['number', 'null'] },
           height: { type: ['number', 'null'] },
+          mime_type: { type: ['string', 'null'] },
+          duration: { type: ['number', 'null'] },
+          updated_at: { type: 'string' },
         },
         required: ['asset_id', 'public_url', 'kind', 'slot', 'sort_order'],
-        additionalProperties: false,
       },
     },
-    channels: {
-      type: 'array',
-      description: 'Per-channel publish job status. Check this for facebook/instagram publish failures — publish_post can succeed overall while an individual channel is skipped or failed.',
-      items: {
-        type: 'object',
-        properties: {
-          channel: { type: 'string', enum: ['instagram', 'facebook'] },
-          status: { type: 'string', enum: ['pending', 'published', 'failed', 'skipped'] },
-          error: { type: ['string', 'null'] },
-          published_at: { type: ['string', 'null'] },
-        },
-        required: ['channel', 'status'],
-      },
-    },
+    publications: { type: 'array', items: postPublicationObject },
     created_at: { type: 'string' },
-    updated_at: { type: 'string' },
+    updated_at: { type: 'string', description: 'The expected_updated_at update_post and publish_post take.' },
   },
+  required: ['id', 'slug', 'status', 'visibility', 'media', 'publications', 'updated_at'],
+}
+
+export const postMutationResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean' },
+    post: postObject,
+    replayed: { type: 'boolean', description: 'True when this idempotency_key had already created the post.' },
+    context: { type: 'object' },
+  },
+  required: ['ok', 'post'],
+}
+
+const publishOutcomeObject = {
+  type: 'object',
+  properties: {
+    channel: { type: 'string', enum: ['organization', 'facebook', 'instagram'] },
+    target_id: { type: 'string' },
+    status: { type: 'string', enum: ['published', 'already_published', 'processing', 'failed', 'unknown', 'skipped'] },
+    publication_id: { type: 'string' },
+    public_url: { type: ['string', 'null'] },
+    code: { type: 'string' },
+    message: { type: 'string' },
+  },
+  required: ['channel', 'target_id', 'status'],
+  additionalProperties: false,
+}
+
+export const postPublishResultObject = {
+  type: 'object',
+  properties: {
+    ok: { type: 'boolean', description: 'True only when every requested target is published or already published.' },
+    post_id: { type: 'string' },
+    updated_at: { type: 'string' },
+    outcomes: { type: 'array', items: publishOutcomeObject },
+  },
+  required: ['ok', 'post_id', 'updated_at', 'outcomes'],
+  additionalProperties: false,
 }
 
 export const mediaAssetObject = {
@@ -861,6 +869,12 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_location_reviews: R,
   list_locations: R,
   list_posts: R,
+  get_social_connections: R,
+  // Reads Meta, and records what the read proves about one publication.
+  reconcile_post_publication: W,
+  // Reads Meta into website posts: it creates them, and updates or unpublishes
+  // provider-owned copies when Meta's changed.
+  sync_social_posts: D,
   list_organization_locales: R,
   list_organization_qa: R,
   list_organization_reviews: R,

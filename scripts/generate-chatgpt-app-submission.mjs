@@ -5,7 +5,6 @@ import Ajv2020 from 'ajv/dist/2020.js'
 register('../tests/unit/support/alias-hooks.mjs', import.meta.url)
 
 const { MCP_PUBLIC_TOOLS } = await import('../server/utils/mcp-tools/index.ts')
-const { visibleConversationalMcpTools } = await import('../server/utils/conversational-tool-surface.ts')
 
 const SCHEMA_URL = 'https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json'
 const OUTPUT_PATH = 'chatgpt-app-submission.json'
@@ -17,10 +16,10 @@ const effects = {
   attach_media: 'Adds an existing asset to a public content collection without replacing its existing placements.',
   batch_create_products: 'Creates products from the supplied catalog entries and records product events.',
   delete_tenant_page: 'Deletes a tenant page; deleting its source locale removes every translation with it.',
-  create_blog_post: 'Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule.',
+  create_blog_post: 'Creates a draft tenant blog article and its content document; it is not public until published.',
   create_collection: 'Creates an empty collection for the selected organization; products are added to it separately.',
   create_metafield_definition: 'Defines a typed product attribute for the organization, which is what makes that attribute storable at all.',
-  create_post: 'Creates a private website announcement draft, or schedules publication when a future date is supplied.',
+  create_post: 'Creates a private draft short post with its media; nothing is public until it is published.',
   create_product: 'Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately.',
   create_tenant_page: 'Creates a tenant page and its structured content document.',
   delete_blog_post: 'Deletes the selected tenant blog article and its associated content.',
@@ -28,13 +27,14 @@ const effects = {
   delete_collection: 'Deletes the selected collection and every product membership in it; the products themselves are untouched.',
   delete_media_asset: 'Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.',
   delete_metafield_definition: 'Deletes a typed product attribute definition and every product value stored under it.',
-  delete_post: 'Deletes the selected website announcement.',
+  delete_post: 'Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are.',
   delete_product: 'Deletes a product, its reviews and placements, and updates the remaining product order.',
   delete_resource_localization: 'Deletes the selected translated resource representation.',
   get_blog_post: 'Reads the selected tenant blog article and content for editing.',
   get_contact_inquiries: 'Reads authorized customer contact inquiries, including personal contact information.',
   get_location: 'Reads the selected location, including operational contact and notification settings.',
-  get_post: 'Reads the selected website announcement.',
+  get_post: 'Reads the selected short post and the state of its external publications.',
+  get_social_connections: 'Reads which website, Facebook Page and Instagram account the organization can publish to, without any token.',
   get_product: 'Reads the selected product and its price and content.',
   get_product_catalog_localization: 'Reads product catalog translations for the selected organization and locale.',
   get_reservation_inquiries: 'Reads authorized reservation inquiries, including guest contact and reservation information.',
@@ -53,15 +53,16 @@ const effects = {
   list_location_reviews: 'Lists reviews for the selected location.',
   list_locations: 'Lists locations accessible in the selected organization.',
   list_metafield_definitions: 'Lists the organization typed product attribute definitions.',
-  list_posts: 'Lists website announcements for the selected organization.',
+  list_posts: 'Lists short posts for the selected organization.',
   list_products: 'Lists the products of the selected organization.',
   list_organization_locales: 'Reads the selected organization locale records without provisioning translations.',
   list_organization_qa: 'Lists questions and answers for the selected organization.',
   list_organization_reviews: 'Lists reviews and their provenance for the selected organization.',
   list_organizations: 'Lists organizations accessible to the authenticated user without provisioning one.',
   list_tenant_pages: 'Lists tenant pages for the selected organization.',
-  publish_blog_post: 'Changes the selected blog article publication state and public availability.',
-  publish_post: 'Publishes the selected announcement to the website; enabled social-channel publication can also enqueue external delivery.',
+  publish_blog_post: 'Publishes the selected draft blog article on the website.',
+  publish_post: 'Publishes the selected post to the website and to the explicitly named connected Facebook Page or Instagram account.',
+  reconcile_post_publication: 'Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes.',
   put_resource_localization: 'Creates or overwrites translated resource values and supplied translated content.',
   reconcile_products: 'Creates and updates products at one location, and marks omitted products unavailable only when explicitly requested.',
   remove_media: 'Removes an asset placement from public content while retaining the underlying media asset.',
@@ -78,12 +79,13 @@ const effects = {
   set_media: 'Replaces or clears the asset assigned to a single public media placement.',
   set_product_location: 'Creates or overwrites the selected product’s location availability and publication settings.',
   set_product_publication: 'Creates or overwrites the selected product’s publication setting, including removing it from public display.',
+  sync_social_posts: 'Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts.',
   set_workspace_context: 'Overwrites the authenticated user selected workspace organization or location.',
   update_blog_post: 'Overwrites supplied fields of an existing tenant blog article.',
   update_collection: 'Overwrites the selected collection name, description or placement.',
   update_location: 'Overwrites location hours, contact details, capacity or notification settings supplied by the user.',
   update_media_asset: 'Overwrites media metadata such as alt text or category.',
-  update_post: 'Overwrites fields of an existing website announcement.',
+  update_post: 'Overwrites supplied fields of an existing short post on the website.',
   update_product: 'Overwrites product fields, including public content, availability and price.',
   update_reservation_policy: 'Creates or overwrites the reservation policy of the selected location, which is what opens reservations there.',
   update_organization_settings: 'Overwrites supplied organization settings, including branding, currency, tracking, verification and indexing controls.',
@@ -93,6 +95,9 @@ const effects = {
 }
 
 const externalProcessing = {
+  publish_post: 'The post, its caption and its media are sent to the named Facebook Page or Instagram account, where they become public.',
+  reconcile_post_publication: 'Facebook or Instagram is read for the publication; the provider answers with its own state.',
+  sync_social_posts: 'Posts and media are read from the connected Facebook Page and Instagram account and stored on the website.',
   upload_user_media: 'The attachment is stored in Cloudflare storage at a public media URL.',
   save_generated_image: 'The supplied image bytes are stored in Cloudflare storage at a public media URL.',
   save_generated_image_file: 'The supplied image attachment is stored in Cloudflare storage at a public media URL.',
@@ -113,7 +118,7 @@ function justifications(tool) {
   }
 }
 
-const publicTools = visibleConversationalMcpTools(MCP_PUBLIC_TOOLS)
+const publicTools = MCP_PUBLIC_TOOLS
 const tools = Object.fromEntries(publicTools.map(tool => [tool.name, {
   annotations: {
     readOnlyHint: tool.annotations.readOnlyHint,

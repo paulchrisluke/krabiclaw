@@ -1,4 +1,3 @@
-import { instantSchema } from '~/utils/timezone'
 import type { McpToolDefinition } from './shared'
 import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
@@ -23,11 +22,11 @@ const blogContentBlockSchema = {
 export const BLOG_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_blog_posts',
-      description: 'List this organization\'s draft, published and scheduled blog articles. This is the organization\'s own long-form content blog — distinct from list_posts, which is the social-update feed.',
+      description: 'List this organization\'s draft and published blog articles, a page at a time. This is the organization\'s own long-form content blog — distinct from list_posts, which is the short-post feed.',
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
-      inputSchema: { status: { type: 'string', enum: ['draft', 'published', 'scheduled'] }, ...paginationInputSchema },
+      inputSchema: { status: { type: 'string', enum: ['draft', 'published'] }, ...paginationInputSchema },
       outputSchema: {
         type: 'object',
         properties: { posts: { type: 'array', items: blogPostSummaryObject }, page_info: pageInfoObject },
@@ -54,11 +53,12 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_blog_post',
-      description: 'Create a long-form, evergreen, SEO-indexed article using content_blocks as the only authoring shape. Creation saves a draft by default. Set status to published to publish immediately, or provide a future scheduled_for to schedule it. Compose and review the complete article with the user before calling this tool. category is free text for tenant blogs.',
+      description: 'Create a long-form, evergreen, SEO-indexed article as a draft, using content_blocks as the only authoring shape. It is not public until publish_blog_post; review the draft with its preview_url first. Pass a new idempotency_key per article: repeating a call with the same key returns the same article instead of a second one. category is free text for tenant blogs.',
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
+        idempotency_key: { type: 'string', minLength: 1, maxLength: 200, description: 'A value you make up once for this article, such as a UUID, and reuse only to retry this same request.' },
         title: { type: 'string' },
         excerpt: { type: 'string' },
         collection: { type: 'string', enum: ['blog', 'docs'], description: "KrabiClaw's own site only: which collection the article belongs to. Every other site has one blog." },
@@ -67,10 +67,8 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         content_blocks: { type: 'array', minItems: 1, description: 'The article, in order. Any number of blocks of any type, images wherever they belong. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
         visibility: { type: 'string', enum: ['listed', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
-        status: { type: 'string', enum: ['draft', 'scheduled', 'published'], description: 'Creation defaults to draft. Scheduled requires a future scheduled_for; published goes live immediately.' },
-        scheduled_for: { ...instantSchema, type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. With no status or schedule, creation saves a draft.' },
       },
-      required: ['title', 'content_blocks'],
+      required: ['idempotency_key', 'title', 'content_blocks'],
       outputSchema: blogPostMutationResultObject,
     }),
   organizationTool({
@@ -99,12 +97,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'publish_blog_post',
-      description: 'Publish a draft or scheduled tenant blog article immediately, or reschedule it with scheduled_for. Requires the current document concurrency token. Use only after the writer has approved the final article.',
+      description: 'Publish a draft blog article now. Requires the current document concurrency token. Publishing an article that is already published changes nothing — not its date, not its announcement. Use only after the writer has approved the final article.',
       domain: 'blog', minimumRole: 'admin', confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string', description: 'Post id or slug.' },
         expected_updated_at: { type: 'string', description: 'Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.' },
-        scheduled_for: { ...instantSchema, type: ['string', 'null'], description: 'Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.' },
       },
       required: ['post_id', 'expected_updated_at'],
       outputSchema: blogPostMutationResultObject,

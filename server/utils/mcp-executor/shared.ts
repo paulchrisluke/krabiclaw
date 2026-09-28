@@ -842,42 +842,6 @@ export function extensionForContentType(contentType: string) {
   }
 }
 
-export function normalizeChannelsInput(
-  args: Record<string, unknown>,
-): Array<"organization" | "instagram" | "facebook"> {
-  const rawChannels = args.channels;
-  if (rawChannels !== undefined) return normalizeChannelArray(rawChannels);
-  return ["organization"];
-}
-
-export function normalizeChannelArray(
-  value: unknown,
-): Array<"organization" | "instagram" | "facebook"> {
-  if (!Array.isArray(value) || !value.length) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "channels must be a non-empty array when provided.",
-    );
-  }
-
-  const normalized = value.filter(
-    (item): item is "organization" | "instagram" | "facebook" =>
-      item === "organization" ||
-      item === "instagram" ||
-      item === "facebook",
-  );
-
-  if (normalized.length !== value.length) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "channels may only contain organization, facebook, or instagram.",
-    );
-  }
-
-  return [...new Set(normalized)];
-}
-
-
 export function assertDomainSuccess(result: {
   status: number;
   data: Record<string, unknown>;
