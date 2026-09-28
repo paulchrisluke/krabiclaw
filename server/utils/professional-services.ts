@@ -330,7 +330,8 @@ export async function getPublicBlawbyDocumentData(
   // Which path each recipe's document lives at is declared once, per template,
   // in utils/template-registry.ts; 'page' names its own path.
   const pagePath = recipe === 'page' ? options.slug ?? null : BLAWBY_TEMPLATE.pageDocuments.recipes[recipe] ?? null
-  if (recipe === 'article') return { shell, route }
+  // An article and a post carry their own locale representations.
+  if (recipe === 'article' || recipe === 'posts') return { shell, route }
   // Every route on this template is a page now, so locale representations
   // come from the document — there is no second resource kind to branch on.
   route.localeRepresentations = await listPublicLocaleRepresentations(env, db, {

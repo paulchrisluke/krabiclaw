@@ -83,8 +83,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/article',
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/policies/privacy', '/policies/terms', '/third-party-notices'],
-      dynamicPrefixes: ['/services/', '/article/', '/docs/'],
+      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/policies/privacy', '/policies/terms', '/third-party-notices'],
+      dynamicPrefixes: ['/services/', '/article/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed'],
     // The Blawby route loader looks a recipe up here. 'links', 'confirmation',
@@ -122,8 +122,8 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       // page documents now, and the platform sitemap reads them from
       // content_documents (see server/plugins/sitemap.ts). What remains is the
       // set of code-owned platform routes that hold no document.
-      exactPaths: ['/blog', '/docs', '/help', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
-      dynamicPrefixes: ['/blog/', '/docs/'],
+      exactPaths: ['/blog', '/docs', '/help', '/posts', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      dynamicPrefixes: ['/blog/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: [],
     // Krabiclaw's own marketing pages are ordinary page documents on the

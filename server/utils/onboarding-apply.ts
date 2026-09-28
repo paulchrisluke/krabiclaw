@@ -258,7 +258,7 @@ export async function applyOnboardingDraft(
     }
   }
 
-  // The full rebuild (Products/qa/posts/reviews delete+insert) plus the final
+  // The full rebuild (Products/qa/reviews delete+insert) plus the final
   // draft status flip runs as a single atomic D1 batch, so a failure partway through
   // never leaves the tenant with half-cleared content — see incident notes for why
   // sequential execute() calls here are unsafe.
@@ -379,17 +379,13 @@ export async function applyOnboardingDraft(
     })
   })
 
-  const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND row_role = 'root' AND kind IN ('qa','social_post')", [organizationId])
+  // Onboarding writes the questions it drafted; the organization's posts are its own, so a re-apply leaves them.
+  const replaced = await queryAll<{ id: string }>(db, "SELECT id FROM content_documents WHERE organization_id = ? AND row_role = 'root' AND kind = 'qa'", [organizationId])
   for (const document of replaced) batchQueries.push(...prepareContentDocumentDeletion({ documentId: document.id, organizationId }))
   for (const item of payload.preview.qa) batchQueries.push(...prepareContentDocumentWithBlocks({
     id: item.id, organizationId, kind: 'qa', rowRole: 'root', locale: 'en', locationId: locationRow.id,
     title: item.question, summary: item.answer, source: 'template', status: 'published', sortOrder: item.sort_order,
     metadata: { answer_author: item.answer_author, is_owner_answer: 1, upvote_count: 0 },
-  }, []).queries)
-  for (const post of payload.preview.posts) batchQueries.push(...prepareContentDocumentWithBlocks({
-    id: post.id, organizationId, kind: 'social_post', rowRole: 'root', locale: 'en', locationId: locationRow.id,
-    title: post.title, summary: post.body, status: post.status, visibility: 'listed', publishedAt: post.published_at, source: 'template',
-    createdBy: userId, metadata: { post_type: 'standard', channels: {} },
   }, []).queries)
 
   batchQueries.push(...googleReviewUpserts({ organizationId, locationId: locationRow.id }, payload.preview.reviews, now))
@@ -400,7 +396,7 @@ export async function applyOnboardingDraft(
     if (batchQueries.length) await executeBatch(db, batchQueries)
   } catch (batchError) {
     console.error('onboarding_apply_batch_failed', {
-      organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, posts: payload.preview.posts.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {
+      organizationId, batchSize: batchQueries.length, contentRows: payload.preview.content.length, products: payload.preview.products.length, qaRows: payload.preview.qa.length, reviews: payload.preview.reviews.length, queries: summarizeBatchQueries(batchQueries), error: batchError instanceof Error ? {
         name: batchError.name, message: batchError.message, stack: batchError.stack, } : String(batchError), })
     throw batchError
   }

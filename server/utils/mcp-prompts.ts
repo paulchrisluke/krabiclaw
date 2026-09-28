@@ -22,11 +22,10 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "create_and_publish_post",
-    description: "Create a post and publish it to the requested channels.",
+    description: "Create a short post, review its draft, and publish it to the destinations the user names.",
     arguments: [
-      { name: "body", description: "The post body text.", required: true },
-      { name: "post_type", description: "standard, offer, event, or alert. Event and offer require a complete event schedule. Defaults to standard.", required: false },
-      { name: "channels", description: "Comma-separated channels: organization, facebook, instagram. Defaults to organization.", required: false },
+      { name: "body", description: "The caption, as the user wants it read. Event dates, offers and codes are part of it.", required: true },
+      { name: "destinations", description: "Where to publish, in the user's words: website, Facebook, Instagram, or several. Nothing is assumed.", required: true },
     ],
   },
   {
@@ -99,19 +98,16 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
     }
     case "create_and_publish_post": {
       const body = requireArg(args, "body");
-      const postType = args.post_type?.trim();
-      const channels = args.channels?.trim();
+      const destinations = requireArg(args, "destinations");
       return {
         description: "Create and publish a post",
         text: [
-          `Call create_post with this body: ${body}`,
-          postType ? `Use post_type "${postType}".` : "",
-          "If the user has supplied or approved media for this post, create the post first, then use set_media with placement { owner_type: 'content_document', owner_id: <exact post id>, slot: 'cover' } for the selected cover asset.",
-          channels
-            ? `If media is supplied or approved, call publish_post with channels [${channels}] only after set_media succeeds; otherwise immediately after create_post succeeds. Do not stop to describe the publish step instead of executing it.`
-            : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the organization channel. Do not stop to describe the publish step instead of executing it.",
-          "Report back the post id, the live view URL, and which channels it published to.",
-        ].filter(Boolean).join(" "),
+          `Call create_post with a new idempotency_key and this body: ${body}`,
+          "If the user supplied or approved media, pass it as create_post media in the order they want it shown: the cover first, then the gallery.",
+          `Publish only to: ${destinations}. For Facebook or Instagram, call get_social_connections and use the exact target_id and connection_revision it returns; if the destination is not connected or has a problem, say so instead of publishing elsewhere.`,
+          "Show the user the draft's preview_url, then call publish_post with the post's updated_at as expected_updated_at and one target per named destination.",
+          "Report each outcome exactly as returned. processing means call publish_post again later to finish the same post; unknown means use reconcile_post_publication, never publish again.",
+        ].join(" "),
       };
     }
     case "set_up_bookable_product": {

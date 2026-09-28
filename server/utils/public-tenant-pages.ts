@@ -17,7 +17,7 @@ import {
   type ExactPublicLocalization,
 } from '~/server/utils/public-localization'
 import { listPublicLocaleRepresentations, resolvePublicDocumentSourcePath } from '~/server/utils/public-locale-representations'
-import { getPublishedPosts } from '~/server/utils/post-management'
+import { listPublicSocialPosts } from '~/server/utils/post-management'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
 import { formatMinorAmount } from '~/shared/prices'
@@ -181,6 +181,7 @@ export async function listPublicTenantPageProductRows(
 }
 
 async function hydrateBlocks(
+  env: CloudflareEnv,
   db: DbClient,
   organizationId: string,
   pagePath: string,
@@ -202,7 +203,6 @@ async function hydrateBlocks(
   // The site's social posts — its own updates and what Facebook and Instagram
   // sync in. They are `social_post` documents, a different record from the
   // articles `organization_posts` reads, and a Saya home shows both.
-  const hasUpdateSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'organization_updates')
   for (const block of blocks) {
     if (block.type === 'page_grid' && Array.isArray(block.data.page_ids)) {
       for (const value of block.data.page_ids) if (typeof value === 'string' && value.trim()) pageIds.add(value)
@@ -268,7 +268,21 @@ async function hydrateBlocks(
         return { ...location, slug, public_path: representation.routePath }
       })
     : parsedLocations
-  const [qaItemsBySource, sourceReviewRows, sourcePostRows, updateRows] = await Promise.all([
+  // A social_posts block reads the organization's feed through the one public
+  // post reader, with its own scope and limit; nothing about a post is stored
+  // on the block.
+  const socialFeeds = new Map(await Promise.all(blocks.filter(block => block.type === 'social_posts').map(async (block) => {
+    const locationId = typeof block.data.location_id === 'string' && block.data.location_id ? block.data.location_id : null
+    // A block scoped to a location that is gone is a broken block, not an empty feed.
+    if (locationId && !(await queryFirst(db, "SELECT 1 FROM business_locations WHERE id = ? AND organization_id = ? AND status = 'active'", [locationId, organizationId]))) {
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
+    }
+    const limit = Number(block.data.limit)
+    const feed = await listPublicSocialPosts(env, db, organizationId, { locale, locationId, window: { limit, offset: 0 },
+      resource: `public-posts:${organizationId}:${locale}:${locationId ?? ''}` })
+    return [block.id, feed] as const
+  })))
+  const [qaItemsBySource, sourceReviewRows, sourcePostRows] = await Promise.all([
     Promise.all([...qaSources].map(async source => [source, faqItems(await listFaqBlockQa(db, organizationId, pagePath, source, locale))] as const)).then(entries => new Map(entries)),
     hasReviewSource ? listOrganizationReviews(db, organizationId, { publishedOnly: true }) : Promise.resolve([]),
     hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; cover_asset_id: string | null; cover_public_url: string | null; cover_thumbnail_url: string | null; cover_kind: string | null; cover_alt_text: string | null; cover_width: number | null; cover_height: number | null }>(db, `
@@ -278,7 +292,6 @@ async function hydrateBlocks(
        WHERE root.kind = 'article' AND root.row_role = 'root' AND p.organization_id = ? AND root.status = 'published' AND root.visibility = 'listed'
        ORDER BY root.published_at IS NULL, root.published_at DESC, p.id DESC
     `, [locale, organizationId]) : Promise.resolve([]),
-    hasUpdateSource ? getPublishedPosts(db, organizationId, 12, undefined, locale) : Promise.resolve([]),
   ])
   const reviewRows = sourceReviewRows
   const postRows = sourcePostRows
@@ -313,23 +326,6 @@ async function hydrateBlocks(
         : [],
     }
   })
-  // A social post is already a published public record with its own route and
-  // media; the grid shows it, it does not restate it.
-  const updateItems = updateRows.map(post => ({
-    id: post.id,
-    title: post.title,
-    description: post.summary || undefined,
-    url: post.public_path,
-    labelKey: 'saya.posts.read_full_story',
-    media: post.media.map(item => ({
-      asset_id: item.asset_id,
-      slot: 'media',
-      public_url: item.public_url,
-      thumbnail_url: item.thumbnail_url ?? null,
-      kind: item.kind ?? null,
-      alt_text: item.alt_text ?? null,
-    })),
-  }))
   return blocks.map(block => {
     const data = { ...block.data }
     if (block.type === 'page_grid' && Array.isArray(data.page_ids)) {
@@ -418,8 +414,13 @@ async function hydrateBlocks(
     const faqSource = faqBlockSource(block)
     if (faqSource) data.items = qaItemsBySource.get(faqSource)
     if (block.type === 'testimonial_grid') data.items = reviewItems
-    if (block.type === 'feature_grid' && (data.source === 'organization_posts' || data.source === 'organization_updates')) {
-      const items = data.source === 'organization_posts' ? postItems : updateItems
+    if (block.type === 'social_posts') {
+      const feed = socialFeeds.get(block.id)!
+      data.posts = feed.posts
+      data.has_more = feed.page_info.has_more
+    }
+    if (block.type === 'feature_grid' && data.source === 'organization_posts') {
+      const items = postItems
       const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : items.length
       data.items = items.slice(0, limit)
     }
@@ -472,7 +473,7 @@ export async function getPublicTenantPageForPath(
   // The home page has no card of its own: it is the organization's page, and
   // its image is the organization's.
   const [blocks, media, sourceLocale] = await Promise.all([
-    hydrateBlocks(db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
+    hydrateBlocks(env, db, organizationId, page.path, page.locale, page.blocks, options.hydrationResources, localizations),
     page.path === '/'
       ? loadPublicSocialMedia(db, organizationId, 'organization', [organizationId]).then(organization => new Map([[page.id, {
           media: [],

@@ -86,14 +86,6 @@ export interface DraftQaRecord {
   sort_order: number
 }
 
-export interface DraftPostRecord {
-  id: string
-  title: string
-  body: string
-  status: 'published'
-  published_at: string
-}
-
 export interface DraftContentRecord {
   page: string
   field: string
@@ -130,7 +122,6 @@ export interface OnboardingDraftPayload {
     products: DraftProductRecord[]
     reviews: DraftReviewRecord[]
     qa: DraftQaRecord[]
-    posts: DraftPostRecord[]
     content: DraftContentRecord[]
     locales: Array<{ code: string; label: string; is_source: boolean }>
   }
@@ -340,7 +331,6 @@ export function buildOnboardingDraftPayload(input: {
   }))
 
   const qa: DraftQaRecord[] = []
-  const posts: DraftPostRecord[] = []
 
   const brandColor = input.brandDraft?.brandColor?.trim() || null
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
@@ -388,7 +378,6 @@ export function buildOnboardingDraftPayload(input: {
       products,
       reviews,
       qa,
-      posts,
       content,
       locales: [{ code: 'en', label: 'English', is_source: true }],
     },

@@ -163,13 +163,10 @@ export function buildMediaPlacementInsertQuery(input: MediaPlacementInsertInput)
     query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, CASE WHEN EXISTS (${owner.query})
         AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND (status = 'active' OR (status = 'pending' AND ? = 'review_request' AND ? = 'pending')))
-        AND (? != 'content_document' OR ? NOT IN ('cover', 'gallery') OR EXISTS
-        (SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
-          WHERE d.id = ? AND d.organization_id = ?
-          AND (root.kind != 'social_post' OR (root.metadata_json ->> '$.post_type') != 'alert'))) THEN ? ELSE NULL END, ?, ?, ?, ?)`,
+        THEN ? ELSE NULL END, ?, ?, ?, ?)`,
     params: [input.id ?? crypto.randomUUID(), input.organizationId, input.ownerType, input.ownerId, input.slot,
       ...owner.params!, input.assetId, input.organizationId, input.ownerType, input.status ?? 'active',
-      input.ownerType, input.slot, input.ownerId, input.organizationId, input.assetId,
+      input.assetId,
       input.sortOrder, input.status ?? 'active', createdAt, input.updatedAt ?? createdAt],
   }
 }
@@ -528,12 +525,37 @@ export async function updateMediaAssetAlt(db: DbClient, id: string, organization
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
+/**
+ * An asset a Facebook or Instagram publication is sending, or may already
+ * have sent, is pinned: its revision is part of what the publication
+ * fingerprinted, so it is not changed or deleted until that is resolved.
+ */
+const PINNING_PUBLICATION = `SELECT pp.id, pp.channel FROM media_placements mp
+    JOIN post_publications pp ON pp.organization_id = mp.organization_id AND pp.post_id = mp.owner_id
+    WHERE mp.organization_id = ? AND mp.asset_id = ? AND mp.owner_type = 'content_document' AND mp.slot IN ('cover', 'gallery')
+      AND pp.state IN ('preparing', 'publishing', 'unknown')`
+
+/** Fails the batch it is in when a publication pinned the asset after the check above read it. */
+function publicationPinGuardQuery(organizationId: string, assetId: string): BatchQuery {
+  return {
+    query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
+      SELECT NULL, ?, 'content_document', NULL, 'cover', ?, 0, 'active', NULL, NULL WHERE EXISTS (${PINNING_PUBLICATION})`,
+    params: [organizationId, assetId, organizationId, assetId],
+  }
+}
+
+async function assertNotPinnedByPublication(db: DbClient, organizationId: string, assetId: string) {
+  const pinned = await queryFirst<{ id: string; channel: string }>(db, `${PINNING_PUBLICATION} LIMIT 1`, [organizationId, assetId])
+  if (pinned) throw new HTTPError({ statusCode: 409, statusMessage: `Media asset ${assetId} is part of the unresolved ${pinned.channel} publication ${pinned.id}; resolve it first` })
+}
+
 export async function updateMediaAssetMetadata(
   db: DbClient,
   id: string,
   organizationId: string,
   updates: { alt_text?: string | null; category?: MediaAsset['category'] }
 ): Promise<boolean> {
+  await assertNotPinnedByPublication(db, organizationId, id)
   const sets: string[] = ['updated_at = ?']
   const params: SqlBindValue[] = [new Date().toISOString()]
   if (updates.alt_text !== undefined) {
@@ -547,7 +569,8 @@ export async function updateMediaAssetMetadata(
   if (sets.length === 1) return false
 
   params.push(id, organizationId)
-  const [result] = await executeBatch(db, [
+  const [, result] = await executeBatch(db, [
+    publicationPinGuardQuery(organizationId, id),
     { query: `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND organization_id = ?`, params },
     publicResourceCacheInvalidationQuery(organizationId, 'media-update'),
   ])
@@ -634,6 +657,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   if (!pendingAsset) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
+  await assertNotPinnedByPublication(db, organizationId, id)
   const claimed = pendingAsset.status !== 'deleted'
   // A deleted row's placements went with its claim, so a retry refreshes nothing.
   const sourcePlacements = pendingAsset.source === 'generated' ? [] : await queryAll<{ owner_type: string; owner_id: string; slot: string }>(db,
@@ -655,7 +679,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     deletions.push({ label: `Cloudflare image ${imageId}`, run: () => deleteImage(env, imageId) })
   }
   if (claimed) {
-    const [result] = await executeBatch(db, [{
+    const [, result] = await executeBatch(db, [publicationPinGuardQuery(organizationId, pendingAsset.id), {
       query: `UPDATE media_assets SET status = 'deleted', updated_at = ? WHERE id = ? AND organization_id = ? AND status != 'deleted'`,
       params: [new Date().toISOString(), pendingAsset.id, organizationId],
     }, organizationEventQuery({

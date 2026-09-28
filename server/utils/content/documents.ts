@@ -43,7 +43,7 @@ export type ContentDocumentInput = ContentDocumentInputFields & (
   | { rowRole: 'representation'; rootId: string; locale: string }
   | { rowRole: 'root'; locale: 'en'; locationId?: string | null; scopePath?: string | null;
       status?: string | null; visibility?: string | null; sortOrder?: number; source?: string | null;
-      authorId?: string | null; publishedAt?: string | null; firstPublishedAt?: string | null; scheduledFor?: string | null }
+      authorId?: string | null; publishedAt?: string | null; firstPublishedAt?: string | null }
 )
 
 export interface ContentBlockRow {
@@ -96,7 +96,7 @@ type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; 
 
 export type ContentDocumentChanges = Partial<Pick<typeof content_documents.$inferInsert,
   'title' | 'slug' | 'path' | 'summary' | 'seo_keywords'
-  | 'status' | 'visibility' | 'sort_order' | 'location_id' | 'source' | 'scope_path' | 'published_at' | 'first_published_at' | 'scheduled_for' | 'updated_by'
+  | 'status' | 'visibility' | 'sort_order' | 'location_id' | 'source' | 'scope_path' | 'published_at' | 'first_published_at' | 'updated_by'
 >> & { metadata?: Record<string, unknown> }
 
 interface ContentDocumentWriteOptions {
@@ -128,9 +128,9 @@ function asObject(value: unknown, field: string) {
 }
 
 function mediaFreeBlockData(type: ContentBlockType, value: unknown, field: string) {
-  const data = asObject(value, field)
+  let data = asObject(value, field)
   try {
-    validateContentBlockData(type, data)
+    data = validateContentBlockData(type, data)
   } catch (error) {
     badRequest(error instanceof Error ? error.message : `${field} contains invalid block data`)
   }
@@ -390,10 +390,21 @@ function buildDocumentWriteBatch(
     { query: 'DELETE FROM content_blocks WHERE document_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [document.id, d1JsonStringSet(retainedIds)] },
   ]
 
+  // A social_posts block that names a location names one of this
+  // organization's active ones, as the public page requires; the write refuses
+  // anything else in the same batch.
+  const blockLocationGuards: BatchQuery[] = snapshots
+    .filter(block => block.type === 'social_posts' && typeof block.data.location_id === 'string' && block.data.location_id)
+    .map(block => ({
+      query: `INSERT INTO content_blocks (id, document_id, type, position, data_json) SELECT NULL, ?, 'markdown', 0, '{}'
+        WHERE NOT EXISTS (SELECT 1 FROM business_locations WHERE id = ? AND organization_id = ? AND status = 'active')`,
+      params: [document.id, block.data.location_id as string, document.organization_id],
+    }))
+
   const assignments = ['updated_at = ?']
   const values: unknown[] = [now]
   const changedColumns = ['title', 'slug', 'path', 'summary', 'seo_keywords', 'status', 'visibility', 'sort_order', 'location_id', 'source', 'scope_path',
-    'published_at', 'first_published_at', 'scheduled_for', 'updated_by'] as const
+    'published_at', 'first_published_at', 'updated_by'] as const
   for (const column of changedColumns) {
     if (opts.changes?.[column] !== undefined) {
       assignments.push(column + ' = ?')
@@ -409,6 +420,7 @@ function buildDocumentWriteBatch(
   const queries: { query: string; params: unknown[] }[] = [
     { query: snapshotAssertion.query, params: snapshotAssertion.params ?? [] },
     ...(opts.additionalQueriesBefore ?? []).map(query => ({ query: query.query, params: query.params ?? [] })),
+    ...blockLocationGuards.map(query => ({ query: query.query, params: query.params ?? [] })),
     ...liveBlockQueries,
     {
       query: `UPDATE content_documents SET ${assignments.join(', ')} WHERE id = ?`,
@@ -467,9 +479,9 @@ export function prepareContentDocumentWithBlocks(
     query: `INSERT INTO content_documents
       (id, organization_id, kind, row_role, root_id, root_role, locale, title, slug, path, summary,
        seo_keywords, metadata_json, created_by, updated_by,
-       location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at, scheduled_for,
+       location_id, scope_path, status, visibility, sort_order, source, author_id, published_at, first_published_at,
        created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [document.id, input.organizationId, input.kind, input.rowRole, document.root_id,
       input.rowRole === 'representation' ? 'root' : null, input.locale,
       input.title ?? null, input.slug ?? null, input.path ?? null, input.summary ?? null,
@@ -477,7 +489,7 @@ export function prepareContentDocumentWithBlocks(
       input.createdBy ?? null, input.updatedBy ?? null,
       root?.locationId ?? null, root?.scopePath ?? null, root?.status ?? null, root?.visibility ?? null,
       root?.sortOrder ?? 0, root?.source ?? null, root?.authorId ?? null,
-      root?.publishedAt ?? null, root?.firstPublishedAt ?? null, root?.scheduledFor ?? null, now, now],
+      root?.publishedAt ?? null, root?.firstPublishedAt ?? null, now, now],
   }
 
   const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({

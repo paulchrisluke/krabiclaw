@@ -1,3 +1,5 @@
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPost } from '~/server/utils/post-management'
@@ -19,12 +21,10 @@ export default defineHandler(async (event) => {
   const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
-  const post = await getPost(db, organization.id, postId)
+  const post = await getPost(db, env, organization.id, postId)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
 
   await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: post.location_id ?? null })
 
   return jsonResponse({ success: true, post })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam } from 'nitro/h3';

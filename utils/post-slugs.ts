@@ -5,11 +5,14 @@ export function slugifyTitle(value: string): string {
   return slugify(value, { lower: true, strict: true, trim: true })
 }
 
+/**
+ * A post's route segment from its words, or '' when they hold nothing usable
+ * — the caller then allocates `update-<id>`, never a shared placeholder.
+ */
 export function normalizePostSlug(value: string | null | undefined) {
-  const slug = slugifyTitle(String(value ?? ''))
-    .replace(/^-+|-+$/g, '')
+  return slugifyTitle(String(value ?? ''))
     .slice(0, 80)
-  return slug || 'post'
+    .replace(/^-+|-+$/g, '')
 }
 
 export function postPublicPath(slugOrId: string) {

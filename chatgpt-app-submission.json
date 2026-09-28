@@ -51,9 +51,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule.",
-        "open_world_justification": "Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates a tenant blog article and its content document, with publication governed by its supplied status and schedule. Existing content is not deleted or overwritten."
+        "read_only_justification": "Creates a draft tenant blog article and its content document; it is not public until published.",
+        "open_world_justification": "Creates a draft tenant blog article and its content document; it is not public until published. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates a draft tenant blog article and its content document; it is not public until published. Existing content is not deleted or overwritten."
       }
     },
     "create_collection": {
@@ -87,9 +87,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates a private website announcement draft, or schedules publication when a future date is supplied.",
-        "open_world_justification": "Creates a private website announcement draft, or schedules publication when a future date is supplied. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Creates a private website announcement draft, or schedules publication when a future date is supplied. Existing content is not deleted or overwritten."
+        "read_only_justification": "Creates a private draft short post with its media; nothing is public until it is published.",
+        "open_world_justification": "Creates a private draft short post with its media; nothing is public until it is published. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates a private draft short post with its media; nothing is public until it is published. Existing content is not deleted or overwritten."
       }
     },
     "create_product": {
@@ -183,9 +183,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Deletes the selected website announcement.",
-        "open_world_justification": "Deletes the selected website announcement. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Deletes the selected website announcement. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are.",
+        "open_world_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes the selected short post from the website; its Facebook and Instagram posts are left as they are. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_product": {
@@ -315,9 +315,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Reads the selected website announcement.",
-        "open_world_justification": "Reads the selected website announcement. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected website announcement. Existing content is not deleted or overwritten."
+        "read_only_justification": "Reads the selected short post and the state of its external publications.",
+        "open_world_justification": "Reads the selected short post and the state of its external publications. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the selected short post and the state of its external publications. Existing content is not deleted or overwritten."
       }
     },
     "get_product": {
@@ -378,6 +378,18 @@
         "read_only_justification": "Reads a resource translation and any existing authoring document.",
         "open_world_justification": "Reads a resource translation and any existing authoring document. It does not publish content or write to an external service.",
         "destructive_justification": "Reads a resource translation and any existing authoring document. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_social_connections": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token.",
+        "open_world_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. Existing content is not deleted or overwritten."
       }
     },
     "get_tenant_page": {
@@ -543,9 +555,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Lists website announcements for the selected organization.",
-        "open_world_justification": "Lists website announcements for the selected organization. It does not publish content or write to an external service.",
-        "destructive_justification": "Lists website announcements for the selected organization. Existing content is not deleted or overwritten."
+        "read_only_justification": "Lists short posts for the selected organization.",
+        "open_world_justification": "Lists short posts for the selected organization. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists short posts for the selected organization. Existing content is not deleted or overwritten."
       }
     },
     "list_products": {
@@ -579,9 +591,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Changes the selected blog article publication state and public availability.",
-        "open_world_justification": "Changes the selected blog article publication state and public availability. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Changes the selected blog article publication state and public availability. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Publishes the selected draft blog article on the website.",
+        "open_world_justification": "Publishes the selected draft blog article on the website. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Publishes the selected draft blog article on the website. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "publish_post": {
@@ -591,9 +603,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Publishes the selected announcement to the website; enabled social-channel publication can also enqueue external delivery.",
-        "open_world_justification": "Publishes the selected announcement to the website; enabled social-channel publication can also enqueue external delivery. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Publishes the selected announcement to the website; enabled social-channel publication can also enqueue external delivery. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Publishes the selected post to the website and to the explicitly named connected Facebook Page or Instagram account.",
+        "open_world_justification": "The post, its caption and its media are sent to the named Facebook Page or Instagram account, where they become public.",
+        "destructive_justification": "Publishes the selected post to the website and to the explicitly named connected Facebook Page or Instagram account. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "put_resource_localization": {
@@ -606,6 +618,18 @@
         "read_only_justification": "Creates or overwrites translated resource values and supplied translated content.",
         "open_world_justification": "Creates or overwrites translated resource values and supplied translated content. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates or overwrites translated resource values and supplied translated content. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "reconcile_post_publication": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes.",
+        "open_world_justification": "Facebook or Instagram is read for the publication; the provider answers with its own state.",
+        "destructive_justification": "Reads Facebook or Instagram to record the proven outcome of one publication; it never publishes. Existing content is not deleted or overwritten."
       }
     },
     "reconcile_products": {
@@ -812,6 +836,18 @@
         "destructive_justification": "Overwrites the authenticated user selected workspace organization or location. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "sync_social_posts": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts.",
+        "open_world_justification": "Posts and media are read from the connected Facebook Page and Instagram account and stored on the website.",
+        "destructive_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "update_blog_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -879,9 +915,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Overwrites fields of an existing website announcement.",
-        "open_world_justification": "Overwrites fields of an existing website announcement. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites fields of an existing website announcement. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Overwrites supplied fields of an existing short post on the website.",
+        "open_world_justification": "Overwrites supplied fields of an existing short post on the website. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites supplied fields of an existing short post on the website. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_product": {

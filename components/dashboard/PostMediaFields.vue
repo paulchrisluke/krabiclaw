@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <!-- The cover, then the rest a guest swipes through. -->
-    <template v-if="supportsMedia">
+    <template v-if="organizationId">
       <UFormField label="Photo">
         <DashboardCoverPhotoField
           :organization-id="organizationId"
@@ -28,9 +28,6 @@
         />
       </UFormField>
     </template>
-    <p v-else class="text-sm text-muted">
-      An alert carries only its message and a call to action, so it has no photos.
-    </p>
   </div>
 </template>
 
@@ -43,8 +40,7 @@ const media = defineModel<PostMediaItem[]>('media', { default: () => [] })
 withDefaults(defineProps<{
   organizationId?: string
   /** An alert's contract shape rejects media outright, so the fields are absent. */
-  supportsMedia?: boolean
-}>(), { organizationId: '', supportsMedia: true })
+}>(), { organizationId: '' })
 
 const coverMedia = computed(() => media.value.find(item => item.slot === 'cover') ?? null)
 const coverMediaId = computed({

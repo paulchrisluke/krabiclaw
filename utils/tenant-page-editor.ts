@@ -78,7 +78,19 @@ function validateGridItems(errors: string[], data: EditorData, label = 'Item') {
   })
 }
 
-const DYNAMIC_GRID_SOURCES = new Set(['organization_posts', 'organization_reviews', 'calculator', 'billing_plans'])
+/**
+ * Whether this block authors its own rows. The registry says so: a grid's
+ * `items` field is declared only for the sources that hold items, so there is
+ * no second list of which sources read their rows from elsewhere.
+ */
+function authorsOwnItems(block: TenantPageBlock): boolean {
+  const items = TENANT_PAGE_BLOCK_REGISTRY[block.type]?.fields.items
+  if (!items) return false
+  if (!items.availableWhen) return true
+  const controller = TENANT_PAGE_BLOCK_REGISTRY[block.type]!.fields[items.availableWhen.field]
+  const value = text(block.data[items.availableWhen.field]) || controller?.default || ''
+  return items.availableWhen.equals.includes(value)
+}
 
 export function validateTenantPageBlock(block: TenantPageBlock): string[] {
   const errors: string[] = []
@@ -119,15 +131,18 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
     case 'button_group':
       validateButtons(errors, data, 'Button')
       break
+    case 'social_posts': {
+      const action = data.call_to_action && typeof data.call_to_action === 'object' ? data.call_to_action as Record<string, unknown> : null
+      if (action && Boolean(text(action.label)) !== Boolean(text(action.url))) addError(errors, 'Button label and URL must be provided together.')
+      break
+    }
     case 'feature_grid':
     case 'page_grid':
     case 'product_grid':
     case 'location_grid':
       // A grid that names a source renders what that source returns; only a
       // grid that authors its own rows has rows to validate.
-      if (!DYNAMIC_GRID_SOURCES.has(text(data.source))) {
-        validateGridItems(errors, data, 'Grid item')
-      }
+      if (authorsOwnItems(block)) validateGridItems(errors, data, 'Grid item')
       // A reference grid names what it shows. There is no "everything on the
       // site" source: a grid that silently grew when a page or product was
       // added is a grid nobody chose the contents of.

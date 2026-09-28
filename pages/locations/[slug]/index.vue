@@ -169,14 +169,12 @@
       />
 
       <!-- Location posts preview -->
-      <LazySayaPosts
-        v-if="postsList.length"
-        :posts="postsList"
-        :limit="3"
-        :show-view-more="true"
-        :show-empty-state="false"
-        :view-more-to="localePath(`/locations/${slug}/posts`)"
-      />
+      <template v-if="locationPosts.length">
+        <SocialPosts :posts="locationPosts" />
+        <div class="pb-20 text-center">
+          <SayaButton :to="localePath(`/locations/${slug}/posts`)" variant="outline">{{ t('saya.posts.view_all') }}</SayaButton>
+        </div>
+      </template>
 
       <!-- Reviews preview -->
       <section v-if="reviewsPreview.length">
@@ -276,6 +274,7 @@
 </template>
 
 <script setup lang="ts">
+import SocialPosts from '~/components/social/SocialPosts.vue'
 import { formatOpeningHours, getIsOpenNow, getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { getTodayHoursLabel } from '~/shared/reservation-hours'
 import { formatProductMoney } from '~/utils/product-money'
@@ -310,13 +309,12 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
-  postsList,
 } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page
 // around a null location answered 200 with an empty shell — a soft 404 a
 // crawler indexes. The sibling menu and product indexes already refuse it.
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-
+const { posts: locationPosts } = await useSocialPostFeed(() => ({ locationId: location.value!.id }), { limit: 3 })
 
 const productPresentation = computed(() => resolveProductPresentation((organization as ApiValue)?.vertical as string | null | undefined))
 const locationProducts = computed(() => products.value.filter(product =>

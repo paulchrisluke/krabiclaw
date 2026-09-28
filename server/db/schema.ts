@@ -238,9 +238,21 @@ export const media_assets = sqliteTable("media_assets", {
 	category: text().$type<MediaCategory>(),
 	status: text().$type<'pending' | 'active' | 'deleted' | 'failed'>().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	// The provider publication this asset was imported from, and its generated
+	// derivatives. Null for everything the tenant uploaded or generated, even
+	// when it was later sent to Facebook or Instagram: an outbound post uses
+	// the tenant's media, it does not make that media the provider's. This is
+	// what a Meta data-deletion request erases by, instead of guessing from
+	// which documents a placement happens to sit on.
+	origin_publication_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	// NO ACTION: the organization's cascade removes both rows in one statement,
+	// and a standalone publication delete is refused while an asset still
+	// names it — erasure detaches or deletes the media first.
+	foreignKey({ columns: [table.organization_id, table.origin_publication_id], foreignColumns: [post_publications.organization_id, post_publications.id], name: "media_assets_origin_publication_fk" }).onDelete("no action"),
+	index("media_assets_origin_publication_idx").on(table.organization_id, table.origin_publication_id).where(sql`origin_publication_id IS NOT NULL`),
 	check("media_assets_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	check("media_assets_video_thumbnail_check", sql`kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)`),
 	// The subject vocabulary lived only in this file's `$type` and in the MCP
@@ -1911,13 +1923,12 @@ export const content_documents = sqliteTable("content_documents", {
 	updated_by: text(),
 	published_at: text(),
 	first_published_at: text(),
-	scheduled_for: text(),
 	seo_keywords: text(),
 	metadata_json: text().default('{}').notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("content_documents_instants_check", sql`(published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	check("content_documents_instants_check", sql`(published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	foreignKey({ columns: [table.organization_id, table.location_id], foreignColumns: [business_locations.organization_id, business_locations.id], name: "content_documents_location_scope_fk" }).onDelete("cascade"),
 	// NO ACTION, not SET NULL: this is a composite key, and SQLite's SET NULL
 	// would null organization_id too, which is NOT NULL — the delete would fail
@@ -1940,18 +1951,12 @@ export const content_documents = sqliteTable("content_documents", {
 	uniqueIndex("content_documents_links_org_unique").on(table.organization_id).where(sql`row_role = 'root' AND kind = 'page' AND json_extract(metadata_json, '$.recipe') = 'links'`),
 	index("content_documents_org_kind_status_idx").on(table.kind, table.row_role, table.status, table.sort_order),
 	index("content_documents_location_kind_status_idx").on(table.location_id, table.kind, table.row_role, table.status, table.sort_order),
-	index("content_documents_schedule_idx").on(table.kind, table.status, table.scheduled_for).where(sql`row_role = 'root' AND status = 'scheduled'`),
-	index("content_documents_facebook_post_idx").on(table.organization_id, sql`(metadata_json ->> '$.channels.facebook.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
-	index("content_documents_instagram_post_idx").on(table.organization_id, sql`(metadata_json ->> '$.channels.instagram.provider_post_id')`).where(sql`row_role = 'root' AND kind = 'social_post'`),
 	check("content_documents_metadata_check", sql`json_valid(metadata_json) AND json_type(metadata_json) IS 'object'`),
-	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)`),
+	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)`),
 	check("content_documents_path_check", sql`path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')`),
 	check("content_documents_page_copy_check", sql`kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)`),
 	check("content_documents_page_type_check", sql`kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1`),
-	check("content_documents_channel_names_check", sql`kind <> 'social_post' OR row_role <> 'root' OR json_type(metadata_json, '$.channels') IS NULL OR (json_type(metadata_json, '$.channels') IS 'object' AND json_remove(json_extract(metadata_json, '$.channels'), '$.facebook', '$.instagram') = '{}')`),
 	check("content_documents_qa_scope_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))`),
-	check("content_documents_publication_check", sql`row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published','scheduled')) IS 1`),
-	check("content_documents_social_schedule_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND scheduled_for IS NULL AND published_at IS NULL) OR (status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL))`),
 	// 'listed' and 'unlisted' say whether the document appears in its index. The
 	// value used to be 'public', which read as a second answer to "is this
 	// published" beside `status` — an unlisted document is just as public, it is
@@ -1959,16 +1964,98 @@ export const content_documents = sqliteTable("content_documents", {
 	check("content_documents_article_visibility_check", sql`kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1`),
 	check("content_documents_qa_state_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)`),
 	check("content_documents_qa_counts_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)`),
-	check("content_documents_copy_required_check", sql`row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind <> 'article' OR slug IS NOT NULL) AND (kind <> 'social_post' OR summary IS NOT NULL))`),
 	check("content_documents_article_tags_check", sql`kind <> 'article' OR json_type(metadata_json, '$.tags') IS NULL OR json_type(metadata_json, '$.tags') IN ('array','null')`),
-	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1`),
-	check("content_documents_social_post_type_check", sql`(kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.post_type') IN ('standard', 'offer', 'event', 'alert'))) IS 1`),
-	check("content_documents_social_event_json_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.event') IS NULL OR (json_valid((metadata_json ->> '$.event')) AND json_type((metadata_json ->> '$.event')) IS 'object' AND json_type((metadata_json ->> '$.event'), '$.title') IS 'text' AND length(trim(json_extract((metadata_json ->> '$.event'), '$.title'))) > 0 AND json_type((metadata_json ->> '$.event'), '$.schedule') IS 'object' AND json_type((metadata_json ->> '$.event'), '$.schedule.start_date') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.start_time') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.end_date') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.end_time') IS 'text'))`),
-	check("content_documents_social_offer_json_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.offer') IS NULL OR (json_valid((metadata_json ->> '$.offer')) AND json_type((metadata_json ->> '$.offer')) IS 'object'))`),
-	check("content_documents_social_call_to_action_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.call_to_action') IS NULL OR (json_valid((metadata_json ->> '$.call_to_action')) AND json_type((metadata_json ->> '$.call_to_action')) IS 'object' AND (json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') IN ('book', 'order', 'shop', 'learn_more', 'sign_up', 'call')) IS 1 AND ((json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') = 'call' AND json_type((metadata_json ->> '$.call_to_action'), '$.url') IS NULL) OR (json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') <> 'call' AND json_type((metadata_json ->> '$.call_to_action'), '$.url') IS 'text' AND length(trim(json_extract((metadata_json ->> '$.call_to_action'), '$.url'))) > 0))))`),
-	check("content_documents_social_topic_shape_check", sql`(kind <> 'social_post' OR row_role <> 'root' OR (((metadata_json ->> '$.post_type') = 'standard' AND (metadata_json ->> '$.event') IS NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'event' AND (metadata_json ->> '$.event') IS NOT NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'offer' AND (metadata_json ->> '$.event') IS NOT NULL AND (metadata_json ->> '$.offer') IS NOT NULL AND (metadata_json ->> '$.call_to_action') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'alert' AND (metadata_json ->> '$.event') IS NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS 'covid_19'))) IS 1`),
-	check("content_documents_channel_facebook_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.facebook') IS NULL OR (json_type(metadata_json, '$.channels.facebook') IS 'object' AND json_type(metadata_json, '$.channels.facebook.created_at') IS 'text' AND (((metadata_json ->> '$.channels.facebook.status') = 'pending' AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NULL) OR ((metadata_json ->> '$.channels.facebook.status') = 'published' AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NULL) OR ((metadata_json ->> '$.channels.facebook.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NOT NULL))) IS 1)`),
-	check("content_documents_channel_instagram_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.instagram') IS NULL OR (json_type(metadata_json, '$.channels.instagram') IS 'object' AND json_type(metadata_json, '$.channels.instagram.created_at') IS 'text' AND (((metadata_json ->> '$.channels.instagram.status') = 'pending' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') = 'published' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NOT NULL))) IS 1)`),
+	// Articles and social posts are drafts or published. Nothing publishes on a
+	// clock: a client that wants a post out later calls publish then.
+	check("content_documents_publication_check", sql`row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published')) IS 1`),
+	// A published post has the instant it was published at, and a draft has
+	// none. An article draft may still carry the date it first went out.
+	check("content_documents_social_lifecycle_check", sql`kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND published_at IS NULL) OR (status = 'published' AND published_at IS NOT NULL))`),
+	check("content_documents_article_lifecycle_check", sql`kind <> 'article' OR row_role <> 'root' OR status <> 'published' OR published_at IS NOT NULL`),
+	// A social post's route is allocated when it is created, so an image-only
+	// draft has an address before it has words. The caption itself is optional:
+	// an empty draft is a draft, and publication decides what is publishable.
+	check("content_documents_copy_required_check", sql`row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind NOT IN ('article','social_post') OR slug IS NOT NULL))`),
+	// Who owns a social post's words: the tenant (`manual`, `template`) or the
+	// provider it was imported from, until the tenant edits it.
+	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1`),
+	// A call to action is the tenant's own words and destination. A translation
+	// carries only its label; the destination is the root's.
+	check("content_documents_social_call_to_action_check", sql`kind <> 'social_post' OR json_type(metadata_json, '$.call_to_action') IS NULL OR (json_type(metadata_json, '$.call_to_action') IS 'object' AND json_type(metadata_json, '$.call_to_action.label') IS 'text' AND length(trim(json_extract(metadata_json, '$.call_to_action.label'))) > 0 AND ((row_role = 'root' AND json_type(metadata_json, '$.call_to_action.url') IS 'text' AND (json_extract(metadata_json, '$.call_to_action.url') LIKE 'https://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'http://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'tel:%') AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label', '$.url') = '{}') OR (row_role = 'representation' AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label') = '{}')))`),
+	// The discriminator, event, offer, recurrence and alert shapes a short post
+	// used to carry are not metadata of one any more.
+	check("content_documents_social_metadata_check", sql`kind <> 'social_post' OR json_remove(metadata_json, '$.call_to_action') = '{}'`),
+]);
+
+// One local social post and one actual Facebook or Instagram object.
+// Row meaning: this post was published to, or imported from, this provider
+//   target, and this is what the provider has said about it. It is not a job
+//   queue and not a delivery log: there is one row per post and channel, and
+//   it carries the provider's identifiers, never its credentials. Tokens stay
+//   on the Better Auth account that `provider_subject_id` names.
+// `origin` is how the association began and never changes: an `import` stays
+//   an import after the tenant edits the local copy, which is what a Meta
+//   data-deletion request erases by. Who owns the words is the document's
+//   `source`, a different fact.
+// `state`: `preparing` holds native containers/uploads that are not public;
+//   `publishing` is committed immediately before the irreversible final call,
+//   so a crash after it reads `unknown`, never a retryable failure; `failed`
+//   is a definite non-publication; `removed` is a positively established
+//   provider removal, not absence from a feed page.
+// `attempt_id` fences one invocation's updates; a preparation claim older
+//   than a minute may be taken over by compare-and-set.
+// Deletion: a local post's deletion sets `post_id` NULL in the same batch and
+//   keeps the provider identity, so the next sync does not resurrect a copy
+//   the tenant deleted. The organization's cascade removes the rest.
+// Read/write: server/utils/social-publication.ts and server/utils/social-sync.ts.
+export const post_publications = sqliteTable("post_publications", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	post_id: text(),
+	// Relational constants for the composite key to the post's root row; not
+	// independently editable state.
+	post_row_role: text().$type<'root'>().default("root").notNull(),
+	post_kind: text().$type<'social_post'>().default("social_post").notNull(),
+	channel: text().$type<'facebook' | 'instagram'>().notNull(),
+	provider_app_id: text().notNull(),
+	provider_subject_id: text().notNull(),
+	provider_target_id: text().notNull(),
+	origin: text().$type<'import' | 'publish'>().notNull(),
+	state: text().$type<'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'>().notNull(),
+	provider_post_id: text(),
+	provider_permalink: text(),
+	provider_handles_json: text().default("{}").notNull(),
+	payload_hash: text(),
+	attempt_id: text(),
+	error_code: text(),
+	error_message: text(),
+	published_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("post_publications_instants_check", sql`(published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	// NO ACTION, not SET NULL: SQLite would null organization_id too. Canonical
+	// post deletion detaches the association first, in the same batch.
+	foreignKey({ columns: [table.organization_id, table.post_id, table.post_row_role, table.post_kind], foreignColumns: [content_documents.organization_id, content_documents.id, content_documents.row_role, content_documents.kind], name: "post_publications_post_scope_fk" }).onDelete("no action"),
+	unique("post_publications_org_id_unique").on(table.organization_id, table.id),
+	uniqueIndex("post_publications_post_channel_unique").on(table.organization_id, table.post_id, table.channel).where(sql`post_id IS NOT NULL`),
+	uniqueIndex("post_publications_provider_post_unique").on(table.organization_id, table.channel, table.provider_app_id, table.provider_post_id).where(sql`provider_post_id IS NOT NULL`),
+	uniqueIndex("post_publications_import_post_unique").on(table.organization_id, table.post_id).where(sql`origin = 'import' AND post_id IS NOT NULL`),
+	index("post_publications_subject_idx").on(table.channel, table.provider_app_id, table.provider_subject_id),
+	index("post_publications_target_state_idx").on(table.organization_id, table.channel, table.provider_target_id, table.state),
+	check("post_publications_constants_check", sql`post_row_role = 'root' AND post_kind = 'social_post'`),
+	check("post_publications_channel_check", sql`channel IN ('facebook', 'instagram')`),
+	check("post_publications_origin_check", sql`origin IN ('import', 'publish')`),
+	check("post_publications_state_check", sql`state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')`),
+	check("post_publications_identity_check", sql`length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)`),
+	check("post_publications_handles_check", sql`json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'`),
+	check("post_publications_permalink_check", sql`provider_permalink IS NULL OR provider_permalink LIKE 'https://%'`),
+	// Published needs provider evidence: the final identity, or an Instagram
+	// container whose own status said it was published.
+	check("post_publications_published_check", sql`state NOT IN ('published', 'removed') OR (published_at IS NOT NULL AND (provider_post_id IS NOT NULL OR (channel = 'instagram' AND json_type(provider_handles_json, '$.container_id') IS 'text')))`),
+	check("post_publications_failed_check", sql`(state IN ('failed', 'unknown')) = (error_code IS NOT NULL)`),
+	check("post_publications_attempt_check", sql`attempt_id IS NULL OR state IN ('preparing', 'publishing')`),
+	check("post_publications_origin_shape_check", sql`(origin = 'publish' AND payload_hash IS NOT NULL) OR (origin = 'import' AND provider_post_id IS NOT NULL AND state IN ('published', 'removed') AND attempt_id IS NULL)`),
 ]);
 
 export const resource_localizations = sqliteTable("resource_localizations", {

@@ -16,7 +16,7 @@ The platform sitemap is an explicit allowlist plus published platform docs and b
 
 A tenant is served from its configured canonical custom domain or canonical Krabiclaw subdomain. Alternate active domains are redirected to the canonical domain before rendering.
 
-The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, and experiences. Aggregate routes such as `/menu`, `/blog`, `/experiences`, `/locations`, `/reservations`, and `/order` are included only when the tenant has corresponding substantive content. It never contains Krabiclaw platform docs, pricing, templates, or application routes.
+The tenant sitemap contains only that site's public static routes and its published locations, menu items, blog posts, listed social posts, and experiences. Aggregate routes such as `/menu`, `/blog`, `/posts`, `/experiences`, `/locations`, `/reservations`, and `/order` are included only when the tenant has corresponding substantive content. It never contains Krabiclaw platform docs, pricing, templates, or application routes.
 
 `server/middleware/zy-site-config.ts` updates Nuxt Site Config only for `/sitemap.xml` and `/robots.txt`, after tenant resolution. This gives the Nuxt SEO modules the active tenant origin and brand without touching page or API request state.
 

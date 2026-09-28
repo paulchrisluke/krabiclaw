@@ -231,11 +231,12 @@ export async function listAgenda(
       ${query.locationId ? 'AND agenda_session.location_id = ?' : ''}
       AND agenda_session.starts_at BETWEEN ? AND ?
   `, [...params(), broadFrom, broadTo]))
-  if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END AS starts_at, NULL AS ends_at,
-    NULLIF(COALESCE(NULLIF(p.title, ''), json_extract(p.metadata_json, '$.event.title')), '') AS title, json_extract(p.metadata_json, '$.post_type') AS subtitle, NULL AS party_size, p.status`, {
+  // A post is on the agenda on the day it was published; nothing is due.
+  if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `p.published_at AS starts_at, NULL AS ends_at,
+    NULLIF(p.title, '') AS title, NULL AS subtitle, NULL AS party_size, p.status`, {
     pictureOwner: { type: `'content_document'`, id: 'p.id' },
   })}
-    AND CASE p.status WHEN 'published' THEN p.published_at WHEN 'scheduled' THEN p.scheduled_for END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
+    AND p.status = 'published' AND p.published_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
 
   const rows = (await Promise.all(sourceQueries)).flat()
   const pictureOwnerTypes = [...new Set(rows.map(row => row.picture_owner_type))]

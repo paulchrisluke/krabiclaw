@@ -7,15 +7,13 @@ interface ScheduledTaskDefinition {
 }
 
 export type ScheduledTaskName =
-  | 'blog-scheduled-publish'
-  | 'post-scheduled-publish'
   | 'public-resource-cache-invalidation'
   | 'domain-reconciliation'
   | 'zaraz-analytics-reconciliation'
   | 'domain-reconciliation-daily'
   | 'analytics-aggregate-daily'
   | 'google-places-sync'
-  | 'instagram-sync-process'
+  | 'social-post-sync'
   | 'review-request-automation'
   | 'social-card-backfill'
   | 'social-card-cleanup'
@@ -28,19 +26,17 @@ type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
 /** The single source of truth for cron-to-task dispatch in Nitro's scheduled hook. */
 export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName[]>> = {
-  '*/5 * * * *': ['blog-scheduled-publish', 'post-scheduled-publish', 'social-card-backfill', 'sessions-materialize', 'article-broadcast-send'],
+  '*/5 * * * *': ['social-card-backfill', 'sessions-materialize', 'article-broadcast-send'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'stripe-ga4-intent-retention'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
+  '0 * * * *': ['social-post-sync', 'review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
-  'blog-scheduled-publish': async () => import('./tasks/blog-scheduled-publish'),
   'social-card-backfill': async () => import('./tasks/social-card-backfill'),
   'social-card-cleanup': async () => import('./tasks/social-card-cleanup'),
-  'post-scheduled-publish': async () => import('./tasks/post-scheduled-publish'),
   'public-resource-cache-invalidation': async () => import('./tasks/public-resource-cache-invalidation'),
   'domain-reconciliation': async () => import('./tasks/domain-reconciliation'),
   'zaraz-analytics-reconciliation': async () => import('./tasks/zaraz-analytics-reconciliation'),
@@ -49,7 +45,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'stripe-ga4-intent-retention': async () => import('./tasks/stripe-ga4-intent-retention'),
   'sessions-materialize': async () => import('./tasks/sessions-materialize'),
   'google-places-sync': async () => import('./tasks/google-places-sync'),
-  'instagram-sync-process': async () => import('./tasks/instagram-sync-process'),
+  'social-post-sync': async () => import('./tasks/social-post-sync'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
   'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
   'article-broadcast-send': async () => import('./tasks/article-broadcast-send'),

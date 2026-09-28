@@ -1,5 +1,5 @@
 import { HTTPError } from 'nitro'
-import { executeBatch, execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { assertResourceAccess, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -15,6 +15,7 @@ import {
 } from '~/server/utils/media-asset-manager'
 import { isEditableMediaPlacement, isEditableMediaPlacementOwnerType, type EditableMediaPlacementOwnerType, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
 import { refreshSocialCard, socialCardRefreshOwnersForPlacement } from '~/server/utils/social-card'
+import { postMediaMutationQueries } from '~/server/utils/post-management'
 
 export { EDITABLE_MEDIA_PLACEMENT_OWNERS, MEDIA_CATEGORIES, WRITABLE_MEDIA_CATEGORIES, isMediaCategory } from '~/shared/media-placement-contract'
 export type { MediaCategory } from '~/shared/media-placement-contract'
@@ -87,14 +88,13 @@ function allowedKindsFor(placement: MediaPlacementKey): Array<'image' | 'video' 
   return placement.owner_type === 'organization' && placement.slot === 'compliance_document' ? ['file'] : ['image', 'video']
 }
 
-async function requirePostMediaAllowed(db: DbClient, input: PlacementAuthInput): Promise<void> {
-  if (input.placement.owner_type !== 'content_document' || !['cover', 'gallery'].includes(input.placement.slot)) return
-  const document = await queryFirst<{ kind: string; post_type: string | null }>(db,
-    `SELECT root.kind, root.metadata_json ->> '$.post_type' AS post_type
-      FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id, d.id)
-      WHERE d.id = ? AND d.organization_id = ? `,
-    [input.placement.owner_id, input.organizationId])
-  if (!document || (document.kind === 'social_post' && document.post_type === 'alert')) throw new HTTPError({ statusCode: 400, statusMessage: 'Alert posts do not accept media' })
+/**
+ * A short post's cover and gallery are its content: changing them is refused
+ * while a publication of it is in flight, advances the post's revision and
+ * makes it the tenant's own, in the same batch as the placement change.
+ */
+async function postMediaQueries(db: DbClient, input: PlacementAuthInput): Promise<BatchQuery[]> {
+  return await postMediaMutationQueries(db, { organizationId: input.organizationId, ownerType: input.placement.owner_type, ownerId: input.placement.owner_id, slot: input.placement.slot })
 }
 
 async function authorizePlacementWrite(db: DbClient, input: PlacementAuthInput): Promise<void> {
@@ -160,7 +160,7 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
   assetId: string | null
 }) {
   await authorizePlacementWrite(db, input)
-  if (input.assetId) await requirePostMediaAllowed(db, input)
+  const postQueries = await postMediaQueries(db, input)
   const refs: MediaAssetRefInput[] = input.assetId ? [{ asset_id: input.assetId }] : []
   const media = await hydrateMediaAssetRefs(db, {
     organizationId: input.organizationId,
@@ -168,7 +168,7 @@ export async function setSingleMediaPlacement(db: DbClient, input: {
     allowedKinds: allowedKindsFor(input.placement),
     fieldName: 'asset_id',
   })
-  await executeBatch(db, buildSingleMediaPlacementQueries({ ...input, media }))
+  await executeBatch(db, [...postQueries, ...buildSingleMediaPlacementQueries({ ...input, media })])
   await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }
@@ -214,7 +214,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
     throw new HTTPError({ statusCode: 400, statusMessage: 'This placement is single-valued; use setSingleMediaPlacement instead' })
   }
   await authorizePlacementWrite(db, input)
-  await requirePostMediaAllowed(db, input)
+  const postQueries = await postMediaQueries(db, input)
   const [asset] = await hydrateMediaAssetRefs(db, {
     organizationId: input.organizationId,
     refs: [{ asset_id: input.assetId }],
@@ -227,18 +227,14 @@ export async function attachMediaPlacement(db: DbClient, input: {
   const owner = mediaPlacementOwnerQuery({ ...input, ownerType: input.placement.owner_type, ownerId: input.placement.owner_id })
   let results
   try {
-    results = await executeBatch(db, [{
+    results = await executeBatch(db, [...postQueries, {
       query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?,
+        SELECT ?, ?, ?, ?, ?, ?,
           COALESCE((SELECT MAX(sort_order) + 1 FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?), 0),
           'active', ?, ?
         WHERE (SELECT COUNT(*) FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?) < ?
           AND EXISTS (${owner.query})
-          AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active')
-          AND (? != 'content_document' OR ? NOT IN ('cover','gallery') OR EXISTS (
-            SELECT 1 FROM content_documents d JOIN content_documents root ON root.id = COALESCE(d.root_id,d.id)
-             WHERE d.id = ? AND d.organization_id = ?
-               AND (root.kind != 'social_post' OR (root.metadata_json ->> '$.post_type') != 'alert')))`,
+          AND EXISTS (SELECT 1 FROM media_assets WHERE id = ? AND organization_id = ? AND status = 'active')`,
       params: [
         crypto.randomUUID(), ...scopeParams, asset.asset_id,
         ...scopeParams,
@@ -247,7 +243,6 @@ export async function attachMediaPlacement(db: DbClient, input: {
         MAX_ORDERED_MEDIA_ASSETS,
         ...owner.params!,
         asset.asset_id, input.organizationId,
-        input.placement.owner_type, input.placement.slot, input.placement.owner_id, input.organizationId,
       ],
     }])
   } catch (error) {
@@ -256,7 +251,7 @@ export async function attachMediaPlacement(db: DbClient, input: {
     }
     throw error
   }
-  if (Number(results[0]?.meta?.changes ?? 0) === 0) {
+  if (Number(results[postQueries.length]?.meta?.changes ?? 0) === 0) {
     throw new HTTPError({ statusCode: 422, statusMessage: `The owner no longer accepts media or has reached ${MAX_ORDERED_MEDIA_ASSETS} assets` })
   }
   await refreshSocialCardForPlacement(db, input)
@@ -277,10 +272,10 @@ export async function removeMediaPlacement(db: DbClient, input: {
   assetId: string
 }) {
   await authorizePlacementWrite(db, input)
-  await execute(db, `
+  await executeBatch(db, [...await postMediaQueries(db, input), { query: `
     DELETE FROM media_placements
      WHERE organization_id = ?  AND owner_type = ? AND owner_id = ? AND slot = ? AND asset_id = ?
-  `, [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId])
+  `, params: [input.organizationId, input.placement.owner_type, input.placement.owner_id, input.placement.slot, input.assetId] }])
   await refreshSocialCardForPlacement(db, input)
   return canonicalPlacementState(db, input)
 }
@@ -364,7 +359,7 @@ export async function reorderMediaPlacements(db: DbClient, input: {
     }
   }
 
-  const queries: BatchQuery[] = [buildMembershipGuardQuery({
+  const queries: BatchQuery[] = [...await postMediaQueries(db, input), buildMembershipGuardQuery({
     organizationId: input.organizationId,
     placement: input.placement,
     expectedAssetIds: currentOrder,

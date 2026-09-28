@@ -2,6 +2,7 @@
 @source "../../pages/*.vue";
 @source "../../pages/docs";
 @source "../../pages/blog";
+@source "../../pages/posts";
 @source "../../pages/templates";
 @source "../../pages/account";
 @source "../../pages/oauth";
@@ -15,6 +16,7 @@
 @source "../../components/blog";
 @source "../../components/content";
 @source "../../components/platform";
+@source "../../components/social";
 @source "../../components/booking";
 @source "../../components/ui/AppBreadcrumb.vue";
 @source "../../components/ui/AppSection.vue";

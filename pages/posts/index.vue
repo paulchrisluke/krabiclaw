@@ -1,66 +1,45 @@
 <template>
-  <div class="min-h-screen bg-default text-default">
-    <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
-      <p class="saya-kicker mb-6">{{ $t('saya.posts.title') }}</p>
-      <h1 class="saya-display-md text-default">
-        <em class="saya-italic">{{ postsCopy.postsEyebrow }}</em>
-      </h1>
-
-      <!-- Multi-location pills -->
-      <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
+  <div class="min-h-screen">
+    <header class="mx-auto max-w-7xl px-4 pt-[calc(4rem+var(--header-overlap,0px))] sm:px-6 lg:px-8">
+      <h1 class="font-[family-name:var(--font-heading)] text-4xl leading-tight text-highlighted [font-weight:var(--font-heading-weight)] sm:text-5xl">{{ t('social_posts.title') }}</h1>
+      <nav v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3" :aria-label="t('social_posts.by_location')">
         <NuxtLink
           v-for="loc in locations"
           :key="loc.id"
           :to="localePath(`/locations/${loc.slug}/posts`)"
-          class="inline-flex items-center gap-2 rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-muted hover:text-default"
+          class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-sm text-muted no-underline transition hover:bg-elevated hover:text-default"
         >
-          <SayaIcon name="map-pin" class="size-3.5 opacity-70" />
           {{ loc.title }}
         </NuxtLink>
-      </div>
+      </nav>
     </header>
 
-    <!-- Post grid -->
-    <LazySayaPosts :posts="visiblePosts" :show-title="false" />
-
-    <!-- Load more -->
-    <div v-if="hasMore" class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8 text-center">
-      <button
-        class="inline-flex items-center gap-2 rounded-full border border-default px-8 py-3 text-[11px] font-medium uppercase tracking-widest text-default transition hover:bg-muted"
-        @click="loadMore"
-      >
-        {{ $t('saya.posts.show_more') }} <span class="opacity-50">({{ remaining }} {{ $t('saya.posts.remaining') }})</span>
-      </button>
+    <SocialPosts :posts="feed.posts.value" />
+    <div v-if="feed.hasMore.value || feed.failed.value" class="flex flex-col items-center gap-3 pb-20">
+      <p v-if="feed.failed.value" role="alert" class="text-sm text-error">{{ t('social_posts.load_failed') }}</p>
+      <button v-if="feed.hasMore.value" type="button" class="rounded-full border border-default px-6 py-2.5 text-sm font-medium text-default transition hover:bg-muted disabled:opacity-60" :disabled="feed.loading.value" :aria-busy="feed.loading.value" @click="feed.loadMore">{{ t('social_posts.load_more') }}</button>
     </div>
-
   </div>
 </template>
 
-<script setup>
-definePageMeta({ layout: 'saya' })
+<script setup lang="ts">
+import SocialPosts from '~/components/social/SocialPosts.vue'
+definePageMeta({ middleware: 'template-layout' })
 
-const { organizationId, organization } = useTenantOrganization()
+const { organizationId, organization, isPlatform } = useTenantOrganization()
 if (!organizationId) throw createError({ statusCode: 404 })
-const { locale, localePath } = useI18n()
-const postsCopy = computed(() => getVerticalCopy(organization?.vertical, locale.value))
+const { t, localePath } = useI18n()
 
-const { googleMaps, socialPosts, locations } = await usePublicPageData()
-const organizationName = computed(() => organization?.name?.trim() || googleMaps.value?.business?.title?.trim() || '')
-
-// Progressive reveal — 6 at a time
-const PAGE_SIZE = 6
-const visibleCount = ref(PAGE_SIZE)
-const visiblePosts = computed(() => socialPosts.value.slice(0, visibleCount.value))
-const hasMore = computed(() => visibleCount.value < socialPosts.value.length)
-const remaining = computed(() => socialPosts.value.length - visibleCount.value)
-function loadMore() { visibleCount.value += PAGE_SIZE }
+const { locations } = await usePublicPageData()
+const feed = await useSocialPostFeed(() => ({ locationId: null }))
+const organizationName = computed(() => organization?.name?.trim() ?? '')
 
 useSocialMetadata(() => ({
   path: '/posts',
-  title: `Updates | ${organizationName.value}`,
-  description: `Latest news and updates from ${organizationName.value}.`,
-  brand: {
-    organizationName: organizationName.value,
-  },
+  // Krabiclaw's own pages carry the product name through their template.
+  title: isPlatform ? t('social_posts.title') : `${t('social_posts.title')} | ${organizationName.value}`,
+  description: t('social_posts.meta_description', { organization: organizationName.value }),
+  brand: { organizationName: organizationName.value },
+  socialImage: organization?.social_image ?? null,
 }))
 </script>

@@ -765,25 +765,27 @@ export async function findAuthUsersByIds(env: CloudflareEnv, userIds: Array<stri
  * organization names by `account_id`, the user it belongs to, and the scopes
  * Better Auth recorded across every link of it.
  */
-interface LinkedAccount {
+export interface LinkedAccount {
   id: string
   userId: string
   providerId: string
+  /** The provider's own id for the person, which for Meta is app-scoped. */
+  providerAccountId: string
   scopes: string[]
 }
 
 /** Reads a linked account through Better Auth's adapter. Null when it has been unlinked. */
-async function readLinkedAccount(env: CloudflareEnv, accountId: string): Promise<LinkedAccount | null> {
+export async function readLinkedAccount(env: CloudflareEnv, accountId: string): Promise<LinkedAccount | null> {
   const context = await createAuth(env).$context
   const adapter = context.adapter as unknown as {
     findOne<T>(_input: { model: string; where: Array<{ field: string; value: string }> }): Promise<T | null>
   }
-  const row = await adapter.findOne<{ id: string; userId: string; providerId: string; scope: string | null }>({
+  const row = await adapter.findOne<{ id: string; userId: string; providerId: string; accountId: string; scope: string | null }>({
     model: 'account',
     where: [{ field: 'id', value: accountId }],
   })
   if (!row) return null
-  return { id: row.id, userId: row.userId, providerId: row.providerId, scopes: (row.scope ?? '').split(/[,\s]+/).filter(Boolean) }
+  return { id: row.id, userId: row.userId, providerId: row.providerId, providerAccountId: row.accountId, scopes: (row.scope ?? '').split(/[,\s]+/).filter(Boolean) }
 }
 
 /**

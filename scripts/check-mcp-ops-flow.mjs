@@ -165,43 +165,59 @@ async function main() {
 
   const post = await mcp(headers, 'create_post', {
     organization_id: organizationId,
+    idempotency_key: `mcp-ops-post-${Date.now()}`,
     title: 'MCP Ops Post',
     body: 'Post created by MCP ops checker',
   })
   expectSuccess('create_post succeeds', post)
-  const postId = data(post.body)?.id
+  const postId = data(post.body)?.post?.id
   expectValue('create_post returns post id', Boolean(postId), post.body)
 
   const postUpdate = await mcp(headers, 'update_post', {
     organization_id: organizationId,
     post_id: postId,
+    expected_updated_at: data(post.body)?.post?.updated_at,
     title: 'MCP Ops Post Updated',
     body: 'Post updated by MCP ops checker',
   })
   expectSuccess('update_post succeeds', postUpdate)
-  expectValue('update_post returns changed_fields', Array.isArray(data(postUpdate.body)?.changed_fields), postUpdate.body)
+  const updatedAt = data(postUpdate.body)?.post?.updated_at
+  expectValue('update_post returns the new revision', typeof updatedAt === 'string' && updatedAt !== data(post.body)?.post?.updated_at, postUpdate.body)
+
+  const connections = await mcp(headers, 'get_social_connections', { organization_id: organizationId })
+  expectSuccess('get_social_connections succeeds', connections)
+  const facebook = (data(connections.body)?.channels ?? []).find(channel => channel.channel === 'facebook')
+  expectValue('get_social_connections reports facebook', Boolean(facebook), connections.body)
 
   const postPublish = await mcp(headers, 'publish_post', {
     organization_id: organizationId,
     post_id: postId,
-    channels: ['organization'],
+    expected_updated_at: updatedAt,
+    targets: [{ channel: 'organization' }],
   })
   expectSuccess('publish_post succeeds', postPublish)
-  expectValue('publish_post returns published post id', Boolean(data(postPublish.body)?.id), postPublish.body)
+  expectValue('publish_post publishes the website only', data(postPublish.body)?.ok === true
+    && data(postPublish.body)?.outcomes?.length === 1
+    && data(postPublish.body)?.outcomes?.[0]?.status === 'published', postPublish.body)
 
-  const combinedPublish = await mcp(headers, 'publish_post', {
-    organization_id: organizationId,
-    post_id: postId,
-    channels: ['organization', 'facebook'],
-  })
-  expectSuccess('publish_post keeps site success when facebook is disconnected', combinedPublish)
-  const combinedOutcome = data(combinedPublish.body)?.channel_outcomes
-  expectValue(
-    'publish_post reports site published and facebook skipped',
-    combinedOutcome?.organization?.status === 'published'
-      && combinedOutcome?.facebook?.status === 'skipped',
-    combinedPublish.body,
-  )
+  if (facebook && !facebook.connected) {
+    const facebookPublish = await mcp(headers, 'publish_post', {
+      organization_id: organizationId,
+      post_id: postId,
+      expected_updated_at: data(postPublish.body)?.updated_at,
+      targets: [{ channel: 'organization' }, { channel: 'facebook', target_id: 'no-page-connected', connection_revision: 'none' }],
+    })
+    expectSuccess('publish_post answers when facebook is not connected', facebookPublish)
+    const outcomes = data(facebookPublish.body)?.outcomes ?? []
+    expectValue(
+      'publish_post keeps the website receipt and skips facebook with the problem get_social_connections named',
+      outcomes.find(outcome => outcome.channel === 'organization')?.status === 'already_published'
+        && outcomes.find(outcome => outcome.channel === 'facebook')?.status === 'skipped'
+        && outcomes.find(outcome => outcome.channel === 'facebook')?.code === facebook.problems?.[0]?.code
+        && data(facebookPublish.body)?.ok === false,
+      facebookPublish.body,
+    )
+  }
 
   const posts = await mcp(headers, 'list_posts', { organization_id: organizationId })
   expectSuccess('list_posts succeeds', posts)

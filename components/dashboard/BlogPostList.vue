@@ -39,6 +39,9 @@
         </span>
       </template>
     </DashboardListEditor>
+    <div v-if="nextCursor" class="mt-4 flex justify-center">
+      <UButton color="neutral" variant="outline" :loading="loadingMore" @click="loadMore">Load more posts</UButton>
+    </div>
     <UAlert v-if="orderError" color="error" variant="soft" icon="i-lucide-circle-alert" :description="orderError" />
 
     <!--
@@ -101,7 +104,6 @@ const repository = tenantBlogRepository({ organizationId, orgSlug })
 const statusTabs = [
   { value: 'all', label: 'All' },
   { value: 'draft', label: 'Drafts' },
-  { value: 'scheduled', label: 'Scheduled' },
   { value: 'published', label: 'Live' },
   ...ARTICLE_COLLECTION_SLUGS.map(slug => ({ value: slug, label: ARTICLE_COLLECTIONS[slug].label })),
 ]
@@ -109,37 +111,68 @@ const activeTab = ref<string | number>('all')
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 
-const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
+type BlogPage = { posts: BlogPost[]; page_info: { has_more: boolean; next_cursor: string | null } }
+const isPostsResponse = (value: unknown): value is BlogPage =>
   isRecord(value)
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.title === 'string')
+  && isRecord(value.page_info)
+  && typeof value.page_info.has_more === 'boolean'
+  && (value.page_info.next_cursor === null || typeof value.page_info.next_cursor === 'string')
 
-const { data, pending, error, refresh } = await useAsyncData(
-  `dashboard-blog-posts:${organizationId}`,
-  async () => {
-    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/organizations/${organizationId}/blog/posts`, {
-      validate: isPostsResponse,
-    })
-    return { posts: response.posts }
+// The tab is a filter the database applies, a page at a time. A collection
+// tab reads every article in that collection, in the order it lists in,
+// because a new order names all of them.
+const orderedCollection = computed<ArticleCollection | null>(() => isArticleCollection(activeTab.value) ? activeTab.value : null)
+const statusFilter = computed(() => (activeTab.value === 'all' || orderedCollection.value ? undefined : String(activeTab.value)))
+const fetchPage = (cursor?: string) => dashboardApi<BlogPage>(`/api/editor/organizations/${organizationId}/blog/posts`, {
+  query: {
+    ...(statusFilter.value ? { status: statusFilter.value } : {}),
+    ...(orderedCollection.value ? { collection: orderedCollection.value, limit: 100 } : {}),
+    ...(cursor ? { cursor } : {}),
   },
-  { lazy: true },
+  validate: isPostsResponse,
+})
+async function fetchFirst(): Promise<BlogPage> {
+  const first = await fetchPage()
+  if (!orderedCollection.value) return first
+  const posts = [...first.posts]
+  let info = first.page_info
+  while (info.has_more && info.next_cursor) {
+    const next = await fetchPage(info.next_cursor)
+    posts.push(...next.posts)
+    info = next.page_info
+  }
+  return { posts, page_info: info }
+}
+const { data, pending, error, refresh } = await useAsyncData(
+  () => `dashboard-blog-posts:${organizationId}:${orderedCollection.value ?? statusFilter.value ?? 'all'}`,
+  fetchFirst,
+  { lazy: true, watch: [statusFilter, orderedCollection] },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
-const posts = computed(() => data.value?.posts ?? [])
-
-// Filtering happens here rather than by refetching per tab: the list is already
-// loaded in full, in the order the site reads it, so a tab press should not
-// cost a round trip.
-const orderedCollection = computed(() => isArticleCollection(activeTab.value) ? activeTab.value : null)
-const collectionOrder = computed(() => localOrder.value?.collection === orderedCollection.value
-  ? localOrder.value.posts
-  : posts.value.filter(post => (post.collection ?? 'blog') === orderedCollection.value))
-const visiblePosts = computed(() => {
-  if (activeTab.value === 'all') return posts.value
-  if (orderedCollection.value) return collectionOrder.value
-  return posts.value.filter(post => post.status === activeTab.value)
-})
+const more = ref<BlogPost[]>([])
+const nextCursor = ref<string | null>(null)
+watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_more ? value.page_info.next_cursor : null }, { immediate: true })
+const loadingMore = ref(false)
+async function loadMore() {
+  if (!nextCursor.value) return
+  // A page fetched for the list that was showing is dropped if the tab changed meanwhile.
+  const base = data.value
+  loadingMore.value = true
+  try {
+    const page = await fetchPage(nextCursor.value)
+    if (data.value !== base) return
+    more.value = [...more.value, ...page.posts]
+    nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
+  } finally {
+    loadingMore.value = false
+  }
+}
+const loadedPosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
+const collectionOrder = computed(() => localOrder.value?.collection === orderedCollection.value ? localOrder.value.posts : loadedPosts.value)
+const visiblePosts = computed(() => (orderedCollection.value ? collectionOrder.value : loadedPosts.value))
 
 const listItems = computed(() => visiblePosts.value.map(row => ({
   id: row.id,
@@ -149,7 +182,7 @@ const listItems = computed(() => visiblePosts.value.map(row => ({
   row,
 })))
 
-const STATUS_LABELS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', published: 'Live' }
+const STATUS_LABELS: Record<string, string> = { draft: 'Draft', published: 'Live' }
 
 /** Where it is in its life, then what it is filed under, then one date. */
 function postSummary(post: BlogPost): string {
@@ -164,7 +197,6 @@ function postSummary(post: BlogPost): string {
 }
 
 function postWhen(post: BlogPost): string {
-  if (post.status === 'scheduled' && post.scheduled_for) return `Goes live ${formatDate(post.scheduled_for)}`
   if (post.published_at) return formatDate(post.published_at)
   return post.updated_at ? `Edited ${formatDate(post.updated_at)}` : ''
 }
@@ -192,7 +224,10 @@ const newTitle = ref('')
 const creating = ref(false)
 const createFailure = ref<string | null>(null)
 
+// One key per dialog: a retried create after a lost answer returns the same article.
+let createKey = ''
 function openNew() {
+  createKey = crypto.randomUUID()
   newTitle.value = ''
   createFailure.value = null
   newDialogOpen.value = true
@@ -204,7 +239,7 @@ async function createPost() {
   creating.value = true
   createFailure.value = null
   try {
-    const post = await repository.create({ title, content_blocks: initialBlogEditorBlocks() })
+    const post = await repository.create({ title, content_blocks: initialBlogEditorBlocks(), idempotency_key: createKey })
     newDialogOpen.value = false
     await navigateTo(`${level.path.value}/${post.id}`)
   } catch (cause) {

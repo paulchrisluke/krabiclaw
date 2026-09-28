@@ -12,7 +12,7 @@ const place = {
 }
 const preview = {
   brandName: 'Kikuzuki', vertical: 'restaurant', subdomainCandidate: 'kikuzuki', config: {}, media: [],
-  locations: [], products: [], reviews: [], qa: [], posts: [], content: [], locales: [],
+  locations: [], products: [], reviews: [], qa: [], content: [], locales: [],
 }
 
 test('a version 2 Google draft stored before deployment restores as version 3 with its place identity', () => {

@@ -32,6 +32,7 @@ export type TenantPageBlockType =
   | 'video_feature'
   | 'media_text'
   | 'contact_form'
+  | 'social_posts'
 
 export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
@@ -88,7 +89,7 @@ export interface TenantPageSnapshot {
  * once, and makes the disagreement unrepresentable.
  */
 export interface TenantPageField {
-  kind: 'text' | 'markdown' | 'url' | 'enum' | 'media' | 'reference' | 'list' | 'calculator'
+  kind: 'text' | 'markdown' | 'url' | 'enum' | 'media' | 'reference' | 'list' | 'calculator' | 'number' | 'record'
   label: string
   required?: boolean
   /** Long-form prose; a single-line control is wrong for it. */
@@ -96,8 +97,11 @@ export interface TenantPageField {
   /** Text is translated unless it is a machine value — a url, an icon, an enum. */
   translatable?: boolean
   options?: readonly { value: string; label: string; platformOnly?: boolean }[]
-  /** A list's item shape. Absent means a list of plain strings. */
+  /** A list's item shape, or a record's fields. Absent means a list of plain strings. */
   of?: Readonly<Record<string, TenantPageField>>
+  /** A number's bounds. */
+  min?: number
+  max?: number
   /** Which canonical record a reference selects. */
   reference?: 'page' | 'product' | 'collection' | 'location'
   /** The media placement slot this field's asset occupies. */
@@ -130,6 +134,9 @@ export interface TenantPageBlockDefinition {
   accessibility: 'required' | 'inherited'
   seo: 'structured' | 'inherited' | 'none'
 }
+
+export const SOCIAL_POSTS_BLOCK_MAX = 12
+export const SOCIAL_POSTS_BLOCK_DEFAULT = 6
 
 const ALL_RECIPES = [
   'custom', 'about', 'pricing', 'donate', 'legal', 'contact', 'schedule', 'home',
@@ -294,7 +301,6 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       options: [
         { value: 'manual', label: 'Items I write' },
         { value: 'organization_posts', label: 'Published articles' },
-        { value: 'organization_updates', label: 'Social posts' },
         { value: 'calculator', label: 'Pricing calculator' },
         { value: 'billing_plans', label: 'Krabiclaw plans', platformOnly: true },
       ],
@@ -454,6 +460,20 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     location_ids: { kind: 'reference', label: 'Locations', translatable: false, section: 'locations', reference: 'location' },
   }, { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 
+  // The organization's short posts, read from the same feed /posts shows. The
+  // block holds what the author chose — its heading, how many, which location,
+  // an optional button — and never a copy of a post.
+  social_posts: blockDefinitionWithMetadata('social_posts', 'Social posts', 'The latest short posts, with their photos, dates and where else they were posted.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    limit: { kind: 'number', label: 'How many posts', translatable: false, section: 'posts', min: 1, max: SOCIAL_POSTS_BLOCK_MAX, default: String(SOCIAL_POSTS_BLOCK_DEFAULT) },
+    location_id: { kind: 'reference', label: 'Location', translatable: false, section: 'posts', reference: 'location' },
+    call_to_action: {
+      kind: 'record', label: 'Button', section: 'button',
+      of: { label: text('Button label', { section: 'button', pairedWith: 'url' }), url: link('Button URL', { pairedWith: 'label' }) },
+    },
+  }),
+
   // An article block, not a page block: it is registered so that one list of
   // block types is the only list, and refused on every page by holding no
   // recipe and no page type. Before this it existed only in the server's own
@@ -577,6 +597,28 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
   if (type === 'faq' || type === 'testimonial_grid') {
     if (data.items !== undefined) throw new Error(`${type}.items is not stored; Q&A and reviews are read-only records.`)
     if (type === 'faq' && !FAQ_BLOCK_SOURCES.some(source => source === data.source)) throw new Error('faq.source must select page_qa or organization_qa.')
+  }
+  if (type === 'social_posts') {
+    // A new block shows six; a stored one keeps the number it was given.
+    if (data.limit === undefined) data = { ...data, limit: SOCIAL_POSTS_BLOCK_DEFAULT }
+    // An empty location choice is the organization-wide feed; so is an empty button.
+    if (data.location_id === '') { const { location_id: _none, ...rest } = data; data = rest }
+    if (data.call_to_action === null) { const { call_to_action: _none, ...rest } = data; data = rest }
+    const unknown = Object.keys(data).find(key => !['title', 'description', 'limit', 'location_id', 'call_to_action'].includes(key))
+    if (unknown) throw new Error(`social_posts.${unknown} is not stored; the posts are read from the organization's feed.`)
+    if (!Number.isInteger(data.limit) || (data.limit as number) < 1 || (data.limit as number) > SOCIAL_POSTS_BLOCK_MAX) {
+      throw new Error(`social_posts.limit must be a whole number from 1 to ${SOCIAL_POSTS_BLOCK_MAX}.`)
+    }
+    if (data.location_id !== undefined && data.location_id !== null && (typeof data.location_id !== 'string' || !data.location_id.trim())) {
+      throw new Error('social_posts.location_id must be a location id or null.')
+    }
+    if (data.call_to_action !== undefined && data.call_to_action !== null) {
+      const action = data.call_to_action as Record<string, unknown>
+      if (!action || typeof action !== 'object' || Array.isArray(action) || Object.keys(action).some(key => key !== 'label' && key !== 'url')
+        || typeof action.label !== 'string' || !action.label.trim() || typeof action.url !== 'string' || !action.url.trim()) {
+        throw new Error('social_posts.call_to_action must carry a label and a url.')
+      }
+    }
   }
   if (type === 'video') {
     if (!youTubeVideoId(data.url)) throw new Error('video.url must be a YouTube video URL.')

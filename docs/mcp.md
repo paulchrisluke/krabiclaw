@@ -14,8 +14,15 @@ through it with the same tools.
   submissions, notifications, Q&A, analytics
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
-- Google Places lookup and domain setup are CMS-only. Social/OAuth publishing is feature-flagged.
-  Manual locale management remains available as ordinary content editing.
+- Google Places lookup and domain setup are CMS-only. Connecting a Facebook Page or
+  Instagram account is a Better Auth sign-in in the dashboard; `get_social_connections`
+  returns the `connect_url`. Manual locale management remains available as ordinary content editing.
+- Posts: `create_post` makes a draft (pass a new `idempotency_key`); `publish_post` publishes to
+  exactly the `targets` named — `{"channel":"organization"}` and the `target_id` and
+  `connection_revision` from `get_social_connections` — and returns one outcome per target.
+  `processing` is finished by calling `publish_post` again; `unknown` is resolved only by
+  `reconcile_post_publication`, never by publishing again. Nothing is scheduled: a client that
+  wants a post out later calls `publish_post` then.
 
 Krabiclaw's marketing site is an ordinary organization running the platform
 template. Its blog and documentation are article collections on that

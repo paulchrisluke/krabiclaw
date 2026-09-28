@@ -314,13 +314,16 @@
             account you connect; the Pages that account manages (Page ID, name,
             category, follower count, and picture) so you can choose one; and,
             for the Page you choose, its posts (post ID, message text, the time
-            it was posted, the post's image, and its link).
+            it was posted, the post's photos and video, and its link).
+            Krabiclaw requests the Facebook permissions
+            <code>pages_show_list</code>, <code>pages_read_engagement</code> and
+            <code>pages_manage_posts</code>.
           </li>
           <li>
             <strong>Instagram:</strong> the identifiers and username of the
             Instagram professional account you connect, and its posts (post ID,
-            caption, media type, the image or video thumbnail, the time it was
-            posted, and its link). Krabiclaw requests the Instagram permissions
+            caption, media type, its images and videos, including every item of
+            a carousel, the time it was posted, and its link). Krabiclaw requests the Instagram permissions
             <code>instagram_business_basic</code> and
             <code>instagram_business_content_publish</code>.
           </li>
@@ -339,16 +342,18 @@
             To import your recent posts onto your Krabiclaw website. While a
             Page or account is connected and your plan includes social sync,
             Krabiclaw checks for new posts about once an hour and imports each
-            post that has an image: its text or caption becomes a post on your
-            website and its image is copied into Krabiclaw's media storage.
+            post: its text or caption becomes a post on your website and its
+            photos and videos are copied into Krabiclaw's media storage.
             Imported posts are published on your website as soon as they are
             imported, where anyone can see them, and you can edit or delete them
             in the dashboard like any other post.
           </li>
           <li>
             To publish to your Facebook Page or Instagram account when you
-            publish a post in Krabiclaw and choose that channel: the post's text
-            goes to your Page, and its caption and cover image go to Instagram.
+            publish a post in Krabiclaw and choose that channel: the post's text,
+            link, photos or video go to your Page, and its caption with its call
+            to action and its image, carousel or Reel go to Instagram, exactly
+            to the Page or account you choose.
           </li>
         </ul>
         <p>
@@ -371,6 +376,12 @@
             members of your organization with organization-wide access can view
             or change the connection, and only the person who linked a Facebook
             or Instagram account can use it to connect an organization.
+          </li>
+          <li>
+            For each post published to or imported from Facebook or Instagram,
+            Krabiclaw records the Page or account it went to or came from, the
+            Meta account that connected it, and the Facebook or Instagram post
+            ID and its link.
           </li>
           <li>
             Imported posts and their images are stored as your organization's
@@ -396,7 +407,8 @@
           its encrypted tokens, is deleted when you delete your Krabiclaw
           account. You can also remove Krabiclaw from your Facebook or Instagram
           settings at any time, after which Krabiclaw can no longer access that
-          account.
+          account: Krabiclaw disconnects every organization connected through
+          it and deletes the linked account and its tokens.
         </p>
         <h3 id="facebook-instagram-data-deletion"><strong>Deleting your Facebook or Instagram data</strong></h3>
         <p>
@@ -420,6 +432,15 @@
           confirms by email. Posts you wrote in Krabiclaw and published to
           Facebook or Instagram remain on Facebook or Instagram; delete them
           there.
+        </p>
+        <p>
+          When Meta sends us a data-deletion request for your Facebook or
+          Instagram account, Krabiclaw deletes the posts it imported from that
+          account, whether or not you edited them, and their images and videos
+          wherever you reused them on your website. Posts you wrote yourself
+          stay on your website; Krabiclaw only deletes its record of which
+          Facebook or Instagram post they became. It also removes the
+          connection and deletes the linked account and its tokens.
         </p>
         <h2><strong>1. Our role when merchants use Krabiclaw</strong></h2>
         <p>

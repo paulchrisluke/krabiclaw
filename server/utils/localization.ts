@@ -543,7 +543,7 @@ function remapNewLocalizedBlockIds(blocks: ContentBlockInput[]): ContentBlockInp
 
 const DOCUMENT_LOCALIZED_METADATA: Record<ContentDocumentKind, readonly string[]> = {
   page: [], article: ['category', 'tags'],
-  social_post: ['event', 'offer'], qa: [],
+  social_post: ['call_to_action'], qa: [],
 }
 
 export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Database,
@@ -559,8 +559,10 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   const copy = input.values as Record<string, unknown>
   const textFields = ['title', 'summary', 'slug', 'seo_keywords'] as const
   if (Object.keys(copy).some(key => key !== 'metadata' && !textFields.some(field => field === key))) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Unknown translated document field')
-  const changes: ContentDocumentChanges = { updated_by: input.userId,
-    metadata: Object.fromEntries(DOCUMENT_LOCALIZED_METADATA[root.kind].map(key => [key, null])) }
+  // A key a translation leaves out is removed, not stored as JSON null: a
+  // social post's translation carries a call to action label or none.
+  const clearedMetadata = DOCUMENT_LOCALIZED_METADATA[root.kind]
+  const changes: ContentDocumentChanges = { updated_by: input.userId }
   for (const field of textFields) {
     if (copy[field] == null) { changes[field] = null; continue }
     if (typeof copy[field] !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', field + ' must be a string')
@@ -573,13 +575,15 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
       if (!DOCUMENT_LOCALIZED_METADATA[root.kind].includes(key)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Unknown translated metadata field: ' + key)
       if (key === 'tags') {
         if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'tags must be an array of strings')
-      } else if (key === 'event' || key === 'offer') {
-        const text = key === 'event' ? 'title' : 'terms_conditions'
-        if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(field => field !== text) || typeof (value as Record<string, unknown>)[text] !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', key + ' contains invalid translated fields')
+      } else if (key === 'call_to_action') {
+        // A translation says the button's words; where it goes is the post's.
+        if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(field => field !== 'label') || typeof (value as Record<string, unknown>).label !== 'string' || !((value as Record<string, unknown>).label as string).trim()) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'call_to_action carries only a label')
       } else if (typeof value !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', key + ' must be a string')
     }
-    changes.metadata = { ...changes.metadata, ...metadata }
+    changes.metadata = metadata
   }
+  const provided = new Set(Object.keys(changes.metadata ?? {}))
+  const removeMetadata = clearedMetadata.filter(key => !provided.has(key))
   if (typeof input.routePath !== 'string' || !input.routePath.startsWith('/' + locale + '/') || /[?#]/.test(input.routePath) || input.routePath.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path must be a canonical localized path')
   changes.path = input.routePath.slice(locale.length + 1)
   if (root.kind !== 'page') changes.slug = input.routePath.split('/').at(-1)!
@@ -591,6 +595,10 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
   const { prepareTenantBlogContentBlocks } = await import('~/server/utils/content/publishing')
   const prepared = requested ? await prepareTenantBlogContentBlocks(db, requested, input.organizationId, new Date().toISOString()) : null
   const after = [...(prepared?.placementQueries ?? []), publicResourceCacheInvalidationQuery(input.organizationId, 'document-localization-put')]
+  const removal = (documentId: string): BatchQuery[] => removeMetadata.length
+    ? [{ query: `UPDATE content_documents SET metadata_json = json_remove(metadata_json, ${removeMetadata.map(() => '?').join(', ')}) WHERE id = ?`,
+        params: [...removeMetadata.map(key => '$.' + JSON.stringify(key)), documentId] }]
+    : []
   if (existing) {
     if (typeof input.expectedUpdatedAt !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'expected_updated_at is required')
     const before: BatchQuery[] = changes.path === undefined ? [] : [{
@@ -603,7 +611,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
       params: [crypto.randomUUID(), input.routePath, new Date().toISOString(), new Date().toISOString(), existing.id, changes.path],
     }]
     await updateContentDocument(db, existing.id, { expected_updated_at: input.expectedUpdatedAt, changes,
-      blocks: prepared?.blocks, additionalQueriesBefore: before, additionalQueriesAfter: after })
+      blocks: prepared?.blocks, additionalQueriesBefore: before, additionalQueriesAfter: [...removal(existing.id), ...after] })
   } else {
     await createContentDocumentWithBlocks(db, { organizationId: input.organizationId,
       kind: root.kind, rowRole: 'representation', rootId: root.id, locale,

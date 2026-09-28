@@ -84,6 +84,11 @@ function blockTextFields(fields: Readonly<Record<string, TenantPageField>>, pref
       else if (field.translatable !== false) collected.push({ path: [...prefix, key, '*'], format: 'plain' })
       continue
     }
+    // A record is one object of named fields — a button's label and url.
+    if (field.kind === 'record') {
+      if (field.of) collected.push(...blockTextFields(field.of, [...prefix, key]))
+      continue
+    }
     if (field.kind !== 'text' && field.kind !== 'markdown') continue
     if (field.translatable === false) continue
     collected.push({ path: [...prefix, key], format: field.kind === 'markdown' ? 'markdown' : 'plain' })
@@ -177,16 +182,20 @@ export function readContentFieldValue(data: Record<string, unknown>, path: Conte
  */
 function describeStructuralFields(type: ContentBlockType): string {
   const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
-  const described = Object.entries(fields)
-    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference'
+  const flattened = Object.entries(fields).flatMap(([key, field]) => field.kind === 'record' && field.of
+    ? Object.entries(field.of).map(([child, value]) => [`${key}.${child}`, value] as const)
+    : [[key, field] as const])
+  const described = flattened
+    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference' || field.kind === 'number'
       || (field.kind === 'text' && field.translatable === false))
     .map(([key, field]) => {
+      if (field.kind === 'number') return `${key} (whole number ${field.min ?? ''}–${field.max ?? ''}${field.default ? `, default ${field.default}` : ''})`
       if (field.kind === 'text') return `${key} (${field.label})`
       if (field.kind === 'enum' && field.options?.length) {
         return `${key} (one of ${field.options.map(option => option.value).join(', ')})`
       }
       if (field.kind === 'enum') return `${key} (see the organization's template)`
-      if (field.kind === 'reference') return `${key} (${field.reference} ids)`
+      if (field.kind === 'reference') return `${key} (${field.reference} id${key.endsWith('_ids') ? 's' : ''})`
       return `${key} (url)`
     })
   return described.length ? ` Also ${described.join(', ')}.` : ''
