@@ -1,4 +1,5 @@
 import { APIError, betterAuth, type BetterAuthPlugin } from 'better-auth'
+import { createAuthMiddleware } from 'better-auth/api'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { loginMethodForPath } from '~/shared/auth/login-method'
@@ -271,6 +272,18 @@ export function createAuth(env: CloudflareEnv) {
     basePath: '/api/auth',
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOriginsForAuth(env),
+    // A phone number is a notification channel a signed-in person verifies, never
+    // a way to sign in. The phone plugin's password sign-in and reset are off, and
+    // its verify is accepted only as an update of the caller's own number: without
+    // updatePhoneNumber it signs in whoever holds that number.
+    disabledPaths: ['/sign-in/phone-number', '/phone-number/request-password-reset', '/phone-number/reset-password'],
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/phone-number/verify' && ctx.body?.updatePhoneNumber !== true) {
+          throw new APIError('BAD_REQUEST', { message: 'A phone number is verified from your account profile, not used to sign in.' })
+        }
+      }),
+    },
     // Better Auth reads the session from the database on every getSession call,
     // and a dashboard render makes several: the route middleware, the capability
     // check, the SSR context loader and the page's own loader each ask
