@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:83041d9515258b335e07a0754740d3ce8052b287409c49ba134ca5242eb84b90",
+  "fingerprint": "sha256:265b8b49c0785db26718c0b80945bc95fbb8c5da99497e6911a75a5606448554",
   "tools": [
     {
       "name": "append_content_block",
@@ -13319,7 +13319,7 @@
             "type": "string"
           },
           "collection": {
-            "description": "Which of the site's collections the article belongs to: its blog, or its documentation. Defaults to the blog.",
+            "description": "Move the article to the site's blog or its documentation. Omit to leave it where it is.",
             "enum": [
               "blog",
               "docs"

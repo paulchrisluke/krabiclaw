@@ -83,7 +83,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         post_id: { type: 'string', description: 'Post id or slug.' },
         title: { type: 'string' },
         excerpt: { type: 'string' },
-        collection: { type: 'string', enum: ['blog', 'docs'], description: "Which of the site's collections the article belongs to: its blog, or its documentation. Defaults to the blog." },
+        collection: { type: 'string', enum: ['blog', 'docs'], description: "Move the article to the site's blog or its documentation. Omit to leave it where it is." },
         category: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
         content_blocks: { type: 'array', minItems: 1, description: 'The whole article, in order, replacing every block. Blocks read back keep their id. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
