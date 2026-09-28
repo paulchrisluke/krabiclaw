@@ -4,8 +4,12 @@ export default {
     "reviews": "Guest reviews & ratings."
   },
   "legal": {
+    "analytics_notice": "This site uses Google Analytics to measure visits. Reject turns off Google Analytics only.",
+    "analytics_notice_label": "Analytics notice",
     "cookie_preferences": "Cookie preferences",
+    "dismiss": "Dismiss",
     "privacy": "Privacy",
+    "reject": "Reject",
     "terms": "Terms"
   },
   "blawby": {
