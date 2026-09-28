@@ -5,20 +5,21 @@ import { guestReplyText, InboundEmailRejection, receiveGuestEmail } from '~/serv
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseReplyToAddress } from '~/server/utils/submission-messages'
 
+// Checks what receiving a reply reads: the D1 binding and the secret that signs
+// reply addresses. Without the secret every signature would fail to verify and
+// every guest would get a bounce for a configuration fault, so a missing secret
+// fails the delivery instead. Nothing here reads the auth or Google secrets.
 function isCloudflareEnvironment(value: unknown): value is CloudflareEnv {
   if (typeof value !== 'object' || value === null) return false
 
   const database = Reflect.get(value, 'DB')
+  const replySecret = Reflect.get(value, 'EMAIL_REPLY_SECRET')
   return typeof database === 'object'
     && database !== null
     && typeof Reflect.get(database, 'prepare') === 'function'
     && typeof Reflect.get(database, 'batch') === 'function'
-    && typeof Reflect.get(database, 'exec') === 'function'
-    && typeof Reflect.get(database, 'withSession') === 'function'
-    && typeof Reflect.get(database, 'dump') === 'function'
-    && typeof Reflect.get(value, 'BETTER_AUTH_SECRET') === 'string'
-    && typeof Reflect.get(value, 'GOOGLE_CLIENT_ID') === 'string'
-    && typeof Reflect.get(value, 'GOOGLE_CLIENT_SECRET') === 'string'
+    && typeof replySecret === 'string'
+    && replySecret.length > 0
 }
 
 async function readEmailBytes(stream: ForwardableEmailMessage['raw']): Promise<Uint8Array<ArrayBuffer>> {
@@ -48,7 +49,7 @@ async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
 }
 
 async function processEmail(message: ForwardableEmailMessage, env: unknown): Promise<void> {
-  if (!isCloudflareEnvironment(env)) throw new Error('Cloudflare environment is not configured')
+  if (!isCloudflareEnvironment(env)) throw new Error('Inbound email needs the DB binding and EMAIL_REPLY_SECRET')
 
   const reply = parseReplyToAddress(env, message.to)
   if (!reply) throw new InboundEmailRejection('This address does not accept email.')
