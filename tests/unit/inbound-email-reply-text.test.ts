@@ -70,6 +70,11 @@ test('an HTML-only Gmail reply keeps only the new text', () => {
   assert.equal(guestReplyText({ html }), 'Wtf')
 })
 
+test('an HTML-only Yahoo reply keeps only the new text', () => {
+  const html = '<div>See you at 8.</div><div class="yahoo_quoted"><p>Earlier message that is not part of the reply.</p></div>'
+  assert.equal(guestReplyText({ html }), 'See you at 8.')
+})
+
 test('an ordinary HTML-only email keeps its paragraphs and line breaks', () => {
   const html = '<html><body><p>Hello,</p><p>Do you have a table for two?<br>Friday at 7pm.</p><div>Alex</div></body></html>'
   assert.equal(guestReplyText({ html }), 'Hello,\n\nDo you have a table for two?\nFriday at 7pm.\n\nAlex')

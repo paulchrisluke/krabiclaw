@@ -24,6 +24,7 @@ const htmlToText = compile({
   selectors: [
     { selector: 'blockquote', format: 'skip' },
     { selector: '.gmail_quote', format: 'skip' },
+    { selector: '.yahoo_quoted', format: 'skip' },
     { selector: 'img', format: 'skip' },
   ],
 })
