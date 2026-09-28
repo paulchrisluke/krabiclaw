@@ -34,6 +34,9 @@ if (!previewUrl) {
   // local Worker delivers log-only, so a run with no key of its own gets one
   // that is never used to send.
   process.env.RESEND_API_KEY ||= 're_local_playwright_log_only'
+  // The provider-ingress spec builds a signed reply address with this and the
+  // local Worker verifies it; neither reads the deployed secret.
+  process.env.EMAIL_REPLY_SECRET = 'local-playwright-email-reply-secret'
 }
 
 const localWorkerEnvironment = [
@@ -43,7 +46,7 @@ const localWorkerEnvironment = [
   'EMAIL_DELIVERY_MODE=log_only',
   'WHATSAPP_DELIVERY_MODE=log_only',
   'ZARAZ_ANALYTICS=absent',
-  'EMAIL_REPLY_SECRET=local-playwright-email-reply-secret',
+  `EMAIL_REPLY_SECRET=${process.env.EMAIL_REPLY_SECRET}`,
   `BETTER_AUTH_URL=http://localhost:${port}`,
   `NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:${port}`,
   `NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN=http://localhost:${port}`,
