@@ -18,7 +18,7 @@
       <p class="text-lg font-medium">{{ t('saya.posts.empty_title') }}</p>
     </div>
 
-    <template v-else>
+    <div v-else class="space-y-14" data-parity-section="articles">
       <ArticleCard v-if="featured" :article="featured" featured />
       <section v-for="group in groups" :id="group.categorySlug" :key="group.categorySlug" class="scroll-mt-28 space-y-6">
         <h2 class="border-b border-default pb-3 text-2xl font-bold text-default">{{ group.category }}</h2>
@@ -26,7 +26,7 @@
           <ArticleCard v-for="article in group.posts" :key="article.id" :article="article" />
         </div>
       </section>
-    </template>
+    </div>
   </div>
 </template>
 

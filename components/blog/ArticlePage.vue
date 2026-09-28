@@ -9,7 +9,7 @@
     <div class="min-w-0">
       <ArticleBreadcrumb :crumbs="breadcrumbs" />
 
-      <div ref="articleBodyRef">
+      <div ref="articleBodyRef" data-parity-section="article-content">
         <BlogArticleRenderer
           :title="post.title"
           :excerpt="post.excerpt"
