@@ -1,4 +1,3 @@
-import { instantDate, isValidInstant, localDateTimeToInstant } from './timezone'
 import { PUBLICATION_CONTENT_BLOCK_LOCALIZED_FIELDS, expandContentFieldPath, readContentFieldValue, type PublicationContentBlockType } from '~/shared/content-registries'
 
 export type BlogVisibility = 'listed' | 'unlisted'
@@ -161,18 +160,6 @@ export function resolveBlogSeo(input: {
 export function firstImageAssetId(blocks: EditorContentBlock[]) {
   const image = blocks.find(block => block.type === 'image' && block.data.status !== 'inactive')
   return image?.media?.find(item => item.slot === 'media')?.asset_id ?? null
-}
-
-export function parseScheduledFor(value: unknown) {
-  if (value === undefined || value === null || value === '') return null
-  if (!isValidInstant(value)) throw new Error('scheduled_for requires a valid timestamp with an explicit UTC offset')
-  return instantDate(value).toISOString()
-}
-
-export function scheduledLifecycleValue(timing: 'Now' | 'Scheduled', localValue: string, timeZone: string) {
-  if (timing === 'Now') return null
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(localValue)) throw new Error('Scheduled date and time is required')
-  return localDateTimeToInstant(localValue.slice(0, 10), localValue.slice(11), timeZone).toISOString()
 }
 
 export function structuredComponentsFromBlocks(blocks: EditorContentBlock[]): Array<{

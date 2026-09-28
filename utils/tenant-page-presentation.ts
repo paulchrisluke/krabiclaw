@@ -29,6 +29,7 @@ import PlatformPluginSections from '~/components/platform/marketing/PlatformPlug
 import PlatformProseCard from '~/components/platform/marketing/PlatformProseCard.vue'
 import PlatformFaqAccordion from '~/components/platform/marketing/PlatformFaqAccordion.vue'
 import PlatformBottomCta from '~/components/platform/marketing/PlatformBottomCta.vue'
+import SocialPosts from '~/components/social/SocialPosts.vue'
 import BlawbyPageHero from '~/components/blawby/BlawbyPageHero.vue'
 import BlawbyFeatureCards from '~/components/blawby/BlawbyFeatureCards.vue'
 import BlawbyTeamSection from '~/components/blawby/BlawbyTeamSection.vue'
@@ -64,6 +65,12 @@ import SayaCTA from '~/components/saya/SayaCTA.vue'
 // fails `typecheck` rather than a customer's eye.
 type BlockPresentation = Component<{ block: TenantPageBlock, page: PublicTenantPage }>
 
+// Every template's social_posts block is the one shared component, themed by
+// the template's tokens. It also draws the /posts feed from a list of posts, so
+// it takes the block and the page as optional props; as a page block it always
+// receives both.
+const feedOrBlock = (component: unknown) => component as BlockPresentation
+
 const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   // Krabiclaw's own marketing template. One component per block type, and the
   // component reads its block — no dispatcher, and nothing in the document
@@ -78,6 +85,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:markdown': PlatformProseCard,
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
+  'platform:social_posts': feedOrBlock(SocialPosts),
 
   // The Blawby template, for professional-services sites.
   'blawby:hero': BlawbyPageHero,
@@ -93,6 +101,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'blawby:video_feature': BlawbyVideoFeature,
   'blawby:button_group': BlawbyButtonRow,
   'blawby:contact_form': BlawbyContactForm,
+  'blawby:social_posts': feedOrBlock(SocialPosts),
 
   // Saya, for restaurants and experience businesses. Its home was a 577-line
   // component that read no blocks at all and composed a fixed list of
@@ -105,6 +114,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'saya:media_text': SayaBrandStory,
   'saya:testimonial_grid': SayaReviewsBlock,
   'saya:cta': SayaCTA,
+  'saya:social_posts': feedOrBlock(SocialPosts),
 }
 
 /** The component this template draws this block with, or null for the default. */

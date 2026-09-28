@@ -301,7 +301,6 @@ CREATE TABLE `content_documents` (
 	`updated_by` text,
 	`published_at` text,
 	`first_published_at` text,
-	`scheduled_for` text,
 	`seo_keywords` text,
 	`metadata_json` text DEFAULT '{}' NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -313,29 +312,24 @@ CREATE TABLE `content_documents` (
 	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`organization_id`,`root_id`,`root_role`,`kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`organization_id`,`locale`) REFERENCES `organization_locales`(`organization_id`,`locale`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "content_documents_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (scheduled_for IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', scheduled_for, '+0 days') IS scheduled_for) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "content_documents_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (first_published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', first_published_at, '+0 days') IS first_published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "content_documents_metadata_check" CHECK(json_valid(metadata_json) AND json_type(metadata_json) IS 'object'),
-	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL AND scheduled_for IS NULL)),
+	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)),
 	CONSTRAINT "content_documents_path_check" CHECK(path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')),
 	CONSTRAINT "content_documents_page_copy_check" CHECK(kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)),
 	CONSTRAINT "content_documents_page_type_check" CHECK(kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1),
-	CONSTRAINT "content_documents_channel_names_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR json_type(metadata_json, '$.channels') IS NULL OR (json_type(metadata_json, '$.channels') IS 'object' AND json_remove(json_extract(metadata_json, '$.channels'), '$.facebook', '$.instagram') = '{}')),
 	CONSTRAINT "content_documents_qa_scope_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))),
-	CONSTRAINT "content_documents_publication_check" CHECK(row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published','scheduled')) IS 1),
-	CONSTRAINT "content_documents_social_schedule_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND scheduled_for IS NULL AND published_at IS NULL) OR (status = 'scheduled' AND scheduled_for IS NOT NULL AND published_at IS NULL) OR (status = 'published' AND scheduled_for IS NULL AND published_at IS NOT NULL))),
 	CONSTRAINT "content_documents_article_visibility_check" CHECK(kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1),
 	CONSTRAINT "content_documents_qa_state_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)),
 	CONSTRAINT "content_documents_qa_counts_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)),
-	CONSTRAINT "content_documents_copy_required_check" CHECK(row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind <> 'article' OR slug IS NOT NULL) AND (kind <> 'social_post' OR summary IS NOT NULL))),
 	CONSTRAINT "content_documents_article_tags_check" CHECK(kind <> 'article' OR json_type(metadata_json, '$.tags') IS NULL OR json_type(metadata_json, '$.tags') IN ('array','null')),
-	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1),
-	CONSTRAINT "content_documents_social_post_type_check" CHECK((kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.post_type') IN ('standard', 'offer', 'event', 'alert'))) IS 1),
-	CONSTRAINT "content_documents_social_event_json_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.event') IS NULL OR (json_valid((metadata_json ->> '$.event')) AND json_type((metadata_json ->> '$.event')) IS 'object' AND json_type((metadata_json ->> '$.event'), '$.title') IS 'text' AND length(trim(json_extract((metadata_json ->> '$.event'), '$.title'))) > 0 AND json_type((metadata_json ->> '$.event'), '$.schedule') IS 'object' AND json_type((metadata_json ->> '$.event'), '$.schedule.start_date') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.start_time') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.end_date') IS 'text' AND json_type((metadata_json ->> '$.event'), '$.schedule.end_time') IS 'text'))),
-	CONSTRAINT "content_documents_social_offer_json_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.offer') IS NULL OR (json_valid((metadata_json ->> '$.offer')) AND json_type((metadata_json ->> '$.offer')) IS 'object'))),
-	CONSTRAINT "content_documents_social_call_to_action_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((metadata_json ->> '$.call_to_action') IS NULL OR (json_valid((metadata_json ->> '$.call_to_action')) AND json_type((metadata_json ->> '$.call_to_action')) IS 'object' AND (json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') IN ('book', 'order', 'shop', 'learn_more', 'sign_up', 'call')) IS 1 AND ((json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') = 'call' AND json_type((metadata_json ->> '$.call_to_action'), '$.url') IS NULL) OR (json_extract((metadata_json ->> '$.call_to_action'), '$.action_type') <> 'call' AND json_type((metadata_json ->> '$.call_to_action'), '$.url') IS 'text' AND length(trim(json_extract((metadata_json ->> '$.call_to_action'), '$.url'))) > 0))))),
-	CONSTRAINT "content_documents_social_topic_shape_check" CHECK((kind <> 'social_post' OR row_role <> 'root' OR (((metadata_json ->> '$.post_type') = 'standard' AND (metadata_json ->> '$.event') IS NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'event' AND (metadata_json ->> '$.event') IS NOT NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'offer' AND (metadata_json ->> '$.event') IS NOT NULL AND (metadata_json ->> '$.offer') IS NOT NULL AND (metadata_json ->> '$.call_to_action') IS NULL AND (metadata_json ->> '$.alert_type') IS NULL) OR ((metadata_json ->> '$.post_type') = 'alert' AND (metadata_json ->> '$.event') IS NULL AND (metadata_json ->> '$.offer') IS NULL AND (metadata_json ->> '$.alert_type') IS 'covid_19'))) IS 1),
-	CONSTRAINT "content_documents_channel_facebook_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.facebook') IS NULL OR (json_type(metadata_json, '$.channels.facebook') IS 'object' AND json_type(metadata_json, '$.channels.facebook.created_at') IS 'text' AND (((metadata_json ->> '$.channels.facebook.status') = 'pending' AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NULL) OR ((metadata_json ->> '$.channels.facebook.status') = 'published' AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NULL) OR ((metadata_json ->> '$.channels.facebook.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.facebook.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.facebook.published_at') IS NULL AND (metadata_json ->> '$.channels.facebook.error_message') IS NOT NULL))) IS 1)),
-	CONSTRAINT "content_documents_channel_instagram_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (json_type(metadata_json, '$.channels.instagram') IS NULL OR (json_type(metadata_json, '$.channels.instagram') IS 'object' AND json_type(metadata_json, '$.channels.instagram.created_at') IS 'text' AND (((metadata_json ->> '$.channels.instagram.status') = 'pending' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') = 'published' AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NOT NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NULL) OR ((metadata_json ->> '$.channels.instagram.status') IN ('failed','skipped') AND (metadata_json ->> '$.channels.instagram.provider_post_id') IS NULL AND (metadata_json ->> '$.channels.instagram.published_at') IS NULL AND (metadata_json ->> '$.channels.instagram.error_message') IS NOT NULL))) IS 1))
+	CONSTRAINT "content_documents_publication_check" CHECK(row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published')) IS 1),
+	CONSTRAINT "content_documents_social_lifecycle_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND published_at IS NULL) OR (status = 'published' AND published_at IS NOT NULL))),
+	CONSTRAINT "content_documents_article_lifecycle_check" CHECK(kind <> 'article' OR row_role <> 'root' OR status <> 'published' OR published_at IS NOT NULL),
+	CONSTRAINT "content_documents_copy_required_check" CHECK(row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind NOT IN ('article','social_post') OR slug IS NOT NULL))),
+	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1),
+	CONSTRAINT "content_documents_social_call_to_action_check" CHECK(kind <> 'social_post' OR json_type(metadata_json, '$.call_to_action') IS NULL OR (json_type(metadata_json, '$.call_to_action') IS 'object' AND json_type(metadata_json, '$.call_to_action.label') IS 'text' AND length(trim(json_extract(metadata_json, '$.call_to_action.label'))) > 0 AND ((row_role = 'root' AND json_type(metadata_json, '$.call_to_action.url') IS 'text' AND (json_extract(metadata_json, '$.call_to_action.url') LIKE 'https://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'http://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'tel:%') AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label', '$.url') = '{}') OR (row_role = 'representation' AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label') = '{}')))),
+	CONSTRAINT "content_documents_social_metadata_check" CHECK(kind <> 'social_post' OR json_remove(metadata_json, '$.call_to_action') = '{}')
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`organization_id`,`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint
@@ -345,9 +339,6 @@ CREATE UNIQUE INDEX `content_documents_slug_unique` ON `content_documents` (`org
 CREATE UNIQUE INDEX `content_documents_links_org_unique` ON `content_documents` (`organization_id`) WHERE row_role = 'root' AND kind = 'page' AND json_extract(metadata_json, '$.recipe') = 'links';--> statement-breakpoint
 CREATE INDEX `content_documents_org_kind_status_idx` ON `content_documents` (`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
 CREATE INDEX `content_documents_location_kind_status_idx` ON `content_documents` (`location_id`,`kind`,`row_role`,`status`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `content_documents_schedule_idx` ON `content_documents` (`kind`,`status`,`scheduled_for`) WHERE row_role = 'root' AND status = 'scheduled';--> statement-breakpoint
-CREATE INDEX `content_documents_facebook_post_idx` ON `content_documents` (`organization_id`,(metadata_json ->> '$.channels.facebook.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
-CREATE INDEX `content_documents_instagram_post_idx` ON `content_documents` (`organization_id`,(metadata_json ->> '$.channels.instagram.provider_post_id')) WHERE row_role = 'root' AND kind = 'social_post';--> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_scope_role_unique` ON `content_documents` (`organization_id`,`id`,`row_role`,`kind`);--> statement-breakpoint
 CREATE TABLE `guest_thread_deliveries` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -515,15 +506,18 @@ CREATE TABLE `media_assets` (
 	`category` text,
 	`status` text DEFAULT 'active' NOT NULL,
 	`created_by_user_id` text,
+	`origin_publication_id` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`created_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`,`origin_publication_id`) REFERENCES `post_publications`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "media_assets_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "media_assets_video_thumbnail_check" CHECK(kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)),
 	CONSTRAINT "media_assets_category_check" CHECK(category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog'))
 );
 --> statement-breakpoint
+CREATE INDEX `media_assets_origin_publication_idx` ON `media_assets` (`organization_id`,`origin_publication_id`) WHERE origin_publication_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `media_assets_org_id_unique` ON `media_assets` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `media_placements` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -898,6 +892,50 @@ CREATE TABLE `organization_redirects` (
 CREATE INDEX `organization_redirects_organization_id_idx` ON `organization_redirects` (`organization_id`);--> statement-breakpoint
 CREATE INDEX `organization_redirects_owner_idx` ON `organization_redirects` (`owner_type`,`owner_id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `organization_redirects_org_locale_from_path_unique` ON `organization_redirects` (`organization_id`,`locale`,`from_path`);--> statement-breakpoint
+CREATE TABLE `post_publications` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`post_id` text,
+	`post_row_role` text DEFAULT 'root' NOT NULL,
+	`post_kind` text DEFAULT 'social_post' NOT NULL,
+	`channel` text NOT NULL,
+	`provider_app_id` text NOT NULL,
+	`provider_subject_id` text NOT NULL,
+	`provider_target_id` text NOT NULL,
+	`origin` text NOT NULL,
+	`state` text NOT NULL,
+	`provider_post_id` text,
+	`provider_permalink` text,
+	`provider_handles_json` text DEFAULT '{}' NOT NULL,
+	`payload_hash` text,
+	`attempt_id` text,
+	`error_code` text,
+	`error_message` text,
+	`published_at` text,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`post_id`,`post_row_role`,`post_kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE no action,
+	CONSTRAINT "post_publications_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "post_publications_constants_check" CHECK(post_row_role = 'root' AND post_kind = 'social_post'),
+	CONSTRAINT "post_publications_channel_check" CHECK(channel IN ('facebook', 'instagram')),
+	CONSTRAINT "post_publications_origin_check" CHECK(origin IN ('import', 'publish')),
+	CONSTRAINT "post_publications_state_check" CHECK(state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')),
+	CONSTRAINT "post_publications_identity_check" CHECK(length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)),
+	CONSTRAINT "post_publications_handles_check" CHECK(json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'),
+	CONSTRAINT "post_publications_permalink_check" CHECK(provider_permalink IS NULL OR provider_permalink LIKE 'https://%'),
+	CONSTRAINT "post_publications_published_check" CHECK(state NOT IN ('published', 'removed') OR (published_at IS NOT NULL AND (provider_post_id IS NOT NULL OR (channel = 'instagram' AND json_type(provider_handles_json, '$.container_id') IS 'text')))),
+	CONSTRAINT "post_publications_failed_check" CHECK((state IN ('failed', 'unknown')) = (error_code IS NOT NULL)),
+	CONSTRAINT "post_publications_attempt_check" CHECK(attempt_id IS NULL OR state IN ('preparing', 'publishing')),
+	CONSTRAINT "post_publications_origin_shape_check" CHECK((origin = 'publish' AND payload_hash IS NOT NULL) OR (origin = 'import' AND provider_post_id IS NOT NULL AND state IN ('published', 'removed') AND attempt_id IS NULL))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `post_publications_post_channel_unique` ON `post_publications` (`organization_id`,`post_id`,`channel`) WHERE post_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `post_publications_provider_post_unique` ON `post_publications` (`organization_id`,`channel`,`provider_app_id`,`provider_post_id`) WHERE provider_post_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `post_publications_import_post_unique` ON `post_publications` (`organization_id`,`post_id`) WHERE origin = 'import' AND post_id IS NOT NULL;--> statement-breakpoint
+CREATE INDEX `post_publications_subject_idx` ON `post_publications` (`channel`,`provider_app_id`,`provider_subject_id`);--> statement-breakpoint
+CREATE INDEX `post_publications_target_state_idx` ON `post_publications` (`organization_id`,`channel`,`provider_target_id`,`state`);--> statement-breakpoint
+CREATE UNIQUE INDEX `post_publications_org_id_unique` ON `post_publications` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `prices` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,

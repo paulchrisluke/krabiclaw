@@ -22,26 +22,16 @@
       </header>
     </template>
 
-    <!-- Post grid -->
-    <LazySayaPosts :posts="posts" :show-title="false" />
-
-    <!-- Empty state -->
-    <div
-      v-if="posts.length === 0"
-      class="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8"
-    >
-      <div class="flex flex-col items-center rounded-3xl border border-dashed border-default bg-muted/20 py-20 text-center">
-        <div class="flex size-14 items-center justify-center rounded-full bg-elevated/50 text-muted shadow-sm">
-          <SayaIcon name="newspaper" class="size-7" />
-        </div>
-        <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.posts.empty_title') }}</h3>
-        <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.posts.empty_desc') }}</p>
-      </div>
+    <SocialPosts :posts="feed.posts.value" />
+    <div v-if="feed.hasMore.value || feed.failed.value" class="flex flex-col items-center gap-3 pb-20">
+      <p v-if="feed.failed.value" role="alert" class="text-sm text-error">{{ t('social_posts.load_failed') }}</p>
+      <button v-if="feed.hasMore.value" type="button" class="rounded-full border border-default px-6 py-2.5 text-sm font-medium text-default transition hover:bg-muted disabled:opacity-60" :disabled="feed.loading.value" :aria-busy="feed.loading.value" @click="feed.loadMore">{{ t('social_posts.load_more') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import SocialPosts from '~/components/social/SocialPosts.vue'
 const { localePath, t } = useI18n()
 
 definePageMeta({ layout: 'saya' })
@@ -53,13 +43,13 @@ if (!organizationId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
-const { location, postsList } = await usePublicPageData()
+const { location } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page
 // around a null location answered 200 with an empty shell — a soft 404 a
 // crawler indexes. The sibling menu and product indexes already refuse it.
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 
-const posts = postsList
+const feed = await useSocialPostFeed(() => ({ locationId: location.value!.id }))
 
 const organizationUrl = useRequestURL().origin
 

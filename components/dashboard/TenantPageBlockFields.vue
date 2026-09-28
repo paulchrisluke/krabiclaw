@@ -9,7 +9,7 @@
       :field-key="entry.key"
       :field="entry.field"
       :autofocus="index === 0"
-      :reference-options="referenceOptions(entry.field)"
+      :reference-options="referenceOptions(entry.field, entry.key)"
       @split-insert="$emit('splitInsert', $event)"
     />
 
@@ -100,7 +100,10 @@ const options = {
   location: computed(() => dashboard.locations.value.map(location => ({ label: location.title, value: location.id }))),
 }
 
-function referenceOptions(field: TenantPageField) {
-  return field.reference ? [...options[field.reference].value] : undefined
+function referenceOptions(field: TenantPageField, key: string) {
+  if (!field.reference) return undefined
+  // One location, or none: the organization-wide choice is a choice too.
+  const unscoped = field.reference === 'location' && !key.endsWith('_ids') ? [{ label: 'All locations', value: '' }] : []
+  return [...unscoped, ...options[field.reference].value]
 }
 </script>

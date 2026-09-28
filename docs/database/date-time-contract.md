@@ -15,7 +15,6 @@ public pages, ChowBot and MCP must use these contracts rather than permissive re
 | Provider timestamp | Provider's documented type and unit at its adapter boundary | Provider contract |
 | Analytics day | Gregorian civil day in the report timezone | Selected site's analytics configuration |
 | Organization analytics range | One shared Gregorian range, ending on the current UTC date unless explicitly supplied | UTC defines range labels; each site measures those dates in its configured timezone |
-| Publication scheduling | Explicit instant; editor labels UTC | Explicit editor zone |
 | Billing access expiry | Canonical UTC instant | Actual trial end for trials; paid-through for paid access; past-due-since plus the explicit grace duration for past-due access |
 
 Human formatting is locale-aware and Gregorian. Zero seconds are omitted;

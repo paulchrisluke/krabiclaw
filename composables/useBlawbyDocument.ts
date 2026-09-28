@@ -22,6 +22,7 @@ export function resolveBlawbyRouteTarget(path: string): BlawbyRouteTarget {
   if (routePath === '/contact/confirmed') return { recipe: 'confirmation', slug: null }
   if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
+  if (routePath === '/posts' || /^\/posts\/[^/]+$/.test(routePath)) return { recipe: 'posts', slug: null }
   // Every article-collection route: an article, and the docs index and a doc.
   if (/^\/article\/[^/]+$/.test(routePath) || /^\/docs(?:\/[^/]+)?$/.test(routePath)) return { recipe: 'article', slug: null }
   if (routePath === '/donate') return { recipe: 'donate', slug: null }

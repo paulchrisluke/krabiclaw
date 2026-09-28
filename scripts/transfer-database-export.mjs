@@ -26,6 +26,8 @@ import Database from 'better-sqlite3'
 import { CONTENT_DOCUMENT_SCOPE_QUERY, MEDIA_PLACEMENT_OWNER_AUDIT_QUERY } from './audit-orphaned-media-placements.mjs'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
 import { organizationRoles } from '../utils/organization-access.ts'
+import { formatCalendarDate, formatTime, formatTimestamp } from '../utils/timezone.ts'
+import { normalizePostSlug } from '../utils/post-slugs.ts'
 
 /** The roles the access matrix declares. Anything else evaluates to no permissions. */
 const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
@@ -309,6 +311,14 @@ export const TARGET_INVARIANT_QUERIES = {
   // still caught.
   document_visibility_is_listed_or_unlisted: `SELECT id FROM content_documents
     WHERE visibility IS NOT NULL AND visibility NOT IN ('listed', 'unlisted')`,
+  // Social posts are read by the social_posts block from the canonical feed;
+  // a grid that copied them, or a block holding its own copy, is stale data.
+  social_posts_are_read_not_copied: `SELECT id FROM content_blocks WHERE (type = 'feature_grid' AND data_json ->> '$.source' = 'organization_updates')
+    OR (type = 'social_posts' AND json_type(data_json, '$.items') IS NOT NULL)`,
+  // Provider media belongs to an imported publication of its own tenant; the
+  // foreign key proves the tenant, this proves the origin.
+  imported_media_comes_from_imports: `SELECT a.id FROM media_assets a JOIN post_publications p ON p.organization_id = a.organization_id AND p.id = a.origin_publication_id
+    WHERE p.origin <> 'import'`,
 }
 
 export function auditTargetInvariants(target) {
@@ -356,171 +366,337 @@ export function auditTargetInvariants(target) {
 }
 
 // ---------------------------------------------------------------------------
-// Schema epoch #1083
+// Schema epoch #1115: social publishing and the content lifecycle
 // ---------------------------------------------------------------------------
 
 /**
  * What this epoch retires on purpose. A source table or column outside this
- * list that the baseline does not carry fails the transfer: it is data the copy
- * would otherwise drop without anyone deciding to.
+ * list that the baseline does not carry fails the transfer.
  *
- * `broadcast_deliveries` rows are provider-delivery bookkeeping Resend owns
- * now (#1077); the SEO override columns are derived from title, summary and
- * path (#1080); a pending scheduled deletion is discarded with the scheduling
- * model (#913). None of them is copied anywhere.
+ * `scheduled_for` goes with application-owned publication scheduling: every
+ * scheduled article and post becomes a draft below, and the time it was due is
+ * kept in the report, not in a runtime field.
  */
 export const EPOCH_RETIRED = {
-  tables: ['customers', 'broadcast_deliveries'],
+  tables: [],
   columns: {
-    requests: ['customer_id'],
-    reservations: ['customer_id'],
-    bookings: ['customer_id'],
-    review_requests: ['customer_id', 'anonymous_user_id'],
-    reviews: ['customer_id'],
-    content_documents: ['seo_title', 'seo_description', 'canonical_url'],
-    user: ['deletionScheduledAt'],
-    organization: ['deletionScheduledAt'],
+    content_documents: ['scheduled_for'],
   },
-  // A placement whose slot the contract no longer declares renders nowhere.
-  // #1098 retired the organization's dark logo with no replacement, so its
-  // rows are dropped and each owner is listed rather than carried into a
-  // database where nothing can show them.
-  placements: ['organization:logo_dark'],
-}
-
-/** Drop placements in retired slots and name their owners. */
-function retirePlacementSlots(stage, record) {
-  const dropped = []
-  for (const key of EPOCH_RETIRED.placements) {
-    const [ownerType, slot] = key.split(':')
-    const rows = stage.prepare(`SELECT mp.id, mp.owner_id, mp.asset_id, o.slug FROM main.media_placements mp
-      LEFT JOIN main.organization o ON mp.owner_type = 'organization' AND o.id = mp.owner_id
-      WHERE mp.owner_type = ? AND mp.slot = ? ORDER BY mp.owner_id, mp.id`).all(ownerType, slot)
-    for (const row of rows) dropped.push({ owner_type: ownerType, slot, owner_id: row.owner_id, slug: row.slug ?? null, placement_id: row.id, asset_id: row.asset_id })
-    stage.prepare('DELETE FROM main.media_placements WHERE owner_type = ? AND slot = ?').run(ownerType, slot)
-  }
-  record('retired_placements', dropped.length)
-  return dropped
 }
 
 /**
- * #1087 moves every provider credential onto the connecting person's Better
- * Auth linked account, which the transfer cannot create from a token stored on
- * the organization. So a `facebook` or `instagram` connection that names no
- * `account_id`, and every `google_credential`, is removed rather than carried,
- * and each organization that loses one is listed so its owner can reconnect.
- * No token survives on the organization, and no account_id is invented.
- * Selection-only keys (`google_analytics`, `google_search_console`) stay.
+ * Tables this epoch adds. The source has none of them; the epoch fills them
+ * from what the source recorded elsewhere, or they start empty.
  */
-function retireOrganizationProviderCredentials(stage, record) {
-  const rows = stage.prepare(`SELECT id, slug, name, integrations_json FROM main.organization
-    WHERE json_type(integrations_json, '$.google_credential') IS NOT NULL
-       OR json_type(integrations_json, '$.facebook') IS NOT NULL
-       OR json_type(integrations_json, '$.instagram') IS NOT NULL`).all()
-  const update = stage.prepare('UPDATE main.organization SET integrations_json = ? WHERE id = ?')
-  const dropped = []
-  for (const row of rows) {
-    const integrations = JSON.parse(row.integrations_json)
-    const connections = []
-    if (integrations.google_credential !== undefined) { delete integrations.google_credential; connections.push('google') }
-    for (const key of ['facebook', 'instagram']) {
-      const connection = integrations[key]
-      if (connection === undefined) continue
-      if (typeof connection?.account_id !== 'string' || !connection.account_id.trim()) { delete integrations[key]; connections.push(key); continue }
-      for (const field of Object.keys(connection).filter(name => name.startsWith('encrypted_'))) delete connection[field]
-    }
-    const serialized = JSON.stringify(integrations)
-    if (serialized !== row.integrations_json) update.run(serialized, row.id)
-    if (connections.length) dropped.push({ organization_id: row.id, slug: row.slug, name: row.name, connections })
-  }
-  record('organization_connections_to_reconnect', dropped.length)
-  return dropped
-}
-
-/** The domain rows that named a person through `customers`. */
-const CUSTOMER_REFERENCES = ['requests', 'reservations', 'bookings', 'review_requests', 'reviews']
+export const EPOCH_ADDED_TABLES = ['post_publications']
 
 /**
- * `customers` was a second identity beside Better Auth's `user`. Each row
- * becomes the Better Auth user it names — or, when it names none, one
- * anonymous user keyed by the customer's own id — and every domain row that
- * pointed at the customer points at that user.
+ * The verified provider identity of each historical channel entry, keyed
+ * `<document id>:<channel>`: `{ provider_app_id, provider_subject_id,
+ * provider_target_id, provider_permalink? }`.
  *
- * Every inconsistency is collected and the transfer fails with all of them at
- * once: a transfer that stops at the first one is re-run once per bad row.
- * Nothing here picks between two values.
+ * `metadata_json.channels` recorded a provider post id and nothing about which
+ * Meta app, which authorizing person or which Page or professional account it
+ * belonged to, and the account connected now is not evidence it authored an old
+ * row. So every entry that becomes a `post_publications` row needs its identity
+ * established from the provider and written here, in the same release, before
+ * the cutover; an entry with none fails the preflight by row ID. Production
+ * held no channel entries when this epoch was written.
  */
-function deriveUserIdentity(stage, sourceTables, record) {
-  if (!sourceTables.includes('customers')) return
+export const EPOCH_PUBLICATION_IDENTITIES = {}
+
+/**
+ * The labels the post detail drew beside an event and an offer, in each locale
+ * the site carried when this epoch was written. They are copied here rather
+ * than read from the runtime catalogs because the runtime no longer renders
+ * structured events or offers, and so no longer carries these strings.
+ */
+const FACT_LABELS = {
+  en: { event: 'Event Details:', offer: 'Special Offer:', code: 'Code:' },
+  th: { event: 'รายละเอียดกิจกรรม:', offer: 'โปรโมชั่นพิเศษ:', code: 'รหัส:' },
+  ja: { event: 'イベント詳細:', offer: '特別オファー:', code: 'コード:' },
+}
+
+/** A label in a locale, as the renderer that showed these facts had it. None is generated. */
+function localeMessage(locale, key) {
+  const value = FACT_LABELS[locale]?.[key]
+  if (!value) throw new Error(`No ${locale} label for ${key}; a caption is never written in a language the site did not already carry`)
+  return value
+}
+
+const POST_WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+/**
+ * The event line the post detail rendered (formerly `postEventDescription` in
+ * shared/posts.ts, which leaves the runtime with the structured event). It is
+ * reproduced here unchanged so the words a visitor read are the words the
+ * caption keeps.
+ */
+function eventDescription(event, locale) {
+  const schedule = event.schedule
+  const range = `${formatCalendarDate(schedule.start_date, locale)} ${formatTime(schedule.start_time, locale)} – ${formatCalendarDate(schedule.end_date, locale)} ${formatTime(schedule.end_time, locale)}`
+  const rule = event.recurrence_info
+  if (!rule) return range
+  const weekdayName = day => formatCalendarDate(`2026-09-${String(6 + POST_WEEKDAYS.indexOf(day)).padStart(2, '0')}`, locale, { weekday: 'long' })
+  const startDay = POST_WEEKDAYS[new Date(`${schedule.start_date}T00:00:00Z`).getUTCDay()]
+  const thai = locale.startsWith('th')
+  const cadence = rule.kind === 'daily' ? (thai ? 'ทุกวัน' : 'Daily')
+    : rule.kind === 'weekly' ? (rule.days_of_week.length ? rule.days_of_week : [startDay]).map(weekdayName).join(', ')
+      : 'day_of_month' in rule ? `${thai ? 'ทุกเดือน วันที่' : 'Monthly on day'} ${rule.day_of_month}`
+        : `${thai ? 'ทุกเดือน' : 'Monthly'}, ${rule.day_of_week_occurrence} ${weekdayName(startDay)}`
+  return `${range} · ${cadence}${rule.series_end_time ? ` · ${thai ? 'ถึง' : 'Until'} ${formatTimestamp(rule.series_end_time, locale, 'UTC')} UTC` : ''}`
+}
+
+/**
+ * The structured facts a short post carried beside its words, written out as
+ * words: the event with its dates, times and recurrence, the offer's code,
+ * redemption link and terms, and the alert. Deterministic, in the post's own
+ * locale, with the labels the post detail already showed. Nothing is
+ * paraphrased and nothing absent is supplied.
+ */
+function literalPostFacts({ event, offer, alert_type: alertType }, locale) {
+  const sections = []
+  if (event) sections.push(`${localeMessage(locale, 'event')} ${event.title.trim()}\n${eventDescription(event, locale)}`)
+  if (offer && ['coupon_code', 'redeem_online_url', 'terms_conditions'].some(key => typeof offer[key] === 'string' && offer[key].trim())) {
+    const lines = [localeMessage(locale, 'offer')]
+    if (offer.coupon_code?.trim()) lines.push(`${localeMessage(locale, 'code')} ${offer.coupon_code.trim()}`)
+    if (offer.redeem_online_url?.trim()) lines.push(offer.redeem_online_url.trim())
+    if (offer.terms_conditions?.trim()) lines.push(offer.terms_conditions.trim())
+    sections.push(lines.join('\n'))
+  }
+  // An alert was a label and nothing else; `covid_19` was its only value.
+  if (alertType) sections.push(alertType === 'covid_19' ? 'COVID-19' : String(alertType))
+  return sections.join('\n\n')
+}
+
+/** The button label the post detail drew for an action type (`formatCta`). */
+const actionLabel = actionType => String(actionType).replaceAll('_', ' ').toLowerCase().replace(/^\w/, character => character.toUpperCase())
+
+const deterministicId = (...parts) => {
+  const digest = hash(parts.join('\u0000'))
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-${digest.slice(12, 16)}-${digest.slice(16, 20)}-${digest.slice(20, 32)}`
+}
+
+const canonicalInstant = value => {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? new Date(time).toISOString() : null
+}
+
+/**
+ * Every epoch rule that needs judgement runs here, on the staged copy, and every
+ * row it cannot map is collected and refused at once with its ID. What it maps
+ * is reported, so the transfer's output is the before/after inventory.
+ */
+function transformSocialPublishingEpoch(stage, source, record, { publicationIdentities = EPOCH_PUBLICATION_IDENTITIES } = {}) {
+  const report = {
+    scheduled_to_draft: [], lifecycle_refusals: [], social_post_facts: [], calls_to_action: [], publications: [],
+    dropped_channel_entries: [], imported_media: [], repaired_slugs: [], first_published_at: 0, social_blocks: [],
+  }
   const problems = []
   const refuse = (title, rows) => { if (rows.length) problems.push(`${title} (${rows.length}):\n${rows.map(row => `  ${JSON.stringify(row)}`).join('\n')}`) }
+  const sourceHasSchedule = columns(source, 'content_documents').includes('scheduled_for')
 
-  for (const table of CUSTOMER_REFERENCES) {
-    // A reference to no customer would map to no one, silently.
-    refuse(`${table} rows naming a customer that does not exist`, stage.prepare(`SELECT t.id, t.customer_id FROM old.${qi(table)} t
-      WHERE t.customer_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM old.customers c WHERE c.id = t.customer_id)`).all())
-    // A customer is one organization's; a row of another organization naming it is a tenant leak.
-    refuse(`${table} rows naming another organization's customer`, stage.prepare(`SELECT t.id, t.organization_id, t.customer_id, c.organization_id AS customer_organization_id
-      FROM old.${qi(table)} t JOIN old.customers c ON c.id = t.customer_id WHERE c.organization_id IS NOT t.organization_id`).all())
+  // 1. Nothing publishes on a clock any more. A scheduled article or post keeps
+  //    its content, id, slug, author, media, translations and visibility and
+  //    becomes a draft; when it was due is reported, not re-created anywhere.
+  if (sourceHasSchedule) {
+    report.scheduled_to_draft = stage.prepare(`SELECT id, organization_id, kind, scheduled_for FROM old.content_documents
+      WHERE row_role = 'root' AND kind IN ('article', 'social_post') AND status = 'scheduled' ORDER BY organization_id, id`).all()
+    stage.prepare(`UPDATE main.content_documents SET status = 'draft', published_at = NULL
+      WHERE row_role = 'root' AND kind IN ('article', 'social_post') AND status = 'scheduled'`).run()
   }
-  refuse('Customers linked to a user that does not exist', stage.prepare(`SELECT c.id, c.user_id FROM old.customers c
-    WHERE c.user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM main.user u WHERE u.id = c.user_id)`).all())
-  refuse('Unlinked customers whose id already belongs to an unrelated Better Auth user', stage.prepare(`SELECT c.id, u.email FROM old.customers c
-    JOIN main.user u ON u.id = c.id WHERE c.user_id IS NULL`).all())
-  refuse('Unlinked customers whose migrated email already belongs to a Better Auth user', stage.prepare(`SELECT c.id, u.id AS user_id FROM old.customers c
-    JOIN main.user u ON u.email = 'anon-migrated-' || c.id || '@customers.krabiclaw.local' WHERE c.user_id IS NULL`).all())
-  // A customer no organization-scoped row refers to has nowhere to go: there is
-  // no profile table to keep it in, and dropping it is not this transfer's call.
-  refuse('Customers no domain row of their own organization refers to', stage.prepare(`SELECT c.id, c.organization_id, c.source, c.created_at, c.updated_at
-    FROM old.customers c WHERE NOT (${CUSTOMER_REFERENCES.map(table => `EXISTS (SELECT 1 FROM old.${qi(table)} t WHERE t.customer_id = c.id AND t.organization_id = c.organization_id)`).join(' OR ')})
-    ORDER BY c.organization_id, c.id`).all())
+  // A published row without the time it was published is not a publication
+  // this transfer can date; it is named rather than given a date.
+  report.lifecycle_refusals = stage.prepare(`SELECT id, organization_id, kind, status FROM main.content_documents
+    WHERE row_role = 'root' AND kind IN ('article', 'social_post') AND (
+      status NOT IN ('draft', 'published') OR (status = 'published' AND published_at IS NULL))
+    ORDER BY id`).all()
+  refuse('Articles and posts whose lifecycle cannot be carried (not draft or published, or published with no published_at)', report.lifecycle_refusals)
+  // A published post that never recorded its first publication did first go
+  // out when it was published.
+  report.first_published_at = stage.prepare(`UPDATE main.content_documents SET first_published_at = published_at
+    WHERE kind = 'social_post' AND row_role = 'root' AND status = 'published' AND first_published_at IS NULL AND published_at IS NOT NULL`).run().changes
 
-  stage.exec(`CREATE TEMP TABLE customer_user AS SELECT id AS customer_id, coalesce(user_id, id) AS user_id FROM old.customers`)
+  const posts = stage.prepare(`SELECT d.id, d.organization_id, d.location_id, d.title, d.slug, d.summary, d.created_by, d.metadata_json, bl.phone AS location_phone
+    FROM main.content_documents d LEFT JOIN main.business_locations bl ON bl.id = d.location_id AND bl.organization_id = d.organization_id
+    WHERE d.kind = 'social_post' AND d.row_role = 'root' ORDER BY d.organization_id, d.id`).all()
+  const representations = stage.prepare(`SELECT id, root_id, locale, summary, metadata_json FROM main.content_documents
+    WHERE kind = 'social_post' AND row_role = 'representation' ORDER BY root_id, locale`).all()
+  const updateDocument = stage.prepare('UPDATE main.content_documents SET summary = ?, metadata_json = ? WHERE id = ?')
+  const insertPublication = stage.prepare(`INSERT INTO main.post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id,
+    provider_target_id, origin, state, provider_post_id, provider_permalink, provider_handles_json, payload_hash, attempt_id, error_code, error_message,
+    published_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', ?, NULL, ?, ?, ?, ?, ?)`)
+  const unmappedIdentities = []
+  const ambiguousProvenance = []
+  const unresolvablePhones = []
+  const invalidTimes = []
+  const untranslated = []
+  const now = new Date().toISOString()
 
-  // One Stripe Customer per person. Two different ones for the same person, or
-  // one shared by two people, is a billing identity nobody can pick for them.
-  const stripe = `SELECT u.id AS user_id, 'user.stripeCustomerId' AS source, u.id AS row_id, u.stripeCustomerId AS stripe_customer_id FROM main.user u WHERE u.stripeCustomerId IS NOT NULL
-    UNION SELECT m.user_id, 'customers.stripe_customer_id', c.id, c.stripe_customer_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id WHERE c.stripe_customer_id IS NOT NULL`
-  refuse('People with more than one Stripe customer', stage.prepare(`SELECT * FROM (${stripe}) WHERE user_id IN (
-    SELECT user_id FROM (${stripe}) GROUP BY user_id HAVING count(DISTINCT stripe_customer_id) > 1) ORDER BY user_id, source, row_id`).all())
-  refuse('Stripe customers shared by more than one person', stage.prepare(`SELECT * FROM (${stripe}) WHERE stripe_customer_id IN (
-    SELECT stripe_customer_id FROM (${stripe}) GROUP BY stripe_customer_id HAVING count(DISTINCT user_id) > 1) ORDER BY stripe_customer_id, user_id`).all())
+  for (const post of posts) {
+    const metadata = JSON.parse(post.metadata_json)
+    const facts = { event: metadata.event ?? null, offer: metadata.offer ?? null, alert_type: metadata.alert_type ?? null }
+    const hasFacts = Boolean(facts.event || facts.alert_type || (facts.offer && Object.keys(facts.offer).length))
 
-  // review_requests and reviews already carried a user id beside the customer.
-  // Where the two name different people there is no single identity to keep.
-  refuse('Review requests whose customer and user disagree', stage.prepare(`SELECT r.id, r.customer_id, m.user_id AS customer_user_id, r.user_id, r.anonymous_user_id
-    FROM old.review_requests r JOIN temp.customer_user m ON m.customer_id = r.customer_id
-    WHERE (r.user_id IS NOT NULL AND r.user_id <> m.user_id) OR (r.anonymous_user_id IS NOT NULL AND r.anonymous_user_id <> m.user_id)`).all())
-  refuse('Reviews whose customer and user disagree', stage.prepare(`SELECT r.id, r.customer_id, m.user_id AS customer_user_id, r.user_id
-    FROM old.reviews r JOIN temp.customer_user m ON m.customer_id = r.customer_id WHERE r.user_id IS NOT NULL AND r.user_id <> m.user_id`).all())
+    // 3. The event, offer, recurrence and alert become the post's own words,
+    //    appended after the original body, which stays verbatim.
+    let summary = post.summary
+    if (hasFacts) {
+      const appended = literalPostFacts(facts, 'en')
+      if (appended) summary = summary?.trim() ? `${summary}\n\n${appended}` : appended
+      report.social_post_facts.push({ id: post.id, locale: 'en', before: { post_type: metadata.post_type ?? null, ...facts }, appended })
+    }
+    // 4. A call to action keeps its destination and the label a visitor saw.
+    //    A call resolves to the phone of the location the post actually names.
+    let callToAction = null
+    const action = metadata.call_to_action
+    if (action && typeof action === 'object') {
+      if (action.action_type === 'call') {
+        if (!post.location_id || !post.location_phone?.trim()) unresolvablePhones.push({ id: post.id, organization_id: post.organization_id, location_id: post.location_id })
+        else callToAction = { label: actionLabel('call'), url: `tel:${post.location_phone.trim().replace(/\s+/g, '')}` }
+      } else if (typeof action.url === 'string' && /^https?:\/\//i.test(action.url.trim())) {
+        callToAction = { label: actionLabel(action.action_type), url: action.url.trim() }
+      } else {
+        unresolvablePhones.push({ id: post.id, organization_id: post.organization_id, call_to_action: action })
+      }
+      if (callToAction) report.calls_to_action.push({ id: post.id, before: action, after: callToAction })
+    }
+    updateDocument.run(summary, JSON.stringify(callToAction ? { call_to_action: callToAction } : {}), post.id)
 
-  assert(problems.length === 0, `Customer identity preflight failed; nothing was written.\n${problems.join('\n')}`)
+    // Translations say the same facts in their own locale, from their own
+    // translated title and terms. A translation that never carried them was
+    // not shown, and is refused rather than completed with English.
+    for (const representation of representations.filter(row => row.root_id === post.id)) {
+      const translated = JSON.parse(representation.metadata_json)
+      let translatedSummary = representation.summary
+      if (hasFacts) {
+        const localized = {
+          event: facts.event ? { ...facts.event, ...(translated.event ?? {}) } : null,
+          offer: facts.offer ? { ...facts.offer, ...(translated.offer ?? {}) } : null,
+          alert_type: facts.alert_type,
+        }
+        if ((facts.event && !translated.event?.title?.trim()) || (facts.offer?.terms_conditions?.trim() && !translated.offer?.terms_conditions?.trim())) {
+          untranslated.push({ id: representation.id, root_id: post.id, locale: representation.locale })
+          continue
+        }
+        const appended = literalPostFacts(localized, representation.locale)
+        translatedSummary = translatedSummary?.trim() ? `${translatedSummary}\n\n${appended}` : appended
+        report.social_post_facts.push({ id: representation.id, locale: representation.locale, before: { event: translated.event ?? null, offer: translated.offer ?? null }, appended })
+      }
+      updateDocument.run(translatedSummary, '{}', representation.id)
+    }
 
-  record('customers_linked_to_existing_users', stage.prepare('SELECT count(*) AS n FROM old.customers WHERE user_id IS NOT NULL').get().n)
-  // Better Auth's anonymous shape, with no `account` row: nobody signs in as a
-  // migrated guest, and linking a real sign-in later goes through onLinkAccount.
-  record('customers_become_anonymous_users', stage.prepare(`INSERT INTO main.user (id, name, email, emailVerified, image, phoneNumber, phoneNumberVerified, role, isAnonymous, stripeCustomerId, createdAt, updatedAt)
-    SELECT c.id, coalesce(nullif(trim(c.name), ''), 'Guest'), 'anon-migrated-' || c.id || '@customers.krabiclaw.local', 0, NULL, NULL, 0, 'user', 1, NULL,
-      unixepoch(c.created_at), unixepoch(c.updated_at)
-    FROM old.customers c WHERE c.user_id IS NULL`).run().changes)
-  record('stripe_customers_moved_to_users', stage.prepare(`UPDATE main.user SET stripeCustomerId = (
-      SELECT c.stripe_customer_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id
-       WHERE m.user_id = main.user.id AND c.stripe_customer_id IS NOT NULL LIMIT 1)
-    WHERE stripeCustomerId IS NULL AND id IN (
-      SELECT m.user_id FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id WHERE c.stripe_customer_id IS NOT NULL)`).run().changes)
-  // An opt-out is the person's, across every tenant, and it wins over any
-  // preference already stored.
-  record('review_request_opt_outs', stage.prepare(`INSERT INTO main.user_notification_preferences (user_id, category, email_enabled, whatsapp_enabled, updated_at)
-    SELECT m.user_id, 'review_requests', 0, 0, max(c.review_request_opted_out_at)
-      FROM old.customers c JOIN temp.customer_user m ON m.customer_id = c.id
-     WHERE c.review_request_opted_out_at IS NOT NULL GROUP BY m.user_id
-    ON CONFLICT (user_id, category) DO UPDATE SET email_enabled = 0, whatsapp_enabled = 0, updated_at = excluded.updated_at`).run().changes)
-  for (const table of CUSTOMER_REFERENCES) {
-    record(`${table}_name_their_user`, stage.prepare(`UPDATE main.${qi(table)} SET user_id = (
-        SELECT m.user_id FROM old.${qi(table)} o JOIN temp.customer_user m ON m.customer_id = o.customer_id WHERE o.id = main.${qi(table)}.id)
-      WHERE id IN (SELECT id FROM old.${qi(table)} WHERE customer_id IS NOT NULL)`).run().changes)
+    // 5-7. Channel entries. A publication is kept only with provider evidence
+    //      and a verified identity; `skipped` never was one. A pending or failed
+    //      entry is unknown: the old catch recorded a timeout as a failure.
+    const importPrefix = { facebook: 'fb-post-', instagram: 'ig-post-' }
+    for (const [channel, entry] of Object.entries(metadata.channels ?? {})) {
+      if (!entry || typeof entry !== 'object') continue
+      if (entry.status === 'skipped') {
+        report.dropped_channel_entries.push({ id: post.id, channel, status: 'skipped', error: entry.error_message ?? null })
+        continue
+      }
+      const imported = post.created_by === `${channel}-sync` && post.id === `${importPrefix[channel]}${entry.provider_post_id}`
+      const importNamed = post.created_by === `${channel}-sync` || post.id.startsWith(importPrefix[channel])
+      if (importNamed && !imported) {
+        ambiguousProvenance.push({ id: post.id, channel, created_by: post.created_by, provider_post_id: entry.provider_post_id ?? null })
+        continue
+      }
+      const identity = publicationIdentities[`${post.id}:${channel}`]
+      if (!identity || !['provider_app_id', 'provider_subject_id', 'provider_target_id'].every(key => typeof identity[key] === 'string' && identity[key].trim())) {
+        unmappedIdentities.push({ id: post.id, organization_id: post.organization_id, channel, status: entry.status, provider_post_id: entry.provider_post_id ?? null })
+        continue
+      }
+      const state = entry.status === 'published' ? 'published' : 'unknown'
+      const publishedAt = state === 'published' ? canonicalInstant(entry.published_at) : null
+      if (state === 'published' && (!entry.provider_post_id || !publishedAt)) {
+        invalidTimes.push({ id: post.id, channel, provider_post_id: entry.provider_post_id ?? null, published_at: entry.published_at ?? null })
+        continue
+      }
+      const publicationId = deterministicId('post_publication', post.organization_id, post.id, channel)
+      const createdAt = canonicalInstant(entry.created_at) ?? now
+      const error = state === 'unknown'
+        ? { code: entry.status === 'pending' ? 'transfer_pending_unresolved' : 'transfer_failure_unconfirmed',
+          message: entry.status === 'pending'
+            ? 'This publication was still pending when the schema was replaced; the provider outcome was never recorded.'
+            : `The earlier attempt recorded "${entry.error_message ?? 'failed'}" without proof the provider refused it.` }
+        : { code: null, message: null }
+      insertPublication.run(publicationId, post.organization_id, post.id, channel, identity.provider_app_id, identity.provider_subject_id,
+        identity.provider_target_id, imported ? 'import' : 'publish', state, entry.provider_post_id ?? null, identity.provider_permalink ?? null,
+        // A historical outbound publication recorded no fingerprint of what it
+        // sent. This marker never equals a real one, so it is never mistaken for
+        // proof the local copy still matches.
+        imported ? null : `unrecorded:${hash(JSON.stringify(entry))}`,
+        error.code, error.message, publishedAt, createdAt, createdAt)
+      report.publications.push({ id: publicationId, post_id: post.id, channel, origin: imported ? 'import' : 'publish', state,
+        provider_post_id: entry.provider_post_id ?? null, prior_status: entry.status, prior_error: entry.error_message ?? null })
+      // Only media the importer itself created is provider media: the asset it
+      // named after the provider post, stored as external, placed on this post.
+      if (imported) {
+        const assetId = `${channel === 'facebook' ? 'fb' : 'ig'}-asset-${entry.provider_post_id}`
+        const changes = stage.prepare(`UPDATE main.media_assets SET origin_publication_id = ? WHERE id = ? AND organization_id = ? AND source = 'external'
+          AND EXISTS (SELECT 1 FROM main.media_placements p WHERE p.asset_id = media_assets.id AND p.owner_type = 'content_document' AND p.owner_id = ?)`)
+          .run(publicationId, assetId, post.organization_id, post.id).changes
+        if (changes) report.imported_media.push({ asset_id: assetId, publication_id: publicationId })
+      }
+    }
   }
-  stage.exec('DROP TABLE temp.customer_user')
+  refuse('Social posts whose call to action has no resolvable destination (a call needs its location\'s phone)', unresolvablePhones)
+  refuse('Social post translations that never carried their event or offer copy', untranslated)
+  refuse('Social posts whose import provenance is ambiguous', ambiguousProvenance)
+  refuse('Channel entries with no verified provider identity in EPOCH_PUBLICATION_IDENTITIES', unmappedIdentities)
+  refuse('Published channel entries without a provider post id or a valid publication time', invalidTimes)
+
+  // 8. Every post has its route from creation. An imported row that never got
+  //    one takes the canonical allocation, and uniqueness is the tenant's.
+  const taken = new Set(stage.prepare("SELECT organization_id || ':' || slug AS key FROM main.content_documents WHERE kind = 'social_post' AND row_role IN ('root', 'representation') AND locale = 'en' AND slug IS NOT NULL").all().map(row => row.key))
+  const setSlug = stage.prepare('UPDATE main.content_documents SET slug = ? WHERE id = ?')
+  for (const post of stage.prepare("SELECT id, organization_id, title, summary FROM main.content_documents WHERE kind = 'social_post' AND row_role = 'root' AND slug IS NULL ORDER BY organization_id, id").all()) {
+    const base = normalizePostSlug(post.title || post.summary?.slice(0, 80) || '') || `update-${post.id}`
+    let slug = base
+    for (let attempt = 2; taken.has(`${post.organization_id}:${slug}`); attempt += 1) slug = `${base}-${attempt}`
+    taken.add(`${post.organization_id}:${slug}`)
+    setSlug.run(slug, post.id)
+    report.repaired_slugs.push({ id: post.id, slug })
+  }
+
+  // 9. The social feature grid becomes the social_posts block: same identity,
+  //    position, headings and button; the rows it held are read, not stored.
+  //    A grid with no limit showed up to twelve and keeps showing twelve.
+  const invalidBlocks = []
+  const updateBlock = stage.prepare('UPDATE main.content_blocks SET type = ?, data_json = ? WHERE id = ?')
+  for (const block of stage.prepare("SELECT id, document_id, data_json FROM main.content_blocks WHERE type = 'feature_grid' AND data_json ->> '$.source' = 'organization_updates' ORDER BY document_id, position").all()) {
+    const data = JSON.parse(block.data_json)
+    const limit = data.limit === undefined || data.limit === null ? 12 : data.limit
+    const hasLabel = typeof data.cta_label === 'string' && data.cta_label.trim() !== ''
+    const hasUrl = typeof data.cta_url === 'string' && data.cta_url.trim() !== ''
+    if (!Number.isInteger(limit) || limit < 1 || limit > 12 || hasLabel !== hasUrl) {
+      invalidBlocks.push({ id: block.id, document_id: block.document_id, limit: data.limit ?? null, cta_label: data.cta_label ?? null, cta_url: data.cta_url ?? null })
+      continue
+    }
+    const converted = {
+      ...(typeof data.title === 'string' && data.title.trim() ? { title: data.title } : {}),
+      ...(typeof data.description === 'string' && data.description.trim() ? { description: data.description } : {}),
+      limit,
+      ...(hasLabel ? { call_to_action: { label: data.cta_label, url: data.cta_url } } : {}),
+    }
+    updateBlock.run('social_posts', JSON.stringify(converted), block.id)
+    report.social_blocks.push({ id: block.id, document_id: block.document_id, before: data, after: converted })
+  }
+  refuse('Social feature grids whose limit or button cannot be carried', invalidBlocks)
+
+  assert(problems.length === 0, `Social publishing preflight failed; nothing was written.\n${problems.join('\n')}`)
+  record('scheduled_content_to_draft', report.scheduled_to_draft.length)
+  record('social_post_facts_to_words', report.social_post_facts.length)
+  record('calls_to_action_converted', report.calls_to_action.length)
+  record('post_publications', report.publications.length)
+  record('channel_entries_dropped', report.dropped_channel_entries.length)
+  record('imported_media_provenance', report.imported_media.length)
+  record('social_post_slugs_repaired', report.repaired_slugs.length)
+  record('social_post_first_published_at', report.first_published_at)
+  record('social_posts_blocks', report.social_blocks.length)
+  return report
 }
 
 
@@ -640,8 +816,8 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
 /**
  * @typedef {{ table: string, source_rows: number, target_rows: number }} TableTransfer
  * @typedef {{ baseline_sha256: string, tables: TableTransfer[], retired_tables: Array<{ table: string, source_rows: number }>, retired_columns: Record<string, string[]>,
- *   added_columns: Record<string, string[]>, connections_to_reconnect: Array<{ organization_id: string, slug: string, name: string, connections: string[] }>,
- *   retired_placements: Array<{ owner_type: string, slot: string, owner_id: string, slug: string | null, placement_id: string, asset_id: string }>, derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
+ *   added_columns: Record<string, string[]>, epoch: ReturnType<typeof transformSocialPublishingEpoch> | null,
+ *   derived: Record<string, number>, transforms: Array<{ name: string, changes: number, sql_sha256: string }>,
  *   invariants: Array<{ name: string, violations: number, sql_sha256: string }>, payload?: { tables: number, statements: number, delta?: Record<string, number>, left_behind?: Record<string, { changed: string[], deleted: string[] }> },
  *   schema?: Array<{ type: string, name: string, sql: string }> }} TransferManifest
  */
@@ -649,10 +825,10 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
 /**
  * @param {string} sourcePath
  * @param {string} targetPath
- * @param {{ payloadPath?: string | null, withoutJwks?: boolean, deltaFrom?: string | null }} [options]
+ * @param {{ payloadPath?: string | null, withoutJwks?: boolean, deltaFrom?: string | null, publicationIdentities?: Record<string, { provider_app_id: string, provider_subject_id: string, provider_target_id: string, provider_permalink?: string | null }> }} [options]
  * @returns {TransferManifest}
  */
-export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false, deltaFrom = null } = {}) {
+export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = null, withoutJwks = false, deltaFrom = null, publicationIdentities = EPOCH_PUBLICATION_IDENTITIES } = {}) {
   assert(!existsSync(targetPath), `Target already exists: ${targetPath}`)
   assert(!deltaFrom || payloadPath, 'A delta is a payload; pass --payload with --delta-from')
   const schemaSql = migrationChainSql()
@@ -675,8 +851,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     retired_tables: [],
     retired_columns: {},
     added_columns: {},
-    connections_to_reconnect: [],
-    retired_placements: [],
+    epoch: null,
     derived: {},
     transforms: [],
     invariants: [],
@@ -696,7 +871,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     manifest.retired_tables = retiredTables.map(table => ({ table, source_rows: count(source, table) }))
     // The snapshot pull leaves jwks behind on purpose; any other absent table
     // would arrive empty and look like a tenant with no data.
-    const absent = names.filter(table => !sourceTables.includes(table) && !(withoutJwks && table === 'jwks'))
+    const absent = names.filter(table => !sourceTables.includes(table) && !(withoutJwks && table === 'jwks') && !EPOCH_ADDED_TABLES.includes(table))
     assert(absent.length === 0, `Source is missing baseline tables: ${absent.join(', ')}`)
 
     for (const table of names.filter(table => sourceTables.includes(table))) {
@@ -717,9 +892,8 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       stage.prepare(`INSERT INTO main.${qi(table)} (${shared.map(qi).join(',')}) SELECT ${shared.map(qi).join(',')} FROM old.${qi(table)}`).run()
       manifest.tables.push({ table, source_rows: count(source, table) })
     }
-    deriveUserIdentity(stage, sourceTables, (name, changes) => { manifest.derived[name] = changes })
-    manifest.connections_to_reconnect = retireOrganizationProviderCredentials(stage, (name, changes) => { manifest.derived[name] = changes })
-    manifest.retired_placements = retirePlacementSlots(stage, (name, changes) => { manifest.derived[name] = changes })
+    for (const table of names.filter(table => !sourceTables.includes(table) && EPOCH_ADDED_TABLES.includes(table))) manifest.tables.push({ table, source_rows: 0 })
+    manifest.epoch = transformSocialPublishingEpoch(stage, source, (name, changes) => { manifest.derived[name] = changes }, { publicationIdentities })
     for (const transform of TRANSFORMS) {
       // A transform that folds a retiring column reads it from the attached
       // source. A source that never had it has nothing to fold, and the
@@ -785,12 +959,14 @@ export function printTransferReport(manifest) {
   for (const entry of manifest.retired_tables) console.log(`${entry.table.padEnd(width)}  ${String(entry.source_rows).padStart(6)}  retired`)
   for (const [table, names] of Object.entries(manifest.retired_columns)) console.log(`Retired ${table}: ${names.join(', ')}`)
   for (const [table, names] of Object.entries(manifest.added_columns)) console.log(`Added ${table}: ${names.join(', ')}`)
-  for (const entry of manifest.connections_to_reconnect) {
-    console.log(`Reconnect required: ${entry.slug} (${entry.organization_id}, ${entry.name}) loses ${entry.connections.join(', ')}`)
-  }
-  for (const entry of manifest.retired_placements) {
-    console.log(`Retired placement: ${entry.owner_type}:${entry.slot} of ${entry.slug ?? entry.owner_id} (${entry.owner_id}) dropped, asset ${entry.asset_id}`)
-  }
+  const epoch = manifest.epoch
+  for (const row of epoch?.scheduled_to_draft ?? []) console.log(`Scheduled ${row.kind} is now a draft: ${row.id} (${row.organization_id}) was due ${row.scheduled_for ?? 'at no recorded time'}`)
+  for (const row of epoch?.social_post_facts ?? []) console.log(`Post facts written into its words: ${row.id} [${row.locale}] ${JSON.stringify(row.before)} -> appended ${JSON.stringify(row.appended)}`)
+  for (const row of epoch?.calls_to_action ?? []) console.log(`Call to action: ${row.id} ${JSON.stringify(row.before)} -> ${JSON.stringify(row.after)}`)
+  for (const row of epoch?.publications ?? []) console.log(`Publication: ${row.post_id} ${row.channel} ${row.origin} ${row.prior_status} -> ${row.state}${row.prior_error ? ` (prior error: ${row.prior_error})` : ''}`)
+  for (const row of epoch?.dropped_channel_entries ?? []) console.log(`Not a publication, dropped: ${row.id} ${row.channel} ${row.status}${row.error ? ` (${row.error})` : ''}`)
+  for (const row of epoch?.repaired_slugs ?? []) console.log(`Post route allocated: ${row.id} -> /posts/${row.slug}`)
+  for (const row of epoch?.social_blocks ?? []) console.log(`Block ${row.id} (document ${row.document_id}) is now social_posts ${JSON.stringify(row.after)}`)
   console.log(`Derived: ${Object.entries(manifest.derived).map(([name, changes]) => `${name}=${changes}`).join(', ') || 'nothing'}`)
   console.log(`Transforms: ${manifest.transforms.filter(transform => transform.changes > 0).map(transform => `${transform.name}=${transform.changes}`).join(', ') || 'no changes'}`)
   for (const [table, rows] of Object.entries(manifest.payload?.left_behind ?? {})) {

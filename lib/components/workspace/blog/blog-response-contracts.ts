@@ -25,9 +25,9 @@ export function isSuccessResponse(value: unknown): value is { success: true } {
 function isBlogLifecycleState(value: unknown): value is BlogLifecycleState {
   return isRecord(value)
     && typeof value.id === 'string'
-    && (value.status === 'published' || value.status === 'scheduled')
+    && value.status === 'published'
     && (value.published_at === null || typeof value.published_at === 'string')
-    && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
+    && typeof value.changed === 'boolean'
     && typeof value.updated_at === 'string'
 }
 

@@ -16,7 +16,6 @@ export type PublicPageDataset =
   | 'reviews'
   | 'photos'
   | 'qa'
-  | 'posts'
   | 'blogPost'
   | 'reservationPolicies'
 
@@ -48,7 +47,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     const sub = segments.length > 3 ? segments[3] : undefined;
     const page = sub || "location";
     const fullData =
-      page === "reviews" || page === "photos" || page === "qa" || page === "posts"
+      page === "reviews" || page === "photos" || page === "qa"
         ? page
         : null;
     return {
@@ -58,7 +57,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
         ...(page === 'location' || page === 'contact' ? ['content'] as const : []),
         'location',
         ...(page === 'location' || page === 'menu' || page === 'products' || page === 'experiences' ? ['products'] as const : []),
-        ...(page === "location" ? ['reviews', 'posts'] as const : []),
+        ...(page === "location" ? ['reviews'] as const : []),
         ...(fullData ? [fullData] as PublicPageDataset[] : []),
       ],
       blogSlug: null,
@@ -142,7 +141,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
     return {
       page: "posts",
       location: null,
-      datasets: ['posts'],
+      datasets: [],
       blogSlug: null,
     };
   if (path.startsWith("/photos"))

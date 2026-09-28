@@ -6,6 +6,12 @@
   color: var(--blawby-ink);
   font-family: Poppins, sans-serif;
 
+  /* The heading face shared components set their headings in, and how far the
+     fixed header reaches past its spacer (it carries the banner too). */
+  --font-heading:        Marcellus, serif;
+  --font-heading-weight: 400;
+  --header-overlap:      3rem;
+
   --blawby-bg:            var(--blawby-token-bg, #fbfaf7);
   --blawby-surface:       var(--blawby-token-surface, #ffffff);
   --blawby-primary:       var(--blawby-token-primary, #25356c);

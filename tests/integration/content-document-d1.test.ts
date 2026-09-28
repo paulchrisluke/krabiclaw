@@ -30,7 +30,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
     }
     const { document } = await createContentDocumentWithBlocks(db, {
       id: 'article', organizationId: 'one', kind: 'article', rowRole: 'root', locale: 'en',
-      title: 'Original', slug: 'article', status: 'published', visibility: 'listed',
+      title: 'Original', slug: 'article', status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
     }, [{ id: 'body', type: 'markdown', data: { markdown: 'Original', editor_mode: 'rich' } }])
     const prepare = (label: string) => prepareContentDocumentUpdate(document, { expected_updated_at: document.updated_at,
       changes: { title: label, summary: label }, blocks: [{ id: 'body', type: 'markdown', data: { markdown: label, editor_mode: 'rich' } }],
@@ -148,8 +148,8 @@ test('document scopes, translations, block ownership and concurrent edits persis
     await db.prepare("INSERT INTO media_assets (id,organization_id,kind,provider,source,status) VALUES ('retained-asset','one','image','cloudflare_r2','uploaded','active')").run()
     const deletion = prepareContentDocumentDeletion({ locationId: 'delete-location', organizationId: 'one' })
     for (const id of ['late-a', 'late-b', 'keep']) {
-      await db.prepare(`INSERT INTO content_documents (id,organization_id,location_id,kind,row_role,locale,title,slug,status,visibility)
-        VALUES (?,'one',?,'article','root','en',?,?,'published','listed')`).bind(id, id === 'keep' ? 'keep-location' : 'delete-location', id, id).run()
+      await db.prepare(`INSERT INTO content_documents (id,organization_id,location_id,kind,row_role,locale,title,slug,status,visibility,published_at)
+        VALUES (?,'one',?,'article','root','en',?,?,'published','listed','2026-01-01T00:00:00.000Z')`).bind(id, id === 'keep' ? 'keep-location' : 'delete-location', id, id).run()
       await db.prepare(`INSERT INTO content_documents (id,organization_id,kind,row_role,root_id,root_role,locale,title,slug)
         VALUES (?,'one','article','representation',?,'root','th',?,?)`).bind(id + '-th', id, id, id).run()
       for (const owner of [id, id + '-th']) {

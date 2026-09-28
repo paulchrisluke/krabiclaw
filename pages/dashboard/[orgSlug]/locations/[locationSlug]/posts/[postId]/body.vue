@@ -9,16 +9,13 @@
     @cancel="post.revert"
     @save="post.save"
   >
-    <!-- A real section this post type does not have is named rather than left as a blank pane. -->
-    <p v-if="!post.hasSection('body')" class="text-base text-muted">
-      {{ post.typeLabel.value }} posts have no {{ post.sectionLabels.value.body.toLowerCase() }}.
-    </p>
-    <UFormField v-else label="Post" required>
+    <UFormField label="Caption" description="Plain text, as you want it read. Dates, offers and codes belong here.">
       <UTextarea
         v-model="post.editor.form.body"
         :rows="10"
         autofocus
         placeholder="What's new? Write it the way you'd say it to a guest."
+        :maxlength="5000"
         size="xl"
         class="w-full"
       />

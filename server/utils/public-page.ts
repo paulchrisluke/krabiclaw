@@ -36,7 +36,6 @@ import {
 import { recordRequestPhase } from "~/server/utils/request-metrics";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isNonProductionHost } from "~/server/utils/tenant-hosts";
-import { getPublishedPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
@@ -222,7 +221,7 @@ async function loadPublicPageSource(
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
-    'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
+    'content', 'location', 'products', 'reviews', 'photos', 'qa',
     'blogPost', 'reservationPolicies',
   ]);
   // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
@@ -345,8 +344,6 @@ async function loadPublicPageSource(
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
     requestedDatasets.has("reviews") && !locationSlug;
-  // Pages that render the posts feed
-  const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
   const needsLocations =
     requestedDatasets.has("reviews") ||
@@ -421,9 +418,6 @@ async function loadPublicPageSource(
       [organizationId],
     );
 
-  // Posts are fetched separately via getPublishedPosts() below, which returns the fully
-  // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
-  // row shape doesn't have — no point running an equivalent query here just to discard it.
 
   if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
@@ -649,13 +643,6 @@ async function loadPublicPageSource(
     }
   }
 
-  options.signal?.throwIfAborted();
-  const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
-    needsGlobalPosts ? getPublishedPosts(db, organizationId, page === "posts" ? 50 : 6, undefined, localizedLocale ?? "en") : Promise.resolve([]),
-    locationId && requestedDatasets.has("posts")
-      ? getPublishedPosts(db, organizationId, 50, locationId, localizedLocale ?? "en")
-      : Promise.resolve([]),
-  ]);
 
 
   // Shape locations
@@ -851,8 +838,6 @@ async function loadPublicPageSource(
     media: requestedDatasets.has("photos") ? media : [],
     qaList,
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
-    postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
-    globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
     reservationPolicyByLocation,
     localeRepresentations,
   };

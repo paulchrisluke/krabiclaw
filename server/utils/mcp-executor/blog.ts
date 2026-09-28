@@ -3,7 +3,7 @@ import { BLOG_UPDATE_MUTATION_FIELDS, createBlogPost, deleteBlogPost, getBlogPos
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
 
@@ -17,7 +17,7 @@ function optionalArticleCollection(args: Record<string, unknown>): ArticleCollec
 
 const BLOG_CONTENT_BLOCK_TYPES = new Set<string>(CONTENT_BLOCK_TYPES)
 
-const BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled'])
+const BLOG_POST_STATUSES = new Set(['draft', 'published'])
 const BLOG_VISIBILITIES = new Set(['listed', 'unlisted'])
 
 function hasAnyField(args: Record<string, unknown>, fields: readonly string[]) {
@@ -139,7 +139,6 @@ function toBlogPostSummary(post: Record<string, unknown>, organization: McpExecu
     published_at: responseNullableString(post.published_at, 'post.published_at'),
     status: responseEnumString(post.status, 'post.status', BLOG_POST_STATUSES),
     visibility: responseEnumString(post.visibility, 'post.visibility', BLOG_VISIBILITIES),
-    scheduled_for: responseNullableString(post.scheduled_for, 'post.scheduled_for'),
     created_at: responseString(post.created_at, 'post.created_at'),
     updated_at: responseString(post.updated_at, 'post.updated_at'),
     cover: toCover(post.cover),
@@ -166,15 +165,11 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
   switch (toolName) {
     case "list_blog_posts":
       {
-        const posts = (await listBlogPosts(
-          organization.db,
-          organization.organizationId,
-          optionalString(args, "status"),
-          organization.env,
-          optionalArticleCollection(args),
-        )).map((post) => toBlogPostSummary(post, organization));
-        const { items, page_info } = paginateMcpCollection(posts, args, { resource: `blog-posts:${organization.organizationId}` });
-        return { posts: items, page_info };
+        const status = optionalString(args, "status");
+        const collection = optionalArticleCollection(args);
+        const resource = { resource: `blog-posts:${organization.organizationId}:${status ?? ''}:${collection ?? ''}` };
+        const page = await listBlogPosts(organization.db, organization.organizationId, status, organization.env, mcpPageWindow(args, resource), resource, collection);
+        return { posts: page.posts.map((post) => toBlogPostSummary(post, organization)), page_info: page.page_info };
       }
     case "get_blog_post":
       {
@@ -198,7 +193,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       );
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(result.post, organization) },
-        `Created ${result.post.status} blog article "${result.post.title ?? result.post.id}".`,
+        `Created draft blog article "${result.post.title ?? result.post.id}". It is not public until publish_blog_post.`,
       );
     }
     case "update_blog_post": {
@@ -217,23 +212,13 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     }
     case "publish_blog_post": {
       const postId = requiredString(args, "post_id")
-      const scheduledFor = args.scheduled_for
-      if (Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
-        && scheduledFor !== null
-        && (typeof scheduledFor !== 'string' || !scheduledFor.trim())) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invalid scheduled_for')
-      }
-      const normalizedScheduledFor = typeof scheduledFor === 'string' ? scheduledFor.trim() : scheduledFor
-      await updateBlogLifecycle(organization.db, postId, {
+      const lifecycle = await updateBlogLifecycle(organization.db, postId, {
         expected_updated_at: requiredString(args, 'expected_updated_at'),
-        ...(Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
-          ? { scheduled_for: normalizedScheduledFor as string | null }
-          : {}),
       }, organization.organizationId)
       const result = await getBlogPost(organization.db, postId, organization.organizationId, organization.env)
       return renderStructuredResponse(
         { post: projectBlogPostForMcp(result, organization) },
-        `${result.status === 'scheduled' ? 'Rescheduled' : 'Published'} blog article "${result.title}".`,
+        lifecycle.changed ? `Published blog article "${result.title}".` : `Blog article "${result.title}" was already published; nothing changed.`,
       )
     }
     case "reorder_blog_posts": {
@@ -243,7 +228,14 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'post_ids must contain non-empty post ids.')
       }
       await reorderArticles(organization.db, organization.organizationId, collection, args.post_ids.map(id => String(id).trim()))
-      const posts = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, collection)
+      // The order that was set, read back whole: every article in the collection, in it.
+      const posts: Awaited<ReturnType<typeof listBlogPosts>>['posts'] = []
+      const resource = { resource: `article-order:${organization.organizationId}:${collection}` }
+      for (let offset = 0, more = true; more; offset += 100) {
+        const page = await listBlogPosts(organization.db, organization.organizationId, null, organization.env, { limit: 100, offset }, resource, collection)
+        posts.push(...page.posts)
+        more = page.page_info.has_more
+      }
       return { posts: posts.map(post => toBlogPostSummary(post, organization)) }
     }
     case "delete_blog_post": {

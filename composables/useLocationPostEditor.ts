@@ -1,4 +1,4 @@
-import { parsePostTopic, type PostMutation } from '~/shared/posts'
+import type { PostCallToAction } from '~/shared/posts'
 import { getErrorMessage } from '~/utils/errors'
 
 export interface PostMediaFormItem {
@@ -29,168 +29,148 @@ export function normalizePostMediaForForm(items: unknown): PostMediaFormItem[] {
   return media
 }
 
-export const isPostResponse = (value: unknown): value is ApiRecord =>
-  isRecord(value)
-  && isRecord(value.post)
-  && typeof value.post.id === 'string'
-  && (value.socialErrors === undefined || isRecord(value.socialErrors))
+export const isPostResponse = (value: unknown): value is { post: ApiRecord } =>
+  isRecord(value) && isRecord(value.post) && typeof value.post.id === 'string' && typeof value.post.updated_at === 'string'
 
+export interface PublishOutcome {
+  channel: 'organization' | 'facebook' | 'instagram'
+  target_id: string
+  status: 'published' | 'already_published' | 'processing' | 'failed' | 'unknown' | 'skipped'
+  publication_id?: string
+  public_url?: string | null
+  code?: string
+  message?: string
+}
+export interface PublishResult { ok: boolean; post_id: string; updated_at: string; outcomes: PublishOutcome[] }
+export type PublishTarget = { channel: 'organization' } | { channel: 'facebook' | 'instagram'; target_id: string; connection_revision: string }
+
+const isPublishResult = (value: unknown): value is PublishResult =>
+  isRecord(value) && typeof value.ok === 'boolean' && typeof value.updated_at === 'string' && Array.isArray(value.outcomes)
+
+/**
+ * The CMS's draft of one short post, written through the same editor routes —
+ * and so the same domain functions — as MCP. Updates carry the revision the
+ * post was read at; a stale one is the server's conflict to report.
+ */
 export function useLocationPostEditor(organizationId: string, locationId: Ref<string | null>) {
   const dashboardApi = useDashboardApi()
   const error = ref<string | null>(null)
   const { trackPostCreated, trackPostPublished } = useAnalytics()
 
   const form = reactive({
-    topic: { post_type: 'standard' } as PostMutation,
     title: '',
     body: '',
-    slug: '',
+    callToAction: null as PostCallToAction | null,
     media: [] as PostMediaFormItem[],
   })
-
-  // Snapshot of media as loaded from the server, used only to compute which
-  // specific attach/remove calls this editing session's own changes require —
-  // never sent to the server as a full array. See syncPostMedia.
+  // The record as last read, and the revision sent with every change.
+  const record = ref<ApiRecord | null>(null)
+  const updatedAt = ref<string | null>(null)
   let originalMedia: PostMediaFormItem[] = []
-  const selectedChannels = ref<string[]>(['organization'])
   const saving = ref(false)
   const publishing = ref(false)
-
-  function reset() {
-    form.topic = { post_type: 'standard' }
-    form.title = ''
-    form.body = ''
-    form.slug = ''
-    form.media = []
-    originalMedia = []
-    selectedChannels.value = ['organization']
-    savedSnapshot.value = snapshot()
-  }
-
-  /** What the form looked like when it was last in sync with the server. */
   const savedSnapshot = ref('')
 
   function snapshot() {
     return JSON.stringify({
-      ...form.topic,
-      title: form.title,
-      body: form.body,
-      slug: form.slug,
-      // A freshly added gallery row has no asset yet; sending it would write a
-      // placement with an empty asset_id.
-      media: form.media
-        .filter(item => item.asset_id)
-        .map(item => ({ asset_id: item.asset_id, slot: item.slot, alt_text: item.alt_text })),
+      title: form.title, body: form.body, callToAction: form.callToAction,
+      media: form.media.filter(item => item.asset_id).map(item => ({ asset_id: item.asset_id, slot: item.slot })),
     })
   }
-
-  /** Nothing to write means nothing to write — a save with no edits would still
-   *  run server-side validation over the whole row, so an already-invalid record
-   *  would block actions that never touched it. */
   const isDirty = computed(() => snapshot() !== savedSnapshot.value)
 
   function loadFrom(post: ApiRecord) {
-    form.topic = { ...parsePostTopic({ post_type: post.post_type, event: post.event, offer: post.offer, call_to_action: post.call_to_action, alert_type: post.alert_type }), scheduled_for: typeof post.scheduled_for === 'string' ? post.scheduled_for : null }
+    record.value = post
     form.title = String(post.title ?? '')
     form.body = String(post.body ?? '')
-    form.slug = String(post.slug ?? '')
+    form.callToAction = isRecord(post.call_to_action) && typeof post.call_to_action.label === 'string' && typeof post.call_to_action.url === 'string'
+      ? { label: post.call_to_action.label, url: post.call_to_action.url }
+      : null
     form.media = normalizePostMediaForForm(post.media)
+    updatedAt.value = typeof post.updated_at === 'string' ? post.updated_at : null
     originalMedia = form.media.map(item => ({ ...item }))
-    selectedChannels.value = ['organization']
     savedSnapshot.value = snapshot()
   }
 
-  function buildPayload(ownerLocationId: string, postId?: string) {
-    const base = {
-      ...form.topic,
-      title: form.title,
-      body: form.body,
-      slug: form.slug || undefined,
-      location_id: ownerLocationId,
-    }
-    // Creation only: post:gallery membership on an update never travels as a
-    // full array (see syncMedia) — only a brand-new post's initial media is
-    // safe to seed this way, since nothing exists yet to resurrect.
-    if (postId) return base
-    return {
-      ...base,
-      media: form.media
-        .filter(item => item.asset_id)
-        .map(item => ({ asset_id: item.asset_id, slot: item.slot })),
-    }
-  }
+  const fields = () => ({
+    title: form.title.trim() ? form.title : null,
+    body: form.body.trim() ? form.body : null,
+    call_to_action: form.callToAction && form.callToAction.label.trim() && form.callToAction.url.trim() ? form.callToAction : null,
+  })
 
-  const isPlacementResponse = (value: unknown): value is { asset_ids: string[] } =>
-    isRecord(value) && Array.isArray(value.asset_ids)
+  const isPlacementResponse = (value: unknown): value is { asset_ids: string[] } => isRecord(value) && Array.isArray(value.asset_ids)
 
   async function syncMedia(postId: string) {
+    const placement = (slot: 'cover' | 'gallery') => ({ owner_type: 'content_document', owner_id: postId, slot })
     const originalCover = originalMedia.find(item => item.slot === 'cover')?.asset_id ?? null
     const currentCover = form.media.find(item => item.slot === 'cover')?.asset_id ?? null
     if (currentCover !== originalCover) {
       await dashboardApi(`/api/editor/organizations/${organizationId}/media/placements`, {
-        method: 'PUT',
-        body: { placement: { owner_type: 'post', owner_id: postId, slot: 'cover' }, asset_id: currentCover },
-        validate: isPlacementResponse,
+        method: 'PUT', body: { placement: placement('cover'), asset_id: currentCover }, validate: isPlacementResponse,
       })
     }
-
     const originalGallery = originalMedia.filter(item => item.slot === 'gallery').map(item => item.asset_id).filter(Boolean)
     const currentGallery = form.media.filter(item => item.slot === 'gallery').map(item => item.asset_id).filter(Boolean)
-    const originalGalleryIds = new Set(originalGallery)
-    const currentGalleryIds = new Set(currentGallery)
-    const placement = { owner_type: 'post', owner_id: postId, slot: 'gallery' }
-    for (const assetId of originalGalleryIds) {
-      if (currentGalleryIds.has(assetId)) continue
+    for (const assetId of originalGallery.filter(id => !currentGallery.includes(id))) {
       await dashboardApi(`/api/editor/organizations/${organizationId}/media/placements/remove`, {
-        method: 'POST', body: { placement, asset_id: assetId }, validate: isPlacementResponse,
+        method: 'POST', body: { placement: placement('gallery'), asset_id: assetId }, validate: isPlacementResponse,
       })
     }
-    for (const assetId of currentGalleryIds) {
-      if (originalGalleryIds.has(assetId)) continue
+    for (const assetId of currentGallery.filter(id => !originalGallery.includes(id))) {
       await dashboardApi(`/api/editor/organizations/${organizationId}/media/placements/attach`, {
-        method: 'POST', body: { placement, asset_id: assetId }, validate: isPlacementResponse,
+        method: 'POST', body: { placement: placement('gallery'), asset_id: assetId }, validate: isPlacementResponse,
       })
     }
-
-    // Attach and remove do not carry order, and the post PATCH excludes media,
-    // so without this a reorder looks saved and comes back in its old order.
-    const orderChanged = currentGallery.length > 1
-      && currentGallery.some((assetId, index) => originalGallery[index] !== assetId)
+    // Attach appends and remove closes the gap, so this is the order the
+    // server now holds; the author's order is set only when it differs.
+    const kept = originalGallery.filter(id => currentGallery.includes(id))
+    const serverOrder = [...kept, ...currentGallery.filter(id => !kept.includes(id))]
+    const orderChanged = currentGallery.some((assetId, index) => serverOrder[index] !== assetId)
     if (orderChanged) {
       const moves = currentGallery.map((assetId, index) => index === currentGallery.length - 1
         ? { asset_id: assetId }
         : { asset_id: assetId, before_asset_id: currentGallery[index + 1]! })
       await dashboardApi(`/api/editor/organizations/${organizationId}/media/placements/reorder`, {
-        method: 'POST', body: { placement, moves: moves.reverse() }, validate: isPlacementResponse,
+        method: 'POST', body: { placement: placement('gallery'), moves: moves.reverse() }, validate: isPlacementResponse,
       })
     }
   }
 
-  /** Returns the saved post, or null when the save could not run or failed. */
-  async function save(postId: string | null): Promise<ApiRecord | null> {
+  async function reload(postId: string): Promise<ApiRecord> {
+    const res = await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${organizationId}/posts/${postId}`, { validate: isPostResponse })
+    loadFrom(res.post)
+    return res.post
+  }
+
+  /** Creates the draft (under its idempotency key) or saves the changes; the saved post, or null with `error` set. */
+  async function save(postId: string | null, idempotencyKey?: string): Promise<ApiRecord | null> {
     const ownerLocationId = locationId.value
-    if (!form.body.trim() || !ownerLocationId) return null
+    if (!ownerLocationId) return null
     error.value = null
     saving.value = true
     try {
-      if (postId) {
-        if (form.topic.post_type === 'alert') await syncMedia(postId)
-        const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${organizationId}/posts/${postId}`, {
-          method: 'PATCH', body: buildPayload(ownerLocationId, postId), validate: isPostResponse,
+      if (!postId) {
+        if (!idempotencyKey) throw new Error('A new post needs its idempotency key')
+        const res = await dashboardApi<{ post: ApiRecord }>(`/api/editor/organizations/${organizationId}/posts`, {
+          method: 'POST',
+          body: { idempotency_key: idempotencyKey, ...fields(), location_id: ownerLocationId,
+            media: form.media.filter(item => item.asset_id).map(item => ({ asset_id: item.asset_id, slot: item.slot })) },
+          validate: isPostResponse,
         })
-        if (form.topic.post_type !== 'alert') await syncMedia(postId)
-        originalMedia = form.media.map(item => ({ ...item }))
-        savedSnapshot.value = snapshot()
-        return res.post as ApiRecord
+        loadFrom(res.post)
+        trackPostCreated(String(res.post.id), organizationId)
+        return res.post
       }
-      const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${organizationId}/posts`, {
-        method: 'POST', body: buildPayload(ownerLocationId), validate: isPostResponse,
-      })
-      const created = res.post as ApiRecord
-      originalMedia = form.media.map(item => ({ ...item }))
-      savedSnapshot.value = snapshot()
-      if (created.id) trackPostCreated(String(created.id), organizationId)
-      return created
+      if (!updatedAt.value) throw new Error('The post has not been read yet')
+      const textChanged = JSON.stringify(fields()) !== JSON.stringify(fieldsOf(savedSnapshot.value))
+      if (textChanged) {
+        await dashboardApi(`/api/editor/organizations/${organizationId}/posts/${postId}`, {
+          method: 'PATCH', body: { expected_updated_at: updatedAt.value, ...fields() }, validate: isPostResponse,
+        })
+      }
+      await syncMedia(postId)
+      // Media changes advance the post's revision too; read it back once.
+      return await reload(postId)
     } catch (err) {
       error.value = getErrorMessage(err, 'Failed to save')
       return null
@@ -199,36 +179,27 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     }
   }
 
-  async function publish(postId: string | null): Promise<ApiRecord | null> {
-    const ownerLocationId = locationId.value
-    if (!form.body.trim() || !ownerLocationId) return null
+  function fieldsOf(saved: string) {
+    const value = JSON.parse(saved || '{}') as { title?: string; body?: string; callToAction?: PostCallToAction | null }
+    return {
+      title: value.title?.trim() ? value.title : null,
+      body: value.body?.trim() ? value.body : null,
+      call_to_action: value.callToAction && value.callToAction.label.trim() && value.callToAction.url.trim() ? value.callToAction : null,
+    }
+  }
+
+  /** Publishes to exactly the targets chosen; the outcome of each is the server's own. */
+  async function publish(postId: string, targets: PublishTarget[]): Promise<PublishResult | null> {
+    if (!updatedAt.value) return null
     error.value = null
     publishing.value = true
     try {
-      let id = postId
-      if (!id) {
-        const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${organizationId}/posts`, {
-          method: 'POST', body: buildPayload(ownerLocationId), validate: isPostResponse,
-        })
-        id = String((res.post as ApiRecord).id)
-      } else if (isDirty.value) {
-        if (form.topic.post_type === 'alert') await syncMedia(id)
-        await dashboardApi<ApiRecord>(`/api/editor/organizations/${organizationId}/posts/${id}`, {
-          method: 'PATCH', body: buildPayload(ownerLocationId, id), validate: isPostResponse,
-        })
-        if (form.topic.post_type !== 'alert') await syncMedia(id)
-      }
-      const res = await dashboardApi<ApiRecord>(`/api/editor/organizations/${organizationId}/posts/${id}/publish`, {
-        method: 'POST', body: { channels: selectedChannels.value }, validate: isPostResponse,
+      const result = await dashboardApi<PublishResult>(`/api/editor/organizations/${organizationId}/posts/${postId}/publish`, {
+        method: 'POST', body: { expected_updated_at: updatedAt.value, targets }, validate: isPublishResult,
       })
-      originalMedia = form.media.map(item => ({ ...item }))
-      savedSnapshot.value = snapshot()
-      trackPostPublished(String(id), organizationId)
-      if (isRecord(res.socialErrors) && Object.keys(res.socialErrors).length > 0) {
-        const errorMessages = Object.entries(res.socialErrors).map(([ch, err]) => `${ch}: ${err}`).join(', ')
-        error.value = `Published, but social channel delivery failed: ${errorMessages}`
-      }
-      return res.post as ApiRecord
+      if (result.outcomes.some(outcome => outcome.status === 'published')) trackPostPublished(postId, organizationId)
+      await reload(postId)
+      return result
     } catch (err) {
       error.value = getErrorMessage(err, 'Failed to publish')
       return null
@@ -237,12 +208,25 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     }
   }
 
+  async function reconcile(postId: string, publicationId: string): Promise<boolean> {
+    error.value = null
+    try {
+      await dashboardApi(`/api/editor/organizations/${organizationId}/post-publications/${publicationId}/reconcile`, {
+        method: 'POST', body: {}, validate: (value): value is ApiRecord => isRecord(value),
+      })
+      await reload(postId)
+      return true
+    } catch (err) {
+      error.value = getErrorMessage(err, 'Failed to check the publication')
+      return false
+    }
+  }
+
   async function remove(postId: string): Promise<boolean> {
     error.value = null
     try {
       await dashboardApi(`/api/editor/organizations/${organizationId}/posts/${postId}`, {
-        method: 'DELETE',
-        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+        method: 'DELETE', validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
       return true
     } catch (err) {
@@ -251,5 +235,5 @@ export function useLocationPostEditor(organizationId: string, locationId: Ref<st
     }
   }
 
-  return { form, selectedChannels, saving, publishing, isDirty, error, reset, loadFrom, save, publish, remove }
+  return { form, record, updatedAt, saving, publishing, isDirty, error, loadFrom, save, publish, reconcile, remove }
 }
