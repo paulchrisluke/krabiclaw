@@ -110,18 +110,6 @@
           >
             {{ item.label }}
           </NuxtLink>
-
-          <!-- Docs and Blog children come from the canonical article sources, so
-               they are fetched when the menu is first opened rather than on
-               every public page render. -->
-          <ClientOnly>
-            <Suspense>
-              <PlatformMobileContentNav @navigate="close" />
-              <template #fallback>
-                <p class="px-3 py-2.75 text-[15px] font-medium text-dimmed">Loading Docs and Blog…</p>
-              </template>
-            </Suspense>
-          </ClientOnly>
         </div>
 
         <div class="mt-4.5 flex flex-col gap-0.5 border-t border-default pt-3.5">
@@ -156,7 +144,6 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
-import PlatformMobileContentNav from '~/components/platform/PlatformMobileContentNav.vue'
 import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
 
 const props = withDefaults(defineProps<{ section?: 'platform' | 'docs' | 'blog' }>(), {
@@ -178,9 +165,7 @@ const PRIMARY_ITEMS = [
   { label: 'Docs', to: '/docs' },
 ] as const
 
-// Collapsed navigation renders Docs as a disclosure group below, so it drops
-// out of the plain-link run rather than being listed a second time.
-const COLLAPSED_LINKS = PRIMARY_ITEMS.filter(item => item.to !== '/docs')
+const COLLAPSED_LINKS = [...PRIMARY_ITEMS, { label: 'Blog', to: '/blog' }] as const
 
 const MORE_ITEMS = [
   { label: 'MCP', to: '/plugin' },

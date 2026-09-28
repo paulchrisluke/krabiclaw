@@ -15,7 +15,6 @@ export default {
   },
   "blawby": {
     "article": {
-      "browse_topics": "Browse topics",
       "from_the": "From the"
     },
     "navigation": {
@@ -154,6 +153,11 @@ export default {
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
+      "browse_topics": "Browse topics",
+      "tagged": "Tagged",
+      "read_time": "{count} min read",
+      "published_from": "Published from {name}",
+      "updated_on": "Updated {date}",
       "title": "Latest Updates",
       "featured": "Featured",
       "subtitle": "News & Events",

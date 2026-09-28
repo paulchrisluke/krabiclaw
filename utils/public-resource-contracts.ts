@@ -86,7 +86,6 @@ export interface PublicPagePayload {
   qaList: ApiRecord[]
   postsList: ApiRecord[]
   globalPosts: ApiRecord[]
-  blogList: ApiRecord[]
   blogPost: ApiRecord | null
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
   products: Product[]
@@ -173,7 +172,6 @@ export const isPublicPagePayload = (
   && Array.isArray(value.postsList)
   && Array.isArray(value.globalPosts)
   && value.globalPosts.every(item => isRecord(item) && typeof item.id === 'string')
-  && Array.isArray(value.blogList)
   && (value.blogPost === null || isRecord(value.blogPost))
   && isRecord(value.reservationPolicyByLocation)
   && Object.values(value.reservationPolicyByLocation).every(item => item === null || isRecord(item))

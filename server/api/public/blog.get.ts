@@ -11,10 +11,9 @@
 // One route now. The tenant comes from `event.context.organizationId`, which
 // tenant-resolution sets from the host, so krabiclaw.com gets Krabiclaw's
 // articles and a tenant domain gets that tenant's, by the same code.
-import { queryAll } from '~/server/db'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { attachCover } from '~/server/utils/content/publishing'
-import { COVER_SELECT, coverJoinSql } from '~/server/utils/content/cover'
+import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { listPublishedArticles } from '~/server/utils/content/publishing'
+import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { isArticleCollection } from '~/utils/article-collections'
 import { defineHandler } from 'nitro'
 import { getQuery } from 'nitro/h3'
@@ -27,36 +26,23 @@ export default defineHandler(async (event) => {
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  // Absent means the blog, the same collection `listPublicPlatformBlogPosts`
+  // Absent means the blog, the same collection `listPublishedArticles`
   // defaults to, because this route answers the blog index and that function
   // renders it server-side; a route that answered every collection put the
   // documentation in the platform's blog feed while its own SSR left it out.
   // Every article carries a collection, so no caller loses rows to the filter.
-  const requested = getQuery(event).collection
+  const query = getQuery(event)
+  const requested = query.collection
   if (requested !== undefined && !isArticleCollection(requested)) {
     return jsonResponse({ error: 'Unknown collection' }, { status: 400 })
   }
   const collection = requested === undefined ? 'blog' : requested
-
-  const sql = `
-    SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection,
-      (p.metadata_json ->> '$.category') AS category, p.seo_keywords,
-      p.published_at, p.updated_at, p.sort_order, ${COVER_SELECT}
-    FROM content_documents p
-    ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
-      AND p.organization_id = ? AND p.visibility = 'listed'
-      AND (p.metadata_json ->> '$.collection') = ?
-    ORDER BY ${collection === 'docs' ? 'p.sort_order, p.title' : 'p.published_at IS NULL, p.published_at DESC, p.id DESC'}
-    LIMIT 200
-  `
+  const locale = assertExactCanonicalLocale(query.locale ?? 'en')
 
   try {
-    const params = [organizationId, collection]
-    const results = await queryAll<ApiRecord>(db, sql, params)
-    return jsonResponse({ posts: (results ?? []).map(attachCover) })
+    return jsonResponse({ posts: await listPublishedArticles(db, env, organizationId, collection, locale) })
   } catch (err) {
+    rethrowHttpError(err)
     console.error('Failed to fetch public blog posts:', err)
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })
   }

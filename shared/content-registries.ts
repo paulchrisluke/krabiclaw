@@ -14,6 +14,7 @@ export const PUBLICATION_CONTENT_BLOCK_TYPES = [
   'markdown',
   'image',
   'gallery',
+  'video',
   'faq',
   'how_to',
   'divider',
@@ -177,8 +178,10 @@ export function readContentFieldValue(data: Record<string, unknown>, path: Conte
 function describeStructuralFields(type: ContentBlockType): string {
   const fields = TENANT_PAGE_BLOCK_REGISTRY[type]?.fields ?? {}
   const described = Object.entries(fields)
-    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference')
+    .filter(([, field]) => field.kind === 'url' || field.kind === 'enum' || field.kind === 'reference'
+      || (field.kind === 'text' && field.translatable === false))
     .map(([key, field]) => {
+      if (field.kind === 'text') return `${key} (${field.label})`
       if (field.kind === 'enum' && field.options?.length) {
         return `${key} (one of ${field.options.map(option => option.value).join(', ')})`
       }

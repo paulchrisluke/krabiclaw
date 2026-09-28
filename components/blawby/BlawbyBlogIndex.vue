@@ -1,18 +1,15 @@
 <template>
   <div data-parity-root>
-    <section class="bg-white pb-16 pt-12 sm:pt-16" data-parity-section="articles">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <TenantBlogIndex
-          variant="blawby"
-          :title="heroTitle"
-          :description="heroDescription"
-          :posts="routeData.posts"
-          base-path="/article"
-        />
-      </div>
+    <section data-parity-section="articles">
+      <TenantBlogIndex
+        variant="blawby"
+        :title="heroTitle"
+        :description="heroDescription"
+        :posts="posts"
+      />
     </section>
 
-    <section v-if="disclaimerBlock?.content" class="blawby-container mb-6 text-center md:text-left" data-parity-section="disclaimer">
+    <section v-if="disclaimerBlock?.content" class="mb-6 text-center md:text-left" data-parity-section="disclaimer">
       <p class="mt-8 text-sm italic text-gray-500">{{ disclaimerBlock.content }}</p>
     </section>
   </div>
@@ -22,6 +19,7 @@
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { data, error, shell } = await useBlawbyRoute('blog')
+const { posts } = await usePublishedArticles('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)
@@ -59,6 +57,6 @@ useProfessionalServiceSchema(() => ({
     { name: 'Home', url: homeUrl.value },
     { name: 'Blog', url: canonicalUrl.value },
   ],
-  items: routeData.value.posts.map(post => ({ name: post.title, url: post.canonical_url })),
+  items: posts.value.map(post => ({ name: post.title, url: post.path })),
 }))
 </script>

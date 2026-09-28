@@ -1,13 +1,11 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'blog' : isBlawby ? 'blawby' : 'saya'">
-    <PlatformBlogIndex v-if="isPlatform" />
-    <BlawbyBlogIndex v-else-if="isBlawby" />
-    <SayaBlogIndex v-else />
-  </NuxtLayout>
+  <PlatformBlogIndex v-if="isPlatform" />
+  <BlawbyBlogIndex v-else-if="isBlawby" />
+  <SayaBlogIndex v-else />
 </template>
 
 <script setup lang="ts">
 const { isPlatform } = useTenantOrganization()
 const { isBlawby } = usePublicTemplate()
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'articles', articleCollection: 'blog' })
 </script>

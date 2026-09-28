@@ -13,7 +13,7 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="authorName" :author-image="authorImage" organization-name="Krabiclaw" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
+      <BlogArticleRenderer :title="post.title" :excerpt="post.excerpt" :tags="post.tags" :published-at="post.published_at" :updated-at="post.updated_at" :author-name="authorName" :author-image="authorImage" organization-name="Krabiclaw" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -60,6 +60,7 @@ interface BlogPost {
   body: string
   excerpt?: string | null
   category?: string | null
+  tags?: string[] | null
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
@@ -69,7 +70,7 @@ interface BlogPost {
   cover?: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null; width: number | null; height: number | null } | null
   social_image?: import('~/utils/social-metadata').SocialImageSource | null
   components?: ContentComponent[]
-  content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
+  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
 }
 
 const route = useRoute()
@@ -153,26 +154,7 @@ const renderableComponents = computed(() =>
   structuredComponentsFromBlocks(post.value?.content_blocks ?? []),
 )
 
-const readTime = computed(() => {
-  const words = (post.value?.content_blocks ?? [])
-    .map(block => block.type === 'heading' ? block.data.text : block.data.markdown)
-    .filter(value => typeof value === 'string')
-    .join(' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length
-  return Math.max(1, Math.ceil(words / 200))
-})
-
 const authorInitial = computed(() => authorName.value?.trim().charAt(0).toUpperCase() || '')
-
-const wasUpdated = computed(() => {
-  if (!post.value?.updated_at || !post.value?.published_at) return false
-  const updatedDate = new Date(post.value.updated_at)
-  const publishedDate = new Date(post.value.published_at)
-  if (Number.isNaN(updatedDate.getTime()) || Number.isNaN(publishedDate.getTime())) return false
-  return Math.abs(updatedDate.getTime() - publishedDate.getTime()) > 60_000
-})
 
 const selectedPostImage = computed(() => post.value?.cover ?? null)
 const postImageUrl = computed(() => resolveSocialImageUrl(selectedPostImage.value))
@@ -211,6 +193,8 @@ useHead(() => ({
     ...(post.value?.seo_keywords?.trim() ? [{ name: 'keywords', content: post.value.seo_keywords.trim() }] : []),
   ],
 }))
+
+useVideoSchema(() => post.value?.content_blocks, canonicalUrl)
 
 useContentPageSchema(computed(() => {
   if (!post.value) return null

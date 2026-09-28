@@ -1,14 +1,49 @@
 <template>
-  <article ref="rootEl" class="blog-article-renderer mx-auto w-full max-w-4xl px-5 py-10 sm:px-8 sm:py-14" :data-template="template">
-    <input
-      v-if="editable && showTitle"
-      :value="title"
-      class="mb-8 w-full border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl"
-      aria-label="Post title"
-      placeholder="Post title"
-      @input="$emit('update:title', ($event.target as HTMLInputElement).value)"
-    >
-    <h1 v-else-if="showTitle" class="mb-8 text-4xl font-bold leading-tight sm:text-5xl">{{ title }}</h1>
+  <article ref="rootEl" class="blog-article min-w-0" :data-template="template">
+    <header v-if="showHeader" class="blog-article-header mb-10">
+      <!-- The category is the site's navigation, so the article does not repeat it. -->
+      <p v-if="showMeta" class="mb-4 text-sm opacity-70">{{ t('saya.posts.read_time', { count: readMinutes }) }}</p>
+      <textarea v-if="editable" :value="title" rows="1" class="field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl" aria-label="Post title" placeholder="Post title" @input="$emit('update:title', ($event.target as HTMLTextAreaElement).value)" @keydown.enter.prevent />
+      <h1 v-else class="text-4xl font-bold leading-tight sm:text-5xl">{{ title }}</h1>
+      <p v-if="excerpt" class="mt-5 text-xl leading-relaxed opacity-75">{{ excerpt }}</p>
+      <ul v-if="showMeta && tags.length" class="mt-5 flex flex-wrap gap-2" :aria-label="t('saya.posts.tagged')">
+        <li v-for="tag in tags" :key="tag">
+          <NuxtLink :to="{ path: tagIndexPath, query: { tag } }" class="inline-flex rounded-full bg-current/10 px-3 py-1 text-sm font-medium no-underline transition hover:bg-current/20">{{ tag }}</NuxtLink>
+        </li>
+      </ul>
+      <!-- Who published it and when, on one line: the dates belong to the byline, not above the headline. -->
+      <div v-if="showMeta && (authorName || authorImage || publishedAt || $slots.author || $slots.share)" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
+        <slot name="author">
+          <div class="flex items-center gap-3">
+            <img v-if="authorImage" :src="authorImage" :alt="authorName || 'Author'" class="size-11 shrink-0 rounded-full object-cover">
+            <span v-else class="grid size-11 shrink-0 place-items-center rounded-full bg-current/10 text-sm font-semibold">{{ authorInitials }}</span>
+            <div>
+              <p v-if="authorName" class="font-semibold">{{ authorName }}</p>
+              <p v-if="organizationName || publishedAt" class="flex flex-wrap items-center gap-x-2 text-sm opacity-65">
+                <span v-if="organizationName">{{ t('saya.posts.published_from', { name: organizationName }) }}</span>
+                <template v-if="publishedAt">
+                  <span v-if="organizationName" aria-hidden="true">·</span>
+                  <time :datetime="publishedAt">{{ formatDate(publishedAt) }}</time>
+                </template>
+                <template v-if="revisedAt">
+                  <span aria-hidden="true">·</span>
+                  <time :datetime="revisedAt">{{ t('saya.posts.updated_on', { date: formatDate(revisedAt) }) }}</time>
+                </template>
+              </p>
+            </div>
+          </div>
+        </slot>
+        <slot name="share" />
+      </div>
+    </header>
+
+    <!--
+      The cover is the article's leading image block — rendered below in the
+      hero position — so an article that opens with text has no cover, and there
+      is no second place a picture could be duplicated from. While editing, the
+      slot offers to add one.
+    -->
+    <slot v-if="editable && !hasCover" name="cover-empty" />
 
     <div class="space-y-4">
       <template v-for="(block, index) in blocks" :key="block.id || index">
@@ -23,7 +58,7 @@
           <div v-if="editable && showInserter(index, block)" class="mb-2 sm:absolute sm:right-full sm:top-0 sm:mb-0 sm:mr-2">
             <button
               class="flex size-8 shrink-0 items-center justify-center rounded-full border border-current/30 text-current/60 transition hover:border-current/60 hover:text-current"
-              :aria-label="inserterIndex === index ? 'Close the insert menu' : 'Insert an image, question list, how-to, call to action, or divider'"
+              :aria-label="inserterIndex === index ? 'Close the insert menu' : 'Insert an image, video, question list, how-to, call to action, or divider'"
               :aria-expanded="inserterIndex === index"
               @click="toggleInserter(index)"
             >
@@ -87,6 +122,17 @@
           <figcaption v-if="block.data.caption" class="text-center text-sm opacity-70">{{ block.data.caption }}</figcaption>
           <slot v-if="editable" name="image-editor" :block="block" :index="index" />
         </figure>
+        <figure v-else-if="block.type === 'video'" class="space-y-3">
+          <ContentVideoEmbed v-if="!editable || youTubeVideoId(block.data.url)" :url="block.data.url" :title="String(block.data.title || '')" class="rounded-2xl" />
+          <div v-else class="flex aspect-video items-center justify-center rounded-2xl bg-black/5 text-sm opacity-70">Paste a YouTube link</div>
+          <figcaption v-if="block.data.caption && !editable" class="text-center text-sm opacity-70">{{ block.data.caption }}</figcaption>
+          <div v-if="editable" class="grid gap-2 sm:grid-cols-2">
+            <UInput :model-value="String(block.data.url || '')" placeholder="YouTube link" class="w-full sm:col-span-2" @update:model-value="value => updateBlockData(index, 'url', String(value))" />
+            <UInput :model-value="String(block.data.title || '')" placeholder="Video title" class="w-full" @update:model-value="value => updateBlockData(index, 'title', String(value))" />
+            <UInput :model-value="String(block.data.upload_date || '')" placeholder="Upload date (YYYY-MM-DD)" class="w-full" @update:model-value="value => updateBlockData(index, 'upload_date', String(value))" />
+            <UInput :model-value="String(block.data.caption || '')" placeholder="Caption" class="w-full sm:col-span-2" @update:model-value="value => updateBlockData(index, 'caption', String(value))" />
+          </div>
+        </figure>
         <UAlert v-else-if="block.type === 'faq' && editable" color="neutral" variant="soft" title="Questions come from Q&amp;A" description="This block lists the published Q&amp;A records for this article. Add or edit questions in the site's Q&amp;A manager." />
         <dl v-else-if="block.type === 'faq' && isRenderable(block) && faqItems(block).length" class="space-y-5">
           <div v-for="(item, itemIndex) in faqItems(block)" :key="itemIndex">
@@ -144,26 +190,67 @@
         </section>
       </template>
     </div>
+    <slot name="footer" />
   </article>
 </template>
 
 <script setup lang="ts">
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import ContentAiAssistanceSection from '~/components/content/ContentAiAssistanceSection.vue'
+import ContentVideoEmbed from '~/components/content/ContentVideoEmbed.vue'
+import { youTubeVideoId } from '~/shared/youtube-video'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
+import { formatTimestamp } from '~/utils/timezone'
 
-const props = withDefaults(defineProps<{ title: string; blocks: BlogEditorBlock[]; editable?: boolean; template?: string; showTitle?: boolean }>(), {
-  editable: false,
-  template: 'saya',
-  showTitle: true,
+const props = withDefaults(defineProps<{
+  title: string
+  blocks: BlogEditorBlock[]
+  excerpt?: string | null
+  tags?: string[] | null
+  /** The blog index a tag pill filters. */
+  tagIndexPath?: string
+  publishedAt?: string | null
+  updatedAt?: string | null
+  authorName?: string | null
+  authorImage?: string | null
+  organizationName?: string | null
+  editable?: boolean
+  template?: 'saya' | 'blawby' | 'platform' | string
+  showHeader?: boolean
+  showMeta?: boolean
+}>(), {
+  excerpt: null, tags: null, tagIndexPath: '/blog', publishedAt: null, updatedAt: null, authorName: null, authorImage: null, organizationName: null,
+  editable: false, template: 'saya', showHeader: true, showMeta: true,
 })
 const emit = defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
+const authorInitials = computed(() => String(props.authorName || props.organizationName || 'A').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase())
+const tags = computed(() => props.tags ?? [])
+const hasCover = computed(() => props.blocks[0]?.type === 'image')
+const { t, locale } = useI18n()
+function formatDate(value: string) { return formatTimestamp(value, locale.value, 'UTC', { dateStyle: 'medium' }) }
+// At two hundred words a minute, from the words a reader reads.
+const readMinutes = computed(() => {
+  const words = props.blocks
+    .map(block => block.type === 'heading' ? block.data.text : block.data.markdown)
+    .filter(value => typeof value === 'string')
+    .join(' ').trim().split(/\s+/).filter(Boolean).length
+  return Math.max(1, Math.ceil(words / 200))
+})
+// A save moments after publishing is the same edition; only a later one is an update.
+const revisedAt = computed(() => {
+  if (!props.updatedAt || !props.publishedAt) return null
+  const updated = new Date(props.updatedAt).getTime()
+  const published = new Date(props.publishedAt).getTime()
+  if (Number.isNaN(updated) || Number.isNaN(published)) return null
+  return Math.abs(updated - published) > 60_000 ? props.updatedAt : null
+})
 const focusedIndex = ref<number | null>(null)
 const inserterIndex = ref<number | null>(null)
 const inserterItems = [
   { type: 'image', label: 'Image', icon: 'i-lucide-image' },
+  { type: 'video', label: 'Video', icon: 'i-lucide-video' },
   { type: 'faq', label: 'FAQ', icon: 'i-lucide-circle-help' },
   { type: 'how_to', label: 'How-To', icon: 'i-lucide-list-ordered' },
   { type: 'cta', label: 'Call to action', icon: 'i-lucide-megaphone' },
@@ -328,6 +415,7 @@ function aiAssistanceProps(block: BlogEditorBlock) {
 </script>
 
 <style scoped>
-.blog-article-renderer[data-template="blawby"] { color: var(--blawby-ink, #263238); font-family: var(--blawby-font-body, inherit); }
-.blog-article-renderer[data-template="saya"] { color: var(--ui-text, inherit); }
+.blog-article[data-template="blawby"] { color: var(--blawby-ink, #263238); font-family: var(--blawby-font-body, inherit); }
+.blog-article[data-template="blawby"] .blog-article-header h1 { color: var(--blawby-primary, currentColor); }
+.blog-article[data-template="saya"] { color: var(--ui-text, inherit); }
 </style>
