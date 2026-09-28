@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { createHmac, randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
+import { buildReplyToAddress } from '../../server/utils/submission-messages'
 import { loginAs } from './helpers/auth'
 import { devLoginHeaders } from './test-env'
 
@@ -120,30 +121,49 @@ test('compact signed email reply persists once and rejects a changed address', a
   const initialResponse = await fetchPhase('read initial entries', detailUrl, {})
   expect(initialResponse.status(), await initialResponse.text()).toBe(200)
   const { thread: initial } = await initialResponse.json()
-  const data = {
-    submissionType: 'contact', submissionId: initial.submissionId,
-    body: `Signed guest reply ${randomUUID()}`, messageId: randomUUID(),
-  }
-  const received = await fetchPhase('receive signed reply', '/api/dev/inbound-email', { method: 'POST', headers: devLoginHeaders(), data })
-  expect(received.status(), await received.text()).toBe(200)
-  const { replyTo } = await received.json()
+  // Delivered through the local runtime's email event, so the Worker's own
+  // email handler parses, verifies and records the reply, and its accept or
+  // reject is what Email Routing would receive.
+  const replyTo = await buildReplyToAddress({
+    EMAIL_REPLY_SECRET: process.env.EMAIL_REPLY_SECRET,
+    NUXT_PUBLIC_PLATFORM_DOMAIN: baseURL,
+  }, 'contact', initial.submissionId)
   expect(replyTo).toMatch(/^rc[0-9a-f]{56}@/)
-  const duplicate = await fetchPhase('receive duplicate reply', '/api/dev/inbound-email', { method: 'POST', headers: devLoginHeaders(), data: { ...data, replyTo } })
-  expect(duplicate.status(), await duplicate.text()).toBe(200)
-  const [localPart, domain] = replyTo.split('@')
-  for (const { phase, address } of [
-    { phase: 'reject altered signature', address: `${localPart.slice(0, -1)}${localPart.endsWith('0') ? '1' : '0'}@${domain}` },
-    { phase: 'reject wrong domain', address: `${localPart}@invalid.example` },
+  const body = `Signed guest reply ${randomUUID()}`
+  const deliver = (phase: string, to: string, messageId: string) => fetchPhase(phase, '/cdn-cgi/local/email', {
+    method: 'POST',
+    params: { from: 'guest@e2e.example.test', to },
+    data: [
+      'From: E2E Guest <guest@e2e.example.test>',
+      `To: ${to}`,
+      'Subject: Re: continuity check',
+      `Message-ID: <${messageId}@e2e.example.test>`,
+      `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      body,
+      '',
+    ].join('\r\n'),
+  })
+  const messageId = randomUUID()
+  for (const phase of ['receive signed reply', 'receive duplicate reply']) {
+    const received = await deliver(phase, replyTo!, messageId)
+    expect(received.status()).toBe(200)
+    expect(await received.text()).toBe('Worker successfully processed email')
+  }
+  const [localPart, domain] = replyTo!.split('@')
+  for (const { phase, address, reason } of [
+    { phase: 'reject altered signature', address: `${localPart!.slice(0, -1)}${localPart!.endsWith('0') ? '1' : '0'}@${domain}`, reason: 'This reply address is not valid.' },
+    { phase: 'reject wrong domain', address: `${localPart}@invalid.example`, reason: 'This address does not accept email.' },
   ]) {
-    const invalid = await fetchPhase(phase, '/api/dev/inbound-email', {
-      method: 'POST',
-      headers: devLoginHeaders(), data: { ...data, messageId: randomUUID(), replyTo: address },
-    })
-    expect(invalid.status()).toBeGreaterThanOrEqual(400)
+    const rejected = await deliver(phase, address, randomUUID())
+    expect(rejected.status()).toBe(400)
+    expect(await rejected.text()).toBe(`Worker rejected email with the following reason: ${reason}`)
   }
   const finalResponse = await fetchPhase('verify final entries', detailUrl, {})
   expect(finalResponse.status(), await finalResponse.text()).toBe(200)
   const { thread: final } = await finalResponse.json()
   expect(final.entries).toHaveLength(initial.entries.length + 1)
-  expect(final.entries.at(-1)).toMatchObject({ body: data.body, channel: 'email', actorKind: 'guest' })
+  expect(final.entries.at(-1)).toMatchObject({ body, channel: 'email', actorKind: 'guest' })
 })

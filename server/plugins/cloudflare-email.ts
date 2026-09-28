@@ -1,7 +1,7 @@
 import type { ForwardableEmailMessage } from '@cloudflare/workers-types'
 import { definePlugin } from 'nitro'
 import PostalMime from 'postal-mime'
-import { guestReplyText, receiveGuestEmail } from '~/server/domain/guest-threads/inbound-email'
+import { guestReplyText, InboundEmailRejection, receiveGuestEmail } from '~/server/domain/guest-threads/inbound-email'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { parseReplyToAddress } from '~/server/utils/submission-messages'
 
@@ -50,16 +50,13 @@ async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
 async function processEmail(message: ForwardableEmailMessage, env: unknown): Promise<void> {
   if (!isCloudflareEnvironment(env)) throw new Error('Cloudflare environment is not configured')
 
+  const reply = parseReplyToAddress(env, message.to)
+  if (!reply) throw new InboundEmailRejection('This address does not accept email.')
+
   const rawEmail = await readEmailBytes(message.raw)
   const messageId = message.headers.get('Message-ID')?.trim()
     || `content-sha256:${await sha256Hex(rawEmail)}`
   const body = guestReplyText(await PostalMime.parse(rawEmail))
-  if (!body) return
-
-  const reply = parseReplyToAddress(env, message.to)
-  if (!reply) {
-    throw new Error('Unrecognized reply address')
-  }
 
   await receiveGuestEmail(env, {
     submissionType: reply.submissionType,
@@ -71,15 +68,20 @@ async function processEmail(message: ForwardableEmailMessage, env: unknown): Pro
 }
 
 export default definePlugin((nitroApp) => {
+  // A rejection bounces the email to its sender. Any other failure rejects the
+  // handler, so Email Routing records the delivery as failed rather than done;
+  // the Message-ID dedupe keeps a redelivery from recording it twice.
   nitroApp.hooks.hook('cloudflare:email', async ({ message, env }) => {
     try {
       await processEmail(message, env)
     } catch (error) {
-      console.error('email_inbound_processing_failed', {
+      const rejected = error instanceof InboundEmailRejection
+      console.error(rejected ? 'email_inbound_rejected' : 'email_inbound_processing_failed', {
         messageId: message.headers.get('Message-ID') ?? null,
         error: error instanceof Error ? error.message : String(error),
       })
-      throw error
+      if (!rejected) throw error
+      message.setReject(error.message)
     }
   })
 })
