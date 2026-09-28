@@ -139,11 +139,12 @@ export interface PlacedMedia extends MediaPresentation {
  * notification hero and the dashboard's agenda and booking details all ask
  * here, and nothing else decides it:
  *
- * 1. the owner's first image in its own slot, skipping videos — a video's
- *    poster stands in only when that slot holds no image at all;
+ * 1. the owner's first image in its own slot, skipping videos;
  * 2. otherwise the organization's `social_share`, the image its owner chose
  *    for exactly this;
- * 3. otherwise nothing.
+ * 3. otherwise a video's poster frame, when the owner's slot holds one — a
+ *    frame is a poor picture, so it stands in only when nothing was chosen;
+ * 4. otherwise nothing.
  *
  * `ownerMedia` and `organizationMedia` are placements in sort order; slots
  * other than the ones named above are ignored, so a caller may pass all of an
@@ -158,7 +159,7 @@ export function resolveOwnerPicture<T extends PlacedMedia>(
   const slot = OWNER_PICTURE_SLOT[ownerType]
   const own = slot ? ownerMedia.filter(item => item.slot === slot && mediaStillUrl(item)) : []
   return own.find(item => item.kind === 'image')
-    ?? own[0]
     ?? organizationMedia.find(item => item.slot === 'social_share' && mediaStillUrl(item))
+    ?? own[0]
     ?? null
 }

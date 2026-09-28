@@ -24,12 +24,13 @@ test('an owner\'s picture is the first image in its own slot, and never its gall
   assert.equal(resolveOwnerPicture('business_location', [placed('gallery', 'gallery-1')], [placed('logo', 'org-logo')]), null)
 })
 
-test('a video stands in by its poster only when its slot holds no image', () => {
+test('a video stands in by its poster only when its slot holds no image and the organization chose no share image', () => {
   const video = placed('hero', 'hero-video', 'video', 'https://img.example/poster.png')
   const still = placed('hero', 'hero-still')
   // Kikuzuki's shape: a video first, then a photograph. The photograph is the picture.
   assert.equal(resolveOwnerPicture('business_location', [video, still], [])?.asset_id, 'hero-still')
   assert.equal(resolveOwnerPicture('business_location', [video], [])?.thumbnail_url, 'https://img.example/poster.png')
+  assert.equal(resolveOwnerPicture('business_location', [video], [placed('social_share', 'org-share')])?.asset_id, 'org-share')
   // A video with no poster has no still, so it is no picture at all.
   assert.equal(resolveOwnerPicture('business_location', [{ ...video, thumbnail_url: null }], []), null)
 })
