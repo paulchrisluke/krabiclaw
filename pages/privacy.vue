@@ -6,7 +6,7 @@
 
       <article class="prose prose-lg max-w-none text-default">
         <h1><strong>Krabiclaw Privacy Policy</strong></h1>
-        <p><strong>Last updated: September 25, 2026</strong></p>
+        <p><strong>Last updated: September 28, 2026</strong></p>
         <p>
           <span style="font-weight: 400">Krabiclaw is operated by </span
           ><strong>Aurelox LLC</strong
@@ -75,6 +75,229 @@
             Policy for a particular interaction, the supplemental notice
             controls for that interaction.</span
           >
+        </p>
+        <h2 id="google-user-data"><strong>Google user data</strong></h2>
+        <p>
+          This section explains what information Krabiclaw receives from
+          Google APIs ("Google user data"), how Krabiclaw uses, stores, shares,
+          protects, retains, and deletes it, and how you can revoke access. It
+          covers Sign in with Google and the Google Analytics and Google Search
+          Console integrations that a merchant can connect in the Krabiclaw
+          dashboard.
+        </p>
+        <p>
+          <strong>Limited Use.</strong> Krabiclaw's use and transfer to any
+          other app of information received from Google APIs will adhere to the
+          <a href="https://developers.google.com/terms/api-services-user-data-policy"
+            >Google API Services User Data Policy</a
+          >, including the Limited Use requirements.
+        </p>
+        <h3><strong>When Krabiclaw asks for Google access</strong></h3>
+        <p>
+          Krabiclaw asks for access to your Google account only when you choose
+          a Google feature: when you sign in with Google, or when you press
+          Connect on the Google Analytics or Google Search Console page under
+          Settings &rarr; Integrations in the dashboard. Each integration asks
+          only for the permissions it needs, at the moment you connect it.
+          Declining a permission leaves the rest of Krabiclaw available.
+        </p>
+        <h3><strong>What Krabiclaw accesses and how it is used</strong></h3>
+        <ul>
+          <li>
+            <strong>Sign in with Google</strong> (basic profile: OpenID,
+            email address, and profile). Krabiclaw receives your Google account
+            identifier, name, email address, and profile picture. It uses them
+            to create your Krabiclaw account, sign you in, show your name and
+            picture in the dashboard, and label which Google account is linked
+            to your Krabiclaw account.
+          </li>
+          <li>
+            <strong>Google Analytics</strong>
+            (<code>https://www.googleapis.com/auth/analytics.readonly</code>,
+            read-only). When you connect Google Analytics, Krabiclaw uses the
+            Google Analytics Admin API to list the Google Analytics accounts and
+            GA4 properties your Google account can access (account names,
+            property names, and property IDs) so you can choose one. For the
+            property you choose, Krabiclaw reads its web data streams to find
+            the measurement ID (a value such as <code>G-XXXXXXX</code>).
+            Krabiclaw stores the chosen property's ID, name, and measurement ID
+            with your organization and uses the measurement ID to add the
+            Google Analytics tag to your Krabiclaw website, so that visits to
+            your website are measured in your own Google Analytics property.
+            Krabiclaw does not read your Google Analytics reports or visitor
+            data, does not change any Google Analytics setting, and does not
+            store the list of properties it showed you.
+          </li>
+          <li>
+            <strong>Google Search Console</strong>
+            (<code>https://www.googleapis.com/auth/webmasters</code>). When you
+            connect Google Search Console, Krabiclaw lists the Search Console
+            properties for which your Google account is an owner or full user
+            (the property address and your permission level) so you can choose
+            one. If your Krabiclaw website's own address is not yet a property
+            in your account, Krabiclaw adds it to your Search Console after
+            Google has verified it. Krabiclaw stores the connected property's
+            address with your organization. Krabiclaw does not read your search
+            performance data, does not submit or remove sitemaps or URLs, and
+            does not delete or change any other property.
+          </li>
+          <li>
+            <strong>Google Site Verification</strong>
+            (<code>https://www.googleapis.com/auth/siteverification</code>).
+            Used only when you connect your Krabiclaw website's own address and
+            it is not already verified in your Search Console. Krabiclaw asks
+            Google for a verification token for that one address, publishes it
+            on your website as a
+            <code>&lt;meta name="google-site-verification"&gt;</code> tag, and
+            asks Google to confirm ownership. Krabiclaw stores the token for as
+            long as the property stays connected, because Google checks for the
+            tag again later. Krabiclaw does not verify any other website and
+            does not read your list of verified websites.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw calls Google APIs only when you sign in with Google, or
+          while you or another member of your organization is viewing or
+          changing these integration settings.
+          Krabiclaw does not access Google user data in the background and does
+          not request Google Workspace data such as Gmail, Drive, Calendar, or
+          Contacts.
+        </p>
+        <h3><strong>Who can see it and with whom it is shared</strong></h3>
+        <ul>
+          <li>
+            <strong>Your organization.</strong> Members with organization-wide
+            access can see the connected Google Analytics property name and
+            measurement ID, the connected Search Console property address, and
+            the connection status in the dashboard. An organization
+            administrator who connects an AI assistant such as ChatGPT or
+            Claude to Krabiclaw can ask it to read the organization's settings,
+            which include those same values; Krabiclaw returns them to that
+            assistant only at the administrator's request.
+          </li>
+          <li>
+            <strong>Your website's visitors.</strong> The Google Analytics
+            measurement ID and the site verification tag are published in your
+            website's pages, as Google requires for those features to work.
+          </li>
+          <li>
+            <strong>Service providers.</strong> Cloudflare hosts Krabiclaw's
+            application, database, and logs, and delivers the Google Analytics
+            tag to your website through Cloudflare Zaraz. Cloudflare processes
+            this data on Krabiclaw's behalf to provide the Services.
+          </li>
+          <li>
+            <strong>Google.</strong> Krabiclaw sends requests to Google APIs
+            only to perform the actions described above.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw does not otherwise transfer Google user data to anyone,
+          except where necessary to comply with applicable law, to protect
+          against security threats, fraud, or abuse, or as part of a merger,
+          acquisition, or sale of assets after obtaining your explicit prior
+          consent.
+        </p>
+        <h3><strong>What Krabiclaw does not do with Google user data</strong></h3>
+        <ul>
+          <li>
+            Krabiclaw does not use Google user data for advertising, including
+            targeted, personalized, retargeted, or interest-based advertising.
+          </li>
+          <li>
+            Krabiclaw does not sell Google user data and does not give it to
+            advertising platforms, data brokers, or information resellers.
+          </li>
+          <li>
+            Krabiclaw does not use Google user data to determine
+            creditworthiness or for lending purposes.
+          </li>
+          <li>
+            Krabiclaw does not use Google user data, including any data
+            obtained through Google Workspace APIs, to develop, improve, or
+            train generalized or non-personalized artificial intelligence or
+            machine learning models.
+          </li>
+          <li>
+            Krabiclaw uses Google user data only to provide and improve the
+            user-facing features described above, and not for any other
+            purpose.
+          </li>
+          <li>
+            Krabiclaw personnel do not read Google user data unless you give
+            affirmative agreement for specific data (for example, in a support
+            request), it is necessary for security purposes such as
+            investigating abuse, it is necessary to comply with applicable law,
+            or the data has been aggregated and anonymized for internal
+            operations.
+          </li>
+        </ul>
+        <h3><strong>How Krabiclaw protects Google user data</strong></h3>
+        <ul>
+          <li>
+            Krabiclaw exchanges data with Google and with your browser only over
+            encrypted HTTPS connections.
+          </li>
+          <li>
+            The access and refresh tokens Google issues are stored on your
+            linked account by Krabiclaw's authentication system, encrypted with
+            a server-side secret. Krabiclaw uses them only on its servers to
+            make the requests described above. They are not shown in the
+            dashboard and are not given to other members or to connected AI
+            assistants.
+          </li>
+          <li>
+            A Google account linked to your Krabiclaw account can be used to
+            connect an integration only by you, and Krabiclaw checks that it has
+            granted the permission the integration needs before using it. Only
+            members with organization-wide access can view or change an
+            organization's integrations.
+          </li>
+        </ul>
+        <h3><strong>Retention and deletion</strong></h3>
+        <ul>
+          <li>
+            <strong>Your linked Google account</strong> (identifier, profile
+            details, granted permissions, and tokens) is kept while your
+            Krabiclaw account exists and is deleted when you delete your
+            Krabiclaw account from Account settings.
+          </li>
+          <li>
+            <strong>Your organization's Google selections</strong> (the Google
+            Analytics property ID, name, and measurement ID, and the Search
+            Console property address and verification token) are kept while the
+            integration is connected. They are deleted when a member presses
+            Disconnect on the integration's page, or when the organization is
+            deleted. Disconnecting Google Analytics also removes the Google
+            Analytics tag from your website, and disconnecting Search Console
+            stops Krabiclaw from publishing the verification tag.
+          </li>
+          <li>
+            Disconnecting an integration does not unlink your Google account
+            from your Krabiclaw account, because the same Google account may be
+            used to sign in or by another organization.
+          </li>
+          <li>
+            Properties that exist in your own Google Analytics or Search
+            Console account, including a Search Console property Krabiclaw
+            added at your request, remain in your Google account; Krabiclaw does
+            not delete them.
+          </li>
+          <li>
+            If a request to Google fails, the error Google returns may be
+            recorded in Krabiclaw's operational logs, which are handled as
+            described in Section 8.
+          </li>
+        </ul>
+        <p>
+          You can revoke Krabiclaw's access to your Google account at any time
+          at
+          <a href="https://myaccount.google.com/permissions"
+            >https://myaccount.google.com/permissions</a
+          >. After you revoke access, Krabiclaw can no longer call Google APIs
+          for your account. To have Krabiclaw delete Google user data it holds
+          about you, delete your account or organization in the dashboard, or
+          email <a href="mailto:hello@krabiclaw.com">hello@krabiclaw.com</a>.
         </p>
         <h2><strong>1. Our role when merchants use Krabiclaw</strong></h2>
         <p>
@@ -323,8 +546,8 @@
             identifiers, and shortened summaries of tool inputs and outputs.
             Sensitive structured fields are limited or redacted where designed
             to do so, but free-text information can still appear in diagnostic
-            summaries. MCP tool-call telemetry is retained for up to 180 days
-            from creation.</span
+            summaries. MCP tool-call telemetry is retained as described for
+            operational records in Section 8.</span
           >
         </p>
         <p>
@@ -706,8 +929,9 @@
           <li style="font-weight: 400">
             <strong>MCP telemetry:</strong
             ><span style="font-weight: 400">
-              MCP tool-call telemetry is retained for up to 180 days from the
-              time the record is created.</span
+              MCP tool-call telemetry is retained only as reasonably necessary
+              for security, reliability, debugging, and auditing. Krabiclaw does
+              not currently delete it on a fixed schedule.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -1932,7 +2156,7 @@ useSocialMetadata({
   path: '/privacy',
   title: 'Privacy Policy',
   description:
-    'Privacy Policy for KrabiClaw website builder platform. Learn how we collect, use, and protect your personal information.',
+    'Privacy Policy for Krabiclaw website builder platform. Learn how we collect, use, and protect your personal information.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Privacy Policy', url: '/privacy' },
