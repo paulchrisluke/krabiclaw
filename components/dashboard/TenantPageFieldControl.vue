@@ -81,6 +81,30 @@
       @update:model-value="write($event)"
     />
 
+    <UInputNumber
+      v-else-if="field.kind === 'number'"
+      :model-value="numberValue"
+      :min="field.min"
+      :max="field.max"
+      size="xl"
+      class="w-full"
+      @update:model-value="writeNumber($event)"
+    />
+
+    <!-- A record is one object of named fields: a button is its label and its URL. -->
+    <div v-else-if="field.kind === 'record'" class="flex flex-col gap-3">
+      <UInput
+        v-for="(child, childKey) in field.of"
+        :key="childKey"
+        :model-value="recordValue(String(childKey))"
+        size="xl"
+        class="w-full"
+        :placeholder="child.kind === 'url' ? '/contact or https://example.com' : child.label"
+        :aria-label="child.label"
+        @update:model-value="writeRecord(String(childKey), $event)"
+      />
+    </div>
+
     <UTextarea
       v-else-if="field.multiline"
       :model-value="stringValue"
@@ -190,6 +214,29 @@ function writeEnum(value: unknown) {
   }
   const level = Number(value)
   block.value.level = Number.isInteger(level) && level >= 1 && level <= 6 ? level : null
+}
+
+const numberValue = computed(() => {
+  const value = Number(block.value.data[props.fieldKey] ?? props.field.default)
+  return Number.isFinite(value) ? value : undefined
+})
+
+function writeNumber(value: unknown) {
+  const number = Number(value)
+  if (Number.isInteger(number)) block.value.data[props.fieldKey] = number
+}
+
+function recordValue(childKey: string): string {
+  const record = block.value.data[props.fieldKey]
+  const value = record && typeof record === 'object' && !Array.isArray(record) ? (record as Record<string, unknown>)[childKey] : ''
+  return typeof value === 'string' ? value : ''
+}
+
+/** A record with every field empty is no record at all, not an object of blanks. */
+function writeRecord(childKey: string, value: unknown) {
+  const current = block.value.data[props.fieldKey]
+  const next = { ...(current && typeof current === 'object' && !Array.isArray(current) ? current as Record<string, unknown> : {}), [childKey]: value == null ? '' : String(value) }
+  block.value.data[props.fieldKey] = Object.values(next).every(item => !String(item ?? '').trim()) ? null : next
 }
 
 function writeStringList(value: unknown) {

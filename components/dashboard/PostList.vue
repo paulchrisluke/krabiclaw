@@ -3,7 +3,7 @@
     <DashboardListEditor
       v-model:editing="editing"
       title="Posts"
-      description="News, events and offers from this location."
+      description="Short posts from this location: news, photos, events and offers, in your own words."
       :items="listItems"
       :pending="pending"
       :error="loadError"
@@ -33,21 +33,22 @@
           </span>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-semibold text-highlighted">{{ item.title }}</span>
-            <!--
-              What the post is, the way a dish states its price. With four post
-              types a row that showed only a date could not tell an offer from
-              an event.
-            -->
-            <span class="mt-1 block truncate text-sm text-muted">{{ item.summary }}</span>
+            <span class="mt-1 flex items-center gap-2 truncate text-sm text-muted">
+              <span class="truncate">{{ item.summary }}</span>
+              <UIcon v-for="channel in item.channels" :key="channel" :name="channel === 'facebook' ? 'i-logos-facebook' : 'i-skill-icons-instagram'" class="size-3.5 shrink-0" :aria-label="`Published on ${channel}`" />
+            </span>
           </span>
         </span>
       </template>
     </DashboardListEditor>
+    <div v-if="nextCursor" class="mt-4 flex justify-center">
+      <UButton color="neutral" variant="outline" :loading="loadingMore" @click="loadMore">Load more posts</UButton>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { formatTimestamp, formatCalendarDate } from '~/utils/timezone'
+import { formatTimestamp } from '~/utils/timezone'
 import DashboardListEditor from '~/components/dashboard/DashboardListEditor.vue'
 import { normalizePostMediaForForm, useLocationPostEditor } from '~/composables/useLocationPostEditor'
 import { getErrorMessage } from '~/utils/errors'
@@ -64,55 +65,56 @@ const editor = useLocationPostEditor(organizationId, currentLocationId)
 // a link to nowhere.
 const level = useRouteLevel()
 
-const TYPE_LABELS: Record<string, string> = {
-  standard: 'Update',
-  event: 'Event',
-  offer: 'Offer',
-  alert: 'Alert',
-}
-
 const postTabs = [
   { value: 'all', label: 'All' },
   { value: 'published', label: 'Live' },
-  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'draft', label: 'Drafts' },
 ]
 const activeTab = ref<string | number>('all')
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 
-const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
+const isPostsResponse = (value: unknown): value is { posts: ApiRecord[]; page_info: { has_more: boolean; next_cursor: string | null } } =>
   isRecord(value)
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.status === 'string')
+  && isRecord(value.page_info)
 
-const postsKey = computed(() => `dashboard-location-posts:${organizationId}:${currentLocationId.value ?? 'missing'}`)
-const { data, pending, error, refresh } = await useAsyncData(
-  postsKey,
-  async () => {
-    if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-    const response = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/organizations/${organizationId}/posts`, {
-      query: { location_id: currentLocationId.value },
-      validate: isPostsResponse,
-    })
-    return { posts: response.posts }
-  },
-  { lazy: true },
-)
+// The tab is a filter the database applies, a page at a time.
+const statusFilter = computed(() => (activeTab.value === 'all' ? undefined : String(activeTab.value)))
+const postsKey = computed(() => `dashboard-location-posts:${organizationId}:${currentLocationId.value ?? 'missing'}:${statusFilter.value ?? 'all'}`)
+const fetchPage = (cursor?: string) => {
+  if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  return dashboardApi<{ posts: ApiRecord[]; page_info: { has_more: boolean; next_cursor: string | null } }>(`/api/editor/organizations/${organizationId}/posts`, {
+    query: { location_id: currentLocationId.value, ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
+    validate: isPostsResponse,
+  })
+}
+const { data, pending, error, refresh } = await useAsyncData(postsKey, () => fetchPage(), { lazy: true, watch: [statusFilter] })
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
-const posts = computed(() => data.value?.posts ?? [])
-
-// Filtering happens here rather than by refetching per tab: the list is already
-// loaded in full, so a tab press should not cost a round trip.
-const visiblePosts = computed(() => {
-  if (activeTab.value === 'all') return posts.value
-  return posts.value.filter(post => post.status === activeTab.value)
-})
+const more = ref<ApiRecord[]>([])
+const nextCursor = ref<string | null>(null)
+watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_more ? value.page_info.next_cursor : null }, { immediate: true })
+const loadingMore = ref(false)
+async function loadMore() {
+  if (!nextCursor.value) return
+  loadingMore.value = true
+  try {
+    const page = await fetchPage(nextCursor.value)
+    more.value = [...more.value, ...page.posts]
+    nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
+  } finally {
+    loadingMore.value = false
+  }
+}
+const visiblePosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
 
 const listItems = computed(() => visiblePosts.value.map(row => ({
   id: String(row.id),
   title: postTitle(row),
   summary: postSummary(row),
+  channels: (Array.isArray(row.publications) ? row.publications as ApiRecord[] : []).filter(item => item.state === 'published').map(item => String(item.channel)),
   to: `${level.path.value}/${String(row.id)}`,
   row,
 })))
@@ -123,31 +125,10 @@ function postTitle(post: ApiRecord): string {
   return title || 'No headline'
 }
 
-/** Type, then what makes this one different, then exactly one date. */
+/** Where it stands, then exactly one date. */
 function postSummary(post: ApiRecord): string {
-  const parts: string[] = [TYPE_LABELS[String(post.post_type)] ?? 'Post']
-  const offer = isRecord(post.offer) ? post.offer : null
-  if (offer && typeof offer.coupon_code === 'string' && offer.coupon_code) parts.push(`Code ${offer.coupon_code}`)
-  parts.push(postWhen(post))
-  return parts.filter(Boolean).join(' · ')
-}
-
-/** Each post state/type declares the date it displays. */
-function postWhen(post: ApiRecord): string {
-  if (post.status === 'scheduled') {
-    if (typeof post.scheduled_for !== 'string') return 'Publish time missing'
-    return `Goes live ${formatDate(post.scheduled_for)}`
-  }
-  const event = isRecord(post.event) ? post.event : null
-  const schedule = event && isRecord(event.schedule) ? event.schedule : null
-  if (post.post_type === 'event' || post.post_type === 'offer') {
-    if (!schedule || typeof schedule.start_date !== 'string' || typeof schedule.end_date !== 'string') return 'Event schedule missing'
-    const start = formatDay(schedule.start_date)
-    const end = formatDay(schedule.end_date)
-    const window = end && end !== start ? `${start} – ${end}` : start
-    return post.post_type === 'offer' ? `Runs ${window}` : window
-  }
-  return post.updated_at ? `Updated ${formatDate(String(post.updated_at))}` : 'Update time missing'
+  if (post.status === 'published') return typeof post.published_at === 'string' ? `Live since ${formatDate(post.published_at)}` : 'Live'
+  return post.updated_at ? `Draft · edited ${formatDate(String(post.updated_at))}` : 'Draft'
 }
 
 function coverUrl(post: ApiRecord): string | null {
@@ -162,14 +143,8 @@ function formatDate(iso: string) {
   return formatTimestamp(iso, 'en', 'UTC', { dateStyle: 'medium' })
 }
 
-function formatDay(day: string) {
-  return day ? formatCalendarDate(day, 'en') : ''
-}
-
 // ── Creating ────────────────────────────────────────────
-/** A post is created on its own level, where its type, its words and — for an
- *  event or an offer — the window it runs in are each a section of the record
- *  being made, rather than a dialog stacked over the list. */
+/** A post is created on its own level, as a draft, rather than in a dialog stacked over the list. */
 function openNew() {
   return navigateTo(`${level.path.value}/new`)
 }

@@ -93,9 +93,8 @@ export const SETTINGS_LABELS: Record<SettingsSection, string> = {
 
 /** The post's draft and what its leaves show beside their one field. */
 export interface BlogEditor {
-  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; slug: string; visibility: 'listed' | 'unlisted'; scheduled_for: string; redirect_old_slug: boolean }>
+  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; slug: string; visibility: 'listed' | 'unlisted'; redirect_old_slug: boolean }>
   tagsText: Ref<string>
-  publishTiming: Ref<'Now' | 'Scheduled'>
   post: Ref<BlogPost | null>
   loadPending: Ref<boolean>
   loadError: Ref<string>
@@ -119,14 +118,13 @@ export const blogEditorKey = Symbol('blog-editor') as InjectionKey<BlogEditor>
 </script>
 
 <script setup lang="ts">
-import { instantDate } from '~/utils/timezone'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { ARTICLE_COLLECTIONS, ARTICLE_COLLECTION_SLUGS } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { publicTemplateRegistry } from '~/utils/template-registry'
 import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, BlogPostUpdateInput } from './types'
-import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogSeo, scheduledLifecycleValue } from '~/utils/blog-editor'
+import { cloneEditorBlocks, generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogSeo } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 
@@ -146,8 +144,6 @@ const actionError = ref('')
 const publishing = ref(false)
 const savingExplicitly = ref(false)
 const contentDirty = ref(false)
-const lifecycleDirty = ref(false)
-const dirtyState = computed(() => contentDirty.value || lifecycleDirty.value)
 let applyingServerSnapshot = false
 let serverPostUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
@@ -160,9 +156,8 @@ const section = computed<SettingsSection | null>(() => {
   return segment && (SETTINGS_SECTIONS as string[]).includes(segment) ? segment as SettingsSection : null
 })
 
-const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', slug: '', visibility: 'listed' as 'listed' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
+const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', slug: '', visibility: 'listed' as 'listed' | 'unlisted', redirect_old_slug: true })
 const tagsText = ref('')
-const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || 'saya')
 const isPlatformTemplate = computed(() => templateName.value === 'platform')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
@@ -196,10 +191,11 @@ const editorCanvasStyle = computed(() => {
 })
 const statusLabel = computed(() => {
   if (!post.value) return 'Not published'
-  if (post.value.status === 'scheduled') return 'Scheduled'
   if (post.value.status === 'draft') return 'Draft'
   return 'Published'
 })
+/** One key for this editor's creation, so a repeated press makes one article. */
+const createKey = crypto.randomUUID()
 const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
@@ -278,9 +274,6 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
 const publishingSummary = computed(() => {
   const visibility = form.visibility === 'unlisted' ? 'Unlisted' : 'Listed'
   if (post.value?.status === 'published') return `Published · ${visibility}`
-  if (publishTiming.value === 'Scheduled') {
-    return form.scheduled_for ? `Scheduled ${form.scheduled_for.replace('T', ' ')} UTC · ${visibility}` : `Scheduled · ${visibility}`
-  }
   return `${statusLabel.value} · ${visibility}`
 })
 
@@ -293,7 +286,7 @@ const saveLabel = computed(() => {
   if (saveState.value === 'saving') return 'Saving…'
   if (saveState.value === 'failed') return 'Save failed'
   if (saveState.value === 'conflict') return 'Conflict — reload to reconcile'
-  return dirtyState.value ? 'Unsaved changes' : 'Saved'
+  return contentDirty.value ? 'Unsaved changes' : 'Saved'
 })
 type InserterBlockType = 'image' | 'faq' | 'how_to' | 'cta' | 'divider'
 
@@ -355,10 +348,6 @@ watch([() => form.title, blocks], () => {
   if (applyingServerSnapshot) return
   markContentDirty()
 }, { deep: true, flush: 'sync' })
-watch([() => form.scheduled_for, publishTiming], () => {
-  if (applyingServerSnapshot) return
-  markLifecycleDirty()
-}, { flush: 'sync' })
 onMounted(async () => {
   interactive.value = true
   if (!props.initialPost && !props.deferLoad) await load()
@@ -376,15 +365,13 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersion(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', slug: loaded.slug || '', visibility: loaded.visibility || 'listed', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', slug: loaded.slug || '', visibility: loaded.visibility || 'listed', redirect_old_slug: true })
     slugResetRequested.value = false
     tagsText.value = loaded.tags?.join(', ') || ''
-    publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
     if (!loaded.content_document) throw new Error('Blog content document is missing')
     blocks.value = cloneEditorBlocks(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
     contentDirty.value = false
-    lifecycleDirty.value = false
   } finally {
     void nextTick(() => { applyingServerSnapshot = false })
   }
@@ -403,10 +390,6 @@ watch(() => props.initialPost, (loaded) => {
 function markContentDirty() {
   if (loadPending.value || saveState.value === 'conflict') return
   contentDirty.value = true
-}
-function markLifecycleDirty() {
-  if (loadPending.value || saveState.value === 'conflict') return
-  lifecycleDirty.value = true
 }
 /** Opens the article with an empty image block; choosing its picture makes it the cover. */
 function addCover() {
@@ -431,7 +414,6 @@ function applyLifecycle(lifecycle: BlogLifecycleState) {
     status: lifecycle.status,
     published_at: lifecycle.published_at,
     first_published_at: post.value.first_published_at ?? lifecycle.published_at,
-    scheduled_for: lifecycle.scheduled_for,
     updated_at: lifecycle.updated_at,
     content_document: {
       ...post.value.content_document,
@@ -442,8 +424,6 @@ function applyLifecycle(lifecycle: BlogLifecycleState) {
     },
   }
   serverPostUpdatedAt = lifecycle.updated_at
-  form.scheduled_for = toLocalDatetime(lifecycle.scheduled_for)
-  publishTiming.value = lifecycle.scheduled_for ? 'Scheduled' : 'Now'
   applyingServerSnapshot = false
 }
 function recordLifecycleError(error: unknown) {
@@ -460,9 +440,8 @@ async function saveSection() {
     // Saying so here is what lets `saveArticle` write it.
     markContentDirty()
     await saveArticle()
-    // The publishing leaf's Save is what commits the lifecycle. A post that is
-    // already live has nothing left to schedule, so only an unpublished one
-    // goes through the lifecycle endpoint.
+    // The publishing leaf's Save is what publishes. A post that is already
+    // live has nothing left to publish, so only a draft goes through it.
     if (section.value === 'publishing' && post.value.status !== 'published') {
       await publish()
       // Stay on the leaf when it failed, so the reason is still on screen.
@@ -490,11 +469,13 @@ async function publish() {
         tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),
         excerpt: form.excerpt || null,
         visibility: form.visibility,
-        scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for, 'UTC'),
+        idempotency_key: createKey,
       })
       applyLoadedPost(created)
+      // Creation is a draft; publishing it is the lifecycle call below.
+      const lifecycle = await props.repository.publish(created.id, lifecycleVersionInput())
+      applyLifecycle(lifecycle)
       contentDirty.value = false
-      lifecycleDirty.value = false
       saveState.value = 'saved'
       await navigateTo(props.repository.editUrl(created.id), { replace: true })
       return
@@ -502,12 +483,8 @@ async function publish() {
     // Publish what is on the canvas: an unsaved article is written first, so
     // the lifecycle token it hands over is the one the save produced.
     await saveArticle()
-    const lifecycle = await props.repository.publish(persistedPostId.value, {
-      ...lifecycleVersionInput(),
-      scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for, 'UTC'),
-    })
+    const lifecycle = await props.repository.publish(persistedPostId.value, lifecycleVersionInput())
     applyLifecycle(lifecycle)
-    lifecycleDirty.value = false
     saveState.value = 'saved'
   } catch (error: unknown) {
     recordLifecycleError(error)
@@ -609,14 +586,12 @@ function changeImage(index: number, value: unknown) {
 }
 
 function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
-function toLocalDatetime(value?: string | null) { if (!value) return ''; return instantDate(value).toISOString().slice(0, -1) }
 function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }
 function syncServerVersion(value: BlogPost) { serverPostUpdatedAt = value.updated_at }
 
 provide(blogEditorKey, {
   form,
   tagsText,
-  publishTiming,
   post,
   loadPending,
   loadError,

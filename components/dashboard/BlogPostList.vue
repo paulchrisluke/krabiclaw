@@ -37,6 +37,9 @@
         </span>
       </template>
     </DashboardListEditor>
+    <div v-if="nextCursor" class="mt-4 flex justify-center">
+      <UButton color="neutral" variant="outline" :loading="loadingMore" @click="loadMore">Load more posts</UButton>
+    </div>
 
     <!--
       Creating asks for the headline and nothing else. A blog post's category,
@@ -96,38 +99,49 @@ const repository = tenantBlogRepository({ organizationId, orgSlug })
 const statusTabs = [
   { value: 'all', label: 'All' },
   { value: 'draft', label: 'Drafts' },
-  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'draft', label: 'Drafts' },
   { value: 'published', label: 'Live' },
 ]
 const activeTab = ref<string | number>('all')
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 
-const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
+type BlogPage = { posts: BlogPost[]; page_info: { has_more: boolean; next_cursor: string | null } }
+const isPostsResponse = (value: unknown): value is BlogPage =>
   isRecord(value)
   && Array.isArray(value.posts)
   && value.posts.every(post => isRecord(post) && typeof post.id === 'string' && typeof post.title === 'string')
+  && isRecord(value.page_info)
 
+// The tab is a filter the database applies, a page at a time.
+const statusFilter = computed(() => (activeTab.value === 'all' ? undefined : String(activeTab.value)))
+const fetchPage = (cursor?: string) => dashboardApi<BlogPage>(`/api/editor/organizations/${organizationId}/blog/posts`, {
+  query: { ...(statusFilter.value ? { status: statusFilter.value } : {}), ...(cursor ? { cursor } : {}) },
+  validate: isPostsResponse,
+})
 const { data, pending, error, refresh } = await useAsyncData(
-  `dashboard-blog-posts:${organizationId}`,
-  async () => {
-    const response = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/organizations/${organizationId}/blog/posts`, {
-      validate: isPostsResponse,
-    })
-    return { posts: response.posts }
-  },
-  { lazy: true },
+  () => `dashboard-blog-posts:${organizationId}:${statusFilter.value ?? 'all'}`,
+  () => fetchPage(),
+  { lazy: true, watch: [statusFilter] },
 )
 
 const loadError = computed(() => (error.value ? getErrorMessage(error.value, 'Failed to load posts') : null))
-const posts = computed(() => data.value?.posts ?? [])
-
-// Filtering happens here rather than by refetching per tab: the list is already
-// loaded in full, so a tab press should not cost a round trip.
-const visiblePosts = computed(() => {
-  if (activeTab.value === 'all') return posts.value
-  return posts.value.filter(post => post.status === activeTab.value)
-})
+const more = ref<BlogPost[]>([])
+const nextCursor = ref<string | null>(null)
+watch(data, value => { more.value = []; nextCursor.value = value?.page_info.has_more ? value.page_info.next_cursor : null }, { immediate: true })
+const loadingMore = ref(false)
+async function loadMore() {
+  if (!nextCursor.value) return
+  loadingMore.value = true
+  try {
+    const page = await fetchPage(nextCursor.value)
+    more.value = [...more.value, ...page.posts]
+    nextCursor.value = page.page_info.has_more ? page.page_info.next_cursor : null
+  } finally {
+    loadingMore.value = false
+  }
+}
+const visiblePosts = computed(() => [...(data.value?.posts ?? []), ...more.value])
 
 const listItems = computed(() => visiblePosts.value.map(row => ({
   id: row.id,
@@ -152,7 +166,6 @@ function postSummary(post: BlogPost): string {
 }
 
 function postWhen(post: BlogPost): string {
-  if (post.status === 'scheduled' && post.scheduled_for) return `Goes live ${formatDate(post.scheduled_for)}`
   if (post.published_at) return formatDate(post.published_at)
   return post.updated_at ? `Edited ${formatDate(post.updated_at)}` : ''
 }
@@ -192,7 +205,7 @@ async function createPost() {
   creating.value = true
   createFailure.value = null
   try {
-    const post = await repository.create({ title, content_blocks: initialBlogEditorBlocks() })
+    const post = await repository.create({ title, content_blocks: initialBlogEditorBlocks(), idempotency_key: crypto.randomUUID() })
     newDialogOpen.value = false
     await navigateTo(`${level.path.value}/${post.id}`)
   } catch (cause) {

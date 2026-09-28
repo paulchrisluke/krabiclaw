@@ -13,8 +13,7 @@ export interface BlogPost {
   updated_at: string
   first_published_at?: string | null
   slug_manually_overridden?: boolean | number | null
-  scheduled_for?: string | null
-  status?: 'draft' | 'published' | 'scheduled'
+  status?: 'draft' | 'published'
   visibility?: 'listed' | 'unlisted'
   tags?: string[]
   /** The leading image block's asset, or null when the article opens with text. */
@@ -53,7 +52,8 @@ export interface BlogPostCreateInput {
   tags?: string[] | null
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
-  scheduled_for?: string | null
+  /** Made once per new article, so a retried create makes one. */
+  idempotency_key: string
 }
 
 export interface BlogPostUpdateInput {
@@ -73,10 +73,10 @@ export interface BlogPostUpdateInput {
 
 export interface BlogLifecycleState {
   id: string
-  status: 'draft' | 'published' | 'scheduled'
+  status: 'draft' | 'published'
   published_at: string | null
-  scheduled_for: string | null
   updated_at: string
+  changed: boolean
 }
 
 export interface BlogPostRepository {
@@ -86,5 +86,5 @@ export interface BlogPostRepository {
   create(_input: BlogPostCreateInput): Promise<BlogPost & { id: string }>
   update(_postId: string, _input: BlogPostUpdateInput): Promise<BlogPost>
   delete(_postId: string): Promise<void>
-  publish(_postId: string, _input: { expected_updated_at: string; scheduled_for?: string | null }): Promise<BlogLifecycleState>
+  publish(_postId: string, _input: { expected_updated_at: string }): Promise<BlogLifecycleState>
 }
