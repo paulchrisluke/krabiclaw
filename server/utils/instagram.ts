@@ -1,11 +1,8 @@
-import type { InstagramIntegration } from '~/shared/organization-settings'
+import type { InstagramIntegration, SocialSyncProgress } from '~/shared/organization-settings'
 import { setTokenUtil } from 'better-auth/oauth2'
-import { parsePostInput } from '~/shared/posts'
-import { execute, executeBatch, queryFirst } from '~/server/db'
+import { execute, queryFirst } from '~/server/db'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
-import { buildR2Key, uploadToR2 } from './cloudflare-r2'
-import { prepareContentDocumentWithBlocks } from './content/documents'
-import { buildMediaAssetInsertQuery, buildMediaPlacementInsertQuery } from './media-asset-manager'
+import { formBody, metaGraphRequest, type MetaDeadline } from './meta-graph'
 
 /**
  * Instagram as its own connection: Instagram Login for professional accounts,
@@ -22,6 +19,7 @@ const INSTAGRAM_GRAPH = `https://graph.instagram.com/${INSTAGRAM_API_VERSION}`
 
 export interface InstagramConnection extends InstagramIntegration {
   organization_id: string
+  sync: SocialSyncProgress | null
 }
 
 /**
@@ -36,7 +34,7 @@ export interface InstagramConnection extends InstagramIntegration {
  */
 const TOKEN_RENEWAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
-async function instagramAccessToken(env: CloudflareEnv, accountId: string): Promise<string> {
+export async function instagramAccessToken(env: CloudflareEnv, accountId: string): Promise<string> {
   const token = await linkedAccountAccessToken(env, accountId)
   if (!token.accessTokenExpiresAt) throw new Error('The linked Instagram account has no token expiry. Connect Instagram again.')
   if (token.accessTokenExpiresAt.getTime() - Date.now() > TOKEN_RENEWAL_WINDOW_MS) return token.accessToken
@@ -113,7 +111,7 @@ export async function readInstagramConnection(
   env: CloudflareEnv,
   organizationId: string,
 ): Promise<InstagramConnection | null> {
-  return await queryFirst<InstagramConnection>(env.DB, `
+  const row = await queryFirst<Omit<InstagramConnection, 'sync'> & { sync: string | null }>(env.DB, `
     SELECT id AS organization_id,
            json_extract(integrations_json, '$.instagram.revision') AS revision,
            json_extract(integrations_json, '$.instagram.account_id') AS account_id,
@@ -121,153 +119,88 @@ export async function readInstagramConnection(
            json_extract(integrations_json, '$.instagram.username') AS username,
            json_extract(integrations_json, '$.instagram.status') AS status,
            json_extract(integrations_json, '$.instagram.created_at') AS created_at,
-           json_extract(integrations_json, '$.instagram.updated_at') AS updated_at
+           json_extract(integrations_json, '$.instagram.updated_at') AS updated_at,
+           json_extract(integrations_json, '$.instagram.sync') AS sync
       FROM organization
      WHERE id = ?
        AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'error')
      LIMIT 1
-  `, [organizationId]) ?? null
+  `, [organizationId])
+  return row ? { ...row, sync: row.sync ? JSON.parse(row.sync) as SocialSyncProgress : null } : null
 }
 
-/** What the last sync found, where the Instagram leaf reads it. */
-async function recordSyncStatus(
-  env: CloudflareEnv,
-  connection: InstagramConnection,
-  status: 'active' | 'error',
-): Promise<void> {
-  await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json,
-      '$.instagram.status', ?, '$.instagram.updated_at', ?)
-    WHERE id = ? AND json_extract(integrations_json, '$.instagram.revision') IS ?
-  `, [status, new Date().toISOString(), connection.organization_id, connection.revision])
+export interface InstagramTarget {
+  userId: string
+  accessToken: string
 }
 
-interface InstagramMedia {
+type GraphInit = RequestInit & { deadline?: MetaDeadline }
+const withToken = (target: InstagramTarget, init: GraphInit = {}): GraphInit => ({
+  ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${target.accessToken}` },
+})
+
+// ── Publication primitives: containers, their status, media_publish ───────
+
+/** A media container. Instagram fetches the URL itself; nothing is public until it is published. */
+export async function createMediaContainer(target: InstagramTarget, input:
+  | { kind: 'image'; url: string; caption?: string; carouselItem: boolean; altText?: string | null }
+  | { kind: 'video'; url: string; caption?: string; carouselItem: boolean; coverUrl?: string | null }
+  | { kind: 'carousel'; children: readonly string[]; caption?: string },
+deadline: MetaDeadline): Promise<string> {
+  const fields: Record<string, string | boolean | undefined> = input.kind === 'image'
+    ? { image_url: input.url, is_carousel_item: input.carouselItem || undefined, alt_text: input.altText || undefined }
+    : input.kind === 'video'
+      // A standalone video is a Reel; a carousel child is a VIDEO item.
+      ? { media_type: input.carouselItem ? 'VIDEO' : 'REELS', video_url: input.url, is_carousel_item: input.carouselItem || undefined, cover_url: input.carouselItem ? undefined : input.coverUrl || undefined }
+      : { media_type: 'CAROUSEL', children: input.children.join(',') }
+  if (!('carouselItem' in input && input.carouselItem) && input.caption) fields.caption = input.caption
+  const result = await metaGraphRequest<{ id?: string }>(`${INSTAGRAM_GRAPH}/${target.userId}/media`, withToken(target, { ...formBody(fields), deadline }))
+  if (!result.id) throw new Error('Instagram created no media container')
+  return result.id
+}
+
+export type InstagramContainerStatus = 'EXPIRED' | 'ERROR' | 'FINISHED' | 'IN_PROGRESS' | 'PUBLISHED'
+
+export async function readContainerStatus(target: InstagramTarget, containerId: string, deadline: MetaDeadline): Promise<{ status: InstagramContainerStatus; detail: string | null }> {
+  const result = await metaGraphRequest<{ status_code?: string; status?: string }>(
+    `${INSTAGRAM_GRAPH}/${containerId}?fields=status_code,status`, withToken(target, { deadline }))
+  const status = result.status_code
+  if (status !== 'EXPIRED' && status !== 'ERROR' && status !== 'FINISHED' && status !== 'IN_PROGRESS' && status !== 'PUBLISHED') {
+    throw new Error(`Instagram reported container ${containerId} in an unknown state: ${String(status)}`)
+  }
+  return { status, detail: result.status ?? null }
+}
+
+/** Publishes the saved container. The answer is the published media id. */
+export async function publishContainer(target: InstagramTarget, containerId: string, deadline: MetaDeadline): Promise<string> {
+  const result = await metaGraphRequest<{ id?: string }>(`${INSTAGRAM_GRAPH}/${target.userId}/media_publish`, withToken(target, { ...formBody({ creation_id: containerId }), deadline }))
+  if (!result.id) throw new Error('Instagram did not return the published media id')
+  return result.id
+}
+
+export interface InstagramMediaRecord {
   id: string
   caption?: string
   media_type: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM'
+  media_product_type?: string
   media_url?: string
   thumbnail_url?: string
-  permalink: string
+  permalink?: string
   timestamp: string
+  username?: string
+  children?: { data?: Array<{ id: string; media_type: 'IMAGE' | 'VIDEO'; media_url?: string; thumbnail_url?: string }> }
 }
 
-async function instagramGraph<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${INSTAGRAM_GRAPH}${path}`, { ...init, signal: AbortSignal.timeout(10_000) })
-  const text = await response.text()
-  if (!response.ok) throw new Error(`Instagram API error: ${text.slice(0, 300)}`)
-  return JSON.parse(text) as T
+const MEDIA_FIELDS = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,username,children{id,media_type,media_url,thumbnail_url}'
+
+export async function readMedia(target: InstagramTarget, mediaId: string, deadline: MetaDeadline): Promise<InstagramMediaRecord> {
+  return await metaGraphRequest<InstagramMediaRecord>(`${INSTAGRAM_GRAPH}/${mediaId}?fields=${MEDIA_FIELDS}`, withToken(target, { deadline }))
 }
 
-/**
- * Publishes a photo post: a media container, then the publish of it. Instagram
- * requires an image, and fetches it itself, so `imageUrl` must be public HTTPS.
- */
-export async function publishToInstagram(
-  env: CloudflareEnv,
-  connection: InstagramConnection,
-  opts: { caption: string; imageUrl: string },
-): Promise<{ id: string }> {
-  const accessToken = await instagramAccessToken(env, connection.account_id)
-  const form = (fields: Record<string, string>) => ({
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ ...fields, access_token: accessToken }).toString(),
-  })
-  const container = await instagramGraph<{ id?: string }>(`/${connection.instagram_user_id}/media`,
-    form({ image_url: opts.imageUrl, caption: opts.caption }))
-  if (!container.id) throw new Error('Instagram did not create a media container')
-  const published = await instagramGraph<{ id?: string }>(`/${connection.instagram_user_id}/media_publish`,
-    form({ creation_id: container.id }))
-  if (!published.id) throw new Error('Instagram did not publish the media container')
-  return { id: published.id }
-}
-
-/**
- * Imports the account's recent posts as the tenant's own social posts. The
- * connection's status afterwards is what this sync found, so a failure is on
- * the Instagram leaf rather than only in a log.
- */
-export async function syncInstagramPosts(
-  env: CloudflareEnv,
-  connection: InstagramConnection,
-  limit = 20,
-): Promise<{ success: number; errors: number; skipped: number }> {
-  let media: InstagramMedia[]
-  try {
-    const params = new URLSearchParams({
-      access_token: await instagramAccessToken(env, connection.account_id),
-      fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp',
-      limit: String(limit),
-    })
-    media = (await instagramGraph<{ data?: InstagramMedia[] }>(`/${connection.instagram_user_id}/media?${params.toString()}`)).data ?? []
-  } catch (error) {
-    await recordSyncStatus(env, connection, 'error')
-    throw error
-  }
-
-  const organizationId = connection.organization_id
-  let success = 0
-  let errors = 0
-  let skipped = 0
-  for (const item of media) {
-    try {
-      const existing = await queryFirst(env.DB,
-        `SELECT id FROM content_documents WHERE kind = 'social_post' AND row_role = 'root'
-          AND (metadata_json ->> '$.channels.instagram.provider_post_id') = ? AND organization_id = ? LIMIT 1`,
-        [item.id, organizationId])
-      if (existing) {
-        skipped++
-        continue
-      }
-
-      const title = item.caption?.split('\n').filter(Boolean)[0] ?? null
-      const { body } = parsePostInput({ body: item.caption, post_type: 'standard' })
-      const imageUrl = item.media_type === 'VIDEO' ? item.thumbnail_url : item.media_url
-      if (!imageUrl) {
-        skipped++
-        continue
-      }
-      const imageResponse = await fetch(imageUrl)
-      if (!imageResponse.ok) throw new Error(`Instagram image ${item.id} answered ${imageResponse.status}`)
-
-      const imageBuffer = await imageResponse.arrayBuffer()
-      const assetId = `ig-asset-${item.id}`
-      const r2Key = buildR2Key(organizationId, assetId, `instagram-${item.id}.jpg`)
-      const publicUrl = await uploadToR2(env, r2Key, imageBuffer, 'image/jpeg')
-      const postId = `ig-post-${item.id}`
-      const now = new Date().toISOString()
-
-      await executeBatch(env.DB, [
-        buildMediaAssetInsertQuery({
-          id: assetId,
-          organization_id: organizationId,
-          kind: 'image',
-          provider: 'cloudflare_r2',
-          source: 'external',
-          r2_key: r2Key,
-          public_url: publicUrl,
-          mime_type: 'image/jpeg',
-          file_name: `instagram-${item.id}.jpg`,
-          file_size: imageBuffer.byteLength,
-          status: 'active',
-        }, now),
-        ...prepareContentDocumentWithBlocks({ id: postId, organizationId, kind: 'social_post',
-          rowRole: 'root', locale: 'en', title, summary: body, status: 'published', visibility: 'listed', source: 'manual',
-          publishedAt: item.timestamp, createdBy: 'instagram-sync',
-          metadata: { post_type: 'standard', event: null, offer: null, call_to_action: null, alert_type: null,
-            channels: { instagram: { status: 'published', provider_post_id: item.id, error_message: null,
-              published_at: item.timestamp, created_at: now } } },
-        }, []).queries,
-        buildMediaPlacementInsertQuery({ organizationId, ownerType: 'content_document', ownerId: postId, slot: 'cover', assetId, sortOrder: 0, createdAt: now, updatedAt: now }),
-      ])
-      success++
-    } catch (error) {
-      errors++
-      console.error('instagram_sync_item_failed', { organizationId, item: item.id, error: error instanceof Error ? error.message : String(error) })
-    }
-  }
-
-  await recordSyncStatus(env, connection, errors > 0 ? 'error' : 'active')
-  return { success, errors, skipped }
+/** One page of the account's own media, newest first, with every carousel child, and the cursor for the next. */
+export async function listMedia(target: InstagramTarget, input: { after: string | null; limit: number }, deadline: MetaDeadline): Promise<{ items: InstagramMediaRecord[]; after: string | null }> {
+  const params = new URLSearchParams({ fields: MEDIA_FIELDS, limit: String(input.limit), ...(input.after ? { after: input.after } : {}) })
+  const page = await metaGraphRequest<{ data?: InstagramMediaRecord[]; paging?: { cursors?: { after?: string }; next?: string } }>(
+    `${INSTAGRAM_GRAPH}/${target.userId}/media?${params}`, withToken(target, { deadline }))
+  return { items: page.data ?? [], after: page.paging?.next ? page.paging.cursors?.after ?? null : null }
 }

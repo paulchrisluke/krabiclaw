@@ -1,168 +1,164 @@
-import { calendarDateSchema, preciseTimeSchema, instantSchema, isValidCalendarDate, isValidInstant, instantDate, formatCalendarDate, formatTime, formatTimestamp } from '../utils/timezone.ts'
-export const POST_TYPES = ['standard', 'event', 'offer', 'alert'] as const
-/** `alert` is not offered when creating: its only alert_type is `covid_19`. An existing alert still opens. */
-export const CREATABLE_POST_TYPES = ['standard', 'event', 'offer'] as const
-export const POST_ACTIONS = ['book', 'order', 'shop', 'learn_more', 'sign_up', 'call'] as const
-export const POST_WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+/**
+ * The short-post authoring contract, shared by MCP, the dashboard and the
+ * domain: optional title, optional plain-text body (the caption, newlines kept),
+ * ordered image/video media, an optional location, an optional call to action
+ * the tenant wrote, and whether the post is listed.
+ *
+ * There is no topic discriminator. Event dates, offers and coupon terms are the
+ * post's own words; bookable occurrences belong to the catalog.
+ */
 export class PostValidationError extends Error { statusCode = 400 }
 
-const text = { type: 'string' } as const
-const nonblank = { type: 'string', minLength: 1 } as const
-const date = calendarDateSchema
-const time = preciseTimeSchema
-const url = { type: 'string', format: 'uri' } as const
-const instant = instantSchema
+export const POST_TITLE_MAX = 200
+export const POST_BODY_MAX = 5000
+export const POST_CALL_TO_ACTION_LABEL_MAX = 60
+
 const absent = { type: 'null' } as const
-const optionalText = { anyOf: [text, absent] } as const
-export const postRecurrenceJsonSchema = { anyOf: [
-  { type: 'object', additionalProperties: false, properties: { kind: { enum: ['daily'] }, series_end_time: instant }, required: ['kind'] },
-  { type: 'object', additionalProperties: false, properties: { kind: { enum: ['weekly'] }, days_of_week: { type: 'array', items: { enum: POST_WEEKDAYS }, uniqueItems: true }, series_end_time: instant }, required: ['kind', 'days_of_week'] },
-  { type: 'object', additionalProperties: false, properties: { kind: { enum: ['monthly'] }, day_of_month: { type: 'integer', minimum: 1, maximum: 31 }, series_end_time: instant }, required: ['kind', 'day_of_month'] },
-  { type: 'object', additionalProperties: false, properties: { kind: { enum: ['monthly'] }, day_of_week_occurrence: { enum: ['first', 'second', 'third', 'fourth', 'last'] }, series_end_time: instant }, required: ['kind', 'day_of_week_occurrence'] },
-] } as const
-export const postEventJsonSchema = {
-  type: 'object', additionalProperties: false, required: ['title', 'schedule'], properties: {
-    title: nonblank,
-    schedule: { type: 'object', additionalProperties: false, properties: { start_date: date, start_time: time, end_date: date, end_time: time }, required: ['start_date', 'start_time', 'end_date', 'end_time'] },
-    recurrence_info: postRecurrenceJsonSchema,
+
+export const postCallToActionJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  description: 'A button the author wrote: its label and an http(s) or tel: destination. Sent to Facebook and Instagram as a separate "label: url" line under the caption; Instagram shows it as text, not a button.',
+  properties: {
+    label: { type: 'string', minLength: 1, maxLength: POST_CALL_TO_ACTION_LABEL_MAX },
+    url: { type: 'string', description: 'https://…, http://… or tel:+…' },
+  },
+  required: ['label', 'url'],
+} as const
+
+export const postMediaJsonSchema = {
+  type: 'array',
+  description: 'Ordered media: at most one cover, then gallery items in order. Each asset appears once.',
+  items: {
+    type: 'object', additionalProperties: false,
+    properties: { asset_id: { type: 'string', minLength: 1 }, slot: { enum: ['cover', 'gallery'] } },
+    required: ['asset_id', 'slot'],
   },
 } as const
-export const postOfferJsonSchema = { type: 'object', additionalProperties: false, properties: { coupon_code: nonblank, redeem_online_url: url, terms_conditions: nonblank } } as const
-export const postCallToActionJsonSchema = { anyOf: [
-  { type: 'object', additionalProperties: false, properties: { action_type: { enum: ['call'] } }, required: ['action_type'] },
-  { type: 'object', additionalProperties: false, properties: { action_type: { enum: ['book', 'order', 'shop', 'learn_more', 'sign_up'] }, url }, required: ['action_type', 'url'] },
-] } as const
-const nullableAction = { anyOf: [postCallToActionJsonSchema, absent] } as const
-const topicRequired = ['post_type', 'event', 'offer', 'call_to_action', 'alert_type'] as const
-export const postTopicJsonSchema = { anyOf: [
-  { type: 'object', additionalProperties: false, required: topicRequired, properties: { post_type: { enum: ['standard'] }, event: absent, offer: absent, alert_type: absent, call_to_action: nullableAction } },
-  { type: 'object', additionalProperties: false, required: topicRequired, properties: { post_type: { enum: ['event'] }, event: postEventJsonSchema, offer: absent, alert_type: absent, call_to_action: nullableAction } },
-  { type: 'object', additionalProperties: false, required: topicRequired, properties: { post_type: { enum: ['offer'] }, event: postEventJsonSchema, offer: postOfferJsonSchema, alert_type: absent, call_to_action: absent } },
-  { type: 'object', additionalProperties: false, required: topicRequired, properties: { post_type: { enum: ['alert'] }, event: absent, offer: absent, alert_type: { enum: ['covid_19'] }, call_to_action: nullableAction } },
-] } as const
+
 export const postMutationJsonSchema = {
-  type: 'object', additionalProperties: false, properties: {
-    title: optionalText, body: nonblank, slug: optionalText,
-    location_id: { anyOf: [nonblank, absent] }, scheduled_for: { anyOf: [instant, absent] },
-    visibility: { enum: ['listed', 'unlisted'] },
-    post_type: { enum: POST_TYPES }, event: { anyOf: [postEventJsonSchema, absent] },
-    offer: { anyOf: [postOfferJsonSchema, absent] }, call_to_action: nullableAction,
-    alert_type: { anyOf: [{ enum: ['covid_19'] }, absent] },
-    media: { type: 'array', items: { type: 'object', additionalProperties: false, properties: { asset_id: nonblank, slot: { enum: ['cover', 'gallery'] } }, required: ['asset_id', 'slot'] } },
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: { anyOf: [{ type: 'string', maxLength: POST_TITLE_MAX }, absent], description: 'Optional headline. Never invented when absent.' },
+    body: { anyOf: [{ type: 'string', maxLength: POST_BODY_MAX }, absent], description: 'The caption, plain text; newlines are kept.' },
+    slug: { anyOf: [{ type: 'string' }, absent], description: 'Optional route segment for /posts/<slug>. Allocated from the title or body when omitted, and fixed once the post is published.' },
+    location_id: { anyOf: [{ type: 'string', minLength: 1 }, absent], description: 'Scope the post to one of this organization\'s locations; omit for organization-wide.' },
+    visibility: { enum: ['listed', 'unlisted'], description: 'listed shows the post in feeds; unlisted keeps it reachable by its URL only. Neither makes a draft public.' },
+    call_to_action: { anyOf: [postCallToActionJsonSchema, absent] },
+    media: postMediaJsonSchema,
   },
 } as const
 
-type SchemaValue<S> = S extends { readonly anyOf: readonly (infer V)[] } ? SchemaValue<V>
-  : S extends { readonly enum: readonly (infer V)[] } ? V
-    : S extends { readonly type: 'null' } ? null
-      : S extends { readonly type: 'string' } ? string
-        : S extends { readonly type: 'integer' } ? number
-          : S extends { readonly type: 'array'; readonly items: infer V } ? SchemaValue<V>[]
-            : S extends { readonly properties: infer P } ? { -readonly [K in keyof P as K extends (S extends { readonly required: readonly (infer R)[] } ? R : never) ? K : never]: SchemaValue<P[K]> }
-              & { -readonly [K in keyof P as K extends (S extends { readonly required: readonly (infer R)[] } ? R : never) ? never : K]?: SchemaValue<P[K]> }
-              : never
-export type PostTopic = SchemaValue<typeof postTopicJsonSchema>
-export type PostEvent = SchemaValue<typeof postEventJsonSchema>
-export type PostRecurrence = SchemaValue<typeof postRecurrenceJsonSchema>
-export type PostAction = SchemaValue<typeof postCallToActionJsonSchema>
-export type PostMutation = SchemaValue<typeof postMutationJsonSchema>
+export interface PostCallToAction { label: string; url: string }
+export interface PostMediaRef { asset_id: string; slot: 'cover' | 'gallery' }
 
-type Schema = { readonly anyOf?: readonly Schema[]; readonly enum?: readonly unknown[]; readonly type?: string; readonly properties?: Readonly<Record<string, Schema>>; readonly required?: readonly string[]; readonly items?: Schema; readonly additionalProperties?: boolean; readonly minimum?: number; readonly maximum?: number; readonly minLength?: number; readonly pattern?: string; readonly format?: string; readonly uniqueItems?: boolean }
+export interface PostMutation {
+  title?: string | null
+  body?: string | null
+  slug?: string | null
+  location_id?: string | null
+  visibility?: 'listed' | 'unlisted'
+  call_to_action?: PostCallToAction | null
+  media?: PostMediaRef[]
+}
 
-function validateShape(schema: Schema, value: unknown, path: string): void {
-  const fail = (reason: string): never => { throw new PostValidationError(`${path}: ${reason}`) }
-  if (schema.anyOf) {
-    for (const candidate of schema.anyOf) {
-      try { validateShape(candidate, value, path); return } catch (error) { if (!(error instanceof PostValidationError)) throw error }
-    }
-    return fail('does not match an allowed shape')
+function fail(message: string): never {
+  throw new PostValidationError(message)
+}
+
+const nullableText = (value: unknown, field: string, max: number): string | null => {
+  if (value === null) return null
+  if (typeof value !== 'string') fail(`${field} must be a string or null`)
+  if (value.length > max) fail(`${field} is ${value.length} characters; the limit is ${max}`)
+  return value
+}
+
+/** A destination a visitor can follow: http(s) on the public internet, or a phone number. */
+export function parseCallToActionUrl(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) fail('call_to_action.url is required')
+  const url = value.trim()
+  if (/^tel:/i.test(url)) {
+    const number = url.slice(4).replace(/[\s().-]/g, '')
+    if (!/^\+?\d{4,15}$/.test(number)) fail('call_to_action.url tel: must be a phone number')
+    return `tel:${number}`
   }
-  if (schema.enum) { if (!schema.enum.includes(value)) fail(`must be one of ${schema.enum.join(', ')}`); return }
-  if (schema.type === 'null') { if (value !== null) fail('must be null'); return }
-  if (schema.type === 'string') {
-    if (typeof value !== 'string') return fail('must be a string')
-    if (schema.minLength && value.trim().length < schema.minLength) fail('must not be empty')
-    if (schema.pattern && !new RegExp(schema.pattern).test(value)) fail('has an invalid format')
-    if (schema.format === 'date' && !isValidCalendarDate(value)) fail('must have a real calendar date')
-    if (schema.format === 'date-time' && !isValidInstant(value)) fail('must be an RFC 3339 timestamp with an explicit offset')
-    if (schema.format === 'uri') {
-      try { if (!['http:', 'https:'].includes(new URL(value).protocol)) fail('must use HTTP or HTTPS') } catch { fail('must be an absolute HTTP or HTTPS URL') }
-    }
-    return
-  }
-  if (schema.type === 'integer') {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < (schema.minimum ?? -Infinity) || value > (schema.maximum ?? Infinity)) fail('is outside its integer range')
-    return
-  }
-  if (schema.type === 'array') {
-    if (!Array.isArray(value)) return fail('must be an array')
-    if (schema.uniqueItems && new Set(value.map(item => JSON.stringify(item))).size !== value.length) fail('must contain unique values')
-    if (schema.items) value.forEach((item, index) => validateShape(schema.items!, item, `${path}[${index}]`))
-    return
-  }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return fail('must be an object')
+  let parsed: URL
+  try { parsed = new URL(url) } catch { fail('call_to_action.url must be an absolute https, http or tel: URL') }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') fail('call_to_action.url must use https, http or tel:')
+  if (!parsed.hostname.includes('.')) fail('call_to_action.url must name a public host')
+  return parsed.toString()
+}
+
+export function parseCallToAction(value: unknown): PostCallToAction | null {
+  if (value === null) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('call_to_action must be an object with label and url, or null')
   const record = value as Record<string, unknown>
-  for (const key of schema.required ?? []) if (record[key] === undefined) fail(`${key} is required`)
-  for (const [key, item] of Object.entries(record)) {
-    const child = schema.properties?.[key]
-    if (!child) fail(`unknown field ${key}`)
-    if (item !== undefined) validateShape(child!, item, `${path}.${key}`)
+  const unknown = Object.keys(record).find(key => key !== 'label' && key !== 'url')
+  if (unknown) fail(`call_to_action: unknown field ${unknown}`)
+  if (typeof record.label !== 'string' || !record.label.trim()) fail('call_to_action.label is required')
+  const label = record.label.trim()
+  if (label.length > POST_CALL_TO_ACTION_LABEL_MAX) fail(`call_to_action.label is ${label.length} characters; the limit is ${POST_CALL_TO_ACTION_LABEL_MAX}`)
+  return { label, url: parseCallToActionUrl(record.url) }
+}
+
+/**
+ * The caller's fields, validated. Only fields present are returned, so an
+ * update changes what it names and nothing else.
+ */
+export function parsePostInput(input: unknown, operation: 'create' | 'update'): PostMutation {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) fail('post must be an object')
+  const record = input as Record<string, unknown>
+  const allowed = Object.keys(postMutationJsonSchema.properties).filter(key => operation === 'create' || key !== 'media')
+  const unknown = Object.keys(record).find(key => record[key] !== undefined && !allowed.includes(key))
+  if (unknown) fail(unknown === 'media' ? 'Change a post\'s media through its media placements' : `post: unknown field ${unknown}`)
+  const result: PostMutation = {}
+  if (record.title !== undefined) {
+    const title = nullableText(record.title, 'title', POST_TITLE_MAX)
+    result.title = title?.trim() ? title.trim() : null
   }
-}
-
-function parseShape<const S extends Schema>(schema: S, value: unknown): SchemaValue<S> {
-  validateShape(schema, value, 'post')
-  return value as SchemaValue<S>
-}
-
-export function parsePostTopic(input: unknown): PostTopic {
-  if (input && typeof input === 'object' && 'post_type' in input) {
-    const variant = postTopicJsonSchema.anyOf.find(schema => schema.properties.post_type.enum[0] === input.post_type)
-    if (variant) validateShape(variant, input, 'post')
+  if (record.body !== undefined) {
+    const body = nullableText(record.body, 'body', POST_BODY_MAX)
+    // Newlines are the author's; only the ends are trimmed.
+    result.body = body?.trim() ? body.replace(/^\s+|\s+$/g, '') : null
   }
-  const topic = parseShape(postTopicJsonSchema, input)
-  if (topic.event) {
-    const { start_date, start_time, end_date, end_time } = topic.event.schedule
-    const precise = (value: string) => { const [whole, fraction = ''] = value.split('.'); return `${whole}.${fraction.padEnd(9, '0')}` }
-    if (`${end_date}T${precise(end_time)}` < `${start_date}T${precise(start_time)}`) throw new PostValidationError('event.schedule: end must not precede start')
+  if (record.slug !== undefined) result.slug = nullableText(record.slug, 'slug', 200)?.trim() || null
+  if (record.location_id !== undefined) {
+    if (record.location_id !== null && (typeof record.location_id !== 'string' || !record.location_id.trim())) fail('location_id must be a location id or null')
+    result.location_id = record.location_id as string | null
   }
-  return topic
-}
-
-export function parsePostInput(input: unknown, existing?: PostTopic & { body: string; scheduled_for?: string | null }) {
-  const patch = parseShape(postMutationJsonSchema, input)
-  const changedType = patch.post_type !== undefined && patch.post_type !== existing?.post_type
-  const post_type = patch.post_type ?? existing?.post_type ?? 'standard'
-  const base = changedType || !existing ? { event: null, offer: post_type === 'offer' ? {} : null, call_to_action: null, alert_type: null } : {
-    event: existing.event, offer: existing.offer, call_to_action: existing.call_to_action, alert_type: existing.alert_type,
+  if (record.visibility !== undefined) {
+    if (record.visibility !== 'listed' && record.visibility !== 'unlisted') fail('visibility must be listed or unlisted')
+    result.visibility = record.visibility
   }
-  const topic = parsePostTopic({ ...base, post_type,
-    ...Object.fromEntries(Object.entries(patch).filter(([key, value]) => value !== undefined && ['event', 'offer', 'call_to_action', 'alert_type'].includes(key))),
-  })
-  const body = patch.body ?? existing?.body
-  if (typeof body !== 'string' || !body.trim()) throw new PostValidationError('body is required')
-  if (patch.scheduled_for && patch.scheduled_for !== existing?.scheduled_for && Date.parse(patch.scheduled_for) <= Date.now()) throw new PostValidationError('scheduled_for must be a future RFC 3339 timestamp')
-  if (topic.post_type === 'alert' && patch.media?.length) throw new PostValidationError('Alert posts support only summary and call to action content')
-  if (patch.media && patch.media.filter(item => item.slot === 'cover').length > 1) throw new PostValidationError('media accepts at most one cover asset')
-  return { ...patch, ...(patch.scheduled_for ? { scheduled_for: instantDate(patch.scheduled_for).toISOString() } : {}), ...topic, body: body.trim() }
+  if (record.call_to_action !== undefined) result.call_to_action = parseCallToAction(record.call_to_action)
+  if (record.media !== undefined) {
+    if (!Array.isArray(record.media)) fail('media must be an array')
+    const seen = new Set<string>()
+    result.media = record.media.map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) fail(`media[${index}] must be an object`)
+      const entry = item as Record<string, unknown>
+      if (typeof entry.asset_id !== 'string' || !entry.asset_id.trim()) fail(`media[${index}].asset_id is required`)
+      if (entry.slot !== 'cover' && entry.slot !== 'gallery') fail(`media[${index}].slot must be cover or gallery`)
+      if (seen.has(entry.asset_id)) fail(`media[${index}]: asset ${entry.asset_id} appears more than once`)
+      seen.add(entry.asset_id)
+      return { asset_id: entry.asset_id, slot: entry.slot }
+    })
+    if (result.media.filter(item => item.slot === 'cover').length > 1) fail('media accepts at most one cover asset')
+  }
+  return result
 }
 
-export function postActionUrl(action: PostAction | null, phone: string | null): string | null {
-  if (!action) return null
-  return action.action_type === 'call' ? (phone ? `tel:${phone}` : null) : action.url
+/** The line a provider caption carries for the author's call to action. */
+export function callToActionLine(action: PostCallToAction | null): string | null {
+  return action ? `${action.label}: ${action.url}` : null
 }
 
-export function postEventDescription(event: PostEvent, locale = 'en'): string {
-  const schedule = event.schedule
-  const range = `${formatCalendarDate(schedule.start_date, locale)} ${formatTime(schedule.start_time, locale)} – ${formatCalendarDate(schedule.end_date, locale)} ${formatTime(schedule.end_time, locale)}`
-  const rule = event.recurrence_info
-  if (!rule) return range
-  const weekdayName = (day: typeof POST_WEEKDAYS[number]) => formatCalendarDate(`2026-09-${String(6 + POST_WEEKDAYS.indexOf(day)).padStart(2, '0')}`, locale, { weekday: 'long' })
-  const startDay = POST_WEEKDAYS[new Date(`${schedule.start_date}T00:00:00Z`).getUTCDay()]!
-  const thai = locale.startsWith('th')
-  const cadence = rule.kind === 'daily' ? (thai ? 'ทุกวัน' : 'Daily')
-    : rule.kind === 'weekly' ? (rule.days_of_week.length ? rule.days_of_week : [startDay]).map(weekdayName).join(', ')
-      : 'day_of_month' in rule ? `${thai ? 'ทุกเดือน วันที่' : 'Monthly on day'} ${rule.day_of_month}`
-        : `${thai ? 'ทุกเดือน' : 'Monthly'}, ${rule.day_of_week_occurrence} ${weekdayName(startDay)}`
-  return `${range} · ${cadence}${rule.series_end_time ? ` · ${thai ? 'ถึง' : 'Until'} ${formatTimestamp(rule.series_end_time, locale, 'UTC')} UTC` : ''}`
+/**
+ * What Facebook and Instagram are sent as the post's text: the author's body,
+ * then their call to action on its own line. Nothing is paraphrased, and
+ * nothing is added when both are absent.
+ */
+export function providerCaption(body: string | null, action: PostCallToAction | null): string {
+  return [body?.trim() ? body : null, callToActionLine(action)].filter(Boolean).join('\n\n')
 }

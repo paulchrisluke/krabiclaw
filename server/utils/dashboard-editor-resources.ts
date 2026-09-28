@@ -1,3 +1,4 @@
+import { mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
@@ -227,10 +228,13 @@ export async function loadDashboardLocationOverview(
 export async function loadDashboardBlogPosts(
   event: H3Event,
   organizationId: string,
-  status?: string,
+  input: { status?: string | null; limit?: number; cursor?: string },
 ) {
   const { env, db } = await requireBlogAccess(event, organizationId)
-  return { posts: await listBlogPosts(db, organizationId, status, env) }
+  const resource = { resource: `blog-posts:${organizationId}:${input.status ?? ''}` }
+  return await listBlogPosts(db, organizationId, input.status, env, mcpPageWindow({
+    ...(input.limit === undefined ? {} : { limit: input.limit }), ...(input.cursor ? { cursor: input.cursor } : {}),
+  }, resource), resource)
 }
 
 export async function loadDashboardBlogPost(

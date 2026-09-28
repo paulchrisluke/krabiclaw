@@ -17,12 +17,10 @@ export interface BroadcastEnv extends ProductNewsEnv {
 /**
  * How recently an article must have first gone public to be worth announcing.
  *
- * The task derives its own work rather than being called from a publish
- * endpoint, because an article reaches `published` two ways — immediately
- * through updateBlogLifecycle, and later through blog-scheduled-publish — and
- * enqueuing from both writers would be two implementations of one rule. The
- * window is what stops the whole existing back catalogue mailing out the first
- * time this ships.
+ * The task derives its own work from `first_published_at` rather than being
+ * called from the publish endpoint, so a repeated publish, which changes
+ * nothing, cannot announce twice. The window is what stops the whole existing
+ * back catalogue mailing out the first time this ships.
  */
 const ANNOUNCEABLE_WINDOW_MS = 24 * 60 * 60 * 1000
 

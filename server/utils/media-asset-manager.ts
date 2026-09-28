@@ -528,12 +528,26 @@ export async function updateMediaAssetAlt(db: DbClient, id: string, organization
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
+/**
+ * An asset a Facebook or Instagram publication is sending, or may already
+ * have sent, is pinned: its revision is part of what the publication
+ * fingerprinted, so it is not changed or deleted until that is resolved.
+ */
+async function assertNotPinnedByPublication(db: DbClient, organizationId: string, assetId: string) {
+  const pinned = await queryFirst<{ id: string; channel: string }>(db, `SELECT pp.id, pp.channel FROM media_placements mp
+    JOIN post_publications pp ON pp.organization_id = mp.organization_id AND pp.post_id = mp.owner_id
+    WHERE mp.organization_id = ? AND mp.asset_id = ? AND mp.owner_type = 'content_document' AND mp.slot IN ('cover', 'gallery')
+      AND pp.state IN ('preparing', 'publishing', 'unknown') LIMIT 1`, [organizationId, assetId])
+  if (pinned) throw new HTTPError({ statusCode: 409, statusMessage: `Media asset ${assetId} is part of the unresolved ${pinned.channel} publication ${pinned.id}; resolve it first` })
+}
+
 export async function updateMediaAssetMetadata(
   db: DbClient,
   id: string,
   organizationId: string,
   updates: { alt_text?: string | null; category?: MediaAsset['category'] }
 ): Promise<boolean> {
+  await assertNotPinnedByPublication(db, organizationId, id)
   const sets: string[] = ['updated_at = ?']
   const params: SqlBindValue[] = [new Date().toISOString()]
   if (updates.alt_text !== undefined) {
@@ -634,6 +648,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   if (!pendingAsset) {
     throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
+  await assertNotPinnedByPublication(db, organizationId, id)
   const claimed = pendingAsset.status !== 'deleted'
   // A deleted row's placements went with its claim, so a retry refreshes nothing.
   const sourcePlacements = pendingAsset.source === 'generated' ? [] : await queryAll<{ owner_type: string; owner_id: string; slot: string }>(db,

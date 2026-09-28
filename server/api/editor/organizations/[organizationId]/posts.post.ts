@@ -1,12 +1,12 @@
-import type { PostMutation } from '~/shared/posts'
+import { defineHandler } from 'nitro'
+import { getRouterParam } from 'nitro/h3'
 import { cloudflareEnv, jsonResponse, readStrictBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createPost, PostValidationError } from '~/server/utils/post-management'
 import { assertResourceAccess, memberAccessPrincipal } from '~/server/utils/member-access'
 import { loadMemberOrganizationRow } from '~/server/utils/location-access'
 
-
-
+/** The dashboard's create: the same draft, the same idempotency, as create_post. */
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
@@ -18,31 +18,22 @@ export default defineHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readStrictBody<PostMutation>(event, {
-    title: 'string', body: 'string', slug: 'nullable-string',
-    media: 'unknown',
-    scheduled_for: 'nullable-string', location_id: 'nullable-string', post_type: 'string',
-    event: 'unknown', offer: 'unknown', call_to_action: 'unknown', alert_type: 'nullable-string',
+  const { idempotency_key: idempotencyKey, ...fields } = await readStrictBody<Record<string, unknown> & { idempotency_key: string }>(event, {
+    idempotency_key: 'string', title: 'unknown', body: 'unknown', slug: 'unknown', media: 'unknown',
+    location_id: 'unknown', visibility: 'unknown', call_to_action: 'unknown',
   })
-  if (!body.body?.trim()) return jsonResponse({ error: 'Post body is required' }, { status: 400 })
 
   const organization = await loadMemberOrganizationRow(event, db, env, organizationId, session.user.id)
   if (!organization) return jsonResponse({ error: 'Organization not found or access denied' }, { status: 404 })
 
-  const targetLocationId = typeof body.location_id === 'string' && body.location_id ? body.location_id : null
+  const targetLocationId = typeof fields.location_id === 'string' && fields.location_id ? fields.location_id : null
   await assertResourceAccess(db, { ...memberAccessPrincipal(organization.membership, { env, event }), resourceLocationId: targetLocationId })
 
-  let post
   try {
-    post = await createPost(db, organization.id, body, session.user.id, env)
+    const { post, replayed } = await createPost(db, env, organization.id, { post: fields, idempotencyKey: idempotencyKey ?? '' }, session.user.id)
+    return jsonResponse({ success: true, post, replayed }, { status: replayed ? 200 : 201 })
   } catch (error) {
-    if (error instanceof PostValidationError) {
-      return jsonResponse({ error: error.message }, { status: error.statusCode })
-    }
+    if (error instanceof PostValidationError) return jsonResponse({ error: error.message }, { status: error.statusCode })
     throw error
   }
-
-  return jsonResponse({ success: true, post }, { status: 201 })
 })
-import { defineHandler } from 'nitro';
-import { getRouterParam  } from 'nitro/h3';

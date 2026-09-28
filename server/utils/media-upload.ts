@@ -22,7 +22,9 @@ interface UploadResolvedMediaInputBase {
 
 type UploadResolvedMediaActor =
   | { source: 'generated'; userId: string | null }
-  | { source: 'uploaded' | 'external'; userId: string }
+  | { source: 'uploaded'; userId: string }
+  // Media a provider sync imports has no person behind the request.
+  | { source: 'external'; userId: string | null }
 
 export type UploadResolvedMediaInput = UploadResolvedMediaInputBase & UploadResolvedMediaActor & (
   | { kind: 'image'; provider?: 'cloudflare_images' | 'cloudflare_r2'; poster?: never }

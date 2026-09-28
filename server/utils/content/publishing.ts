@@ -1,6 +1,6 @@
 import { HTTPError } from 'nitro';
 
-import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   attachContentBlockMedia,
   createContentDocumentWithBlocks,
@@ -26,8 +26,9 @@ import { slugifyTitle } from '~/utils/post-slugs'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { ARTICLE_COLLECTION_SLUGS, isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
-import { normalizeBlogSlug, parseScheduledFor, resolveSlugMutation } from '~/utils/blog-editor'
-import { createBlogRedirect } from '~/server/utils/blog-publishing'
+import { normalizeBlogSlug, resolveSlugMutation } from '~/utils/blog-editor'
+import { creationDedupeKey, creationRequestHash, organizationEventQuery, readCreationRecord } from '~/server/utils/organization-events'
+import { mcpPageInfo, type McpPageInfo } from '~/server/utils/mcp-pagination'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { buildSingleMediaPlacementQueries, hydrateMediaPlacementRefs, insertInitialMediaPlacements } from '~/server/utils/media-asset-manager'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
@@ -106,7 +107,6 @@ export interface BlogScope {
 }
 
 export interface PlatformBlogCreateInput {
-  status?: PlatformBlogLifecycleState['status']
   title: string
   slug?: string | null
   content_blocks: Array<ContentBlockInput & { id?: string }>
@@ -117,7 +117,6 @@ export interface PlatformBlogCreateInput {
   tags?: string[] | null
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
-  scheduled_for?: string | null
 }
 
 export interface PlatformBlogUpdateInput {
@@ -137,31 +136,24 @@ export interface PlatformBlogUpdateInput {
 
 export interface PlatformBlogLifecycleInput {
   expected_updated_at: string
-  scheduled_for?: string | null
 }
 
 export interface PlatformBlogLifecycleState {
   id: string
-  status: 'draft' | 'published' | 'scheduled'
+  status: 'draft' | 'published'
   published_at: string | null
-  scheduled_for: string | null
   updated_at: string
+  /** False when the article was already published: nothing changed, and nothing is announced again. */
+  changed: boolean
 }
 
-export function parseBlogLifecycleInput(body: unknown, _action: 'publish' = 'publish'): PlatformBlogLifecycleInput {
+export function parseBlogLifecycleInput(body: unknown): PlatformBlogLifecycleInput {
   if (!body || typeof body !== 'object' || Array.isArray(body)) badRequest('Request body must be a valid object')
   const record = body as Record<string, unknown>
-  const allowed = new Set(['expected_updated_at', 'scheduled_for'])
-  const unknownField = Object.keys(record).find(key => !allowed.has(key))
+  const unknownField = Object.keys(record).find(key => key !== 'expected_updated_at')
   if (unknownField) badRequest(`Unknown request field: ${unknownField}`)
   if (typeof record.expected_updated_at !== 'string' || !record.expected_updated_at.trim()) badRequest('expected_updated_at is required')
-  if (record.scheduled_for !== undefined && record.scheduled_for !== null && typeof record.scheduled_for !== 'string') {
-    badRequest('scheduled_for must be a string or null')
-  }
-  return {
-    expected_updated_at: record.expected_updated_at,
-    scheduled_for: record.scheduled_for as string | null | undefined,
-  }
+  return { expected_updated_at: record.expected_updated_at }
 }
 
 function badRequest(message: string): never {
@@ -425,8 +417,8 @@ async function resolveTenantContext(db: DbClient, organizationId: string, env?: 
 // shapes the URL; a tenant's blog category is free text.
 function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, isTenant: boolean, operation: 'create' | 'update') {
   if (isTenant && input.collection !== undefined && input.collection !== null && input.collection !== 'blog') badRequest('Only KrabiClaw\'s own site publishes collections other than the blog')
-  const writable = new Set<string>([...BLOG_UPDATE_MUTATION_FIELDS, operation === 'create' ? 'scheduled_for' : 'expected_updated_at'])
-  if (operation === 'create') { writable.add('status'); writable.delete('redirect_old_slug'); writable.delete('reset_slug_override') }
+  const writable = new Set<string>([...BLOG_UPDATE_MUTATION_FIELDS, ...(operation === 'create' ? [] : ['expected_updated_at'])])
+  if (operation === 'create') { writable.delete('redirect_old_slug'); writable.delete('reset_slug_override') }
   const unknown = Object.keys(input).find(field => !writable.has(field))
   if (unknown) badRequest(unknown + ' is not writable through article ' + operation)
   if ('visibility' in input && input.visibility !== undefined && !['listed', 'unlisted'].includes(String(input.visibility))) badRequest('visibility must be listed or unlisted')
@@ -461,27 +453,29 @@ export async function listPublicPlatformBlogPosts(db: DbClient, collection: Arti
   return (await queryAll<ApiRecord>(db, sql, [platformOrganizationId, collection])).map(attachCover)
 }
 
-export async function listBlogPosts(db: DbClient, organizationId: string, status?: string | null, env?: CloudflareEnv) {
-  let sql = `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
+export async function listBlogPosts(
+  db: DbClient, organizationId: string, status: string | null | undefined, env: CloudflareEnv | undefined,
+  window: { limit: number; offset: number }, resource: { resource: string },
+): Promise<{ posts: ApiRecord[]; page_info: McpPageInfo }> {
+  if (status && status !== 'draft' && status !== 'published') badRequest('status must be draft or published')
+  const rows = await queryAll<ApiRecord>(db, `SELECT
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility,
       p.seo_keywords,
       ${COVER_SELECT},
       p.published_at, p.created_at, p.updated_at
     FROM content_documents p
     ${coverJoinSql('p')}
-    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ?`
-  const params: ApiValue[] = [organizationId]
-  if (status === 'published') sql += " AND p.status = 'published'"
-  else if (status === 'scheduled') sql += " AND p.status = 'scheduled'"
-  else if (status === 'draft') sql += " AND p.status = 'draft'"
-  sql += ' ORDER BY p.published_at IS NULL, p.published_at DESC, p.created_at DESC'
-  const results = await queryAll<ApiRecord>(db, sql, params)
+    WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ? ${status ? 'AND p.status = ?' : ''}
+    ORDER BY p.published_at IS NULL, p.published_at DESC, p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
+  [organizationId, ...(status ? [status] : []), window.limit + 1, window.offset])
+  const page = rows.slice(0, window.limit)
   const [context, organization] = await Promise.all([resolveTenantContext(db, organizationId, env), loadOrganizationTemplate(db, organizationId)])
-  return Promise.all((results ?? []).map((record) => {
+  const posts = await Promise.all(page.map((record) => {
     const slug = typeof record.slug === 'string' ? record.slug : ''
     const publicPath = slug ? tenantBlogPostPath(organization.template, slug, articleCollectionOf(record.collection)) : null
     return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, organizationId, context, env)
   }))
+  return { posts, page_info: mcpPageInfo(window, page.length, rows.length > window.limit, resource) }
 }
 
 export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizationId: string, env?: CloudflareEnv) {
@@ -489,7 +483,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility, p.scheduled_for,
+       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility,
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_keywords,
        ${COVER_SELECT},
@@ -548,7 +542,7 @@ export async function getPublicOrganizationBlogPost(db: DbClient, organizationId
     FROM content_documents p
     ${coverJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.organization_id = ?
-      ${previewAuthorized ? "AND p.status IN ('draft', 'scheduled', 'published')" : "AND p.status = 'published' AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"}
+      ${previewAuthorized ? "AND p.status IN ('draft', 'published')" : "AND p.status = 'published'"}
     LIMIT 1
   `, [slug, organizationId])
 
@@ -634,38 +628,50 @@ export async function getPublishedBlogPost(
   }
 }
 
+/**
+ * Creates a draft article. Publication is `updateBlogLifecycle`'s alone. The
+ * idempotency key makes a repeat of the same request return the article it
+ * made; a different request under the key conflicts; a deleted one is gone.
+ */
 export async function createBlogPost(
   db: D1Database,
   authorId: string,
-  input: PlatformBlogCreateInput,
+  input: PlatformBlogCreateInput & { idempotency_key?: string },
   scope: BlogScope = {},
   env?: CloudflareEnv,
 ) {
-  if (!input.title?.trim()) badRequest('title is required')
+  const { idempotency_key: rawKey, ...article } = input
+  const idempotencyKey = typeof rawKey === 'string' ? rawKey.trim() : ''
+  if (!idempotencyKey || idempotencyKey.length > 200) badRequest('idempotency_key must be 1 to 200 characters')
+  if (!article.title?.trim()) badRequest('title is required')
   const organizationId = scope.organization_id
   if (!organizationId) badRequest('organization_id is required')
+  if (!env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
   const organization = await loadOrganizationTemplate(db, organizationId)
   const isTenant = !organization.isPlatform
-  validateBlogCommon(input, isTenant, 'create')
-  const collection = articleCollectionOf(input.collection)
+  validateBlogCommon(article, isTenant, 'create')
+  const requestHash = await creationRequestHash(article)
+  const dedupeKey = creationDedupeKey('article', organizationId, idempotencyKey)
+  const replay = async () => {
+    const record = await readCreationRecord(db, dedupeKey)
+    if (!record) return null
+    if (record.requestHash !== requestHash) throw new HTTPError({ statusCode: 409, statusMessage: 'This idempotency_key was already used for a different article' })
+    const existing = await queryFirst<{ id: string }>(db, "SELECT id FROM content_documents WHERE id = ? AND kind = 'article' AND row_role = 'root'", [record.entityId])
+    if (!existing) throw new HTTPError({ statusCode: 410, statusMessage: 'The article this idempotency_key created has been deleted; it is not created again' })
+    return await createdArticleResult(db, record.entityId, organizationId, env)
+  }
+  const earlier = await replay()
+  if (earlier) return earlier
+  const collection = articleCollectionOf(article.collection)
   const placementScope = { organizationId }
   const id = crypto.randomUUID()
-  const customSlug = typeof input.slug === 'string' && input.slug.trim()
-    ? normalizeBlogSlug(input.slug)
+  const customSlug = typeof article.slug === 'string' && article.slug.trim()
+    ? normalizeBlogSlug(article.slug)
     : null
-  const slugBase = customSlug ?? normalizeSlugFromTitle(input.title, 'post')
+  const slugBase = customSlug ?? normalizeSlugFromTitle(article.title, 'post')
   const now = new Date().toISOString()
-  let scheduledFor: string | null = null
-  try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
-  if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
-  const status = input.status ?? (scheduledFor ? 'scheduled' : 'draft')
-  if (!['draft', 'scheduled', 'published'].includes(status)) badRequest('status must be draft, scheduled or published')
-  if (status === 'scheduled' && !scheduledFor) badRequest('scheduled articles require scheduled_for')
-  if (status !== 'scheduled' && scheduledFor) badRequest('scheduled_for is only valid for scheduled articles')
-  if (status !== 'published' && !env?.PREVIEW_SECRET) throw new HTTPError({ statusCode: 500, statusMessage: 'Article preview signing is not configured' })
-  const publishedAt = status === 'published' ? now : null
-  if (input.visibility && !['listed', 'unlisted'].includes(input.visibility)) badRequest('visibility must be listed or unlisted')
-  const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, placementScope)
+  if (article.visibility && !['listed', 'unlisted'].includes(article.visibility)) badRequest('visibility must be listed or unlisted')
+  const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, article, placementScope)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
 
   const slugAttempts = customSlug ? 1 : MAX_SLUG_ATTEMPTS
@@ -674,28 +680,23 @@ export async function createBlogPost(
     try {
       await createContentDocumentWithBlocks(db, {
         id, rowRole: 'root', locale: 'en', kind: 'article', organizationId,
-        title: input.title, slug, summary: input.excerpt ?? null, status, visibility: input.visibility ?? 'listed',
-        authorId, scheduledFor, publishedAt, firstPublishedAt: publishedAt,
-        seoKeywords: input.seo_keywords,
-        metadata: { collection, category: input.category ?? null, tags: input.tags ?? null, slug_manually_overridden: customSlug ? 1 : 0 },
+        title: article.title, slug, summary: article.excerpt ?? null, status: 'draft', visibility: article.visibility ?? 'listed',
+        authorId, seoKeywords: article.seo_keywords,
+        metadata: { collection, category: article.category ?? null, tags: article.tags ?? null, slug_manually_overridden: customSlug ? 1 : 0 },
       }, canonicalBlocks, { bodyMarkdown: canonicalBody,
-        additionalQueriesAfter: await contentBlockPlacementQueries(db, canonicalBlocks, placementScope, now),
+        additionalQueriesAfter: [
+          ...await contentBlockPlacementQueries(db, canonicalBlocks, placementScope, now),
+          organizationEventQuery({ organizationId, actorId: authorId, eventType: 'article.created', entityType: 'article', entityId: id,
+            metadata: { request_hash: requestHash }, dedupeKey }),
+        ],
       })
-      const post = await getBlogPost(db, id, organizationId, env)
-      if (env) await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: id }, actorId: authorId })
-      return {
-        success: true,
-        id,
-        slug,
-        published_at: publishedAt,
-        admin_edit_url: post.admin_edit_url,
-        edit_url: post.edit_url,
-        public_path: post.public_path,
-        public_url: post.public_url,
-        preview_url: post.preview_url,
-        post,
-      }
+      await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: id }, actorId: authorId })
+      return await createdArticleResult(db, id, organizationId, env)
     } catch (err) {
+      if (/UNIQUE constraint failed: activity_entries\.dedupe_key/.test(String(err))) {
+        const concurrent = await replay()
+        if (concurrent) return concurrent
+      }
       if (customSlug && isUniqueConstraintError(err)) badRequest('slug is already in use')
       if (isUniqueConstraintError(err) && attempt < slugAttempts - 1) continue
       throw err
@@ -705,6 +706,26 @@ export async function createBlogPost(
   throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to create post' })
 }
 
+async function createdArticleResult(db: DbClient, id: string, organizationId: string, env: CloudflareEnv) {
+  const post = await getBlogPost(db, id, organizationId, env)
+  return {
+    success: true,
+    id,
+    slug: post.slug,
+    published_at: null,
+    admin_edit_url: post.admin_edit_url,
+    edit_url: post.edit_url,
+    public_path: post.public_path,
+    public_url: post.public_url,
+    preview_url: post.preview_url,
+    post,
+  }
+}
+
+/**
+ * Publishes a draft article. Publishing one that is already published changes
+ * nothing — not its date, not its announcement — and says so.
+ */
 export async function updateBlogLifecycle(
   db: D1Database,
   postIdOrSlug: string,
@@ -712,31 +733,24 @@ export async function updateBlogLifecycle(
   organizationId: string,
 ): Promise<PlatformBlogLifecycleState> {
   if (!input.expected_updated_at?.trim()) badRequest('expected_updated_at is required')
-
-  let scheduledFor: string | null = null
-  try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
-  if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
-
   const sourceId = await resolvePlatformContentId(db, 'article', postIdOrSlug, 'Post not found', organizationId)
-  const source = await queryFirst<{ id: string; status: string; updated_at: string }>(db,
-    "SELECT id, status, updated_at FROM content_documents WHERE id = ? AND row_role = 'root' AND kind = 'article'", [sourceId])
+  const source = await queryFirst<{ id: string; status: string; published_at: string | null; updated_at: string }>(db,
+    "SELECT id, status, published_at, updated_at FROM content_documents WHERE id = ? AND row_role = 'root' AND kind = 'article'", [sourceId])
   if (!source) notFound('Post not found')
-  if (source.status !== 'draft' && source.status !== 'scheduled') badRequest('Only a draft or scheduled article can be published or scheduled')
+  if (source.status === 'published') return { id: source.id, status: 'published', published_at: source.published_at, updated_at: source.updated_at, changed: false }
   if (source.updated_at !== input.expected_updated_at) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Article was updated by another writer' })
   }
   const committedAt = new Date(Math.max(Date.now(), Date.parse(source.updated_at) + 1)).toISOString()
-  const [result] = await executeBatch(db, [{ query: `UPDATE content_documents SET scheduled_for = ?,
-    published_at = ?, first_published_at = CASE WHEN ? IS NULL THEN COALESCE(first_published_at, ?) ELSE first_published_at END,
-    status = ?, updated_at = ? WHERE id = ? AND kind = 'article' AND row_role = 'root' AND updated_at = ? AND status IN ('draft', 'scheduled')`,
-  params: [scheduledFor, scheduledFor ? null : committedAt, scheduledFor, committedAt,
-    scheduledFor ? 'scheduled' : 'published', committedAt, source.id, input.expected_updated_at] },
+  const [result] = await executeBatch(db, [{ query: `UPDATE content_documents SET
+    published_at = COALESCE(published_at, ?), first_published_at = COALESCE(first_published_at, ?),
+    status = 'published', updated_at = ? WHERE id = ? AND kind = 'article' AND row_role = 'root' AND updated_at = ? AND status = 'draft'`,
+  params: [committedAt, committedAt, committedAt, source.id, input.expected_updated_at] },
   publicResourceCacheInvalidationQuery(organizationId, 'article-publication')])
   if (Number(result?.meta.changes ?? 0) !== 1) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Article was updated by another writer' })
   }
-  return { id: source.id, status: scheduledFor ? 'scheduled' as const : 'published' as const,
-    published_at: scheduledFor ? null : committedAt, scheduled_for: scheduledFor, updated_at: committedAt }
+  return { id: source.id, status: 'published', published_at: source.published_at ?? committedAt, updated_at: committedAt, changed: true }
 }
 
 export async function updateBlogPost(
@@ -812,4 +826,28 @@ export async function deleteBlogPost(db: D1Database, postIdOrSlug: string, organ
   await executeBatch(db, prepareContentDocumentDeletion({ documentId: document.id,
     organizationId: document.organization_id }))
   return { success: true }
+}
+
+/**
+ * The permanent redirect a published article's old address keeps when its slug
+ * changes. It lives beside the slug change that needs it.
+ */
+async function createBlogRedirect(db: D1Database, postId: string, organizationId: string, oldSlug: string) {
+  const now = new Date().toISOString()
+  const post = await queryFirst<{ id: string; organization_id: string; slug: string; theme_id: string | null }>(db, `
+    SELECT p.id, p.organization_id, p.slug, s.theme_id
+      FROM content_documents p JOIN organization s ON s.id = p.organization_id
+     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.id = ? AND p.organization_id = ? LIMIT 1
+  `, [postId, organizationId])
+  if (!post) throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
+  const oldPath = tenantBlogPostPath({ themeId: post.theme_id }, oldSlug)
+  const newPath = tenantBlogPostPath({ themeId: post.theme_id }, post.slug)
+  // The scope check is the SELECT above: the post was read under the caller's
+  // organization, so the redirect cannot be written against another tenant's.
+  await execute(db, `INSERT INTO organization_redirects
+    (id, organization_id, locale, owner_type, owner_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at)
+    VALUES (?, ?, 'en', ?, ?, ?, ?, 301, 'redirect', ?, ?, ?, ?)
+    ON CONFLICT(organization_id, locale, from_path) DO UPDATE SET owner_type = excluded.owner_type, owner_id = excluded.owner_id,
+      to_path = excluded.to_path, status_code = 301, behavior = 'redirect', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at`,
+  [crypto.randomUUID(), post.organization_id, 'content_document', postId, oldPath, newPath, 'blog_slug_change', 'blog', now, now])
 }
