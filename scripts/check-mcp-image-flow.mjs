@@ -159,11 +159,12 @@ async function createProduct(headers, organizationId, locationId) {
 async function createPost(headers, organizationId) {
   const response = await mcp(headers, 'create_post', {
     organization_id: organizationId,
+    idempotency_key: `mcp-image-post-${Date.now()}`,
     title: 'MCP Image Post',
     body: 'Post used for image tool coverage',
   })
   expectStatus('create_post succeeds', response)
-  const postId = data(response.body)?.id
+  const postId = data(response.body)?.post?.id
   expectValue('create_post returns post id', Boolean(postId), response.body)
   return postId
 }

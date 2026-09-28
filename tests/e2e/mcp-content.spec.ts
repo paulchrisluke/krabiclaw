@@ -10,39 +10,31 @@ import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 // tools, and the stateless discovery/list/error protocol flow.
 
 test.describe('stateless MCP server', () => {
-  // Split out of one test doing ~15-18 sequential MCP round trips sharing a
-  // single 90s budget (invalid-post validation, the create/publish/
-  // idempotency/public-API chain, and event/offer type validation are three
-  // largely independent scenarios) — was intermittently exceeding even that
-  // 90s budget under preview-deploy load, most recently confirmed on an
-  // unrelated staging push (run 30061194138) that predates this split.
-  // Splitting gives each scenario its own budget instead of raising the
-  // shared one further.
-
-  test('invalid event and offer posts are rejected with validation errors', async ({ request, baseURL }) => {
+  test('a post rejects fields that are not part of the contract', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
-    const invalidEvent = await mcpRequest(request, baseURL!, {
+    // Event and offer types are gone: their dates and terms are written in the body.
+    const typed = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
-      args: { organization_id: organizationId, title: 'Invalid event', body: 'Missing its start.', post_type: 'event' },
+      args: { organization_id: organizationId, idempotency_key: `typed-${Date.now()}`, title: 'Typed post', body: 'Has a type.', post_type: 'event' },
     })
-    expect(invalidEvent.status()).toBe(200)
-    const invalidEventBody = await invalidEvent.json()
-    expect(invalidEventBody.result?.isError).toBe(true)
-    expect(invalidEventBody.result?.content?.[0]?.text).toContain('event')
+    expect(typed.status()).toBe(200)
+    const typedBody = await typed.json()
+    expect(typedBody.result?.isError).toBe(true)
+    expect(typedBody.result?.content?.[0]?.text).toContain('post_type')
 
-    const invalidOffer = await mcpRequest(request, baseURL!, {
+    const badAction = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
-      args: { organization_id: organizationId, title: 'Invalid offer', body: 'Missing terms.', post_type: 'offer' },
+      args: { organization_id: organizationId, idempotency_key: `cta-${Date.now()}`, body: 'Bad link.', call_to_action: { label: 'Book', url: 'javascript:alert(1)' } },
     })
-    expect(invalidOffer.status()).toBe(200)
-    const invalidOfferBody = await invalidOffer.json()
-    expect(invalidOfferBody.result?.isError).toBe(true)
-    expect(invalidOfferBody.result?.content?.[0]?.text).toContain('event')
+    expect(badAction.status()).toBe(200)
+    const badActionBody = await badAction.json()
+    expect(badActionBody.result?.isError).toBe(true)
+    expect(badActionBody.result?.content?.[0]?.text).toContain('call_to_action.url')
   })
 
-  test('a draft publishes explicitly, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
+  test('a draft is created once per key, publishes only to its named targets, and matches the public API', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
@@ -54,23 +46,30 @@ test.describe('stateless MCP server', () => {
       const imageAssetId = 'media-demo-burrata'
 
       const now = Date.now()
-      const create = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_post',
-        args: {
-          organization_id: organizationId,
-          title: `MCP explicit publication ${now}`,
-          body: 'Visible after explicit publication through MCP and the public API.',
-        },
-      })
+      const createArgs = {
+        organization_id: organizationId,
+        idempotency_key: `mcp-explicit-publication-${now}`,
+        title: `MCP explicit publication ${now}`,
+        body: 'Visible after explicit publication through MCP and the public API.',
+        call_to_action: { label: 'Book a table', url: 'https://example.com/book' },
+      }
+      const create = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'create_post', args: createArgs })
       if (create.status() !== 200) console.error(await create.text())
       expect(create.status()).toBe(200)
-      const created = mcpData<{ id: string, slug: string }>(await create.json())
-      createdPostId = created.id
+      const created = mcpData<{ post: { id: string, slug: string }, replayed: boolean }>(await create.json())
+      createdPostId = created.post.id
+      expect(created.replayed).toBe(false)
+
+      const replay = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'create_post', args: createArgs })
+      expect(replay.status()).toBe(200)
+      const replayed = mcpData<{ post: { id: string }, replayed: boolean }>(await replay.json())
+      expect(replayed.replayed).toBe(true)
+      expect(replayed.post.id).toBe(created.post.id)
 
       const placement = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { organization_id: organizationId, placement: { owner_type: 'content_document', owner_id: created.id, slot: 'cover' }, asset_id: imageAssetId },
+        args: { organization_id: organizationId, placement: { owner_type: 'content_document', owner_id: created.post.id, slot: 'cover' }, asset_id: imageAssetId },
       })
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)
@@ -79,98 +78,71 @@ test.describe('stateless MCP server', () => {
       expect(placementBody.result.isError).toBe(false)
 
       const read = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.post.id },
       })
       expect(read.status()).toBe(200)
-      const draft = mcpData<{ post: { status: string; slug: string; published_at: string | null; public_url: string | null } }>(await read.json()).post
+      const draft = mcpData<{ post: { status: string; slug: string; updated_at: string; published_at: string | null; public_url: string | null; preview_url: string | null } }>(await read.json()).post
       expect(draft.status).toBe('draft')
       expect(draft.published_at).toBeNull()
       expect(draft.public_url).toBeNull()
+      expect(draft.preview_url).toContain('preview_token=')
       expect((await request.get(`${tenantBaseURL}/api/public/posts/${encodeURIComponent(draft.slug)}`, { headers: tenantExtraHeaders })).status()).toBe(404)
+
+      // Facebook is named with what get_social_connections reports; this
+      // organization has no Page connected, so the outcome is exactly the
+      // problem that read names, and the website still publishes.
+      const connectionsRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_social_connections', args: { organization_id: organizationId } })
+      expect(connectionsRead.status()).toBe(200)
+      const facebook = mcpData<{ channels: Array<{ channel: string, connected: boolean, problems: Array<{ code: string }> }> }>(await connectionsRead.json())
+        .channels.find(channel => channel.channel === 'facebook')!
+      expect(facebook.connected).toBe(false)
+      const facebookTarget = { channel: 'facebook', target_id: 'no-page-connected', connection_revision: 'none' }
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { organization_id: organizationId, post_id: created.id, channels: ['organization', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.post.id, expected_updated_at: draft.updated_at, targets: [{ channel: 'organization' }, facebookTarget] },
       })
       expect(publish.status()).toBe(200)
-      const publishData = mcpData<{ channel_outcomes: Record<string, { status: string, reason?: string }> }>(await publish.json())
-      expect(publishData.channel_outcomes.organization?.status).toBe('published')
-      expect(publishData.channel_outcomes.facebook?.status).toBe('skipped')
-      expect(publishData.channel_outcomes.facebook?.reason).toMatch(/not_connected|not_entitled|social_publishing_disabled/)
+      const publishData = mcpData<{ ok: boolean, updated_at: string, outcomes: Array<{ channel: string, status: string, code?: string }> }>(await publish.json())
+      expect(publishData.ok).toBe(false)
+      expect(publishData.outcomes.find(outcome => outcome.channel === 'organization')?.status).toBe('published')
+      expect(publishData.outcomes.find(outcome => outcome.channel === 'facebook')).toMatchObject({ status: 'skipped', code: facebook.problems[0]!.code })
 
       const publishedRead = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.post.id },
       })
-      const firstPost = mcpData<{ post: { status: string, slug: string, published_at: string, media: Array<{ asset_id: string, slot: string }> } }>(await publishedRead.json()).post
+      const firstPost = mcpData<{ post: { status: string, slug: string, updated_at: string, published_at: string, publications: unknown[], media: Array<{ asset_id: string, slot: string }> } }>(await publishedRead.json()).post
       expect(firstPost.status).toBe('published')
       expect(firstPost.published_at).toEqual(expect.any(String))
+      expect(firstPost.updated_at).toBe(publishData.updated_at)
+      expect(firstPost.publications).toEqual([])
       expect(firstPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
       const publicRead = await request.get(`${tenantBaseURL}/api/public/posts/${encodeURIComponent(firstPost.slug)}`, { headers: tenantExtraHeaders })
       expect(publicRead.status()).toBe(200)
-      const publicPost = (await publicRead.json() as { post: { id: string, media: Array<{ asset_id: string, slot: string }> } }).post
-      expect(publicPost.id).toBe(created.id)
+      const publicPost = (await publicRead.json() as { post: { id: string, call_to_action: { label: string, url: string } | null, media: Array<{ asset_id: string, slot: string }> } }).post
+      expect(publicPost.id).toBe(created.post.id)
+      expect(publicPost.call_to_action).toEqual(createArgs.call_to_action)
       expect(publicPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
 
+      // A repeat with the old revision returns the receipt and changes nothing.
       const repeat = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_post',
-        args: { organization_id: organizationId, post_id: created.id, channels: ['organization', 'facebook'] },
+        args: { organization_id: organizationId, post_id: created.post.id, expected_updated_at: draft.updated_at, targets: [{ channel: 'organization' }] },
       })
       expect(repeat.status()).toBe(200)
+      const repeatData = mcpData<{ ok: boolean, outcomes: Array<{ channel: string, status: string }> }>(await repeat.json())
+      expect(repeatData.ok).toBe(true)
+      expect(repeatData.outcomes).toEqual([expect.objectContaining({ channel: 'organization', status: 'already_published' })])
       const reread = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.id },
+        method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: created.post.id },
       })
-      const repeatedPost = mcpData<{ post: { published_at: string, channels: Array<{ channel: string }> } }>(await reread.json()).post
+      const repeatedPost = mcpData<{ post: { published_at: string, updated_at: string } }>(await reread.json()).post
       expect(repeatedPost.published_at).toBe(firstPost.published_at)
-      expect(repeatedPost.channels.filter(job => job.channel === 'site')).toHaveLength(0)
-      expect(repeatedPost.channels.filter(job => job.channel === 'facebook')).toHaveLength(1)
+      expect(repeatedPost.updated_at).toBe(firstPost.updated_at)
     } finally {
       if (createdPostId) {
         const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { organization_id: organizationId, post_id: createdPostId } })
-        expect(cleanup.status()).toBe(200)
-        expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
-      }
-    }
-  })
-
-  // Comparable round-trip count to the publish/idempotency test above (4
-  // creates/reads plus 2 deletes), which needed an explicit 60s budget under
-  // preview-deploy load — this test was missed with the default 30s when the
-  // file was split and timed out the same way (run 30084182210).
-  test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const organizationId = MCP_GROWTH_ORGANIZATION_ID
-    const now = Date.now()
-    const createdPostIds: string[] = []
-
-    try {
-      const eventDay = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
-      const eventDetails = { title: 'MCP Event', schedule: { start_date: eventDay, start_time: '15:00:00.123456789', end_date: eventDay, end_time: '17:00:00' }, recurrence_info: { kind: 'weekly', days_of_week: [] } }
-      const event = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_post',
-        args: { organization_id: organizationId, title: `Valid event ${now}`, body: 'Event details.', post_type: 'event', event: eventDetails },
-      })
-      expect(event.status()).toBe(200)
-      const eventId = mcpData<{ id: string }>(await event.json()).id
-      createdPostIds.push(eventId)
-      const eventRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: eventId } })
-      const eventPost = mcpData<{ post: { post_type: string, event: typeof eventDetails } }>(await eventRead.json()).post
-      expect(eventPost).toMatchObject({ post_type: 'event', event: eventDetails })
-
-      const offer = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_post',
-        args: { organization_id: organizationId, title: `Valid offer ${now}`, body: 'Offer details.', post_type: 'offer', event: eventDetails, offer: { coupon_code: 'MCP20', terms_conditions: 'Valid during the E2E window.' } },
-      })
-      expect(offer.status()).toBe(200)
-      const offerId = mcpData<{ id: string }>(await offer.json()).id
-      createdPostIds.push(offerId)
-      const offerRead = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_post', args: { organization_id: organizationId, post_id: offerId } })
-      const offerPost = mcpData<{ post: { post_type: string, offer: { coupon_code: string, terms_conditions: string } } }>(await offerRead.json()).post
-      expect(offerPost).toMatchObject({ post_type: 'offer', offer: { coupon_code: 'MCP20', terms_conditions: 'Valid during the E2E window.' } })
-    } finally {
-      for (const postId of createdPostIds) {
-        const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { organization_id: organizationId, post_id: postId } })
         expect(cleanup.status()).toBe(200)
         expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
       }
@@ -193,6 +165,7 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'create_blog_post',
         args: {
           organization_id: organizationId,
+          idempotency_key: `mcp-canonical-blog-${Date.now()}`,
           title: `MCP canonical blog ${Date.now()}`,
           category: 'Guides',
           content_blocks: [
@@ -257,27 +230,29 @@ test.describe('stateless MCP server', () => {
       expect(editorPost.body).toContain('Edited through MCP')
       expect(editorPost.body).toContain('Still one shared **document**.')
 
+      // Articles publish now or stay drafts: there is no scheduling.
       const schedule = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
         args: { organization_id: organizationId, post_id: postId, expected_updated_at: updatedPost.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
       })
-      const scheduled = mcpData<{ post: { status: string; updated_at: string; published_at: string | null; preview_url: string | null } }>(await schedule.json()).post
-      expect(scheduled.status).toBe('scheduled')
-      expect(scheduled.published_at).toBeNull()
-      expect(scheduled.preview_url).toContain('?preview_token=')
+      const scheduleBody = await schedule.json()
+      expect(scheduleBody.result?.isError).toBe(true)
+      expect(scheduleBody.result?.content?.[0]?.text).toContain('scheduled_for')
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { organization_id: organizationId, post_id: postId, expected_updated_at: scheduled.updated_at },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: updatedPost.updated_at },
       })
       const published = mcpData<{ post: { status: string; updated_at: string; public_url: string; published_at: string } }>(await publish.json()).post
       expect(published.status).toBe('published')
       expect(published.public_url).toEqual(expect.any(String))
       expect(published.published_at).toEqual(expect.any(String))
-      const reschedule = await mcpRequest(request, baseURL!, {
+      const republish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { organization_id: organizationId, post_id: postId, expected_updated_at: published.updated_at, scheduled_for: '2099-01-01T00:00:00.000Z' },
+        args: { organization_id: organizationId, post_id: postId, expected_updated_at: published.updated_at },
       })
-      expect((await reschedule.json()).result?.isError).toBe(true)
+      const republished = mcpData<{ post: { updated_at: string; published_at: string } }>(await republish.json()).post
+      expect(republished.published_at).toBe(published.published_at)
+      expect(republished.updated_at).toBe(published.updated_at)
       const unlist = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_blog_post',
         args: { organization_id: organizationId, post_id: postId, expected_updated_at: published.updated_at, visibility: 'unlisted' },

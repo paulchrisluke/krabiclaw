@@ -14,7 +14,7 @@ managed through it, KrabiClaw's own included.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, feature-flagged Facebook and Instagram publishing, and analytics. Google Maps connection and domain setup are CMS-only.
+- MCP capabilities cover existing site settings, locations, the Product catalog and its collections, posts, articles, media, locale management, Facebook and Instagram publishing and import (Growth), and analytics. Google Maps connection and domain setup are CMS-only.
 - Every public tool rejects unknown top-level arguments and declares explicit `readOnlyHint`, `openWorldHint`, and `destructiveHint` values. `server/utils/mcp-tools/shared.ts` contains the registry.
 - Location-scoped mutations require an explicit `location_id`. Product-by-ID mutations resolve the Product's stored owning location.
 - `chatgpt-app-submission.json` contains the review import data. Run `yarn chatgpt:submission:write` after changing the public tool catalog.
@@ -188,7 +188,7 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 | WhatsApp OTP login | ✅ Built — blocked on real number registration |
 | Stripe billing | ✅ Live |
 | WhatsApp Business API | ✅ Built — blocked on real number |
-| Facebook / Instagram Graph API | ✅ OAuth + Pages sync + publish built |
+| Facebook / Instagram Graph API | ✅ Better Auth linked accounts; hourly import; publish to the named Page or professional account |
 | Google Places API sync | ✅ Live — hours, address, rating, reviews (up to 5) |
 | Google Places API | ✅ Live — CMS location autocomplete and Places lookup |
 | Cloudflare R2 media host | ✅ Built — video upload/playback |
@@ -200,11 +200,11 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 ## Architecture
 
 - MCP server is the canonical creation surface; dashboard CMS and ChowBot are secondary
-- Short updates use `posts`; long-form articles use `blog_posts` with canonical content documents and blocks.
-- `posts` owns website publication. `post_channel_jobs` records only Facebook and Instagram delivery outcomes.
+- Short posts and long-form articles are content documents (`social_post`, `article`); both are drafts or published, and nothing publishes on a clock.
+- A social post owns its website publication. `post_publications` holds one row per post and channel: what Facebook or Instagram said about a publication, or where an imported post came from. Places show posts with the `social_posts` block, which reads them; nothing is copied into a page.
 - All location data is CRUD-available in D1; Google Places import is additive and read-only with respect to Google
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
-- WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
+- Facebook Login and Instagram Login are separate Meta apps, each a Better Auth provider with its own linked account; the same person in each is a different provider subject
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend
 - Image generation: ChatGPT generates natively → `save_generated_image_file` persists via Cloudflare Images → chat displays the image for review → `set_media` assigns a single image or `attach_media` adds it to a gallery. Never pass raw base64 to MCP tools.
 
@@ -347,7 +347,7 @@ A URL-bearing public page owned by one tenant, such as a privacy policy, disclai
 _Avoid_: blog post, site content field, platform page
 
 **Blog post**:
-Editorial content owned by either the platform or one tenant. A blog post has a draft, published, or scheduled lifecycle and one public path. Platform and tenant repositories share the post contract but keep their authorization transports separate.
+Editorial content owned by either the platform or one tenant. A blog post is a draft or published and has one public path. Platform and tenant repositories share the post contract but keep their authorization transports separate.
 _Avoid_: platform blog input for shared post data, tenant page, documentation page
 
 **Redirect manifest**:
