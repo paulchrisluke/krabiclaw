@@ -1,5 +1,4 @@
 {
-  "blawby.article.browse_topics": "トピックを見る",
   "blawby.article.from_the": "提供",
   "blawby.footer.company": "会社情報",
   "blawby.footer.copyright": "© {year} {name} 無断転載を禁じます。",
@@ -248,6 +247,11 @@
   "saya.posts.show_more": "もっと見る",
   "saya.posts.special_offer_label": "特別オファー:",
   "saya.posts.subtitle": "ニュース・イベント",
+  "saya.posts.browse_topics": "トピックを見る",
+  "saya.posts.tagged": "タグ",
+  "saya.posts.read_time": "{count}分で読めます",
+  "saya.posts.published_from": "{name} より公開",
+  "saya.posts.updated_on": "{date} 更新",
   "saya.posts.title": "最新情報",
   "saya.posts.view_all": "すべてのお知らせを見る",
   "saya.product_detail.choose_option": "オプションを選択",

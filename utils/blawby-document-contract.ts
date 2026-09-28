@@ -72,5 +72,4 @@ export const isBlawbyDocumentPayload = (
   && Array.isArray(value.route.localeRepresentations)
   && Array.isArray(value.route.qa)
   && Array.isArray(value.route.reviews)
-  && Array.isArray(value.route.posts)
   && hasRequiredRouteContent(value.route)

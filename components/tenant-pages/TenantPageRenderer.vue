@@ -82,6 +82,11 @@
         </figure>
       </template>
 
+      <figure v-else-if="block.type === 'video'" class="my-12">
+        <ContentVideoEmbed :url="block.data.url" :title="text(block.data.title)" class="rounded-2xl shadow-lg" />
+        <figcaption v-if="text(block.data.caption)" class="mt-3 text-center text-sm text-muted">{{ text(block.data.caption) }}</figcaption>
+      </figure>
+
       <template v-else-if="block.type === 'gallery'">
         <p v-if="text(block.data.caption)" class="mb-4 text-center text-sm text-muted">{{ text(block.data.caption) }}</p>
         <div v-if="galleryImages(block).length" class="my-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,6 +224,7 @@ import type { PublicTemplateSlug } from '~/utils/template-registry'
 import { tenantPageBlockPresentation } from '~/utils/tenant-page-presentation'
 import { blawbyHeroProseBlockId } from '~/types/blawby'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
+import ContentVideoEmbed from '~/components/content/ContentVideoEmbed.vue'
 
 const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: PublicTemplateSlug }>(), {
   template: undefined,

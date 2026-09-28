@@ -67,6 +67,7 @@ const effects = {
   remove_media: 'Removes an asset placement from public content while retaining the underlying media asset.',
   remove_product_location: 'Removes a product from a location, so the location no longer offers it.',
   reorder_collections: 'Overwrites the order collections are presented in on the selected organization.',
+  reorder_docs: 'Overwrites the order Krabiclaw\'s own documentation articles are presented in.',
   reorder_media: 'Overwrites media placement ordering for the selected public content collection.',
   replace_content_block: 'Replaces one block\'s data and media in the selected blog article or tenant page after a version check, keeping its position.',
   replace_resource_localizations: 'Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.',

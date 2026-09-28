@@ -13,7 +13,7 @@
         <h1 class="mb-6 text-4xl font-bold text-default">{{ article.title }}</h1>
 
         <div ref="articleBodyRef">
-          <BlogArticleRenderer :title="article.title" :blocks="blocks" template="platform" :show-title="false" class="docs-page-body max-w-none! px-0! py-0!" />
+          <BlogArticleRenderer :title="article.title" :blocks="blocks" template="platform" :show-header="false" class="docs-page-body" />
         </div>
 
         <nav v-if="previousArticle || nextArticle" class="mt-16 flex items-start justify-between gap-6">
@@ -77,7 +77,7 @@ interface DocsArticleDetail {
 // docs layout, one article per slug. The path used to carry the article's
 // category as well, and /docs/{category} answered only when some article's
 // slug happened to equal the category's slug.
-definePageMeta({ layout: 'docs' })
+definePageMeta({ layout: 'articles', articleCollection: 'docs' })
 
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
@@ -87,8 +87,9 @@ const slug = computed(() => String(route.params.slug || '').trim())
 if (!slug.value) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
 
 const path = computed(() => `/docs/${slug.value}`)
-const { articles, error: articlesError } = await useDocsArticles()
-if (articlesError.value) throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation index' })
+// Only Krabiclaw's own site publishes documentation.
+if (usePublicTemplate().template.value.slug !== 'platform') throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
+const { posts: articles } = await usePublishedArticles('docs')
 
 const current = computed(() => articles.value.find(item => item.path === path.value) ?? null)
 
@@ -172,6 +173,8 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   path: resolveSeoUrl(path.value, platformOrigin.value),
   socialImage: article.value?.social_image ?? null,
 }))
+
+useVideoSchema(blocks, canonicalUrl)
 
 useContentPageSchema(computed(() => {
   if (!article.value) return null
