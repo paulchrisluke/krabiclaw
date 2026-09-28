@@ -1054,8 +1054,8 @@
             <strong>MCP telemetry:</strong
             ><span style="font-weight: 400">
               MCP tool-call telemetry is retained for security, reliability,
-              debugging, and auditing, and is deleted 180 days after it is
-              recorded.</span
+              debugging, and auditing for up to 180 days from the time the
+              record is created.</span
             >
           </li>
           <li style="font-weight: 400">
