@@ -1,6 +1,6 @@
 # AI Search
 
-KrabiClaw uses Cloudflare AI Search as the single retrieval backend for platform knowledge.
+Krabiclaw uses Cloudflare AI Search as the single retrieval backend for platform knowledge.
 
 ## Instance layout
 
@@ -29,7 +29,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/autor
 every rebuild, so index method, fusion, tokenizer, and the custom metadata schema always
 match the code that queries them.
 
-KrabiClaw uses the native `AI_SEARCH` Workers namespace binding as the canonical runtime path for instance management, item indexing, and search queries against the environment-specific instance in the built-in `default` namespace.
+Krabiclaw uses the native `AI_SEARCH` Workers namespace binding as the canonical runtime path for instance management, item indexing, and search queries against the environment-specific instance in the built-in `default` namespace.
 
 ## Indexed corpus
 

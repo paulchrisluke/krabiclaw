@@ -47,7 +47,7 @@
               <source media="(min-width: 992px)" srcset="/krabiclaw-login-mascot.webp">
               <img
                 src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
-                alt="KrabiClaw mascot"
+                alt="Krabiclaw mascot"
                 width="1200"
                 height="1200"
                 loading="eager"
@@ -89,7 +89,7 @@
   <!-- The plugin header: the app icon beside the title, the account CTA at the end of the row. -->
   <div v-else-if="variant === 'plugin'" class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between" data-parity-section="hero">
     <div class="flex items-center gap-6">
-      <img src="/platform/apple-touch-icon.png" alt="KrabiClaw app icon" class="size-24 rounded-[28px] border border-default shadow-lg">
+      <img src="/platform/apple-touch-icon.png" alt="Krabiclaw app icon" class="size-24 rounded-[28px] border border-default shadow-lg">
       <div>
         <h1 class="m-0 text-3xl font-extrabold tracking-tight text-default md:text-4xl">{{ title }}</h1>
         <p v-if="subtitle" class="mt-2 text-lg text-muted">{{ subtitle }}</p>
@@ -132,7 +132,7 @@ import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 
 /**
- * The hero of one of KrabiClaw's own marketing pages.
+ * The hero of one of Krabiclaw's own marketing pages.
  *
  * Six pages, five shapes: the homepage's two-column hero with the mascot, the
  * About header, the Pricing header with its pinging pill, the plugin header
@@ -147,7 +147,7 @@ import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 /**
- * Which of KrabiClaw's marketing shapes this hero takes.
+ * Which of Krabiclaw's marketing shapes this hero takes.
  *
  * The page decides, because the page is what differs — a vertical landing page
  * opens differently from Pricing. It was a prop a dispatcher computed from the

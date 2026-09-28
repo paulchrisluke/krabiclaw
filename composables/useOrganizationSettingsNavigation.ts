@@ -15,7 +15,7 @@ export function useOrganizationSettingsNavigation() {
   const settingsPath = computed(() => orgPaths.value.settings)
 
   /**
-   * KrabiClaw runs on KrabiClaw, so its own business's Menu carries the one
+   * Krabiclaw runs on Krabiclaw, so its own business's Menu carries the one
    * tool no tenant has: every account on the platform, and impersonation.
    * Airbnb has no equivalent — internal admin tooling is not in the host's
    * dashboard — so this row is a deliberate addition, not parity.

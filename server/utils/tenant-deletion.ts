@@ -27,7 +27,7 @@ async function ownedImageIds(db: DbClient, organizationId: string): Promise<stri
 }
 
 /**
- * KrabiClaw-specific cleanup Better Auth cannot perform.
+ * Krabiclaw-specific cleanup Better Auth cannot perform.
  *
  * The Better Auth organization lifecycle owns authorization, subscription
  * gating and the organization/member deletion itself. This function only
@@ -60,7 +60,7 @@ export type AbandonedDraftTenantOutcome =
 /**
  * Abandoning an onboarding draft is an internal token-scoped cleanup rather
  * than the signed-in organization-delete product action. It still reuses the
- * same KrabiClaw resource cleanup before removing the Better Auth organization.
+ * same Krabiclaw resource cleanup before removing the Better Auth organization.
  */
 export async function deleteAbandonedDraftTenant(
   env: CloudflareEnv,

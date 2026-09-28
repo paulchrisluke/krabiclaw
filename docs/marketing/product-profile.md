@@ -1,4 +1,4 @@
-# KrabiClaw marketing source of truth
+# Krabiclaw marketing source of truth
 
 Last verified: 2026-09-07. Use this file for directory listings, launch pages, press requests, social profiles, and reusable marketing copy. Update facts here before reusing them elsewhere.
 
@@ -6,12 +6,12 @@ Last verified: 2026-09-07. Use this file for directory listings, launch pages, p
 
 | Field | Canonical value | Evidence / status |
 |---|---|---|
-| Product name | KrabiClaw | Product and repository name |
+| Product name | Krabiclaw | Product and repository name |
 | Website | https://krabiclaw.com | Production platform site |
 | Contact email | hello@krabiclaw.com | Cloudflare forwarding verified end to end on 2026-09-07 |
 | Founder / listing owner | Paul Chris Luke | Repository history and signed-in directory profiles |
 | Founder LinkedIn | https://www.linkedin.com/in/paulchrisluke/ | Supplied by the owner on 2026-09-07 |
-| Start date | May 2026 | First repository commit that renamed the project to KrabiClaw: 2026-05-03 |
+| Start date | May 2026 | First repository commit that renamed the project to Krabiclaw: 2026-05-03 |
 | Initial commitment | Full time | Confirmed by the owner on 2026-09-07 |
 | Product type | Web SaaS | Product contract and pricing model |
 | Business model | Freemium subscriptions | Free Starter plan and paid Growth plan in `PRODUCT.md` |
@@ -32,35 +32,35 @@ The following founder facts still need an explicit owner decision before they ar
 **Long version — About page, interviews, and launch posts**
 
 ```text
-KrabiClaw grew out of a problem I first encountered during COVID. Restaurant owners and tour operators I knew suddenly needed online ordering, bookings, and dependable websites. We built an early open-source product to help them adapt quickly.
+Krabiclaw grew out of a problem I first encountered during COVID. Restaurant owners and tour operators I knew suddenly needed online ordering, bookings, and dependable websites. We built an early open-source product to help them adapt quickly.
 
 The software worked, but maintaining the websites did not scale. Many owners had no interest in learning another CMS—and they should not have needed to. They would send us photos of menus or new dishes, and we would visit their businesses to take more photos, organize the content, and update everything ourselves. We helped where we could, but that service-heavy model became impossible to maintain, so we eventually shut the product down.
 
 AI changed what was possible. With ChatGPT and modern agent tools, restaurant owners could describe a new item or ask for a change in plain language to keep their website current.
 
-I returned to the idea in May 2026 and built KrabiClaw. It helps restaurants, tour operators, and other local businesses manage content, bookings, inquiries, products, media, and translations through AI while preserving the fundamentals that make a website effective: fast performance, structured content, strong local SEO, accessible pages, and clear paths to conversion.
+I returned to the idea in May 2026 and built Krabiclaw. It helps restaurants, tour operators, and other local businesses manage content, bookings, inquiries, products, media, and translations through AI while preserving the fundamentals that make a website effective: fast performance, structured content, strong local SEO, accessible pages, and clear paths to conversion.
 
-My name is Paul Chris Luke, and my background is in marketing. KrabiClaw combines that marketing discipline with a simpler way for business owners to maintain the information their customers depend on. The goal is straightforward: give local businesses a website that performs well without turning website administration into another job.
+My name is Paul Chris Luke, and my background is in marketing. Krabiclaw combines that marketing discipline with a simpler way for business owners to maintain the information their customers depend on. The goal is straightforward: give local businesses a website that performs well without turning website administration into another job.
 ```
 
 **Short version — directories and founder profiles**
 
 ```text
-During COVID, restaurant owners and tour operators I knew urgently needed online ordering, bookings, and better websites. We built an early open-source product, but maintaining every menu, photo, and update for clients became impossible to scale. AI made the workflow owners already preferred practical: send a photo or describe a change, and let the system keep the website current. I returned to the idea in May 2026 and built KrabiClaw to combine conversational website management with fast performance, structured content, and strong local SEO.
+During COVID, restaurant owners and tour operators I knew urgently needed online ordering, bookings, and better websites. We built an early open-source product, but maintaining every menu, photo, and update for clients became impossible to scale. AI made the workflow owners already preferred practical: send a photo or describe a change, and let the system keep the website current. I returned to the idea in May 2026 and built Krabiclaw to combine conversational website management with fast performance, structured content, and strong local SEO.
 ```
 
 **One-paragraph version — compact forms**
 
 ```text
-KrabiClaw grew from an open-source product we built during COVID to help restaurants and tour operators add online ordering and bookings. The first version proved the need, but manually maintaining client menus, photos, and content did not scale. AI made the natural workflow possible: owners can send a photo or describe a change while KrabiClaw keeps an SEO-ready, high-performance website current.
+Krabiclaw grew from an open-source product we built during COVID to help restaurants and tour operators add online ordering and bookings. The first version proved the need, but manually maintaining client menus, photos, and content did not scale. AI made the natural workflow possible: owners can send a photo or describe a change while Krabiclaw keeps an SEO-ready, high-performance website current.
 ```
 
 Story chronology:
 
 - COVID era: an early open-source predecessor helped restaurants and tour operators move ordering and bookings online.
 - The predecessor was shut down because hands-on content maintenance could not scale.
-- May 2026: Paul Chris Luke began the current KrabiClaw product after AI made conversational maintenance practical.
-- Do not describe the COVID-era predecessor as the current KrabiClaw product or use the COVID period as KrabiClaw's start date.
+- May 2026: Paul Chris Luke began the current Krabiclaw product after AI made conversational maintenance practical.
+- Do not describe the COVID-era predecessor as the current Krabiclaw product or use the COVID period as Krabiclaw's start date.
 
 **Short tagline**
 
@@ -77,19 +77,19 @@ Manage your business website through AI conversation.
 **Short description under 160 characters**
 
 ```text
-Update your KrabiClaw website from ChatGPT: edit products, publish posts, manage media, and review inquiries and experience bookings.
+Update your Krabiclaw website from ChatGPT: edit products, publish posts, manage media, and review inquiries and experience bookings.
 ```
 
 **Directory description**
 
 ```text
-KrabiClaw lets local business owners launch and manage multilingual websites through a dashboard or ChatGPT. Owners can update pages, products, menus, photos, translations, and posts, then review customer inquiries and bookings from the same permissioned business data.
+Krabiclaw lets local business owners launch and manage multilingual websites through a dashboard or ChatGPT. Owners can update pages, products, menus, photos, translations, and posts, then review customer inquiries and bookings from the same permissioned business data.
 ```
 
 **Founder motivation**
 
 ```text
-KrabiClaw exists so restaurants and local businesses can keep a polished, multilingual website current without wrestling with a traditional CMS. Owners manage real website content, bookings, inquiries, products, experiences, media, translations, and analytics through ChatGPT, while the dashboard and assistant use the same permissioned business data.
+Krabiclaw exists so restaurants and local businesses can keep a polished, multilingual website current without wrestling with a traditional CMS. Owners manage real website content, bookings, inquiries, products, experiences, media, translations, and analytics through ChatGPT, while the dashboard and assistant use the same permissioned business data.
 ```
 
 ## Classification

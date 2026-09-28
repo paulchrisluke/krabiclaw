@@ -3,9 +3,9 @@
 
       <!-- Header -->
       <div class="mb-6">
-        <img src="/platform/krabiclaw-symbol.svg" alt="KrabiClaw Logo" width="32" height="32" class="h-8 mb-4">
+        <img src="/platform/krabiclaw-symbol.svg" alt="Krabiclaw Logo" width="32" height="32" class="h-8 mb-4">
         <h1 class="text-2xl font-bold text-default tracking-tight mt-0.5">
-          {{ clientName || 'This app' }} wants to access your KrabiClaw Account.
+          {{ clientName || 'This app' }} wants to access your Krabiclaw Account.
         </h1>
       </div>
 
@@ -125,7 +125,7 @@ const permissionGroups = computed(() => {
   if (scopes.has('tenant')) {
     groups.push({
       icon: 'layout-dashboard',
-      title: 'Access your KrabiClaw workspace',
+      title: 'Access your Krabiclaw workspace',
       items: [
         'Read and update your site content, menus, and media',
         'Manage locations, reviews, and Q&A',

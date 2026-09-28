@@ -15,7 +15,7 @@ definePageMeta({ layout: false })
 
 const { isPlatform, organizationId } = useTenantOrganization()
 const { template } = usePublicTemplate()
-// Where this template keeps its home document. KrabiClaw's own homepage is an
+// Where this template keeps its home document. Krabiclaw's own homepage is an
 // ordinary published page on the platform site, read by the same loader every
 // customer site uses (#903).
 const homePath = useTenantPageDocumentPath('home')

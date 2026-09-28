@@ -6,7 +6,7 @@
 
       <article class="prose prose-lg max-w-none text-default">
         <h1><strong>Krabiclaw Privacy Policy</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 28, 2026</strong></p>
         <p>
           <span style="font-weight: 400">Krabiclaw is operated by </span
           ><strong>Aurelox LLC</strong
@@ -75,6 +75,351 @@
             Policy for a particular interaction, the supplemental notice
             controls for that interaction.</span
           >
+        </p>
+        <h2 id="google-user-data"><strong>Google user data</strong></h2>
+        <p>
+          This section explains what information Krabiclaw receives from
+          Google APIs ("Google user data"), how Krabiclaw uses, stores, shares,
+          protects, retains, and deletes it, and how you can revoke access. It
+          covers Sign in with Google and the Google Analytics and Google Search
+          Console integrations that a merchant can connect in the Krabiclaw
+          dashboard.
+        </p>
+        <p>
+          <strong>Limited Use.</strong> Krabiclaw's use and transfer to any
+          other app of information received from Google APIs will adhere to the
+          <a href="https://developers.google.com/terms/api-services-user-data-policy"
+            >Google API Services User Data Policy</a
+          >, including the Limited Use requirements.
+        </p>
+        <h3><strong>When Krabiclaw asks for Google access</strong></h3>
+        <p>
+          Krabiclaw asks for access to your Google account only when you choose
+          a Google feature: when you sign in with Google, or when you press
+          Connect on the Google Analytics or Google Search Console page under
+          Settings &rarr; Integrations in the dashboard. Each integration asks
+          only for the permissions it needs, at the moment you connect it.
+          Declining a permission leaves the rest of Krabiclaw available.
+        </p>
+        <h3><strong>What Krabiclaw accesses and how it is used</strong></h3>
+        <ul>
+          <li>
+            <strong>Sign in with Google</strong> (basic profile: OpenID,
+            email address, and profile). Krabiclaw receives your Google account
+            identifier, name, email address, and profile picture. It uses them
+            to create your Krabiclaw account, sign you in, show your name and
+            picture in the dashboard, and label which Google account is linked
+            to your Krabiclaw account.
+          </li>
+          <li>
+            <strong>Google Analytics</strong>
+            (<code>https://www.googleapis.com/auth/analytics.readonly</code>,
+            read-only). When you connect Google Analytics, Krabiclaw uses the
+            Google Analytics Admin API to list the Google Analytics accounts and
+            GA4 properties your Google account can access (account names,
+            property names, and property IDs) so you can choose one. For the
+            property you choose, Krabiclaw reads its web data streams to find
+            the measurement ID (a value such as <code>G-XXXXXXX</code>).
+            Krabiclaw stores the chosen property's ID, name, and measurement ID
+            with your organization and uses the measurement ID to add the
+            Google Analytics tag to your Krabiclaw website, so that visits to
+            your website are measured in your own Google Analytics property.
+            Krabiclaw does not read your Google Analytics reports or visitor
+            data, does not change any Google Analytics setting, and does not
+            store the list of properties it showed you.
+          </li>
+          <li>
+            <strong>Google Search Console</strong>
+            (<code>https://www.googleapis.com/auth/webmasters</code>). When you
+            connect Google Search Console, Krabiclaw lists the Search Console
+            properties for which your Google account is an owner or full user
+            (the property address and your permission level) so you can choose
+            one. If your Krabiclaw website's own address is not yet a property
+            in your account, Krabiclaw adds it to your Search Console after
+            Google has verified it. Krabiclaw stores the connected property's
+            address with your organization. Krabiclaw does not read your search
+            performance data, does not submit or remove sitemaps or URLs, and
+            does not delete or change any other property.
+          </li>
+          <li>
+            <strong>Google Site Verification</strong>
+            (<code>https://www.googleapis.com/auth/siteverification</code>).
+            Used only when you connect your Krabiclaw website's own address and
+            it is not already verified in your Search Console. Krabiclaw asks
+            Google for a verification token for that one address, publishes it
+            on your website as a
+            <code>&lt;meta name="google-site-verification"&gt;</code> tag, and
+            asks Google to confirm ownership. Krabiclaw stores the token for as
+            long as the property stays connected, because Google checks for the
+            tag again later. Krabiclaw does not verify any other website and
+            does not read your list of verified websites.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw calls Google APIs only when you sign in with Google, or
+          while you or another member of your organization is viewing or
+          changing these integration settings.
+          Krabiclaw does not access Google user data in the background and does
+          not request Google Workspace data such as Gmail, Drive, Calendar, or
+          Contacts.
+        </p>
+        <h3><strong>Who can see it and with whom it is shared</strong></h3>
+        <ul>
+          <li>
+            <strong>Your organization.</strong> Members with organization-wide
+            access can see the connected Google Analytics property name and
+            measurement ID, the connected Search Console property address, and
+            the connection status in the dashboard. An organization
+            administrator who connects an AI assistant such as ChatGPT or
+            Claude to Krabiclaw can ask it to read the organization's settings,
+            which include those same values; Krabiclaw returns them to that
+            assistant only at the administrator's request.
+          </li>
+          <li>
+            <strong>Your website's visitors.</strong> The Google Analytics
+            measurement ID and the site verification tag are published in your
+            website's pages, as Google requires for those features to work.
+          </li>
+          <li>
+            <strong>Service providers.</strong> Cloudflare hosts Krabiclaw's
+            application, database, and logs, and delivers the Google Analytics
+            tag to your website through Cloudflare Zaraz. Cloudflare processes
+            this data on Krabiclaw's behalf to provide the Services.
+          </li>
+          <li>
+            <strong>Google.</strong> Krabiclaw sends requests to Google APIs
+            only to perform the actions described above.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw does not otherwise transfer Google user data to anyone,
+          except where necessary to comply with applicable law, to protect
+          against security threats, fraud, or abuse, or as part of a merger,
+          acquisition, or sale of assets after obtaining your explicit prior
+          consent.
+        </p>
+        <h3><strong>What Krabiclaw does not do with Google user data</strong></h3>
+        <ul>
+          <li>
+            Krabiclaw does not use Google user data for advertising, including
+            targeted, personalized, retargeted, or interest-based advertising.
+          </li>
+          <li>
+            Krabiclaw does not sell Google user data and does not give it to
+            advertising platforms, data brokers, or information resellers.
+          </li>
+          <li>
+            Krabiclaw does not use Google user data to determine
+            creditworthiness or for lending purposes.
+          </li>
+          <li>
+            Krabiclaw does not use Google user data, including any data
+            obtained through Google Workspace APIs, to develop, improve, or
+            train generalized or non-personalized artificial intelligence or
+            machine learning models.
+          </li>
+          <li>
+            Krabiclaw uses Google user data only to provide and improve the
+            user-facing features described above, and not for any other
+            purpose.
+          </li>
+          <li>
+            Krabiclaw personnel do not read Google user data unless you give
+            affirmative agreement for specific data (for example, in a support
+            request), it is necessary for security purposes such as
+            investigating abuse, it is necessary to comply with applicable law,
+            or the data has been aggregated and anonymized for internal
+            operations.
+          </li>
+        </ul>
+        <h3><strong>How Krabiclaw protects Google user data</strong></h3>
+        <ul>
+          <li>
+            Krabiclaw exchanges data with Google and with your browser only over
+            encrypted HTTPS connections.
+          </li>
+          <li>
+            The access and refresh tokens Google issues are stored on your
+            linked account by Krabiclaw's authentication system, encrypted with
+            a server-side secret. Krabiclaw uses them only on its servers to
+            make the requests described above. They are not shown in the
+            dashboard and are not given to other members or to connected AI
+            assistants.
+          </li>
+          <li>
+            A Google account linked to your Krabiclaw account can be used to
+            connect an integration only by you, and Krabiclaw checks that it has
+            granted the permission the integration needs before using it. Only
+            members with organization-wide access can view or change an
+            organization's integrations.
+          </li>
+        </ul>
+        <h3><strong>Retention and deletion</strong></h3>
+        <ul>
+          <li>
+            <strong>Your linked Google account</strong> (identifier, profile
+            details, granted permissions, and tokens) is kept while your
+            Krabiclaw account exists and is deleted when you delete your
+            Krabiclaw account from Account settings.
+          </li>
+          <li>
+            <strong>Your organization's Google selections</strong> (the Google
+            Analytics property ID, name, and measurement ID, and the Search
+            Console property address and verification token) are kept while the
+            integration is connected. They are deleted when a member presses
+            Disconnect on the integration's page, or when the organization is
+            deleted. Disconnecting Google Analytics also removes the Google
+            Analytics tag from your website, and disconnecting Search Console
+            stops Krabiclaw from publishing the verification tag.
+          </li>
+          <li>
+            Disconnecting an integration does not unlink your Google account
+            from your Krabiclaw account, because the same Google account may be
+            used to sign in or by another organization.
+          </li>
+          <li>
+            Properties that exist in your own Google Analytics or Search
+            Console account, including a Search Console property Krabiclaw
+            added at your request, remain in your Google account; Krabiclaw does
+            not delete them.
+          </li>
+          <li>
+            If a request to Google fails, the error Google returns may be
+            recorded in Krabiclaw's operational logs, which are handled as
+            described in Section 8.
+          </li>
+        </ul>
+        <p>
+          You can revoke Krabiclaw's access to your Google account at any time
+          at
+          <a href="https://myaccount.google.com/permissions"
+            >https://myaccount.google.com/permissions</a
+          >. After you revoke access, Krabiclaw can no longer call Google APIs
+          for your account. To have Krabiclaw delete Google user data it holds
+          about you, delete your account or organization in the dashboard, or
+          email <a href="mailto:privacy@krabiclaw.com">privacy@krabiclaw.com</a>.
+        </p>
+        <h2 id="facebook-instagram"><strong>Facebook and Instagram integrations</strong></h2>
+        <p>
+          A merchant can connect a Facebook Page and an Instagram professional
+          account to Krabiclaw from Settings &rarr; Integrations in the
+          dashboard. This section explains what Krabiclaw receives from Meta
+          through those connections, how it is used, stored, and shared, and
+          how to have it deleted.
+        </p>
+        <h3><strong>What Krabiclaw accesses</strong></h3>
+        <ul>
+          <li>
+            <strong>Facebook:</strong> the identifier and name of the Facebook
+            account you connect; the Pages that account manages (Page ID, name,
+            category, follower count, and picture) so you can choose one; and,
+            for the Page you choose, its posts (post ID, message text, the time
+            it was posted, the post's image, and its link).
+          </li>
+          <li>
+            <strong>Instagram:</strong> the identifiers and username of the
+            Instagram professional account you connect, and its posts (post ID,
+            caption, media type, the image or video thumbnail, the time it was
+            posted, and its link). Krabiclaw requests the Instagram permissions
+            <code>instagram_business_basic</code> and
+            <code>instagram_business_content_publish</code>.
+          </li>
+          <li>
+            <strong>Authorization tokens</strong> that Meta issues for the
+            connected Facebook account and Instagram account.
+          </li>
+        </ul>
+        <h3><strong>How Krabiclaw uses it</strong></h3>
+        <ul>
+          <li>
+            To connect the Facebook Page and Instagram account that you select,
+            and to show which ones are connected.
+          </li>
+          <li>
+            To import your recent posts onto your Krabiclaw website. While a
+            Page or account is connected and your plan includes social sync,
+            Krabiclaw checks for new posts about once an hour and imports each
+            post that has an image: its text or caption becomes a post on your
+            website and its image is copied into Krabiclaw's media storage.
+            Imported posts are published on your website as soon as they are
+            imported, where anyone can see them, and you can edit or delete them
+            in the dashboard like any other post.
+          </li>
+          <li>
+            To publish to your Facebook Page or Instagram account when you
+            publish a post in Krabiclaw and choose that channel: the post's text
+            goes to your Page, and its caption and cover image go to Instagram.
+          </li>
+        </ul>
+        <p>
+          Krabiclaw does not use Facebook or Instagram data for advertising,
+          does not sell it, and does not use it to train artificial intelligence
+          or machine learning models.
+        </p>
+        <h3><strong>How it is stored and shared</strong></h3>
+        <ul>
+          <li>
+            Authorization tokens are stored on your linked account by
+            Krabiclaw's authentication system, encrypted with a server-side
+            secret, and used only on Krabiclaw's servers. A Facebook Page's own
+            token is not stored; Krabiclaw obtains it from Meta each time it
+            imports or publishes.
+          </li>
+          <li>
+            Krabiclaw stores the connected Page's ID and name, or the connected
+            Instagram account's ID and username, with your organization. Only
+            members of your organization with organization-wide access can view
+            or change the connection, and only the person who linked a Facebook
+            or Instagram account can use it to connect an organization.
+          </li>
+          <li>
+            Imported posts and their images are stored as your organization's
+            content. Members of your organization, and AI assistants they
+            connect to Krabiclaw, can read and edit them like any other post.
+            Once published on your website they are public.
+          </li>
+          <li>
+            Cloudflare hosts Krabiclaw's application, database, and media
+            storage and processes this data on Krabiclaw's behalf. Meta receives
+            the requests Krabiclaw makes to Facebook and Instagram, including
+            content you choose to publish there.
+          </li>
+        </ul>
+        <h3><strong>Disconnecting</strong></h3>
+        <p>
+          Pressing Disconnect on the Facebook or Instagram page in the
+          dashboard removes the connected Page or account from your
+          organization and stops importing and publishing. Disconnecting does
+          not delete posts already imported onto your website or their images,
+          which stay until you delete them. It also does not unlink the Facebook
+          or Instagram account from your Krabiclaw account; that link, including
+          its encrypted tokens, is deleted when you delete your Krabiclaw
+          account. You can also remove Krabiclaw from your Facebook or Instagram
+          settings at any time, after which Krabiclaw can no longer access that
+          account.
+        </p>
+        <h3 id="facebook-instagram-data-deletion"><strong>Deleting your Facebook or Instagram data</strong></h3>
+        <p>
+          To have Krabiclaw delete the data it holds from your Facebook Page or
+          Instagram account, email
+          <a href="mailto:privacy@krabiclaw.com">privacy@krabiclaw.com</a> from
+          the email address on your Krabiclaw account, and include:
+        </p>
+        <ul>
+          <li>the name or web address of your Krabiclaw workspace; and</li>
+          <li>
+            the Facebook Page name or Instagram username the request is about.
+          </li>
+        </ul>
+        <p>
+          Never send your password, or your Facebook or Instagram login
+          details; Krabiclaw will never ask for them. After verifying the
+          request, Krabiclaw deletes the posts and images imported from that
+          Page or account, removes the connection from your workspace, and
+          deletes the linked Facebook or Instagram account and its tokens, and
+          confirms by email. Posts you wrote in Krabiclaw and published to
+          Facebook or Instagram remain on Facebook or Instagram; delete them
+          there.
         </p>
         <h2><strong>1. Our role when merchants use Krabiclaw</strong></h2>
         <p>
@@ -296,23 +641,23 @@
           <span style="font-weight: 400"
             >Krabiclaw provides Model Context Protocol (MCP) connections that
             authorized merchants can use with compatible services such as
-            ChatGPT and Claude. When a merchant connects one of these services
-            and asks it to perform an action, Krabiclaw returns information from
-            the authorized merchant organization to that service only if the
-            authenticated user has permissions for that action. Depending on the
-            request, returned information may include website content,
-            analytics, submissions, customer contact information, booking or
-            reservation information, or other merchant data the connected
-            account is authorized to access.</span
+            ChatGPT and Claude. When a merchant connects one of these services,
+            Krabiclaw applies the authenticated user's technical account
+            permissions to determine which information and operations the
+            connected client can access. Depending on the request, returned
+            information may include website content, analytics, submissions,
+            customer contact information, booking or reservation information, or
+            other merchant data within those permissions.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >Actions performed through a connected AI assistant are treated as
-            actions authorized by the authenticated user's account and
-            permissions. Merchants are responsible for reviewing significant
-            actions performed through AI-assisted interfaces before and after
-            execution.</span
+            >Technical permission to access an operation does not by itself
+            establish action-specific authorization for every action a connected
+            client may request. Where Krabiclaw requires an action-specific
+            confirmation, that confirmation must be satisfied before execution.
+            The absence of a general review screen in a connected client does not
+            waive a confirmation Krabiclaw requires.</span
           >
         </p>
         <p>
@@ -323,7 +668,8 @@
             identifiers, and shortened summaries of tool inputs and outputs.
             Sensitive structured fields are limited or redacted where designed
             to do so, but free-text information can still appear in diagnostic
-            summaries. MCP telemetry is retained for 90-180 days.</span
+            summaries. MCP tool-call telemetry is retained as described for
+            operational records in Section 8.</span
           >
         </p>
         <p>
@@ -654,35 +1000,22 @@
           <span style="font-weight: 400"
             >We retain Personal Data for the period reasonably necessary for the
             purpose for which it was collected, including to provide the
-            Services, preserve merchant functionality, complete transactions,
-            maintain security and audit records, resolve disputes, enforce
-            agreements, and comply with legal obligations.</span
+            Services, complete transactions, maintain security, resolve
+            disputes, enforce agreements, and comply with applicable legal
+            obligations.</span
           >
         </p>
         <p>
-          <span style="font-weight: 400"
-            >Current retention practices include:</span
-          >
+          <span style="font-weight: 400">Current retention practices include:</span>
         </p>
         <ul>
           <li style="font-weight: 400">
             <strong>Merchant accounts and business content:</strong
             ><span style="font-weight: 400">
               generally retained while the account or organization remains
-              active and until deleted through applicable controls or a verified
-              deletion process, subject to legal, security, backup, and
-              dispute-related retention needs.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>Scheduled account or organization deletion:</strong
-            ><span style="font-weight: 400">
-              Krabiclaw currently uses a 30-day deletion grace period. During
-              that period, the account or organization remains scheduled for
-              deletion and the request can be cancelled. After the grace period,
-              Krabiclaw's deletion process removes the account or organization
-              and associated data subject to technical, legal, backup, and
-              provider limitations.</span
+              active and until deleted through applicable controls, subject to
+              records that Krabiclaw may retain where applicable law permits or
+              requires.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -691,17 +1024,18 @@
               when Krabiclaw processes customer data for a merchant, the
               merchant generally determines the primary retention period. Data
               may remain until the merchant deletes it, the relevant merchant
-              account is deleted, or retention is otherwise required for
-              operational or legal reasons.</span
+              organization is deleted, or retention is otherwise permitted or
+              required under applicable law.</span
             >
           </li>
           <li style="font-weight: 400">
             <strong>Payments:</strong
             ><span style="font-weight: 400">
-              Krabiclaw retains limited transaction and billing records for 7
-              years for tax and audit purposes. Stripe separately retains
-              information under its own policies and legal obligations.
-              Krabiclaw's payment records are separate from Stripe's records.</span
+              Krabiclaw retains limited transaction and billing records as
+              reasonably necessary for accounting, tax, fraud prevention,
+              disputes, and other applicable legal obligations. Stripe
+              separately retains information under its own policies and legal
+              obligations.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -710,9 +1044,16 @@
               Krabiclaw's current cleanup processes are designed to remove raw
               pageview-event data after approximately 90 days and certain
               analytics session or aggregate data after approximately 740 days.
-              These periods are current operational practices and may change.
               Aggregated or de-identified information may be retained longer
               when it no longer identifies an individual.</span
+            >
+          </li>
+          <li style="font-weight: 400">
+            <strong>MCP telemetry:</strong
+            ><span style="font-weight: 400">
+              MCP tool-call telemetry is retained only as reasonably necessary
+              for security, reliability, debugging, and auditing. Krabiclaw does
+              not currently delete it on a fixed schedule.</span
             >
           </li>
           <li style="font-weight: 400">
@@ -720,65 +1061,41 @@
             ><span style="font-weight: 400">
               media generally remains until deleted by an authorized user or
               removed through an account or organization deletion process.
-              Copies may remain temporarily in caches, backups, or recovery
-              systems.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>MCP and operational diagnostics:</strong
-            ><span style="font-weight: 400">
-              diagnostic and tool-usage records are retained for 90-180 days
-              for debugging purposes. Security-relevant logs are retained for
-              1-2 years for incident investigation and compliance. Some diagnostic
-              records do not currently have a fixed automatic age-based
-              expiration and may remain until an operational cleanup or verified
-              deletion process applies.</span
+              Copies may remain temporarily in caches or provider-operated
+              recovery systems.</span
             >
           </li>
           <li style="font-weight: 400">
             <strong>Backups and recovery copies:</strong
             ><span style="font-weight: 400">
-              deleted information may remain for 30-90 days in online backup
-              systems and up to 1 year in long-term backup systems before it is
-              overwritten or otherwise removed. Such copies are not used as active
-              production records except for recovery, security, or legal
-              purposes. Restoration from backups is limited to recovery, security,
-              or legal purposes and is not a general data-recovery service.</span
+              deleted information may remain temporarily in provider-operated
+              backup, point-in-time recovery, disaster-recovery, or similar
+              systems until those copies are overwritten or expire under the
+              provider's applicable recovery process. Such copies are not used
+              as ordinary active records. If a recovery copy is restored,
+              Krabiclaw applies applicable deletion controls before data that was
+              previously deleted is returned to ordinary production use.</span
             >
           </li>
           <li style="font-weight: 400">
-            <strong>Transactional emails:</strong
+            <strong>Operational, security, and email delivery records:</strong
             ><span style="font-weight: 400">
-              email delivery records may be retained for 1-2 years for delivery
-              troubleshooting, security, and legal compliance.</span
+              these records are retained only as reasonably necessary for
+              security, fraud prevention, incident investigation, delivery
+              troubleshooting, service operation, disputes, and applicable legal
+              obligations. Krabiclaw does not state a fixed period where the
+              applicable system does not enforce one.</span
             >
           </li>
           <li style="font-weight: 400">
-            <strong>Operational and security logs:</strong
+            <strong>Legal holds and claims:</strong
             ><span style="font-weight: 400">
-              access logs and operational logs are retained for 30-90 days.
-              Security event logs are retained for 1-2 years for incident
-              response, debugging, and audit purposes. Some logs do not currently
-              have automatic expiration and may be retained until operational
-              cleanup or legal hold release.</span
-            >
-          </li>
-          <li style="font-weight: 400">
-            <strong>Legal holds:</strong
-            ><span style="font-weight: 400">
-              information may be retained beyond normal retention periods when
-              subject to a legal hold, litigation, investigation, or other legal
-              process.</span
+              information may be retained beyond an otherwise applicable period
+              when required by legal process, a legal hold, an investigation, or
+              the establishment, exercise, or defense of legal claims.</span
             >
           </li>
         </ul>
-        <p>
-          <span style="font-weight: 400"
-            >We may retain information longer when required by law, legal
-            process, a legal hold, fraud prevention, security needs, or the
-            establishment, exercise, or defense of legal claims.</span
-          >
-        </p>
         <h2><strong>9. Security</strong></h2>
         <p>
           <span style="font-weight: 400"
@@ -966,7 +1283,7 @@
         <h1>
           <strong>Supplemental Merchant and Partner Privacy Notice</strong>
         </h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice supplements the Krabiclaw Privacy Policy for merchants,
@@ -1108,60 +1425,39 @@
         <h2><strong>Account and organization deletion</strong></h2>
         <p>
           <span style="font-weight: 400"
-            >Krabiclaw currently schedules account and organization deletion
-            with a 30-day grace period. An organization may be deleted with an
-            account only when the account holder is both the sole owner and the
-            sole member of that organization. If the account holder is the sole
-            owner but other members remain, account deletion is blocked until
-            another member is promoted to owner or the organization/membership
-            situation is otherwise resolved. If another owner already exists,
-            deleting the account does not delete the organization. Data associated
-            with an organization is deleted through the platform deletion process
-            after the grace period, subject to legal, backup, provider, and
-            technical limitations described in the main Policy.</span
+            >Krabiclaw provides separate controls to permanently delete an
+            account or organization after explicit destructive confirmation.
+            Deleting an account does not by itself delete an organization.
+            Organization deletion is a separate action subject to the
+            permissions and billing controls applicable to that
+            organization.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >An owner may schedule organization deletion even when other members
-            exist. Organization deletion requires explicit destructive
-            confirmation naming the organization and making clear that the
-            organization and its data will be deleted and other members will lose
-            access. Affected members are notified using Krabiclaw's existing
-            notification and email infrastructure. Organization deletion is
-            blocked when the canonical billing state shows an active or
-            unresolved paid subscription or billing obligation.</span
+            >When an organization is deleted, its organization data is removed
+            and its members lose access. If an active subscription or other
+            provider condition prevents organization deletion, it must be
+            resolved through the applicable billing or provider controls before
+            deletion can complete.</span
           >
         </p>
         <p>
           <span style="font-weight: 400"
-            >During the 30-day grace period, the account or organization remains
-            scheduled for deletion and the request can be cancelled. After the
-            grace period, Krabiclaw's deletion process re-checks destructive
-            eligibility when deletion actually executes; the deletion relies on
-            current state at execution time, not only on state captured 30 days
-            earlier. If eligibility has changed (for example, an organization
-            now has an active paid subscription or billing obligation),
-            deletion is skipped.</span
-          >
-        </p>
-        <p>
-          <span style="font-weight: 400"
-            >Account or organization deletion through Krabiclaw's controls is
-            distinct from a statutory personal-data deletion request under
-            privacy law. For statutory deletion requests, applicable legal
-            requirements and deadlines apply. CCPA/CPRA requires response within
-            45 days (with a possible 45-day extension). GDPR requires response
-            within one month where applicable. Billing blocks, ownership
-            resolution requirements, and surviving organizations' data may
-            affect what can be deleted within statutory deadlines. Where a
-            statutory deadline conflicts with a technical or billing block,
-            Krabiclaw will follow applicable law and may retain specific records
-            until the block is resolved or the legal obligation is satisfied.</span
+            >Account or organization deletion through Krabiclaw's product
+            controls is distinct from a statutory Personal Data request. For a
+            privacy-rights request, Krabiclaw responds within the period required
+            by applicable law, subject to verification requirements and any
+            extension permitted by that law. Krabiclaw may retain specific
+            records after a deletion request only where an applicable legal
+            basis permits or requires that retention, such as accounting or tax
+            obligations, fraud or security needs, disputes, legal claims, or
+            legal process. A technical or billing issue does not by itself create
+            an independent basis to retain Personal Data.</span
           >
         </p>
         <h1><strong>Supplemental Consumer Privacy Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice applies when you visit, communicate with, create a
@@ -1265,7 +1561,7 @@
             >Supplemental Website Visitor and Support Privacy Notice</strong
           >
         </h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice applies when you visit Krabiclaw's own websites, create
@@ -1300,7 +1596,7 @@
           >
         </p>
         <h1><strong>United States Regional Privacy Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >This notice supplements the Krabiclaw Privacy Policy for residents
@@ -1873,7 +2169,7 @@
           >
         </p>
         <h1><strong>Cookie and Tracking Technologies Notice</strong></h1>
-        <p><strong>Last updated: September 20, 2026</strong></p>
+        <p><strong>Last updated: September 25, 2026</strong></p>
         <p>
           <span style="font-weight: 400"
             >Krabiclaw and Krabiclaw-powered merchants use cookies and similar
@@ -1982,7 +2278,7 @@ useSocialMetadata({
   path: '/privacy',
   title: 'Privacy Policy',
   description:
-    'Privacy Policy for KrabiClaw website builder platform. Learn how we collect, use, and protect your personal information.',
+    'Privacy Policy for Krabiclaw website builder platform. Learn how we collect, use, and protect your personal information.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Privacy Policy', url: '/privacy' },

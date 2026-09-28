@@ -88,7 +88,7 @@ up, because rendering a card runs in the Worker, and it takes a while on the
 first run — a card is rendered and uploaded per product, post and page. Requests
 process five owners at a time. Each generated or reused PNG is fetched and its
 1200×630 dimensions checked; every skipped or failed owner is reported. Re-running
-reuses matching cards. Use `--site-id` to limit it to one site; KrabiClaw's own
+reuses matching cards. Use `--site-id` to limit it to one site; Krabiclaw's own
 site is an ordinary site here.
 
 Approved `client:import --apply` runs this same generator for the imported site

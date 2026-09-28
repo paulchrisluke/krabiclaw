@@ -9,7 +9,7 @@
           </div>
           <!-- No logo asset: a monogram of the tenant's own name, in the
                tenant's own brand color. It used to be --kc-navy, which put
-               KrabiClaw's platform navy on every tenant site that had not
+               Krabiclaw's platform navy on every tenant site that had not
                uploaded a logo. -->
           <div v-else class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-bold text-(--primary-foreground)">
             {{ restaurantName.charAt(0).toUpperCase() }}

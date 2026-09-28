@@ -37,7 +37,7 @@ usePlatformTheme().bootstrap()
 
 useHead({
   link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
-  titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'
+  titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
 })
 </script>
 

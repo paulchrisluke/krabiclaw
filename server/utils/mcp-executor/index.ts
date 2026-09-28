@@ -106,7 +106,7 @@ export async function executeMcpToolCall(
     return renderStructuredResponse(
       { organizations: page.items, currentUser, page_info: page.page_info },
       organizations.length === 0
-        ? "You have no organizations yet. Create your site and locations in the KrabiClaw CMS, then return here to manage their content."
+        ? "You have no organizations yet. Create your site and locations in the Krabiclaw CMS, then return here to manage their content."
         : `You have ${organizations.length} organization${organizations.length > 1 ? "s" : ""}: ${organizations.map((entry) => entry.name).join(", ")}.`,
     );
   }

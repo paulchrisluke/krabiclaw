@@ -147,7 +147,7 @@ const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value
 
 const seoTitle = computed(() => article.value?.title || 'Documentation')
 const seoDescription = computed(() => article.value?.excerpt
-  || `Learn about ${article.value?.title || 'this topic'} in KrabiClaw documentation.`)
+  || `Learn about ${article.value?.title || 'this topic'} in Krabiclaw documentation.`)
 
 // The category groups the index; it is not a place, so the trail is Docs ->
 // this article.
@@ -163,7 +163,7 @@ const { canonicalUrl } = useSocialMetadata(() => ({
   schema: false,
   title: seoTitle.value,
   description: seoDescription.value,
-  brand: { organizationName: 'KrabiClaw' },
+  brand: { organizationName: 'Krabiclaw' },
   // A category index is one of the site's own index pages, so it carries the
   // site's social card the way /features and /pricing do. An article carries
   // its own generated card and nothing else — omitting the key would reach for

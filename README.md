@@ -1,4 +1,4 @@
-# KrabiClaw
+# Krabiclaw
 
 Multi-tenant platform SaaS. Nuxt 5 nightly + Nitro 3 + Cloudflare Workers + D1.
 

@@ -64,7 +64,7 @@ export default definePlugin((nitroApp) => {
       const platformOrganizationId = event.context.organizationId as string
       entries.push(...PLATFORM_SITEMAP_ROUTES.map(loc => ({ loc })))
 
-      // KrabiClaw's marketing pages are page documents on its own organization,
+      // Krabiclaw's marketing pages are page documents on its own organization,
       // listed from the same table as every customer's pages.
       for (const page of await listPublishedTenantSitemapPages(db, platformOrganizationId)) {
         if (!page.path) continue

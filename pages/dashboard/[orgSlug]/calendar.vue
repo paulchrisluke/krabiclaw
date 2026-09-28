@@ -92,7 +92,7 @@ import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
 
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Calendar | KrabiClaw', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Calendar | Krabiclaw', robots: 'noindex, nofollow' })
 
 const FILTER_ALL = '__all__'
 const route = useRoute()

@@ -103,7 +103,7 @@ test('a constrained param claims only what it matches', () => {
 })
 
 test('the platform template holds its own marketing pages', () => {
-  // KrabiClaw's own site renders page documents through the same loader and the
+  // Krabiclaw's own site renders page documents through the same loader and the
   // same catch-all every customer site uses (#903).
   assert.equal(allows('platform', '/about'), true)
   assert.equal(allows('platform', '/features'), true)

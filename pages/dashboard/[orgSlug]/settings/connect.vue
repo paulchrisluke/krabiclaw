@@ -35,7 +35,7 @@
             variant="soft"
             icon="i-lucide-shield-check"
             title="Choose the business's registered country"
-            description="This cannot be changed after the Stripe account is created. KrabiClaw does not store the identity details you enter at Stripe."
+            description="This cannot be changed after the Stripe account is created. Krabiclaw does not store the identity details you enter at Stripe."
           />
           <UFormField label="Business country" description="The country where the business is legally registered.">
             <USelectMenu
@@ -97,7 +97,7 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Stripe Connect | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Stripe Connect | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'

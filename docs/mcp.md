@@ -1,6 +1,6 @@
 # MCP
 
-KrabiClaw ships one MCP surface. Every site, KrabiClaw's own included, is managed
+Krabiclaw ships one MCP surface. Every site, Krabiclaw's own included, is managed
 through it with the same tools.
 
 ## Surface
@@ -10,14 +10,14 @@ through it with the same tools.
 - Server entrypoint: `server/api/mcp.post.ts`
 - Scope: `tenant`
 - Exposes: existing-tenant content management, menus, experiences, posts, articles
-  (blog and, on KrabiClaw's own site, documentation), media, reviews,
+  (blog and, on Krabiclaw's own site, documentation), media, reviews,
   submissions, notifications, Q&A, analytics
 - Site creation and location creation, copying, and deletion are CMS-only. MCP
   retains daily content operations, including media asset and experience deletion.
 - Google Places lookup and domain setup are CMS-only. Social/OAuth publishing is feature-flagged.
   Manual locale management remains available as ordinary content editing.
 
-KrabiClaw's marketing site is an ordinary organization running the platform
+Krabiclaw's marketing site is an ordinary organization running the platform
 template. Its blog and documentation are article collections on that
 organization and are edited with the same tools as any tenant's articles, using
 its `organization_id`.
@@ -43,7 +43,7 @@ its `organization_id`.
 
 ## Tool catalog
 
-KrabiClaw exposes one canonical tool contract. Every tool name, input schema,
+Krabiclaw exposes one canonical tool contract. Every tool name, input schema,
 output schema, and executor must agree. Unknown tool names return JSON-RPC
 `-32601` over HTTP 200.
 

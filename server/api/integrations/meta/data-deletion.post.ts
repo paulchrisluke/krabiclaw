@@ -11,7 +11,7 @@ import { releaseMetaUserIntegrations } from '~/server/utils/integration-release'
  * Meta — the synced posts and their images — as well as ending the
  * authorization. Both go through the same release path.
  *
- * It deletes Meta's data, not the customer. A KrabiClaw workspace is deleted
+ * It deletes Meta's data, not the customer. A Krabiclaw workspace is deleted
  * by its owner through Better Auth's organization deletion; a request from
  * Meta about one person's Instagram account is not that, and must never
  * become that.

@@ -5,7 +5,7 @@ import { releaseMetaUserIntegrations } from '~/server/utils/integration-release'
 /**
  * Meta's deauthorize callback: a protocol adapter and nothing else.
  *
- * Meta posts a signed request when someone removes KrabiClaw from their
+ * Meta posts a signed request when someone removes Krabiclaw from their
  * Facebook or Instagram settings. Verifying that signature is the whole
  * authorization check — there is no session here — and what follows is the
  * same release the dashboard's Disconnect performs, so there is one definition
