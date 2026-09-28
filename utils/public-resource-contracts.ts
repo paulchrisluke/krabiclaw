@@ -84,7 +84,6 @@ export interface PublicPagePayload {
   reviewsList: ApiRecord[]
   media: ApiRecord[]
   qaList: ApiRecord[]
-  postsFeed: { posts: PublicSocialPost[]; page_info: { has_more: boolean; next_cursor: string | null } } | null
   blogList: ApiRecord[]
   blogPost: ApiRecord | null
   reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
@@ -169,8 +168,6 @@ export const isPublicPagePayload = (
   && Array.isArray(value.reviewsList)
   && Array.isArray(value.media)
   && Array.isArray(value.qaList)
-  && (value.postsFeed === null || (isRecord(value.postsFeed) && Array.isArray(value.postsFeed.posts)
-    && value.postsFeed.posts.every(isPublicSocialPost) && isRecord(value.postsFeed.page_info)))
   && Array.isArray(value.blogList)
   && (value.blogPost === null || isRecord(value.blogPost))
   && isRecord(value.reservationPolicyByLocation)

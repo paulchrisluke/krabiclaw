@@ -1,13 +1,11 @@
 <template>
-  <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <template v-if="post">
-      <PlatformPostDetail v-if="isPlatform" :post="post" />
-      <BlawbyPostDetail v-else-if="isBlawby" :post="post" :brand="postBrand" />
-      <div v-else class="min-h-screen bg-default text-default">
-        <SayaPostDetail :post="post" :brand="postBrand" />
-      </div>
-    </template>
-  </NuxtLayout>
+  <div v-if="post">
+    <PlatformPostDetail v-if="isPlatform" :post="post" />
+    <BlawbyPostDetail v-else-if="isBlawby" :post="post" :brand="postBrand" />
+    <div v-else class="min-h-screen bg-default text-default">
+      <SayaPostDetail :post="post" :brand="postBrand" />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -15,7 +13,7 @@ import PlatformPostDetail from '~/components/platform/PlatformPostDetail.vue'
 import { isPublicSocialPost, type PublicSocialPost } from '~/utils/public-resource-contracts'
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 
-definePageMeta({ layout: false })
+definePageMeta({ middleware: 'template-layout' })
 
 type DetailPost = PublicSocialPost & { localeRepresentations: Array<{ locale: string; label: string; route_path: string; source: 'source' | 'localized' }> }
 
@@ -69,7 +67,8 @@ const seoTitle = computed(() => post.value?.title || post.value?.body?.split('\n
 const seoDescription = computed(() => post.value?.body || post.value?.title || '')
 const { canonicalUrl, ogImageUrl } = useSocialMetadata(() => ({
   path: post.value?.url || post.value?.path || `/posts/${slug.value}`,
-  title: seoTitle.value,
+  // A tenant's page names the business, as its other pages do; Krabiclaw's template adds its own name.
+  title: isPlatform || seoTitle.value === organizationName.value ? seoTitle.value : `${seoTitle.value} | ${organizationName.value}`,
   description: seoDescription.value,
   pageType: 'article',
   brand: { organizationName: organizationName.value },

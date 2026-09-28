@@ -22,6 +22,7 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/contact/confirmed') return { recipe: 'confirmation', slug: null }
   if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
+  if (routePath === '/posts' || /^\/posts\/[^/]+$/.test(routePath)) return { recipe: 'posts', slug: null }
   if (/^\/article\/[^/]+$/.test(routePath)) return { recipe: 'article', slug: String(params.slug || '') }
   if (routePath === '/donate') return { recipe: 'donate', slug: null }
   if (routePath === '/policies/privacy') return { recipe: 'privacy', slug: null }

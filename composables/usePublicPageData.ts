@@ -126,7 +126,6 @@ export const usePublicPageData = async (options: {
   }))
   // The first page of the route's short-post feed — the location's on a
   // location route — and the cursor to the next.
-  const postsFeed = computed(() => data.value?.postsFeed ?? null)
   const products = computed(() => data.value?.products ?? []);
   const collections = computed(() => data.value?.collections ?? []);
   /**
@@ -296,7 +295,6 @@ export const usePublicPageData = async (options: {
     location,
     config,
     googleMaps,
-    postsFeed,
     locationReviews,
     reviewsAggregate,
     reviewsList,

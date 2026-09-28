@@ -36,7 +36,6 @@ import {
 import { recordRequestPhase } from "~/server/utils/request-metrics";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isNonProductionHost } from "~/server/utils/tenant-hosts";
-import { listPublicSocialPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
@@ -222,7 +221,7 @@ async function loadPublicPageSource(
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
   const VALID_DATASETS = new Set([
-    'content', 'location', 'products', 'reviews', 'photos', 'qa', 'posts',
+    'content', 'location', 'products', 'reviews', 'photos', 'qa',
     'blog', 'blogPost', 'reservationPolicies',
   ]);
   // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
@@ -664,14 +663,6 @@ async function loadPublicPageSource(
     }
   }
 
-  options.signal?.throwIfAborted();
-  // The first page of the feed this route shows — the location's when it names
-  // one — through the one public post reader. Later pages are the feed API's.
-  const postsLocale = localizedLocale ?? "en";
-  const postsResource = `public-posts:${organizationId}:${postsLocale}:${locationId ?? ''}`;
-  const postsFeed = requestedDatasets.has("posts")
-    ? await listPublicSocialPosts(env, db, organizationId, { locale: postsLocale, locationId: locationId ?? null, window: { limit: 12, offset: 0 }, resource: postsResource })
-    : null;
 
 
   // Shape locations
@@ -877,7 +868,6 @@ async function loadPublicPageSource(
     qaList,
     blogList: requestedDatasets.has("blog") ? blogList : [],
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
-    postsFeed,
     reservationPolicyByLocation,
     localeRepresentations,
   };

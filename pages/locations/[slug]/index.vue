@@ -308,14 +308,12 @@ const {
   locationReviews,
   pending,
   config: pageConfig,
-  postsFeed,
 } = await usePublicPageData()
-const locationPosts = computed(() => (postsFeed.value?.posts ?? []).slice(0, 3))
 // A slug naming no location is a URL that does not exist. Rendering the page
 // around a null location answered 200 with an empty shell — a soft 404 a
 // crawler indexes. The sibling menu and product indexes already refuse it.
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
-
+const { posts: locationPosts } = await useSocialPostFeed(() => ({ locationId: location.value!.id }), { limit: 3 })
 
 const productPresentation = computed(() => resolveProductPresentation((organization as ApiValue)?.vertical as string | null | undefined))
 const locationProducts = computed(() => products.value.filter(product =>

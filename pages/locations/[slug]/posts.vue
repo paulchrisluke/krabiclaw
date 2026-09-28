@@ -25,7 +25,7 @@
     <SayaSocialPosts :posts="feed.posts.value" />
     <div v-if="feed.hasMore.value || feed.failed.value" class="flex flex-col items-center gap-3 pb-20">
       <p v-if="feed.failed.value" role="alert" class="text-sm text-error">{{ t('social_posts.load_failed') }}</p>
-      <UButton v-if="feed.hasMore.value" color="neutral" variant="outline" size="lg" :loading="feed.loading.value" @click="feed.loadMore">{{ t('social_posts.load_more') }}</UButton>
+      <button v-if="feed.hasMore.value" type="button" class="rounded-full border border-default px-6 py-2.5 text-sm font-medium text-default transition hover:bg-muted disabled:opacity-60" :disabled="feed.loading.value" :aria-busy="feed.loading.value" @click="feed.loadMore">{{ t('social_posts.load_more') }}</button>
     </div>
   </div>
 </template>
@@ -42,13 +42,13 @@ if (!organizationId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const organizationName = computed(() => String((organization as ApiValue)?.name ?? '').trim())
 
-const { location, postsFeed } = await usePublicPageData()
+const { location } = await usePublicPageData()
 // A slug naming no location is a URL that does not exist. Rendering the page
 // around a null location answered 200 with an empty shell — a soft 404 a
 // crawler indexes. The sibling menu and product indexes already refuse it.
 if (!location.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
 
-const feed = useSocialPostFeed(() => postsFeed.value, () => ({ locationId: location.value?.id ?? null }))
+const feed = await useSocialPostFeed(() => ({ locationId: location.value!.id }))
 
 const organizationUrl = useRequestURL().origin
 

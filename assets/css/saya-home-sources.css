@@ -18,3 +18,5 @@
 @source "../../components/platform/PlatformIcon.vue";
 @source "../../components/ui/AppSection.vue";
 @source "../../components/ui/UImage.vue";
+@source "../../components/saya/SayaSocialPosts.vue";
+@source "../../components/social";

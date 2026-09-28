@@ -36,6 +36,9 @@ export default {
   "social_posts": {
     "title": "Updates",
     "media_label": "Photos and video ({count})",
+    "media_position": "{position} of {count}",
+    "previous_media": "Previous photo or video",
+    "next_media": "Next photo or video",
     "play_video": "Play video",
     "also_on": "Also posted on",
     "view_on_facebook": "View on Facebook",

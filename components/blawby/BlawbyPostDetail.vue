@@ -5,7 +5,7 @@
     for a text-only update, one readable column with no empty media frame.
   -->
   <article class="bg-[var(--blawby-bg)] pb-20">
-    <header class="bg-[var(--blawby-primary)] py-10 text-white sm:py-14">
+    <header class="bg-[var(--blawby-primary)] pb-10 pt-20 text-white sm:pb-14 sm:pt-24">
       <div class="blawby-container">
         <div class="flex items-center justify-between gap-4">
           <NuxtLink :to="localePath('/posts')" class="inline-flex items-center gap-2 text-sm font-medium text-white/80 no-underline hover:text-white">

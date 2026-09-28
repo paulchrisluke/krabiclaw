@@ -1,4 +1,5 @@
 <template>
+  <!-- The item fills the frame it is given; the frame sets the proportions. -->
   <div class="relative size-full overflow-hidden bg-black/5">
     <template v-if="item.kind === 'video'">
       <video
@@ -9,12 +10,12 @@
         autoplay
         playsinline
         preload="metadata"
-        class="size-full bg-black object-contain"
+        class="absolute inset-0 size-full bg-black object-contain"
       />
       <button
         v-else
         type="button"
-        class="group relative block size-full"
+        class="group absolute inset-0 block size-full"
         :aria-label="t('social_posts.play_video')"
         @click="playing = true"
       >
@@ -42,7 +43,7 @@
       :height="item.height || undefined"
       :loading="eager ? 'eager' : 'lazy'"
       decoding="async"
-      :class="['size-full', fit === 'cover' ? 'object-cover' : 'object-contain']"
+      :class="['absolute inset-0 size-full', fit === 'cover' ? 'object-cover' : 'object-contain']"
     >
   </div>
 </template>

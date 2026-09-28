@@ -48,7 +48,7 @@ function hasValidThemeTokens(value: unknown) {
 }
 
 function hasRequiredRouteContent(route: Record<string, unknown>) {
-  if (route.recipe === 'links' || route.recipe === 'confirmation') return true
+  if (route.recipe === 'links' || route.recipe === 'confirmation' || route.recipe === 'posts') return true
   if (route.recipe === 'article') return isRecord(route.post)
   return isRecord(route.page)
 }
