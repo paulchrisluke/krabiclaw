@@ -28,8 +28,13 @@ async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
+/** A draft has the path it will be published at, but no public URL until it is published. */
 function forMcp(post: Post, organization: McpExecutorContext['organization']) {
-  return { ...attachViewUrlToRecord(post, organization, {}), preview_url: absolutizeOrganizationUrl(organization, post.preview_url) }
+  return {
+    ...attachViewUrlToRecord(post, organization, { publicPath: post.status === 'published' ? post.public_path : null }),
+    public_path: post.public_path,
+    preview_url: absolutizeOrganizationUrl(organization, post.preview_url),
+  }
 }
 
 export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown> {

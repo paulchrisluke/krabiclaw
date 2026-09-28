@@ -2,7 +2,8 @@ import type { InstagramIntegration, SocialSyncProgress } from '~/shared/organiza
 import { setTokenUtil } from 'better-auth/oauth2'
 import { execute, queryFirst } from '~/server/db'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
-import { formBody, metaGraphRequest, type MetaDeadline } from './meta-graph'
+import { formBody, metaGraphRequest } from './meta-graph'
+import type { MetaDeadline } from './meta-graph'
 
 /**
  * Instagram as its own connection: Instagram Login for professional accounts,
@@ -141,12 +142,13 @@ const withToken = (target: InstagramTarget, init: GraphInit = {}): GraphInit => 
 
 // ── Publication primitives: containers, their status, media_publish ───────
 
-/** A media container. Instagram fetches the URL itself; nothing is public until it is published. */
-export async function createMediaContainer(target: InstagramTarget, input:
+export type InstagramContainerInput =
   | { kind: 'image'; url: string; caption?: string; carouselItem: boolean; altText?: string | null }
   | { kind: 'video'; url: string; caption?: string; carouselItem: boolean; coverUrl?: string | null }
-  | { kind: 'carousel'; children: readonly string[]; caption?: string },
-deadline: MetaDeadline): Promise<string> {
+  | { kind: 'carousel'; children: readonly string[]; caption?: string }
+
+/** A media container. Instagram fetches the URL itself; nothing is public until it is published. */
+export async function createMediaContainer(target: InstagramTarget, input: InstagramContainerInput, deadline: MetaDeadline): Promise<string> {
   const fields: Record<string, string | boolean | undefined> = input.kind === 'image'
     ? { image_url: input.url, is_carousel_item: input.carouselItem || undefined, alt_text: input.altText || undefined }
     : input.kind === 'video'

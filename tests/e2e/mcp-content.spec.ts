@@ -120,10 +120,11 @@ test.describe('stateless MCP server', () => {
 
       const publicRead = await request.get(`${tenantBaseURL}/api/public/posts/${encodeURIComponent(firstPost.slug)}`, { headers: tenantExtraHeaders })
       expect(publicRead.status()).toBe(200)
-      const publicPost = (await publicRead.json() as { post: { id: string, call_to_action: { label: string, url: string } | null, media: Array<{ asset_id: string, slot: string }> } }).post
+      const publicPost = (await publicRead.json() as { post: { id: string, call_to_action: { label: string, url: string } | null, media: Array<{ asset_id: string }> } }).post
       expect(publicPost.id).toBe(created.post.id)
       expect(publicPost.call_to_action).toEqual(createArgs.call_to_action)
-      expect(publicPost.media).toContainEqual(expect.objectContaining({ asset_id: imageAssetId, slot: 'cover' }))
+      // Visitors get the media in order, cover first; which slot it came from is the editor's concern.
+      expect(publicPost.media.map(item => item.asset_id)).toEqual([imageAssetId])
 
       // A repeat with the old revision returns the receipt and changes nothing.
       const repeat = await mcpRequest(request, baseURL!, {

@@ -16,7 +16,6 @@ const LOCATION_ID = process.argv.includes('--location-id')
 const USER_ID = process.argv.includes('--user-id')
   ? process.argv[process.argv.indexOf('--user-id') + 1]
   : process.env.MCP_USER_ID
-const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 const isLocal = BASE_URL.includes('localhost') || BASE_URL.includes('127.0.0.1')
 let failed = false
@@ -53,13 +52,15 @@ async function getAuthHeaders() {
 }
 
 async function mcp(headers, name, args = {}) {
+  // Plain JSON-RPC 2.0, as @modelcontextprotocol/server reads it: the method
+  // and tool come from the body. A `_meta['io.modelcontextprotocol/...']` key
+  // claims the modern envelope, which this request does not carry the rest of,
+  // so the server rejected every call as an invalid message.
   const res = await fetch(`${BASE_URL}/api/mcp`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'mcp-protocol-version': MCP_VERSION,
-      'mcp-method': 'tools/call',
-      'mcp-name': name,
+      accept: 'application/json, text/event-stream',
       ...headers,
     },
     body: JSON.stringify({
@@ -67,14 +68,13 @@ async function mcp(headers, name, args = {}) {
       id: `${name}-${Date.now()}`,
       method: 'tools/call',
       params: { name, arguments: args },
-      _meta: {
-        'io.modelcontextprotocol/version': MCP_VERSION,
-        'io.modelcontextprotocol/method': 'tools/call',
-        'io.modelcontextprotocol/name': name,
-      },
     }),
   })
-  const text = await res.text()
+  // The transport may answer a single result as a one-event SSE stream.
+  const raw = await res.text()
+  const text = (res.headers.get('content-type') ?? '').includes('text/event-stream')
+    ? raw.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice('data:'.length).trim()).join('')
+    : raw
   let body
   try {
     body = JSON.parse(text)

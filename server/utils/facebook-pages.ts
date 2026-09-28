@@ -1,7 +1,8 @@
 import type { FacebookIntegration, SocialSyncProgress } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
-import { formBody, metaGraphRequest, type MetaDeadline } from './meta-graph'
+import { formBody, metaGraphRequest } from './meta-graph'
+import type { MetaDeadline } from './meta-graph'
 
 /**
  * A Facebook Page as an organization's integration, and the Page Graph calls
