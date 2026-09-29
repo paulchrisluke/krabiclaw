@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { APIRequestContext, APIResponse } from '@playwright/test'
 import { loginAs } from './auth'
+import { E2E_DEMO_ORGANIZATION_ID } from '../test-env'
 
 // The Streamable HTTP transport requires clients to accept both
 // application/json and text/event-stream (see the Accept header below), and
@@ -38,7 +39,7 @@ export const MCP_VERSION = '2025-06-18'
 // Ember & Slice, the demo organization the production snapshot carries with the
 // Growth plan active. Every MCP spec drives this tenant and its loc-demo
 // location; a spec never provisions an organization or location of its own.
-export const MCP_GROWTH_ORGANIZATION_ID = 'org-demo'
+export const MCP_GROWTH_ORGANIZATION_ID = E2E_DEMO_ORGANIZATION_ID
 
 export async function mcpRequest(
   request: APIRequestContext,

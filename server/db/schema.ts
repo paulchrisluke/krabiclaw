@@ -1955,7 +1955,6 @@ export const content_documents = sqliteTable("content_documents", {
 	check("content_documents_role_check", sql`(row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)`),
 	check("content_documents_path_check", sql`path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')`),
 	check("content_documents_page_copy_check", sql`kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)`),
-	check("content_documents_page_type_check", sql`kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1`),
 	check("content_documents_qa_scope_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))`),
 	// 'listed' and 'unlisted' say whether the document appears in its index. The
 	// value used to be 'public', which read as a second answer to "is this
@@ -1963,8 +1962,6 @@ export const content_documents = sqliteTable("content_documents", {
 	// simply not listed.
 	check("content_documents_article_visibility_check", sql`kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1`),
 	check("content_documents_qa_state_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)`),
-	check("content_documents_qa_counts_check", sql`kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)`),
-	check("content_documents_article_tags_check", sql`kind <> 'article' OR json_type(metadata_json, '$.tags') IS NULL OR json_type(metadata_json, '$.tags') IN ('array','null')`),
 	// Articles and social posts are drafts or published. Nothing publishes on a
 	// clock: a client that wants a post out later calls publish then.
 	check("content_documents_publication_check", sql`row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published')) IS 1`),
@@ -1979,12 +1976,6 @@ export const content_documents = sqliteTable("content_documents", {
 	// Who owns a social post's words: the tenant (`manual`, `template`) or the
 	// provider it was imported from, until the tenant edits it.
 	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1`),
-	// A call to action is the tenant's own words and destination. A translation
-	// carries only its label; the destination is the root's.
-	check("content_documents_social_call_to_action_check", sql`kind <> 'social_post' OR json_type(metadata_json, '$.call_to_action') IS NULL OR (json_type(metadata_json, '$.call_to_action') IS 'object' AND json_type(metadata_json, '$.call_to_action.label') IS 'text' AND length(trim(json_extract(metadata_json, '$.call_to_action.label'))) > 0 AND ((row_role = 'root' AND json_type(metadata_json, '$.call_to_action.url') IS 'text' AND (json_extract(metadata_json, '$.call_to_action.url') LIKE 'https://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'http://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'tel:%') AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label', '$.url') = '{}') OR (row_role = 'representation' AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label') = '{}')))`),
-	// The discriminator, event, offer, recurrence and alert shapes a short post
-	// used to carry are not metadata of one any more.
-	check("content_documents_social_metadata_check", sql`kind <> 'social_post' OR json_remove(metadata_json, '$.call_to_action') = '{}'`),
 ]);
 
 // One local social post and one actual Facebook or Instagram object.
@@ -2242,4 +2233,3 @@ export const broadcasts = sqliteTable("broadcasts", {
 	check("broadcasts_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
 	check("broadcasts_created_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at`),
 ]);
-

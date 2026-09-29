@@ -57,9 +57,8 @@ const localWorkerEnvironment = [
 
 const localWorkerCommand = [
   localWorkerEnvironment,
-  'corepack yarn wrangler dev .output/server/index.mjs',
+  'corepack yarn wrangler dev .output/server/index.mjs --env e2e',
   '--assets .output/public',
-  '--local',
   `--port ${port}`,
   `--host localhost:${port}`,
   '--var E2E_ALLOW_DEV_ROUTES:true',

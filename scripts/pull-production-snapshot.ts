@@ -2,15 +2,13 @@
  * Local and staging start from a copy of production instead of hand-maintained
  * seed definitions, so what they test against is what customers actually have.
  *
- * The row copy is transferred through scripts/transfer-database-export.mjs: every row is
- * copied into the current generated baseline, the schema epoch and the pending
- * data transforms run, and the result is audited before anything is written.
- * Until the source itself carries the baseline this is what makes its copy
- * loadable; after that the epoch reads nothing and the transforms are no-ops.
+ * The row copy is transferred through scripts/transfer-database-export.mjs:
+ * rows are copied into the current migration chain and audited before a target
+ * is written.
  *
- * `jwks` is left alone — production's signing keys are encrypted under
- * production's BETTER_AUTH_SECRET, so the target keeps and mints its own. E2E
- * credentials come from provision-development-auth.ts afterwards, as before.
+ * Only local development omits jwks: production keys are encrypted under the
+ * production secret. A remote replacement carries its own source's jwks, so
+ * existing signed tokens remain valid across the binding repoint.
  *
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --local
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --staging
@@ -59,10 +57,13 @@ const { values } = parseArgs({
 const loads = (['local', 'staging', 'production'] as const).filter(name => values[name])
 if (loads.length > 1 || (loads.length === 0 && !values.out)) throw new Error('Choose one of --local, --staging or --production, or --out <target.sqlite> alone for a preflight.')
 const target = loads[0] ?? 'out'
+const omitJwks = target === 'local'
 // Production is only ever loaded as a schema replacement: the top-level `DB`
 // binding already names the replacement, and the database it replaces has to
 // be named, or the source would be the destination.
-if (target === 'production' && values.source === 'DB') throw new Error('--production loads a replacement database; name the database it replaces with --source <database>.')
+if ((target === 'staging' || target === 'production') && values.source === 'DB') {
+  throw new Error(`--${target} loads a replacement database; name that environment's previous database with --source <database>.`)
+}
 const deltaFrom = values['delta-from'] ? resolve(values['delta-from']) : null
 
 const wrangler = resolve('node_modules/wrangler/bin/wrangler.js')
@@ -120,12 +121,19 @@ function sourceRows<T>(sql: string): T[] {
 function copyProductionRows(path: string) {
   const identifier = (value: string) => '"' + value.replaceAll('"', '""') + '"'
   const literal = (value: string) => "'" + value.replaceAll("'", "''") + "'"
-  const catalog = "SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT IN ('d1_migrations', '__drizzle_migrations', 'jwks')"
+  // Keep D1's migration ledger in the source snapshot: the transfer must know
+  // which forward files have already run, including data-only migrations.
+  const catalog = "SELECT type, name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND tbl_name <> '__drizzle_migrations'"
+  const tableCatalog = `SELECT name, sql FROM (${catalog}) WHERE type = 'table'`
   const tables = sourceRows<{ name: string; sql: string; column_names: string }>(
-    `SELECT name, sql, (SELECT json_group_array(name) FROM pragma_table_xinfo(catalog.name) WHERE hidden = 0) AS column_names FROM (${catalog}) catalog ORDER BY name`,
+    `SELECT name, sql, (SELECT json_group_array(name) FROM pragma_table_xinfo(tables.name) WHERE hidden = 0) AS column_names FROM (${tableCatalog}) tables ORDER BY name`,
   )
-  const queries = [`SELECT name AS table_name, 0 AS phase, sql AS statement FROM (${catalog})`]
+  const schemaObjects = sourceRows<{ name: string; phase: number; sql: string }>(
+    `SELECT name, CASE WHEN type = 'table' THEN 0 ELSE 2 END AS phase, sql FROM (${catalog}) ORDER BY phase, name`,
+  )
+  const queries = [`SELECT name AS table_name, CASE WHEN type = 'table' THEN 0 ELSE 2 END AS phase, sql AS statement FROM (${catalog})`]
   for (const table of tables) {
+    if (omitJwks && table.name === 'jwks') continue
     const names = (JSON.parse(table.column_names) as string[]).map(identifier)
     const prefix = `INSERT INTO ${identifier(table.name)} (${names.join(',')}) VALUES (`
     const expression = literal(prefix) + ' || ' + names.map(name => `quote(${name})`).join(" || ',' || ") + " || ');'"
@@ -149,14 +157,14 @@ function copyProductionRows(path: string) {
     groups = next
   }
   const rows = sourceRows<{ table_name: string; phase: number; statement: string; total_rows: number }>(
-    `WITH ${ctes.join(', ')} SELECT *, count(*) OVER () AS total_rows FROM (${groups[0]}) ORDER BY table_name, phase`,
+    `WITH ${ctes.join(', ')} SELECT *, count(*) OVER () AS total_rows FROM (${groups[0]}) ORDER BY phase, table_name`,
   )
   if (!rows.length || rows[0]!.total_rows !== rows.length) throw new Error(`Incomplete ${values.source} copy; no target data was written`)
-  const schema = rows.filter(row => row.phase === 0)
-  if (schema.length !== tables.length || schema.some((row, index) => row.table_name !== tables[index]!.name || row.statement !== tables[index]!.sql)) {
+  const schema = rows.filter(row => row.phase !== 1)
+  if (schema.length !== schemaObjects.length || schema.some((row, index) => row.table_name !== schemaObjects[index]!.name || row.phase !== schemaObjects[index]!.phase || row.statement !== schemaObjects[index]!.sql)) {
     throw new Error(`${values.source} schema changed during column discovery; no target data was written`)
   }
-  writeFileSync(path, 'PRAGMA foreign_keys=OFF;\n' + rows.map(row => row.statement + (row.phase === 0 ? ';' : '')).join('\n'), { mode: 0o600 })
+  writeFileSync(path, 'PRAGMA foreign_keys=OFF;\n' + rows.map(row => row.statement + (row.phase === 1 ? '' : ';')).join('\n'), { mode: 0o600 })
   for (const table of tables) console.log(`Copied ${table.name}: ${rows.filter(row => row.phase === 1 && row.table_name === table.name).length} rows`)
 }
 
@@ -171,17 +179,15 @@ try {
 
   const targetPath = values.out ? resolve(values.out) : join(directory, 'target.sqlite')
   const payloadPath = values.out ? `${targetPath}.payload.sql` : join(directory, 'payload.sql')
-  const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: true, deltaFrom })
+  const manifest = transferDatabaseExport(dumpPath, targetPath, { payloadPath, withoutJwks: omitJwks, deltaFrom })
   printTransferReport(manifest)
   const rows = manifest.tables.reduce((total, table) => total + table.target_rows, 0)
   if (target === 'out') {
     console.log(`Preflight passed: ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${targetPath}; payload ${payloadPath}. Nothing remote was written.`)
   } else {
     const destination = target === 'local' ? ['--local'] : target === 'production' ? ['--remote'] : ['--env', target, '--remote']
-    // The payload is data only, written for the schema the target was built
-    // from. A destination still on an earlier baseline — the file is regenerated
-    // under the same name, so `migrations apply` sees nothing new — fails half
-    // way through the import instead, on whichever object moved first.
+    // The payload is data only and must match the exact current migration
+    // chain before any remote row is written.
     const expectedSchema = manifest.schema
     if (!expectedSchema) throw new Error('The transfer did not report the schema it built')
     const [actual] = JSON.parse(run(['d1', 'execute', 'DB', ...destination, '--command', SCHEMA_OBJECTS_QUERY, '--json'], true)) as Array<{ results: Array<{ type: string; name: string; sql: string }> }>
@@ -189,9 +195,9 @@ try {
     const actualSchema = new Map((actual?.results ?? []).map(object => [key(object), object.sql]))
     const drift = expectedSchema.filter(object => actualSchema.get(key(object)) !== object.sql).map(key)
     if (drift.length || actualSchema.size !== expectedSchema.length) {
-      throw new Error(`${target} D1 does not carry the current baseline (${drift.length ? drift.slice(0, 5).join(', ') : 'extra objects'} differ); no data was written. ${target === 'local'
+      throw new Error(`${target} D1 does not carry the current migration chain (${drift.length ? drift.slice(0, 5).join(', ') : 'extra objects'} differ); no data was written. ${target === 'local'
         ? 'Delete .wrangler/state/v3/d1 and run `corepack yarn local:setup` again.'
-        : 'Replace the database through the schema replacement in docs/operations/release-and-outage-prevention.md first.'}`)
+        : 'Apply pending forward migrations or use the schema replacement in docs/operations/release-and-outage-prevention.md if a referenced constraint changed.'}`)
     }
     // Every deploy runs `d1 migrations apply` before it ships. A destination
     // whose ledger does not already record each migration file would have the

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7482c374-a163-4413-a80d-b287b8a8ca36",
+  "id": "424ba0e0-da25-4999-9e05-2eecddcefe99",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -2292,6 +2292,10 @@
           "name": "content_documents_page_copy_check",
           "value": "kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)"
         },
+        "content_documents_page_type_check": {
+          "name": "content_documents_page_type_check",
+          "value": "kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1"
+        },
         "content_documents_qa_scope_check": {
           "name": "content_documents_qa_scope_check",
           "value": "kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))"
@@ -2303,6 +2307,14 @@
         "content_documents_qa_state_check": {
           "name": "content_documents_qa_state_check",
           "value": "kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)"
+        },
+        "content_documents_qa_counts_check": {
+          "name": "content_documents_qa_counts_check",
+          "value": "kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)"
+        },
+        "content_documents_article_tags_check": {
+          "name": "content_documents_article_tags_check",
+          "value": "kind <> 'article' OR json_type(metadata_json, '$.tags') IS NULL OR json_type(metadata_json, '$.tags') IN ('array','null')"
         },
         "content_documents_publication_check": {
           "name": "content_documents_publication_check",
@@ -2323,6 +2335,14 @@
         "content_documents_social_source_check": {
           "name": "content_documents_social_source_check",
           "value": "kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1"
+        },
+        "content_documents_social_call_to_action_check": {
+          "name": "content_documents_social_call_to_action_check",
+          "value": "kind <> 'social_post' OR json_type(metadata_json, '$.call_to_action') IS NULL OR (json_type(metadata_json, '$.call_to_action') IS 'object' AND json_type(metadata_json, '$.call_to_action.label') IS 'text' AND length(trim(json_extract(metadata_json, '$.call_to_action.label'))) > 0 AND ((row_role = 'root' AND json_type(metadata_json, '$.call_to_action.url') IS 'text' AND (json_extract(metadata_json, '$.call_to_action.url') LIKE 'https://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'http://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'tel:%') AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label', '$.url') = '{}') OR (row_role = 'representation' AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label') = '{}')))"
+        },
+        "content_documents_social_metadata_check": {
+          "name": "content_documents_social_metadata_check",
+          "value": "kind <> 'social_post' OR json_remove(metadata_json, '$.call_to_action') = '{}'"
         }
       }
     },

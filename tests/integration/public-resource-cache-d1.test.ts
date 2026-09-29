@@ -3,7 +3,24 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
-import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow } from '../../server/utils/public-resource-cache.ts'
+import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow, type OrganizationChangeDrainEnv } from '../../server/utils/public-resource-cache.ts'
+import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
+
+const searchEnv: OrganizationChangeDrainEnv = {
+  NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
+  AI_SEARCH_INSTANCE_ID: 'test-index',
+  AI_SEARCH: {
+    get: () => ({
+      items: {
+        list: async () => ({ result: [], result_info: { per_page: 50, total_count: 0 } }),
+        upload: async () => ({}),
+        delete: async () => ({}),
+      },
+    }),
+  } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
+}
 
 async function migratedCacheD1(context: TestContext) {
   const miniflare = new Miniflare({
@@ -38,6 +55,7 @@ async function migratedCacheD1(context: TestContext) {
     }
   }
   await db.prepare("INSERT INTO organization (id, name, slug, subdomain) VALUES ('org', 'Org', 'org', 'org')").run()
+  await db.prepare("INSERT INTO organization (id, name, slug, subdomain, theme_id) VALUES ('platform', 'Platform', 'platform', 'platform', 'krabiclaw-theme-v1')").run()
   return { db, kv }
 }
 
@@ -59,6 +77,40 @@ async function insertInvalidation(
   `).bind(input.id, input.status, input.attemptCount, input.claimedAt ?? null, input.processedAt ?? null, input.createdAt).run()
 }
 
+test('a scoped sync returns current pending work after its queued item finishes indexing', async (t) => {
+  const { db } = await migratedCacheD1(t)
+  await db.prepare("INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location', 'org', 'location', 'Location')").run()
+  const records = expandDocumentsForSurfaces(await buildOrganizationDocuments(db, 'org'))
+  assert.equal(records.length, 1)
+  const record = records[0]!
+  let lists = 0
+  let uploads = 0
+  const env = {
+    AI_SEARCH_INSTANCE_ID: 'test-index',
+    AI_SEARCH: { get: () => ({
+      stats: async () => { throw new Error('instance-wide status must not block this organization') },
+      items: {
+        list: async () => {
+          lists += 1
+          return {
+            result: [{ id: 'item', key: record.key, status: lists === 1 ? 'queued' : 'completed',
+              metadata: lists === 1 ? null : { content_hash: indexItemPayload(record).contentHash } }],
+            result_info: { per_page: 50, total_count: 1 },
+          }
+        },
+        upload: async () => { uploads += 1 },
+        delete: async () => { throw new Error('the current item must not be deleted') },
+      },
+    }) },
+  } as unknown as CloudflareEnv
+
+  assert.deepEqual(await syncOrganizationSearchIndex(env, db, 'org'), {
+    indexed: 0, unchanged: 1, pending: 0, deleted: 0, indexingUnconfirmedReason: null,
+  })
+  assert.equal(lists, 3)
+  assert.equal(uploads, 0)
+})
+
 test('cache invalidation drain enforces the durable work lifecycle', async (t) => {
   const { db, kv } = await migratedCacheD1(t)
   await t.test('validates its domain before claiming work and purges both cache contracts', async () => {
@@ -74,10 +126,17 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'pending'
     `).first<{ status: string; attempt_count: number }>()
     assert.deepEqual(row, { status: 'pending', attempt_count: 0 })
+    await assert.rejects(
+      drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, {}),
+      /AI Search binding is required/,
+    )
+    assert.deepEqual(await db.prepare(`
+      SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'pending'
+    `).first(), { status: 'pending', attempt_count: 0 })
 
     await kv.put('public~org~v4~page', 'public resource')
     await kv.put('html:org.krabiclaw.com:/', 'html')
-    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, {}), 1)
+    assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, {}), 1)
     assert.equal(await kv.get('public~org~v4~page'), null)
     assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
     const processed = await db.prepare(`
@@ -110,7 +169,10 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       })
     }
 
-    assert.equal(await drainPublicResourceCacheInvalidations(db, failingKv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, { now }), 0)
+    await assert.rejects(
+      drainPublicResourceCacheInvalidations(db, failingKv, searchEnv, { now }),
+      /injected KV failure/,
+    )
 
     const terminal = await db.prepare(`
       SELECT id, status, attempt_count, claimed_at, processed_at, last_error
@@ -134,6 +196,24 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       },
     ])
   })
+})
+
+test('nonproduction drains cache invalidations without AI Search', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await insertInvalidation(db, {
+    id: 'local-write', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
+  })
+  await kv.put('public~org~v4~page', 'stale public resource')
+  await kv.put('html:org.krabiclaw.com:/', 'stale HTML')
+  const env: OrganizationChangeDrainEnv = {
+    NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
+    NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3107',
+  }
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org' }), 1)
+  assert.equal(await kv.get('public~org~v4~page'), null)
+  assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
+  assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'local-write'").first(),
+    { status: 'processed', attempt_count: 1 })
 })
 
 
@@ -161,7 +241,118 @@ test('an organization write purges that organization despite an older invalidati
     { organization_id: 'changed', status: 'pending', attempt_count: 0 },
     { organization_id: 'org', status: 'pending', attempt_count: 0 },
   ])
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com' }, {}), 2)
+  await assert.rejects(
+    drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'changed', limit: 0 }),
+    /pending cache or search index work remains/,
+  )
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'changed' }), 1)
+  assert.equal(await kv.get('public~org~v4~page'), 'cached public resource')
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, {}), 1)
   assert.equal(await kv.get('public~org~v4~page'), null)
   assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
+})
+
+test('a complete fresh reconciliation clears older terminal work, but no work cannot claim to repair it', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  const now = new Date('2026-09-29T04:30:00.000Z')
+  await insertInvalidation(db, {
+    id: 'old-failed', status: 'failed', attemptCount: 5,
+    processedAt: '2026-09-28T04:30:00.000Z', createdAt: '2026-09-28T04:00:00.000Z',
+  })
+  await assert.rejects(
+    drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'org', now }),
+    /failed cache or search index work remains/,
+  )
+  await insertInvalidation(db, {
+    id: 'fresh', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
+  })
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, searchEnv, { organizationId: 'org', now }), 1)
+  const rows = await db.prepare("SELECT id, status, last_error FROM public_resource_cache_invalidations ORDER BY id")
+    .all<{ id: string; status: string; last_error: string | null }>()
+  assert.deepEqual(rows.results, [
+    { id: 'fresh', status: 'processed', last_error: null },
+    { id: 'old-failed', status: 'processed', last_error: null },
+  ])
+})
+
+test('a global drain reports one failed organization after processing other organizations', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await db.prepare("INSERT INTO organization (id, name, slug, subdomain) VALUES ('changed', 'Changed', 'changed', 'changed')").run()
+  await insertInvalidation(db, {
+    id: 'first', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
+  })
+  await db.prepare(`INSERT INTO public_resource_cache_invalidations
+    (id, organization_id, reason, status, attempt_count, created_at)
+    VALUES ('second', 'changed', 'test', 'pending', 0, '2026-09-29T04:01:00.000Z')`).run()
+  await kv.put('public~changed~v4~page', 'old page')
+  const failingKv = new Proxy(kv, {
+    get(target, property) {
+      if (property === 'list') return async (options: { prefix?: string }) => {
+        if (options.prefix?.startsWith('public~org~')) throw new Error('injected org KV failure')
+        return await target.list(options)
+      }
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  await assert.rejects(
+    drainPublicResourceCacheInvalidations(db, failingKv, searchEnv, { now: new Date('2026-09-29T04:30:00.000Z') }),
+    /injected org KV failure/,
+  )
+  assert.equal(await kv.get('public~changed~v4~page'), null)
+  const rows = await db.prepare('SELECT id, status, attempt_count FROM public_resource_cache_invalidations ORDER BY id')
+    .all<{ id: string; status: string; attempt_count: number }>()
+  assert.deepEqual(rows.results, [
+    { id: 'first', status: 'pending', attempt_count: 1 },
+    { id: 'second', status: 'processed', attempt_count: 1 },
+  ])
+})
+
+test('simultaneous drains cannot sync one organization out of order', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await insertInvalidation(db, {
+    id: 'first', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
+  })
+  let releaseFirst!: () => void
+  let signalFirst!: () => void
+  const firstEntered = new Promise<void>(resolve => { signalFirst = resolve })
+  const firstMayFinish = new Promise<void>(resolve => { releaseFirst = resolve })
+  let providerReads = 0
+  const env: OrganizationChangeDrainEnv = {
+    ...searchEnv,
+    AI_SEARCH: {
+      get: () => ({ items: {
+        list: async () => {
+          providerReads += 1
+          if (providerReads === 1) {
+            signalFirst()
+            await firstMayFinish
+          }
+          return { result: [], result_info: { per_page: 50, total_count: 0 } }
+        },
+        upload: async () => ({}),
+        delete: async () => ({}),
+      } }),
+    } as unknown as NonNullable<OrganizationChangeDrainEnv['AI_SEARCH']>,
+  }
+  const now = new Date('2026-09-29T04:30:00.000Z')
+  const first = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now })
+  try {
+    await firstEntered
+    await insertInvalidation(db, {
+      id: 'second', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:01:00.000Z',
+    })
+    await assert.rejects(
+      drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now }),
+      /processing cache or search index work remains|pending cache or search index work remains/,
+    )
+    assert.equal(providerReads, 1)
+    assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'second'").first(),
+      { status: 'pending', attempt_count: 0 })
+  } finally {
+    releaseFirst()
+  }
+  await assert.rejects(first, /pending cache or search index work remains/)
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now }), 1)
+  assert.equal(providerReads, 2)
 })

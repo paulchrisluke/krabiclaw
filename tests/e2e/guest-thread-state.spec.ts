@@ -7,7 +7,7 @@ import type {
   GuestThreadListItemViewModel,
 } from '../../server/domain/guest-threads/types'
 import { loginAs } from './helpers/auth'
-import { devLoginHeaders, potteryHouseTestExtraHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
+import { E2E_POTTERY_ORGANIZATION_ID, devLoginHeaders, potteryHouseTestExtraHeaders, tenantTestExtraHeaders, testBaseUrl } from './test-env'
 
 interface NotificationView {
   id: string
@@ -33,7 +33,7 @@ interface DeliveryList {
 }
 
 const baseURL = testBaseUrl()
-const organizationId = 'org-user-pottery-house'
+const organizationId = E2E_POTTERY_ORGANIZATION_ID
 const ownerId = 'user-e2e-pottery-owner'
 const secondOwnerId = 'user-e2e-pottery-location-owner'
 const foreignOwnerId = 'user-e2e-kikuzuki-owner'
@@ -196,13 +196,13 @@ test('guest thread state stays source-owned, per-user, tenant-isolated, and idem
     expect(secondOwnerListBefore.threads).toHaveLength(1)
     const threadId = ownerListBefore.threads[0]!.id
     const organizationList = await owner.get('/api/dashboard/guest-threads', {
-      params: { org: 'org-user-pottery-house', type: 'contact' },
+      params: { org: organizationId, type: 'contact' },
     })
     await expectStatus(organizationList, 200)
     expect((await organizationList.json() as { threads: GuestThreadListItemViewModel[] }).threads.filter(thread => thread.guestName === guestName))
       .toMatchObject([{ id: threadId }])
     await expectStatus(await foreignOwner.get('/api/dashboard/guest-threads', {
-      params: { org: 'org-user-pottery-house', type: 'contact' },
+      params: { org: organizationId, type: 'contact' },
     }), 404)
     expect(secondOwnerListBefore.threads[0]!.id).toBe(threadId)
     expect(ownerListBefore.threads[0]).toMatchObject({ guestName, submissionType: 'contact', unread: true })

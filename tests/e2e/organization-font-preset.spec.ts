@@ -3,7 +3,7 @@ import { expect, test, type APIResponse, type Browser } from '@playwright/test'
 import { openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders } from './helpers'
 import { loginAs } from './helpers/auth'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
-import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
+import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
 type Metrics = { lcp: number; cls: number; fontBytes: number; fontRequests: number; lcpElement: string }
 
@@ -138,7 +138,7 @@ function phase(name: string) {
 // [font-phase] markers.
 test('Mali saves through Brand, renders before hydration, and stays within the cold-mobile regression budget', async ({ browser, playwright }, testInfo) => {
   test.setTimeout(600_000)
-  const organizationId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
+  const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
@@ -168,7 +168,7 @@ test('Mali saves through Brand, renders before hydration, and stays within the c
   try {
     await patch({ font_preset: 'default', brand_color: '' })
     const cms = await dashboard.newPage()
-    const brandPath = `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/brand/font`
+    const brandPath = `${baseURL}/dashboard/${organizationId}/brand/font`
     // The deployed dashboard DOES serve the Zaraz consent modal, whose
     // .cf_modal_container overlay intercepts pointer events until it is dismissed.
     // openTenantPage accepts it; plain goto left every click on this page blocked

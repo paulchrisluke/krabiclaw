@@ -1,7 +1,6 @@
 import { HTTPError, type H3Event } from 'nitro'
 import { setHeader } from 'nitro/h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
-import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { resolvePublicBlawbyDocumentOrThrow } from '~/server/utils/professional-services'
 import {
   buildPublicBlawbyDocumentCacheKey,
@@ -27,15 +26,6 @@ export interface PublicBlawbyDocumentLoadOptions {
   locale?: string
   mutateResponseHeaders?: boolean
   signal?: AbortSignal
-}
-
-async function trackBackgroundWork(event: H3Event, operation: Promise<void>) {
-  const waitUntil = getCloudflareWaitUntil(event)
-  if (waitUntil) {
-    waitUntil(operation)
-    return
-  }
-  await operation
 }
 
 export async function loadPublicBlawbyDocument(
@@ -80,20 +70,8 @@ export async function loadPublicBlawbyDocument(
         if (mutateResponseHeaders) setHeader(event, 'x-bootstrap-cache', 'HIT')
         return parsed
       } catch (error) {
-        console.warn('[public-resource-cache] corrupt Blawby document entry', {
-          organizationId,
-          recipe,
-          slug,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        await trackBackgroundWork(event, cache.delete(cacheKey).catch((deleteError: unknown) => {
-          console.warn('[public-resource-cache] corrupt Blawby document deletion failed', {
-            organizationId,
-            recipe,
-            slug,
-            error: String(deleteError),
-          })
-        }))
+        await cache.delete(cacheKey)
+        throw error
       }
     }
     if (mutateResponseHeaders) setHeader(event, 'x-bootstrap-cache', 'MISS')
@@ -107,11 +85,7 @@ export async function loadPublicBlawbyDocument(
   options.signal?.throwIfAborted()
 
   if (useCache && cache) {
-    await trackBackgroundWork(
-      event,
-      putPublicResourceCache(cache, cacheKey, JSON.stringify(payload))
-        .catch(error => console.warn('[public-resource-cache] Blawby document put failed:', String(error))),
-    )
+    await putPublicResourceCache(cache, cacheKey, JSON.stringify(payload))
   }
   return payload
 }

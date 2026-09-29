@@ -365,13 +365,12 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const kv = env.ORGANIZATION_CACHE;
       const db = env.db ?? (env.DB ? createDb(env.DB) : null);
       if (!kv || !db) throw new Error("ORGANIZATION_CACHE and DB bindings are required to drain site changes after a tenant MCP write");
-      // The drain outlives the response. Its failure is a Worker exception in
-      // the logs, not a warning: the queue rows keep their own failure state
-      // and the scheduled task retries them.
-      const drained = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 });
-      const waitUntil = getCloudflareWaitUntil(event);
-      if (waitUntil) waitUntil(drained);
-      else await drained;
+      try {
+        await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 });
+      } catch (drainError) {
+        const reason = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the site's cache or search index was not updated: ${describeErrorForTelemetry(drainError)}`;
+        purgeFailure = purgeFailure ? `${purgeFailure}; ${reason}` : reason;
+      }
     }
 
     logMcpEventDetached(event, cfEnv.DB, {
