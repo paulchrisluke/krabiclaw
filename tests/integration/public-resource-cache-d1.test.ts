@@ -4,6 +4,8 @@ import test, { type TestContext } from 'node:test'
 import { Miniflare } from 'miniflare'
 
 import { drainPublicResourceCacheInvalidations, purgePublicResourceCacheNow, type OrganizationChangeDrainEnv } from '../../server/utils/public-resource-cache.ts'
+import { buildOrganizationDocuments, expandDocumentsForSurfaces, indexItemPayload, syncOrganizationSearchIndex } from '../../server/utils/public-search.ts'
+import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const searchEnv: OrganizationChangeDrainEnv = {
   NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
@@ -73,6 +75,40 @@ async function insertInvalidation(
     VALUES (?, 'org', 'test', ?, ?, ?, ?, ?)
   `).bind(input.id, input.status, input.attemptCount, input.claimedAt ?? null, input.processedAt ?? null, input.createdAt).run()
 }
+
+test('a scoped sync returns current pending work after its queued item finishes indexing', async (t) => {
+  const { db } = await migratedCacheD1(t)
+  await db.prepare("INSERT INTO business_locations (id, organization_id, slug, title) VALUES ('location', 'org', 'location', 'Location')").run()
+  const records = expandDocumentsForSurfaces(await buildOrganizationDocuments(db, 'org'))
+  assert.equal(records.length, 1)
+  const record = records[0]!
+  let lists = 0
+  let uploads = 0
+  const env = {
+    AI_SEARCH_INSTANCE_ID: 'test-index',
+    AI_SEARCH: { get: () => ({
+      stats: async () => { throw new Error('instance-wide status must not block this organization') },
+      items: {
+        list: async () => {
+          lists += 1
+          return {
+            result: [{ id: 'item', key: record.key, status: lists === 1 ? 'queued' : 'completed',
+              metadata: lists === 1 ? null : { content_hash: indexItemPayload(record).contentHash } }],
+            result_info: { per_page: 50, total_count: 1 },
+          }
+        },
+        upload: async () => { uploads += 1 },
+        delete: async () => { throw new Error('the current item must not be deleted') },
+      },
+    }) },
+  } as unknown as CloudflareEnv
+
+  assert.deepEqual(await syncOrganizationSearchIndex(env, db, 'org'), {
+    indexed: 0, unchanged: 1, pending: 0, deleted: 0, indexingUnconfirmedReason: null,
+  })
+  assert.equal(lists, 3)
+  assert.equal(uploads, 0)
+})
 
 test('cache invalidation drain enforces the durable work lifecycle', async (t) => {
   const { db, kv } = await migratedCacheD1(t)
