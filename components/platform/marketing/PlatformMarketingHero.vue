@@ -397,18 +397,6 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   background: #070b13;
 }
 
-.kc-parallax-hero::after {
-  position: absolute;
-  z-index: 19;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 15%;
-  background: linear-gradient(to bottom, transparent, #070b13 92%);
-  content: "";
-  pointer-events: none;
-}
-
 .kc-parallax-hero__art {
   position: absolute;
   inset: 0;
@@ -482,17 +470,18 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   z-index: 30;
   margin-top: -1px;
   overflow: hidden;
-  background: #070b13;
-  color: white;
+  background: var(--ui-bg);
+  color: var(--ui-text);
 }
 
-.kc-parallax-intro::after {
+.kc-parallax-intro::before {
   position: absolute;
+  z-index: 0;
+  top: 0;
   right: 0;
-  bottom: 0;
   left: 0;
-  height: clamp(5rem, 11vw, 9rem);
-  background: linear-gradient(to bottom, transparent, var(--ui-bg));
+  height: clamp(7rem, 16vw, 12rem);
+  background: linear-gradient(to bottom, #070b13 0%, rgb(7 11 19 / 82%) 30%, transparent 100%);
   content: "";
   pointer-events: none;
 }
@@ -503,7 +492,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   display: flex;
   width: min(92vw, 860px);
   margin: 0 auto;
-  padding: clamp(4.5rem, 8vw, 7rem) 0 clamp(9rem, 14vw, 12rem);
+  padding: clamp(8rem, 15vw, 11rem) 0 clamp(5rem, 9vw, 7rem);
   flex-direction: column;
   align-items: center;
   gap: 1.4rem;
@@ -514,7 +503,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  color: rgb(255 255 255 / 75%);
+  color: var(--ui-text-dimmed);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -525,7 +514,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 .kc-parallax-intro__title {
   margin: 0;
   max-width: 16ch;
-  color: white;
+  color: var(--ui-text-highlighted);
   font-size: clamp(2.4rem, 6vw, 4.75rem);
   font-weight: 700;
   letter-spacing: -0.045em;
@@ -540,7 +529,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 .kc-parallax-intro__subtitle {
   margin: 0;
   max-width: 52rem;
-  color: rgb(255 255 255 / 78%);
+  color: var(--ui-text-muted);
   font-size: clamp(1rem, 1.8vw, 1.15rem);
   line-height: 1.75;
   text-wrap: pretty;
@@ -555,12 +544,8 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 }
 
 .kc-parallax-intro__secondary {
-  border-color: rgb(255 255 255 / 36%);
-  color: white;
-}
-
-.kc-parallax-intro__secondary:hover {
-  background: rgb(255 255 255 / 8%);
+  border-color: var(--ui-border);
+  color: var(--ui-text);
 }
 
 @media (min-width: 376px) {
@@ -590,7 +575,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 @media (max-width: 599px) {
   .kc-parallax-intro__inner {
     width: min(88vw, 34rem);
-    padding-top: 4rem;
+    padding-top: 8rem;
   }
 
   .kc-parallax-intro__title {
