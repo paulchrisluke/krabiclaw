@@ -18,7 +18,12 @@ import '~/assets/css/platform-entry.css'
 const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 
 useHead(() => ({
-  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
+  link: [
+    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
+    { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&display=swap' },
+    { rel: 'stylesheet', href: platformStylesheetHref },
+  ],
 }))
 
 // Krabiclaw's blog and docs pages name their collection; the header says which.
