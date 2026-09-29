@@ -13,3 +13,10 @@ export const ZARAZ_ANALYTICS_PURPOSE = {
 }
 
 export const ZARAZ_CONSENT_MODAL_INTRO_HTML = 'You can choose whether this site uses Google Analytics. Krabiclaw also measures site usage with its own first-party analytics, which runs separately from this choice. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
+
+/**
+ * The event name the collector sends to Zaraz once the native pageview is accepted. The GA4
+ * pageview action fires on a trigger that matches exactly this event and on nothing else, so Google
+ * Analytics never records a page view the native record did not accept.
+ */
+export const NATIVE_PAGEVIEW_ZARAZ_EVENT = 'krabiclaw_native_pageview'

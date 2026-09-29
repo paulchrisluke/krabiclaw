@@ -1801,6 +1801,9 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	stripe_subscription_id: text(),
 	action: text().notNull(),
+	// The visitor's native attribution snapshot when checkout began (JSON), so revenue
+	// recorded later by a webhook can carry the campaign that produced it.
+	attribution_json: text(),
 	client_id: text(),
 	session_id: text(),
 	session_captured_at: integer(),
@@ -1816,6 +1819,7 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	check("stripe_ga4_subscription_intents_attribution_check", sql`attribution_json IS NULL OR (json_valid(attribution_json) AND json_type(attribution_json) IS 'object')`),
 	check("stripe_ga4_subscription_intents_instants_check", sql`(lifecycle_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lifecycle_sent_at, '+0 days') IS lifecycle_sent_at) AND (consumed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', consumed_at, '+0 days') IS consumed_at) AND (expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+0 days') IS expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	index("stripe_ga4_subscription_intents_subscription_idx").on(table.stripe_subscription_id, table.status, table.created_at),
 	index("stripe_ga4_subscription_intents_organization_idx").on(table.organization_id, table.status, table.created_at),
@@ -2187,7 +2191,10 @@ export const public_resource_cache_invalidations = sqliteTable("public_resource_
 
 export const analytics_events = sqliteTable("analytics_events", {
   id: text().primaryKey(),
-  kind: text({ enum: ["pageview", "conversion"] }).notNull(),
+  // pageview: a page was visited. conversion: a business outcome (a persisted submission, signup,
+  // onboarding, verified payment or refund). interaction: something a visitor or user did that is
+  // not an outcome (a handoff click, a product view, a checkout start, a product-usage event).
+  kind: text({ enum: ["pageview", "conversion", "interaction"] }).notNull(),
   organization_id: text().references(() => organization.id, { onDelete: "cascade" }),
   location_id: text().references(() => business_locations.id, { onDelete: "set null" }),
   session_id: text(),
@@ -2195,22 +2202,32 @@ export const analytics_events = sqliteTable("analytics_events", {
   page_path: text(),
   duration_seconds: integer(),
   payload_json: text().notNull(),
+  // When the event happened, as observed by the browser and bounded by the collector (a deferred
+  // delivery keeps its own time). Server outcomes happen when they are recorded.
   created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+  // When the server accepted the event. Ingestion order: a late event has an old created_at and a
+  // new received_at, so a paginated read bounded by received_at never skips or repeats it.
+  received_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, table => [
-	check("analytics_events_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
+	check("analytics_events_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (received_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', received_at, '+0 days') IS received_at)`),
   check("analytics_events_payload_check", sql`json_valid(payload_json) AND json_type(payload_json) IS 'object'`),
-  check("analytics_events_shape_check", sql`(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND session_id IS NOT NULL AND visitor_id IS NOT NULL AND duration_seconds IS NULL
+  // A conversion with a browser session carries that session's attribution snapshot. One with no
+  // session (a server outcome) carries either a snapshot captured earlier through the actual
+  // checkout relationship, or none. A server event never borrows a browser session.
+  check("analytics_events_shape_check", sql`(kind = 'pageview' AND page_path IS NOT NULL) OR (kind IN ('conversion', 'interaction') AND organization_id IS NOT NULL AND duration_seconds IS NULL
     AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64
     AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'
-    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')
-    AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
-    AND json_type(payload_json, '$.attributed_at') IS 'text')`),
+    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed', 'viewed', 'started', 'occurred')
+    AND ((session_id IS NULL) = (visitor_id IS NULL))
+    AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')
+      OR (json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))`),
   index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
+  index("analytics_events_org_received_idx").on(table.organization_id, table.received_at),
   index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),
   index("analytics_events_org_visitor_idx").on(table.organization_id, table.kind, table.visitor_id),
   index("analytics_events_conversion_name_idx").on(table.kind, sql`(payload_json ->> '$.event_name')`, table.created_at),
-  index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion'`),
-  uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')`),
+  index("analytics_events_conversion_entity_idx").on(table.organization_id, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind IN ('conversion', 'interaction')`),
+  uniqueIndex("analytics_events_conversion_entity_unique").on(table.organization_id, sql`(payload_json ->> '$.event_name')`, sql`(payload_json ->> '$.entity_type')`, sql`(payload_json ->> '$.entity_id')`).where(sql`kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit', 'sign_up', 'onboarding_complete', 'purchase', 'refund')`),
 ]);
 
 export const analytics_summaries = sqliteTable("analytics_summaries", {

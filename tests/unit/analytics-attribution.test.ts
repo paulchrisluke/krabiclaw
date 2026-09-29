@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   ATTRIBUTION_KEYS,
   normalizeReferrerHost,
+  observeAttribution,
   readAttributionParams,
   resolveAttributionTouch,
   sanitizeAttributionParams,
@@ -90,4 +91,25 @@ test('external referrers create a hostname-only touch while direct and internal 
     fbclid: null,
     msclkid: null,
   })
+})
+
+test('partial campaign parameters are kept, never discarded for lack of a source', () => {
+  assert.deepEqual(resolveAttributionTouch({ utm_campaign: 'A', utm_content: 'image-1' }, null, []), {
+    source: '(not set)', medium: '(none)', campaign: 'A', term: null, content: 'image-1', referrerHost: null,
+    gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null,
+  })
+  assert.equal(resolveAttributionTouch({ utm_medium: 'email' }, null, [])?.source, '(not set)')
+  // A campaign next to a click ID keeps both: the click ID names the source, the UTMs the campaign.
+  const mixed = resolveAttributionTouch({ utm_campaign: 'B', fbclid: 'f' }, null, [])
+  assert.deepEqual([mixed?.source, mixed?.medium, mixed?.campaign, mixed?.fbclid], ['Facebook', 'paid', 'B', 'f'])
+})
+
+test('observations are exactly what arrived: partial, referrer-only, click-only, or nothing', () => {
+  assert.deepEqual(observeAttribution({ utm_campaign: 'A', utm_content: 'image-1' }, null), {
+    source: null, medium: null, campaign: 'A', term: null, content: 'image-1', referrerHost: null,
+    gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null,
+  })
+  assert.equal(observeAttribution({}, 'News.Example')?.referrerHost, 'news.example')
+  assert.equal(observeAttribution({ gclid: 'g' }, null)?.source, null)
+  assert.equal(observeAttribution({}, null), null)
 })

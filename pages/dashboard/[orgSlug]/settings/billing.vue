@@ -135,7 +135,8 @@ onMounted(async () => {
   const { success, plan, canceled, ...restQuery } = route.query
 
   if (success === 'true') {
-    trackSubscriptionCheckoutSuccess(typeof plan === 'string' ? plan : undefined)
+    const organizationId = dashboard.organization.value?.id
+    if (organizationId) trackSubscriptionCheckoutSuccess(organizationId, typeof plan === 'string' ? plan : undefined)
     // The plan the guest paid for is in the query; the refreshed billing row says what Stripe has confirmed.
     successMessage.value = typeof plan === 'string' && billing.value?.plan === plan
       ? 'Payment confirmed. Your plan has been updated.'

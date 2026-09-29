@@ -78,6 +78,39 @@ export function normalizeReferrerHost(referrer: string | null | undefined): stri
   }
 }
 
+/**
+ * What a request actually carried: the sanitized allowlisted parameters and the external referrer
+ * host, exactly as observed, with nothing defaulted, classified or inherited. A partial input
+ * (a campaign with no source, a referrer only, click IDs only) is kept as it arrived. Null when the
+ * request carried none of them. This is the fact an event stores; `AttributionTouch` is the
+ * derived last-touch classification computed from it.
+ */
+export interface ObservedAttribution {
+  source: string | null
+  medium: string | null
+  campaign: string | null
+  term: string | null
+  content: string | null
+  referrerHost: string | null
+  gclid: string | null
+  gbraid: string | null
+  wbraid: string | null
+  fbclid: string | null
+  msclkid: string | null
+}
+
+export function observeAttribution(params: AttributionParams, referrerHost: string | null): ObservedAttribution | null {
+  const observed: ObservedAttribution = {
+    source: params.utm_source ?? null, medium: params.utm_medium ?? null, campaign: params.utm_campaign ?? null,
+    term: params.utm_term ?? null, content: params.utm_content ?? null, referrerHost: referrerHost?.toLowerCase() ?? null,
+    gclid: params.gclid ?? null, gbraid: params.gbraid ?? null, wbraid: params.wbraid ?? null,
+    fbclid: params.fbclid ?? null, msclkid: params.msclkid ?? null,
+  }
+  return Object.values(observed).some(value => value !== null) ? observed : null
+}
+
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'] as const
+
 export function resolveAttributionTouch(
   params: AttributionParams,
   referrerHost: string | null,
@@ -90,10 +123,17 @@ export function resolveAttributionTouch(
     fbclid: params.fbclid ?? null,
     msclkid: params.msclkid ?? null,
   }
-  if (params.utm_source) {
+  let paidSource: string | null = null
+  if (params.gclid || params.gbraid || params.wbraid) paidSource = 'Google'
+  else if (params.fbclid) paidSource = 'Facebook'
+  else if (params.msclkid) paidSource = 'Microsoft'
+
+  // Any campaign parameter makes this a campaign touch, and every one that arrived is kept: a
+  // campaign or content without a source is a touch with an unknown source, not a discarded input.
+  if (UTM_KEYS.some(key => params[key])) {
     return {
-      source: params.utm_source,
-      medium: params.utm_medium ?? '(none)',
+      source: params.utm_source ?? paidSource ?? '(not set)',
+      medium: params.utm_medium ?? (!params.utm_source && paidSource ? 'paid' : '(none)'),
       campaign: params.utm_campaign ?? null,
       term: params.utm_term ?? null,
       content: params.utm_content ?? null,
@@ -101,11 +141,6 @@ export function resolveAttributionTouch(
       ...clickIds,
     }
   }
-
-  let paidSource: string | null = null
-  if (params.gclid || params.gbraid || params.wbraid) paidSource = 'Google'
-  else if (params.fbclid) paidSource = 'Facebook'
-  else if (params.msclkid) paidSource = 'Microsoft'
   if (paidSource) {
     return {
       source: paidSource,

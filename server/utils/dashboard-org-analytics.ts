@@ -4,6 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertRoleAllows } from '~/server/utils/member-access'
 import { getAnalyticsReport, type AnalyticsReport } from '~/server/utils/analytics-report'
+import { AnalyticsQueryError, queryOrganizationAnalytics, type AnalyticsQueryInput } from '~/server/utils/analytics-query'
 import { loadOnboardingChecklist } from '~/server/utils/onboarding-checklist'
 import { queryAll, type DbClient } from '~/server/db'
 
@@ -140,4 +141,26 @@ export async function loadDashboardOrganizationAnalytics(
   ])
 
   return { organizationId: organization.id, report, reviews, setup }
+}
+
+/**
+ * The dashboard's adapter over the one native analytics query. It authorizes the caller and
+ * resolves the organization; the query itself is the same function the MCP tool calls.
+ */
+export async function loadDashboardOrganizationAnalyticsQuery(event: H3Event, request: Omit<AnalyticsQueryInput, 'organizationId' | 'cursorSecret' | 'now'>) {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, statusMessage: 'Authentication required' })
+  const context = await getDashboardContext(event, {})
+  const organization = context.organization
+  if (!organization) throw new HTTPError({ statusCode: 403, statusMessage: 'Organization access required' })
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { analytics: ['read'] } })
+  try {
+    return await queryOrganizationAnalytics(db, { ...request, organizationId: organization.id, cursorSecret: env.BETTER_AUTH_SECRET })
+  } catch (error) {
+    if (error instanceof AnalyticsQueryError) throw new HTTPError({ statusCode: 400, statusMessage: error.message })
+    throw error
+  }
 }

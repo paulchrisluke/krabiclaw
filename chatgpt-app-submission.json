@@ -656,6 +656,18 @@
         "destructive_justification": "Creates or overwrites translated resource values and supplied translated content. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "query_organization_analytics": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads individual native analytics events, retained sessions and grouped breakdowns from the selected organization's stored analytics without modifying them.",
+        "open_world_justification": "Reads individual native analytics events, retained sessions and grouped breakdowns from the selected organization's stored analytics without modifying them. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads individual native analytics events, retained sessions and grouped breakdowns from the selected organization's stored analytics without modifying them. Existing content is not deleted or overwritten."
+      }
+    },
     "reconcile_post_publication": {
       "annotations": {
         "readOnlyHint": false,

@@ -220,12 +220,29 @@ function mapLocalization(row: ResourceLocalizationRow): ResourceLocalizationReco
   return { ...rest, values: parsed as LocalizedValues }
 }
 
+/** The published, active Product a location-scoped route names, with the location that serves it. */
+export async function findPublishedProductAtRoute(
+  db: DbClient,
+  organizationId: string,
+  route: { locationSlug: string; productSlug: string },
+): Promise<{ id: string; location_id: string } | null> {
+  return await queryFirst<{ id: string; location_id: string }>(db, `
+    SELECT p.id, l.id AS location_id FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
+        AND pub.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
+       AND pl.published = 1 AND pl.active = 1
+      JOIN business_locations l ON l.id = pl.location_id AND l.organization_id = ? AND l.slug = ?
+     WHERE p.organization_id = ? AND p.slug = ? AND p.active = 1 LIMIT 1
+  `, [organizationId, route.locationSlug, organizationId, route.productSlug]) ?? null
+}
+
 /**
  * The location-scoped Product route this path names, or null when the path is
  * not one. The family segment follows the vertical, exactly as the English
  * route does.
  */
-function parseProductRouteSegments(path: string, vertical: string): { locationSlug: string; productSlug: string; sourcePath: string } | null {
+export function parseProductRouteSegments(path: string, vertical: string): { locationSlug: string; productSlug: string; sourcePath: string } | null {
   const segments = path.split('/').filter(Boolean)
   const family = vertical === 'restaurant' ? 'menu' : 'products'
   if (segments.length !== 4 || segments[0] !== 'locations' || segments[2] !== family) return null
@@ -235,7 +252,7 @@ function parseProductRouteSegments(path: string, vertical: string): { locationSl
   return { locationSlug, productSlug, sourcePath: `/locations/${locationSlug}/${family}/${productSlug}` }
 }
 
-async function getOrganizationVertical(db: DbClient, organizationId: string): Promise<string> {
+export async function getOrganizationVertical(db: DbClient, organizationId: string): Promise<string> {
   const organization = await queryFirst<{ vertical: string }>(db, 'SELECT vertical FROM organization WHERE id = ? LIMIT 1', [organizationId])
   if (!organization) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Organization was not found', { organization_id: organizationId })
   return organization.vertical
@@ -353,15 +370,7 @@ export async function resolveLocalizedPublicRoute(
   const productRoute = parseProductRouteSegments(routePath.slice(locale.length + 1),
     await getOrganizationVertical(db, organizationId))
   if (productRoute) {
-    const product = await queryFirst<{ id: string }>(db, `
-      SELECT p.id FROM products p
-        JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-          AND pub.published = 1
-        JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
-         AND pl.published = 1 AND pl.active = 1
-        JOIN business_locations l ON l.id = pl.location_id AND l.organization_id = ? AND l.slug = ?
-       WHERE p.organization_id = ? AND p.slug = ? AND p.active = 1 LIMIT 1
-    `, [ organizationId, productRoute.locationSlug, organizationId, productRoute.productSlug])
+    const product = await findPublishedProductAtRoute(db, organizationId, productRoute)
     if (!product) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'Localized route was not found', { locale, route_path: routePath })
     const localized = await queryFirst<ResourceLocalizationRow>(db, `
       SELECT id, organization_id, resource_type, resource_id, locale, values_json, route_path,

@@ -1,5 +1,9 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import type { StripeGa4IntentAction } from '~/shared/stripe-ga4'
+import type { AttributionTouch } from '~/utils/analytics-attribution'
+
+/** The visitor's native attribution when checkout began. */
+export interface CheckoutAttribution { touch: AttributionTouch; attributedAt: string }
 
 export interface StripeGa4Intent {
   id: string
@@ -30,6 +34,7 @@ export interface CreateStripeGa4IntentInput {
   clientId?: string | null
   sessionId?: string | null
   sessionCapturedAt?: number | null
+  attribution?: CheckoutAttribution | null
   previousPriceId?: string | null
   newPriceId?: string | null
   effectiveTiming?: 'immediate' | 'period_end'
@@ -70,6 +75,7 @@ export async function recordStripeGa4Intent(
     clientId,
     sessionId,
     sessionCapturedAt,
+    attribution: input.attribution ?? null,
     previousPriceId: normalizeOptional(input.previousPriceId),
     newPriceId: normalizeOptional(input.newPriceId),
     effectiveTiming,
@@ -85,9 +91,9 @@ export async function recordStripeGa4Intent(
   await execute(db, `
     INSERT INTO stripe_ga4_subscription_intents
       (id, organization_id, user_id, stripe_subscription_id, action,
-       client_id, session_id, session_captured_at, previous_price_id, new_price_id,
+       client_id, session_id, session_captured_at, attribution_json, previous_price_id, new_price_id,
        effective_timing, source, status, expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     row.id,
     row.organizationId,
@@ -97,6 +103,7 @@ export async function recordStripeGa4Intent(
     row.clientId,
     row.sessionId,
     row.sessionCapturedAt,
+    row.attribution ? JSON.stringify({ touch: row.attribution.touch, attributedAt: row.attribution.attributedAt }) : null,
     row.previousPriceId,
     row.newPriceId,
     row.effectiveTiming,
@@ -135,26 +142,7 @@ function mapIntent(row: StripeGa4IntentRow | null): StripeGa4Intent | null {
   }
 }
 
-interface StripeGa4IntentRow {
-  id: string
-  organizationId: string
-  userId: string
-  stripeSubscriptionId: string | null
-  action: StripeGa4IntentAction
-  clientId: string | null
-  sessionId: string | null
-  sessionCapturedAt: number | null
-  previousPriceId: string | null
-  newPriceId: string | null
-  effectiveTiming: 'immediate' | 'period_end'
-  source: string
-  status: 'pending' | 'consumed' | 'expired'
-  lifecycleSentAt: string | null
-  consumedAt: string | null
-  consumedEventId: string | null
-  expiresAt: string
-  createdAt: string
-}
+type StripeGa4IntentRow = StripeGa4Intent
 
 const INTENT_SELECT = `
   SELECT id,
@@ -268,4 +256,23 @@ export async function expireStripeGa4Intents(
     DELETE FROM stripe_ga4_subscription_intents
      WHERE status = 'consumed' AND consumed_at IS NOT NULL AND consumed_at < ?
   `, [retentionCutoff])
+}
+
+/**
+ * The attribution the checkout observed, found through the exact subscription and the kind of
+ * checkout that produced the payment, whatever the intent's status or expiry: a first payment after
+ * a trial or delayed collection arrives long after the seven-day pending window.
+ */
+export async function findStripeGa4CheckoutAttribution(
+  db: DbClient,
+  stripeSubscriptionId: string,
+  purchaseType: string,
+): Promise<CheckoutAttribution | null> {
+  const action = purchaseType === 'initial_subscription' || purchaseType === 'resubscription' ? 'initial_subscription'
+    : purchaseType === 'upgrade' || purchaseType === 'downgrade' ? purchaseType
+      : null
+  if (!action) return null
+  const row = await queryFirst<{ attribution: string | null }>(db, `SELECT attribution_json AS attribution FROM stripe_ga4_subscription_intents
+    WHERE stripe_subscription_id = ? AND action = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [stripeSubscriptionId, action])
+  return row?.attribution != null ? JSON.parse(row.attribution) as CheckoutAttribution : null
 }

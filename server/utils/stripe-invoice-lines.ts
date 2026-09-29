@@ -76,11 +76,6 @@ export function invoiceLineQuantity(line: StripeInvoiceLine): number {
   return invoiceLineExactQuantity(line) ?? 1
 }
 
-export function invoiceLineUnitAmount(line: StripeInvoiceLine): number | null {
-  if (typeof line.amount !== 'number' || line.amount <= 0) return null
-  return line.amount / invoiceLineQuantity(line)
-}
-
 export async function loadStripeInvoiceLines(
   stripe: Stripe,
   invoice: Stripe.Invoice & {

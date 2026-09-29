@@ -60,7 +60,6 @@ useSocialMetadata({
 })
 
 const route = useRoute()
-const { trackSignUp } = useAnalytics()
 const redirect = computed(() => validatedInternalPath(route.query.redirect))
 const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: redirect.value }))
 const loginUrl = computed(() => redirect.value ? { path: '/login', query: { redirect: redirect.value } } : '/login')
@@ -89,11 +88,9 @@ if (isAuthenticated.value) await navigateTo(postLoginUrl.value, { external: true
 
 async function googleSignup() {
   await signInWithGoogle(postLoginUrl.value)
-  if (!error.value) trackSignUp('oauth_google')
 }
 
 async function emailSignupComplete(email: string) {
-  trackSignUp('email')
   pendingEmail.value = email
 }
 

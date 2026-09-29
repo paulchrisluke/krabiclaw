@@ -1,13 +1,17 @@
+import { boundedOccurrence } from '~/server/utils/pageview-tracking'
 import { getRouterParam, readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { HOUR_MS, getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { recordOrganizationConversionEvent, type ConversionEntityType, type ConversionStage } from '~/server/utils/organization-conversions'
-import { ORGANIZATION_CONVERSION_EVENT_NAMES, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
+import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
+import { isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { defineHandler } from 'nitro'
 
-const VALID_EVENTS = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES)
+// Only public interactions arrive here; every outcome is produced by the server, and signed-in
+// product-usage events have their own authenticated endpoint.
+const VALID_EVENTS = new Set<string>(BROWSER_INTERACTION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].origin === 'public'))
 
 function destinationHost(value: string): string | null {
   try {
@@ -27,6 +31,12 @@ export default defineHandler(async (event) => {
   try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 
   const eventName = cleanString(body.event_name, 80)
+  // The interaction's own identity, chosen by the browser when it happened: the same one delivered
+  // twice is one event, two interactions are two.
+  const eventId = body.event_id === undefined ? undefined : body.event_id
+  if (eventId !== undefined && !isCanonicalEventId(eventId)) return jsonResponse({ error: 'event_id must be a UUID' }, { status: 400 })
+  const pageEventId = body.page_event_id === undefined ? null : body.page_event_id
+  if (pageEventId !== null && !isCanonicalEventId(pageEventId)) return jsonResponse({ error: 'page_event_id must be a UUID' }, { status: 400 })
   if (!VALID_EVENTS.has(eventName)) return jsonResponse({ error: 'Invalid event_name' }, { status: 400 })
   const organization = await queryFirst<{ id: string; vertical: string | null }>(db,
     `SELECT id, vertical FROM organization WHERE id = ? AND status = 'active' AND onboarding_status = 'active' LIMIT 1`, [organizationId])
@@ -46,6 +56,7 @@ export default defineHandler(async (event) => {
   let pagePath: string | null = null
   let ctaDestination: string | null = null
   let metadata: ApiRecord | null = null
+  let variantId: string | null = null
 
   if (eventName === 'consultation_cta_click') {
     if (body.stage !== 'schedule_navigation' && body.stage !== 'external_booking_handoff') return jsonResponse({ error: 'Invalid consultation stage' }, { status: 400 })
@@ -86,6 +97,26 @@ export default defineHandler(async (event) => {
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }
+  } else if (eventName === 'product_view' || eventName === 'checkout_start') {
+    stage = eventName === 'product_view' ? 'viewed' : 'started'
+    locationId = cleanString(body.location_id, 120) || null
+    entityId = cleanString(body.product_id, 120) || null
+    if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
+    // A product this site publishes, offered and on sale at a location of this site.
+    const product = await queryFirst<{ id: string }>(db, `
+      SELECT p.id FROM products p
+      JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
+      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
+      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
+      WHERE p.id = ? AND p.active = 1 LIMIT 1`, [organizationId, locationId, organizationId, entityId])
+    if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
+    entityType = 'product'; pageType = 'product'
+    const requestedVariant = cleanString(body.variant_id, 120)
+    if (requestedVariant) {
+      const variant = await queryFirst<{ id: string }>(db, 'SELECT id FROM product_variants WHERE id = ? AND product_id = ? AND organization_id = ? AND active = 1 LIMIT 1', [requestedVariant, product.id, organizationId])
+      if (!variant) return jsonResponse({ error: 'Variant not found' }, { status: 404 })
+      variantId = variant.id
+    }
   } else if (eventName === 'link_click') {
     stage = 'external_handoff'
     entityId = cleanString(body.link_item_id, 120) || null
@@ -137,9 +168,11 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })
   }
 
-  const result = await recordOrganizationConversionEvent(db, event, {
+  const result = await recordOrganizationConversionEvent(db, event.req, {
     organizationId: organization.id, eventName: eventName as OrganizationConversionEventName,
-    stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata,
+    stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata, surface: 'website',
+    id: eventId, originEventId: pageEventId, variantId,
+    occurredAt: boundedOccurrence(body.occurred_at, new Date().toISOString()),
   })
-  return jsonResponse({ success: true, id: result.id }, { status: 201 })
+  return jsonResponse({ success: true, id: result.id, recorded: result.created }, { status: result.created ? 201 : 200 })
 })

@@ -132,6 +132,7 @@ import DashboardMenuSlideover from '~/lib/components/workspace/dashboard/Dashboa
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
+import { reconcileAnalyticsConsent } from '~/composables/useAnalyticsConsentReconciliation'
 import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
@@ -183,6 +184,8 @@ const isPhoneWidth = useMediaQuery('(max-width: 767px)')
 const nuxtApp = useNuxtApp()
 let unhookSearchToggle: (() => void) | null = null
 onMounted(() => {
+  // Billing resumes signed in: honor the analytics choice made while signed out.
+  void reconcileAnalyticsConsent().catch(error => nuxtApp.callHook('vue:error', error, null, 'analytics-consent-reconciliation'))
   unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
 })
 onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })

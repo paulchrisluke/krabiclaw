@@ -3,10 +3,12 @@ export const STRIPE_GA4_PURCHASE_TYPES = [
   'subscription_renewal',
   'upgrade',
   'downgrade',
+  'plan_change',
+  'resubscription',
 ] as const
 
 export type StripeGa4PurchaseType = typeof STRIPE_GA4_PURCHASE_TYPES[number]
-export type StripeGa4IntentAction = Exclude<StripeGa4PurchaseType, 'subscription_renewal'>
+export type StripeGa4IntentAction = Exclude<StripeGa4PurchaseType, 'subscription_renewal' | 'plan_change' | 'resubscription'>
 
 export interface StripeGa4MetadataContext {
   gaClientId?: string | null
