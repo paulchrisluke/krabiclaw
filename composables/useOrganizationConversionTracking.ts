@@ -1,5 +1,6 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
+import { currentPageEventId } from '~/utils/pageview-tracking-runtime.client'
 import type { ConversionValue, OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
@@ -18,14 +19,19 @@ interface ConversionPayload {
   tier_amount?: number | null
 }
 
-function nativeConversion(organizationId: string, payload: ConversionPayload) {
-  if (!import.meta.client) return
-  void fetch(`/api/public/conversion-events`, {
+// The native record is the primary one and does not depend on Google Analytics, consent, or a GA
+// client. Each interaction carries its own identity (the same one delivered twice is one event) and
+// the pageview it happened on, which the collector believes only when it recorded that pageview
+// for this visitor. A collection that fails is reported through the application's error hook,
+// never silently dropped and never allowed to break the page.
+async function postNativeInteraction(payload: ConversionPayload & { event_id: string; page_event_id: string | null; variant_id?: string | null }) {
+  const response = await fetch(`/api/public/conversion-events`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
     keepalive: true,
-  }).catch(() => {})
+  })
+  if (!response.ok) throw new Error(`Native analytics collection was rejected (${response.status})`)
 }
 
 // The browser owns what the visitor does on the page. The name, dimensions and
@@ -47,20 +53,36 @@ function mirrorConversion(payload: ConversionPayload, value?: ConversionValue | 
   window.zaraz?.track(projection.name, projection.params)
 }
 
-// view_item and begin_checkout at the real boundaries of a product page, sent
-// through Zaraz's ecommerce API (which the zone enables and the GA4 tool maps).
-function trackEcommerce(name: 'Product Viewed' | 'Checkout Started', params: Record<string, unknown>) {
-  if (!import.meta.client) return
-  window.zaraz?.ecommerce?.(name, params)
-}
-
 export function useOrganizationConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
   const { organizationId } = useTenantOrganization()
+  const nuxtApp = useNuxtApp()
+
+  function recordNative(payload: ConversionPayload, variantId?: string | null) {
+    if (!import.meta.client || !organizationId) return
+    void postNativeInteraction({ ...payload, event_id: crypto.randomUUID(), page_event_id: currentPageEventId(), ...(variantId ? { variant_id: variantId } : {}) })
+      .catch(error => nuxtApp.callHook('vue:error', error, null, 'analytics-interaction'))
+  }
 
   function track(payload: ConversionPayload) {
-    if (!organizationId) return
-    nativeConversion(organizationId, payload)
+    recordNative(payload)
     mirrorConversion(payload)
+  }
+
+  /** The pageview a form submission came from, for the server to verify and attach. */
+  function pageEventId(): string | null {
+    return import.meta.client ? currentPageEventId() : null
+  }
+
+  // A product was viewed / a booking was started: native interactions first, then the GA4
+  // ecommerce event through Zaraz's ecommerce API. Neither is an outcome.
+  function trackProductView(productId: string, locationId: string, ecommerce: Record<string, unknown> | null) {
+    recordNative({ event_name: 'product_view', stage: 'viewed', product_id: productId, location_id: locationId, page_type: 'product' })
+    if (import.meta.client && ecommerce) window.zaraz?.ecommerce?.('Product Viewed', ecommerce)
+  }
+
+  function trackCheckoutStart(productId: string, locationId: string, ecommerce: Record<string, unknown>, variantId?: string | null) {
+    recordNative({ event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: 'product' }, variantId)
+    if (import.meta.client) window.zaraz?.ecommerce?.('Checkout Started', ecommerce)
   }
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
@@ -91,5 +113,5 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     track({ event_name: 'product_order_external_click', stage: 'external_handoff', location_id: locationId, product_id: productId, page_type: 'product', page_path: pagePath })
   }
 
-  return { track, trackEcommerce, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder }
+  return { track, pageEventId, trackProductView, trackCheckoutStart, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder }
 }

@@ -16,7 +16,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
-import { measurementOutcome, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
@@ -348,6 +348,7 @@ export function createAuth(env: CloudflareEnv) {
                 organizationId: (await getPlatformOrganization(db)).id,
                 eventName: 'sign_up', stage: 'completed', surface: 'auth',
                 entityType: 'user', entityId: user.id,
+                originEventId: readPageEventId(context?.request?.headers.get('x-analytics-page-event')),
               })
             })()])
             const measurement = measurementOutcome(result!)

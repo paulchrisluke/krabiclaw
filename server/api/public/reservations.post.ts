@@ -19,7 +19,7 @@ import { getSourceLocale } from '~/server/utils/organization-locales'
 import { ensureInteractionUser } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
-import { measurementOutcome, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -186,6 +186,7 @@ export default defineHandler(async (event) => {
         entityId: id,
         pageType: 'reservations',
         pagePath: '/reservations',
+        originEventId: readPageEventId(body.page_event_id),
       }),
     ]),
   ])

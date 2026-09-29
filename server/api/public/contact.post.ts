@@ -6,7 +6,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
-import { measurementOutcome, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { ensureInteractionUser } from '~/server/utils/auth'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -117,6 +117,7 @@ export default defineHandler(async (event) => {
     entityId: id,
     pageType: 'contact',
     pagePath: '/contact',
+        originEventId: readPageEventId(body.page_event_id),
     }),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the

@@ -363,7 +363,7 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
-const { mirrorSubmission } = useOrganizationConversionTracking()
+const { mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
 const submitError = ref<string | null>(null)
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
@@ -392,7 +392,7 @@ async function handleReservation() {
     const timezone = reservationTimezone.value
     const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/reservations`, {
       method: 'POST',
-      body: reservationForm.value,
+      body: { ...reservationForm.value, page_event_id: pageEventId() },
     })
     setBookingConfirmation({
       type: 'reservation',

@@ -35,7 +35,7 @@ const consultation = computed(() => shell.value.consultation)
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })
-const { mirrorSubmission } = useOrganizationConversionTracking(consultation)
+const { mirrorSubmission, pageEventId } = useOrganizationConversionTracking(consultation)
 
 async function submitContact() {
   if (!organizationId || submitting.value) return
@@ -44,7 +44,7 @@ async function submitContact() {
   try {
     await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
-      body: form,
+      body: { ...form, page_event_id: pageEventId() },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     mirrorSubmission('contact_submit')

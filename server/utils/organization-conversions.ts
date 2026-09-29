@@ -5,10 +5,11 @@ import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { deliverForVisitor, type MeasurementProtocolEnv } from '~/server/utils/ga4-delivery'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
 import { SESSION_COOKIE, VISITOR_COOKIE, hashIp, isCanonicalEventId } from '~/server/utils/pageview-tracking'
-import type { AttributionTouch } from '~/utils/analytics-attribution'
+import type { AttributionTouch, ObservedAttribution } from '~/utils/analytics-attribution'
 import {
   CONVERSION_EVENT_CATALOG,
   type ConversionEntityType,
+  type ConversionEventDefinition,
   type ConversionStage,
   type ConversionValue,
   type OrganizationConversionEventName,
@@ -24,6 +25,9 @@ export interface OrganizationConversionInput {
   eventName: OrganizationConversionEventName
   stage: ConversionStage
   locationId?: string | null
+  /** The product and variant this event is about, when it is about one (a booking's selection, a product view). */
+  productId?: string | null
+  variantId?: string | null
   entityType?: ConversionEntityType | null
   entityId?: string | null
   pageType?: string | null
@@ -32,8 +36,24 @@ export interface OrganizationConversionInput {
   metadata?: ApiRecord | null
   value?: ConversionValue | null
   surface: ConversionSurface
-  /** The staff member or agent who performed the transition, when it is not the subject. */
-  actor?: { type: 'staff' | 'agent'; id: string } | null
+  /** The staff member, agent or signed-in user who performed the action, when it is not the subject. */
+  actor?: { type: 'staff' | 'agent' | 'user'; id: string } | null
+  /**
+   * A stable identity chosen by the producer of an interaction, so the same interaction delivered
+   * twice is one event and two interactions are two. Server outcomes take their identity from the
+   * business entity instead.
+   */
+  id?: string
+  /** The flat scalars an interaction carries; only the catalog's allowlisted names are kept. */
+  properties?: Record<string, unknown> | null
+  /**
+   * The pageview this outcome or interaction happened on, as the browser reports it. It is only
+   * believed when that pageview exists, belongs to this organization, and was recorded for the same
+   * visitor session as this request; otherwise the reference is dropped and the context stays
+   * unknown. It gives the event the page, language and event-time attribution of that visit rather
+   * than whatever the session became by the time of the report.
+   */
+  originEventId?: string | null
   /**
    * An attribution snapshot captured earlier through a real relationship (the checkout that
    * started a subscription). Used only when the request carries no browser session; it does not
@@ -42,6 +62,66 @@ export interface OrganizationConversionInput {
   attribution?: { touch: AttributionTouch; attributedAt: string } | null
   /** Overrides the event time; defaults to now. Provider events carry their own occurrence time. */
   occurredAt?: string
+}
+
+interface PageContext {
+  path: string
+  source_path: string | null
+  locale: string | null
+  page_id: string | null
+  page_type: string | null
+  document_id: string | null
+  product_id: string | null
+  location_id: string | null
+}
+
+interface VerifiedOriginEvent {
+  id: string
+  page: PageContext
+  observed: ObservedAttribution | null
+  attribution: AttributionTouch | null
+  attributedAt: string | null
+  basis: string
+}
+
+/**
+ * The pageview an outcome claims to have happened on, believed only when it is this organization's
+ * own pageview recorded for this very visitor session. Anything else — an unknown id, another
+ * tenant's event, another visitor's — is not context and is dropped rather than trusted.
+ */
+async function verifiedOriginEvent(db: DbClient, organizationId: string, browser: { sessionId: string; visitorId: string }, originEventId: string | null | undefined): Promise<VerifiedOriginEvent | null> {
+  if (!originEventId || !isCanonicalEventId(originEventId)) return null
+  const row = await queryFirst<{ id: string; page_path: string; location_id: string | null; payload_json: string }>(db, `SELECT id, page_path, location_id, payload_json FROM analytics_events
+    WHERE id = ? AND kind = 'pageview' AND organization_id = ? AND session_id = ? AND visitor_id = ?`, [originEventId, organizationId, browser.sessionId, browser.visitorId])
+  if (!row) return null
+  const payload = JSON.parse(row.payload_json) as Record<string, unknown>
+  const text = (key: string) => typeof payload[key] === 'string' ? payload[key] as string : null
+  return {
+    id: row.id,
+    page: { path: row.page_path, source_path: text('source_path'), locale: text('locale'), page_id: text('page_id'), page_type: text('page_type'),
+      document_id: text('document_id'), product_id: text('product_id'), location_id: row.location_id },
+    observed: (payload.observed as ObservedAttribution | null | undefined) ?? null,
+    attribution: (payload.attribution as AttributionTouch | null | undefined) ?? null,
+    attributedAt: text('attributed_at'),
+    basis: text('attribution_basis') ?? 'none',
+  }
+}
+
+/** The pageview a form submission says it came from, or null when the claim is not even shaped like one. Whether it is believed is decided when the event is recorded. */
+export function readPageEventId(value: unknown): string | null {
+  return isCanonicalEventId(value) ? value : null
+}
+
+function allowlistedProperties(rule: ConversionEventDefinition, properties: Record<string, unknown> | null | undefined): Record<string, string | number | boolean> | null {
+  if (!properties || !rule.properties) return null
+  const kept: Record<string, string | number | boolean> = {}
+  for (const name of rule.properties) {
+    const value = properties[name]
+    if (typeof value === 'string' && value.length > 0) kept[name] = value.slice(0, 255)
+    else if (typeof value === 'number' && Number.isFinite(value)) kept[name] = value
+    else if (typeof value === 'boolean') kept[name] = value
+  }
+  return Object.keys(kept).length > 0 ? kept : null
 }
 
 /**
@@ -55,7 +135,7 @@ export interface OrganizationConversionInput {
  * here.
  */
 export async function recordOrganizationConversionEvent(db: DbClient, origin: { headers: Headers } | null, input: OrganizationConversionInput) {
-  const rule = CONVERSION_EVENT_CATALOG[input.eventName]
+  const rule: ConversionEventDefinition = CONVERSION_EVENT_CATALOG[input.eventName]
   if (!(rule.stages as readonly ConversionStage[]).includes(input.stage)) throw new Error(`Invalid stage for ${input.eventName}`)
   if (rule.entityType !== null && input.entityType !== rule.entityType) throw new Error(`Invalid entity type for ${input.eventName}`)
   if ((input.entityType && !input.entityId) || (!input.entityType && input.entityId)) throw new Error('entityType and entityId must be supplied together')
@@ -73,6 +153,9 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
     if (input.value.basis !== 'quoted' && !input.value.transaction_id) throw new Error(`${input.eventName} requires a transaction identity`)
   }
 
+  if (input.id !== undefined && !isCanonicalEventId(input.id)) throw new Error('An event id must be a canonical UUID')
+  const properties = allowlistedProperties(rule, input.properties)
+
   const now = input.occurredAt ?? new Date().toISOString()
   const cookies = parseCookies(origin?.headers.get('cookie') ?? '')
   const sessionId = cookies.get(SESSION_COOKIE)
@@ -81,13 +164,15 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
 
   let attribution: unknown = input.attribution?.touch ?? null
   let attributedAt: string | null = input.attribution?.attributedAt ?? null
+  let attributionBasis: string = input.attribution ? 'checkout' : 'none'
+  let origin_: VerifiedOriginEvent | null = null
   if (browser) {
-    const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
+    const session = await queryFirst<{ attribution: string; last_touch_at: string | null }>(db, `INSERT INTO analytics_summaries (
       id, kind, organization_id, date, key, payload_json, created_at, updated_at
     ) VALUES (?, 'session', ?, '', ?, ?, ?, ?)
     ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
       payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
-    RETURNING json_extract(payload_json, '$.attribution') attribution`, [
+    RETURNING json_extract(payload_json, '$.attribution') attribution, json_extract(payload_json, '$.last_touch_at') last_touch_at`, [
       crypto.randomUUID(), input.organizationId, browser.sessionId,
       JSON.stringify({ visitor_id: browser.visitorId, started_at: now, last_seen_at: now,
         landing_path: input.pagePath?.startsWith('/') ? input.pagePath : '/', duration_seconds: 0,
@@ -96,27 +181,46 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
     ])
     if (!session) throw new Error('Analytics session unavailable')
     attribution = JSON.parse(session.attribution)
-    attributedAt = now
+    attributedAt = session.last_touch_at ?? now
+    attributionBasis = session.last_touch_at ? 'session_current' : 'none'
+    origin_ = await verifiedOriginEvent(db, input.organizationId, browser, input.originEventId)
+    if (origin_?.attribution) {
+      // The visit this happened on keeps its own context; the session's newest touch is not it.
+      attribution = origin_.attribution
+      attributedAt = origin_.attributedAt
+      attributionBasis = origin_.basis
+    }
   }
 
-  const id = crypto.randomUUID()
+  const id = input.id ?? crypto.randomUUID()
   const ipHash = origin ? await hashIp(getClientIp({ req: origin })) : null
   const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
     entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
     conversion_type: rule.conversionType, surface: input.surface, actor: input.actor ?? null,
-    attribution, attributed_at: attributedAt, value: input.value ?? null, metadata: input.metadata ?? null,
+    attribution, attributed_at: attributedAt, attribution_basis: attributionBasis, observed: origin_?.observed ?? null,
+    origin_event_id: origin_?.id ?? null, page: origin_?.page ?? null, properties,
+    product_id: input.productId ?? (input.entityType === 'product' ? input.entityId : null) ?? null, variant_id: input.variantId ?? null,
+    value: input.value ?? null, metadata: input.metadata ?? null,
     ip_hash: ipHash, user_agent: (origin?.headers.get('user-agent') || '').slice(0, 1024) || null })
   const inserted = await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
-  ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?)`, [
-    id, input.organizationId, browser?.sessionId ?? null, browser?.visitorId ?? null, input.locationId ?? null, input.pagePath ?? null, payload, now,
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, rule.kind, input.organizationId, browser?.sessionId ?? null, browser?.visitorId ?? null, input.locationId ?? origin_?.page.location_id ?? null, input.pagePath ?? origin_?.page.path ?? null, payload, now,
   ])
   if (Number(inserted.meta?.changes ?? 0) === 1) return { id, created: true }
+
+  // An interaction with a supplied identity that already exists is the same interaction delivered
+  // again. The identity must be this organization's own: another tenant's event is never returned.
+  if (input.id) {
+    const same = await queryFirst<{ organization_id: string }>(db, 'SELECT organization_id FROM analytics_events WHERE id = ?', [id])
+    if (same?.organization_id !== input.organizationId) throw new Error('Analytics event id belongs to another organization')
+    return { id, created: false }
+  }
 
   // The insert was ignored by the entity-uniqueness index: the outcome is
   // already recorded, and its persisted identity is the answer.
   const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM analytics_events
-    WHERE kind = 'conversion' AND organization_id = ? AND (payload_json ->> '$.event_name') = ?
+    WHERE kind IN ('conversion', 'interaction') AND organization_id = ? AND (payload_json ->> '$.event_name') = ?
       AND (payload_json ->> '$.entity_type') = ? AND (payload_json ->> '$.entity_id') = ?`,
   [input.organizationId, input.eventName, input.entityType ?? null, input.entityId ?? null])
   if (!existing) throw new Error(`Conversion ${input.eventName} was neither inserted nor found`)

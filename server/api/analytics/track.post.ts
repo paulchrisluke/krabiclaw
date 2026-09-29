@@ -9,11 +9,10 @@ import {
   hashIp,
   isCanonicalEventId,
   isKnownBot,
-  isKnownTenantPublicPath,
   isTrackablePath,
   recordTenantPageview,
-  resolveLocationIdFromPath,
-  resolvePageviewTenantPageIdentity,
+  boundedOccurrence,
+  resolvePublicPageIdentity,
   updateTenantPageviewDuration,
   SESSION_COOKIE,
 } from '~/server/utils/pageview-tracking'
@@ -31,6 +30,7 @@ interface PageviewRequest {
   referrerHost?: unknown
   attribution?: unknown
   durationSeconds?: unknown
+  occurredAt?: unknown
 }
 
 const RATE_LIMIT_MAX = 120
@@ -109,23 +109,21 @@ export default defineHandler(async (event) => {
       ? normalizeReferrerHost(`https://${body.referrerHost}`)
       : null
     const geo = getCloudflareGeo(event)
-    const [locationId, page, internalHosts] = await Promise.all([
-      resolveLocationIdFromPath(db, organizationId, pagePath),
-      resolvePageviewTenantPageIdentity(db, organizationId, pagePath, locale),
+    const organization = event.context.organization as { vertical?: string | null } | undefined
+    const [identity, internalHosts] = await Promise.all([
+      resolvePublicPageIdentity(cloudflareEnv(event) as never, db, {
+        organizationId, pagePath, requestedLocale: locale,
+        themeId: event.context.themeId as string | null | undefined, vertical: organization?.vertical,
+      }),
       getOrganizationInternalHosts(db, organizationId, event.url.hostname),
     ])
-    const organization = event.context.organization as { theme?: string | null; vertical?: string | null } | undefined
-    if (!page && !isKnownTenantPublicPath(pagePath, {
-      themeId: event.context.themeId as string | null | undefined,
-      vertical: organization?.vertical,
-    })) {
-      return jsonResponse({ error: 'Page path is not a published tenant route' }, { status: 400 })
-    }
+    if (!identity) return jsonResponse({ error: 'Page path is not a published public route' }, { status: 400 })
     await recordTenantPageview(db, {
       eventId: body.eventId,
       organizationId,
       pagePath,
-      locale,
+      sourcePath: identity.sourcePath,
+      locale: identity.locale,
       referrerHost,
       attribution: sanitizeAttributionParams(body.attribution),
       internalHosts,
@@ -136,10 +134,13 @@ export default defineHandler(async (event) => {
       country: geo.country ?? null,
       region: geo.region ?? null,
       city: geo.city ?? null,
-      locationId,
-      pageId: page?.page_id ?? null,
-      pageType: page?.page_type ?? null,
-      recipe: page?.recipe ?? null,
+      locationId: identity.locationId,
+      pageId: identity.pageId,
+      pageType: identity.pageType,
+      recipe: identity.recipe,
+      documentId: identity.documentId,
+      productId: identity.productId,
+      occurredAt: boundedOccurrence(body.occurredAt, now),
       now,
     })
     return jsonResponse({ ok: true })

@@ -3,7 +3,7 @@ import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/a
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
-import { measurementOutcome, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
@@ -62,6 +62,7 @@ export default defineHandler(async (event) => {
   const sessionId = cleanString(body.session_id, 64)
   const requestedVariantId = cleanString(body.variant_id, 64)
   const notes = cleanString(body.notes, 1000)
+  const pageEventId = readPageEventId(body.page_event_id)
   const partySizeValue = typeof body.party_size === 'number' || typeof body.party_size === 'string' ? Number(body.party_size) : Number.NaN
   if (!Number.isInteger(partySizeValue) || partySizeValue < 1 || partySizeValue > 99) {
     return jsonResponse({ error: 'Party size must be a whole number between 1 and 99.' }, { status: 400 })
@@ -207,7 +208,8 @@ export default defineHandler(async (event) => {
       recordOrganizationConversionEvent(db, event.req, {
         organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
         locationId: session.location_id, entityType: 'request', entityId: threadId,
-        pageType: 'product', pagePath: `/products/${slug}`, value: quotedValue,
+        productId: product.id, variantId: productVariantId,
+        pageType: 'product', pagePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
       }),
     ]),
   ])

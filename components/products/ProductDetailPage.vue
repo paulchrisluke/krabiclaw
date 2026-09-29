@@ -408,7 +408,7 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const { trackProductOrder, trackEcommerce, mirrorSubmission } = useOrganizationConversionTracking()
+const { trackProductOrder, trackProductView, trackCheckoutStart, mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
 const { locale, localePath, t } = useI18n()
 const collectionLabel = computed(() => {
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
@@ -662,7 +662,7 @@ async function loadSessions() {
 
 async function openBooking() {
   // The option and its price are not chosen yet, so none is claimed here.
-  if (offer.value) trackEcommerce('Checkout Started', { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] })
+  trackCheckoutStart(props.product.id, props.location.id, { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] }, selectedVariantId.value)
   bookingStep.value = 1
   bookingError.value = ''
   await loadSessions()
@@ -678,7 +678,10 @@ async function openBookingAt(session: PublicProductSession) {
 // has it, so a tab left open does not offer a seat that has since gone. Only
 // for a product a guest can book here; an enquiry has no calendar.
 onMounted(() => {
-  if (offer.value && !enquiryOnly.value) trackEcommerce('Product Viewed', { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) })
+  // Every product view is a native interaction; only a priced, bookable product is an ecommerce item.
+  trackProductView(props.product.id, props.location.id, offer.value && !enquiryOnly.value
+    ? { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) }
+    : null)
   if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
 })
 
@@ -764,6 +767,7 @@ async function submitBooking(contact: ContactFormState) {
           guest_phone: contact.phone || null,
           notes: contact.notes || null,
           locale: locale.value,
+          page_event_id: pageEventId(),
         },
         validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',

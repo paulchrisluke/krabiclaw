@@ -341,7 +341,7 @@ const tenantForm = ref<TenantContactForm>({
   message: aboutPrefix,
 })
 const tenantSubmitting = ref(false)
-const { mirrorSubmission } = useOrganizationConversionTracking()
+const { mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
 const tenantErrors = ref<TenantFieldError[]>([])
 const tenantSubmitError = ref<string | null>(null)
 const tenantFieldError = (name: keyof TenantContactForm) =>
@@ -372,7 +372,7 @@ const handleTenantContact = async () => {
   try {
     await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value },
+      body: { ...tenantForm.value, page_event_id: pageEventId() },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
   } catch {
