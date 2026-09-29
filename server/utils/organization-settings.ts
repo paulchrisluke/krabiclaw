@@ -4,7 +4,7 @@ import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/do
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import { isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
-import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
+import { purgeOrganizationCaches, purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
 import type { OrganizationIntegrations } from '~/shared/organization-settings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
@@ -501,10 +501,13 @@ async function attemptOrganizationUpdate(
     }
   }
 
-  // All settings callers use this mutation path. Both typography and the
-  // announcement are rendered into the public site's cached shell and HTML.
-  if (updates.font_preset !== undefined || updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
+  // A status change adds or removes this site's indexed content. Typography
+  // and announcements affect only its public resource and HTML caches.
+  if (updates.status !== undefined) {
     await purgePublicResourceCacheNow(env, organizationId)
+  } else if (updates.font_preset !== undefined || updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
+    if (!env.ORGANIZATION_CACHE) throw new Error('ORGANIZATION_CACHE is not bound; site caches cannot be purged')
+    await purgeOrganizationCaches(db, env.ORGANIZATION_CACHE, organizationId, env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   }
 
   // Zaraz serves analytics only for tenants that are Live, so taking one to
