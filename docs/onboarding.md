@@ -61,5 +61,7 @@ take effect immediately. Every path runs `cleanupOrganizationBeforeDelete` in
 hostnames and the Cloudflare Images the organization is the last holder of.
 Better Auth then deletes the organization, and D1's `ON DELETE CASCADE` takes
 the domains, locations, content, bookings, reservations, integration
-selections and media with it. The user's linked provider accounts belong to the
-user, not the organization, and remain.
+selections, media and the onboarding draft that created the site with it, so
+signing up again starts a new draft rather than resuming the deleted site. The
+user's linked provider accounts belong to the user, not the organization, and
+remain.

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "94f5e51b-529e-47b1-a2bb-eb9a440ed1e6",
-  "prevId": "9936a597-ad43-456f-b4e3-3eb50242c782",
+  "id": "72261415-5722-48a9-875f-bea568048949",
+  "prevId": "94f5e51b-529e-47b1-a2bb-eb9a440ed1e6",
   "tables": {
     "account": {
       "name": "account",
@@ -570,7 +570,7 @@
             "(payload_json ->> '$.entity_id')"
           ],
           "isUnique": true,
-          "where": "kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit')"
+          "where": "kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit', 'sign_up', 'onboarding_complete', 'purchase', 'refund')"
         }
       },
       "foreignKeys": {
@@ -614,7 +614,7 @@
         },
         "analytics_events_shape_check": {
           "name": "analytics_events_shape_check",
-          "value": "(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND session_id IS NOT NULL AND visitor_id IS NOT NULL AND duration_seconds IS NULL\n    AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64\n    AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'\n    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')\n    AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'\n    AND json_type(payload_json, '$.attributed_at') IS 'text')"
+          "value": "(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND duration_seconds IS NULL\n    AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64\n    AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'\n    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed')\n    AND ((session_id IS NOT NULL AND visitor_id IS NOT NULL\n        AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'\n        AND json_type(payload_json, '$.attributed_at') IS 'text')\n      OR (session_id IS NULL AND visitor_id IS NULL\n        AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))"
         }
       }
     },
