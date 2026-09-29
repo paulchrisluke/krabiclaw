@@ -256,7 +256,7 @@ WHERE id IN (SELECT id FROM map) AND position <> (SELECT new_position FROM map W
 
 const LOCALIZED_OWNER_TABLES = {
   organization: 'organization', business_location: 'business_locations', product: 'products',
-  collection: 'collections', media_asset: 'media_assets',
+  collection: 'collections', media_asset: 'media_assets', article_category: 'article_categories',
 }
 
 /** Every query must return no rows on a valid target. */
