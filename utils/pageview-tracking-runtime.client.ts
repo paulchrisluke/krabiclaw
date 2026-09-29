@@ -24,23 +24,53 @@ interface TrackedPage {
 
 const isTracked = (path: string) => isTrackablePath(path) && !path.startsWith('/dev')
 
-let observedPage: TrackedPage | null = null
+// The pages observed so far, by path, so an action names the visit it happened on even when it was
+// captured before the collector registered or after the visitor moved on.
+const observedPages = new Map<string, TrackedPage>()
+const OBSERVED_PAGES_MAX = 20
+
+// Settles once the collector has observed the initial page (or has decided it will not track). An
+// emitter that runs earlier than registration waits on this instead of reading a page that does not exist yet.
+let settleRegistration: () => void = () => {}
+const registration = new Promise<void>((resolve) => { settleRegistration = resolve })
+
+/** Called by the registering plugin once the collector has finished starting, whether or not it tracks. */
+export function collectorRegistered(): void {
+  settleRegistration()
+}
 
 /**
- * The pageview event of the page the visitor is on, for an interaction or a form submission to
- * name as the visit it happened on. Null when this page is not tracked. The collector believes the
- * claim only when it recorded that pageview for this same visitor session.
+ * The pageview event of the visit the caller's path names, once the collector has recorded it, for an
+ * interaction or a form submission to attach as its origin. Null when that page is not tracked, was
+ * not persisted, or the collector is not running. The wait is only for the pageview already in flight;
+ * callers capture the event first and await this for its delivery, never before the visitor's action.
+ * The server believes the reference only when it recorded that pageview for the same visitor session.
  */
-export function currentPageEventId(): string | null {
-  return observedPage?.pageview ? observedPage.eventId : null
+export async function pageEventIdFor(path: string): Promise<string | null> {
+  if (!import.meta.client) return null
+  await registration
+  const page = observedPages.get(path)
+  if (!page?.pageview) return null
+  return await page.pageviewReady ? page.eventId : null
+}
+
+/**
+ * Resolves null when the visitor is leaving the page. An interaction waiting for its pageview races this,
+ * so it is still delivered (without origin context, which stays unknown) rather than lost with the page.
+ */
+export function whenLeaving(): Promise<null> {
+  return new Promise((resolve) => {
+    window.addEventListener('pagehide', () => resolve(null), { once: true })
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') resolve(null) }, { once: true })
+  })
 }
 
 export function registerPageviewTracking() {
   const win = window as Window & { __kc_pageview_tracking_registered?: boolean; zaraz?: ZarazPageviewApi }
-  if (win.__kc_pageview_tracking_registered) return
+  if (win.__kc_pageview_tracking_registered) { settleRegistration(); return }
 
   const { isTenant, isPlatform } = useTenantOrganization()
-  if (!isTenant && !isPlatform) return
+  if (!isTenant && !isPlatform) { settleRegistration(); return }
   win.__kc_pageview_tracking_registered = true
 
   const nuxtApp = useNuxtApp()
@@ -105,11 +135,18 @@ export function registerPageviewTracking() {
     })
   }
 
+  const remember = (page: TrackedPage) => {
+    observedPages.delete(page.path)
+    observedPages.set(page.path, page)
+    if (observedPages.size > OBSERVED_PAGES_MAX) observedPages.delete(observedPages.keys().next().value as string)
+  }
+
   // Tracking is registered whatever the first route is: landing on an excluded internal route must
   // not stop a later public navigation from being recorded.
   let currentPage = observe(router.currentRoute.value, true)
-  observedPage = currentPage
+  remember(currentPage)
   if (currentPage.pageview) currentPage.pageviewReady = deliver(Promise.resolve(true), currentPage.pageview)
+  settleRegistration()
 
   router.afterEach((to, from, failure) => {
     if (failure || to.fullPath === from.fullPath || to.fullPath === currentPage.fullPath) return
@@ -117,7 +154,7 @@ export function registerPageviewTracking() {
     sendDuration(previousPage)
     const nextPage = observe(to, false)
     currentPage = nextPage
-    observedPage = nextPage
+    remember(nextPage)
     if (nextPage.pageview) {
       // Sent after the previous page's event, so the session exists before this one lands, but with
       // the payload captured now.

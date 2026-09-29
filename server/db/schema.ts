@@ -2214,7 +2214,7 @@ export const analytics_events = sqliteTable("analytics_events", {
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed', 'viewed', 'started', 'occurred')
     AND ((session_id IS NULL) = (visitor_id IS NULL))
     AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')
-      OR (session_id IS NULL AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))`),
+      OR (json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))`),
   index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
   index("analytics_events_org_received_idx").on(table.organization_id, table.received_at),
   index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),

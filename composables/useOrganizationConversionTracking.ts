@@ -1,6 +1,6 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
-import { currentPageEventId } from '~/utils/pageview-tracking-runtime.client'
+import { pageEventIdFor, whenLeaving } from '~/utils/pageview-tracking-runtime.client'
 import type { ConversionValue, OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
@@ -24,7 +24,7 @@ interface ConversionPayload {
 // the pageview it happened on, which the collector believes only when it recorded that pageview
 // for this visitor. A collection that fails is reported through the application's error hook,
 // never silently dropped and never allowed to break the page.
-async function postNativeInteraction(payload: ConversionPayload & { event_id: string; page_event_id: string | null; variant_id?: string | null }) {
+async function postNativeInteraction(payload: ConversionPayload & { event_id: string; occurred_at: string; page_event_id: string | null; variant_id?: string | null }) {
   const response = await fetch(`/api/public/conversion-events`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -59,7 +59,13 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
 
   function recordNative(payload: ConversionPayload, variantId?: string | null) {
     if (!import.meta.client || !organizationId) return
-    void postNativeInteraction({ ...payload, event_id: crypto.randomUUID(), page_event_id: currentPageEventId(), ...(variantId ? { variant_id: variantId } : {}) })
+    // The interaction is captured now: its identity, moment and page are fixed here. Only its delivery
+    // waits for the pageview it happened on to be recorded, so the server can attach that visit's
+    // page, language and attribution. The visitor's own action never waits on it.
+    const captured = { ...payload, event_id: crypto.randomUUID(), occurred_at: new Date().toISOString(), ...(variantId ? { variant_id: variantId } : {}) }
+    const path = window.location.pathname
+    void Promise.race([pageEventIdFor(path), whenLeaving()])
+      .then(pageEventId => postNativeInteraction({ ...captured, page_event_id: pageEventId }))
       .catch(error => nuxtApp.callHook('vue:error', error, null, 'analytics-interaction'))
   }
 
@@ -69,8 +75,8 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
   }
 
   /** The pageview a form submission came from, for the server to verify and attach. */
-  function pageEventId(): string | null {
-    return import.meta.client ? currentPageEventId() : null
+  function pageEventId(): Promise<string | null> {
+    return import.meta.client ? pageEventIdFor(window.location.pathname) : Promise.resolve(null)
   }
 
   // A product was viewed / a booking was started: native interactions first, then the GA4

@@ -209,7 +209,7 @@ export default defineHandler(async (event) => {
         organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
         locationId: session.location_id, entityType: 'request', entityId: threadId,
         productId: product.id, variantId: productVariantId,
-        pageType: 'product', pagePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
+        pageType: 'product', routePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
       }),
     ]),
   ])

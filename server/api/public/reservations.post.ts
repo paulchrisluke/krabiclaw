@@ -185,7 +185,7 @@ export default defineHandler(async (event) => {
         entityType: 'request',
         entityId: id,
         pageType: 'reservations',
-        pagePath: '/reservations',
+        routePath: '/reservations',
         originEventId: readPageEventId(body.page_event_id),
       }),
     ]),

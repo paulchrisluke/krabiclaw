@@ -44,7 +44,7 @@ async function submitContact() {
   try {
     await publicApiMutation<{ success: true }>(`/api/public/contact`, {
       method: 'POST',
-      body: { ...form, page_event_id: pageEventId() },
+      body: { ...form, page_event_id: await pageEventId() },
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     mirrorSubmission('contact_submit')

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:55e6a0371a9a3ba841f029c73c5d79023a7afd1449155b4c4ce9ee15a29a57ae",
+  "fingerprint": "sha256:a737e8d2058ffe5ae7a389fee719671ad96fa18e7f39bfa2271b3b7a4e70fe47",
   "tools": [
     {
       "name": "append_content_block",
@@ -10501,6 +10501,16 @@
                 "description": "device class derived from the user agent",
                 "type": "string"
               },
+              "dimension": {
+                "description": "daily_summaries with dimension_day: the dimension to read.",
+                "enum": [
+                  "country",
+                  "city",
+                  "device",
+                  "referrer"
+                ],
+                "type": "string"
+              },
               "entity_id": {
                 "description": "the business subject of an outcome or interaction",
                 "type": "string"
@@ -10597,12 +10607,25 @@
                 "description": "outcome or interaction stage",
                 "type": "string"
               },
+              "summary_kind": {
+                "description": "daily_summaries only (required): the retained summary grain: one row per day, per day and public page path, or per day and country/city/device/referrer value.",
+                "enum": [
+                  "organization_day",
+                  "page_day",
+                  "dimension_day"
+                ],
+                "type": "string"
+              },
               "surface": {
                 "description": "the surface that produced the event",
                 "type": "string"
               },
               "term": {
                 "description": "term on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "value": {
+                "description": "daily_summaries with dimension_day: one value of the dimension.",
                 "type": "string"
               },
               "value_basis": {
@@ -10631,7 +10654,7 @@
             "type": "integer"
           },
           "metrics": {
-            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct sessions that completed the selected outcome); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions)",
+            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions)",
             "items": {
               "enum": [
                 "events",
@@ -10655,11 +10678,12 @@
             "type": "array"
           },
           "mode": {
-            "description": "events | sessions | breakdown",
+            "description": "events | sessions | breakdown | daily_summaries",
             "enum": [
               "events",
               "sessions",
-              "breakdown"
+              "breakdown",
+              "daily_summaries"
             ],
             "type": "string"
           },

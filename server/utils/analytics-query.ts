@@ -12,7 +12,10 @@ import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~
  * Three modes read what the collector stored, never a projection of it:
  *  - events: individual events with every observation the collector kept;
  *  - sessions: the retained session records and their derived last-touch state;
- *  - breakdown: complete grouped results over the whole filtered population.
+ *  - breakdown: complete grouped results over the whole filtered population;
+ *  - daily_summaries: the retained daily summary rows (organization, page and dimension days) at their
+ *    own grain. They outlive raw pageview detail, so a period past it is answered from them, and each
+ *    row says it is a summary, not events.
  *
  * Everything the caller can name comes from the field, filter and metric registries below. There is
  * no SQL, expression, table or JSON path in the request: an unknown name is rejected, not passed on.
@@ -20,13 +23,24 @@ import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~
 
 export class AnalyticsQueryError extends Error {}
 
-export type AnalyticsQueryMode = 'events' | 'sessions' | 'breakdown'
+export type AnalyticsQueryMode = 'events' | 'sessions' | 'breakdown' | 'daily_summaries'
 export type AttributionBasis = 'observed' | 'event_snapshot' | 'session_last_touch'
 
 const PAGE_SIZE_DEFAULT = 50
 const PAGE_SIZE_MAX = 200
 
 const invalid = (message: string): never => { throw new AnalyticsQueryError(message) }
+
+/**
+ * The query window is server-computed (a range from the organization's calendar and an `as_of` from
+ * the server clock or a signed cursor), never caller text. SQL fragments name it with `@start`,
+ * `@end` and `@asof`, and it is bound as a validated instant literal.
+ */
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/
+function bindWindow(sql: string, window: { start: string; end: string; asOf: string }): string {
+  for (const value of [window.start, window.end, window.asOf]) if (!INSTANT.test(value)) invalid('Invalid query window.')
+  return sql.replaceAll('@start', `'${window.start}'`).replaceAll('@end', `'${window.end}'`).replaceAll('@asof', `'${window.asOf}'`)
+}
 
 // ---------------------------------------------------------------------------------------------
 // Fields
@@ -55,7 +69,27 @@ function attributionSql(field: AttributionField): EventField['sql'] {
   const key = ATTRIBUTION_FIELDS[field]
   return (basis) => basis === 'observed' ? payload(`$.observed.${key}`)
     : basis === 'event_snapshot' ? payload(`$.attribution.${key}`)
-      : `json_extract(s.payload_json, '$.attribution.${key}')`
+      : sessionTouchAsOf(key, 'e')
+}
+
+/**
+ * The session's last touch as it stood at the query's `as_of` boundary, not as it is now. A session
+ * record that has not changed since the boundary is exact; one that has changed is rebuilt from the
+ * retained pageviews that had been received by then (the latest one that carried a touch of its
+ * own), so a touch that arrives between two pages of a result never moves earlier events between
+ * groups. A session with no touch by the boundary was Direct.
+ */
+/** A session record that no event has touched since the boundary is exactly what it was at the boundary. */
+const SESSION_UNCHANGED = `NOT EXISTS (SELECT 1 FROM analytics_events u WHERE u.organization_id = s.organization_id AND u.session_id = s.key AND u.received_at > @asof)`
+
+function sessionTouchAsOf(key: string, eventAlias: string | null): string {
+  const session = eventAlias ? `t.session_id = ${eventAlias}.session_id` : 't.session_id = s.key'
+  const rebuilt = `(SELECT json_extract(t.payload_json, '$.attribution.${key}') FROM analytics_events t
+    WHERE t.organization_id = s.organization_id AND ${session} AND t.kind = 'pageview'
+      AND json_extract(t.payload_json, '$.attribution_basis') = 'own_touch' AND t.received_at <= @asof
+    ORDER BY t.created_at DESC, t.id DESC LIMIT 1)`
+  const none = key === 'source' ? `'Direct'` : key === 'medium' ? `'(none)'` : 'NULL'
+  return `CASE WHEN ${SESSION_UNCHANGED} THEN json_extract(s.payload_json, '$.attribution.${key}') ELSE COALESCE(${rebuilt}, ${none}) END`
 }
 
 const EVENT_FIELDS: Record<string, EventField> = {
@@ -107,6 +141,10 @@ export const ANALYTICS_QUERY_DIMENSIONS = Object.keys(EVENT_FIELDS)
 // ---------------------------------------------------------------------------------------------
 
 const OUTCOME_LIST = ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].outcome).map(name => `'${name}'`).join(', ')
+/** Whether the event's own session completed the selected outcome in the range: an attribute of the session, evaluated for the pageview that makes the session eligible. */
+const SESSION_HAS_OUTCOME = `EXISTS (SELECT 1 FROM analytics_events o WHERE o.organization_id = e.organization_id AND o.session_id = e.session_id
+  AND o.kind IN ('conversion', 'interaction') AND json_extract(o.payload_json, '$.event_name') = @outcome
+  AND o.created_at >= @start AND o.created_at < @end AND o.received_at <= @asof)`
 const valueSum = (basis: string, column: string) => `COALESCE(SUM(CASE WHEN ${payload('$.value.basis')} = '${basis}' THEN ${payload(column)} END), 0)`
 
 interface Metric { sql: string; unit: string; monetary?: boolean; needsOutcome?: boolean; nullable?: boolean; description: string }
@@ -123,9 +161,9 @@ const METRICS: Record<string, Metric> = {
   collected_minor: { sql: valueSum('purchase', '$.value.collected_minor'), unit: 'minor units of the group currency', monetary: true, description: 'cash collected by verified purchases, tax included' },
   refunded_minor: { sql: valueSum('refund', '$.value.collected_minor'), unit: 'minor units of the group currency', monetary: true, description: 'cash returned by verified refunds, tax included' },
   net_collected_minor: { sql: `${valueSum('purchase', '$.value.collected_minor')} - ${valueSum('refund', '$.value.collected_minor')}`, unit: 'minor units of the group currency', monetary: true, description: 'collected minus refunded cash' },
-  converting_sessions: { sql: `COUNT(DISTINCT CASE WHEN ${EVENT_NAME_SQL} = @outcome THEN e.session_id END)`, unit: 'distinct sessions that completed the selected outcome', needsOutcome: true, description: 'sessions in the group with the selected outcome_event' },
+  converting_sessions: { sql: `COUNT(DISTINCT CASE WHEN e.kind = 'pageview' AND ${SESSION_HAS_OUTCOME} THEN e.session_id END)`, unit: 'distinct eligible sessions that completed the selected outcome in the range', needsOutcome: true, description: 'sessions in the group with a pageview that also completed outcome_event in the range; always a subset of eligible_sessions' },
   eligible_sessions: { sql: `COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END)`, unit: 'distinct sessions with a pageview', description: 'the denominator population: sessions with a pageview in the group' },
-  session_conversion_rate: { sql: `CASE WHEN COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) = 0 THEN NULL ELSE 100.0 * COUNT(DISTINCT CASE WHEN ${EVENT_NAME_SQL} = @outcome THEN e.session_id END) / COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) END`, unit: 'percent: converting sessions / eligible sessions', needsOutcome: true, nullable: true, description: 'sessions with the selected outcome / sessions with a pageview, within the group; null when the group has no eligible session' },
+  session_conversion_rate: { sql: `CASE WHEN COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) = 0 THEN NULL ELSE 100.0 * COUNT(DISTINCT CASE WHEN e.kind = 'pageview' AND ${SESSION_HAS_OUTCOME} THEN e.session_id END) / COUNT(DISTINCT CASE WHEN e.kind = 'pageview' THEN e.session_id END) END`, unit: 'percent: converting sessions / eligible sessions, over the same sessions', needsOutcome: true, nullable: true, description: 'converting_sessions / eligible_sessions within the group, computed over one session population; null when the group has no eligible session' },
 }
 export const ANALYTICS_QUERY_METRICS = Object.fromEntries(Object.entries(METRICS).map(([name, metric]) => [name, { unit: metric.unit, description: metric.description }]))
 
@@ -244,7 +282,8 @@ export async function queryOrganizationAnalytics(db: DbClient, input: AnalyticsQ
     mode: input.mode, start_date: range.startDate, end_date: range.endDate, timezone: context.timezone, range_start: start, range_end: end,
     attribution_basis: basis,
   }
-  const filters = resolveFilters(input.mode, input.filters, basis)
+  const summaryFilters = input.mode === 'daily_summaries' ? resolveSummaryFilters(input) : null
+  const filters = summaryFilters ? { where: [], params: [], echo: summaryFilters.echo, needsSession: false } : resolveFilters(input.mode, input.filters, basis)
   resolved.filters = filters.echo
   const outcomeEvent = input.outcomeEvent ?? (typeof input.filters?.outcome_event === 'string' ? input.filters.outcome_event : undefined)
   if (outcomeEvent !== undefined && !(ORGANIZATION_CONVERSION_EVENT_NAMES as readonly string[]).includes(outcomeEvent)) invalid(`outcome_event must be one of: ${ORGANIZATION_CONVERSION_EVENT_NAMES.join(', ')}.`)
@@ -260,6 +299,10 @@ export async function queryOrganizationAnalytics(db: DbClient, input: AnalyticsQ
   const coverage = await coverageFor(db, input.organizationId, { start, end, now, analyticsDataStartAt: context.analyticsDataStartAt, filters, basis })
   const issue = async (key: unknown[] | null) => key ? await encodeCursor(input.cursorSecret, { v: 1, org: input.organizationId, q: queryHash, asOf, key }) : null
 
+  if (input.mode === 'daily_summaries') {
+    const result = await summariesMode(db, input, { start, end, asOf, limit, filters, cursorKey: cursor?.key ?? null, resolved }, summaryFilters!, { startDate: range.startDate, endDate: range.endDate })
+    return { mode: 'daily_summaries', rows: result.rows, next_cursor: await issue(result.nextKey), query: resolved, totals: result.totals, coverage: { ...coverage, summary_source: result.source } }
+  }
   if (input.mode === 'events') {
     const result = await eventsMode(db, input, { start, end, asOf, limit, basis, filters, cursorKey: cursor?.key ?? null, resolved })
     return { mode: 'events', rows: result.rows, next_cursor: await issue(result.nextKey), query: resolved, totals: result.totals, coverage }
@@ -275,7 +318,7 @@ export async function queryOrganizationAnalytics(db: DbClient, input: AnalyticsQ
 interface ModeContext { start: string; end: string; asOf: string; limit: number; filters: ResolvedFilters; cursorKey: unknown[] | null; resolved: Record<string, unknown> }
 
 const populationWhere = (ctx: { start: string; end: string; asOf: string; filters: ResolvedFilters }) => ({
-  sql: `e.organization_id = ? AND e.created_at >= ? AND e.created_at < ? AND e.received_at <= ?${ctx.filters.where.length ? ` AND ${ctx.filters.where.join(' AND ')}` : ''}`,
+  sql: bindWindow(`e.organization_id = ? AND e.created_at >= ? AND e.created_at < ? AND e.received_at <= ?${ctx.filters.where.length ? ` AND ${ctx.filters.where.join(' AND ')}` : ''}`, ctx),
   params: (organizationId: string) => [organizationId, ctx.start, ctx.end, ctx.asOf, ...ctx.filters.params],
 })
 
@@ -345,22 +388,29 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
   const supported = new Set(['session_id', 'visitor_id', 'source', 'medium', 'campaign', 'content', 'term', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'path_prefix'])
   for (const name of Object.keys(ctx.filters.echo)) if (!supported.has(name)) invalid(`Filter "${name}" does not apply to sessions. Supported: ${[...supported].join(', ')}.`)
   ctx.resolved.sort = 'started_at_desc'
+  // Everything a session record says that later activity can change is read as it stood at `as_of`.
+  const asOfState = (column: 'started_at' | 'last_seen_at', aggregate: 'MIN' | 'MAX') => `CASE WHEN ${SESSION_UNCHANGED} THEN json_extract(s.payload_json, '$.${column}')
+    ELSE COALESCE((SELECT ${aggregate}(t.created_at) FROM analytics_events t WHERE t.organization_id = s.organization_id AND t.session_id = s.key AND t.received_at <= @asof), json_extract(s.payload_json, '$.${column}')) END`
+  const startedAt = asOfState('started_at', 'MIN')
+  const lastSeenAt = asOfState('last_seen_at', 'MAX')
   const where: string[] = []
   const params: unknown[] = []
   for (const [name, text] of Object.entries(ctx.filters.echo)) {
     if (name === 'path_prefix') { where.push(`(json_extract(s.payload_json, '$.landing_path') = ? OR json_extract(s.payload_json, '$.landing_path') LIKE ? ESCAPE '\\')`); params.push(text.replace(/\/$/, '') || '/', `${text.replace(/[\\%_]/g, '\\$&')}%`); continue }
-    where.push(name === 'session_id' ? 's.key = ?' : name === 'visitor_id' ? `json_extract(s.payload_json, '$.visitor_id') = ?` : `json_extract(s.payload_json, '$.attribution.${ATTRIBUTION_FIELDS[name as AttributionField]}') = ?`)
+    where.push(name === 'session_id' ? 's.key = ?' : name === 'visitor_id' ? `json_extract(s.payload_json, '$.visitor_id') = ?` : `${sessionTouchAsOf(ATTRIBUTION_FIELDS[name as AttributionField], null)} = ?`)
     params.push(text)
   }
-  const base = `s.organization_id = ? AND s.kind = 'session' AND s.date = '' AND s.created_at <= ?
-    AND json_extract(s.payload_json, '$.started_at') < ? AND json_extract(s.payload_json, '$.last_seen_at') >= ?${where.length ? ` AND ${where.join(' AND ')}` : ''}`
-  const baseParams = [input.organizationId, ctx.asOf, ctx.end, ctx.start, ...params]
-  const keyset = ctx.cursorKey ? `AND (json_extract(s.payload_json, '$.started_at'), s.key) < (?, ?)` : ''
-  const rows = await queryAll<Record<string, unknown>>(db, `SELECT s.key AS session_id, s.created_at, s.payload_json,
-      (SELECT COUNT(*) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= ?) AS events_retained,
-      (SELECT COALESCE(SUM(e.kind = 'pageview'), 0) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= ?) AS page_views_retained
+  const base = bindWindow(`s.organization_id = ? AND s.kind = 'session' AND s.date = '' AND s.created_at <= @asof
+    AND ${startedAt} < @end AND ${lastSeenAt} >= @start${where.length ? ` AND ${where.join(' AND ')}` : ''}`, ctx)
+  const baseParams = [input.organizationId, ...params]
+  const keyset = ctx.cursorKey ? `AND (${startedAt}, s.key) < (?, ?)` : ''
+  const rows = await queryAll<Record<string, unknown>>(db, bindWindow(`SELECT s.key AS session_id, s.created_at, s.payload_json,
+      ${startedAt} AS started_at_asof, ${lastSeenAt} AS last_seen_at_asof,
+      ${['source', 'medium', 'campaign', 'content', 'term', 'referrerHost', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid'].map(key => `${sessionTouchAsOf(key, null)} AS t_${key}`).join(', ')},
+      (SELECT COUNT(*) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS events_retained,
+      (SELECT COALESCE(SUM(e.kind = 'pageview'), 0) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS page_views_retained
     FROM analytics_summaries s WHERE ${base} ${keyset}
-    ORDER BY json_extract(s.payload_json, '$.started_at') DESC, s.key DESC LIMIT ?`, [ctx.asOf, ctx.asOf, ...baseParams, ...(ctx.cursorKey ?? []), ctx.limit + 1])
+    ORDER BY started_at_asof DESC, s.key DESC LIMIT ?`, ctx), [...baseParams, ...(ctx.cursorKey ?? []), ctx.limit + 1])
   const page = rows.slice(0, ctx.limit)
   const last = page.at(-1)
   const totalRow = await queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) AS sessions, COUNT(DISTINCT json_extract(s.payload_json, '$.visitor_id')) AS visitors FROM analytics_summaries s WHERE ${base}`, baseParams)
@@ -368,14 +418,15 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
     rows: page.map((row) => {
       const body = j(row.payload_json) as Record<string, unknown>
       return {
-        session_id: row.session_id, visitor_id: body.visitor_id, started_at: body.started_at, last_seen_at: body.last_seen_at,
+        session_id: row.session_id, visitor_id: body.visitor_id, started_at: row.started_at_asof, last_seen_at: row.last_seen_at_asof,
         duration_seconds: body.duration_seconds, landing_path: body.landing_path,
-        // Derived view: the session's current last touch. Each event keeps the attribution it had.
-        last_touch: { attribution: body.attribution, last_touch_at: body.last_touch_at ?? null, derived: true },
+        // Derived view: the session's last touch as of the query boundary. Each event keeps the attribution it had.
+        last_touch: { attribution: { source: row.t_source, medium: row.t_medium, campaign: row.t_campaign, term: row.t_term, content: row.t_content, referrerHost: row.t_referrerHost,
+          gclid: row.t_gclid, gbraid: row.t_gbraid, wbraid: row.t_wbraid, fbclid: row.t_fbclid, msclkid: row.t_msclkid }, as_of: ctx.asOf, derived: true },
         events_retained: Number(row.events_retained), page_views_retained: Number(row.page_views_retained),
       }
     }),
-    nextKey: rows.length > ctx.limit && last ? [(j(last.payload_json) as Record<string, unknown>).started_at, last.session_id] : null,
+    nextKey: rows.length > ctx.limit && last ? [last.started_at_asof, last.session_id] : null,
     totals: {
       sessions: { value: Number(totalRow?.sessions ?? 0), unit: 'sessions with any activity in the range' },
       visitors: { value: Number(totalRow?.visitors ?? 0), unit: 'distinct visitors (exact, not summed)' },
@@ -383,10 +434,97 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
   }
 }
 
+/** A metric's SQL with the query window bound, and the parameters its `@outcome` placeholders take. */
+const metricSql = (name: string, ctx: { start: string; end: string; asOf: string; outcomeEvent?: string }) => {
+  const sql = METRICS[name]!.sql
+  return { sql: bindWindow(sql, ctx).replaceAll('@outcome', '?'), params: Array(sql.split('@outcome').length - 1).fill(ctx.outcomeEvent) as unknown[] }
+}
+
+interface SummaryFilters { kind: 'organization_day' | 'page_day' | 'dimension_day'; dimension?: string; value?: string; pathPrefix?: string; echo: Record<string, string> }
+
+const SUMMARY_KINDS = ['organization_day', 'page_day', 'dimension_day'] as const
+const SUMMARY_DIMENSIONS = ['country', 'city', 'device', 'referrer'] as const
+
+function resolveSummaryFilters(input: AnalyticsQueryInput): SummaryFilters {
+  if (input.dimensions || input.metrics || input.attributionBasis) invalid('daily_summaries takes summary_kind, dimension, value and path_prefix filters only.')
+  const raw = input.filters ?? {}
+  for (const name of Object.keys(raw)) if (!['summary_kind', 'dimension', 'value', 'path_prefix'].includes(name)) invalid(`Filter "${name}" does not apply to daily_summaries. Supported: summary_kind, dimension, value, path_prefix.`)
+  const text = (name: string) => raw[name] === undefined ? undefined : typeof raw[name] === 'string' && (raw[name] as string).length > 0 && (raw[name] as string).length <= 512 ? raw[name] as string : invalid(`Filter "${name}" must be a non-empty string of at most 512 characters.`)
+  const kind = text('summary_kind') ?? invalid(`daily_summaries requires filters.summary_kind: ${SUMMARY_KINDS.join(', ')}.`)
+  if (!(SUMMARY_KINDS as readonly string[]).includes(kind)) invalid(`summary_kind must be one of: ${SUMMARY_KINDS.join(', ')}.`)
+  const dimension = text('dimension'); const value = text('value'); const pathPrefix = text('path_prefix')
+  if (dimension && !(SUMMARY_DIMENSIONS as readonly string[]).includes(dimension)) invalid(`dimension must be one of: ${SUMMARY_DIMENSIONS.join(', ')}.`)
+  if (kind !== 'dimension_day' && (dimension || value)) invalid('dimension and value apply to summary_kind dimension_day only.')
+  if (value && !dimension) invalid('value requires dimension.')
+  if (kind !== 'page_day' && pathPrefix) invalid('path_prefix applies to summary_kind page_day only.')
+  if (pathPrefix && !pathPrefix.startsWith('/')) invalid('path_prefix must start with "/".')
+  return { kind: kind as SummaryFilters['kind'], dimension, value, pathPrefix, echo: Object.fromEntries(Object.entries({ summary_kind: kind, dimension, value, path_prefix: pathPrefix }).filter(([, v]) => v !== undefined)) as Record<string, string> }
+}
+
+const SUMMARY_METRICS = {
+  organization_day: { page_views: 'page views that day', unique_sessions: 'distinct sessions that day', unique_visitors: 'distinct visitors that day', returning_visitors: 'distinct visitors with an earlier session', avg_session_duration: 'average session duration in seconds', pages_per_session: 'page views per session' },
+  page_day: { page_views: 'page views of the path that day' },
+  dimension_day: { page_views: 'page views in the dimension value that day' },
+} as const
+
+/**
+ * The retained daily summaries, complete and paginated at their stored grain: one row per day
+ * (organization_day), per day and page path (page_day) or per day and dimension value
+ * (dimension_day). Nothing is reconstructed into events, and distinct counts are those the summary
+ * stored for its own grain, not sums of other rows. A summary rewritten after `as_of` makes the
+ * cursor stale, since the rows it would continue through are no longer the ones it started over.
+ */
+async function summariesMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeContext, summary: SummaryFilters, days: { startDate: string; endDate: string }) {
+  const direction = input.sort === 'occurred_at_asc' ? 'asc' : (input.sort === undefined || input.sort === 'occurred_at_desc') ? 'desc' : invalid('sort for daily_summaries must be occurred_at_desc or occurred_at_asc (by day).')
+  ctx.resolved.sort = `date_${direction}`
+  const where = ['organization_id = ?', 'kind = ?', 'date >= ?', 'date <= ?']
+  const params: unknown[] = [input.organizationId, summary.kind, days.startDate, days.endDate]
+  if (summary.dimension) { where.push(`key ->> '$[0]' = ?`); params.push(summary.dimension) }
+  if (summary.value) { where.push(`key ->> '$[1]' = ?`); params.push(summary.value) }
+  if (summary.pathPrefix) { where.push(`(key = ? OR key LIKE ? ESCAPE '\\')`); params.push(summary.pathPrefix.replace(/\/$/, '') || '/', `${summary.pathPrefix.replace(/[\\%_]/g, '\\$&')}%`) }
+  const filtered = where.join(' AND ')
+  if (ctx.cursorKey) {
+    const changed = await queryFirst<{ n: number }>(db, `SELECT COUNT(*) AS n FROM analytics_summaries WHERE ${filtered} AND updated_at > ?`, [...params, ctx.asOf])
+    if (Number(changed?.n ?? 0) > 0) invalid('The daily summaries in this range were rewritten after the first page was read. Read the first page again.')
+  }
+  const keyset = ctx.cursorKey ? `AND (date ${direction === 'desc' ? '<' : '>'} ? OR (date = ? AND key > ?))` : ''
+  const cursor = ctx.cursorKey ? [ctx.cursorKey[0], ctx.cursorKey[0], ctx.cursorKey[1]] : []
+  const rows = await queryAll<{ date: string; key: string; payload_json: string; updated_at: string }>(db, `SELECT date, key, payload_json, updated_at FROM analytics_summaries
+    WHERE ${filtered} ${keyset} ORDER BY date ${direction.toUpperCase()}, key ASC LIMIT ?`, [...params, ...cursor, ctx.limit + 1])
+  const page = rows.slice(0, ctx.limit)
+  const last = page.at(-1)
+  const totalRow = await queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) AS summary_rows, COUNT(DISTINCT date) AS days, COALESCE(SUM(json_extract(payload_json, '$.page_views')), 0) AS page_views FROM analytics_summaries WHERE ${filtered}`, params)
+  const summarizedDays = await queryFirst<{ n: number }>(db, `SELECT COUNT(*) AS n FROM analytics_summaries WHERE organization_id = ? AND kind = 'organization_day' AND date >= ? AND date <= ?`, [input.organizationId, days.startDate, days.endDate])
+  const daysInRange = Math.round((Date.parse(`${days.endDate}T00:00:00Z`) - Date.parse(`${days.startDate}T00:00:00Z`)) / 86_400_000) + 1
+  const totals: AnalyticsQueryResult['totals'] = {
+    summary_rows: { value: Number(totalRow?.summary_rows ?? 0), unit: 'summary rows matching the filters' },
+    days_with_rows: { value: Number(totalRow?.days ?? 0), unit: 'days that have a matching row' },
+  }
+  // Page views add up exactly when the rows partition the views: one row kind of days or pages, or one dimension.
+  if (summary.kind !== 'dimension_day' || summary.dimension) totals.page_views = { value: Number(totalRow?.page_views ?? 0), unit: 'page views (sum of the matching rows)' }
+  return {
+    rows: page.map((row) => {
+      const body = j(row.payload_json) as Record<string, unknown>
+      const identity = summary.kind === 'page_day' ? { page_path: row.key }
+        : summary.kind === 'dimension_day' ? (() => { const [dimension, value, subvalue] = JSON.parse(row.key) as string[]; return { dimension, value, subvalue } })() : {}
+      return { date: row.date, summary_kind: summary.kind, ...identity, metrics: body, summarized_at: row.updated_at }
+    }),
+    nextKey: rows.length > ctx.limit && last ? [last.date, last.key] : null,
+    totals,
+    source: {
+      table: 'analytics_summaries', summary_kind: summary.kind, grain: summary.kind === 'organization_day' ? 'day' : summary.kind === 'page_day' ? 'day and public page path' : 'day and dimension value (country, city, device or referrer)',
+      supported_metrics: SUMMARY_METRICS[summary.kind], derived_from: 'pageview events aggregated per local day; not individual events',
+      days_in_range: daysInRange, days_summarized: Number(summarizedDays?.n ?? 0),
+      note: 'Days without an organization_day summary have not been aggregated (the current day, or a day the aggregation has not reached); their pageviews are in events and breakdown while raw detail is retained.',
+    },
+  }
+}
+
 async function totalsFor(db: DbClient, organizationId: string, ctx: ModeContext & { basis: AttributionBasis }, names: string[], outcomeEvent?: string): Promise<AnalyticsQueryResult['totals']> {
   const where = populationWhere(ctx)
-  const row = await queryFirst<Record<string, unknown>>(db, `SELECT ${names.map(name => `${METRICS[name]!.sql.replaceAll('@outcome', '?')} AS "${name}"`).join(', ')} FROM ${FROM(ctx.filters.needsSession)} WHERE ${where.sql}`,
-    [...names.flatMap(name => Array(METRICS[name]!.sql.split('@outcome').length - 1).fill(outcomeEvent)), ...where.params(organizationId)])
+  const bound = names.map(name => metricSql(name, { ...ctx, outcomeEvent }))
+  const row = await queryFirst<Record<string, unknown>>(db, `SELECT ${names.map((name, index) => `${bound[index]!.sql} AS "${name}"`).join(', ')} FROM ${FROM(ctx.filters.needsSession)} WHERE ${where.sql}`,
+    [...bound.flatMap(item => item.params), ...where.params(organizationId)])
   const totals: AnalyticsQueryResult['totals'] = {}
   for (const name of names) totals[name] = { value: row?.[name] === null || row?.[name] === undefined ? null : Number(row[name]), unit: `${METRICS[name]!.unit}${['sessions', 'visitors'].includes(name) ? ' (exact over the whole filtered population, not summed)' : ''}` }
   return totals
@@ -402,6 +540,14 @@ async function breakdownMode(db: DbClient, input: AnalyticsQueryInput, ctx: Mode
   for (const name of metrics) if (!(name in METRICS)) invalid(`Unknown metric "${name}". Supported: ${Object.keys(METRICS).join(', ')}.`)
   const needsOutcome = metrics.filter(name => METRICS[name]!.needsOutcome)
   if (needsOutcome.length > 0 && !ctx.outcomeEvent) invalid(`${needsOutcome.join(' and ')} require outcome_event: the selected outcome, the population is sessions with a pageview in each group.`)
+  if (needsOutcome.length > 0) {
+    // The rate is over sessions with a pageview. Filters or dimensions that only outcome events carry would empty
+    // that population, so the request cannot mean what it says and is rejected instead of answered.
+    const eventOnly = new Set(['stage', 'surface', 'entity_type', 'entity_id', 'currency', 'value_basis', 'conversion_type', 'actor_id', 'ga4_delivery_status'])
+    for (const name of [...Object.keys(ctx.filters.echo), ...dimensions]) if (eventOnly.has(name)) invalid(`${needsOutcome.join(' and ')} measure sessions with a pageview; "${name}" only outcome events carry. Choose the outcome with outcome_event and filter the pageview population.`)
+    for (const name of ['kind', 'event_name']) if (ctx.filters.echo[name] && ctx.filters.echo[name] !== 'pageview') invalid(`${needsOutcome.join(' and ')} measure sessions with a pageview: ${name} must be pageview or omitted; choose the outcome with outcome_event.`)
+    if (dimensions.some(name => name === 'kind' || name === 'event_name')) invalid(`${needsOutcome.join(' and ')} cannot be grouped by kind or event_name; the population is pageviews.`)
+  }
   const monetary = metrics.filter(name => METRICS[name]!.monetary)
   if (monetary.length > 0 && !dimensions.includes('currency')) invalid(`${monetary.join(', ')} are amounts: group by the currency dimension so currencies are never added together.`)
   if (dimensions.some(name => name in ATTRIBUTION_FIELDS) && ctx.basis === 'session_last_touch') ctx.filters.needsSession = true
@@ -416,13 +562,13 @@ async function breakdownMode(db: DbClient, input: AnalyticsQueryInput, ctx: Mode
   if (ctx.outcomeEvent) ctx.resolved.outcome_event = ctx.outcomeEvent
 
   const where = populationWhere(ctx)
-  const dimSql = dimensions.map(name => EVENT_FIELDS[name]!.sql(ctx.basis))
-  const outcomeCount = (sql: string) => sql.split('@outcome').length - 1
+  const dimSql = dimensions.map(name => bindWindow(EVENT_FIELDS[name]!.sql(ctx.basis), ctx))
+  const boundMetrics = metrics.map(name => metricSql(name, ctx))
   const select = [
     ...dimSql.map((sql, index) => `${sql} AS d${index}, (${sql}) IS NULL AS n${index}, COALESCE(${sql}, '') AS v${index}`),
-    ...metrics.map(name => `${METRICS[name]!.sql.replaceAll('@outcome', '?')} AS "m_${name}"`),
+    ...metrics.map((name, index) => `${boundMetrics[index]!.sql} AS "m_${name}"`),
   ].join(', ')
-  const selectParams = metrics.flatMap(name => Array(outcomeCount(METRICS[name]!.sql)).fill(ctx.outcomeEvent))
+  const selectParams = boundMetrics.flatMap(item => item.params)
   const sortValue = `COALESCE("m_${sortMetric}", -1)`
   const keyColumns = dimensions.flatMap((_, index) => [`n${index}`, `v${index}`])
   const op = direction === 'desc' ? '<' : '>'
@@ -441,7 +587,7 @@ async function breakdownMode(db: DbClient, input: AnalyticsQueryInput, ctx: Mode
   const totals = plain.length > 0 ? await totalsFor(db, input.organizationId, ctx, plain, ctx.outcomeEvent) : {}
   totals.groups = { value: Number(groupCount?.groups ?? 0), unit: 'groups in the whole filtered population' }
   if (monetary.length > 0) {
-    const perCurrency = await queryAll<Record<string, unknown>>(db, `SELECT ${payload('$.value.currency')} AS currency, ${monetary.map(name => `${METRICS[name]!.sql} AS "${name}"`).join(', ')}
+    const perCurrency = await queryAll<Record<string, unknown>>(db, `SELECT ${payload('$.value.currency')} AS currency, ${monetary.map(name => `${metricSql(name, ctx).sql} AS "${name}"`).join(', ')}
       FROM ${FROM(ctx.filters.needsSession)} WHERE ${where.sql} AND ${payload('$.value.currency')} IS NOT NULL GROUP BY 1 ORDER BY 1`, where.params(input.organizationId))
     totals.by_currency = perCurrency.map(row => ({ currency: row.currency, ...Object.fromEntries(monetary.map(name => [name, Number(row[name])])), unit: 'minor units of the currency' }))
   }

@@ -87,7 +87,16 @@ repeated event ID changes nothing. `occurred_at` is the browser-reported time
 bounded by receipt; `received_at` is the server watermark.
 
 Outcomes and interactions reference the pageview they happened on
-(`origin_event_id`). The reference is believed only when that pageview exists for
+(`origin_event_id`). The browser captures an interaction (ID, moment, page)
+when it happens and only its delivery waits for that pageview to be recorded
+(`pageEventIdFor`); the collector registers independently of the emitters, so
+an emitter that runs first (a product page on mount) waits on the collector
+rather than reading a page that does not exist yet. A visit left before its
+pageview persisted delivers the interaction with unknown context. The verified
+origin's public path is the event's `page_path`; a submission endpoint's own
+label is stored separately as `route_path`. When an origin is verified its
+snapshot is kept exactly, including "no attribution"; the session's newer
+campaign is never substituted. The reference is believed only when that pageview exists for
 this organization and the same visitor session; the event then carries that
 visit's page, locale and attribution. Otherwise the context stays unknown; no
 session is fabricated. Stripe outcomes carry context through the checkout,
@@ -96,7 +105,8 @@ subscription and invoice relationships.
 ## Querying: `query_organization_analytics`
 
 Modes: `events` (event history), `sessions` (derived last-touch view),
-`breakdown` (grouped metrics). Inputs: `start_date`/`end_date` in the
+`breakdown` (grouped metrics), `daily_summaries` (the retained daily summary
+rows at their own grain). Inputs: `start_date`/`end_date` in the
 organization's timezone, string-equality `filters` over the documented fields,
 `attribution_basis` (`observed` | `event_snapshot` | `session_last_touch`),
 `sort`, `limit` (1–200), `cursor`, `dimensions`, `metrics`, `outcome_event`.
@@ -105,8 +115,30 @@ boundary), `totals` with units (monetary totals by currency, never summed across
 currencies), and `coverage`. Cursors are HMAC-signed and bound to the
 organization, exact query, sort and `as_of`; tampered, foreign or mismatched
 cursors are rejected. Distinct counts (`sessions`, `visitors`, `entities`) are
-exact at the requested grain. `session_conversion_rate` is labeled
-converting sessions / eligible sessions and requires `outcome_event`.
+exact at the requested grain.
+
+`session_conversion_rate` and `converting_sessions` require `outcome_event`.
+The eligible population is the sessions with a pageview in the group; the
+converting sessions are those same sessions that completed the outcome in the
+range, so the rate cannot exceed 100%. Filters and dimensions that only outcome
+events carry, and a `kind`/`event_name` other than `pageview`, are rejected
+for these metrics.
+
+`attribution_basis=session_last_touch` reads a session's last touch as of the
+cursor's `as_of` boundary, not as it is now: a session no event has touched
+since the boundary is read from its record, otherwise it is rebuilt from the
+retained pageviews received by then (a session with no touch by then is
+Direct). A touch that arrives between two pages therefore never moves earlier
+events between groups. Pageview detail older than its retention cannot be
+replayed; such a session reads from its record.
+
+`daily_summaries` (`filters.summary_kind`: `organization_day`, `page_day` or
+`dimension_day`, plus `dimension`/`value`/`path_prefix`) pages completely
+through the retained summaries, including days older than raw pageview detail.
+Each row carries its `summary_kind`, grain and stored metrics
+(`coverage.summary_source` lists them). Nothing is reconstructed into events.
+A summary rewritten after the first page makes the cursor stale and it is
+rejected.
 
 ## Retention and coverage
 

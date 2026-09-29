@@ -767,7 +767,7 @@ async function submitBooking(contact: ContactFormState) {
           guest_phone: contact.phone || null,
           notes: contact.notes || null,
           locale: locale.value,
-          page_event_id: pageEventId(),
+          page_event_id: await pageEventId(),
         },
         validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',

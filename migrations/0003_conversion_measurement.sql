@@ -21,7 +21,7 @@ CREATE TABLE `__new_analytics_events` (
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed', 'viewed', 'started', 'occurred')
     AND ((session_id IS NULL) = (visitor_id IS NULL))
     AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')
-      OR (session_id IS NULL AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null'))))
+      OR (json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null'))))
 );
 --> statement-breakpoint
 INSERT INTO `__new_analytics_events`("id", "kind", "organization_id", "location_id", "session_id", "visitor_id", "page_path", "duration_seconds", "payload_json", "created_at", "received_at") SELECT "id", "kind", "organization_id", "location_id", "session_id", "visitor_id", "page_path", "duration_seconds", "payload_json", "created_at", "created_at" FROM `analytics_events`;--> statement-breakpoint

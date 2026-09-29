@@ -116,7 +116,7 @@ export default defineHandler(async (event) => {
     entityType: 'request',
     entityId: id,
     pageType: 'contact',
-    pagePath: '/contact',
+    routePath: '/contact',
         originEventId: readPageEventId(body.page_event_id),
     }),
   ])

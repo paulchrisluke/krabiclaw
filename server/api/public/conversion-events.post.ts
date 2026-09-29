@@ -1,3 +1,4 @@
+import { boundedOccurrence } from '~/server/utils/pageview-tracking'
 import { getRouterParam, readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -171,6 +172,7 @@ export default defineHandler(async (event) => {
     organizationId: organization.id, eventName: eventName as OrganizationConversionEventName,
     stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata, surface: 'website',
     id: eventId, originEventId: pageEventId, variantId,
+    occurredAt: boundedOccurrence(body.occurred_at, new Date().toISOString()),
   })
   return jsonResponse({ success: true, id: result.id, recorded: result.created }, { status: result.created ? 201 : 200 })
 })

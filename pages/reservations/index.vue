@@ -392,7 +392,7 @@ async function handleReservation() {
     const timezone = reservationTimezone.value
     const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/reservations`, {
       method: 'POST',
-      body: { ...reservationForm.value, page_event_id: pageEventId() },
+      body: { ...reservationForm.value, page_event_id: await pageEventId() },
     })
     setBookingConfirmation({
       type: 'reservation',

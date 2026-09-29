@@ -31,7 +31,10 @@ export interface OrganizationConversionInput {
   entityType?: ConversionEntityType | null
   entityId?: string | null
   pageType?: string | null
+  /** The public path the action happened on, when the server knows it. A verified origin pageview's path always wins. */
   pagePath?: string | null
+  /** The business route that handled the action (a form endpoint's own label); never a substitute for the visited path. */
+  routePath?: string | null
   ctaDestination?: string | null
   metadata?: ApiRecord | null
   value?: ConversionValue | null
@@ -184,8 +187,9 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
     attributedAt = session.last_touch_at ?? now
     attributionBasis = session.last_touch_at ? 'session_current' : 'none'
     origin_ = await verifiedOriginEvent(db, input.organizationId, browser, input.originEventId)
-    if (origin_?.attribution) {
-      // The visit this happened on keeps its own context; the session's newest touch is not it.
+    if (origin_) {
+      // The visit this happened on keeps its own context, including having none: a later campaign
+      // touch on the same session is not the context of an earlier visit.
       attribution = origin_.attribution
       attributedAt = origin_.attributedAt
       attributionBasis = origin_.basis
@@ -195,7 +199,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
   const id = input.id ?? crypto.randomUUID()
   const ipHash = origin ? await hashIp(getClientIp({ req: origin })) : null
   const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
-    entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
+    entity_id: input.entityId ?? null, page_type: input.pageType ?? null, route_path: input.routePath ?? null, cta_destination: input.ctaDestination ?? null,
     conversion_type: rule.conversionType, surface: input.surface, actor: input.actor ?? null,
     attribution, attributed_at: attributedAt, attribution_basis: attributionBasis, observed: origin_?.observed ?? null,
     origin_event_id: origin_?.id ?? null, page: origin_?.page ?? null, properties,
@@ -205,7 +209,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
   const inserted = await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-    id, rule.kind, input.organizationId, browser?.sessionId ?? null, browser?.visitorId ?? null, input.locationId ?? origin_?.page.location_id ?? null, input.pagePath ?? origin_?.page.path ?? null, payload, now,
+    id, rule.kind, input.organizationId, browser?.sessionId ?? null, browser?.visitorId ?? null, input.locationId ?? origin_?.page.location_id ?? null, origin_?.page.path ?? input.pagePath ?? null, payload, now,
   ])
   if (Number(inserted.meta?.changes ?? 0) === 1) return { id, created: true }
 

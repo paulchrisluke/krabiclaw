@@ -5,7 +5,7 @@
 import { parseGaClientId, parseGaSessionId } from '~/utils/ga-cookies'
 import { ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 import { CONVERSION_EVENT_CATALOG, type ConversionEventDefinition, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
-import { currentPageEventId } from '~/utils/pageview-tracking-runtime.client'
+import { pageEventIdFor, whenLeaving } from '~/utils/pageview-tracking-runtime.client'
 
 declare global {
   interface Window {
@@ -100,7 +100,9 @@ export const useAnalytics = () => {
     const eventId = crypto.randomUUID()
     const definition: ConversionEventDefinition = CONVERSION_EVENT_CATALOG[eventName]
     const kept = Object.fromEntries(Object.entries(properties).filter(([name]) => definition.properties?.includes(name)))
-    const native = postAuthenticatedInteraction({ event_id: eventId, event_name: eventName, organization_id: organizationId, page_event_id: currentPageEventId(), properties: kept })
+    const occurredAt = new Date().toISOString()
+    const path = window.location.pathname
+    const native = Promise.race([pageEventIdFor(path), whenLeaving()]).then(pageEventId => postAuthenticatedInteraction({ event_id: eventId, occurred_at: occurredAt, event_name: eventName, organization_id: organizationId, page_event_id: pageEventId, properties: kept }))
     // A collection failure is reported through the application's error hook. The error tracker's
     // own event is the one exception: reporting its failure as an error would report itself again
     // without end, so that failure is written to the console and nowhere else.

@@ -163,3 +163,89 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     await runtime.dispose()
   }
 })
+
+test('native analytics: rates share one population, cursors survive attribution changes, summaries page completely, origins keep their own path and context', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await openDb()
+  try {
+    const settings = '{"config":{"default_timezone":"Asia/Bangkok"}}'
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json) VALUES (?, ?, ?, ?, ?)`).bind(ORG, ORG, ORG, ORG, settings).run()
+    const day2 = { start_date: '2026-09-11', end_date: '2026-09-11' }
+
+    // Two sessions view a page just before Bangkok midnight (17:00Z) and convert just after; a third only views after midnight.
+    const conv = async (n: number) => {
+      const session = uuid(2000 + n), visitor = uuid(3000 + n)
+      await recordTenantPageview(db, pageview({ eventId: uuid(4000 + n), sessionId: session, visitorId: visitor, now: '2026-09-11T16:58:00.000Z' }))
+      await recordOrganizationConversionEvent(db, cookieFor(session, visitor), { organizationId: ORG, eventName: 'contact_submit', stage: 'submitted', surface: 'website', entityType: 'request', entityId: `req-${n}`, originEventId: uuid(4000 + n), occurredAt: '2026-09-11T17:02:00.000Z' })
+    }
+    await conv(1); await conv(2)
+    await recordTenantPageview(db, pageview({ eventId: uuid(4100), sessionId: uuid(2100), visitorId: uuid(3100), now: '2026-09-11T17:05:00.000Z' }))
+    const day3 = { start_date: '2026-09-12', end_date: '2026-09-12' }
+    const rate = await mcp(db, ORG, { mode: 'breakdown', ...day3, dimensions: ['device'], metrics: ['eligible_sessions', 'converting_sessions', 'session_conversion_rate'], outcome_event: 'contact_submit' })
+    assert.deepEqual((rate.rows[0] as any).metrics, { eligible_sessions: 1, converting_sessions: 0, session_conversion_rate: 0 }, 'sessions that only viewed before the range are not counted as converting in it')
+    const both = await mcp(db, ORG, { mode: 'breakdown', start_date: '2026-09-11', end_date: '2026-09-12', dimensions: ['device'], metrics: ['eligible_sessions', 'converting_sessions', 'session_conversion_rate'], outcome_event: 'contact_submit' })
+    assert.deepEqual((both.rows[0] as any).metrics, { eligible_sessions: 3, converting_sessions: 2, session_conversion_rate: 100 * 2 / 3 })
+    await assert.rejects(mcp(db, ORG, { mode: 'breakdown', ...day3, dimensions: ['device'], metrics: ['session_conversion_rate'], outcome_event: 'contact_submit', filters: { kind: 'conversion' } }), /pageview/)
+    await assert.rejects(mcp(db, ORG, { mode: 'breakdown', ...day3, dimensions: ['device'], metrics: ['session_conversion_rate'], outcome_event: 'contact_submit', filters: { stage: 'submitted' } }), /only outcome events carry/)
+
+    // A verified origin keeps its own public path and its own (empty) attribution, whatever the session became.
+    const S = uuid(5000), V = uuid(5001)
+    await recordTenantPageview(db, pageview({ eventId: uuid(5010), sessionId: S, visitorId: V, pagePath: '/th/contact', sourcePath: '/contact', locale: 'th', now: '2026-09-11T02:00:00.000Z' }))
+    await recordTenantPageview(db, pageview({ eventId: uuid(5011), sessionId: S, visitorId: V, pagePath: '/pricing', attribution: { utm_source: 'meta', utm_medium: 'paid', utm_campaign: 'B' }, now: '2026-09-11T02:05:00.000Z' }))
+    await recordOrganizationConversionEvent(db, cookieFor(S, V), { organizationId: ORG, eventName: 'contact_submit', stage: 'submitted', surface: 'website', entityType: 'request', entityId: 'req-th', originEventId: uuid(5010), routePath: '/contact', occurredAt: '2026-09-11T02:10:00.000Z' })
+    const th = await mcp(db, ORG, { mode: 'events', ...day2, filters: { event_name: 'contact_submit', path_prefix: '/th/' } })
+    assert.equal(th.rows.length, 1, 'the conversion carries the visited /th/contact path')
+    const row = th.rows[0] as Record<string, any>
+    assert.equal(row.page.path, '/th/contact')
+    assert.equal(row.page.locale, 'th')
+    assert.equal(row.attribution.snapshot, null, 'the visit had no attribution; the later campaign is not its context')
+    assert.equal(row.attribution.basis, 'none')
+
+    // Pagination by session_last_touch is stable while a session's touch changes between pages.
+    const P = uuid(6000)
+    const touch = (n: number, session: string, campaign: string | null, at: string) => recordTenantPageview(db, pageview({ eventId: uuid(6100 + n), sessionId: session, visitorId: uuid(6500 + n), pagePath: `/t${n}`, attribution: campaign ? { utm_source: 'x', utm_medium: 'y', utm_campaign: campaign } : {}, now: at }))
+    await touch(1, P, 'A', '2026-09-10T03:00:00.000Z')
+    await touch(2, P, null, '2026-09-10T03:01:00.000Z') // inherits A
+    const Q = uuid(6001)
+    await touch(3, Q, 'B', '2026-09-10T03:02:00.000Z')
+    const request = { mode: 'breakdown', start_date: '2026-09-10', end_date: '2026-09-10', dimensions: ['campaign'], metrics: ['page_views'], attribution_basis: 'session_last_touch', filters: { kind: 'pageview', source: 'x' }, limit: 1 }
+    const first = await mcp(db, ORG, request)
+    assert.equal((first.rows[0] as any).dimensions.campaign, 'A')
+    // Session P receives a new B touch after the first page was read.
+    await touch(4, P, 'B', '2026-09-10T03:10:00.000Z')
+    const second = await mcp(db, ORG, { ...request, cursor: first.next_cursor })
+    assert.deepEqual((second.rows[0] as any).dimensions.campaign, 'B')
+    assert.equal((second.rows[0] as any).metrics.page_views, 1, 'B is read as it stood at the first page: only its own session, not the moved events')
+    assert.equal(second.next_cursor, null)
+
+    // Retained daily summaries: complete, paginated, older than the raw window, at their own grain.
+    for (let i = 0; i < 5; i++) {
+      await recordTenantPageview(db, pageview({ eventId: uuid(7000 + i), sessionId: uuid(7100), visitorId: uuid(7101), pagePath: `/old${i}`, now: '2026-06-01T03:00:00.000Z' }))
+    }
+    const { aggregateOrganizationAnalyticsDate } = await import('../../server/utils/analytics-report.ts')
+    await aggregateOrganizationAnalyticsDate(db, ORG, '2026-06-01')
+    const readSummaries = async (filters: Record<string, string>) => {
+      const rows: any[] = []
+      let cursor: string | null = null
+      do {
+        const page = await mcp(db, ORG, { mode: 'daily_summaries', start_date: '2026-06-01', end_date: '2026-06-01', filters, limit: 2, ...(cursor ? { cursor } : {}) })
+        rows.push(...page.rows); cursor = page.next_cursor
+        assert.equal((page.coverage as any).summary_source.table, 'analytics_summaries')
+      } while (cursor)
+      return rows
+    }
+    const pages = await readSummaries({ summary_kind: 'page_day' })
+    assert.deepEqual(pages.map(r => r.page_path), ['/old0', '/old1', '/old2', '/old3', '/old4'])
+    assert.ok(pages.every(r => r.metrics.page_views === 1))
+    assert.equal((await readSummaries({ summary_kind: 'organization_day' }))[0].metrics.page_views, 5)
+    assert.ok((await readSummaries({ summary_kind: 'dimension_day', dimension: 'device' })).length >= 1)
+    const oldEvents = await mcp(db, ORG, { mode: 'events', start_date: '2026-06-01', end_date: '2026-06-01' })
+    assert.equal((oldEvents.coverage as any).requested_range.pageview_detail_complete, false)
+    // A summary rewritten between pages makes the cursor stale instead of skipping rows.
+    const firstSummary = await mcp(db, ORG, { mode: 'daily_summaries', start_date: '2026-06-01', end_date: '2026-06-01', filters: { summary_kind: 'page_day' }, limit: 2 })
+    await aggregateOrganizationAnalyticsDate(db, ORG, '2026-06-01')
+    await assert.rejects(mcp(db, ORG, { mode: 'daily_summaries', start_date: '2026-06-01', end_date: '2026-06-01', filters: { summary_kind: 'page_day' }, limit: 2, cursor: firstSummary.next_cursor }), /rewritten/)
+    await assert.rejects(mcp(db, ORG, { mode: 'daily_summaries', start_date: '2026-06-01', end_date: '2026-06-01' }), /summary_kind/)
+  } finally {
+    await runtime.dispose()
+  }
+})

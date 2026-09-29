@@ -4,8 +4,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { HOUR_MS, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
-import { readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
-import { isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import { boundedOccurrence, isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 
@@ -47,6 +46,7 @@ export default defineHandler(async (event) => {
     actor: { type: 'user', id: session.user.id },
     id: body.event_id, properties: body.properties && typeof body.properties === 'object' && !Array.isArray(body.properties) ? body.properties as Record<string, unknown> : null,
     originEventId: readPageEventId(body.page_event_id),
+    occurredAt: boundedOccurrence(body.occurred_at, new Date().toISOString()),
   })
   return jsonResponse({ success: true, id: result.id, recorded: result.created }, { status: result.created ? 201 : 200 })
 })
