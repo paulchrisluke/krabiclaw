@@ -46,9 +46,8 @@
       </div>
 
       <div class="kc-parallax-hero__mark" aria-hidden="true">
-        <span class="kc-wordmark">
-          <span class="kc-parallax-hero__mark-text">krabiclaw</span>
-        </span>
+        <span class="kc-parallax-hero__mark-line">Ready when</span>
+        <span class="kc-parallax-hero__mark-line kc-parallax-hero__mark-line--strong">You are.</span>
       </div>
     </section>
 
@@ -414,10 +413,10 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 }
 
 .kc-parallax-hero__layer--1 { z-index: 1; }
-.kc-parallax-hero__layer--2 { z-index: 2; }
-.kc-parallax-hero__layer--3 { z-index: 3; }
-.kc-parallax-hero__layer--4 { z-index: 4; }
-.kc-parallax-hero__layer--5 { z-index: 5; }
+.kc-parallax-hero__layer--2 { z-index: 3; }
+.kc-parallax-hero__layer--3 { z-index: 4; }
+.kc-parallax-hero__layer--4 { z-index: 5; }
+.kc-parallax-hero__layer--5 { z-index: 6; }
 
 .kc-parallax-hero__layer img,
 .kc-parallax-hero__foreground img {
@@ -448,21 +447,31 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 
 .kc-parallax-hero__mark {
   position: absolute;
-  z-index: 15;
-  top: 19%;
+  z-index: 2;
+  top: calc(120px / var(--kc-scene-ratio));
   left: 50%;
+  display: flex;
+  width: min(82vw, 34rem);
+  flex-direction: column;
+  align-items: center;
   color: white;
+  font-family: var(--font-jost);
+  font-size: clamp(2.6rem, 6.5vw, 5.25rem);
+  letter-spacing: -0.02em;
+  line-height: 0.92;
   text-align: center;
-  text-shadow: 0 2px 18px rgb(0 0 0 / 35%);
+  text-shadow: 0 2px 18px rgb(0 0 0 / 32%);
   transform: translate3d(-50%, var(--kc-parallax-offset), 0);
   will-change: transform;
 }
 
-.kc-parallax-hero__mark-text {
-  color: white;
-  font-size: clamp(2.35rem, 6vw, 4.8rem);
-  font-weight: 300;
-  letter-spacing: 0.01em;
+.kc-parallax-hero__mark-line {
+  display: block;
+  font-weight: 400;
+}
+
+.kc-parallax-hero__mark-line--strong {
+  font-weight: 600;
 }
 
 .kc-parallax-intro {
