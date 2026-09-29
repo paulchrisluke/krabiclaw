@@ -42,7 +42,7 @@
     "local:setup": "yarn schema:local && yarn db:pull:local && node --experimental-strip-types scripts/provision-development-auth.ts --local-dev && yarn fixtures:verify:local --local-dev",
     "local:cards": "node scripts/generate-local-social-cards.mjs",
     "dev:worker": "yarn build && yarn dev:worker:start",
-    "dev:worker:start": "wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000 --live-reload",
+    "dev:worker:start": "wrangler dev .output/server/index.mjs --assets .output/public --port 3000 --live-reload --var AI_SEARCH_INSTANCE_ID:krabiclaw-platform-knowledge-preview",
     "fixtures:verify:local": "node --experimental-strip-types scripts/verify-seeded-d1.ts",
     "fixtures:verify:preview": "node --experimental-strip-types scripts/verify-seeded-d1.ts --preview",
     "e2e:local:prepare": "yarn schema:local && node --env-file-if-exists=.env --experimental-strip-types scripts/reset-e2e-artifacts.ts --older-than-hours=0 && yarn db:pull:local && node --env-file-if-exists=.env --experimental-strip-types scripts/provision-development-auth.ts && yarn build",
