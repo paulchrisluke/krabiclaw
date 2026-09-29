@@ -317,14 +317,19 @@ CREATE TABLE `content_documents` (
 	CONSTRAINT "content_documents_role_check" CHECK((row_role = 'root' AND root_id IS NULL AND root_role IS NULL AND locale = 'en') OR (row_role = 'representation' AND root_id IS NOT NULL AND root_id <> id AND root_role = 'root' AND locale IS NOT NULL AND locale <> 'en' AND product_id IS NULL AND location_id IS NULL AND scope_path IS NULL AND status IS NULL AND visibility IS NULL AND source IS NULL AND author_id IS NULL AND published_at IS NULL AND first_published_at IS NULL)),
 	CONSTRAINT "content_documents_path_check" CHECK(path IS NULL OR (path LIKE '/%' AND path NOT LIKE '//%')),
 	CONSTRAINT "content_documents_page_copy_check" CHECK(kind <> 'page' OR (path IS NOT NULL AND title IS NOT NULL)),
+	CONSTRAINT "content_documents_page_type_check" CHECK(kind <> 'page' OR row_role <> 'root' OR ((metadata_json ->> '$.page_type') IN ('custom','recipe','legal','system')) IS 1),
 	CONSTRAINT "content_documents_qa_scope_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((location_id IS NULL OR scope_path IS NULL) AND (scope_path IS NULL OR scope_path LIKE '/%'))),
 	CONSTRAINT "content_documents_article_visibility_check" CHECK(kind NOT IN ('article','social_post') OR row_role <> 'root' OR (visibility IN ('listed','unlisted')) IS 1),
 	CONSTRAINT "content_documents_qa_state_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((status IN ('published','hidden')) IS 1 AND (source IN ('manual','import','template')) IS 1)),
+	CONSTRAINT "content_documents_qa_counts_check" CHECK(kind <> 'qa' OR row_role <> 'root' OR ((json_type(metadata_json, '$.is_owner_answer') = 'integer' AND json_type(metadata_json, '$.upvote_count') = 'integer') IS 1)),
+	CONSTRAINT "content_documents_article_tags_check" CHECK(kind <> 'article' OR json_type(metadata_json, '$.tags') IS NULL OR json_type(metadata_json, '$.tags') IN ('array','null')),
 	CONSTRAINT "content_documents_publication_check" CHECK(row_role <> 'root' OR kind NOT IN ('article', 'social_post') OR (status IN ('draft','published')) IS 1),
 	CONSTRAINT "content_documents_social_lifecycle_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND published_at IS NULL) OR (status = 'published' AND published_at IS NOT NULL))),
 	CONSTRAINT "content_documents_article_lifecycle_check" CHECK(kind <> 'article' OR row_role <> 'root' OR status <> 'published' OR published_at IS NOT NULL),
 	CONSTRAINT "content_documents_copy_required_check" CHECK(row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind NOT IN ('article','social_post') OR slug IS NOT NULL))),
-	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1)
+	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1),
+	CONSTRAINT "content_documents_social_call_to_action_check" CHECK(kind <> 'social_post' OR json_type(metadata_json, '$.call_to_action') IS NULL OR (json_type(metadata_json, '$.call_to_action') IS 'object' AND json_type(metadata_json, '$.call_to_action.label') IS 'text' AND length(trim(json_extract(metadata_json, '$.call_to_action.label'))) > 0 AND ((row_role = 'root' AND json_type(metadata_json, '$.call_to_action.url') IS 'text' AND (json_extract(metadata_json, '$.call_to_action.url') LIKE 'https://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'http://%' OR json_extract(metadata_json, '$.call_to_action.url') LIKE 'tel:%') AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label', '$.url') = '{}') OR (row_role = 'representation' AND json_remove(json_extract(metadata_json, '$.call_to_action'), '$.label') = '{}')))),
+	CONSTRAINT "content_documents_social_metadata_check" CHECK(kind <> 'social_post' OR json_remove(metadata_json, '$.call_to_action') = '{}')
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`organization_id`,`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint

@@ -400,7 +400,7 @@ async function uploadIndexItem(env: CloudflareEnv, key: string, content: string,
   await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata }))
 }
 
-async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
+async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000, organizationId?: string) {
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const startedAt = Date.now()
 
@@ -409,25 +409,31 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   // rather than logged, so that when the budget does run out the error says what
   // actually went wrong instead of "timed out". A whole window of identical
   // errors is our instance being unhealthy, and that is the thing worth naming.
-  let lastStatsError: unknown = null
+  let lastStatusError: unknown = null
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const stats = await instance.stats()
-      const queued = Number(stats.queued ?? 0)
-      const running = Number(stats.running ?? 0)
-      const outdated = Number(stats.outdated ?? 0)
-      if (queued === 0 && running === 0 && outdated === 0) return
-      lastStatsError = null
+      if (organizationId) {
+        const items = await listOrganizationItems(env, organizationId)
+        if (items.every(item => !['queued', 'running', 'outdated'].includes(item.status))) return
+      } else {
+        const stats = await instance.stats()
+        const { queued, running, outdated } = stats
+        if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
+          throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
+        }
+        if (queued === 0 && running === 0 && outdated === 0) return
+      }
+      lastStatusError = null
     } catch (error) {
-      lastStatsError = error
+      lastStatusError = error
     }
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
-  if (lastStatsError) {
+  if (lastStatusError) {
     throw new Error(
-      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatsError instanceof Error ? lastStatsError.message : String(lastStatsError)}`,
-      { cause: lastStatsError },
+      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatusError instanceof Error ? lastStatusError.message : String(lastStatusError)}`,
+      { cause: lastStatusError },
     )
   }
   throw new Error('Timed out waiting for AI Search indexing to complete')
@@ -882,12 +888,9 @@ export function indexItemPayload(record: ExpandedPlatformKnowledgeDocument) {
 
 // Records get expanded across every surface they support (a doc record alone spans 6:
 // public/docs/blog/help/chowbot/dashboard), so the real upload count for the full
-// corpus is a multiple of the base document count — sequential one-at-a-time uploads
-// (even with per-item retries) took ~5 minutes for production content, right at the
-// Workers platform's own request-duration ceiling, killing the whole request with a
-// raw "fetch failed" before the loop could finish. Bounded concurrency cuts wall-clock
-// time roughly by the batch factor without the instability of fully unbounded parallel
-// requests against a single AI Search instance.
+// corpus is a multiple of the base document count. Sequential uploads took about
+// five minutes for production content. Bounded concurrency reduces the time spent
+// waiting on AI Search without sending unbounded requests to one instance.
 const UPLOAD_CONCURRENCY = 10
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_item: T) => Promise<void>): Promise<void> {
@@ -906,31 +909,42 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_
  *
  * Re-uploading everything each time is what exhausted AI Search's rate limit on every
  * tenant MCP blog write (issue #917) — a one-post edit was spending ~222 uploads. An item
- * whose stored content_hash still matches what we would send is already correct in the
- * index, so sending it again buys nothing. Items that failed to index are re-sent
- * regardless of their hash: the stored fingerprint describes what was uploaded, not what
- * was successfully indexed. Items with no document behind them are deleted.
+ * whose stored content_hash still matches what we would send has already been accepted
+ * for indexing, so sending it again buys nothing. Failed or outdated items are
+ * re-sent regardless of their hash: the fingerprint describes what was uploaded,
+ * not what was successfully indexed. An unchanged skipped item cannot be repaired
+ * by resending the same payload and fails visibly. Items with no document behind
+ * them are deleted.
  */
 export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiSearchItemInfo[], records: ExpandedPlatformKnowledgeDocument[], options: { maxUploads?: number } = {}) {
   const nextKeys = new Set(records.map(record => record.key))
   const existingByKey = new Map(existingItems.map(item => [item.key, item]))
 
+  let unresolved = 0
   const outdated = records
     .map(record => ({ record, payload: indexItemPayload(record) }))
     .filter(({ record, payload }) => {
       const existing = existingByKey.get(record.key)
-      if (!existing || existing.status === 'error') return true
-      // An item Cloudflare is still processing carries no metadata yet, so its
-      // hash cannot be read; sending it again only re-queues it. The next sync
-      // after it completes compares it properly.
-      if (existing.status === 'queued' || existing.status === 'running') return false
+      if (existing?.status === 'skipped' && existing.metadata?.content_hash === payload.contentHash) {
+        throw new Error(`AI Search skipped unchanged item "${record.key}": ${existing.error || 'indexing was skipped'}`)
+      }
+      // AI Search lists newly accepted items as queued before it exposes their
+      // metadata. Their payload cannot be compared yet; re-uploading them here
+      // keeps resetting the same first batch instead of advancing the index.
+      if (existing && ['queued', 'running'].includes(existing.status)
+        && (typeof existing.metadata?.content_hash !== 'string' || !existing.metadata.content_hash)) {
+        unresolved += 1
+        return false
+      }
+      if (!existing || !['completed', 'queued', 'running'].includes(existing.status)) return true
+      // Once AI Search exposes the uploaded hash, a newer D1 payload must
+      // overwrite the accepted item under the same key.
       return existing.metadata?.content_hash !== payload.contentHash
     })
-  // An upload takes AI Search a few seconds, so a first pass over a large
-  // business would outlast the Workers request ceiling. Each run sends a bounded
-  // batch and reports what is left; the caller runs again until nothing is.
+  // An upload takes AI Search a few seconds, so a large business may need
+  // multiple bounded batches. Report what is left for the caller's next pass.
   const changed = options.maxUploads ? outdated.slice(0, options.maxUploads) : outdated
-  const pending = outdated.length - changed.length
+  const pending = outdated.length - changed.length + unresolved
 
   await runWithConcurrency(changed, UPLOAD_CONCURRENCY, async ({ record, payload }) => {
     try {
@@ -948,7 +962,7 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
   await runWithConcurrency(staleItems, UPLOAD_CONCURRENCY, (item) => deleteIndexItem(env, item.id))
 
-  return { indexed: changed.length, unchanged: records.length - outdated.length, pending, deleted: staleItems.length }
+  return { indexed: changed.length, unchanged: records.length - outdated.length - unresolved, pending, deleted: staleItems.length }
 }
 
 /** How many uploads one sync request sends before handing the rest to the next run. */
@@ -981,17 +995,30 @@ export async function listOrganizationItems(env: CloudflareEnv, organizationId: 
 export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
   const startedAt = Date.now()
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
-  const result = await reconcileIndexItems(env, existingItems, expandDocumentsForSurfaces(baseRecords), { maxUploads: SYNC_UPLOADS_PER_RUN })
+  const records = expandDocumentsForSurfaces(baseRecords)
+  let result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
+  let indexingUnconfirmedReason: string | null = null
+  if (result.indexed === 0 && result.pending > 0) {
+    // A pass waiting only on accepted, metadata-less items must let AI Search
+    // progress instead of immediately polling and resetting the same queue.
+    try {
+      await waitForIndexing(env, 45_000, organizationId)
+    } catch (error) {
+      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
+    }
+    if (!indexingUnconfirmedReason) {
+      result = await reconcileIndexItems(env, await listOrganizationItems(env, organizationId), records, { maxUploads: SYNC_UPLOADS_PER_RUN })
+    }
+  }
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-  return result
+  return { ...result, indexingUnconfirmedReason }
 }
 
 /**
  * The platform's own corpus — docs, articles, FAQ, static pages — and the
  * cleanup of anything in the instance that belongs to no business. Each
- * business's slice is a request of its own (`syncOrganizationSearchIndex`), which is
- * how a full rebuild stays under the Workers request ceiling: the caller
- * takes the site ids returned here and syncs them one at a time.
+ * business's slice is a request of its own (`syncOrganizationSearchIndex`).
+ * The caller takes the site ids returned here and syncs them one at a time.
  */
 export async function rebuildPlatformKnowledgeIndex(
   env: CloudflareEnv,
@@ -1018,15 +1045,10 @@ export async function rebuildPlatformKnowledgeIndex(
   const result = await reconcileIndexItems(env, platformItems, platformRecords, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] rebuild uploaded ${result.indexed}/${platformRecords.length} records, pending ${result.pending}, deleted ${result.deleted} stale items in ${elapsed()}`)
 
-  // Cloudflare processes indexing asynchronously regardless of whether this request
-  // stays open to observe it, and the Workers platform enforces a request-duration
-  // ceiling (~5 minutes, observed in production as a raw connection failure — "fetch
-  // failed" — not a thrown error our own try/catch could ever see) well under
-  // waitForIndexing's original 10-minute budget. Blocking on full confirmation here
-  // risks the whole Worker being killed mid-request before it can respond at all.
-  // The uploads/deletes above are the actual mutation — give indexing a short,
-  // safe courtesy window and return regardless of whether it confirms completion
-  // within that window; a not-yet-confirmed result is not a failed rebuild.
+  // Cloudflare processes indexing asynchronously after accepting uploads.
+  // Waiting for every item would delay this response and keep its client request
+  // open. Observe indexing for a short window and report whether it completed;
+  // the caller can see an unconfirmed result separately from an upload failure.
   let indexingConfirmed = false
   let indexingUnconfirmedReason: string | null = null
   if (options.confirmIndexing !== false) {

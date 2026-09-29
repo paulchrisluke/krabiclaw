@@ -1,9 +1,9 @@
 import { expect, test, type APIRequestContext, type APIResponse, type Page } from '@playwright/test'
 import { openTenantPage } from './helpers'
 import { loginAs } from './helpers/auth'
-import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
+import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
-const organizationId = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
+const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
 const locale = 'th'
 
 async function expectStatus(response: APIResponse, expected: number) {
@@ -51,7 +51,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
         brand_description: 'อาหารญี่ปุ่นต้นตำรับในกระบี่',
       },
     })
-    const locationResponse = await owner.get('/api/organizations/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/locations/loc-kikuzuki')
+    const locationResponse = await owner.get(`/api/organizations/${organizationId}/locations/loc-kikuzuki`)
     await expectStatus(locationResponse, 200)
     expect(await locationResponse.json()).toMatchObject({
       location: {
@@ -157,7 +157,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
     const cms = await dashboardContext.newPage()
     try {
       // Languages is a row on the location's settings list; its control opens the sheet.
-      await openTenantPage(cms, `${baseURL}/dashboard/org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
+      await openTenantPage(cms, `${baseURL}/dashboard/${organizationId}/locations/kikuzuki-japanese-robatayaki-izakaya/settings`, {})
       await cms.getByRole('button', { name: 'Localize' }).click()
       await cms.getByTestId('localize-language').click()
       await cms.getByRole('option', { name: /ไทย \(th\)/ }).click()

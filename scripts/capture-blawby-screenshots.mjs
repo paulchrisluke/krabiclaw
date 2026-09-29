@@ -21,7 +21,9 @@ function parseArgs(argv) {
     sourceRevision: '',
     outDir: 'client-imports/north-carolina-legal-services/evidence',
     tenantSlug: '',
+    sitemapUrl: '',
     routes: structuredClone(BLAWBY_PARITY_ROUTES),
+    explicitRoutes: {},
   }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -30,10 +32,12 @@ function parseArgs(argv) {
     else if (arg === '--source-revision') args.sourceRevision = argv[++i]
     else if (arg === '--out-dir') args.outDir = argv[++i]
     else if (arg === '--tenant-slug') args.tenantSlug = argv[++i]
+    else if (arg === '--sitemap-url') args.sitemapUrl = argv[++i]
     else if (arg === '--route') {
       const [name, route] = argv[++i].split('=')
       if (!name || !route) throw new Error('--route must use name=/path')
       args.routes[name] = { path: route, sections: [] }
+      args.explicitRoutes[name] = { path: route, sections: [] }
     }
   }
   if (!['reference', 'blawby'].includes(args.source)) {
@@ -55,6 +59,22 @@ function resolveUrl(base, route) {
   const resolved = new URL(route, `${baseUrl.origin}/`)
   if (resolved.origin !== baseUrl.origin) throw new Error(`Route escapes capture origin: ${route}`)
   return resolved.toString()
+}
+
+async function publishedRoutes(sitemapUrl) {
+  const source = new URL(sitemapUrl)
+  const response = await fetch(source, { signal: AbortSignal.timeout(15_000) })
+  if (response.status !== 200) throw new Error(`Published route sitemap returned ${response.status}: ${source}`)
+  const xml = await response.text()
+  if (/<sitemapindex\b/i.test(xml)) throw new Error(`Expected route URLs, received a sitemap index: ${source}`)
+  const paths = new Set()
+  for (const match of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) {
+    const route = new URL(match[1].replaceAll('&amp;', '&'))
+    if (route.origin !== source.origin) throw new Error(`Sitemap route belongs to another origin: ${route}`)
+    paths.add(`${route.pathname}${route.search}`)
+  }
+  if (!paths.size) throw new Error(`Published route sitemap has no routes: ${source}`)
+  return Object.fromEntries([...paths].map((route, index) => [`published-${String(index + 1).padStart(3, '0')}`, { path: route, sections: [] }]))
 }
 
 function portablePath(root, filePath) {
@@ -247,8 +267,13 @@ if (args.source === 'blawby' && args.tenantSlug) {
   }
 }
 if (!args.url) {
-  console.error('Usage: node scripts/capture-blawby-screenshots.mjs --url https://example.com --source reference|blawby [--source-revision sha] [--out-dir dir]')
+  console.error('Usage: node scripts/capture-blawby-screenshots.mjs --url https://example.com --source reference|blawby [--sitemap-url https://example.com/sitemap.xml] [--route name=/path] [--source-revision sha] [--out-dir dir]')
   process.exit(2)
+}
+const inventoryMode = Boolean(args.sitemapUrl)
+if (inventoryMode) {
+  if (args.source !== 'blawby') throw new Error('--sitemap-url is only for a Blawby target')
+  args.routes = { ...await publishedRoutes(args.sitemapUrl), ...args.explicitRoutes }
 }
 
 let referenceEtag = null
@@ -274,6 +299,7 @@ const manifest = {
   pinned_reference_etag: BLAWBY_REFERENCE_ETAG,
   observed_reference_etag: referenceEtag,
   base_url: args.url,
+  route_inventory_source: args.sitemapUrl || null,
   browser: { name: 'chromium', version: browser.version(), device_scale_factor: 1 },
   rendering: {
     color_scheme: 'light',
@@ -287,7 +313,9 @@ const manifest = {
 }
 
 try {
-  for (const [viewportName, viewport] of Object.entries(BLAWBY_PARITY_VIEWPORTS)) {
+  for (const [viewportName, viewport] of Object.entries(inventoryMode
+    ? { mobile: BLAWBY_PARITY_VIEWPORTS.mobile, desktop: BLAWBY_PARITY_VIEWPORTS.desktop }
+    : BLAWBY_PARITY_VIEWPORTS)) {
     const context = await browser.newContext({
       viewport,
       deviceScaleFactor: 1,
@@ -301,14 +329,36 @@ try {
     })
     await context.route(/(?:youtube\.com|youtu\.be|googlevideo\.com|vimeo\.com)/, route => route.abort())
     const page = await context.newPage()
+    const pageErrors = []
+    const failedFirstParty = []
+    page.on('pageerror', error => pageErrors.push(error.message))
+    page.on('response', response => {
+      if (new URL(response.url()).origin === new URL(args.url).origin && response.status() >= 400) {
+        failedFirstParty.push(`${response.status()} ${response.url()}`)
+      }
+    })
     for (const [routeName, routeConfig] of Object.entries(args.routes)) {
+      pageErrors.length = 0
+      failedFirstParty.length = 0
       const targetUrl = resolveUrl(args.url, routeConfig.path)
       const filePath = path.resolve(args.outDir, 'screenshots', args.source, `${routeName}-${viewportName}.png`)
       await fs.mkdir(path.dirname(filePath), { recursive: true })
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {})
+      if (inventoryMode) {
+        if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
+        await page.locator('.blawby-shell[data-hydrated="true"]').waitFor()
+      }
       await stabilizePage(page)
       await page.screenshot({ path: filePath, fullPage: true })
+      if (inventoryMode) {
+        if (!(await page.locator('main').innerText()).trim()) throw new Error(`${routeConfig.path} has no visible main content at ${viewportName}`)
+        if (pageErrors.length || failedFirstParty.length) {
+          throw new Error(`${routeConfig.path} failed at ${viewportName}: ${JSON.stringify({ pageErrors, failedFirstParty })}`)
+        }
+        manifest.screenshots.push({ route_name: routeName, route: routeConfig.path, viewport: viewportName,
+          status: response.status(), file: portablePath(args.outDir, filePath) })
+        continue
+      }
       await page.evaluate(() => window.scrollTo(0, 0))
       const markedSections = await markCaptureSections(page, routeName, routeConfig.sections)
       const markedMainNames = markedSections

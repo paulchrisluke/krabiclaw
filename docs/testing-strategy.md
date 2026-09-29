@@ -137,18 +137,22 @@ contract, not whether it expects success or failure.
 
 ## Release feedback loop
 
-A pull request runs `Checks` and nothing else. There is no preview deployment
-and no E2E job: the suite ran against a shared preview database that every run
-reset and restored from a production snapshot, which wrote 8-10 million D1 rows
-a day and was the whole of this account's D1 bill. It also meant one mutable
-environment that runs had to queue for.
+A pull request targeting `staging` runs `Checks` and the full E2E suite
+against a local Worker and D1 copy. AI Search is production-only, so E2E has
+no remote search prerequisite. There is no pull-request
+preview deployment; `staging` is the first deployed validation.
 
-The E2E suite runs locally, against a local D1 and a Worker the suite starts:
+The E2E suite runs locally, against a local D1 and a Worker the suite starts.
+The local Worker uses the `e2e` Wrangler environment and its local D1 copy:
 
 ```bash
 yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
 yarn test:e2e:local
 ```
+
+Local Playwright waits for the Worker's health endpoint before running specs.
+The tests exercise cache invalidation without provisioning or indexing a remote
+AI Search instance.
 
 `staging` is the first deployed validation. A push to `staging` deploys it and
 then runs read-only MCP discovery and tenant rendering against staging itself.
@@ -184,4 +188,3 @@ Worker's own test-client documents when running those cases.
 Schema changes also run `yarn lint:migrations`, `yarn lint:schema-drift` and
 `yarn test:migrations`: the chain must not drop a referenced parent table,
 `db:generate` must emit nothing, and the chain must apply from zero.
-

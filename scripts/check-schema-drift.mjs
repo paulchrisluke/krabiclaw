@@ -5,15 +5,9 @@
 // Without a target: the committed migration metadata still describes
 // server/db/schema.ts, so `db:generate` would emit nothing.
 //
-// With one: the live database's schema is also the one the baseline builds.
-// Those are different questions. A re-baseline changes what
-// `migrations/0000_baseline.sql` contains while its tag stays `0000_baseline`,
-// so `d1 migrations apply` finds the tag in `d1_migrations` and skips it — the
-// database keeps whatever content it was first migrated under, and the deploy
-// that ships the new code says nothing. Staging served renamed columns against
-// a database that still held the old names three times in one night before
-// anyone noticed by hand. A database is rebuilt from a new baseline, never
-// migrated toward one, and this is what says so out loud.
+// With one: the live database's schema is also what the full migration chain
+// builds. Forward migrations update it normally. A replacement baseline needs
+// a new D1 resource, because reusing a prior filename does not replay that SQL.
 import { createHash } from 'node:crypto'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -78,12 +72,16 @@ try {
   // Kit 0.31 prefixes snapshot paths with './'; an absolute out path fails.
   // Reuse the normal config so this check exercises the same schema contract.
   writeFileSync(temporaryConfig, `import config from ${JSON.stringify(join(root, 'drizzle.config.ts'))}; export default { ...config, out: ${JSON.stringify(relative(root, temporaryMigrations))}, dbCredentials: { url: ${JSON.stringify(join(temporaryRoot, 'drift.sqlite'))} } }\n`)
+  const childEnvironment = { ...process.env }
+  delete childEnvironment.FORCE_COLOR
   const result = spawnSync(process.execPath, [
     join(root, 'node_modules', 'drizzle-kit', 'bin.cjs'), 'generate', '--config', temporaryConfig,
   ], {
     cwd: root,
     encoding: 'utf8',
-    env: { ...process.env, DRIZZLE_DB_FILE: join(temporaryRoot, 'drift.sqlite') },
+    // NO_COLOR and FORCE_COLOR conflict in the local Playwright runner. Keep
+    // Drizzle's diagnostics strict while giving the child one color policy.
+    env: { ...childEnvironment, NO_COLOR: '1', DRIZZLE_DB_FILE: join(temporaryRoot, 'drift.sqlite') },
   })
   // Kit can print an exception and still exit 0. Never treat that as a clean diff.
   if (result.error || result.status !== 0 || result.stderr?.trim()) {
@@ -125,12 +123,11 @@ function compareLiveSchema(name) {
   if (missing.length || extra.length) {
     const name0 = entry => entry.split('\n')[0]
     throw new Error([
-      `The ${name} database does not carry the schema this baseline builds.`,
-      'It was migrated under an earlier baseline and the tag has not changed since, so `d1 migrations apply` skipped it.',
-      'Rebuild it from the baseline (see docs/operations/release-and-outage-prevention.md); do not migrate it toward one.',
+      `The ${name} database does not carry the schema this migration chain builds.`,
+      'Apply pending forward migrations, or use the documented replacement procedure for a changed constraint on a referenced table.',
       missing.length ? `  the baseline defines, the database lacks: ${missing.map(name0).join(', ')}` : '',
       extra.length ? `  the database carries, the baseline does not: ${extra.map(name0).join(', ')}` : '',
     ].filter(Boolean).join('\n'))
   }
-  console.log(`The ${name} database carries the schema this baseline builds.`)
+  console.log(`The ${name} database carries the schema this migration chain builds.`)
 }

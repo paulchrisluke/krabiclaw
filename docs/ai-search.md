@@ -5,10 +5,8 @@ Krabiclaw uses Cloudflare AI Search as the single retrieval backend for platform
 ## Instance layout
 
 - Namespace: `default`
-- Environment isolation comes from `AI_SEARCH_INSTANCE_ID`:
-  - production: `krabiclaw-platform-knowledge`
-  - staging: `krabiclaw-platform-knowledge-staging`
-  - preview: `krabiclaw-platform-knowledge-preview`
+- Production instance: `krabiclaw-platform-knowledge`. AI Search has no local,
+  E2E, preview, or staging binding.
 
 ### Provisioning an instance
 
@@ -18,10 +16,7 @@ the intended outcome: it means the environment is not provisioned, not that a bl
 went wrong.
 
 ```bash
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/autorag/rags" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{"id":"<AI_SEARCH_INSTANCE_ID>"}'
+yarn wrangler ai-search create <AI_SEARCH_INSTANCE_ID> --namespace default --type builtin
 ```
 
 `ensurePlatformKnowledgeInstance()` then re-asserts the retrieval configuration
@@ -29,7 +24,8 @@ curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/autor
 every rebuild, so index method, fusion, tokenizer, and the custom metadata schema always
 match the code that queries them.
 
-Krabiclaw uses the native `AI_SEARCH` Workers namespace binding as the canonical runtime path for instance management, item indexing, and search queries against the environment-specific instance in the built-in `default` namespace.
+Krabiclaw uses the native production `AI_SEARCH` Workers namespace binding for
+instance management, indexing, and search queries in the built-in `default` namespace.
 
 ## Indexed corpus
 
@@ -57,13 +53,13 @@ Every write to a site's data queues a "this site changed" row
 (`publicResourceCacheInvalidationQuery`, table `public_resource_cache_invalidations`) in the
 write's own batch: content documents, products and collections, locations, media, guest
 threads at intake, and Better Auth's member hooks. The drainer
-(`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
-`syncOrganizationSearchIndex()`, which lists the site's own items (`items.list` with a
-`metadata_filter` on `organization_id`), rebuilds its documents from D1, uploads the ones whose
-`content_hash` changed and deletes the ones that are gone. It runs right after every
-dashboard editor response and every mutating MCP tool call, and every two minutes from the
-scheduled task. A write therefore costs one list of the site's items plus one upload per
-changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
+(`drainPublicResourceCacheInvalidations`) clears the site's caches in every
+environment. In production it also runs `syncOrganizationSearchIndex()`, which lists the site's own items by its hashed
+organization key segment, rebuilds its documents from D1, uploads the ones whose
+`content_hash` changed and deletes the ones that are gone. Dashboard editor responses
+and mutating MCP tool calls await the scoped drain before reporting success. The scheduled task also drains queued work every two minutes. A failed
+drain is reported to the caller and retained for reconciliation. A write therefore costs
+one list of the site's items plus one upload per changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
 
 ## Rebuild flow
 
@@ -77,19 +73,26 @@ Required secret:
 
 - `PLATFORM_SEARCH_REINDEX_SECRET`
 
-The script calls `POST /api/internal/search/reindex` once for the platform pass, which
-reconciles the platform corpus and returns the live site ids, and then once per site with
-`?site=<id>`, which runs that site's sync. One request per pass keeps each under the
-Workers request ceiling.
+The script calls `POST /api/internal/search/reindex` for the platform corpus, then
+for each returned organization with `?organization=<id>`. Each request performs a bounded
+batch; the script repeats that pass until its reported pending count reaches zero.
 
-Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo
-secret and runs a blocking rebuild step when a file that defines the indexed corpus or its
-rendering changed. A failed production rebuild fails the deploy job instead of silently
-leaving production search stale. Preview and staging deploys do not rebuild.
+To initialize or reconcile one explicitly named organization's slice against the
+Worker serving the corresponding D1 snapshot, use the same command with its internal ID:
+
+```bash
+yarn ai-search:sync:prod --organization <organization-id>
+```
+
+This calls only the named organization's production slice; it does not rebuild
+the platform or other businesses.
+
+Production CI (`.github/workflows/ci.yml`) runs a blocking rebuild when a file
+that defines the indexed corpus or its rendering changes. A failed rebuild fails
+the deploy job. Nonproduction writes still wait for cache invalidation, but do
+not access or require AI Search.
 
 ## Environment expectations
 
-- AI Search is required infrastructure for local, preview, staging, and production.
-- `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block.
-- Local development should run with the normal Cloudflare dev environment and remote AI Search bindings available.
+- AI Search is production-only. `wrangler.toml` binds it only on the production Worker.
 - Production should not be treated as healthy after indexed content changes until the AI Search rebuild has completed successfully.

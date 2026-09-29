@@ -41,6 +41,10 @@ the runner supplies local URLs, test-route settings, and log-only delivery.
 There is no separate secret forwarding list to maintain. Deployed Worker
 secrets remain configured through Cloudflare and the release workflow.
 
+AI Search runs only in production. Local and CI E2E use the native `e2e`
+Wrangler environment, which has local D1/KV/DO bindings and no AI Search
+binding. Site writes still await cache purges.
+
 Local `.env` sets `ZARAZ_ANALYTICS=absent` and leaves `CF_ZONE_ID` unset, and
 the Playwright runner sets the same. The only Zaraz zone is production's, so a
 local reconcile would rewrite production's tags. With Zaraz declared absent,
@@ -143,11 +147,11 @@ setup keeps minting a throwaway and the route answers 400.
 stale, run the whole command again and then sign in again. Do not run an
 individual seed or provisioning script as an alternate repair path.
 
-A schema change regenerates `migrations/0000_baseline.sql` under the same name,
-so `schema:local` treats the local database as current and setup stops with
-"local D1 does not carry the current baseline". The local database is only ever
-a copy, so delete `.wrangler/state/v3/d1` and run `corepack yarn local:setup`
-again.
+`schema:local` applies new forward migrations when the schema changes. A rare
+replacement baseline, such as the v6 WNAM cutover, starts a new migration
+history; a local D1 created under the prior baseline then fails the schema
+check. Local data is a copy, so delete `.wrangler/state/v3/d1` and run
+`corepack yarn local:setup` again in that case.
 
 ## Dashboard URLs
 
@@ -177,7 +181,8 @@ corepack yarn quality && corepack yarn test:unit && corepack yarn test:d1 && cor
 corepack yarn chatgpt:submission:check && corepack yarn lint:migrations && corepack yarn lint:schema-drift
 ```
 
-That is every CI check that runs without a deployed environment. `test:unit`
+These cover the static, D1, and migration checks before pushing. Pull-request
+CI also runs the full E2E suite against a local Worker and D1 copy. `test:unit`
 alone is not enough: D1 and migration checks cover persistence behavior that
 typecheck and unit tests cannot see.
 

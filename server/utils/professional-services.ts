@@ -114,6 +114,7 @@ export async function getPublicTenantPageByPath(
     blocks: page.blocks,
     media: page.media,
     social_image: page.social_image,
+    localeRepresentations: page.localeRepresentations,
     updated_at: page.updated_at,
   }
 }

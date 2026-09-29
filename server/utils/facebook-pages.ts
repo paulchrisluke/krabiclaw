@@ -132,23 +132,20 @@ export async function createUnpublishedPhoto(target: FacebookPageTarget, input: 
 }
 
 /**
- * An unpublished Page post: the text, a native link when there is no media, and
- * the attached photos in the author's order. It has its final identity already;
- * `publishPagePost` publishes this same object.
+ * Publishes the Page post: the text, a native link when there is no media, and
+ * the already-uploaded unpublished photos in the author's order. This is the one
+ * irreversible call. Facebook does not publish an unpublished feed post later —
+ * `is_published=true` on one answers `(#10) Failed to publish post` — so the post
+ * gets its identity only from this call's answer.
  */
-export async function createUnpublishedPagePost(target: FacebookPageTarget, input: { message: string; link: string | null; photoIds: readonly string[] }, deadline: MetaDeadline): Promise<string> {
-  const fields: Record<string, string | boolean> = { published: false }
+export async function publishPagePost(target: FacebookPageTarget, input: { message: string; link: string | null; photoIds: readonly string[] }, deadline: MetaDeadline): Promise<string> {
+  const fields: Record<string, string> = {}
   if (input.message) fields.message = input.message
   if (input.link && input.photoIds.length === 0) fields.link = input.link
   input.photoIds.forEach((id, index) => { fields[`attached_media[${index}]`] = JSON.stringify({ media_fbid: id }) })
   const result = await metaGraphRequest<{ id?: string }>(`${GRAPH_BASE}/${target.pageId}/feed`, authorized(target, { ...formBody(fields), deadline }))
   if (!result.id) throw new Error('Facebook created no Page post')
   return result.id
-}
-
-export async function publishPagePost(target: FacebookPageTarget, postId: string, deadline: MetaDeadline): Promise<void> {
-  const result = await metaGraphRequest<{ success?: boolean }>(`${GRAPH_BASE}/${postId}`, authorized(target, { ...formBody({ is_published: true }), deadline }))
-  if (result.success !== true) throw new Error('Facebook did not confirm the post was published')
 }
 
 export interface FacebookPostState { id: string; isPublished: boolean; permalink: string | null; createdTime: string | null }

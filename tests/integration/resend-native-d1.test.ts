@@ -147,7 +147,7 @@ async function runtimeWithSchema() {
       export default { fetch() { return new Response('ok') } }
     ` } } },
     exports: { Hub: { type: 'durable-object', storage: 'sqlite' } },
-    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', workerName: 'resend-native-proof', exportName: 'Hub' } },
+    env: { DB: { type: 'd1' }, GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'resend-native-proof', exportName: 'Hub' } },
   } }] })
   const db = await runtime.getD1Database('DB')
   await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))).map(statement => db.prepare(statement)))
