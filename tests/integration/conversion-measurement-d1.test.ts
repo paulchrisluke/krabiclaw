@@ -7,6 +7,7 @@ import { handleStripeGa4Event, withdrawStripeGaIdentifiers } from '../../server/
 import { deliverViaMeasurementProtocol, readGa4Delivery } from '../../server/utils/ga4-delivery.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
 import { originatingOwnerId, recordAndDeliverConversion, recordOrganizationConversionEvent as recordAt, type OrganizationConversionInput } from '../../server/utils/organization-conversions.ts'
+import { findStripeGa4CheckoutAttribution } from '../../server/utils/stripe-ga4-intents.ts'
 import { getAnalyticsReport } from '../../server/utils/analytics-report.ts'
 import { recordTenantPageview, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
 
@@ -425,6 +426,47 @@ test('Stripe payments keep exact line totals, checkout attribution after expiry,
     assert.deepEqual([refund?.owner, refund?.type], ['user-a', 'subscription_renewal'])
   } finally {
     globalThis.fetch = realFetch
+    await runtime.dispose()
+  }
+})
+
+
+test('conversion session bounds survive out-of-order arrivals on D1', { timeout: 60_000 }, async () => {
+  const { runtime, db } = await openDb()
+  try {
+    await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('org-bounds', 'Bounds', 'bounds')").run()
+    const input = { organizationId: 'org-bounds', eventName: 'product_view', stage: 'viewed', surface: 'website', entityType: 'product', entityId: 'product-1' } as const
+    for (const hour of ['03', '05', '01', '04']) {
+      await recordOrganizationConversionEvent(db, browser, { ...input, occurredAt: `2026-09-10T${hour}:00:00.000Z` })
+    }
+    const bounds = await db.prepare(`SELECT json_extract(payload_json, '$.started_at') started_at,
+      json_extract(payload_json, '$.last_seen_at') last_seen_at, updated_at
+      FROM analytics_summaries WHERE organization_id = 'org-bounds' AND kind = 'session'`).first()
+    assert.deepEqual(bounds, { started_at: '2026-09-10T01:00:00.000Z', last_seen_at: '2026-09-10T05:00:00.000Z', updated_at: '2026-09-10T05:00:00.000Z' })
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+test('checkout attribution uses the newest matching intent even when attribution is absent', { timeout: 60_000 }, async () => {
+  const { runtime, db } = await openDb()
+  try {
+    await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('org-intents', 'Intents', 'intents')").run()
+    await db.prepare("INSERT INTO user (id, name, email) VALUES ('intent-user', 'Intent', 'intent@example.com')").run()
+    const attribution = { touch: { source: 'meta', medium: 'paid', campaign: 'launch', term: null, content: null, referrerHost: null, gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null }, attributedAt: '2026-09-10T01:00:00.000Z' }
+    const insert = (id: string, createdAt: string, value: string | null, action = 'initial_subscription', subscription = 'sub-intents') => db.prepare(`INSERT INTO stripe_ga4_subscription_intents
+      (id, organization_id, user_id, stripe_subscription_id, action, attribution_json, created_at, expires_at)
+      VALUES (?, 'org-intents', 'intent-user', ?, ?, ?, ?, '2099-01-01T00:00:00.000Z')`).bind(id, subscription, action, value, createdAt).run()
+    assert.equal(await findStripeGa4CheckoutAttribution(db, 'sub-intents', 'initial_subscription'), null)
+    await insert('intent-a', '2026-09-10T01:00:00.000Z', JSON.stringify(attribution))
+    assert.deepEqual(await findStripeGa4CheckoutAttribution(db, 'sub-intents', 'initial_subscription'), attribution)
+    await insert('intent-b', '2026-09-10T02:00:00.000Z', null)
+    assert.equal(await findStripeGa4CheckoutAttribution(db, 'sub-intents', 'resubscription'), null)
+    await insert('intent-c', '2026-09-10T02:00:00.000Z', JSON.stringify(attribution))
+    await insert('intent-d', '2026-09-10T03:00:00.000Z', null, 'upgrade')
+    await insert('intent-e', '2026-09-10T03:00:00.000Z', null, 'initial_subscription', 'sub-other')
+    assert.deepEqual(await findStripeGa4CheckoutAttribution(db, 'sub-intents', 'initial_subscription'), attribution)
+  } finally {
     await runtime.dispose()
   }
 })

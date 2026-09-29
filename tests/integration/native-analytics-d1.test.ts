@@ -110,7 +110,11 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     const contact = (await mcp(db, ORG, { mode: 'events', ...range, filters: { event_name: 'contact_submit' } })).rows[0] as Record<string, any>
     assert.equal(contact.page.locale, 'th')
     const rate = await mcp(db, ORG, { mode: 'breakdown', ...range, dimensions: ['campaign'], metrics: ['eligible_sessions', 'converting_sessions', 'session_conversion_rate'], outcome_event: 'contact_submit' })
-    assert.ok(rate.rows.length > 0)
+    assert.deepEqual([...rate.rows].sort((a, b) => String(a.dimensions.campaign).localeCompare(String(b.dimensions.campaign))), [
+      { dimensions: { campaign: 'A' }, metrics: { eligible_sessions: 1, converting_sessions: 1, session_conversion_rate: 100 } },
+      { dimensions: { campaign: 'B' }, metrics: { eligible_sessions: 1, converting_sessions: 1, session_conversion_rate: 100 } },
+      { dimensions: { campaign: null }, metrics: { eligible_sessions: 0, converting_sessions: 0, session_conversion_rate: null } },
+    ])
     assert.match(rate.totals.session_conversion_rate!.unit, /converting sessions \/ eligible sessions/)
 
     // Pagination across the page limit: 130 more events, page size 50, traverse without loss or duplicates.
@@ -237,7 +241,8 @@ test('native analytics: rates share one population, cursors survive attribution 
     assert.deepEqual(pages.map(r => r.page_path), ['/old0', '/old1', '/old2', '/old3', '/old4'])
     assert.ok(pages.every(r => r.metrics.page_views === 1))
     assert.equal((await readSummaries({ summary_kind: 'organization_day' }))[0].metrics.page_views, 5)
-    assert.ok((await readSummaries({ summary_kind: 'dimension_day', dimension: 'device' })).length >= 1)
+    assert.deepEqual((await readSummaries({ summary_kind: 'dimension_day', dimension: 'device' }))
+      .map(row => ({ device: row.value, pageViews: row.metrics.page_views })), [{ device: 'Desktop', pageViews: 5 }])
     const oldEvents = await mcp(db, ORG, { mode: 'events', start_date: '2026-06-01', end_date: '2026-06-01' })
     assert.equal((oldEvents.coverage as any).requested_range.pageview_detail_complete, false)
     // A summary rewritten between pages makes the cursor stale instead of skipping rows.

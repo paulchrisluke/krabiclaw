@@ -272,7 +272,7 @@ export async function findStripeGa4CheckoutAttribution(
     : purchaseType === 'upgrade' || purchaseType === 'downgrade' ? purchaseType
       : null
   if (!action) return null
-  const row = await queryFirst<{ attribution: string }>(db, `SELECT attribution_json AS attribution FROM stripe_ga4_subscription_intents
-    WHERE stripe_subscription_id = ? AND action = ? AND attribution_json IS NOT NULL ORDER BY created_at DESC LIMIT 1`, [stripeSubscriptionId, action])
-  return row ? JSON.parse(row.attribution) as CheckoutAttribution : null
+  const row = await queryFirst<{ attribution: string | null }>(db, `SELECT attribution_json AS attribution FROM stripe_ga4_subscription_intents
+    WHERE stripe_subscription_id = ? AND action = ? ORDER BY created_at DESC, id DESC LIMIT 1`, [stripeSubscriptionId, action])
+  return row?.attribution != null ? JSON.parse(row.attribution) as CheckoutAttribution : null
 }

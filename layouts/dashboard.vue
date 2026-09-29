@@ -185,7 +185,7 @@ const nuxtApp = useNuxtApp()
 let unhookSearchToggle: (() => void) | null = null
 onMounted(() => {
   // Billing resumes signed in: honor the analytics choice made while signed out.
-  void reconcileAnalyticsConsent()
+  void reconcileAnalyticsConsent().catch(error => nuxtApp.callHook('vue:error', error, null, 'analytics-consent-reconciliation'))
   unhookSearchToggle = nuxtApp.hooks.hook('dashboard:search:toggle', () => { dashboardSearchOpen.value = !dashboardSearchOpen.value })
 })
 onBeforeUnmount(() => { unhookSearchToggle?.(); unhookSearchToggle = null })

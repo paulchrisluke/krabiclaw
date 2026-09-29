@@ -645,7 +645,7 @@ async function loadLanguages(more: boolean) {
     const response = await dashboardApi<{
       rows: Array<{ dimensions: { locale: string | null }; metrics: { page_views: number; sessions: number } }>
       next_cursor: string | null
-      totals: Record<string, { value: number | null }>
+      totals: { page_views: { value: number }; sessions: { value: number } }
       coverage: { requested_range: { unavailable: string | null } }
     }>('/api/dashboard/analytics-query', {
       method: 'POST',
@@ -654,14 +654,16 @@ async function loadLanguages(more: boolean) {
         dimensions: ['locale'], metrics: ['page_views', 'sessions'], limit: 20,
         ...(more && nativeLanguages.cursor ? { cursor: nativeLanguages.cursor } : {}),
       },
-      validate: (value): value is never => isRecord(value) && Array.isArray(value.rows) && isRecord(value.totals) && isRecord(value.coverage),
+      validate: (value): value is never => isRecord(value) && Array.isArray(value.rows) && isRecord(value.totals)
+        && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value')
+        && isRecord(value.coverage),
     })
     if (requestId !== latestLanguageRequest) return
     const rows = response.rows.map(row => ({ language: row.dimensions.locale, pageViews: row.metrics.page_views, sessions: row.metrics.sessions }))
     nativeLanguages.rows = more ? [...nativeLanguages.rows, ...rows] : rows
     nativeLanguages.cursor = response.next_cursor
-    nativeLanguages.totalPageViews = response.totals.page_views?.value ?? 0
-    nativeLanguages.totalSessions = response.totals.sessions?.value ?? 0
+    nativeLanguages.totalPageViews = response.totals.page_views.value
+    nativeLanguages.totalSessions = response.totals.sessions.value
     nativeLanguages.detailUnavailable = response.coverage.requested_range.unavailable
   } catch (error) {
     if (requestId === latestLanguageRequest) nativeLanguages.error = error instanceof Error ? error.message : 'Could not load pageviews by language'

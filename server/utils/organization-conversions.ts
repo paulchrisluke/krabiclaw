@@ -174,7 +174,10 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
       id, kind, organization_id, date, key, payload_json, created_at, updated_at
     ) VALUES (?, 'session', ?, '', ?, ?, ?, ?)
     ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
-      payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
+      payload_json = json_set(analytics_summaries.payload_json,
+        '$.started_at', MIN(json_extract(analytics_summaries.payload_json, '$.started_at'), json_extract(excluded.payload_json, '$.started_at')),
+        '$.last_seen_at', MAX(json_extract(analytics_summaries.payload_json, '$.last_seen_at'), json_extract(excluded.payload_json, '$.last_seen_at'))),
+      updated_at = MAX(analytics_summaries.updated_at, excluded.updated_at)
     RETURNING json_extract(payload_json, '$.attribution') attribution, json_extract(payload_json, '$.last_touch_at') last_touch_at`, [
       crypto.randomUUID(), input.organizationId, browser.sessionId,
       JSON.stringify({ visitor_id: browser.visitorId, started_at: now, last_seen_at: now,
