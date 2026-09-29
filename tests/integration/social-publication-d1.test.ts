@@ -78,8 +78,12 @@ class FakeMeta {
     if (path === 'me/accounts') return json({ data: [{ id: PAGE, name: 'Krabi Claw', access_token: 'page-token' }] })
     if (method === 'POST' && path === `${PAGE}/photos`) { const id = this.id('photo-'); this.fbPhotos.set(id, body.url!); return json({ id }) }
     if (method === 'POST' && path === `${PAGE}/feed`) {
+      const attached: string[] = Object.keys(body).filter(key => key.startsWith('attached_media')).sort().map(key => JSON.parse(body[key]!).media_fbid)
+      // Production answered this on 2026-09-29 for photos a deleted unpublished post had carried.
+      const invalid = attached.findIndex(photo => !this.fbPhotos.has(photo))
+      if (invalid >= 0) return json({ error: { message: `(#100) Param attached_media[${invalid}][media_fbid] must be a valid media id`, code: 100, fbtrace_id: 'trace-100' } }, 400)
       const id = this.id(`${PAGE}_`)
-      this.fbPosts.set(id, { published: body.published !== 'false', message: body.message, link: body.link, attached: Object.keys(body).filter(key => key.startsWith('attached_media')).sort().map(key => JSON.parse(body[key]!).media_fbid) })
+      this.fbPosts.set(id, { published: body.published !== 'false', message: body.message, link: body.link, attached })
       return json({ id })
     }
     if (method === 'POST' && path === `${PAGE}/videos`) { const id = this.id('video-'); this.fbVideos.set(id, { ready: 1, published: false, postId: null }); return json({ id }) }
@@ -101,7 +105,7 @@ class FakeMeta {
       return json({ id: path, published: video.published, post_id: video.postId, permalink_url: `/Krabi/videos/${path}/`, status: { video_status: video.ready < 0 ? 'ready' : 'processing' } })
     }
     if (video && method === 'POST') { video.published = true; video.postId = `${PAGE}_${path}`; return json({ success: true }) }
-    if (method === 'DELETE') { this.fbPosts.delete(path); this.fbPhotos.delete(path); return json({ success: true }) }
+    if (method === 'DELETE') { for (const photo of this.fbPosts.get(path)?.attached ?? []) this.fbPhotos.delete(photo); this.fbPosts.delete(path); this.fbPhotos.delete(path); return json({ success: true }) }
     const record = this.pagePosts.find(item => item.id === path)
     if (record) return json(record)
     return json({ error: { message: 'Unsupported get request. Object does not exist', code: 100, error_subcode: 33 } }, 400)
@@ -320,9 +324,10 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal((await reconcilePostPublication(env, 'org-a', fifthPublication.id, createdId)).state, 'published')
     await publishedOnMeta(fifth.post.id, 'facebook')
 
-    // A publication an earlier version prepared as an unpublished feed post: that draft is deleted and the post is published once with the saved photos.
+    // A publication an earlier version prepared as an unpublished feed post: that draft is deleted with the photos it carried, and the post is published once with new ones.
     const sixth = await create('key-6', { body: 'Prepared the old way', media: [{ asset_id: 'a1', slot: 'cover' }] })
     const draftId = `${PAGE}_legacy-draft`
+    meta.fbPhotos.set('photo-legacy', 'https://legacy.example.test/a.jpg')
     meta.fbPosts.set(draftId, { published: false, attached: ['photo-legacy'] })
     await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, provider_post_id, provider_handles_json, payload_hash, error_code, error_message)
       VALUES ('legacy', 'org-a', '${sixth.post.id}', 'facebook', 'fb-app', 'fb-subject', '${PAGE}', 'publish', 'failed', '${draftId}', '${JSON.stringify({ photo_ids: ['photo-legacy'], post_id: draftId })}',
@@ -335,7 +340,9 @@ test('publication: one result, one external post per target, and no blind resend
     const republished = await publishPost(env, 'org-a', sixth.post.id, { expectedUpdatedAt: sixth.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.equal(republished.outcomes[0]!.status, 'published', JSON.stringify(republished.outcomes))
     assert.equal(meta.fbPosts.has(draftId), false)
-    assert.deepEqual(meta.sent(request => request.method === 'POST' && request.path.endsWith(`${PAGE}/feed`)).at(-1)!.body['attached_media[0]'], JSON.stringify({ media_fbid: 'photo-legacy' }))
+    const attachedPhoto = JSON.parse(meta.sent(request => request.method === 'POST' && request.path.endsWith(`${PAGE}/feed`)).at(-1)!.body['attached_media[0]']!).media_fbid
+    assert.notEqual(attachedPhoto, 'photo-legacy')
+    assert.equal(meta.fbPhotos.has(attachedPhoto), true)
     await publishedOnMeta(sixth.post.id, 'facebook')
 
     // An earlier reconciliation left an unclaimed unpublished draft in preparing.
@@ -457,8 +464,15 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     assert.ok(!JSON.stringify(progress).includes('access_token'))
 
     // A repeat scan converges: nothing new, and no duplicate row.
+    const assetsBefore = await db.prepare("SELECT count(*) FROM media_assets WHERE organization_id = 'org-a'").first('count(*)')
+    const sentBefore = meta.sent(() => true).length
     const again = await syncSocialPosts(env, 'org-a', 60_000)
     assert.equal(again[0]!.imported + again[1]!.imported, 0)
+    // Every known post was seen in the list, so none is read again one by one
+    // and no media is stored anew.
+    const known = new Set((await db.prepare("SELECT provider_post_id FROM post_publications WHERE organization_id = 'org-a'").all<{ provider_post_id: string }>()).results.map(row => row.provider_post_id))
+    assert.deepEqual(meta.sent(() => true).slice(sentBefore).filter(request => request.method === 'GET' && known.has(request.path.split('/').at(-1)!)).map(request => request.path), [])
+    assert.equal(await db.prepare("SELECT count(*) FROM media_assets WHERE organization_id = 'org-a'").first('count(*)'), assetsBefore)
     // A native caption change updates the provider-owned copy; an edited copy keeps its words; a deleted one stays deleted.
     const note1 = (await imported(`${PAGE}_t1`))!
     const note2 = (await imported(`${PAGE}_t2`))!

@@ -485,11 +485,13 @@ async function syncChannel(env: CloudflareEnv, organizationId: string, channel: 
     return true
   }
   try {
+    // A walk begins before its head is applied: every post the head touches is
+    // then seen by this walk and is not probed again below.
+    const walkStartedAt = progress.cycle_started_at ?? now()
     // 1. The newest page, every pass.
     const head = await reader.list(null, deadline)
     let finished = await apply(head.items, head.errors)
     // 2. The history walk: resumed where it stopped, or begun after the head.
-    const walkStartedAt = progress.cycle_started_at ?? now()
     let cursor = progress.cycle_started_at ? progress.cursor : head.after
     // A blocked target does not walk: the walk resumes once the outbound
     // publication that could race it has its identity.
