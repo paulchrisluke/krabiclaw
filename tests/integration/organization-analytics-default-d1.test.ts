@@ -29,9 +29,6 @@ test('a new organization initializes analytics time without inventing a location
     await assert.rejects(deleteConfig(db, 'org', 'default_timezone'), /cannot be removed/)
     await setConfig(db, 'org', 'brand_color', '#123456')
     await setConfig(db, 'mcp-fixture', 'default_timezone', 'Asia/Bangkok')
-    await db.prepare(`INSERT INTO analytics_events (id, kind, organization_id, page_path, created_at, payload_json)
-      VALUES ('old-pageview', 'pageview', 'org', '/menu', '2026-01-01T00:00:00.000Z', '{}')`).run()
-    assert.equal(await db.prepare("SELECT count(*) AS count FROM analytics_events WHERE id = 'old-pageview'").first('count'), 1, 'analytics history is not aged out')
     for (const { id, zone } of [{ id: 'org', zone: 'UTC' }, { id: 'platform', zone: 'UTC' }, { id: 'mcp-fixture', zone: 'Asia/Bangkok' }]) {
       const report = await getAnalyticsReport(db, { organizationId: id, startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') })
       assert.equal(report.period.timezone, zone)

@@ -85,7 +85,6 @@
               />
               <p v-if="!nativeLanguages.rows.length && !nativeLanguages.error" class="text-sm text-muted">No pageviews recorded in this range.</p>
               <p v-if="nativeLanguages.error" class="text-sm text-error">{{ nativeLanguages.error }}</p>
-              <p v-if="nativeLanguages.detailUnavailable" class="text-xs text-muted">{{ nativeLanguages.detailUnavailable }}</p>
               <p v-if="nativeLanguages.rows.length" class="text-xs text-muted">{{ formatCount(nativeLanguages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
               <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
             </div>
@@ -632,7 +631,7 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
 const nativeLanguages = reactive({
   rows: [] as Array<{ language: string | null; pageViews: number; sessions: number }>,
   totalPageViews: 0, totalSessions: 0, cursor: null as string | null, loading: false,
-  error: null as string | null, detailUnavailable: null as string | null,
+  error: null as string | null,
 })
 let latestLanguageRequest = 0
 async function loadLanguages(more: boolean) {
@@ -646,7 +645,6 @@ async function loadLanguages(more: boolean) {
       rows: Array<{ dimensions: { locale: string | null }; metrics: { page_views: number; sessions: number } }>
       next_cursor: string | null
       totals: { page_views: { value: number }; sessions: { value: number } }
-      coverage: { requested_range: { unavailable: string | null } }
     }>('/api/dashboard/analytics-query', {
       method: 'POST',
       body: {
@@ -655,8 +653,7 @@ async function loadLanguages(more: boolean) {
         ...(more && nativeLanguages.cursor ? { cursor: nativeLanguages.cursor } : {}),
       },
       validate: (value): value is never => isRecord(value) && Array.isArray(value.rows) && isRecord(value.totals)
-        && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value')
-        && isRecord(value.coverage),
+        && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value'),
     })
     if (requestId !== latestLanguageRequest) return
     const rows = response.rows.map(row => ({ language: row.dimensions.locale, pageViews: row.metrics.page_views, sessions: row.metrics.sessions }))
@@ -664,7 +661,6 @@ async function loadLanguages(more: boolean) {
     nativeLanguages.cursor = response.next_cursor
     nativeLanguages.totalPageViews = response.totals.page_views.value
     nativeLanguages.totalSessions = response.totals.sessions.value
-    nativeLanguages.detailUnavailable = response.coverage.requested_range.unavailable
   } catch (error) {
     if (requestId === latestLanguageRequest) nativeLanguages.error = error instanceof Error ? error.message : 'Could not load pageviews by language'
   } finally {

@@ -126,6 +126,7 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
       await recordTenantPageview(db, pageview({ eventId: uuid(1000 + i), sessionId: S2, visitorId: V2, pagePath: `/p${i % 7}`, now: `2026-09-11T${String(1 + Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00.000Z` }))
     }
     const total = await mcp(db, ORG, { mode: 'events', ...range, limit: 200 })
+    assert.equal(total.rows.length, 141)
     const seen: string[] = []
     let cursor: string | null = null
     let pages = 0
@@ -137,7 +138,7 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     } while (cursor)
     assert.equal(new Set(seen).size, seen.length, 'no duplicate across pages')
     assert.deepEqual([...seen].sort(), total.rows.map(row => row.event_id as string).sort(), 'pagination reads every event exactly once')
-    assert.ok(pages >= 3)
+    assert.equal(pages, 3)
 
     // Tamper, cross-query and cross-tenant cursors are rejected.
     const firstPage = await mcp(db, ORG, { mode: 'events', ...range, limit: 50 })
