@@ -1,5 +1,5 @@
 <template>
-  <nav v-if="headings.length" aria-label="On this page" class="sticky top-24 text-sm">
+  <nav v-if="headings.length" aria-label="On this page" class="sticky top-28 text-sm">
     <p class="mb-3 font-semibold text-default">On this page</p>
     <ul class="space-y-1">
       <li v-for="heading in headings" :key="heading.id">

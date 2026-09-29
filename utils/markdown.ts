@@ -24,12 +24,17 @@ export function decodeHtmlEntities(value: string): string {
 // renders (e.g. FAQ/How-To sections) don't bleed into each other's numbering.
 let headingSlugCounts = new Map<string, number>();
 
-function slugifyHeading(text: string) {
-  const base = decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
+/** A heading's anchor: the id a heading block and a markdown heading both carry, and ArticleToc links to. */
+export function headingAnchor(text: string) {
+  return decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-");
+}
+
+function slugifyHeading(text: string) {
+  const base = headingAnchor(text);
   const count = headingSlugCounts.get(base) ?? 0;
   headingSlugCounts.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;

@@ -29,9 +29,10 @@ const redirects: Record<string, string> = {
  * shape for both markdown mirrors. They are addressed by slug now, so any URL
  * published under the old shape keeps working by dropping the segment that
  * stopped meaning anything. Listing the moved articles instead would go stale
- * the first time one is renamed.
+ * the first time one is renamed. `/{blog,docs}/category/{slug}` is a category's
+ * own page now, and no old category was named "category", so it is not one.
  */
-const ARTICLE_CATEGORY_PATH = /^\/(blog|docs|blog-md|docs-md)\/[^/]+\/([^/]+)$/
+const ARTICLE_CATEGORY_PATH = /^\/(blog|docs|blog-md|docs-md)\/(?!category\/)[^/]+\/([^/]+)$/
 
 function articlePathWithoutCategory(pathname: string): string | null {
   const match = ARTICLE_CATEGORY_PATH.exec(pathname)

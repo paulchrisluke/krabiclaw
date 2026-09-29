@@ -42,18 +42,17 @@ import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
 import { createPreviewToken, PREVIEW_TOKEN_QUERY, PREVIEW_TOKEN_TTL_MS } from '~/server/utils/preview-token'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { getPublishedTenantPage } from '~/server/utils/content/pages'
+import { ARTICLE_CATEGORY_SELECT, articleCategoryJoinSql, articleCategoryMembershipQuery, attachArticleCategory, localizeArticleCategories } from '~/server/utils/content/article-categories'
 
 const BLOG_TITLE_MAX = 200
 const BLOG_EXCERPT_MAX = 500
-const BLOG_CATEGORY_MAX = 100
 const BLOG_SEO_KEYWORDS_MAX = 500
 const MAX_SLUG_ATTEMPTS = 8
 export const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
   'title',
   'excerpt',
   'collection',
-  'category',
-  'tags',
+  'category_id',
   'seo_keywords',
   'visibility',
   'slug',
@@ -61,29 +60,6 @@ export const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> =
   'reset_slug_override',
   'content_blocks',
 ]
-
-function parseStringArray(value: unknown): string[] {
-  if (value === null || value === undefined || value === '') return []
-  if (Array.isArray(value)) {
-    if (value.some(item => typeof item !== 'string')) {
-      throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
-    }
-    return value as string[]
-  }
-  if (typeof value !== 'string') {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(value) as unknown
-  } catch {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
-  }
-  if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string')) {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
-  }
-  return parsed as string[]
-}
 
 export function parseBlogEditorThemeTokens(value: string | null | undefined): ApiRecord {
   if (value === null || value === undefined) return {}
@@ -113,8 +89,8 @@ export interface PlatformBlogCreateInput {
   excerpt?: string | null
   /** Which of the site's collections the article belongs to. Defaults to the blog. */
   collection?: ArticleCollection | null
-  category?: string | null
-  tags?: string[] | null
+  /** The article's category, one of its collection's categories. Required before publishing. */
+  category_id?: string
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
 }
@@ -123,8 +99,8 @@ export interface PlatformBlogUpdateInput {
   title?: string
   excerpt?: string | null
   collection?: ArticleCollection | null
-  category?: string | null
-  tags?: string[] | null
+  /** The article's category, one of its collection's categories. Required before publishing. */
+  category_id?: string
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   slug?: string | null
@@ -350,19 +326,6 @@ async function normalizeCanonicalBlogBlocks(
   return await normalizeEditorContentBlocks(db, input.content_blocks, scope)
 }
 
-function parseTags<T extends Record<string, unknown>>(record: T) {
-  const normalized = { ...record } as T & { tags?: string[]; tags_metadata?: unknown }
-  if ('tags_metadata' in record) {
-    normalized.tags = parseStringArray(record.tags_metadata)
-    delete normalized.tags_metadata
-  }
-  return normalized
-}
-
-/** Read-model shape shared by every article loader: tags parsed, cover lifted from the leading image block. */
-export function attachCover(record: ApiRecord) {
-  return attachCoverMedia(parseTags(record))
-}
 
 export interface ContentReviewContext { orgSlug: string }
 
@@ -421,11 +384,6 @@ function validateBlogCommon(input: Partial<PlatformBlogCreateInput>, operation: 
   if ('visibility' in input && input.visibility !== undefined && !['listed', 'unlisted'].includes(String(input.visibility))) badRequest('visibility must be listed or unlisted')
   if (input.title !== undefined) assertStringLength(input.title, BLOG_TITLE_MAX, 'title')
   if (input.excerpt !== undefined) assertStringLength(input.excerpt ?? null, BLOG_EXCERPT_MAX, 'excerpt')
-  if (input.category !== undefined) assertStringLength(input.category ?? null, BLOG_CATEGORY_MAX, 'category')
-  if (input.tags !== undefined && input.tags !== null) {
-    if (!Array.isArray(input.tags) || input.tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.length > 80)) badRequest('tags must be an array of non-empty strings up to 80 characters each')
-    input.tags = [...new Set(input.tags.map(tag => tag.trim()))].slice(0, 20)
-  }
   if (input.seo_keywords !== undefined) assertStringLength(input.seo_keywords ?? null, BLOG_SEO_KEYWORDS_MAX, 'seo_keywords')
 }
 
@@ -449,17 +407,28 @@ export async function listPublishedArticles(db: DbClient, env: CloudflareEnv, or
   const sql = `
     SELECT
       root.id, p.title, p.slug, p.summary AS excerpt, (root.metadata_json ->> '$.collection') AS collection,
-      (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_keywords,
+      ${ARTICLE_CATEGORY_SELECT}, p.seo_keywords,
       root.published_at, p.updated_at, root.sort_order, ${COVER_SELECT}
     FROM content_documents root
     JOIN content_documents p ON COALESCE(p.root_id, p.id) = root.id AND p.locale = ?
     ${coverJoinSql('p')}
+    ${articleCategoryJoinSql('root')}
     WHERE root.kind = 'article' AND root.row_role = 'root' AND root.status = 'published' AND root.organization_id = ? AND root.visibility = 'listed'
       AND (root.metadata_json ->> '$.collection') = ?
     ORDER BY ${ARTICLE_ORDER_SQL('root')}
     LIMIT 200
   `
-  return (await queryAll<ApiRecord>(db, sql, [locale, organizationId, collection])).map(attachCover)
+  const rows = (await queryAll<ApiRecord>(db, sql, [locale, organizationId, collection])).map(row => attachArticleCategory(attachCoverMedia(row)))
+  return localizeArticleCategories(env, db, organizationId, locale, rows)
+}
+
+/**
+ * The languages a collection's index is read in: every language the site
+ * publishes, at its locale prefix. The index lists that language's articles,
+ * and its categories' pages follow the same prefix.
+ */
+export async function listArticleCollectionRepresentations(env: CloudflareEnv, db: DbClient, organizationId: string, collection: ArticleCollection) {
+  return listPublicLocaleRepresentations(env, db, { organizationId, sourcePath: ARTICLE_COLLECTIONS[collection].pathPrefix, publishedLocaleRoute: true })
 }
 
 /**
@@ -518,12 +487,13 @@ export async function listBlogPosts(
 ): Promise<{ posts: ApiRecord[]; page_info: McpPageInfo }> {
   if (status && status !== 'draft' && status !== 'published') badRequest('status must be draft or published')
   const rows = await queryAll<ApiRecord>(db, `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility,
+      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, ${ARTICLE_CATEGORY_SELECT}, p.status, p.visibility,
       p.seo_keywords, p.sort_order,
       ${COVER_SELECT},
       p.published_at, p.created_at, p.updated_at
     FROM content_documents p
     ${coverJoinSql('p')}
+    ${articleCategoryJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.organization_id = ? ${status ? 'AND p.status = ?' : ''}
       ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
     ORDER BY ${ARTICLE_ORDER_SQL('p')} LIMIT ? OFFSET ?`,
@@ -533,7 +503,7 @@ export async function listBlogPosts(
   const posts = await Promise.all(page.map((record) => {
     const slug = typeof record.slug === 'string' ? record.slug : ''
     const publicPath = slug ? tenantBlogPostPath(organization.template, slug, articleCollectionOf(record.collection)) : null
-    return contentReviewUrls(attachCover(attachPublished(record, Boolean(record.published_at))), publicPath, organizationId, context, env)
+    return contentReviewUrls(attachArticleCategory(attachCoverMedia(attachPublished(record, Boolean(record.published_at)))), publicPath, organizationId, context, env)
   }))
   return { posts, page_info: mcpPageInfo(window, page.length, rows.length > window.limit, resource) }
 }
@@ -543,7 +513,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   const post = await queryFirst<ApiRecord | null>(
     db,
     `SELECT
-       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.status, p.visibility,
+       p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.collection') AS collection, ${ARTICLE_CATEGORY_SELECT}, p.status, p.visibility,
        p.first_published_at, (p.metadata_json ->> '$.slug_manually_overridden') AS slug_manually_overridden,
        p.seo_keywords, p.sort_order,
        ${COVER_SELECT},
@@ -551,6 +521,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
        p.published_at, p.created_at, p.updated_at
      FROM content_documents p
      ${coverJoinSql('p')}
+     ${articleCategoryJoinSql('p')}
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.id = ?`,
     [postId],
   )
@@ -581,8 +552,7 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
   `, ['$.theme_by_template.' + organization.template.slug, organizationId, '$.theme_by_template.' + organization.template.slug])
   const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   return {
-    ...await contentReviewUrls(attachCover(attachPublished(postFields, Boolean(postFields.published_at))), publicPath, organizationId, context, env),
-    tags: parseStringArray(postFields.tags_metadata),
+    ...await contentReviewUrls(attachArticleCategory(attachCoverMedia(attachPublished(postFields, Boolean(postFields.published_at)))), publicPath, organizationId, context, env),
     body: renderContentBlocksToMarkdown(rawBlocks),
     content_document: contentDocument,
     editor_template: organization.template.slug,
@@ -595,12 +565,13 @@ export async function getBlogPost(db: DbClient, postIdOrSlug: string, organizati
 async function getPublicOrganizationBlogPost(db: DbClient, organizationId: string, collection: ArticleCollection, slug: string, env: CloudflareEnv, previewAuthorized = false) {
   const post = await queryFirst<ApiRecord>(db, `
     SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, p.seo_keywords, p.visibility,
+      p.id, p.title, p.slug, p.summary AS excerpt, ${ARTICLE_CATEGORY_SELECT}, p.seo_keywords, p.visibility,
       p.published_at, p.created_at, p.updated_at,
       p.author_id,
       ${COVER_SELECT}
     FROM content_documents p
     ${coverJoinSql('p')}
+    ${articleCategoryJoinSql('p')}
     WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.organization_id = ? AND (p.metadata_json ->> '$.collection') = ?
       ${previewAuthorized ? "AND p.status IN ('draft', 'published')" : "AND p.status = 'published'"}
     LIMIT 1
@@ -622,7 +593,7 @@ async function getPublicOrganizationBlogPost(db: DbClient, organizationId: strin
   const authors = await findAuthUsersByIds(env, [authorId as string | null])
   const author = typeof authorId === 'string' ? authors.get(authorId) ?? null : null
   return {
-    ...attachCover({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) }),
+    ...attachArticleCategory(attachCoverMedia({ ...postRecord, content_blocks: contentBlocks ?? [], body: renderContentBlocksToMarkdown(rawBlocks) })),
     media: socialMedia?.media ?? [],
     social_image: socialMedia?.social_image ?? null,
     author: author ? { id: author.id, name: author.name, image: author.image } : null,
@@ -662,9 +633,9 @@ export async function getPublishedBlogPost(
 
   const localizations = await loadExactPublicLocalizations(env, db, organizationId, locale)
   const row = await queryFirst<{ id: string; root_id: string; title: string | null; summary: string | null;
-    seo_keywords: string | null; metadata_json: string;
+    seo_keywords: string | null;
     source_slug: string; updated_at: string }>(db, `
-    SELECT d.id, d.root_id, d.title, d.summary, d.seo_keywords, d.metadata_json,
+    SELECT d.id, d.root_id, d.title, d.summary, d.seo_keywords,
            d.updated_at, root.slug AS source_slug
       FROM content_documents d JOIN content_documents root ON root.id = d.root_id
      WHERE d.organization_id = ? AND d.locale = ? AND d.path = ? AND d.row_role = 'representation'
@@ -674,7 +645,6 @@ export async function getPublishedBlogPost(
   if (!row) return null
   const canonical = await getPublicOrganizationBlogPost(db, organizationId, collection, row.source_slug, env, previewAuthorized)
   if (!canonical) return null
-  const metadata = JSON.parse(row.metadata_json) as Record<string, unknown>
   const [outlineBlocks, rawBlocks, social] = await Promise.all([
     getContentOutline(db, row.id), listBlocksForDocument(db, row.id),
     loadPublicSocialMedia(db, organizationId, 'content_document', [row.id]),
@@ -682,7 +652,7 @@ export async function getPublishedBlogPost(
   const contentBlocks = await attachPageQa(db, organizationId, pathOf(row.source_slug), outlineBlocks, locale)
   return { ...canonical, id: row.id, title: row.title, excerpt: row.summary, slug,
     seo_keywords: row.seo_keywords,
-    category: metadata.category ?? null, tags: metadata.tags ?? [],
+    category: (await localizeArticleCategories(env, db, organizationId, locale, [canonical]))[0]!.category,
     updated_at: row.updated_at, body: renderContentBlocksToMarkdown(rawBlocks),
     content_blocks: contentBlocks.map(block => ({ ...block, media: projectLocalizedMediaAlt(block.media.map(item => ({ ...item, alt_text: item.alt_text ?? null })), localizations) })),
     media: projectLocalizedMediaAlt(social.get(row.id)?.media ?? [], localizations),
@@ -745,9 +715,10 @@ export async function createBlogPost(
         id, rowRole: 'root', locale: 'en', kind: 'article', organizationId,
         title: article.title, slug, summary: article.excerpt ?? null, status: 'draft', visibility: article.visibility ?? 'listed',
         authorId, seoKeywords: article.seo_keywords,
-        metadata: { collection, category: article.category ?? null, tags: article.tags ?? null, slug_manually_overridden: customSlug ? 1 : 0 },
+        metadata: { collection, slug_manually_overridden: customSlug ? 1 : 0 },
       }, canonicalBlocks, { bodyMarkdown: canonicalBody,
         additionalQueriesAfter: [
+          ...(article.category_id === undefined ? [] : [await articleCategoryMembershipQuery(db, { organizationId, articleId: id, collection, categoryId: article.category_id })]),
           ...await contentBlockPlacementQueries(db, canonicalBlocks, placementScope, now),
           organizationEventQuery({ organizationId, actorId: authorId, eventType: 'article.created', entityType: 'article', entityId: id,
             metadata: { request_hash: requestHash }, dedupeKey }),
@@ -804,6 +775,9 @@ export async function updateBlogLifecycle(
   if (source.updated_at !== input.expected_updated_at) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Article was updated by another writer' })
   }
+  // A published article is always in a category: its index, sidebar and breadcrumb are built from them.
+  const categorized = await queryFirst<{ category_id: string }>(db, 'SELECT category_id FROM article_category_articles WHERE article_id = ?', [source.id])
+  if (!categorized) badRequest('Choose a category before publishing (category_id)')
   const committedAt = new Date(Math.max(Date.now(), Date.parse(source.updated_at) + 1)).toISOString()
   const [result] = await executeBatch(db, [{ query: `UPDATE content_documents SET
     published_at = COALESCE(published_at, ?), first_published_at = COALESCE(first_published_at, ?),
@@ -823,14 +797,20 @@ export async function updateBlogPost(
   if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) badRequest('At least one blog mutation field is required')
   const postId = await resolvePlatformContentId(db, 'article', postIdOrSlug, 'Post not found', organizationId)
   validateBlogCommon(input, 'update')
-  const current = await queryFirst<{ organization_id: string; collection: string | null; category: string | null; title: string; slug: string;
+  const current = await queryFirst<{ organization_id: string; collection: string | null; title: string; slug: string;
     first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, `
-    SELECT organization_id, metadata_json ->> '$.collection' AS collection, metadata_json ->> '$.category' AS category, title, slug, first_published_at,
+    SELECT organization_id, metadata_json ->> '$.collection' AS collection, title, slug, first_published_at,
       metadata_json ->> '$.slug_manually_overridden' AS slug_manually_overridden, updated_at
     FROM content_documents WHERE id = ? AND kind = 'article' AND row_role = 'root'`, [postId])
   if (!current) notFound('Post not found')
   if (input.content_blocks !== undefined && !input.expected_updated_at) badRequest('expected_updated_at is required with content_blocks')
   const effectiveCollection = articleCollectionOf(input.collection === undefined ? current.collection : input.collection)
+  // Its category belongs to its collection, so moving an article to the other
+  // collection names the category it goes into there.
+  if (effectiveCollection !== articleCollectionOf(current.collection) && input.category_id === undefined) {
+    badRequest(`Moving an article to ${effectiveCollection} needs a category_id from ${effectiveCollection}`)
+  }
+  const categoryMembership = input.category_id === undefined ? [] : [await articleCategoryMembershipQuery(db, { organizationId, articleId: postId, collection: effectiveCollection, categoryId: input.category_id })]
   const placementScope = { organizationId }
   const normalizedBlocks = input.content_blocks === undefined ? undefined : await normalizeEditorContentBlocks(db, input.content_blocks, placementScope)
   const metadata: Record<string, unknown> = {}
@@ -856,21 +836,20 @@ export async function updateBlogPost(
   }
   if (input.excerpt !== undefined) changes.summary = input.excerpt
   if (input.collection !== undefined) metadata.collection = effectiveCollection
-  if (input.category !== undefined) metadata.category = input.category
-  if (input.tags !== undefined) metadata.tags = input.tags
   const now = new Date().toISOString()
   try {
     await updateContentDocument(db, postId, {
       expected_updated_at: input.expected_updated_at ?? current.updated_at, blocks: normalizedBlocks, changes,
       additionalQueriesAfter: [...(normalizedBlocks ? await contentBlockPlacementQueries(db, normalizedBlocks, placementScope, now) : []),
-        ...(input.visibility === undefined ? [] : [publicResourceCacheInvalidationQuery(organizationId, 'article-visibility')])],
+        ...categoryMembership,
+        ...(input.visibility === undefined && input.category_id === undefined ? [] : [publicResourceCacheInvalidationQuery(organizationId, 'article-visibility')])],
     })
     if (requestedSlug && requestedSlug !== current.slug && current.first_published_at && input.redirect_old_slug !== false) {
       await createBlogRedirect(db, postId, organizationId, current.slug)
     }
     const post = await getBlogPost(db, postId, organizationId, env)
     // Title and excerpt are drawn on the card, and the blocks hold its leading
-    // picture. Slug, tags and visibility are not on it.
+    // picture. Slug and visibility are not on it.
     const cardInputChanged = input.title !== undefined || input.excerpt !== undefined || normalizedBlocks !== undefined
     if (env && cardInputChanged) await refreshSocialCard({ db, env, owner: { owner_type: 'content_document', owner_id: postId } })
     return { success: true, admin_edit_url: post.admin_edit_url, edit_url: post.edit_url,

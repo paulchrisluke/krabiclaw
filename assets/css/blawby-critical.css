@@ -45,8 +45,7 @@ button {
 }
 
 [data-blawby-critical-header] {
-  position: fixed;
-  inset-inline: 0;
+  position: sticky;
   top: 0;
   z-index: 50;
   border-bottom: 1px solid #e5e7eb;
@@ -115,11 +114,6 @@ button {
   max-width: 120px;
   max-height: 4rem;
   object-fit: contain;
-}
-
-.blawby-critical-header-spacer {
-  height: 4rem;
-  margin-bottom: 0;
 }
 
 [data-blawby-critical-hero] {

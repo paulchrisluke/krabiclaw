@@ -91,7 +91,7 @@ export async function getOrganizationLocalizationProgress(
   const source = await getPersistedSourceLocale(db, input.organizationId)
   if (input.locale === source.locale) throw new Error('Localization progress requires an additional language')
   const params = [input.locale, input.organizationId]
-  const [organization, locations, catalog, collections, posts, blog, qa, media, links, pages] = await Promise.all([
+  const [organization, locations, catalog, collections, posts, blog, categories, qa, media, links, pages] = await Promise.all([
     queryAll<LocalizableRow>(db, `SELECT s.id, s.name, s.brand_description, rl.values_json
       FROM organization s LEFT JOIN resource_localizations rl ON rl.resource_type = 'organization' AND rl.resource_id = s.id AND rl.locale = ?
         AND rl.organization_id = s.id
@@ -132,6 +132,13 @@ export async function getOrganizationLocalizationProgress(
         CASE WHEN t.id IS NULL THEN NULL ELSE json_object('title',t.title,'summary',t.summary,'metadata',json(t.metadata_json)) END AS values_json
       FROM content_documents p LEFT JOIN content_documents t ON t.root_id = p.id AND t.row_role = 'representation' AND t.locale = ?
       WHERE p.organization_id = ? AND p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' ORDER BY p.id`, params),
+    queryAll<LocalizableRow>(db, `
+      SELECT c.id, c.name, c.description, rl.values_json
+        FROM article_categories c
+        LEFT JOIN resource_localizations rl ON rl.resource_type = 'article_category' AND rl.resource_id = c.id AND rl.locale = ?
+          AND rl.organization_id = c.organization_id
+       WHERE c.organization_id = ?
+       ORDER BY c.collection, c.sort_order, c.id`, params),
     queryAll<LocalizableRow>(db, `SELECT q.id, l.slug AS location_slug, q.title, q.summary,
         CASE WHEN t.id IS NULL THEN NULL ELSE json_object('title',t.title,'summary',t.summary) END AS values_json
       FROM content_documents q JOIN business_locations l ON l.id = q.location_id
@@ -177,7 +184,8 @@ export async function getOrganizationLocalizationProgress(
     { id: 'collections', label: 'Collections', result: progress(collections, ['name', 'description']), path: (row: LocalizableRow) => `collections/${row.id}`, resourceType: 'collection', resourceId: (row: LocalizableRow) => row.id },
     { id: 'pages', label: 'Pages', result: progress(pages, ['title', 'summary', 'content']), path: (row: LocalizableRow) => `pages/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
     { id: 'posts', label: 'Posts', result: progress(posts, ['summary', 'metadata.event.title', 'metadata.offer.terms_conditions']), path: (row: LocalizableRow) => `locations/${row.location_slug}/posts/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
-    { id: 'blog', label: 'Blog', result: progress(blog, ['title', 'summary', 'metadata.category', 'metadata.tags']), path: (row: LocalizableRow) => `blog/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'blog', label: 'Blog', result: progress(blog, ['title', 'summary']), path: (row: LocalizableRow) => `blog/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
+    { id: 'article-categories', label: 'Article categories', result: progress(categories, ['name', 'description']), path: (row: LocalizableRow) => `blog/categories/${row.id}`, resourceType: 'article_category', resourceId: (row: LocalizableRow) => row.id },
     { id: 'qa', label: 'Q&A', result: progress(qa, ['title', 'summary']), path: (row: LocalizableRow) => `locations/${row.location_slug}/qa/${row.id}`, resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },
     { id: 'media', label: 'Media', result: progress(media, ['alt_text']), path: () => 'media', resourceType: 'media_asset', resourceId: (row: LocalizableRow) => row.id },
     { id: 'links', label: 'Links', result: progress(links, ['title', 'label']), path: () => 'links', resourceType: 'content_document', resourceId: (row: LocalizableRow) => row.id },

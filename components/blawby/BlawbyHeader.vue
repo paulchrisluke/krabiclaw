@@ -1,12 +1,17 @@
 <template>
-  <header data-blawby-critical-header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
-    <BlawbyBanner
-      data-blawby-critical-banner
-      :content="organization.banner_content"
-      :phone="organization.phone"
-      :dismissible="organization.banner_dismissible"
-      :storage-key="`blawby-banner:${organization.name}:${organization.banner_content}`"
-    />
+  <!--
+    The banner scrolls away and the nav sticks. The header is sticky rather than
+    fixed, so it takes its own height in the flow instead of a spacer guessing
+    it — the guess was one nav tall and the banner sat on top of the content.
+  -->
+  <BlawbyBanner
+    data-blawby-critical-banner
+    :content="organization.banner_content"
+    :phone="organization.phone"
+    :dismissible="organization.banner_dismissible"
+    :storage-key="`blawby-banner:${organization.name}:${organization.banner_content}`"
+  />
+  <header data-blawby-critical-header class="sticky top-0 z-50 border-b border-gray-200 bg-white">
     <div class="blawby-container">
       <nav class="relative z-50 flex items-center justify-between gap-4 py-2" :aria-label="t('blawby.navigation.main')">
         <div class="flex shrink-0 items-center">
@@ -58,7 +63,18 @@
                 <path :class="mobileOpen ? '' : 'scale-90 opacity-0'" class="origin-center transition" d="M2 2L12 12M12 2L2 12" />
               </svg>
             </summary>
-            <div class="absolute right-0 top-full mt-4 w-[min(20rem,calc(100vw-2rem))] rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5">
+            <div class="absolute right-0 top-full mt-4 max-h-[calc(100vh-6rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5">
+              <!-- On an article page, its articles come first: this menu is the page's one navigation. -->
+              <PlatformCommandSearchTrigger
+                v-if="articleNav?.search"
+                :surface="articleNav.search.surface"
+                :variant="articleNav.search.variant"
+                :label="articleSearchLabel"
+                :aria-label="articleSearchLabel"
+                class="mb-3 text-base"
+                @click="closeMobileNav"
+              />
+              <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-3 border-b border-gray-200 pb-3" @navigate="closeMobileNav" />
               <NuxtLink
                 v-for="item in headerItems"
                 :key="item.id"
@@ -75,11 +91,13 @@
       </nav>
     </div>
   </header>
-  <div class="blawby-critical-header-spacer mb-16" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
 import type { PublicBlawbyIdentity, PublicBlawbyPageLink, PublicConsultationSettings } from '~/types/blawby'
+import ArticleSidebar from '~/components/blog/ArticleSidebar.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import { articleNavKey } from '~/composables/useArticleNav'
 
 const props = defineProps<{
   organization: PublicBlawbyIdentity
@@ -103,6 +121,8 @@ const headerItems = computed(() => {
   })
 })
 const mobileOpen = ref(false)
+const articleNav = inject(articleNavKey, null)
+const articleSearchLabel = computed(() => articleNav ? t('saya.search.dialog_title', { surface: articleNav.value.indexLabel }) : '')
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
 function syncMobileNavState(event: Event) { mobileOpen.value = (event.currentTarget as HTMLDetailsElement).open }
 function closeMobileNav() {

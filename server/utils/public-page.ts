@@ -25,8 +25,8 @@ import {
 import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { Collection, Product } from '~/server/types/products'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { attachCover } from "~/server/utils/content/publishing";
-import { COVER_SELECT, coverJoinSql } from "~/server/utils/content/cover";
+import { COVER_SELECT, attachCoverMedia, coverJoinSql } from "~/server/utils/content/cover";
+import { ARTICLE_CATEGORY_SELECT, articleCategoryJoinSql, attachArticleCategory } from '~/server/utils/content/article-categories'
 import { getContentBlocksForDocument } from '~/server/utils/content/documents'
 import {
   buildPublicResourceCacheKey,
@@ -459,11 +459,12 @@ async function loadPublicPageSource(
 
   if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
-      `SELECT p.id, root.id AS root_id, root.slug AS source_slug, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, json_extract(p.metadata_json, '$.tags') AS tags_metadata, (p.metadata_json ->> '$.nav_title') AS nav_title, p.seo_keywords,
+      `SELECT p.id, root.id AS root_id, root.slug AS source_slug, p.title, p.slug, p.summary AS excerpt, ${ARTICLE_CATEGORY_SELECT}, (p.metadata_json ->> '$.nav_title') AS nav_title, p.seo_keywords,
               root.published_at, p.created_at, p.updated_at,
               ${COVER_SELECT}
        FROM content_documents root JOIN content_documents p ON COALESCE(p.root_id,p.id) = root.id AND p.locale = ?
        ${coverJoinSql('p')}
+       ${articleCategoryJoinSql('root')}
        WHERE ${localizedBlogPostId ? 'p.id' : 'p.slug'} = ? AND p.organization_id = ? AND root.row_role = 'root' AND root.kind = 'article' AND root.status = 'published'
        LIMIT 1`,
       [localizedLocale ?? "en", localizedBlogPostId ?? blogSlug, organizationId],
@@ -786,7 +787,7 @@ async function loadPublicPageSource(
       const contentBlocks = loadedBlocks
         ? await attachPageQa(db, organizationId, tenantBlogPostPath({ themeId: organization.theme_id, vertical: organization.vertical }, String(postRow.source_slug)), loadedBlocks, localizedLocale ?? 'en')
         : loadedBlocks
-      blogPost = attachCover({ ...postRow, content_blocks: contentBlocks });
+      blogPost = attachArticleCategory(attachCoverMedia({ ...postRow, content_blocks: contentBlocks }));
     }
   }
 

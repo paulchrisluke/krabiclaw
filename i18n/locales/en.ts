@@ -175,13 +175,11 @@ export default {
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
-      "browse_topics": "Browse topics",
       "previous": "Previous",
       "next": "Next",
       "docs_meta_description": "Documentation from {organization}.",
-      "tagged": "Tagged",
+      "category_meta_description": "{category} articles in the {collection} of {organization}.",
       "read_time": "{count} min read",
-      "published_from": "Published from {name}",
       "updated_on": "Updated {date}",
       "title": "Latest Updates",
       "featured": "Featured",

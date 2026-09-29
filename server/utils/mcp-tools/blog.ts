@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
+import { articleCategoryObject, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, contentBlockMediaInputObject, contentBlockUpdatedAtInput, pageInfoObject, paginationInputSchema, organizationTool } from './shared'
 import { PUBLICATION_CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
 
 // A block's place is its index in the array; there is no position to state.
@@ -16,6 +16,20 @@ const blogContentBlockSchema = {
     updated_at: contentBlockUpdatedAtInput,
   },
   required: ['type', 'data'],
+  additionalProperties: false,
+} as const
+
+const articleCategoryResult = {
+  type: 'object',
+  properties: { category: articleCategoryObject },
+  required: ['category'],
+  additionalProperties: false,
+} as const
+
+const articleCategoryListResult = {
+  type: 'object',
+  properties: { categories: { type: 'array', items: articleCategoryObject } },
+  required: ['categories'],
   additionalProperties: false,
 } as const
 
@@ -53,7 +67,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_blog_post',
-      description: 'Create a long-form, evergreen, SEO-indexed article as a draft, using content_blocks as the only authoring shape. It is not public until publish_blog_post; review the draft with its preview_url first. Pass a new idempotency_key per article: repeating a call with the same key returns the same article instead of a second one. category is free text for tenant blogs.',
+      description: 'Create a long-form, evergreen, SEO-indexed article as a draft, using content_blocks as the only authoring shape. It is not public until publish_blog_post; review the draft with its preview_url first. Pass a new idempotency_key per article: repeating a call with the same key returns the same article instead of a second one. Every published article is in one of its collection\'s categories: pass category_id from list_article_categories.',
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -62,8 +76,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         title: { type: 'string' },
         excerpt: { type: 'string' },
         collection: { type: 'string', enum: ['blog', 'docs'], description: "Which of the site's collections the article belongs to: its blog, or its documentation. Defaults to the blog." },
-        category: { type: 'string' },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
+        category_id: { type: 'string', description: "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first." },
         content_blocks: { type: 'array', minItems: 1, description: 'The article, in order. Any number of blocks of any type, images wherever they belong. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
         visibility: { type: 'string', enum: ['listed', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
@@ -82,8 +95,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         title: { type: 'string' },
         excerpt: { type: 'string' },
         collection: { type: 'string', enum: ['blog', 'docs'], description: "Move the article to the site's blog or its documentation. Omit to leave it where it is." },
-        category: { type: 'string' },
-        tags: { type: 'array', items: { type: 'string' }, description: 'Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.' },
+        category_id: { type: 'string', description: "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first." },
         content_blocks: { type: 'array', minItems: 1, description: 'The whole article, in order, replacing every block. Blocks read back keep their id. The first block, when it is an image, is the cover.', items: blogContentBlockSchema },
         expected_updated_at: { type: 'string', description: 'Required with content_blocks. Use updated_at returned by get_blog_post; stale tokens are rejected with a conflict.' },
         seo_keywords: { type: ['string', 'null'], description: 'Comma-separated SEO keyword phrases when useful.' },
@@ -108,7 +120,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'reorder_blog_posts',
-      description: "Set the order one collection (the blog or the documentation) is read in on the public site, which also orders its categories (a category sits where its first article does). Send every article id in that collection exactly once, drafts included, in the intended order; a partial order is rejected. Each article's sort_order is its position from 1; an article written afterwards has sort_order 0 and leads, newest first, until it is placed.",
+      description: "Set the order one collection (the blog or the documentation) is read in on the public site, within and across its categories; the categories' own order is reorder_article_categories. Send every article id in that collection exactly once, drafts included, in the intended order; a partial order is rejected. Each article's sort_order is its position from 1; an article written afterwards has sort_order 0 and leads, newest first, until it is placed.",
       domain: 'blog',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -137,5 +149,61 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         required: ['post_id', 'deleted'],
         additionalProperties: false,
       },
+    }),
+  organizationTool({
+      name: 'list_article_categories',
+      description: "List one collection's categories (the blog's or the documentation's) in the order they are read in publicly, with how many articles each holds. Every published article is in exactly one; each category has its own public page at /blog/category/{slug} or /docs/category/{slug}.",
+      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: { collection: { type: 'string', enum: ['blog', 'docs'] } },
+      required: ['collection'],
+      outputSchema: articleCategoryListResult,
+    }),
+  organizationTool({
+      name: 'create_article_category',
+      description: 'Create a category in the blog or the documentation. It goes last; place it with reorder_article_categories. Its slug comes from the name and does not change later.',
+      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: {
+        collection: { type: 'string', enum: ['blog', 'docs'] },
+        name: { type: 'string', minLength: 1, maxLength: 100 },
+        description: { type: ['string', 'null'], maxLength: 500, description: 'What the category covers, shown on its page and used as the page description.' },
+      },
+      required: ['collection', 'name'],
+      outputSchema: articleCategoryResult,
+    }),
+  organizationTool({
+      name: 'update_article_category',
+      description: "Rename a category or change its description. Its page's address (slug) stays the same.",
+      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: {
+        category_id: { type: 'string' },
+        name: { type: 'string', minLength: 1, maxLength: 100 },
+        description: { type: ['string', 'null'], maxLength: 500 },
+      },
+      required: ['category_id'],
+      outputSchema: articleCategoryResult,
+    }),
+  organizationTool({
+      name: 'delete_article_category',
+      description: 'Delete an empty category. A category that still has articles is refused with the number it holds: ask the user which category those articles should move to, move each with update_blog_post (category_id), then delete it.',
+      domain: 'blog', minimumRole: 'admin', confirmRequired: true,
+      inputSchema: { category_id: { type: 'string' } },
+      required: ['category_id'],
+      outputSchema: {
+        type: 'object',
+        properties: { category_id: { type: 'string' }, deleted: { type: 'boolean' } },
+        required: ['category_id', 'deleted'],
+        additionalProperties: false,
+      },
+    }),
+  organizationTool({
+      name: 'reorder_article_categories',
+      description: "Set the order one collection's categories are read in on the public site: the index, its sidebar and the menu. Send every category id in that collection exactly once; a partial order is rejected.",
+      domain: 'blog', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: {
+        collection: { type: 'string', enum: ['blog', 'docs'] },
+        category_ids: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      },
+      required: ['collection', 'category_ids'],
+      outputSchema: articleCategoryListResult,
     }),
 ]

@@ -5,7 +5,7 @@
     template's layout is the chrome around it and its design tokens are the
     only other difference.
   -->
-  <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10">
+  <div :class="hasToc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10' : undefined">
     <div class="min-w-0">
       <ArticleBreadcrumb :crumbs="breadcrumbs" />
 
@@ -13,8 +13,6 @@
         <BlogArticleRenderer
           :title="post.title"
           :excerpt="post.excerpt"
-          :tags="post.tags"
-          :tag-index-path="indexPath"
           :published-at="post.published_at"
           :updated-at="post.updated_at"
           :author-name="authorName"
@@ -44,7 +42,7 @@
       </nav>
     </div>
 
-    <aside class="hidden xl:block">
+    <aside v-if="hasToc" class="hidden xl:block">
       <ArticleToc :html="tocHtml" />
     </aside>
   </div>
@@ -57,11 +55,11 @@ import ArticleToc from '~/components/blog/ArticleToc.vue'
 import BlogArticleRenderer from '~/components/blog/BlogArticleRenderer.vue'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { headingAnchor, renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
-import { ARTICLE_COLLECTIONS, type ArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, collectionCategoryPath, type ArticleCollection } from '~/utils/article-collections'
 
 const props = defineProps<{ collection: ArticleCollection }>()
 
@@ -83,8 +81,10 @@ const authorName = computed(() => post.value.author?.name ?? null)
 const indexPath = computed(() => localePath(ARTICLE_COLLECTIONS[props.collection].pathPrefix))
 const indexLabel = computed(() => props.collection === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'))
 const articlePath = computed(() => localePath(tenantBlogPostPath(template.value, post.value.slug, props.collection)))
+// The index, the article's category, the article: the category is a page of its own.
 const breadcrumbs = computed(() => [
   { name: indexLabel.value, url: indexPath.value },
+  ...(post.value.category ? [{ name: post.value.category.name, url: localePath(collectionCategoryPath(props.collection, post.value.category.slug)) }] : []),
   { name: post.value.title, url: articlePath.value },
 ])
 
@@ -98,9 +98,12 @@ const tocHtml = computed(() => post.value.content_blocks
   .map((block) => {
     if (block.type !== 'heading') return DOMPurify.sanitize(renderMarkdownToHtml(String(block.data.markdown || '')))
     const level = Math.max(2, Math.min(6, block.level || 2))
-    return `<h${level}>${DOMPurify.sanitize(String(block.data.text || ''))}</h${level}>`
+    const text = String(block.data.text || '')
+    return `<h${level} id="${headingAnchor(text)}">${DOMPurify.sanitize(text)}</h${level}>`
   })
   .join('\n'))
+// The column is there only when the article has headings to list; an empty one left a blank strip beside the text.
+const hasToc = computed(() => /<h[23]\b[^>]*\bid="[^"]+"/.test(tocHtml.value))
 const articleBodyRef = shallowRef<Element | null>(null)
 useCopyableCodeBlocks(articleBodyRef, computed(() => post.value.content_blocks))
 
@@ -141,7 +144,7 @@ useContentPageSchema(computed(() => ({
   datePublished: post.value.published_at,
   dateModified: post.value.updated_at,
   authorName: authorName.value,
-  articleSection: post.value.category || undefined,
+  articleSection: post.value.category?.name || undefined,
   keywords: post.value.seo_keywords || undefined,
   inLanguage: locale.value === 'en' ? 'en-US' : locale.value,
   breadcrumbs: breadcrumbs.value,

@@ -12,7 +12,9 @@
  * required field an author could not add to — and, because an article filed
  * under an undeclared category had no URL, drop it from every index silently.
  *
- * A category is now the author's own word on both, used to group an index.
+ * A category is now a record of its collection (server/utils/content/article-categories.ts):
+ * the owner names and orders them, every published article is in one, and
+ * each has its own page at `{prefix}/category/{slug}`.
  */
 export type ArticleCollection = 'blog' | 'docs'
 
@@ -31,6 +33,11 @@ export const ARTICLE_COLLECTION_SLUGS = Object.keys(ARTICLE_COLLECTIONS) as Arti
 
 export function isArticleCollection(value: unknown): value is ArticleCollection {
   return typeof value === 'string' && value in ARTICLE_COLLECTIONS
+}
+
+/** The public path of a collection's category page: `{prefix}/category/{slug}`. */
+export function collectionCategoryPath(collection: ArticleCollection, slug: string): string {
+  return `${ARTICLE_COLLECTIONS[collection].pathPrefix}/category/${encodeURIComponent(slug)}`
 }
 
 /** The public path of an article in a collection: `{prefix}/{slug}`. */

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:707dac543f48c1c21ebcafd05cd480027d2cab62b28206ab99f2951de9b36683",
+  "fingerprint": "sha256:3abd45c59c7f7f43fe6d3efd49102661ffcf3355c2f83befae73b6d0fe26a91c",
   "tools": [
     {
       "name": "append_content_block",
@@ -1121,11 +1121,103 @@
       }
     },
     {
+      "name": "create_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "description": "What the category covers, shown on its page and used as the page description.",
+            "maxLength": 500,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "additionalProperties": false,
+            "properties": {
+              "article_count": {
+                "description": "Articles in the category, drafts included.",
+                "type": "integer"
+              },
+              "collection": {
+                "enum": [
+                  "blog",
+                  "docs"
+                ],
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "collection",
+              "name",
+              "slug",
+              "description",
+              "sort_order",
+              "article_count"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_blog_post",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "category": {
+          "category_id": {
+            "description": "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first.",
             "type": "string"
           },
           "collection": {
@@ -1281,13 +1373,6 @@
               "null"
             ]
           },
-          "tags": {
-            "description": "Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "title": {
             "type": "string"
           },
@@ -1320,8 +1405,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -1548,12 +1650,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -1582,7 +1678,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -3191,6 +3286,41 @@
       }
     },
     {
+      "name": "delete_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "category_id",
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "delete_blog_post",
       "inputSchema": {
         "additionalProperties": false,
@@ -3450,6 +3580,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -3484,6 +3615,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -3589,8 +3721,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -3817,12 +3966,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -3851,7 +3994,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -6281,6 +6423,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -6326,6 +6469,7 @@
                       "business_location",
                       "product",
                       "collection",
+                      "article_category",
                       "media_asset"
                     ],
                     "type": "string"
@@ -6764,6 +6908,86 @@
       }
     },
     {
+      "name": "list_article_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "article_count": {
+                  "description": "Articles in the category, drafts included.",
+                  "type": "integer"
+                },
+                "collection": {
+                  "enum": [
+                    "blog",
+                    "docs"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "collection",
+                "name",
+                "slug",
+                "description",
+                "sort_order",
+                "article_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_blog_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -6832,8 +7056,25 @@
                   ]
                 },
                 "category": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
                 },
@@ -6965,12 +7206,6 @@
                   ],
                   "type": "string"
                 },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "title": {
                   "type": "string"
                 },
@@ -6999,7 +7234,6 @@
                 "collection",
                 "category",
                 "sort_order",
-                "tags",
                 "seo_keywords",
                 "published",
                 "published_at",
@@ -8572,8 +8806,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -8800,12 +9051,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -8834,7 +9079,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -9045,6 +9289,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -9105,6 +9350,7 @@
                       "business_location",
                       "product",
                       "collection",
+                      "article_category",
                       "media_asset"
                     ],
                     "type": "string"
@@ -10753,6 +10999,94 @@
       }
     },
     {
+      "name": "reorder_article_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "category_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "article_count": {
+                  "description": "Articles in the category, drafts included.",
+                  "type": "integer"
+                },
+                "collection": {
+                  "enum": [
+                    "blog",
+                    "docs"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "collection",
+                "name",
+                "slug",
+                "description",
+                "sort_order",
+                "article_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "reorder_blog_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -10795,8 +11129,25 @@
                   ]
                 },
                 "category": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
                 },
@@ -10928,12 +11279,6 @@
                   ],
                   "type": "string"
                 },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "title": {
                   "type": "string"
                 },
@@ -10962,7 +11307,6 @@
                 "collection",
                 "category",
                 "sort_order",
-                "tags",
                 "seo_keywords",
                 "published",
                 "published_at",
@@ -11442,6 +11786,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset"
             ],
             "type": "string"
@@ -11469,6 +11814,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset"
             ],
             "type": "string"
@@ -13194,11 +13540,97 @@
       }
     },
     {
+      "name": "update_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 500,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "additionalProperties": false,
+            "properties": {
+              "article_count": {
+                "description": "Articles in the category, drafts included.",
+                "type": "integer"
+              },
+              "collection": {
+                "enum": [
+                  "blog",
+                  "docs"
+                ],
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "collection",
+              "name",
+              "slug",
+              "description",
+              "sort_order",
+              "article_count"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "update_blog_post",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "category": {
+          "category_id": {
+            "description": "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first.",
             "type": "string"
           },
           "collection": {
@@ -13370,13 +13802,6 @@
               "null"
             ]
           },
-          "tags": {
-            "description": "Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "title": {
             "type": "string"
           },
@@ -13406,8 +13831,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -13634,12 +14076,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -13668,7 +14104,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",

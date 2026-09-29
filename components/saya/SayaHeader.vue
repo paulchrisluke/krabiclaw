@@ -70,7 +70,18 @@
             >
               <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
             </summary>
-            <div class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden">
+            <div class="absolute inset-x-0 top-16 max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-default bg-default p-4 shadow-sm lg:hidden">
+              <!-- On a blog page, its articles come first: this menu is the page's one navigation. -->
+              <PlatformCommandSearchTrigger
+                v-if="articleNav?.search"
+                :surface="articleNav.search.surface"
+                :variant="articleNav.search.variant"
+                :label="articleSearchLabel"
+                :aria-label="articleSearchLabel"
+                class="mb-3"
+                @click="closeMobileNav"
+              />
+              <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-3 border-b border-default pb-3" @navigate="closeMobileNav" />
               <nav class="grid gap-1" :aria-label="t('saya.header.mobile_nav_aria')">
                 <NuxtLink v-if="showProducts" :to="localePath(productPresentation!.collectionPath)" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
                   {{ productCollectionLabel }}
@@ -117,6 +128,9 @@ interface I18nComposable {
 
 
 import { getVerticalCopy } from '~/utils/vertical-copy'
+import ArticleSidebar from '~/components/blog/ArticleSidebar.vue'
+import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import { articleNavKey } from '~/composables/useArticleNav'
 import { EXPERIENCE_PRESENTATION, resolveProductPresentation } from '~/utils/product-presentation'
 
 // Data comes from layouts/saya.vue, which already owns the single shared
@@ -132,6 +146,8 @@ const i18n = useI18n() as ApiValue as I18nComposable
 const { locale, localePath, t } = i18n
 const verticalCopy = computed(() => getVerticalCopy(props.organization?.vertical, locale.value))
 const mobileMenuOpen = ref(false)
+const articleNav = inject(articleNavKey, null)
+const articleSearchLabel = computed(() => articleNav ? t('saya.search.dialog_title', { surface: articleNav.value.indexLabel }) : '')
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
 const headerRef = shallowRef<Element | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
