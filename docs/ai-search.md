@@ -81,11 +81,22 @@ The script calls `POST /api/internal/search/reindex` for the platform corpus, th
 for each returned organization with `?organization=<id>`. Each request performs a bounded
 batch; the script repeats that pass until its reported pending count reaches zero.
 
+To initialize or reconcile one explicitly named organization's slice against the
+Worker serving the corresponding D1 snapshot, use the same command with its internal ID:
+
+```bash
+yarn ai-search:sync --base-url http://localhost:3107 --organization org-demo
+```
+
+This calls only `?organization=org-demo`; it does not rebuild the platform or other
+businesses. Use a dedicated AI Search instance for each concurrently different D1 snapshot.
+
 Staging and production CI (`.github/workflows/ci.yml`) sync the
 `PLATFORM_SEARCH_REINDEX_SECRET` repository secret and run a blocking rebuild when a file
 that defines the indexed corpus or its rendering changes. A failed rebuild fails the
-deploy job. Local and CI E2E runs bootstrap their dedicated instance with `ai-search:sync`
-after the Worker is healthy and before browser tests start.
+deploy job. Local and CI E2E runs use dedicated instances corresponding to their D1
+snapshots. Initialize the organizations a test writes through the scoped command
+when that instance is new; the browser suite does not rebuild every tenant first.
 
 ## Environment expectations
 
