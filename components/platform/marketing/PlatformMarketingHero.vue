@@ -196,6 +196,51 @@ type ParallaxLayer = {
  */
 const PARALLAX_BREAKPOINTS: ParallaxBreakpoint[] = ['xxs', 'xs', 'sm', 'md', 'lg']
 
+const LEGACY_PARALLAX: Record<string, ParallaxImageSet> = {
+  parallax_sky: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/1_-_376_Crop_f3kohe.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/1_-_600_Crop_exoo15.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452929/Home%20Page/1_-_960_Crop_oa7sit.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452735/Home%20Page/1_-_1264_Crop_etah3p.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578391761/Home%20Page/1_xblbcz.png',
+  },
+  parallax_clouds: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_376,c_scale,q_auto:low/v1578537679/Home%20Page/2_-_376_Crop_jurubz.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_600,c_scale,q_auto:low/v1578453086/Home%20Page/2_-_600_Crop_ljuk1q.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_960,c_scale,q_auto:low/v1578452931/Home%20Page/2_-_960_Crop_nmuzwk.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264,c_scale,q_auto:low/v1578452735/Home%20Page/2_-_1264_Crop_oemckj.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264,c_scale,q_auto:low/v1578304830/Home%20Page/2_sswfon.png',
+  },
+  parallax_mountains: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/3_-_376_Crop_hzx8pn.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/3_-_600_Crop_oi117l.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/3_-_960_Crop_u8unwb.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452735/Home%20Page/3_-_1264_Crop_rzmbf7.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578391697/Home%20Page/3_s78ihj.png',
+  },
+  parallax_far_trees: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/4_-_376_Crop_ojxrls.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/4_-_600_Crop_lzo0qm.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/4_-_960_Crop_yjllbe.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452734/Home%20Page/4_-_1264_Crop_b2si7p.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578304829/Home%20Page/4_y2kccp.png',
+  },
+  parallax_building_trees: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_376/v1578537679/Home%20Page/5_-_376_Crop_kwd38n.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_600/v1578453084/Home%20Page/5_-_600_Crop_hv4pgh.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_960/v1578452928/Home%20Page/5_-_960_Crop_kxqi9o.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264/v1578452735/Home%20Page/5_-_1264_Crop_j243x6.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1920/v1578304830/Home%20Page/5_hqueja.png',
+  },
+  parallax_foreground: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537678/Home%20Page/6_-_376_Crop_idycl2.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/6_-_600_Crop_dld0qh.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/6_-_960_Crop_yweblf.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452734/Home%20Page/6_-_1264_Crop_axf4bc.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578304829/Home%20Page/6-_Black_nt3cjt.png',
+  },
+}
+
 function mediaUrl(slot: string): string | null {
   const media = props.block.media.find(item => item.slot === slot && item.public_url)
   return media?.public_url ?? null
@@ -203,12 +248,12 @@ function mediaUrl(slot: string): string | null {
 
 function parallaxImageSet(slot: string): ParallaxImageSet {
   const generic = mediaUrl(slot)
-  const exact = Object.fromEntries(PARALLAX_BREAKPOINTS.map((breakpoint) => {
-    const url = mediaUrl(slot + '_' + breakpoint) ?? generic
-    if (!url) throw new Error('Homepage hero is missing required media slot ' + slot + '_' + breakpoint)
-    return [breakpoint, url]
-  }))
-  return exact as ParallaxImageSet
+  const legacy = LEGACY_PARALLAX[slot]
+  if (!legacy) throw new Error('Homepage hero has no parallax source definition for ' + slot)
+  return Object.fromEntries(PARALLAX_BREAKPOINTS.map((breakpoint) => [
+    breakpoint,
+    mediaUrl(slot + '_' + breakpoint) ?? generic ?? legacy[breakpoint],
+  ])) as ParallaxImageSet
 }
 
 const parallaxLayers = computed<ParallaxLayer[]>(() => [
