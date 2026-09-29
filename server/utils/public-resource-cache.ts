@@ -107,6 +107,7 @@ export async function drainPublicResourceCacheInvalidations(
       if (!syncedOrganizations.has(row.organization_id)) {
         const synced = await syncOrganizationSearchIndex(env as CloudflareEnv, db, row.organization_id)
         syncedOrganizations.add(row.organization_id)
+        if (synced.indexingUnconfirmedReason) throw new Error(`AI Search indexing for organization ${row.organization_id} was not confirmed: ${synced.indexingUnconfirmedReason}`)
         // A bounded run that left uploads behind is not a failure to retry; it
         // is more of the same change, so it goes back on the queue as a new row.
         if (synced.pending > 0) {

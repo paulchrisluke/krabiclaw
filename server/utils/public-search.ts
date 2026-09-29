@@ -413,9 +413,10 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   while (Date.now() - startedAt < timeoutMs) {
     try {
       const stats = await instance.stats()
-      const queued = Number(stats.queued ?? 0)
-      const running = Number(stats.running ?? 0)
-      const outdated = Number(stats.outdated ?? 0)
+      const { queued, running, outdated } = stats
+      if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
+        throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
+      }
       if (queued === 0 && running === 0 && outdated === 0) return
       lastStatsError = null
     } catch (error) {
@@ -914,6 +915,7 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
   const nextKeys = new Set(records.map(record => record.key))
   const existingByKey = new Map(existingItems.map(item => [item.key, item]))
 
+  let unresolved = 0
   const outdated = records
     .map(record => ({ record, payload: indexItemPayload(record) }))
     .filter(({ record, payload }) => {
@@ -921,15 +923,23 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
       if (existing?.status === 'skipped' && existing.metadata?.content_hash === payload.contentHash) {
         throw new Error(`AI Search skipped unchanged item "${record.key}": ${existing.error || 'indexing was skipped'}`)
       }
+      // AI Search lists newly accepted items as queued before it exposes their
+      // metadata. Their payload cannot be compared yet; re-uploading them here
+      // keeps resetting the same first batch instead of advancing the index.
+      if (existing && ['queued', 'running'].includes(existing.status)
+        && (typeof existing.metadata?.content_hash !== 'string' || !existing.metadata.content_hash)) {
+        unresolved += 1
+        return false
+      }
       if (!existing || !['completed', 'queued', 'running'].includes(existing.status)) return true
-      // AI Search exposes the uploaded hash even while processing. A newer D1
-      // payload must overwrite the accepted item under the same key.
+      // Once AI Search exposes the uploaded hash, a newer D1 payload must
+      // overwrite the accepted item under the same key.
       return existing.metadata?.content_hash !== payload.contentHash
     })
   // An upload takes AI Search a few seconds, so a large business may need
   // multiple bounded batches. Report what is left for the caller's next pass.
   const changed = options.maxUploads ? outdated.slice(0, options.maxUploads) : outdated
-  const pending = outdated.length - changed.length
+  const pending = outdated.length - changed.length + unresolved
 
   await runWithConcurrency(changed, UPLOAD_CONCURRENCY, async ({ record, payload }) => {
     try {
@@ -947,7 +957,7 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
   const staleItems = existingItems.filter(item => !nextKeys.has(item.key))
   await runWithConcurrency(staleItems, UPLOAD_CONCURRENCY, (item) => deleteIndexItem(env, item.id))
 
-  return { indexed: changed.length, unchanged: records.length - outdated.length, pending, deleted: staleItems.length }
+  return { indexed: changed.length, unchanged: records.length - outdated.length - unresolved, pending, deleted: staleItems.length }
 }
 
 /** How many uploads one sync request sends before handing the rest to the next run. */
@@ -981,8 +991,16 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
   const startedAt = Date.now()
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
   const result = await reconcileIndexItems(env, existingItems, expandDocumentsForSurfaces(baseRecords), { maxUploads: SYNC_UPLOADS_PER_RUN })
+  let indexingUnconfirmedReason: string | null = null
+  if (result.indexed === 0 && result.pending > 0) {
+    // A pass waiting only on accepted, metadata-less items must let AI Search
+    // progress instead of immediately polling and resetting the same queue.
+    try { await waitForIndexing(env, 45_000) } catch (error) {
+      indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
+    }
+  }
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-  return result
+  return { ...result, indexingUnconfirmedReason }
 }
 
 /**
