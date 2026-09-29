@@ -44,6 +44,7 @@ const effects = {
   get_resource_localization: 'Reads a resource translation and any existing authoring document.',
   get_organization: 'Reads the selected accessible organization and workspace context.',
   get_organization_analytics: 'Reads website analytics reports from stored aggregates and retained raw events without creating aggregates.',
+  query_organization_analytics: 'Reads individual native analytics events, retained sessions and grouped breakdowns from the selected organization\'s stored analytics without modifying them.',
   get_organization_media_assets: 'Lists the selected organization media library and public asset URLs.',
   get_organization_settings: 'Reads the selected organization settings.',
   get_tenant_page: 'Reads the selected tenant page and its existing content document.',

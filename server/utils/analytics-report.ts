@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PAGEVIEW_DETAIL_RETENTION_DAYS, SESSION_AND_SUMMARY_RETENTION_DAYS } from '~/utils/analytics-retention'
 import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
@@ -71,6 +72,8 @@ export interface AnalyticsReport {
     measurementContractStartedAt: string | null
     /** Outcome events with no browser attribution (nonbrowser or attribution unobserved). */
     outcomeEventsWithoutAttribution: number
+    /** The retention policy this report is bound by. Pageview detail expires first; a range that reaches past it is incomplete, not zero. Full event history is available through query_organization_analytics. */
+    retention: { pageviewDetailDays: number; pageviewDetailAvailableFrom: string; summaryDays: number; rangeDetailComplete: boolean }
     /** GA4 delivery outcome of server-delivered events; provider failure is distinct from disabled, disconnected or consent-rejected. */
     ga4Delivery: Array<{ eventName: string; status: string; count: number }>
   }
@@ -104,6 +107,7 @@ const rate = (count: number, of: number) => of ? Math.round(count / of * 10_000)
 
 const eventList = (predicate: (definition: typeof CONVERSION_EVENT_CATALOG[keyof typeof CONVERSION_EVENT_CATALOG]) => boolean) =>
   ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => predicate(CONVERSION_EVENT_CATALOG[name])).map(name => `'${name}'`).join(', ')
+const OUTCOME_EVENT_NAMES = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].outcome))
 const OUTCOME_EVENT_SQL_LIST = eventList(definition => definition.outcome)
 const SERVER_DELIVERED_EVENT_SQL_LIST = eventList(definition => definition.ga4Sender !== 'browser')
 
@@ -222,7 +226,7 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
   if (dates.length === 0) return []
   const rows = await queryAll<AnalyticsSummaryRow>(db, `SELECT kind, date, key, payload_json FROM analytics_summaries
     WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [organizationId, dates[0]!, dates.at(-1)!])
-  const rawRetentionCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
+  const rawRetentionCutoff = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
   const result: DailySlice[] = []
   for (const date of dates) {
     const dayRows = rows.filter(row => row.date === date)
@@ -242,11 +246,11 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
 }
 
 interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number }
-type ConversionReport = Pick<AnalyticsReport, 'outcomeAttribution' | 'attributedValue' | 'conversions' | 'values' | 'bookingValue' | 'net' | 'signupCohort' | 'coverage'>
+type ConversionReport = Pick<AnalyticsReport, 'outcomeAttribution' | 'attributedValue' | 'conversions' | 'values' | 'bookingValue' | 'net' | 'signupCohort'> & { coverage: Omit<AnalyticsReport['coverage'], 'retention'> }
 
 async function loadConversionReport(db: DbClient, organizationId: string, window: ConversionReportWindow): Promise<ConversionReport> {
   const { start, end, observedEnd, uniqueSessions } = window
-  const inRange = `kind = 'conversion' AND organization_id = ? AND created_at >= ? AND created_at < ?`
+  const inRange = `kind IN ('conversion', 'interaction') AND organization_id = ? AND created_at >= ? AND created_at < ?`
   const eventName = `(payload_json ->> '$.event_name')`
   const snapshot = `(payload_json ->> '$.attribution.source') source, (payload_json ->> '$.attribution.medium') medium,
     (payload_json ->> '$.attribution.campaign') campaign, (payload_json ->> '$.attribution.content') content`
@@ -312,7 +316,8 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
     conversions: conversionRows.map(row => ({
       eventName: String(row.event_name), stage: String(row.stage), conversionType: text(row.conversion_type),
       events: n(row.events), distinctEntities: n(row.entities), convertingSessions: n(row.sessions), nonbrowserEvents: n(row.nonbrowser),
-      sessionConversionRate: rate(n(row.sessions), uniqueSessions),
+      // Only a business outcome has a session conversion rate. A click or a view is an interaction.
+      sessionConversionRate: OUTCOME_EVENT_NAMES.has(String(row.event_name)) ? rate(n(row.sessions), uniqueSessions) : null,
     })),
     values: valueRows.map(row => ({
       eventName: String(row.event_name), basis: row.basis as 'quoted' | 'purchase' | 'refund', currency: String(row.currency), events: n(row.events),
@@ -341,6 +346,11 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
       ga4Delivery: deliveryRows.map(row => ({ eventName: String(row.event_name), status: String(row.status), count: n(row.count) })),
     },
   }
+}
+
+function retentionFor(now: Date, rangeStart: string): AnalyticsReport['coverage']['retention'] {
+  const pageviewDetailAvailableFrom = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
+  return { pageviewDetailDays: PAGEVIEW_DETAIL_RETENTION_DAYS, pageviewDetailAvailableFrom, summaryDays: SESSION_AND_SUMMARY_RETENTION_DAYS, rangeDetailComplete: rangeStart >= pageviewDetailAvailableFrom }
 }
 
 function netByCurrency(valueRows: Array<Record<string, unknown>>): AnalyticsReport['net'] {
@@ -443,7 +453,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
       return { source: String(row.source), medium: String(row.medium), campaign: row.campaign ? String(row.campaign) : null, content: row.content ? String(row.content) : null,
         sessions, outcomeEvents: n(row.outcome_events), convertingSessions: n(row.converting), sessionConversionRate: rate(n(row.converting), sessions) }
     }).sort((a, b) => b.sessions - a.sessions),
-    ...conversionReport,
+    ...{ ...conversionReport, coverage: { ...conversionReport.coverage, retention: retentionFor(now, start) } },
     countries: dimensionRows('country').slice(0, 12).map(row => ({ country: row.value, countryCode: row.value, views: row.views, percentOfTotal: percent(row.views) })),
     cities: dimensionRows('city').slice(0, 10).map(row => {
       const [region, countryCode = 'XX'] = row.subvalue.split('|')
@@ -468,8 +478,8 @@ export async function aggregatePreviousLocalDateForAllOrganizations(db: DbClient
 }
 
 export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Promise<number> {
-  const rawCutoff = new Date(now.getTime() - 90 * 86_400_000).toISOString()
-  const retainedCutoff = new Date(now.getTime() - 740 * 86_400_000).toISOString()
+  const rawCutoff = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
+  const retainedCutoff = new Date(now.getTime() - SESSION_AND_SUMMARY_RETENTION_DAYS * 86_400_000).toISOString()
   const organizations = await queryAll<{ id: string; timezone: string | null }>(db, `
     SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s
   `)
@@ -481,7 +491,7 @@ export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Pr
   for (const organization of organizations) {
     if (!isValidTimezone(organization.timezone)) throw new Error(`Organization ${organization.id} default_timezone is missing or invalid`)
     const timezone = organization.timezone
-    const retainedDate = addLocalDays(localDateAt(now, timezone), -739)
+    const retainedDate = addLocalDays(localDateAt(now, timezone), -(SESSION_AND_SUMMARY_RETENTION_DAYS - 1))
     const results = await executeBatch(db, [
       { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date < ?", params: [organization.id, retainedDate] },
     ], { operation: `clean retained tenant analytics aggregates for ${organization.id}` })

@@ -73,6 +73,23 @@
               <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
             </div>
           </UCard>
+          <UCard variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Pageviews by language</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in nativeLanguages.rows"
+                :key="row.language ?? 'unknown'"
+                :label="row.language ?? 'Language not recorded'"
+                :value="`${formatCount(row.pageViews)} pageviews · ${formatCount(row.sessions)} sessions`"
+                :percent="nativeLanguages.totalPageViews ? Math.round(row.pageViews / nativeLanguages.totalPageViews * 100) : 0"
+              />
+              <p v-if="!nativeLanguages.rows.length && !nativeLanguages.error" class="text-sm text-muted">No pageviews recorded in this range.</p>
+              <p v-if="nativeLanguages.error" class="text-sm text-error">{{ nativeLanguages.error }}</p>
+              <p v-if="nativeLanguages.detailUnavailable" class="text-xs text-muted">{{ nativeLanguages.detailUnavailable }}</p>
+              <p v-if="nativeLanguages.rows.length" class="text-xs text-muted">{{ formatCount(nativeLanguages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
+              <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
+            </div>
+          </UCard>
           <UCard v-if="(analytics?.values || []).length || (analytics?.bookingValue || []).length" variant="soft">
             <template #header><h2 class="font-semibold text-highlighted">Value</h2></template>
             <div class="space-y-3">
@@ -609,6 +626,50 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
     loadError.value = null
   }
 }, { immediate: true })
+
+// The same native query MCP exposes (query_organization_analytics), asked for the pageviews of the
+// selected range grouped by language. Every group is reachable: "Show more" follows the cursor.
+const nativeLanguages = reactive({
+  rows: [] as Array<{ language: string | null; pageViews: number; sessions: number }>,
+  totalPageViews: 0, totalSessions: 0, cursor: null as string | null, loading: false,
+  error: null as string | null, detailUnavailable: null as string | null,
+})
+let latestLanguageRequest = 0
+async function loadLanguages(more: boolean) {
+  const requestId = ++latestLanguageRequest
+  const period = analytics.value?.period
+  if (!period) return
+  nativeLanguages.loading = true
+  nativeLanguages.error = null
+  try {
+    const response = await dashboardApi<{
+      rows: Array<{ dimensions: { locale: string | null }; metrics: { page_views: number; sessions: number } }>
+      next_cursor: string | null
+      totals: Record<string, { value: number | null }>
+      coverage: { requested_range: { unavailable: string | null } }
+    }>('/api/dashboard/analytics-query', {
+      method: 'POST',
+      body: {
+        mode: 'breakdown', start_date: period.startDate, end_date: period.endDate, filters: { kind: 'pageview' },
+        dimensions: ['locale'], metrics: ['page_views', 'sessions'], limit: 20,
+        ...(more && nativeLanguages.cursor ? { cursor: nativeLanguages.cursor } : {}),
+      },
+      validate: (value): value is never => isRecord(value) && Array.isArray(value.rows) && isRecord(value.totals) && isRecord(value.coverage),
+    })
+    if (requestId !== latestLanguageRequest) return
+    const rows = response.rows.map(row => ({ language: row.dimensions.locale, pageViews: row.metrics.page_views, sessions: row.metrics.sessions }))
+    nativeLanguages.rows = more ? [...nativeLanguages.rows, ...rows] : rows
+    nativeLanguages.cursor = response.next_cursor
+    nativeLanguages.totalPageViews = response.totals.page_views?.value ?? 0
+    nativeLanguages.totalSessions = response.totals.sessions?.value ?? 0
+    nativeLanguages.detailUnavailable = response.coverage.requested_range.unavailable
+  } catch (error) {
+    if (requestId === latestLanguageRequest) nativeLanguages.error = error instanceof Error ? error.message : 'Could not load pageviews by language'
+  } finally {
+    if (requestId === latestLanguageRequest) nativeLanguages.loading = false
+  }
+}
+watch(() => analytics.value ? `${analytics.value.period.startDate}:${analytics.value.period.endDate}` : null, (key) => { if (key) void loadLanguages(false) }, { immediate: true })
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
 const socialProviders = computed(() => analytics.value ? [analytics.value.social.facebook, analytics.value.social.instagram] : [])

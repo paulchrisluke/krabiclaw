@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:1e46c4003c079f0b2ce1596c29e505dc470e6c928d42e7354a98d2ab4183d88c",
+  "fingerprint": "sha256:55e6a0371a9a3ba841f029c73c5d79023a7afd1449155b4c4ce9ee15a29a57ae",
   "tools": [
     {
       "name": "append_content_block",
@@ -4972,11 +4972,35 @@
               },
               "outcomeEventsWithoutAttribution": {
                 "type": "number"
+              },
+              "retention": {
+                "properties": {
+                  "pageviewDetailAvailableFrom": {
+                    "type": "string"
+                  },
+                  "pageviewDetailDays": {
+                    "type": "number"
+                  },
+                  "rangeDetailComplete": {
+                    "type": "boolean"
+                  },
+                  "summaryDays": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "pageviewDetailDays",
+                  "pageviewDetailAvailableFrom",
+                  "summaryDays",
+                  "rangeDetailComplete"
+                ],
+                "type": "object"
               }
             },
             "required": [
               "measurementContractStartedAt",
               "outcomeEventsWithoutAttribution",
+              "retention",
               "ga4Delivery"
             ],
             "type": "object"
@@ -10365,6 +10389,360 @@
         },
         "required": [
           "localization"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "query_organization_analytics",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution_basis": {
+            "description": "Which attribution the attribution fields read. Default event_snapshot (sessions: session_last_touch).",
+            "enum": [
+              "observed",
+              "event_snapshot",
+              "session_last_touch"
+            ],
+            "type": "string"
+          },
+          "cursor": {
+            "description": "next_cursor from the previous page of this same request.",
+            "type": "string"
+          },
+          "dimensions": {
+            "description": "breakdown only: 1-6 fields to group by.",
+            "items": {
+              "enum": [
+                "kind",
+                "event_name",
+                "stage",
+                "surface",
+                "page_path",
+                "source_path",
+                "page_id",
+                "page_type",
+                "product_id",
+                "variant_id",
+                "location_id",
+                "locale",
+                "entity_type",
+                "entity_id",
+                "session_id",
+                "visitor_id",
+                "device",
+                "country",
+                "region",
+                "city",
+                "currency",
+                "value_basis",
+                "conversion_type",
+                "attribution_basis",
+                "actor_id",
+                "ga4_delivery_status",
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "term",
+                "referrer_host",
+                "gclid",
+                "gbraid",
+                "wbraid",
+                "fbclid",
+                "msclkid"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "end_date": {
+            "description": "Inclusive local end date (YYYY-MM-DD). Defaults to today.",
+            "type": "string"
+          },
+          "filters": {
+            "additionalProperties": false,
+            "description": "Exact-match filters (all must match). path_prefix matches the public path or anything under it. Names are the queryable fields; enumerated ones list their values.",
+            "properties": {
+              "actor_id": {
+                "description": "the staff member, agent or user who acted, when not the subject",
+                "type": "string"
+              },
+              "attribution_basis": {
+                "description": "how the event snapshot arose: own_touch, inherited, session_current, checkout or none",
+                "type": "string"
+              },
+              "campaign": {
+                "description": "campaign on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "city": {
+                "description": "city",
+                "type": "string"
+              },
+              "content": {
+                "description": "content on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "conversion_type": {
+                "description": "contact, reservation, booking or subscription",
+                "type": "string"
+              },
+              "country": {
+                "description": "ISO country code",
+                "type": "string"
+              },
+              "currency": {
+                "description": "currency of a monetary outcome",
+                "type": "string"
+              },
+              "device": {
+                "description": "device class derived from the user agent",
+                "type": "string"
+              },
+              "entity_id": {
+                "description": "the business subject of an outcome or interaction",
+                "type": "string"
+              },
+              "entity_type": {
+                "description": "the business subject type of an outcome or interaction",
+                "type": "string"
+              },
+              "event_name": {
+                "description": "pageview, or the catalog event name",
+                "type": "string"
+              },
+              "fbclid": {
+                "description": "fbclid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "ga4_delivery_status": {
+                "description": "the outcome of the optional GA4 delivery",
+                "type": "string"
+              },
+              "gbraid": {
+                "description": "gbraid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "gclid": {
+                "description": "gclid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "kind": {
+                "description": "pageview, conversion (a business outcome) or interaction",
+                "type": "string"
+              },
+              "locale": {
+                "description": "the language of the visit",
+                "type": "string"
+              },
+              "location_id": {
+                "description": "the business location",
+                "type": "string"
+              },
+              "medium": {
+                "description": "medium on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "msclkid": {
+                "description": "msclkid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "outcome_event": {
+                "description": "The outcome measured by converting_sessions and session_conversion_rate (sign_up, contact_submit, booking_submit, purchase, ...)",
+                "type": "string"
+              },
+              "page_id": {
+                "description": "the canonical page document",
+                "type": "string"
+              },
+              "page_path": {
+                "description": "the public path exactly as visited (localized visits keep their prefix)",
+                "type": "string"
+              },
+              "page_type": {
+                "description": "the page type",
+                "type": "string"
+              },
+              "path_prefix": {
+                "description": "A public path prefix such as /th/ or /locations/main",
+                "type": "string"
+              },
+              "product_id": {
+                "description": "the product the event is about",
+                "type": "string"
+              },
+              "referrer_host": {
+                "description": "referrer_host on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "region": {
+                "description": "region",
+                "type": "string"
+              },
+              "session_id": {
+                "description": "the native session; null for a server outcome with no browser",
+                "type": "string"
+              },
+              "source": {
+                "description": "source on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "source_path": {
+                "description": "the locale-bare path documents are stored under",
+                "type": "string"
+              },
+              "stage": {
+                "description": "outcome or interaction stage",
+                "type": "string"
+              },
+              "surface": {
+                "description": "the surface that produced the event",
+                "type": "string"
+              },
+              "term": {
+                "description": "term on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "value_basis": {
+                "description": "quoted, purchase or refund",
+                "type": "string"
+              },
+              "variant_id": {
+                "description": "the product variant the event is about",
+                "type": "string"
+              },
+              "visitor_id": {
+                "description": "the native visitor; null for a server outcome with no browser",
+                "type": "string"
+              },
+              "wbraid": {
+                "description": "wbraid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "limit": {
+            "description": "Rows per page (default 50). A page size is not a total-result limit.",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "metrics": {
+            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct sessions that completed the selected outcome); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions)",
+            "items": {
+              "enum": [
+                "events",
+                "page_views",
+                "interactions",
+                "outcomes",
+                "sessions",
+                "visitors",
+                "entities",
+                "quoted_value_minor",
+                "purchase_value_minor",
+                "collected_minor",
+                "refunded_minor",
+                "net_collected_minor",
+                "converting_sessions",
+                "eligible_sessions",
+                "session_conversion_rate"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "description": "events | sessions | breakdown",
+            "enum": [
+              "events",
+              "sessions",
+              "breakdown"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "outcome_event": {
+            "description": "The outcome measured by converting_sessions and session_conversion_rate.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "events: occurred_at_desc (default) or occurred_at_asc. breakdown: { metric, direction } over a requested metric (default: the first metric, descending). Ties break deterministically.",
+            "oneOf": [
+              {
+                "enum": [
+                  "occurred_at_desc",
+                  "occurred_at_asc"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "direction": {
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "type": "string"
+                  },
+                  "metric": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "start_date": {
+            "description": "Inclusive local start date (YYYY-MM-DD). Defaults to 29 days before end_date.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "coverage": {
+            "type": "object"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "type": "object"
+          },
+          "rows": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totals": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "mode",
+          "rows",
+          "next_cursor",
+          "query",
+          "totals",
+          "coverage"
         ],
         "type": "object"
       }

@@ -1,10 +1,16 @@
 # Event measurement
 
-One tenant-scoped event contract measures every business outcome, whatever the
-theme or entry surface. Native reporting is the D1-backed report
-(`server/utils/analytics-report.ts`) served identically by the dashboard API, the
-MCP tool `get_organization_analytics` and CMS Insights. Google Analytics 4 is an
-optional destination for the same facts.
+One tenant-scoped event contract measures every pageview, interaction and
+business outcome, whatever the theme or entry surface. The native D1 store
+(`analytics_events`, `analytics_summaries`) is canonical. The MCP tool
+`query_organization_analytics` is the canonical access contract: the dashboard
+route `/api/dashboard/analytics-query` and CMS Insights call the same
+authorized implementation (`server/utils/analytics-query.ts`), and the summary
+report (`server/utils/analytics-report.ts`, MCP `get_organization_analytics`) is
+built on the same events. Google Analytics 4 is an optional destination for the
+same facts; native records never depend on it, on consent to it, or on its
+delivery succeeding. No surface collects credentials, card data, tokens,
+free-text form content or error messages, and none accepts arbitrary SQL.
 
 ## The catalog
 
@@ -26,8 +32,24 @@ enforces the shape and the once-per-subject rule.
 | `refund` | refund | Stripe refund with status `succeeded` | `refund` | Measurement Protocol |
 | `consultation_cta_click`, `product_order_external_click`, `link_click`, `donation_click` | handoffs | every click; a handoff is not a booking, payment or donation | same name | browser |
 
-`view_item` (`Product Viewed`) and `begin_checkout` (`Checkout Started`) are sent
-from the product page through Zaraz's ecommerce API and are GA4-only.
+### Interactions and their producers
+
+Every browser-emitted fact is an `interaction` event with a stable UUID chosen
+by its producer: the same ID delivered twice is one event, two views of a
+product are two events. `POST /api/analytics/interactions` (public origin) and
+`POST /api/public/conversion-events` (product views and booking starts) are the
+only browser entrances; both write through
+`recordOrganizationConversionEvent`. The GA4 copy is a mirror sent through Zaraz
+only when consent allows; the native event is written first and regardless.
+
+| Interaction | Canonical producer | GA4 name |
+| --- | --- | --- |
+| `product_view`, `checkout_start` | `ProductDetailPage.vue` via `useOrganizationConversionTracking` | `view_item`, `begin_checkout` |
+| `consultation_cta_click`, `product_order_external_click`, `link_click`, `donation_click` | `useOrganizationConversionTracking` | same name |
+| `organization_created`, `domain_connected`, `subscription_upgrade`, `subscription_downgrade`, `subscription_checkout_success`, `post_created`, `post_published`, `image_uploaded`, `video_uploaded`, `media_library_viewed`, `dashboard_visited`, `error_encountered` | `useAnalytics` (measured on the platform organization; subject is the organization worked on, actor is the user; only the catalog's allowlisted scalar `properties` are kept) | same name |
+
+Server-owned outcomes (`sign_up`, `onboarding_complete`, submissions, payments,
+refunds) are never emitted by the browser.
 
 Exactly one sender owns each outcome. Never send the application name and the GA4
 name for the same fact.
@@ -41,6 +63,59 @@ organization is the subject (`entity_id`, `metadata.subscribing_organization_id`
 Customer booking, reservation and contact events are recorded on the customer's
 own organization. Subscription revenue therefore never appears in a customer's
 report, and a customer's outcomes never fall back to KrabiClaw.
+
+## Collection contract
+
+The client collector (`utils/pageview-tracking-runtime.client.ts`) registers
+independently of the initial route and captures each navigation's payload
+(path, query attribution, referrer, locale, event ID, occurrence time) when the
+navigation is observed. Duration is reported for the exact event. Delivery
+failures are reported through the application's error mechanism, not swallowed.
+
+`server/api/analytics/track.post.ts` resolves the path with
+`resolvePublicPageIdentity`: a prefixed route (`/th/pricing`) yields the public
+path, the locale `th`, and the lookup path `/pricing`, validated by the same
+resolver the public site serves (published locale, entitlement, published
+representation). Unknown, unpublished or other-tenant routes are rejected;
+paths are never rewritten to make a lookup succeed. Each pageview stores its own
+observations (`observed`: the UTMs, click IDs and referrer it carried, partial
+inputs kept), the attribution in force for it when it happened
+(`attribution` + `attribution_basis`: `own_touch`, `inherited`, `none`),
+the page, locale, document/product and location, session and visitor.
+The session's last touch is a derived view and never rewrites an event. A
+repeated event ID changes nothing. `occurred_at` is the browser-reported time
+bounded by receipt; `received_at` is the server watermark.
+
+Outcomes and interactions reference the pageview they happened on
+(`origin_event_id`). The reference is believed only when that pageview exists for
+this organization and the same visitor session; the event then carries that
+visit's page, locale and attribution. Otherwise the context stays unknown; no
+session is fabricated. Stripe outcomes carry context through the checkout,
+subscription and invoice relationships.
+
+## Querying: `query_organization_analytics`
+
+Modes: `events` (event history), `sessions` (derived last-touch view),
+`breakdown` (grouped metrics). Inputs: `start_date`/`end_date` in the
+organization's timezone, string-equality `filters` over the documented fields,
+`attribution_basis` (`observed` | `event_snapshot` | `session_last_touch`),
+`sort`, `limit` (1–200), `cursor`, `dimensions`, `metrics`, `outcome_event`.
+Response: `rows`, `next_cursor`, the resolved `query` (including the `as_of`
+boundary), `totals` with units (monetary totals by currency, never summed across
+currencies), and `coverage`. Cursors are HMAC-signed and bound to the
+organization, exact query, sort and `as_of`; tampered, foreign or mismatched
+cursors are rejected. Distinct counts (`sessions`, `visitors`, `entities`) are
+exact at the requested grain. `session_conversion_rate` is labeled
+converting sessions / eligible sessions and requires `outcome_event`.
+
+## Retention and coverage
+
+Retention policy is unchanged: pageview detail 90 days
+(`PAGEVIEW_DETAIL_RETENTION_DAYS`), sessions and daily summaries about 740 days
+(`SESSION_AND_SUMMARY_RETENTION_DAYS`), outcomes and interactions not expired by
+the cleanup. Every query response reports this in `coverage` and marks a range
+reaching past pageview detail as unavailable, not zero. Events recorded before
+a fact existed list it under `missing`.
 
 ## Attribution
 

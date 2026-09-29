@@ -2,6 +2,7 @@ import type { DbClient } from '~/server/db'
 import { queryAll, queryFirst } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
 import { resolveOrganizationAnalyticsContext } from '~/server/utils/analytics-report'
+import { PAGEVIEW_DETAIL_RETENTION_DAYS, SESSION_AND_SUMMARY_RETENTION_DAYS } from '~/utils/analytics-retention'
 import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
 
 /**
@@ -24,8 +25,6 @@ export type AttributionBasis = 'observed' | 'event_snapshot' | 'session_last_tou
 
 const PAGE_SIZE_DEFAULT = 50
 const PAGE_SIZE_MAX = 200
-export const PAGEVIEW_DETAIL_RETENTION_DAYS = 90
-export const SESSION_AND_SUMMARY_RETENTION_DAYS = 740
 
 const invalid = (message: string): never => { throw new AnalyticsQueryError(message) }
 

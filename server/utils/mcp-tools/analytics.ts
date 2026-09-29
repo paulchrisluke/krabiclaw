@@ -1,5 +1,6 @@
 import type { McpToolDefinition } from './shared'
 import { organizationTool } from './shared'
+import { ANALYTICS_QUERY_FIELDS, ANALYTICS_QUERY_METRICS } from '~/server/utils/analytics-query'
 
 const number = { type: 'number' } as const
 const string = { type: 'string' } as const
@@ -85,6 +86,7 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         }),
         coverage: row({
           measurementContractStartedAt: nullableString, outcomeEventsWithoutAttribution: number,
+          retention: row({ pageviewDetailDays: number, pageviewDetailAvailableFrom: string, summaryDays: number, rangeDetailComplete: { type: 'boolean' } }),
           ga4Delivery: { type: 'array', items: row({ eventName: string, status: string, count: number }) },
         }),
         countries: { type: 'array', items: { type: 'object', properties: { country: string, countryCode: string, views: number, percentOfTotal: number }, required: ['country', 'countryCode', 'views', 'percentOfTotal'] } },
@@ -94,6 +96,48 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         social: { type: 'object', properties: { facebook: providerReport, instagram: providerReport }, required: ['facebook', 'instagram'] },
       },
       required: ['period', 'metrics', 'dailyData', 'topPages', 'attribution', 'outcomeAttribution', 'attributedValue', 'conversions', 'values', 'bookingValue', 'net', 'signupCohort', 'coverage', 'countries', 'cities', 'referrers', 'devices', 'social'],
+    },
+  }),
+  organizationTool({
+    name: 'query_organization_analytics',
+    description: 'Query the complete native analytics record of the selected organization: individual events (pageviews, business outcomes, interactions) with every observation the collector kept, retained sessions, or complete grouped breakdowns over the whole filtered population. Reads the same native store as get_organization_analytics and the CMS; nothing is sampled or top-N. Dates are inclusive local dates in the site timezone (default: the last 30 days, at most 365). mode=events lists events; mode=sessions lists retained session records (derived last touch); mode=breakdown groups by 1-6 dimensions and returns the requested metrics. filters narrow the population by any named field. attribution_basis selects which attribution the source/medium/campaign/content/term/click-id/referrer_host fields read: observed (exactly what the event carried), event_snapshot (the attribution in force for the event when it happened; default) or session_last_touch (the session\'s current last touch). Amount metrics require the currency dimension, so currencies are never added together; session_conversion_rate and converting_sessions require outcome_event and count sessions with a pageview as the denominator inside each group. Every response returns rows, next_cursor, the resolved query with its as_of boundary, totals over the WHOLE filtered population with named units (distinct sessions and visitors are exact, not summed from groups), and coverage: pageview event detail is retained for 90 days, sessions and daily summaries for 740 days, and events recorded before a fact was collected say so in coverage.missing_dimensions and per-event `missing` instead of reading as zero. To continue, repeat the SAME request with next_cursor; it is bound to this organization, this exact query and the as_of boundary. When next_cursor is null every matching row has been returned.',
+    domain: 'analytics',
+    minimumRole: 'admin',
+    confirmRequired: false,
+    required: ['mode'],
+    inputSchema: {
+      mode: { type: 'string', enum: ['events', 'sessions', 'breakdown'], description: 'events | sessions | breakdown' },
+      start_date: { type: 'string', description: 'Inclusive local start date (YYYY-MM-DD). Defaults to 29 days before end_date.' },
+      end_date: { type: 'string', description: 'Inclusive local end date (YYYY-MM-DD). Defaults to today.' },
+      filters: {
+        type: 'object',
+        description: 'Exact-match filters (all must match). path_prefix matches the public path or anything under it. Names are the queryable fields; enumerated ones list their values.',
+        additionalProperties: false,
+        properties: {
+          ...Object.fromEntries(Object.entries(ANALYTICS_QUERY_FIELDS).map(([name, description]) => [name, { type: 'string', description }])),
+          path_prefix: { type: 'string', description: 'A public path prefix such as /th/ or /locations/main' },
+          outcome_event: { type: 'string', description: 'The outcome measured by converting_sessions and session_conversion_rate (sign_up, contact_submit, booking_submit, purchase, ...)' },
+        },
+      },
+      attribution_basis: { type: 'string', enum: ['observed', 'event_snapshot', 'session_last_touch'], description: 'Which attribution the attribution fields read. Default event_snapshot (sessions: session_last_touch).' },
+      sort: { description: 'events: occurred_at_desc (default) or occurred_at_asc. breakdown: { metric, direction } over a requested metric (default: the first metric, descending). Ties break deterministically.', oneOf: [{ type: 'string', enum: ['occurred_at_desc', 'occurred_at_asc'] }, { type: 'object', additionalProperties: false, properties: { metric: { type: 'string' }, direction: { type: 'string', enum: ['asc', 'desc'] } } }] },
+      limit: { type: 'integer', minimum: 1, maximum: 200, description: 'Rows per page (default 50). A page size is not a total-result limit.' },
+      cursor: { type: 'string', description: 'next_cursor from the previous page of this same request.' },
+      dimensions: { type: 'array', items: { type: 'string', enum: Object.keys(ANALYTICS_QUERY_FIELDS) }, description: 'breakdown only: 1-6 fields to group by.' },
+      metrics: { type: 'array', items: { type: 'string', enum: Object.keys(ANALYTICS_QUERY_METRICS) }, description: `breakdown only: 1-8 metrics. ${Object.entries(ANALYTICS_QUERY_METRICS).map(([name, metric]) => `${name} (${metric.unit})`).join('; ')}` },
+      outcome_event: { type: 'string', description: 'The outcome measured by converting_sessions and session_conversion_rate.' },
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        mode: string,
+        rows: { type: 'array', items: { type: 'object' } },
+        next_cursor: nullableString,
+        query: { type: 'object' },
+        totals: { type: 'object' },
+        coverage: { type: 'object' },
+      },
+      required: ['mode', 'rows', 'next_cursor', 'query', 'totals', 'coverage'],
     },
   }),
 ]
