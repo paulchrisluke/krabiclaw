@@ -8,7 +8,8 @@ import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
-import { getProduct } from '~/server/utils/product-management'
+import { getProduct, resolveVariantPrice } from '~/server/utils/product-management'
+import { isCurrencyCode } from '~/shared/currencies'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -35,7 +36,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const organization = await queryFirst<{ id: string; name: string | null; public_url: string | null }>(db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const organization = await queryFirst<{ id: string; name: string | null; default_currency: string; public_url: string | null }>(db, `SELECT id, name, default_currency, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -108,6 +109,22 @@ export default defineHandler(async (event) => {
   }
   const productVariantId = requestedVariantId || variants[0]!.id
 
+  // The value the guest is shown, snapshotted now: a later price edit never
+  // revalues this booking or a retried event. Seats are priced per person, as
+  // the product page states, so the quoted amount is unit price x seats. A
+  // variant with no offer has an unknown value, not a zero one.
+  const full = await getProduct(db, organization.id, product.id)
+  if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
+  const variant = full.variants.find(candidate => candidate.id === productVariantId)
+  if (!variant) throw new Error(`Variant ${productVariantId} missing from product ${product.id}`)
+  const offer = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
+  const quotedValue = offer ? {
+    basis: 'quoted' as const,
+    amount_minor: offer.unit_amount * partySize,
+    currency: offer.currency,
+    items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, price_minor: offer.unit_amount, quantity: partySize }],
+  } : null
+
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
   const emailHash = await hashIdentifier(guestEmail)
@@ -177,10 +194,7 @@ export default defineHandler(async (event) => {
   // attempted before either failure is raised: running the notification first
   // meant a failed dispatch silently cost the tenant the conversion record too.
   const requestedLocale = cleanString(body.locale, 10)
-  const [full, locale, ...followUps] = await Promise.all([
-    // The policy the guest is shown is the product's own attribute. There is
-    // no site or location policy merged underneath it.
-    getProduct(db, organization.id, product.id),
+  const [locale, ...followUps] = await Promise.all([
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
     ...await Promise.allSettled([
       notifyBookingCreated(env, db, {
@@ -191,9 +205,9 @@ export default defineHandler(async (event) => {
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
       }),
       recordOrganizationConversionEvent(db, event, {
-        organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted',
+        organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
         locationId: session.location_id, entityType: 'request', entityId: threadId,
-        pageType: 'product', pagePath: `/products/${slug}`,
+        pageType: 'product', pagePath: `/products/${slug}`, value: quotedValue,
       }),
     ]),
   ])

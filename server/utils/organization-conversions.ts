@@ -1,24 +1,23 @@
+import { getCookie } from 'nitro/h3'
 import type { H3Event } from 'nitro'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
-import { getOrCreateSessionId, getOrCreateVisitorId, hashIp } from '~/server/utils/pageview-tracking'
-import type { OrganizationConversionEventName } from '~/utils/organization-conversion-events'
+import { SESSION_COOKIE, VISITOR_COOKIE, hashIp, isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import {
+  CONVERSION_EVENT_CATALOG,
+  type ConversionEntityType,
+  type ConversionStage,
+  type ConversionValue,
+  type OrganizationConversionEventName,
+} from '~/utils/organization-conversion-events'
 
-export type ConversionStage = 'schedule_navigation' | 'external_booking_handoff' | 'submitted' | 'external_handoff'
-export type ConversionEntityType = 'request' | 'product' | 'content_block' | 'content_document'
+export type { ConversionEntityType, ConversionStage }
 
-const TAXONOMY: Record<OrganizationConversionEventName, { stages: ConversionStage[]; entityType: ConversionEntityType | null }> = {
-  consultation_cta_click: { stages: ['schedule_navigation', 'external_booking_handoff'], entityType: null },
-  contact_submit: { stages: ['submitted'], entityType: 'request' },
-  reservation_submit: { stages: ['submitted'], entityType: 'request' },
-  booking_submit: { stages: ['submitted'], entityType: 'request' },
-  product_order_external_click: { stages: ['external_handoff'], entityType: 'product' },
-  link_click: { stages: ['external_handoff'], entityType: 'content_block' },
-  donation_click: { stages: ['external_handoff'], entityType: 'content_document' },
-}
+export type ConversionSurface = 'website' | 'dashboard' | 'mcp' | 'auth' | 'stripe'
 
 export interface OrganizationConversionInput {
+  /** The business whose outcome is measured — not necessarily the subject's own organization. */
   organizationId: string
   eventName: OrganizationConversionEventName
   stage: ConversionStage
@@ -29,11 +28,27 @@ export interface OrganizationConversionInput {
   pagePath?: string | null
   ctaDestination?: string | null
   metadata?: ApiRecord | null
+  value?: ConversionValue | null
+  surface: ConversionSurface
+  /** The staff member or agent who performed the transition, when it is not the subject. */
+  actor?: { type: 'staff' | 'agent'; id: string } | null
+  /** Overrides the event time; defaults to now. Provider events carry their own occurrence time. */
+  occurredAt?: string
 }
 
-export async function recordOrganizationConversionEvent(db: DbClient, event: H3Event, input: OrganizationConversionInput) {
-  const rule = TAXONOMY[input.eventName]
-  if (!rule.stages.includes(input.stage)) throw new Error(`Invalid stage for ${input.eventName}`)
+/**
+ * Records one conversion for `input.organizationId`.
+ *
+ * `origin` is the request made by the person who produced the outcome, or null
+ * when nobody was there (webhook, MCP, scheduled work). Only a request that
+ * already carries this platform's own analytics cookies gives the event a
+ * browser session and attribution snapshot; anything else is recorded as a
+ * nonbrowser outcome with no attribution. A browser session is never minted
+ * here.
+ */
+export async function recordOrganizationConversionEvent(db: DbClient, origin: H3Event | null, input: OrganizationConversionInput) {
+  const rule = CONVERSION_EVENT_CATALOG[input.eventName]
+  if (!(rule.stages as readonly ConversionStage[]).includes(input.stage)) throw new Error(`Invalid stage for ${input.eventName}`)
   if (rule.entityType !== null && input.entityType !== rule.entityType) throw new Error(`Invalid entity type for ${input.eventName}`)
   if ((input.entityType && !input.entityId) || (!input.entityType && input.entityId)) throw new Error('entityType and entityId must be supplied together')
   if (input.eventName === 'consultation_cta_click') {
@@ -41,34 +56,58 @@ export async function recordOrganizationConversionEvent(db: DbClient, event: H3E
     if (input.stage === 'schedule_navigation' && !validScheduleEntity) throw new Error('Invalid entity type for consultation_cta_click')
     if (input.stage === 'external_booking_handoff' && (input.entityType || input.entityId)) throw new Error('External consultation handoffs cannot include an entity')
   }
+  if (input.value) {
+    if (rule.valueBasis !== input.value.basis) throw new Error(`${input.eventName} cannot carry a ${input.value.basis} value`)
+    if (!Number.isSafeInteger(input.value.amount_minor) || (input.value.basis === 'refund' ? input.value.amount_minor <= 0 : input.value.amount_minor < 0)) {
+      throw new Error(`Invalid ${input.eventName} value amount`)
+    }
+    if (!/^[A-Z]{3}$/.test(input.value.currency)) throw new Error(`Invalid ${input.eventName} value currency`)
+    if (input.value.basis !== 'quoted' && !input.value.transaction_id) throw new Error(`${input.eventName} requires a transaction identity`)
+  }
 
-  const now = new Date().toISOString()
-  const sessionId = getOrCreateSessionId(event)
-  const visitorId = getOrCreateVisitorId(event)
-  const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
-    id, kind, organization_id, date, key, payload_json, created_at, updated_at
-  ) VALUES (?, 'session', ?, '', ?, ?, ?, ?)
-  ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
-    payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
-  RETURNING json_extract(payload_json, '$.attribution') attribution`, [
-    crypto.randomUUID(), input.organizationId, sessionId,
-    JSON.stringify({ visitor_id: visitorId, started_at: now, last_seen_at: now,
-      landing_path: input.pagePath?.startsWith('/') ? input.pagePath : '/', duration_seconds: 0,
-      attribution: { source: 'Direct', medium: '(none)', campaign: null, term: null, content: null,
-        referrerHost: null, gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null }, last_touch_at: null }), now, now,
-  ])
-  if (!session) throw new Error('Analytics session unavailable')
+  const now = input.occurredAt ?? new Date().toISOString()
+  const sessionId = origin ? getCookie(origin, SESSION_COOKIE) : undefined
+  const visitorId = origin ? getCookie(origin, VISITOR_COOKIE) : undefined
+  const browser = isCanonicalEventId(sessionId) && isCanonicalEventId(visitorId) ? { sessionId, visitorId } : null
+
+  let attribution: unknown = null
+  if (browser) {
+    const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
+      id, kind, organization_id, date, key, payload_json, created_at, updated_at
+    ) VALUES (?, 'session', ?, '', ?, ?, ?, ?)
+    ON CONFLICT(organization_id, kind, date, key) DO UPDATE SET
+      payload_json = json_set(analytics_summaries.payload_json, '$.last_seen_at', excluded.updated_at), updated_at = excluded.updated_at
+    RETURNING json_extract(payload_json, '$.attribution') attribution`, [
+      crypto.randomUUID(), input.organizationId, browser.sessionId,
+      JSON.stringify({ visitor_id: browser.visitorId, started_at: now, last_seen_at: now,
+        landing_path: input.pagePath?.startsWith('/') ? input.pagePath : '/', duration_seconds: 0,
+        attribution: { source: 'Direct', medium: '(none)', campaign: null, term: null, content: null,
+          referrerHost: null, gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null }, last_touch_at: null }), now, now,
+    ])
+    if (!session) throw new Error('Analytics session unavailable')
+    attribution = JSON.parse(session.attribution)
+  }
 
   const id = crypto.randomUUID()
-  const ipHash = await hashIp(getClientIp(event))
-  await execute(db, `INSERT OR IGNORE INTO analytics_events (
+  const ipHash = origin ? await hashIp(getClientIp(origin)) : null
+  const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
+    entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
+    conversion_type: rule.conversionType, surface: input.surface, actor: input.actor ?? null,
+    attribution, attributed_at: browser ? now : null, value: input.value ?? null, metadata: input.metadata ?? null,
+    ip_hash: ipHash, user_agent: (origin?.req.headers.get('user-agent') || '').slice(0, 1024) || null })
+  const inserted = await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
   ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?)`, [
-    id, input.organizationId, sessionId, visitorId, input.locationId ?? null, input.pagePath ?? null,
-    JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
-      entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
-      attribution: JSON.parse(session.attribution), attributed_at: now, metadata: input.metadata ?? null,
-      ip_hash: ipHash, user_agent: (event.req.headers.get('user-agent') || '').slice(0, 1024) || null }), now,
+    id, input.organizationId, browser?.sessionId ?? null, browser?.visitorId ?? null, input.locationId ?? null, input.pagePath ?? null, payload, now,
   ])
-  return { id }
+  if (Number(inserted.meta?.changes ?? 0) === 1) return { id, created: true }
+
+  // The insert was ignored by the entity-uniqueness index: the outcome is
+  // already recorded, and its persisted identity is the answer.
+  const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM analytics_events
+    WHERE kind = 'conversion' AND organization_id = ? AND (payload_json ->> '$.event_name') = ?
+      AND (payload_json ->> '$.entity_type') = ? AND (payload_json ->> '$.entity_id') = ?`,
+  [input.organizationId, input.eventName, input.entityType ?? null, input.entityId ?? null])
+  if (!existing) throw new Error(`Conversion ${input.eventName} was neither inserted nor found`)
+  return { id: existing.id, created: false }
 }

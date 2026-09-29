@@ -11,11 +11,9 @@ import {
   isKnownBot,
   isKnownTenantPublicPath,
   isTrackablePath,
-  recordPlatformPageview,
   recordTenantPageview,
   resolveLocationIdFromPath,
   resolvePageviewTenantPageIdentity,
-  updatePlatformPageviewDuration,
   updateTenantPageviewDuration,
   SESSION_COOKIE,
 } from '~/server/utils/pageview-tracking'
@@ -58,10 +56,9 @@ export default defineHandler(async (event) => {
 
     const tenantType = event.context.tenantType
     const isTenant = tenantType === TENANT_TYPES.TENANT
-    const isPlatform = tenantType === TENANT_TYPES.PLATFORM
     const organizationId = typeof event.context.organizationId === 'string' ? event.context.organizationId : ''
-    if ((!isTenant && !isPlatform) || (isTenant && (!organizationId || !organizationId))) {
-      return jsonResponse({ error: 'Active tenant or platform context is required' }, { status: 400 })
+    if ((!isTenant && tenantType !== TENANT_TYPES.PLATFORM) || !organizationId) {
+      return jsonResponse({ error: 'Active organization context is required' }, { status: 400 })
     }
     const userAgent = (event.req.headers.get('user-agent') || '').slice(0, 1024)
     if (isKnownBot(userAgent)) return jsonResponse({ ok: true, ignored: true })
@@ -76,14 +73,14 @@ export default defineHandler(async (event) => {
 
     const rawLocale = typeof body.locale === 'string' ? body.locale.trim() : ''
     const locale = rawLocale ? normalizeLocale(rawLocale) : null
-    if (isTenant && rawLocale && !locale) {
+    if (rawLocale && !locale) {
       return jsonResponse({ error: 'locale must be a valid BCP-47 locale' }, { status: 400 })
     }
 
     const ipHash = await hashIp(getClientIp(event))
     const now = new Date().toISOString()
     const windowEndsAt = new Date(Date.now() + RATE_LIMIT_WINDOW_SECONDS * 1000).toISOString()
-    const rateKey = `analytics-track:${isPlatform ? 'platform' : organizationId}:${ipHash}`
+    const rateKey = `analytics-track:${organizationId}:${ipHash}`
     await execute(db, `INSERT INTO rate_limits (key, count, updated_at, expires_at)
       VALUES (?, 1, ?, ?)
       ON CONFLICT(key) DO UPDATE SET
@@ -101,11 +98,7 @@ export default defineHandler(async (event) => {
       if (!isCanonicalEventId(sessionId)) {
         return jsonResponse({ error: 'A valid analytics session is required' }, { status: 400 })
       }
-      if (isTenant) {
-        await updateTenantPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds!, now })
-      } else {
-        await updatePlatformPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds! })
-      }
+      await updateTenantPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds!, now })
       return jsonResponse({ ok: true })
     }
 
@@ -116,57 +109,39 @@ export default defineHandler(async (event) => {
       ? normalizeReferrerHost(`https://${body.referrerHost}`)
       : null
     const geo = getCloudflareGeo(event)
-    if (isPlatform) {
-      await recordPlatformPageview(db, {
-        eventId: body.eventId,
-        organizationId,
-        pagePath,
-        referrerHost,
-        userAgent,
-        ipHash,
-        sessionId,
-        visitorId,
-        country: geo.country ?? null,
-        region: geo.region ?? null,
-        city: geo.city ?? null,
-        now,
-      })
-    } else {
-      const [locationId, page, internalHosts] = await Promise.all([
-        resolveLocationIdFromPath(db, organizationId, pagePath),
-        resolvePageviewTenantPageIdentity(db, organizationId, pagePath, locale),
-        getOrganizationInternalHosts(db, organizationId, event.url.hostname),
-      ])
-      const organization = event.context.organization as { theme?: string | null; vertical?: string | null } | undefined
-      if (!page && !isKnownTenantPublicPath(pagePath, {
-        themeId: event.context.themeId as string | null | undefined,
-        vertical: organization?.vertical,
-      })) {
-        return jsonResponse({ error: 'Page path is not a published tenant route' }, { status: 400 })
-      }
-      await recordTenantPageview(db, {
-        eventId: body.eventId,
-        organizationId,
-        
-        pagePath,
-        locale,
-        referrerHost,
-        attribution: sanitizeAttributionParams(body.attribution),
-        internalHosts,
-        userAgent,
-        ipHash,
-        sessionId,
-        visitorId,
-        country: geo.country ?? null,
-        region: geo.region ?? null,
-        city: geo.city ?? null,
-        locationId,
-        pageId: page?.page_id ?? null,
-        pageType: page?.page_type ?? null,
-        recipe: page?.recipe ?? null,
-        now,
-      })
+    const [locationId, page, internalHosts] = await Promise.all([
+      resolveLocationIdFromPath(db, organizationId, pagePath),
+      resolvePageviewTenantPageIdentity(db, organizationId, pagePath, locale),
+      getOrganizationInternalHosts(db, organizationId, event.url.hostname),
+    ])
+    const organization = event.context.organization as { theme?: string | null; vertical?: string | null } | undefined
+    if (!page && !isKnownTenantPublicPath(pagePath, {
+      themeId: event.context.themeId as string | null | undefined,
+      vertical: organization?.vertical,
+    })) {
+      return jsonResponse({ error: 'Page path is not a published tenant route' }, { status: 400 })
     }
+    await recordTenantPageview(db, {
+      eventId: body.eventId,
+      organizationId,
+      pagePath,
+      locale,
+      referrerHost,
+      attribution: sanitizeAttributionParams(body.attribution),
+      internalHosts,
+      userAgent,
+      ipHash,
+      sessionId,
+      visitorId,
+      country: geo.country ?? null,
+      region: geo.region ?? null,
+      city: geo.city ?? null,
+      locationId,
+      pageId: page?.page_id ?? null,
+      pageType: page?.page_type ?? null,
+      recipe: page?.recipe ?? null,
+      now,
+    })
     return jsonResponse({ ok: true })
   } catch (error) {
     console.error('Analytics track error:', error instanceof Error ? error.message : String(error))

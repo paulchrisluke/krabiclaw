@@ -139,7 +139,7 @@ export default defineHandler(async (event) => {
 
   const result = await recordOrganizationConversionEvent(db, event, {
     organizationId: organization.id, eventName: eventName as OrganizationConversionEventName,
-    stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata,
+    stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata, surface: 'website',
   })
   return jsonResponse({ success: true, id: result.id }, { status: 201 })
 })

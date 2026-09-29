@@ -180,6 +180,7 @@ export default defineHandler(async (event) => {
         organizationId: organization.id,
         eventName: 'reservation_submit',
         stage: 'submitted',
+        surface: 'website',
         locationId: resolvedLocationId,
         entityType: 'request',
         entityId: id,

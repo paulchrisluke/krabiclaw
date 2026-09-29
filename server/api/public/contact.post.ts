@@ -111,6 +111,7 @@ export default defineHandler(async (event) => {
     organizationId: organization.id,
     eventName: 'contact_submit',
     stage: 'submitted',
+    surface: 'website',
     locationId: assignedLocationId,
     entityType: 'request',
     entityId: id,

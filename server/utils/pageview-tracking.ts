@@ -1,7 +1,7 @@
 import { getCookie, setCookie } from 'nitro/h3'
 import type { H3Event } from 'nitro'
 import type { AppDb } from '~/server/db'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { executeBatch, queryAll, queryFirst } from '~/server/db'
 import { resolvePublishedTenantPageIdentity as resolveCanonicalTenantPageIdentity } from '~/server/utils/content/pages'
 import { resolveAttributionTouch, type AttributionParams } from '~/utils/analytics-attribution'
 import { publicTemplateRegistry, resolvePublicTemplate } from '~/utils/template-registry'
@@ -163,25 +163,4 @@ export async function updateTenantPageviewDuration(db: AppDb, input: {
       params: [input.organizationId, input.sessionId, input.now, input.now, input.organizationId, input.sessionId],
     },
   ], { operation: 'update exact tenant pageview duration' })
-}
-
-export async function recordPlatformPageview(db: AppDb, input: {
-  eventId: string; organizationId: string; pagePath: string; referrerHost: string | null; userAgent: string; ipHash: string;
-  sessionId: string; visitorId: string; country: string | null; region: string | null; city: string | null; now: string
-}): Promise<void> {
-  await execute(db, `INSERT OR IGNORE INTO analytics_events (
-    id, kind, organization_id, page_path, session_id, visitor_id, payload_json, created_at
-  ) VALUES (?, 'pageview', ?, ?, ?, ?, ?, ?)`, [
-    input.eventId, input.organizationId, input.pagePath, input.sessionId, input.visitorId,
-    JSON.stringify({ referrer: input.referrerHost, user_agent: input.userAgent, ip_hash: input.ipHash,
-      country: input.country, region: input.region, city: input.city }), input.now,
-  ])
-}
-
-export async function updatePlatformPageviewDuration(db: AppDb, input: {
-  eventId: string; organizationId: string; sessionId: string; durationSeconds: number
-}): Promise<void> {
-  await execute(db, `UPDATE analytics_events SET duration_seconds = ? WHERE kind = 'pageview' AND organization_id = ? AND id = ? AND session_id = ?`, [
-    input.durationSeconds, input.organizationId, input.eventId, input.sessionId,
-  ])
 }
