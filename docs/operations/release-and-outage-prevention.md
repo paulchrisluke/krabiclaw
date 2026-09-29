@@ -129,30 +129,53 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
+Change `server/db/schema.ts` first, then use `yarn db:generate` to add a forward
+migration under `migrations/`. Keep every migration already applied to a live D1
+immutable. A normal staging or production deployment runs `wrangler d1
+migrations apply` before the Worker deploy; new tables, columns and indexes use
+that path. Run `yarn lint:migrations`, `yarn lint:schema-drift` and `yarn
+test:migrations` locally, then check schema drift and `PRAGMA foreign_key_check`
+on each deployed database.
 
-Never rewrite migration history for a production database resource in place. A schema replacement stands up a new database from a generated baseline and repoints the binding.
+SQLite cannot alter a CHECK constraint in place. When a constraint on a table
+referenced by other tables must change, Drizzle generates a table rebuild whose
+`DROP TABLE` can cascade-delete D1 child rows. That case alone uses a replacement
+database. Name the constraint and affected references in the pull request. A
+replacement gets a new generated baseline and a fresh D1 migration ledger; move
+the prior SQL and metadata intact to `migrations-history/<version>/`. Never edit
+an already deployed migration and ask D1 to replay it under the same filename.
 
-A schema replacement does not take the site down. Prepare the new database ahead of time, load it, verify it in place, deploy the candidate on the new binding, then copy over rows created after the export. There is no write-freeze or maintenance switch in the codebase; an action that returns errors to customers is never a procedure step.
+The replacement is prepared while the old Worker stays live. Use the existing
+`scripts/pull-production-snapshot.ts` path for preflight, initial load and final
+delta, specifying the old database with `--source`. The script refuses
+unexpected source tables or columns, validates copied rows, checks foreign keys
+and target schema, and previews rows changed or deleted since the initial
+export. The delta inserts newly created rows only. Inspect changed and deleted
+keys before retiring the old database; carry important edits explicitly,
+without overwriting new-database writes. There is no write freeze or
+maintenance response in the application.
 
-`scripts/pull-production-snapshot.ts` runs every step of it through
-`scripts/transfer-database-export.mjs`. It names the database being replaced with
-`--source`, because after the repoint `DB` means the replacement.
+For the v5-to-v6 WNAM replacement, create empty v6 databases with location hint
+`wnam` and apply `migrations/0000_baseline.sql` using `wrangler d1 migrations
+apply`. Never execute the SQL file directly: the migration ledger must record
+it. Run preflight and initial load against each environment's own named v5
+source. Remote loads carry `jwks` along with account, session and OAuth rows;
+local development omits production's encrypted signing keys. Example commands:
 
-Staging and production run the same command. `--staging` or `--production` is
-the only difference, and both check the destination's schema and
-`d1_migrations` ledger before writing anything. `--production` refuses to run
-without `--source`.
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --source krabiclaw-staging-v5 --out staging-preflight.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v5 --out staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v5 --out production-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v5 --out staging-final.sqlite --delta-from staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v5 --out production-final.sqlite --delta-from production-initial.sqlite
+```
 
-1. Preflight, with nothing written remotely. Fix any refused row at its source, never in the transfer. Read the epoch's report lines — for the social publishing epoch (#1115): `Scheduled … is now a draft`, `Post facts written into its words`, `Call to action`, `Publication`, `Not a publication, dropped`, `Post route allocated` and `Block … is now social_posts`. A channel entry needs its verified provider identity in `EPOCH_PUBLICATION_IDENTITIES` before the preflight passes:
-   `node --experimental-strip-types scripts/pull-production-snapshot.ts --source <old database> --out preflight.sqlite`
-2. On the repoint branch, create the replacement D1 and name it in `wrangler.toml`. Build its schema with `wrangler d1 migrations apply DB --env staging --remote`, or `DB --remote` for production. Never execute `0000_baseline.sql` directly. `migrations apply` records the baseline in `d1_migrations`, so the apply every deploy runs next does nothing.
-3. Load the replacement immediately before the repoint pull request merges. The time between this export and the repoint is the window in which an edit on the old database is not carried over, so it should be minutes, not hours. Keep `initial.sqlite`; step 5 compares against it.
-   `node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source <old database> --out initial.sqlite` (or `--production`)
-4. Merge the repoint and deploy on the new binding. Run `yarn lint:schema-drift --env staging` (or `--production`) and `PRAGMA foreign_key_check`.
-5. Copy the rows created after the export, through the same checked load:
-   `node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source <old database> --out final.sqlite --delta-from initial.sqlite` (or `--production`)
-   The delta only inserts rows whose primary key `initial.sqlite` lacked. It never updates or deletes, and a row it cannot insert fails the load instead of being overwritten.
-   Before writing, the run prints `Not carried, changed since the initial export` and `Not carried, deleted since the initial export`, with the primary keys, for each table. These are rows that already existed at the export and were edited or removed on the old database before the repoint. Read that list, and run the delta first with `--out` alone to read it without writing. If it names bookings, reservations, requests or activity entries, carry those rows deliberately before the old database is retired. Nothing updates them automatically.
+Load just before the binding repoint. After deployment, check schema drift,
+foreign keys and customer journeys on the new binding; inspect the read-only
+delta preview before applying the final delta. After v6 is verified, article
+categories land as `0001_article_categories.sql` through the normal forward
+migration path. That migration runs once on populated v6 data; no category IDs
+are regenerated during v6 initial and final loads.
 
 Before dropping or retiring a legacy table or writer:
 

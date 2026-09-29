@@ -172,11 +172,7 @@ export function buildPublicResourceCacheKey(organizationId: string, params: Publ
 }
 
 export async function getPublicResourceCache(kv: KVNamespace, key: string): Promise<string | null> {
-  try {
-    return await kv.get(key, 'text')
-  } catch {
-    return null
-  }
+  return await kv.get(key, 'text')
 }
 
 export async function putPublicResourceCache(
@@ -227,8 +223,8 @@ export async function purgePublicResourceCache(kv: KVNamespace, organizationId: 
 
 /**
  * Convenience wrapper for call sites outside /api/editor/organizations/** and mcp.post.ts.
- * When D1 is available it records a durable invalidation before attempting the
- * purge; a failed purge remains pending for the scheduled drain to retry.
+ * Records a durable invalidation before purging. The caller waits for the purge
+ * so a successful write cannot be read back through a stale public cache.
  */
 export async function purgePublicResourceCacheNow(
   env: unknown,
@@ -238,35 +234,23 @@ export async function purgePublicResourceCacheNow(
     DB?: DbClient
     ORGANIZATION_CACHE?: KVNamespace
     NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN?: string
-    ctx?: { waitUntil?: (_promise: Promise<unknown>) => void }
   } | null | undefined
   // ORGANIZATION_CACHE is bound in every environment in wrangler.toml. Returning quietly
   // when it is missing meant a deployment that had lost the binding purged
   // nothing and reported that it had, so every edit went on serving stale.
   const kv = maybeEnv?.ORGANIZATION_CACHE
   if (!kv) throw new Error('ORGANIZATION_CACHE is not bound; the public resource cache cannot be purged')
+  const db = maybeEnv?.DB
+  if (!db) throw new Error('DB is not bound; the public resource cache cannot be purged')
 
   // This request clears its own site's entries, so nothing it wrote can be
   // read back stale. Everything else — the retention sweep, retry bookkeeping,
   // claiming, the domain and site reads — belongs to the drainer, which runs
   // on its own schedule rather than inside a mutation's response time. The
   // queued row is what makes every other worker converge.
-  const purgePromise = maybeEnv.DB
-    ? (async () => {
-        const invalidation = publicResourceCacheInvalidationQuery(organizationId, 'write-through-purge')
-        await Promise.all([
-          execute(maybeEnv.DB!, invalidation.query, invalidation.params),
-          purgeOrganizationCaches(maybeEnv.DB!, kv, organizationId, maybeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN),
-        ])
-      })()
-    : purgePublicResourceCache(kv, organizationId)
-
-  const waitUntil = maybeEnv?.ctx?.waitUntil
-  if (typeof waitUntil === 'function') {
-    waitUntil.call(maybeEnv?.ctx, purgePromise)
-    return
-  }
-
-  // Hard timeout fallback if waitUntil is not available
-  await purgePromise
+  const invalidation = publicResourceCacheInvalidationQuery(organizationId, 'write-through-purge')
+  await Promise.all([
+    execute(db, invalidation.query, invalidation.params),
+    purgeOrganizationCaches(db, kv, organizationId, maybeEnv.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN),
+  ])
 }

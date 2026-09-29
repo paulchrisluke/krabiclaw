@@ -59,9 +59,9 @@ const localWorkerCommand = [
   localWorkerEnvironment,
   'corepack yarn wrangler dev .output/server/index.mjs',
   '--assets .output/public',
-  '--local',
   `--port ${port}`,
   `--host localhost:${port}`,
+  '--var AI_SEARCH_INSTANCE_ID:krabiclaw-platform-knowledge-preview',
   '--var E2E_ALLOW_DEV_ROUTES:true',
   `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
 ].join(' ')
