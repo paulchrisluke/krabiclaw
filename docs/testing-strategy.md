@@ -138,26 +138,21 @@ contract, not whether it expects success or failure.
 ## Release feedback loop
 
 A pull request targeting `staging` runs `Checks` and the full E2E suite
-against a local Worker and D1 copy. CI E2E jobs serialize access to the
-dedicated `krabiclaw-e2e-ci` AI Search instance. There is no pull-request
+against a local Worker and D1 copy. AI Search is production-only, so E2E has
+no remote search prerequisite. There is no pull-request
 preview deployment; `staging` is the first deployed validation.
 
 The E2E suite runs locally, against a local D1 and a Worker the suite starts.
-Set `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID` to a provisioned instance dedicated to
-that D1 copy, and keep `PLATFORM_SEARCH_REINDEX_SECRET` in `.env`:
+The local Worker uses the `e2e` Wrangler environment and its local D1 copy:
 
 ```bash
 yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
 yarn test:e2e:local
 ```
 
-Local Playwright runs do not rebuild the entire copied tenant corpus before
-specs. Initialize a new dedicated local index with the scoped `ai-search:sync`
-command for organizations the tests mutate. In CI, Playwright waits for the
-Worker's health endpoint, then reconciles the platform and the three mutation
-targets (demo, Pottery House, and Kikuzuki) into its persistent index before
-specs run. The E2E job owns that index exclusively until it finishes. Local
-runs must use a separate instance because their D1 copies differ from CI's.
+Local Playwright waits for the Worker's health endpoint before running specs.
+The tests exercise cache invalidation without provisioning or indexing a remote
+AI Search instance.
 
 `staging` is the first deployed validation. A push to `staging` deploys it and
 then runs read-only MCP discovery and tenant rendering against staging itself.

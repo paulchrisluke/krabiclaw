@@ -41,14 +41,9 @@ the runner supplies local URLs, test-route settings, and log-only delivery.
 There is no separate secret forwarding list to maintain. Deployed Worker
 secrets remain configured through Cloudflare and the release workflow.
 
-Local E2E requires `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID` to name a provisioned AI
-Search instance dedicated to this checkout's D1 snapshot. Create one with
-`corepack yarn wrangler ai-search create <instance-name> --type builtin`, then
-export that exact name before `corepack yarn test:e2e:local`. Keep
-`PLATFORM_SEARCH_REINDEX_SECRET` in `.env`; after Playwright starts and checks
-its Worker, it runs the existing `ai-search:sync` command before any spec.
-Never share an instance between concurrent runs with different D1 snapshots.
-CI creates and deletes its own run-specific instance.
+AI Search runs only in production. Local and CI E2E use the native `e2e`
+Wrangler environment, which has local D1/KV/DO bindings and no AI Search
+binding. Site writes still await cache purges.
 
 Local `.env` sets `ZARAZ_ANALYTICS=absent` and leaves `CF_ZONE_ID` unset, and
 the Playwright runner sets the same. The only Zaraz zone is production's, so a

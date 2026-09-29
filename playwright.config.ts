@@ -18,10 +18,6 @@ const baseURL = previewUrl || `http://localhost:${port}`
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
 const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
-const searchInstanceId = process.env.PLAYWRIGHT_AI_SEARCH_INSTANCE_ID
-if (!previewUrl && (!searchInstanceId || !/^[a-z0-9][a-z0-9-]*$/.test(searchInstanceId))) {
-  throw new Error('PLAYWRIGHT_AI_SEARCH_INSTANCE_ID must name a provisioned, dedicated AI Search instance for local E2E')
-}
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
   // Same shape as CI's generated password: the app's password policy requires an
@@ -61,18 +57,16 @@ const localWorkerEnvironment = [
 
 const localWorkerCommand = [
   localWorkerEnvironment,
-  'corepack yarn wrangler dev .output/server/index.mjs',
+  'corepack yarn wrangler dev .output/server/index.mjs --env e2e',
   '--assets .output/public',
   `--port ${port}`,
   `--host localhost:${port}`,
-  `--var AI_SEARCH_INSTANCE_ID:${searchInstanceId}`,
   '--var E2E_ALLOW_DEV_ROUTES:true',
   `--var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`,
 ].join(' ')
 
 export default defineConfig({
   testDir: './tests/e2e',
-  globalSetup: './tests/e2e/global-setup.ts',
   timeout: 30_000,
   expect: {
     timeout: 10_000
