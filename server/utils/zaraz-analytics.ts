@@ -167,9 +167,8 @@ export function platformPageLocationRegex(hostnames: string[]): string {
 function configureZarazConsentManagement(config: ZarazConfig) {
   config.consent ||= {}
   config.consent.enabled = true
-  // Analytics is on by default: ZarazConsentNotice grants the purpose on a
-  // first visit and offers Reject, so Zaraz never shows its modal on its own.
-  // The Cookie preferences link still opens it to change the answer.
+  // The site notice asks for a choice on first visit. Cookie preferences opens
+  // Zaraz's own modal to change that answer later.
   config.consent.hideModal = true
   // Consent is keyed to the cookie name. The previous zone setup was TCF-based
   // and its cf_consent cookies name tcf-purposes-* only, so returning visitors

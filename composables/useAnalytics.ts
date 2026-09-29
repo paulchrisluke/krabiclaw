@@ -1,6 +1,6 @@
 // Product analytics is sent through the edge-injected Cloudflare Zaraz API.
 // The configured GA4 tool mirrors `zaraz.track()` events while its consent
-// purpose is granted (on by default; see ZarazConsentNotice).
+// purpose is granted by the visitor in ZarazConsentNotice.
 
 declare global {
   interface Window {
@@ -11,7 +11,6 @@ declare global {
         APIReady?: boolean
         modal: boolean
         set: (_preferences: Record<string, boolean>) => void
-        setAll: (_consentStatus: boolean) => void
         getAll: () => Record<string, boolean>
         sendQueuedEvents: () => void
       }

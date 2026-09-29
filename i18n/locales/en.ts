@@ -4,11 +4,11 @@ export default {
     "reviews": "Guest reviews & ratings."
   },
   "legal": {
-    "analytics_notice": "We use cookies to improve your experience. By using our site, you agree to our use of cookies. Learn more in our",
+    "accept": "Accept",
+    "analytics_notice": "Choose whether to allow Google Analytics cookies. Krabiclaw's own site measurement runs separately. Learn more in our",
     "analytics_notice_link": "Privacy Policy",
     "analytics_notice_label": "Analytics notice",
     "cookie_preferences": "Cookie preferences",
-    "dismiss": "Dismiss",
     "privacy": "Privacy",
     "reject": "Reject",
     "terms": "Terms"

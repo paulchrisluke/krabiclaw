@@ -43,6 +43,8 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   custom_domain_status: string | null
   default_currency: string | null
   brand_description: string | null
+  banner_content: string | null
+  banner_dismissible: number | null
   logo_media_id: string | null
   logo_public_url: string | null
   logo_thumbnail_url: string | null
@@ -89,6 +91,8 @@ export async function loadSettingsPayload(
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
+           json_extract(organization.settings_json, '$.compliance.metadata_json.header.banner_content') AS banner_content,
+           json_extract(organization.settings_json, '$.compliance.metadata_json.header.banner_dismissible') AS banner_dismissible,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
@@ -149,6 +153,8 @@ export async function loadSettingsPayload(
     custom_domain_status: updatedOrganization.custom_domain_status,
     name: updatedOrganization.name,
     brand_description: updatedOrganization.brand_description,
+    banner_content: updatedOrganization.banner_content,
+    banner_dismissible: updatedOrganization.banner_dismissible === 1,
     media: [
       ...(updatedOrganization.logo_media_id ? [{
         asset_id: updatedOrganization.logo_media_id,
@@ -293,10 +299,8 @@ async function attemptOrganizationUpdate(
   const guards: string[] = []
   const organizationMedia = updates.media
 
-  if (updates.font_preset !== undefined) {
-    setParts.push("settings_json = json_set(settings_json, '$.config.font_preset', ?)")
-    params.push(updates.font_preset)
-  }
+  const settingsPatch: Record<string, unknown> = {}
+  if (updates.font_preset !== undefined) settingsPatch.config = { font_preset: updates.font_preset }
   if (updates.name !== undefined) {
     setParts.push('name = ?', 'subdomain = ?')
     params.push(updates.name, subdomain)
@@ -304,6 +308,16 @@ async function attemptOrganizationUpdate(
   if (updates.brand_description !== undefined) {
     setParts.push('brand_description = ?')
     params.push(updates.brand_description ?? null)
+  }
+  if (updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
+    const header: Record<string, string | boolean | null> = {}
+    if (updates.banner_content !== undefined) header.banner_content = updates.banner_content?.trim() || null
+    if (updates.banner_dismissible !== undefined) header.banner_dismissible = updates.banner_dismissible
+    settingsPatch.compliance = { metadata_json: { header } }
+  }
+  if (Object.keys(settingsPatch).length > 0) {
+    setParts.push('settings_json = json_patch(settings_json, json(?))')
+    params.push(JSON.stringify(settingsPatch))
   }
   if (updates.contact_email !== undefined) {
     if (updates.contact_email !== null && updates.contact_email !== '') {
@@ -487,9 +501,11 @@ async function attemptOrganizationUpdate(
     }
   }
 
-  // All settings callers use this mutation path; refresh both public resource
-  // and HTML caches when typography changes, including a reset to Default.
-  if (updates.font_preset !== undefined) await purgePublicResourceCacheNow(env, organizationId)
+  // All settings callers use this mutation path. Both typography and the
+  // announcement are rendered into the public site's cached shell and HTML.
+  if (updates.font_preset !== undefined || updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
+    await purgePublicResourceCacheNow(env, organizationId)
+  }
 
   // Zaraz serves analytics only for tenants that are Live, so taking one to
   // Draft has to withdraw its tag rather than leave it collecting from a
@@ -564,6 +580,18 @@ export async function updateOrganizationSettingsFields(
     if (updates.font_preset === 'mali' && resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'saya') {
       return { status: 400, data: { error: 'Mali is available for the Saya template only' } }
     }
+  }
+
+  if (updates.banner_content !== undefined && updates.banner_content !== null &&
+      (typeof updates.banner_content !== 'string' || updates.banner_content.trim().length > 500)) {
+    return { status: 400, data: { error: 'Banner content must be 500 characters or fewer' } }
+  }
+  if (updates.banner_dismissible !== undefined && typeof updates.banner_dismissible !== 'boolean') {
+    return { status: 400, data: { error: 'Banner dismissible must be true or false' } }
+  }
+  if ((updates.banner_content !== undefined || updates.banner_dismissible !== undefined) &&
+      resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'blawby') {
+    return { status: 400, data: { error: 'Announcement banner is available for Blawby sites only' } }
   }
 
   const organizationMedia = updates.media
