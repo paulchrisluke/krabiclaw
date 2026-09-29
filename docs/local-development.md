@@ -143,11 +143,11 @@ setup keeps minting a throwaway and the route answers 400.
 stale, run the whole command again and then sign in again. Do not run an
 individual seed or provisioning script as an alternate repair path.
 
-A schema change regenerates `migrations/0000_baseline.sql` under the same name,
-so `schema:local` treats the local database as current and setup stops with
-"local D1 does not carry the current baseline". The local database is only ever
-a copy, so delete `.wrangler/state/v3/d1` and run `corepack yarn local:setup`
-again.
+`schema:local` applies new forward migrations when the schema changes. A rare
+replacement baseline, such as the v6 WNAM cutover, starts a new migration
+history; a local D1 created under the prior baseline then fails the schema
+check. Local data is a copy, so delete `.wrangler/state/v3/d1` and run
+`corepack yarn local:setup` again in that case.
 
 ## Dashboard URLs
 
