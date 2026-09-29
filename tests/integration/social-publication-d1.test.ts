@@ -3,13 +3,17 @@ import { createHmac } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
+import { H3 } from 'nitro/h3'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { syncSocialPosts } from '../../server/utils/social-sync.ts'
-import { deauthorizeMetaSubject, eraseMetaSubjectData, remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
+import { remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
 import { verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
+import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
+import deleteCallback from '../../server/api/integrations/meta/data-deletion.post.ts'
+import deletionStatus from '../../server/api/integrations/meta/data-deletion.get.ts'
 
 /**
  * Publication, import and erasure against real local D1, with Meta and
@@ -153,6 +157,7 @@ async function setUp() {
     BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example', STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests',
     NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', PREVIEW_SECRET: 'preview-proof-secret',
     FACEBOOK_APP_ID: 'fb-app', FACEBOOK_APP_SECRET: 'facebook-secret', INSTAGRAM_APP_ID: 'ig-app', INSTAGRAM_APP_SECRET: 'instagram-secret',
+    CONNECTOR_TOKEN_ENCRYPTION_KEY: 'local-proof-meta-deletion-confirmation-key',
     CF_ACCOUNT_ID: 'cf-proof', CLOUDFLARE_IMAGES_API_TOKEN: 'cf-images-proof', CLOUDFLARE_IMAGES_VARIANT_BASE: 'https://imagedelivery.example.test/hash',
     MEDIA_BASE_URL: 'https://media.example.test',
   } as unknown as CloudflareEnv
@@ -507,15 +512,25 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     const signed = `${createHmac('sha256', 'facebook-secret').update(body).digest('base64url')}.${body}`
     const subject = (await verifyMetaSignedRequest(signed, configuredMetaApps(env as unknown as Record<string, unknown>)))!
     assert.deepEqual([subject.channel, subject.providerAppId, subject.providerSubjectId], ['facebook', 'fb-app', 'fb-subject'])
+    const app = new H3()
+    app.post('/api/integrations/meta/deauthorize', deauthorizeCallback)
+    app.post('/api/integrations/meta/data-deletion', deleteCallback)
+    app.get('/api/integrations/meta/data-deletion', deletionStatus)
+    const callback = (path: string, method: 'GET' | 'POST') => app.request(Object.assign(new Request(new URL(path, 'https://proof.example'), {
+      method,
+      ...(method === 'POST' && { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signed_request: signed }) }),
+    }), { runtime: { name: 'cloudflare', cloudflare: { env } } }))
     // Deauthorization removes this person's linked account and both tenant
     // selections, but keeps the imported and authored website content.
-    assert.deepEqual(await deauthorizeMetaSubject(env, subject), [
-      { product: 'facebook', released: true }, { product: 'facebook', released: true },
-    ])
+    const deauthorized = await callback('/api/integrations/meta/deauthorize', 'POST')
+    assert.equal(deauthorized.status, 200)
+    assert.deepEqual(await deauthorized.json(), { success: true, released: 2 })
     assert.equal(await db.prepare("SELECT count(*) FROM account WHERE id = 'fb-account'").first('count(*)'), 0)
     assert.equal(await db.prepare("SELECT count(*) FROM organization WHERE json_extract(integrations_json, '$.facebook') IS NOT NULL").first('count(*)'), 0)
     assert.equal(await db.prepare("SELECT count(*) FROM organization WHERE json_extract(integrations_json, '$.instagram') IS NOT NULL").first('count(*)'), 2)
-    assert.deepEqual(await deauthorizeMetaSubject(env, subject), [])
+    const repeatedDeauthorization = await callback('/api/integrations/meta/deauthorize', 'POST')
+    assert.equal(repeatedDeauthorization.status, 200)
+    assert.deepEqual(await repeatedDeauthorization.json(), { success: true, released: 0 })
     assert.deepEqual(await db.prepare('SELECT status, summary FROM content_documents WHERE id = ?').bind(own.post.id).first(), { status: 'published', summary: 'Written by us' })
     const importedDocuments = Number(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'facebook' AND provider_app_id = 'fb-app' AND provider_subject_id = 'fb-subject' AND origin = 'import' AND post_id IS NOT NULL").first('count(*)'))
     // A failed storage cleanup must not claim the subject was erased. The
@@ -523,16 +538,25 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     const imageDelete = (request: SeenRequest) => request.host === 'api.cloudflare.com' && request.method === 'DELETE'
     const imageDeletesBeforeFailure = meta.sent(imageDelete).length
     meta.fault('reject', imageDelete)
-    await assert.rejects(eraseMetaSubjectData(env, subject), /Cloudflare image/)
+    const failedDeletion = await callback('/api/integrations/meta/data-deletion', 'POST')
+    assert.equal(failedDeletion.status, 500)
     const failedImageDelete = meta.sent(imageDelete)[imageDeletesBeforeFailure]!
     assert.ok(await remainingMetaSubjectData(env, subject) > 0)
     const documentsAfterFailure = Number(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'facebook' AND provider_app_id = 'fb-app' AND provider_subject_id = 'fb-subject' AND origin = 'import' AND post_id IS NOT NULL").first('count(*)'))
     assert.ok(documentsAfterFailure <= importedDocuments)
     assert.deepEqual(await db.prepare('SELECT status, summary FROM content_documents WHERE id = ?').bind(own.post.id).first(), { status: 'published', summary: 'Written by us' })
-    const erased = await eraseMetaSubjectData(env, subject)
+    const deletion = await callback('/api/integrations/meta/data-deletion', 'POST')
+    assert.equal(deletion.status, 200)
+    const erased = await deletion.json() as { url: string; confirmation_code: string; erased_documents: number; remaining: number }
     assert.equal(erased.erased_documents, documentsAfterFailure)
     assert.equal(meta.sent(request => imageDelete(request) && request.path === failedImageDelete.path).length, 2)
     assert.equal(erased.remaining, 0)
+    const status = await callback(erased.url, 'GET')
+    assert.equal(status.status, 200)
+    const statusBody = await status.json() as { confirmation_code: string; status: string; description: string }
+    assert.equal(statusBody.confirmation_code, erased.confirmation_code)
+    assert.equal(statusBody.status, 'complete')
+    assert.match(statusBody.description, /have been deleted/)
     assert.equal(await remainingMetaSubjectData(env, subject), 0)
     // The tenant's own post and upload stay; only the Facebook association went.
     assert.deepEqual(await db.prepare('SELECT status, summary FROM content_documents WHERE id = ?').bind(own.post.id).first(), { status: 'published', summary: 'Written by us' })
@@ -545,7 +569,10 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     assert.equal(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'instagram'").first('count(*)'), 7)
     assert.equal(await db.prepare("SELECT count(*) FROM post_publications WHERE id = 'other-app'").first('count(*)'), 1)
     // A repeated callback succeeds with nothing left to do.
-    assert.deepEqual(await eraseMetaSubjectData(env, subject), { erased_documents: 0, erased_media: 0, detached_publications: 0, remaining: 0 })
+    const repeatedDeletion = await callback('/api/integrations/meta/data-deletion', 'POST')
+    assert.equal(repeatedDeletion.status, 200)
+    const repeatedBody = await repeatedDeletion.json() as { erased_documents: number; erased_media: number; detached_publications: number; remaining: number }
+    assert.deepEqual([repeatedBody.erased_documents, repeatedBody.erased_media, repeatedBody.detached_publications, repeatedBody.remaining], [0, 0, 0, 0])
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0)
     // With nothing in flight, the tenant adds a gallery picture; it advances the post's revision.
     const beforeGallery = (await getPost(db, env, 'org-a', own.post.id))!
