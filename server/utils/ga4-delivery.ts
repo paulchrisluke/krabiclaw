@@ -54,19 +54,25 @@ async function recordGa4Delivery(db: DbClient, eventId: string, delivery: Ga4Del
 }
 
 /**
- * The visitor's own consent and GA identity, read from their request. Only the
- * Zaraz consent cookie and the `_ga` cookies are ever looked at; the request's
- * other cookies (sessions, credentials) are not.
+ * The visitor's own answer to the analytics purpose, from their Zaraz consent cookie. `absent`
+ * means they have not answered (or the cookie is unreadable): that is not consent.
  */
+export function readAnalyticsConsent(cookieHeader: string): 'accepted' | 'rejected' | 'absent' {
+  const raw = parseCookies(cookieHeader).get(ZARAZ_CONSENT_COOKIE_NAME)
+  if (!raw) return 'absent'
+  let purposes: unknown
+  try { purposes = JSON.parse(decodeURIComponent(raw)) } catch { return 'absent' }
+  if (typeof purposes !== 'object' || purposes === null) return 'absent'
+  return (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] === true ? 'accepted' : 'rejected'
+}
+
+/** The visitor's consent and GA identity, read from their own request. Only the consent and `_ga` cookies are looked at. */
 function visitorGaContext(origin: { headers: Headers } | null, nowSeconds: number):
   { status: 'no_consent_context' | 'consent_rejected' } | { clientId: string; sessionId: number | null; sessionCapturedAt: number | null } {
   if (!origin) return { status: 'no_consent_context' }
   const cookieHeader = origin.headers.get('cookie') ?? ''
-  const rawConsent = parseCookies(cookieHeader).get(ZARAZ_CONSENT_COOKIE_NAME)
-  if (!rawConsent) return { status: 'no_consent_context' }
-  let purposes: unknown
-  try { purposes = JSON.parse(decodeURIComponent(rawConsent)) } catch { return { status: 'no_consent_context' } }
-  if (typeof purposes !== 'object' || purposes === null || (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] !== true) return { status: 'consent_rejected' }
+  const consent = readAnalyticsConsent(cookieHeader)
+  if (consent !== 'accepted') return { status: consent === 'rejected' ? 'consent_rejected' : 'no_consent_context' }
   const clientId = parseGaClientId(cookieHeader)
   if (!clientId) return { status: 'no_consent_context' }
   const sessionId = parseGaSessionId(cookieHeader)
@@ -88,9 +94,10 @@ export interface MeasurementProtocolInput {
 
 /**
  * Posts one event to the measuring organization's property. The client ID is
- * the visitor's own GA client captured in their consenting browser; without
- * one there is no consent evidence and nothing is sent — a client is never
- * synthesized from a user ID.
+ * the visitor's own GA client, and it exists in storage only because it was
+ * captured while they consented and is erased when they withdraw
+ * (`withdrawStripeGaIdentifiers`); without one nothing is sent, and a client is
+ * never synthesized from a user ID.
  */
 export async function sendMeasurementProtocol(env: MeasurementProtocolEnv, db: DbClient, input: MeasurementProtocolInput, nowSeconds = Math.floor(Date.now() / 1000)): Promise<Omit<Ga4Delivery, 'transport'>> {
   const resolved = await resolveGa4Destination(db, input.organizationId)

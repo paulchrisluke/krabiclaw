@@ -1801,6 +1801,9 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
 	stripe_subscription_id: text(),
 	action: text().notNull(),
+	// The visitor's native attribution snapshot when checkout began (JSON), so revenue
+	// recorded later by a webhook can carry the campaign that produced it.
+	attribution_json: text(),
 	client_id: text(),
 	session_id: text(),
 	session_captured_at: integer(),
@@ -1816,6 +1819,7 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
+	check("stripe_ga4_subscription_intents_attribution_check", sql`attribution_json IS NULL OR (json_valid(attribution_json) AND json_type(attribution_json) IS 'object')`),
 	check("stripe_ga4_subscription_intents_instants_check", sql`(lifecycle_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lifecycle_sent_at, '+0 days') IS lifecycle_sent_at) AND (consumed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', consumed_at, '+0 days') IS consumed_at) AND (expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+0 days') IS expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	index("stripe_ga4_subscription_intents_subscription_idx").on(table.stripe_subscription_id, table.status, table.created_at),
 	index("stripe_ga4_subscription_intents_organization_idx").on(table.organization_id, table.status, table.created_at),
@@ -2193,17 +2197,16 @@ export const analytics_events = sqliteTable("analytics_events", {
 }, table => [
 	check("analytics_events_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)`),
   check("analytics_events_payload_check", sql`json_valid(payload_json) AND json_type(payload_json) IS 'object'`),
-  // A conversion is either a browser outcome (session, visitor and an attribution snapshot) or a
-  // nonbrowser outcome (none of the three). Nothing in between: a server event never borrows a browser.
+  // A conversion with a browser session carries that session's attribution snapshot. One with no
+  // session (a server outcome) carries either a snapshot captured earlier through the actual
+  // checkout relationship, or none. A server event never borrows a browser session.
   check("analytics_events_shape_check", sql`(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND duration_seconds IS NULL
     AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64
     AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'
     AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed')
-    AND ((session_id IS NOT NULL AND visitor_id IS NOT NULL
-        AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
-        AND json_type(payload_json, '$.attributed_at') IS 'text')
-      OR (session_id IS NULL AND visitor_id IS NULL
-        AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))`),
+    AND ((session_id IS NULL) = (visitor_id IS NULL))
+    AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')
+      OR (session_id IS NULL AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))`),
   index("analytics_events_org_kind_created_idx").on(table.organization_id, table.kind, table.created_at),
   index("analytics_events_org_session_idx").on(table.organization_id, table.kind, table.session_id),
   index("analytics_events_org_visitor_idx").on(table.organization_id, table.kind, table.visitor_id),

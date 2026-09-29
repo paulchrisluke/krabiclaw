@@ -78,7 +78,7 @@ export interface ConversionValue {
   basis: ConversionValueBasis
   /** The event's value: what a quote showed, what a purchase earned excluding tax and shipping, or what a refund returned. */
   amount_minor: number
-  /** Purchases only: the amount actually collected, tax included. Reported separately from `amount_minor`. */
+  /** Purchases and refunds: the cash actually moved (collected or returned), tax included. Reported separately from the tax-exclusive `amount_minor`. */
   collected_minor?: number
   currency: string
   transaction_id?: string

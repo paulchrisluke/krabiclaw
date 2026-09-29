@@ -91,6 +91,13 @@
                 :percent="0"
               />
               <DashboardAnalyticsRow
+                v-for="row in analytics?.attributedValue || []"
+                :key="`attributed-${row.source}-${row.medium}-${row.campaign}-${row.content}-${row.currency}`"
+                :label="`Revenue · ${row.source || 'unattributed'} / ${row.medium || 'unattributed'}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
+                :value="`${formatMoney(row.netMinor, row.currency)} net (${formatMoney(row.collectedMinor, row.currency)} collected − ${formatMoney(row.refundedMinor, row.currency)} refunded) · ${formatCount(row.purchases)} purchases`"
+                :percent="0"
+              />
+              <DashboardAnalyticsRow
                 v-for="row in analytics?.bookingValue || []"
                 :key="`booking-${row.productId}-${row.locationId}-${row.currency}`"
                 :label="`Quoted booking value · ${row.productName || 'price unknown'}`"
@@ -405,6 +412,8 @@ interface AnalyticsResponse {
   referrers: Array<{ source: string; views: number; percentOfTotal: number }>
   devices: Array<{ type: string; views: number; percentOfTotal: number }>
   attribution: AnalyticsReport['attribution']
+  outcomeAttribution: AnalyticsReport['outcomeAttribution']
+  attributedValue: AnalyticsReport['attributedValue']
   conversions: AnalyticsReport['conversions']
   values: AnalyticsReport['values']
   bookingValue: AnalyticsReport['bookingValue']
@@ -541,6 +550,10 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   && Array.isArray(value.conversions)
   && value.conversions.every(row => isLabelled(row, 'eventName', 'events', 'distinctEntities', 'convertingSessions', 'nonbrowserEvents') && typeof (row as Record<string, unknown>).stage === 'string'
     && ((row as Record<string, unknown>).sessionConversionRate === null || typeof (row as Record<string, unknown>).sessionConversionRate === 'number'))
+  && Array.isArray(value.outcomeAttribution)
+  && value.outcomeAttribution.every(row => isLabelled(row, 'source', 'eventName', 'events', 'distinctEntities'))
+  && Array.isArray(value.attributedValue)
+  && value.attributedValue.every(row => isLabelled(row, 'currency', 'purchases', 'collectedMinor', 'refundedMinor', 'netMinor'))
   && Array.isArray(value.values)
   && value.values.every(row => isLabelled(row, 'eventName', 'events', 'valueMinor') && typeof (row as Record<string, unknown>).currency === 'string')
   && Array.isArray(value.bookingValue)

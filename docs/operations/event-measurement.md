@@ -52,10 +52,22 @@ nonbrowser event with no session and no attribution; nothing mints a browser
 session from server headers. The report exposes the count as
 `coverage.outcomeEventsWithoutAttribution`.
 
+Revenue is attributed without a browser session: checkout stores the visitor's
+native attribution on the subscription intent
+(`stripe_ga4_subscription_intents.attribution_json`, read from their `kc_session_id`
+session), and the payment a webhook records later carries that snapshot
+(`attributedValue`). Refunds carry their purchase's snapshot. Renewals have no
+snapshot of their own; they belong to the signup cohort.
+
 `signupCohort` groups signups by the signup event's own snapshot and follows the
-user through the organizations they own to onboarding and first payment. It never
-rewrites the later events' own attribution. `attribution` groups sessions and
-outcome events by each one's own snapshot.
+organization the user originated (the first owner, recorded as
+`metadata.originating_user_id` on the onboarding and purchase events when they
+happened, so later ownership changes never rewrite a result) to onboarding, first
+payment and cohort revenue, counting only outcomes after the signup. It never
+rewrites the later events' own attribution. `attribution` groups sessions by their
+current last touch and counts, in the same group, the sessions that completed an
+outcome, so its rate never exceeds 100%. `outcomeAttribution` groups outcome events
+by their own snapshot and carries counts only.
 
 ## Value
 
@@ -69,14 +81,21 @@ Amounts are stored in minor units with an ISO currency in the event payload
   states. A variant with no offer has no value, not a zero. A quote is not revenue.
 - `purchase`: `value` is the invoice total excluding tax (GA4 ecommerce `value`);
   `collected_minor` is `amount_paid`, tax included. Report both.
-- `refund`: the refunded amount, linked to the invoice (`transaction_id`); every
-  refund ID is its own event, so partial refunds stay distinct and a redelivery is
-  not a second refund.
+- `refund`: keeps the purchase's basis. `value` is the refunded share of the
+  tax-exclusive value (pro rata by cash, exact for a full refund) and
+  `collected_minor` is the cash returned, tax included. Stripe does not itemize a
+  refund, so items are sent only for a full refund; a partial refund names none.
+  It is linked to the invoice (`transaction_id`) and carries the purchase's
+  attribution. Every refund ID is its own event, so partial refunds stay distinct
+  and a redelivery is not a second refund.
 
 Purchases are typed `initial_subscription` (the first positive payment the
 customer ever made, including the first charge after a zero-value trial),
+`resubscription` (a new subscription by a customer who has paid before),
 `subscription_renewal`, `upgrade`, `downgrade` or `plan_change`, from Stripe's
-paid-invoice history, not a shadow lifecycle. Invoice IDs are unique within the
+paid-invoice history, not a shadow lifecycle. Every paid subscription invoice is a
+purchase; only invoices outside the subscription lifecycle (for example manual
+ones) are not. Invoice IDs are unique within the
 seller's Stripe account, which is the measuring organization's namespace.
 
 Currencies are never summed together. `net` is collected minus refunded per
@@ -113,7 +132,7 @@ surfaced as `coverage.ga4Delivery`:
 | `sent` | accepted by the transport |
 | `not_configured` | no integration, no measurement ID or host, or no API secret |
 | `disconnected` | the property connection is not active |
-| `no_consent_context` | no visitor request or GA client ID, so consent cannot be observed |
+| `no_consent_context` | no visitor request, no answered consent, or no GA client ID, so consent cannot be observed |
 | `consent_rejected` | the visitor's Zaraz consent cookie declines the `kc_analytics` purpose |
 | `failed` | provider error (`detail` has the reason) |
 
@@ -123,7 +142,14 @@ onboarding the consent and GA client come from the visitor's own request: only t
 Zaraz consent cookie and the `_ga` cookies are read, and a request without a
 consenting visitor sends nothing and records `no_consent_context` or
 `consent_rejected`. For Stripe the client ID is the one captured in the visitor's
-consenting browser; it is never synthesized from a user ID. A `failed` Stripe
+consenting browser; it is never synthesized from a user ID. An identifier is not
+consent, so it is enforced at both ends: the browser reads GA identifiers only while
+the analytics purpose is accepted, `POST /api/billing/analytics-intent` stores them
+only when the request's own Zaraz consent cookie says accepted, and withdrawing
+consent (`zarazConsentChoicesUpdated`) calls
+`POST /api/billing/analytics-consent-withdrawn`, which erases the identifiers from the
+user's intents and from the Stripe customer and subscription metadata they captured
+(`withdrawStripeGaIdentifiers`). Native recording never depends on consent. A `failed` Stripe
 delivery fails the webhook so Stripe redelivers; the native event is already
 recorded and is returned on the retry.
 
@@ -152,7 +178,7 @@ SHA:
    Confirm the
    `Product Viewed` / `Checkout Started` ecommerce events reach GA4 with the
    mapping Cloudflare documents only in general terms.
-2. Password and social signup, real onboarding, Stripe test payment, first
+2. Consent: accept, pay, then withdraw and confirm the stored identifiers are gone and later payments/refunds record natively with delivery `no_consent_context`. Password and social signup, real onboarding, Stripe test payment, first
    payment after a trial, renewal and a partial refund produce the events in the
    table above and the `ga4_delivery` outcomes, in the designated GA4 property
    (DebugView plus a standard report). Validate the Measurement Protocol payload
@@ -163,3 +189,11 @@ SHA:
    `get_organization_analytics` and CMS Insights and compare fields.
 5. Multi-organization isolation: platform subscription revenue on KrabiClaw only,
    tenant booking outcomes on the tenant only.
+
+## Measurement never masks a committed result
+
+`POST /api/public/contact`, `/api/public/reservations` and
+`/api/public/products/:slug/book` commit the business record first. Measurement
+is recorded after, and its outcome is returned beside the committed identity as
+`measurement: { status: 'recorded' }` or `{ status: 'failed', reason }`; it never
+turns a confirmed submission into an error the guest would retry.

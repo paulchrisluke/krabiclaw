@@ -7,6 +7,11 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import {
   buildStripeSubscriptionMetadata, isStripeGa4IntentAction, type StripeGa4IntentAction, } from '~/shared/stripe-ga4'
 import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
+import { readAnalyticsConsent } from '~/server/utils/ga4-delivery'
+import { SESSION_COOKIE, isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import { queryFirst } from '~/server/db'
+import type { AttributionTouch } from '~/utils/analytics-attribution'
+import { parseCookies } from 'better-auth/cookies'
 
 interface AnalyticsIntentRequest {
   organizationId?: string
@@ -104,17 +109,31 @@ export default defineHandler(async (event) => {
   if (action !== 'downgrade' && body.effectiveTiming === 'period_end') {
     return jsonResponse({ error: 'Only downgrades can be scheduled at period end' }, { status: 400 })
   }
-  const clientId = optionalString(body.gaClientId)
-  const sessionId = optionalString(body.gaSessionId, 64)
-  const sessionCapturedAt = typeof body.gaSessionCapturedAt === 'number'
-    && Number.isSafeInteger(body.gaSessionCapturedAt)
-    && body.gaSessionCapturedAt > 0
-    ? body.gaSessionCapturedAt
+  // A GA identifier is stored only for a visitor whose own request says they accepted analytics;
+  // the browser's claim is not consent, and no identifier is kept without it.
+  const cookieHeader = event.req.headers.get('cookie') ?? ''
+  const consented = readAnalyticsConsent(cookieHeader) === 'accepted'
+  const gaBody = consented ? body : { ...body, gaClientId: null, gaSessionId: null, gaSessionCapturedAt: null }
+  const clientId = optionalString(gaBody.gaClientId)
+  const sessionId = optionalString(gaBody.gaSessionId, 64)
+  const sessionCapturedAt = typeof gaBody.gaSessionCapturedAt === 'number'
+    && Number.isSafeInteger(gaBody.gaSessionCapturedAt)
+    && gaBody.gaSessionCapturedAt > 0
+    ? gaBody.gaSessionCapturedAt
     : null
 
-  await updateStripeAttribution(env, organization.id, session.user.id, body, action)
+  // The native attribution this visitor's session has observed so far, so the payment a webhook
+  // records later carries the campaign that produced it. First-party, so consent-independent.
+  const nativeSessionId = parseCookies(cookieHeader).get(SESSION_COOKIE)
+  const observed = isCanonicalEventId(nativeSessionId) && typeof event.context.organizationId === 'string'
+    ? await queryFirst<{ attribution: string }>(env.DB, `SELECT json_extract(payload_json, '$.attribution') AS attribution FROM analytics_summaries
+        WHERE organization_id = ? AND kind = 'session' AND date = '' AND key = ?`, [event.context.organizationId, nativeSessionId])
+    : null
+  const attribution = observed?.attribution ? { touch: JSON.parse(observed.attribution) as AttributionTouch, attributedAt: new Date().toISOString() } : null
+
+  await updateStripeAttribution(env, organization.id, session.user.id, gaBody, action)
   const intent = await recordStripeGa4Intent(env.DB, {
-    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, clientId, sessionId, sessionCapturedAt, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
+    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, clientId, sessionId, sessionCapturedAt, attribution, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
   return jsonResponse({ success: true, intentId: intent.id })
 })
 import { readBody } from 'nitro/h3';

@@ -33,7 +33,7 @@ const providerReport = {
 export const ANALYTICS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_organization_analytics',
-    description: 'Get website traffic, attribution (including campaign content/creative), conversions with session conversion rates, booking and purchase value, refunds and net by currency, signup-cohort funnel and measurement coverage, plus live Facebook Page and Instagram professional-account insights for the selected organization. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates. Each provider returns one newest-first page of native content and a nextCursor; pass facebook_cursor or instagram_cursor to continue. Rank content only among pages fetched, and check each metric status. Do not add unique audiences across providers or treat unavailable as zero. Amounts are minor units per currency and are never summed across currencies; quoted booking value is not revenue, and purchase revenue exists only for verified payments. sessionConversionRate is converting sessions divided by eligible sessions, not an event count over sessions. signupCohort counts per signup through the organizations that user owns; onboardedBusinesses and firstPaidBusinesses count per organization.',
+    description: 'Get website traffic, attribution (including campaign content/creative), conversions with session conversion rates, booking and purchase value, revenue by campaign and creative (attributedValue, and per signup cohort), refunds and net by currency, signup-cohort funnel and measurement coverage, plus live Facebook Page and Instagram professional-account insights for the selected organization. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates. Each provider returns one newest-first page of native content and a nextCursor; pass facebook_cursor or instagram_cursor to continue. Rank content only among pages fetched, and check each metric status. Do not add unique audiences across providers or treat unavailable as zero. Amounts are minor units per currency and are never summed across currencies; quoted booking value is not revenue, and purchase revenue exists only for verified payments. sessionConversionRate is converting sessions divided by the sessions in the same attribution group, not an event count over sessions; outcomeAttribution groups events by their own attribution snapshot and is a different population. attributedValue/collectedMinor/refundedMinor are cash including tax; value fields are tax-exclusive. signupCohort counts per signup through the organizations that user owns; onboardedBusinesses and firstPaidBusinesses count per organization.',
     domain: 'analytics',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -72,13 +72,15 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         dailyData: { type: 'array', items: { type: 'object', properties: { date: string, pageViews: number, sessions: number, avgDuration: number }, required: ['date', 'pageViews', 'sessions', 'avgDuration'] } },
         topPages: { type: 'array', items: { type: 'object', properties: { path: string, views: number, percentOfTotal: number }, required: ['path', 'views', 'percentOfTotal'] } },
         attribution: { type: 'array', items: row({ source: string, medium: string, campaign: nullableString, content: nullableString, sessions: number, outcomeEvents: number, convertingSessions: number, sessionConversionRate: nullableNumber }) },
+        outcomeAttribution: { type: 'array', items: row({ source: string, medium: string, campaign: nullableString, content: nullableString, eventName: string, events: number, distinctEntities: number }) },
+        attributedValue: { type: 'array', items: row({ source: nullableString, medium: nullableString, campaign: nullableString, content: nullableString, currency: string, purchases: number, collectedMinor: number, refundedMinor: number, netMinor: number }) },
         conversions: { type: 'array', items: row({ eventName: string, stage: string, conversionType: nullableString, events: number, distinctEntities: number, convertingSessions: number, nonbrowserEvents: number, sessionConversionRate: nullableNumber }) },
         values: { type: 'array', items: row({ eventName: string, basis: { type: 'string', enum: ['quoted', 'purchase', 'refund'] }, currency: string, events: number, valueMinor: number, collectedMinor: nullableNumber }) },
         bookingValue: { type: 'array', items: row({ productId: nullableString, productName: nullableString, locationId: nullableString, currency: nullableString, bookings: number, valuedBookings: number, quotedValueMinor: number }) },
         net: { type: 'array', items: row({ currency: string, collectedMinor: number, refundedMinor: number, netMinor: number }) },
         signupCohort: row({
           observedThrough: string, signups: number, onboardedSignups: number, firstPaidSignups: number,
-          bySignupAttribution: { type: 'array', items: row({ source: nullableString, medium: nullableString, campaign: nullableString, content: nullableString, signups: number, onboardedSignups: number, firstPaidSignups: number }) },
+          bySignupAttribution: { type: 'array', items: row({ source: nullableString, medium: nullableString, campaign: nullableString, content: nullableString, signups: number, onboardedSignups: number, firstPaidSignups: number, revenue: { type: 'array', items: row({ currency: string, collectedMinor: number, refundedMinor: number, netMinor: number }) } }) },
           onboardedBusinesses: number, firstPaidBusinesses: number,
         }),
         coverage: row({
@@ -91,7 +93,7 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         devices: { type: 'array', items: { type: 'object', properties: { type: string, views: number, percentOfTotal: number }, required: ['type', 'views', 'percentOfTotal'] } },
         social: { type: 'object', properties: { facebook: providerReport, instagram: providerReport }, required: ['facebook', 'instagram'] },
       },
-      required: ['period', 'metrics', 'dailyData', 'topPages', 'attribution', 'conversions', 'values', 'bookingValue', 'net', 'signupCohort', 'coverage', 'countries', 'cities', 'referrers', 'devices', 'social'],
+      required: ['period', 'metrics', 'dailyData', 'topPages', 'attribution', 'outcomeAttribution', 'attributedValue', 'conversions', 'values', 'bookingValue', 'net', 'signupCohort', 'coverage', 'countries', 'cities', 'referrers', 'devices', 'social'],
     },
   }),
 ]

@@ -3,6 +3,7 @@
 // purpose is granted by the visitor in ZarazConsentNotice.
 
 import { parseGaClientId, parseGaSessionId } from '~/utils/ga-cookies'
+import { ZARAZ_ANALYTICS_PURPOSE_ID } from '~/utils/zaraz-consent'
 
 declare global {
   interface Window {
@@ -137,7 +138,9 @@ export interface BillingAnalyticsContext {
   gaSessionCapturedAt?: number
 }
 
+// GA identifiers are read only while the visitor has accepted analytics; an identifier is not consent.
 export const getBillingAnalyticsContext = (): BillingAnalyticsContext => {
+  if (!import.meta.client || window.zaraz?.consent?.getAll()[ZARAZ_ANALYTICS_PURPOSE_ID] !== true) return {}
   const gaClientId = getGaClientId()
   const gaSessionId = getGaSessionId()
   const gaSessionCapturedAt = gaSessionId ? getGaSessionCapturedAt() : null

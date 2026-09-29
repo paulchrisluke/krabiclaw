@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import { queryFirst, type DbClient } from '~/server/db'
+import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   invoiceLineIsProration,
@@ -21,7 +21,7 @@ import {
   type StripeGa4Intent,
 } from '~/server/utils/stripe-ga4-intents'
 import { deliverViaMeasurementProtocol, sendMeasurementProtocol } from '~/server/utils/ga4-delivery'
-import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { originatingOwnerId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
 import type { ConversionItem, ConversionValue } from '~/utils/organization-conversion-events'
@@ -143,10 +143,22 @@ export function buildStripePurchaseValue(invoice: StripeInvoiceWithSubscription,
   }
 }
 
-export function buildStripeRefundValue(input: { invoiceId: string; amount: number; currency: string; items: ConversionItem[] }): ConversionValue {
+/**
+ * A refund keeps the purchase's accounting basis: `amount_minor` is the refunded share of the
+ * tax-exclusive value (pro rata by cash; exact for a full refund) and `collected_minor` is the
+ * cash actually returned, tax included. Stripe does not itemize a refund, so items are sent only
+ * when the whole payment is refunded and the original quantities are therefore the refunded ones;
+ * a partial refund names no items rather than substituting the original purchase.
+ */
+export function buildStripeRefundValue(input: { invoice: StripeInvoiceWithSubscription; refundAmount: number; currency: string; lineItems: ConversionItem[] }): ConversionValue {
+  const { invoice, refundAmount } = input
+  if (typeof invoice.total_excluding_tax !== 'number' || invoice.amount_paid <= 0) throw new Error(`Stripe invoice ${invoice.id} cannot be refunded against: missing tax-exclusive total or paid amount`)
+  if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0 || refundAmount > invoice.amount_paid) throw new Error(`Refund of ${refundAmount} is outside invoice ${invoice.id}'s paid amount ${invoice.amount_paid}`)
+  const full = refundAmount === invoice.amount_paid
   return {
-    basis: 'refund', amount_minor: input.amount, currency: input.currency.toUpperCase(), transaction_id: input.invoiceId,
-    ...(input.items.length > 0 ? { items: input.items } : {}),
+    basis: 'refund', currency: input.currency.toUpperCase(), transaction_id: invoice.id, collected_minor: refundAmount,
+    amount_minor: full ? invoice.total_excluding_tax : Math.round(refundAmount * invoice.total_excluding_tax / invoice.amount_paid),
+    ...(full && input.lineItems.length > 0 ? { items: input.lineItems } : {}),
   }
 }
 
@@ -172,6 +184,9 @@ export async function classifyStripeInvoicePurchase(
   metadataAction?: string | null,
 ): Promise<StripeGa4PurchaseType | null> {
   if (!await hasEarlierPositivePayment(stripe, invoice)) return 'initial_subscription'
+  // A new subscription by a customer who has paid before (cancelled, then came back) is revenue,
+  // classified apart from first-time acquisition rather than dropped.
+  if (invoice.billing_reason === 'subscription_create') return 'resubscription'
   if (invoice.billing_reason === 'subscription_cycle' || invoice.billing_reason === 'subscription_threshold') return 'subscription_renewal'
   // Invoices outside the subscription lifecycle (manual, upcoming) are not a supported payment path.
   if (invoice.billing_reason !== 'subscription_update') return null
@@ -216,7 +231,7 @@ async function resolveStripeGa4Context(
   }
 
   let intent = await findPendingStripeGa4Intent(db, subscription.id)
-  if (!intent && organizationId && purchaseType === 'initial_subscription') {
+  if (!intent && organizationId && (purchaseType === 'initial_subscription' || purchaseType === 'resubscription')) {
     intent = await findPendingInitialStripeGa4Intent(db, organizationId)
     if (intent) await attachStripeGa4IntentToSubscription(db, intent.id, subscription.id)
   }
@@ -229,6 +244,7 @@ async function resolveStripeGa4Context(
     ?? intent?.clientId
     ?? null
   const interactiveAction = purchaseType === 'initial_subscription'
+    || purchaseType === 'resubscription'
     || purchaseType === 'upgrade'
     || purchaseType === 'downgrade'
   const sessionId = interactiveAction
@@ -282,9 +298,12 @@ async function recordStripePurchase(
     organizationId: platformOrganizationId, eventName: 'purchase', stage: 'completed', surface: 'stripe',
     entityType: 'invoice', entityId: invoice.id, value,
     occurredAt: invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : undefined,
+    // The checkout that started this subscription observed the visitor's attribution; a renewal
+    // has none of its own and is attributed through the signup cohort instead.
+    attribution: context.intent?.attribution ?? null,
     metadata: {
       purchase_type: purchaseType, subscription_id: subscriptionId,
-      ...(context.organizationId ? { subscribing_organization_id: context.organizationId } : {}),
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, context.organizationId) } : {}),
       ...(context.userId ? { user_id: context.userId } : {}),
     },
   })
@@ -298,10 +317,44 @@ async function recordStripePurchase(
   // (disabled, disconnected, no consent) is a recorded outcome, not an error.
   if (delivery.status === 'failed') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
 
-  if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription')) {
+  if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription' || purchaseType === 'resubscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
   }
   await clearInteractiveStripeMetadata(stripe, subscription)
+}
+
+const GA_IDENTIFIER_KEYS = [
+  'ga_client_id', 'ga_session_id', 'ga_session_captured_at',
+  'initial_ga_session_id', 'initial_ga_session_captured_at',
+  'pending_ga_client_id', 'pending_ga_session_id', 'pending_ga_session_captured_at',
+]
+
+/**
+ * A visitor who withdraws analytics consent no longer has any GA identifier stored for their
+ * billing: the intents and the Stripe customer/subscription metadata that later payments and
+ * refunds would read it from. Native recording of those payments is unaffected. The identifiers
+ * are found through the organizations this user owns and only cleared where this user is the one
+ * who captured them.
+ */
+export async function withdrawStripeGaIdentifiers(db: DbClient, getStripeClient: () => Stripe, userId: string): Promise<void> {
+  await execute(db, `UPDATE stripe_ga4_subscription_intents SET client_id = NULL, session_id = NULL, session_captured_at = NULL, updated_at = ? WHERE user_id = ?`, [new Date().toISOString(), userId])
+  const customers = await queryAll<{ customerId: string }>(db, `SELECT DISTINCT o."stripeCustomerId" AS customerId FROM member m JOIN organization o ON o.id = m."organizationId"
+    WHERE m."userId" = ? AND m.role = 'owner' AND o."stripeCustomerId" IS NOT NULL`, [userId])
+  if (customers.length === 0) return
+  const stripe = getStripeClient()
+  const blank = (metadata: Stripe.Metadata) => Object.fromEntries(GA_IDENTIFIER_KEYS.filter(key => metadata[key] !== undefined).map(key => [key, '']))
+  for (const { customerId } of customers) {
+    const customer = await stripe.customers.retrieve(customerId)
+    if (!customer.deleted && customer.metadata.user_id === userId && Object.keys(blank(customer.metadata)).length > 0) {
+      await stripe.customers.update(customerId, { metadata: blank(customer.metadata) })
+    }
+    for await (const subscription of stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 })) {
+      const captured = subscription.metadata.user_id === userId || subscription.metadata.pending_user_id === userId
+      if (captured && Object.keys(blank(subscription.metadata)).length > 0) {
+        await stripe.subscriptions.update(subscription.id, { metadata: blank(subscription.metadata) })
+      }
+    }
+  }
 }
 
 async function clearInteractiveStripeMetadata(
@@ -428,20 +481,23 @@ async function recordStripeRefund(
   const platformOrganizationId = (await getPlatformOrganization(db)).id
   // Linked to the original transaction: the refund carries the purchase's own
   // classification. A purchase recorded before this coverage began has none.
-  const original = await queryFirst<{ purchase_type: string | null }>(db, `SELECT (payload_json ->> '$.metadata.purchase_type') AS purchase_type FROM analytics_events
+  const original = await queryFirst<{ purchase_type: string | null; attribution: string | null; attributed_at: string | null }>(db, `SELECT (payload_json ->> '$.metadata.purchase_type') AS purchase_type,
+      json_extract(payload_json, '$.attribution') AS attribution, (payload_json ->> '$.attributed_at') AS attributed_at FROM analytics_events
     WHERE kind = 'conversion' AND organization_id = ? AND (payload_json ->> '$.event_name') = 'purchase'
       AND (payload_json ->> '$.entity_type') = 'invoice' AND (payload_json ->> '$.entity_id') = ?`, [platformOrganizationId, invoiceId])
   const value = buildStripeRefundValue({
-    invoiceId, amount: refund.amount, currency: refund.currency ?? invoice.currency,
-    items: positiveSubscriptionLines(lines, subscriptionId).flatMap(line => itemFromInvoiceLine(line) ?? []),
+    invoice, refundAmount: refund.amount, currency: refund.currency ?? invoice.currency,
+    lineItems: positiveSubscriptionLines(lines, subscriptionId).flatMap(line => itemFromInvoiceLine(line) ?? []),
   })
   const recorded = await recordOrganizationConversionEvent(db, null, {
     organizationId: platformOrganizationId, eventName: 'refund', stage: 'completed', surface: 'stripe',
     entityType: 'refund', entityId: refund.id, value,
     occurredAt: new Date(refund.created * 1000).toISOString(),
+    // The refund is attributed exactly as the purchase it reverses.
+    attribution: original?.attribution && original.attributed_at ? { touch: JSON.parse(original.attribution), attributedAt: original.attributed_at } : null,
     metadata: {
       subscription_id: subscriptionId, ...(original?.purchase_type ? { purchase_type: original.purchase_type } : {}),
-      ...(context.organizationId ? { subscribing_organization_id: context.organizationId } : {}),
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, context.organizationId) } : {}),
     },
   })
   const projection = projectConversionToGa4({ eventName: 'refund', value, params: { refund_id: refund.id, subscription_id: subscriptionId } })

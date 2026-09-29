@@ -3,7 +3,7 @@ import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/a
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
-import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
@@ -211,11 +211,14 @@ export default defineHandler(async (event) => {
       }),
     ]),
   ])
-  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps,
-    ['notifyBookingCreated', 'recordOrganizationConversionEvent'])
+  // Only the owner notification can fail the request. Measurement is reported beside the
+  // committed result: a guest told a confirmed submission failed would submit again.
+  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps.slice(0, 1),
+    ['notifyBookingCreated'])
+  const measurement = measurementOutcome(followUps[1]!)
 
   return jsonResponse({
-    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValue,
+    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValue, measurement,
     message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })

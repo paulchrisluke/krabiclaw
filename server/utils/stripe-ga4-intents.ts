@@ -1,5 +1,6 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import type { StripeGa4IntentAction } from '~/shared/stripe-ga4'
+import type { AttributionTouch } from '~/utils/analytics-attribution'
 
 export interface StripeGa4Intent {
   id: string
@@ -10,6 +11,8 @@ export interface StripeGa4Intent {
   clientId: string | null
   sessionId: string | null
   sessionCapturedAt: number | null
+  /** The visitor's native attribution when checkout began; null when they had no observed session. */
+  attribution: { touch: AttributionTouch; attributedAt: string } | null
   previousPriceId: string | null
   newPriceId: string | null
   effectiveTiming: 'immediate' | 'period_end'
@@ -30,6 +33,7 @@ export interface CreateStripeGa4IntentInput {
   clientId?: string | null
   sessionId?: string | null
   sessionCapturedAt?: number | null
+  attribution?: { touch: AttributionTouch; attributedAt: string } | null
   previousPriceId?: string | null
   newPriceId?: string | null
   effectiveTiming?: 'immediate' | 'period_end'
@@ -70,6 +74,7 @@ export async function recordStripeGa4Intent(
     clientId,
     sessionId,
     sessionCapturedAt,
+    attribution: input.attribution ?? null,
     previousPriceId: normalizeOptional(input.previousPriceId),
     newPriceId: normalizeOptional(input.newPriceId),
     effectiveTiming,
@@ -85,9 +90,9 @@ export async function recordStripeGa4Intent(
   await execute(db, `
     INSERT INTO stripe_ga4_subscription_intents
       (id, organization_id, user_id, stripe_subscription_id, action,
-       client_id, session_id, session_captured_at, previous_price_id, new_price_id,
+       client_id, session_id, session_captured_at, attribution_json, previous_price_id, new_price_id,
        effective_timing, source, status, expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     row.id,
     row.organizationId,
@@ -97,6 +102,7 @@ export async function recordStripeGa4Intent(
     row.clientId,
     row.sessionId,
     row.sessionCapturedAt,
+    row.attribution ? JSON.stringify({ touch: row.attribution.touch, attributedAt: row.attribution.attributedAt }) : null,
     row.previousPriceId,
     row.newPriceId,
     row.effectiveTiming,
@@ -122,6 +128,7 @@ function mapIntent(row: StripeGa4IntentRow | null): StripeGa4Intent | null {
     clientId: row.clientId,
     sessionId: row.sessionId,
     sessionCapturedAt: row.sessionCapturedAt,
+    attribution: row.attributionJson ? JSON.parse(row.attributionJson) as StripeGa4Intent['attribution'] : null,
     previousPriceId: row.previousPriceId,
     newPriceId: row.newPriceId,
     effectiveTiming: row.effectiveTiming,
@@ -135,26 +142,7 @@ function mapIntent(row: StripeGa4IntentRow | null): StripeGa4Intent | null {
   }
 }
 
-interface StripeGa4IntentRow {
-  id: string
-  organizationId: string
-  userId: string
-  stripeSubscriptionId: string | null
-  action: StripeGa4IntentAction
-  clientId: string | null
-  sessionId: string | null
-  sessionCapturedAt: number | null
-  previousPriceId: string | null
-  newPriceId: string | null
-  effectiveTiming: 'immediate' | 'period_end'
-  source: string
-  status: 'pending' | 'consumed' | 'expired'
-  lifecycleSentAt: string | null
-  consumedAt: string | null
-  consumedEventId: string | null
-  expiresAt: string
-  createdAt: string
-}
+type StripeGa4IntentRow = Omit<StripeGa4Intent, 'attribution'> & { attributionJson: string | null }
 
 const INTENT_SELECT = `
   SELECT id,
@@ -165,6 +153,7 @@ const INTENT_SELECT = `
          client_id AS clientId,
          session_id AS sessionId,
          session_captured_at AS sessionCapturedAt,
+         attribution_json AS attributionJson,
          previous_price_id AS previousPriceId,
          new_price_id AS newPriceId,
          effective_timing AS effectiveTiming,

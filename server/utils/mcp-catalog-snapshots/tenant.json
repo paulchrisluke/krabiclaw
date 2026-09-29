@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:89fe90b801f33f1c0d3e782a9332183edbbb1a357f48e612640c83c55efb46e4",
+  "fingerprint": "sha256:1e46c4003c079f0b2ce1596c29e505dc470e6c928d42e7354a98d2ab4183d88c",
   "tools": [
     {
       "name": "append_content_block",
@@ -4678,6 +4678,64 @@
       },
       "outputSchema": {
         "properties": {
+          "attributedValue": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "collectedMinor": {
+                  "type": "number"
+                },
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "medium": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "netMinor": {
+                  "type": "number"
+                },
+                "purchases": {
+                  "type": "number"
+                },
+                "refundedMinor": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "currency",
+                "purchases",
+                "collectedMinor",
+                "refundedMinor",
+                "netMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "attribution": {
             "items": {
               "properties": {
@@ -4687,14 +4745,26 @@
                     "null"
                   ]
                 },
-                "conversionRate": {
-                  "type": "number"
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
-                "conversions": {
+                "convertingSessions": {
                   "type": "number"
                 },
                 "medium": {
                   "type": "string"
+                },
+                "outcomeEvents": {
+                  "type": "number"
+                },
+                "sessionConversionRate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "sessions": {
                   "type": "number"
@@ -4707,9 +4777,61 @@
                 "source",
                 "medium",
                 "campaign",
+                "content",
                 "sessions",
-                "conversions",
-                "conversionRate"
+                "outcomeEvents",
+                "convertingSessions",
+                "sessionConversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bookingValue": {
+            "items": {
+              "properties": {
+                "bookings": {
+                  "type": "number"
+                },
+                "currency": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "locationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "productId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "productName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quotedValueMinor": {
+                  "type": "number"
+                },
+                "valuedBookings": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "productName",
+                "locationId",
+                "currency",
+                "bookings",
+                "valuedBookings",
+                "quotedValueMinor"
               ],
               "type": "object"
             },
@@ -4747,14 +4869,32 @@
           "conversions": {
             "items": {
               "properties": {
-                "conversionRate": {
+                "conversionType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "convertingSessions": {
                   "type": "number"
                 },
-                "count": {
+                "distinctEntities": {
                   "type": "number"
                 },
                 "eventName": {
                   "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "nonbrowserEvents": {
+                  "type": "number"
+                },
+                "sessionConversionRate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "stage": {
                   "type": "string"
@@ -4763,8 +4903,12 @@
               "required": [
                 "eventName",
                 "stage",
-                "count",
-                "conversionRate"
+                "conversionType",
+                "events",
+                "distinctEntities",
+                "convertingSessions",
+                "nonbrowserEvents",
+                "sessionConversionRate"
               ],
               "type": "object"
             },
@@ -4795,6 +4939,47 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "coverage": {
+            "properties": {
+              "ga4Delivery": {
+                "items": {
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    },
+                    "eventName": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "eventName",
+                    "status",
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "measurementContractStartedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "outcomeEventsWithoutAttribution": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "measurementContractStartedAt",
+              "outcomeEventsWithoutAttribution",
+              "ga4Delivery"
+            ],
+            "type": "object"
           },
           "dailyData": {
             "items": {
@@ -4882,6 +5067,76 @@
             ],
             "type": "object"
           },
+          "net": {
+            "items": {
+              "properties": {
+                "collectedMinor": {
+                  "type": "number"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "netMinor": {
+                  "type": "number"
+                },
+                "refundedMinor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "currency",
+                "collectedMinor",
+                "refundedMinor",
+                "netMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "outcomeAttribution": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "distinctEntities": {
+                  "type": "number"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "medium": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "eventName",
+                "events",
+                "distinctEntities"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "period": {
             "properties": {
               "analyticsDataStartAt": {
@@ -4929,6 +5184,115 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "signupCohort": {
+            "properties": {
+              "bySignupAttribution": {
+                "items": {
+                  "properties": {
+                    "campaign": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "content": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "firstPaidSignups": {
+                      "type": "number"
+                    },
+                    "medium": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "onboardedSignups": {
+                      "type": "number"
+                    },
+                    "revenue": {
+                      "items": {
+                        "properties": {
+                          "collectedMinor": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "netMinor": {
+                            "type": "number"
+                          },
+                          "refundedMinor": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "currency",
+                          "collectedMinor",
+                          "refundedMinor",
+                          "netMinor"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "signups": {
+                      "type": "number"
+                    },
+                    "source": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "medium",
+                    "campaign",
+                    "content",
+                    "signups",
+                    "onboardedSignups",
+                    "firstPaidSignups",
+                    "revenue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "firstPaidBusinesses": {
+                "type": "number"
+              },
+              "firstPaidSignups": {
+                "type": "number"
+              },
+              "observedThrough": {
+                "type": "string"
+              },
+              "onboardedBusinesses": {
+                "type": "number"
+              },
+              "onboardedSignups": {
+                "type": "number"
+              },
+              "signups": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "observedThrough",
+              "signups",
+              "onboardedSignups",
+              "firstPaidSignups",
+              "bySignupAttribution",
+              "onboardedBusinesses",
+              "firstPaidBusinesses"
+            ],
+            "type": "object"
           },
           "social": {
             "properties": {
@@ -5398,6 +5762,48 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "values": {
+            "items": {
+              "properties": {
+                "basis": {
+                  "enum": [
+                    "quoted",
+                    "purchase",
+                    "refund"
+                  ],
+                  "type": "string"
+                },
+                "collectedMinor": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "valueMinor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "eventName",
+                "basis",
+                "currency",
+                "events",
+                "valueMinor",
+                "collectedMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -5406,7 +5812,14 @@
           "dailyData",
           "topPages",
           "attribution",
+          "outcomeAttribution",
+          "attributedValue",
           "conversions",
+          "values",
+          "bookingValue",
+          "net",
+          "signupCohort",
+          "coverage",
           "countries",
           "cities",
           "referrers",

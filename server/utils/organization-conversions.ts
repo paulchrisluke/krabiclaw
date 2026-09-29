@@ -5,6 +5,7 @@ import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { deliverForVisitor, type MeasurementProtocolEnv } from '~/server/utils/ga4-delivery'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
 import { SESSION_COOKIE, VISITOR_COOKIE, hashIp, isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import type { AttributionTouch } from '~/utils/analytics-attribution'
 import {
   CONVERSION_EVENT_CATALOG,
   type ConversionEntityType,
@@ -33,6 +34,12 @@ export interface OrganizationConversionInput {
   surface: ConversionSurface
   /** The staff member or agent who performed the transition, when it is not the subject. */
   actor?: { type: 'staff' | 'agent'; id: string } | null
+  /**
+   * An attribution snapshot captured earlier through a real relationship (the checkout that
+   * started a subscription). Used only when the request carries no browser session; it does not
+   * create one.
+   */
+  attribution?: { touch: AttributionTouch; attributedAt: string } | null
   /** Overrides the event time; defaults to now. Provider events carry their own occurrence time. */
   occurredAt?: string
 }
@@ -72,7 +79,8 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
   const visitorId = cookies.get(VISITOR_COOKIE)
   const browser = isCanonicalEventId(sessionId) && isCanonicalEventId(visitorId) ? { sessionId, visitorId } : null
 
-  let attribution: unknown = null
+  let attribution: unknown = input.attribution?.touch ?? null
+  let attributedAt: string | null = input.attribution?.attributedAt ?? null
   if (browser) {
     const session = await queryFirst<{ attribution: string }>(db, `INSERT INTO analytics_summaries (
       id, kind, organization_id, date, key, payload_json, created_at, updated_at
@@ -88,6 +96,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
     ])
     if (!session) throw new Error('Analytics session unavailable')
     attribution = JSON.parse(session.attribution)
+    attributedAt = now
   }
 
   const id = crypto.randomUUID()
@@ -95,7 +104,7 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
   const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
     entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
     conversion_type: rule.conversionType, surface: input.surface, actor: input.actor ?? null,
-    attribution, attributed_at: browser ? now : null, value: input.value ?? null, metadata: input.metadata ?? null,
+    attribution, attributed_at: attributedAt, value: input.value ?? null, metadata: input.metadata ?? null,
     ip_hash: ipHash, user_agent: (origin?.headers.get('user-agent') || '').slice(0, 1024) || null })
   const inserted = await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
@@ -129,4 +138,27 @@ export async function recordAndDeliverConversion(env: MeasurementProtocolEnv, db
     })
   }
   return recorded
+}
+
+/**
+ * The person an organization's acquisition is attributed to: the first owner
+ * it ever had (the one who created it). Recorded on the onboarding and purchase
+ * events when they happen, so a signup cohort follows this relationship and a
+ * later ownership change never rewrites a historical campaign result.
+ */
+export async function originatingOwnerId(db: DbClient, organizationId: string): Promise<string | null> {
+  const row = await queryFirst<{ userId: string }>(db,
+    `SELECT "userId" FROM member WHERE "organizationId" = ? AND role = 'owner' ORDER BY "createdAt", id LIMIT 1`, [organizationId])
+  return row?.userId ?? null
+}
+
+/**
+ * Measurement is recorded after the business transition has committed, so its
+ * failure is reported next to the committed result and never in place of it:
+ * a guest told their confirmed booking failed would book again.
+ */
+export function measurementOutcome(result: PromiseSettledResult<unknown>): { status: 'recorded' } | { status: 'failed'; reason: string } {
+  return result.status === 'fulfilled'
+    ? { status: 'recorded' }
+    : { status: 'failed', reason: result.reason instanceof Error ? result.reason.message : String(result.reason) }
 }

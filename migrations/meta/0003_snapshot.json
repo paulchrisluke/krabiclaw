@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "72261415-5722-48a9-875f-bea568048949",
+  "id": "941e8c33-0258-4ab2-ad5a-f77b2a0981d4",
   "prevId": "94f5e51b-529e-47b1-a2bb-eb9a440ed1e6",
   "tables": {
     "account": {
@@ -614,7 +614,7 @@
         },
         "analytics_events_shape_check": {
           "name": "analytics_events_shape_check",
-          "value": "(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND duration_seconds IS NULL\n    AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64\n    AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'\n    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed')\n    AND ((session_id IS NOT NULL AND visitor_id IS NOT NULL\n        AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'\n        AND json_type(payload_json, '$.attributed_at') IS 'text')\n      OR (session_id IS NULL AND visitor_id IS NULL\n        AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))"
+          "value": "(kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND duration_seconds IS NULL\n    AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64\n    AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'\n    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed')\n    AND ((session_id IS NULL) = (visitor_id IS NULL))\n    AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')\n      OR (session_id IS NULL AND json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null')))"
         }
       }
     },
@@ -10599,6 +10599,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "attribution_json": {
+          "name": "attribution_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "client_id": {
           "name": "client_id",
           "type": "text",
@@ -10762,6 +10769,10 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
+        "stripe_ga4_subscription_intents_attribution_check": {
+          "name": "stripe_ga4_subscription_intents_attribution_check",
+          "value": "attribution_json IS NULL OR (json_valid(attribution_json) AND json_type(attribution_json) IS 'object')"
+        },
         "stripe_ga4_subscription_intents_instants_check": {
           "name": "stripe_ga4_subscription_intents_instants_check",
           "value": "(lifecycle_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lifecycle_sent_at, '+0 days') IS lifecycle_sent_at) AND (consumed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', consumed_at, '+0 days') IS consumed_at) AND (expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+0 days') IS expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"

@@ -11,7 +11,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { originatingOwnerId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 
 type SetupEnv = CloudflareEnv
@@ -179,6 +179,7 @@ export async function activateOrganization(env: SetupEnv, db: D1Database, organi
   await recordAndDeliverConversion(env, db, origin, {
     organizationId: platformOrganizationId, eventName: 'onboarding_complete', stage: 'completed', surface: 'dashboard',
     entityType: 'organization', entityId: organizationId,
+    metadata: { originating_user_id: await originatingOwnerId(db, organizationId) },
   })
 }
 

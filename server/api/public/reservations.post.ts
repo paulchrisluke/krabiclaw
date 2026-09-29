@@ -19,7 +19,7 @@ import { getSourceLocale } from '~/server/utils/organization-locales'
 import { ensureInteractionUser } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
-import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -189,9 +189,12 @@ export default defineHandler(async (event) => {
       }),
     ]),
   ])
-  raiseSettledFailures('reservation follow-up', `reservationId ${id}`, followUps,
-    ['notifyReservationCreated', 'recordOrganizationConversionEvent'])
+  // Only the owner notification can fail the request. Measurement is reported beside the
+  // committed result: a guest told a confirmed submission failed would submit again.
+  raiseSettledFailures('reservation follow-up', `reservationId ${id}`, followUps.slice(0, 1),
+    ['notifyReservationCreated'])
+  const measurement = measurementOutcome(followUps[1]!)
 
   return jsonResponse({
-    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
+    success: true, id, measurement, cancellationToken: cancellation.token, message: 'Your reservation is confirmed.', policy_summary: renderBookingPolicySummary(reservationPolicySummarySource(policy), locale), }, { status: 201 })
 })
