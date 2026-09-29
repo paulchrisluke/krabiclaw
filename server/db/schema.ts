@@ -1495,7 +1495,7 @@ export const subscription = sqliteTable("subscription", {
 export const onboarding_drafts = sqliteTable("onboarding_drafts", {
 	id: text().primaryKey(),
 	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
-	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),
+	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
 	name: text().notNull(),
 	vertical: text().notNull(),
 	subdomain_candidate: text(),
