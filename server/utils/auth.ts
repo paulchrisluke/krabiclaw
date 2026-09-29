@@ -16,7 +16,7 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
-import { recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { measurementOutcome, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
@@ -343,11 +343,18 @@ export function createAuth(env: CloudflareEnv) {
             // carries the visitor's analytics cookies gives the event a
             // browser session.
             if (context?.path === '/admin/create-user') return
-            await recordAndDeliverConversion(env, db, context?.request ?? null, {
-              organizationId: (await getPlatformOrganization(db)).id,
-              eventName: 'sign_up', stage: 'completed', surface: 'auth',
-              entityType: 'user', entityId: user.id,
-            })
+            const [result] = await Promise.allSettled([(async () => {
+              await recordAndDeliverConversion(env, db, context?.request ?? null, {
+                organizationId: (await getPlatformOrganization(db)).id,
+                eventName: 'sign_up', stage: 'completed', surface: 'auth',
+                entityType: 'user', entityId: user.id,
+              })
+            })()])
+            const measurement = measurementOutcome(result!)
+            // The user already exists. Report measurement separately from the auth result,
+            // including for internal creations that have no HTTP response context.
+            context?.setHeader('x-signup-measurement', encodeURIComponent(JSON.stringify(measurement)))
+            console.info('signup_measurement', { userId: user.id, measurement })
           }
         }
       },

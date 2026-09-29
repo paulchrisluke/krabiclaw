@@ -300,7 +300,7 @@ async function recordStripePurchase(
     occurredAt: invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : undefined,
     // The checkout that started this subscription observed the visitor's attribution; a renewal
     // has none of its own and is attributed through the signup cohort instead.
-    attribution: context.intent?.attribution ?? null,
+    attribution: purchaseType === 'subscription_renewal' || purchaseType === 'plan_change' ? null : context.intent?.attribution ?? null,
     metadata: {
       purchase_type: purchaseType, subscription_id: subscriptionId,
       ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, context.organizationId) } : {}),
@@ -315,7 +315,7 @@ async function recordStripePurchase(
   // A failed send makes Stripe redeliver; the native event is already
   // recorded and its identity is returned on the retry. Everything else
   // (disabled, disconnected, no consent) is a recorded outcome, not an error.
-  if (delivery.status === 'failed') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
+  if (delivery.status === 'failed' || delivery.status === 'sending') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
 
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription' || purchaseType === 'resubscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
@@ -505,7 +505,7 @@ async function recordStripeRefund(
     eventId: recorded.id, organizationId: platformOrganizationId, event: projection,
     clientId: context.clientId, userId: context.userId, sessionId: null, sessionCapturedAt: null,
   })
-  if (delivery.status === 'failed') throw new Error(`GA4 refund delivery failed for refund ${refund.id}: ${delivery.detail}`)
+  if (delivery.status === 'failed' || delivery.status === 'sending') throw new Error(`GA4 refund delivery failed for refund ${refund.id}: ${delivery.detail}`)
 }
 
 /** The subscription an invoice belongs to, across both Stripe invoice shapes. */

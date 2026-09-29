@@ -17,11 +17,13 @@ import type { Ga4Projection } from '~/utils/ga4-projection'
  * (`payload.ga4_delivery`), so reporting can tell a disabled, disconnected or
  * consent-rejected outcome from a provider failure without inventing zeros.
  */
-export type Ga4DeliveryStatus = 'sent' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
+export type Ga4DeliveryStatus = 'sending' | 'sent' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
 export interface Ga4Delivery {
   transport: 'measurement_protocol'
   status: Ga4DeliveryStatus
   detail?: string
+  claimId?: string
+  leaseExpiresAt?: string
 }
 
 interface Ga4Destination { measurementId: string; host: string }
@@ -47,8 +49,14 @@ export async function readGa4Delivery(db: DbClient, eventId: string): Promise<Ga
   return row?.delivery ? JSON.parse(row.delivery) as Ga4Delivery : null
 }
 
-async function recordGa4Delivery(db: DbClient, eventId: string, delivery: Ga4Delivery): Promise<Ga4Delivery> {
-  await execute(db, `UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?)) WHERE id = ?`, [JSON.stringify(delivery), eventId])
+async function recordGa4Delivery(db: DbClient, eventId: string, delivery: Ga4Delivery, claimId?: string): Promise<Ga4Delivery> {
+  const updated = await execute(db, `UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?)) WHERE id = ?
+    AND (? IS NULL OR json_extract(payload_json, '$.ga4_delivery.claimId') = ?)`, [JSON.stringify(delivery), eventId, claimId ?? null, claimId ?? null])
+  if (updated.meta.changes === 0) {
+    const existing = await readGa4Delivery(db, eventId)
+    if (!existing) throw new Error(`GA4 delivery event ${eventId} not found`)
+    return existing
+  }
   if (delivery.status === 'failed') console.error('ga4_delivery_failed', { eventId, ...delivery })
   return delivery
 }
@@ -130,14 +138,28 @@ export async function sendMeasurementProtocol(env: MeasurementProtocolEnv, db: D
 
 /**
  * Measurement Protocol delivery of a recorded native event, with the outcome
- * written onto it. An outcome already `sent` is not sent again, so a Stripe
- * redelivery after a failed attempt sends once. The caller decides whether a
- * `failed` outcome should make Stripe redeliver.
+ * written onto it. Only the holder of the atomic sending lease may send or
+ * finish the attempt. A sent event is never claimed again; an abandoned attempt
+ * can be retried after one minute. Callers can retry failed or busy deliveries.
  */
 export async function deliverViaMeasurementProtocol(env: MeasurementProtocolEnv, db: DbClient, input: MeasurementProtocolInput & { eventId: string }): Promise<Ga4Delivery> {
-  const existing = await readGa4Delivery(db, input.eventId)
-  if (existing?.status === 'sent') return existing
-  return await recordGa4Delivery(db, input.eventId, { transport: 'measurement_protocol', ...await sendMeasurementProtocol(env, db, input) })
+  const now = new Date()
+  const claimId = crypto.randomUUID()
+  const claim: Ga4Delivery = {
+    transport: 'measurement_protocol', status: 'sending', claimId,
+    leaseExpiresAt: new Date(now.getTime() + 60_000).toISOString(),
+  }
+  const claimed = await execute(db, `UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?))
+    WHERE id = ? AND COALESCE(json_extract(payload_json, '$.ga4_delivery.status'), '') != 'sent'
+      AND (COALESCE(json_extract(payload_json, '$.ga4_delivery.status'), '') != 'sending'
+        OR COALESCE(json_extract(payload_json, '$.ga4_delivery.leaseExpiresAt'), '') <= ?)`,
+  [JSON.stringify(claim), input.eventId, now.toISOString()])
+  if (claimed.meta.changes === 0) {
+    const existing = await readGa4Delivery(db, input.eventId)
+    if (!existing) throw new Error(`GA4 delivery event ${input.eventId} not found`)
+    return existing
+  }
+  return await recordGa4Delivery(db, input.eventId, { transport: 'measurement_protocol', ...await sendMeasurementProtocol(env, db, input) }, claimId)
 }
 
 /**

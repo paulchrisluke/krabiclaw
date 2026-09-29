@@ -122,7 +122,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       // page documents now, and the platform sitemap reads them from
       // content_documents (see server/plugins/sitemap.ts). What remains is the
       // set of code-owned platform routes that hold no document.
-      exactPaths: ['/blog', '/docs', '/help', '/posts', '/privacy', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      exactPaths: ['/blog', '/docs', '/help', '/posts', '/privacy', '/signup', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
       dynamicPrefixes: ['/blog/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: [],
