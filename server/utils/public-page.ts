@@ -26,7 +26,7 @@ import { getMediaPlacements } from '~/server/utils/media-placement'
 import type { Collection, Product } from '~/server/types/products'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from "~/server/utils/content/cover";
-import { ARTICLE_CATEGORY_SELECT, articleCategoryJoinSql, attachArticleCategory } from '~/server/utils/content/article-categories'
+import { ARTICLE_CATEGORY_SELECT, articleCategoryJoinSql, attachArticleCategory, localizeArticleCategories } from '~/server/utils/content/article-categories'
 import { getContentBlocksForDocument } from '~/server/utils/content/documents'
 import {
   buildPublicResourceCacheKey,
@@ -787,7 +787,8 @@ async function loadPublicPageSource(
       const contentBlocks = loadedBlocks
         ? await attachPageQa(db, organizationId, tenantBlogPostPath({ themeId: organization.theme_id, vertical: organization.vertical }, String(postRow.source_slug)), loadedBlocks, localizedLocale ?? 'en')
         : loadedBlocks
-      blogPost = attachArticleCategory(attachCoverMedia({ ...postRow, content_blocks: contentBlocks }));
+      blogPost = (await localizeArticleCategories(env, db, orgId, localizedLocale ?? 'en',
+        [attachArticleCategory(attachCoverMedia({ ...postRow, content_blocks: contentBlocks }))], publicLocalizations))[0]!;
     }
   }
 

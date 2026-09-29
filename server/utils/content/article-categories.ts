@@ -3,7 +3,7 @@ import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { slugifyTitle } from '~/utils/post-slugs'
-import { loadExactPublicLocalizations } from '~/server/utils/public-localization'
+import { loadExactPublicLocalizations, type ExactPublicLocalization } from '~/server/utils/public-localization'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { isArticleCollection, type ArticleCollection } from '~/utils/article-collections'
 
@@ -44,6 +44,11 @@ function badRequest(message: string): never {
 
 function notFound(message: string): never {
   throw new HTTPError({ statusCode: 404, statusMessage: message })
+}
+
+function isCategoryUniquenessConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /article_categories_name_unique|article_categories_slug_unique|UNIQUE constraint failed: article_categories\.organization_id, article_categories\.collection/.test(message)
 }
 
 function mapRow(row: Row): ArticleCategory {
@@ -110,12 +115,17 @@ export async function createArticleCategory(db: DbClient, input: {
   const slug = await uniqueSlug(db, input.organizationId, collection, name)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await executeBatch(db, [{
-    // A new category goes last; the owner places it with reorder.
-    query: `INSERT INTO article_categories (id, organization_id, collection, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM article_categories WHERE organization_id = ? AND collection = ?), ?, ?, ?, ?)`,
-    params: [id, input.organizationId, collection, name, slug, description, input.organizationId, collection, now, now, input.actorId, input.actorId],
-  }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_created')], { operation: 'Create article category' })
+  try {
+    await executeBatch(db, [{
+      // A new category goes last; the owner places it with reorder.
+      query: `INSERT INTO article_categories (id, organization_id, collection, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM article_categories WHERE organization_id = ? AND collection = ?), ?, ?, ?, ?)`,
+      params: [id, input.organizationId, collection, name, slug, description, input.organizationId, collection, now, now, input.actorId, input.actorId],
+    }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_created')], { operation: 'Create article category' })
+  } catch (error) {
+    if (isCategoryUniquenessConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A category with this name or slug was created. Reload and try again.', cause: error })
+    throw error
+  }
   return getArticleCategory(db, input.organizationId, id)
 }
 
@@ -126,11 +136,16 @@ export async function updateArticleCategory(db: DbClient, input: {
   if (input.name === undefined && input.description === undefined) badRequest('Provide name or description')
   const name = input.name === undefined ? existing.name : requireName(input.name)
   // The slug is the category page's address; renaming does not move the page.
-  await executeBatch(db, [{
-    query: 'UPDATE article_categories SET name = ?, description = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
-    params: [name, input.description === undefined ? existing.description : optionalDescription(input.description),
-      new Date().toISOString(), input.actorId, input.organizationId, input.categoryId],
-  }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_updated')], { operation: 'Update article category' })
+  try {
+    await executeBatch(db, [{
+      query: 'UPDATE article_categories SET name = ?, description = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
+      params: [name, input.description === undefined ? existing.description : optionalDescription(input.description),
+        new Date().toISOString(), input.actorId, input.organizationId, input.categoryId],
+    }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_updated')], { operation: 'Update article category' })
+  } catch (error) {
+    if (isCategoryUniquenessConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A category with this name already exists. Reload and try again.', cause: error })
+    throw error
+  }
   return getArticleCategory(db, input.organizationId, input.categoryId)
 }
 
@@ -246,9 +261,9 @@ export function attachArticleCategory<T extends Record<string, unknown>>(record:
 }
 
 /** Articles read in a language other than the source name their category in it. */
-export async function localizeArticleCategories<T extends { category: ArticleCategoryRef | null }>(env: CloudflareEnv, db: DbClient, organizationId: string, locale: string, records: T[]): Promise<T[]> {
+export async function localizeArticleCategories<T extends { category: ArticleCategoryRef | null }>(env: CloudflareEnv, db: DbClient, organizationId: string, locale: string, records: T[], loaded?: ExactPublicLocalization[]): Promise<T[]> {
   if (locale === 'en') return records
-  const names = new Map((await loadExactPublicLocalizations(env, db, organizationId, locale))
+  const names = new Map((loaded ?? await loadExactPublicLocalizations(env, db, organizationId, locale))
     .filter(localization => localization.resourceType === 'article_category' && typeof localization.values.name === 'string')
     .map(localization => [localization.resourceId, String(localization.values.name)]))
   return records.map(record => record.category

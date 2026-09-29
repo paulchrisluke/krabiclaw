@@ -19,6 +19,7 @@ CREATE TABLE `article_categories` (
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `article_categories_slug_unique` ON `article_categories` (`organization_id`,`collection`,`slug`);--> statement-breakpoint
+CREATE UNIQUE INDEX `article_categories_name_unique` ON `article_categories` (`organization_id`,`collection`,lower("name"));--> statement-breakpoint
 CREATE INDEX `article_categories_org_sort_idx` ON `article_categories` (`organization_id`,`collection`,`sort_order`);--> statement-breakpoint
 CREATE UNIQUE INDEX `article_categories_org_id_unique` ON `article_categories` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `article_category_articles` (

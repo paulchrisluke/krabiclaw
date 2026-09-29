@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ca67eb15-9ed4-40ad-87d8-8715ebc11bfa",
+  "id": "9936a597-ad43-456f-b4e3-3eb50242c782",
   "prevId": "7482c374-a163-4413-a80d-b287b8a8ca36",
   "tables": {
     "account": {
@@ -851,6 +851,15 @@
             "organization_id",
             "collection",
             "slug"
+          ],
+          "isUnique": true
+        },
+        "article_categories_name_unique": {
+          "name": "article_categories_name_unique",
+          "columns": [
+            "organization_id",
+            "collection",
+            "lower(\"name\")"
           ],
           "isUnique": true
         },
@@ -11642,6 +11651,13 @@
             "isExpression": true
           },
           "(payload_json ->> '$.started_at')": {
+            "isExpression": true
+          }
+        }
+      },
+      "article_categories_name_unique": {
+        "columns": {
+          "lower(\"name\")": {
             "isExpression": true
           }
         }

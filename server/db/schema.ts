@@ -2108,6 +2108,7 @@ export const article_categories = sqliteTable("article_categories", {
 	check("article_categories_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	unique("article_categories_org_id_unique").on(table.organization_id, table.id),
 	uniqueIndex("article_categories_slug_unique").on(table.organization_id, table.collection, table.slug),
+	uniqueIndex("article_categories_name_unique").on(table.organization_id, table.collection, sql`lower(${table.name})`),
 	index("article_categories_org_sort_idx").on(table.organization_id, table.collection, table.sort_order),
 	check("article_categories_collection_check", sql`collection IN ('blog', 'docs')`),
 	check("article_categories_name_not_blank_check", sql`trim(name) <> ''`),
