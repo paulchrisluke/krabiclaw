@@ -400,7 +400,7 @@ async function uploadIndexItem(env: CloudflareEnv, key: string, content: string,
   await withRetries(() => searchNamespace(env).get(platformKnowledgeInstanceId(env)).items.upload(key, content, { metadata }))
 }
 
-async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
+async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000, organizationId?: string) {
   const instance = searchNamespace(env).get(platformKnowledgeInstanceId(env))
   const startedAt = Date.now()
 
@@ -409,26 +409,31 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000) {
   // rather than logged, so that when the budget does run out the error says what
   // actually went wrong instead of "timed out". A whole window of identical
   // errors is our instance being unhealthy, and that is the thing worth naming.
-  let lastStatsError: unknown = null
+  let lastStatusError: unknown = null
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const stats = await instance.stats()
-      const { queued, running, outdated } = stats
-      if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
-        throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
+      if (organizationId) {
+        const items = await listOrganizationItems(env, organizationId)
+        if (items.every(item => !['queued', 'running', 'outdated'].includes(item.status))) return
+      } else {
+        const stats = await instance.stats()
+        const { queued, running, outdated } = stats
+        if (![queued, running, outdated].every(value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)) {
+          throw new Error('AI Search stats omitted or returned invalid queued, running, or outdated counts')
+        }
+        if (queued === 0 && running === 0 && outdated === 0) return
       }
-      if (queued === 0 && running === 0 && outdated === 0) return
-      lastStatsError = null
+      lastStatusError = null
     } catch (error) {
-      lastStatsError = error
+      lastStatusError = error
     }
     await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
-  if (lastStatsError) {
+  if (lastStatusError) {
     throw new Error(
-      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatsError instanceof Error ? lastStatsError.message : String(lastStatsError)}`,
-      { cause: lastStatsError },
+      `Timed out waiting for AI Search indexing; the last status read failed with: ${lastStatusError instanceof Error ? lastStatusError.message : String(lastStatusError)}`,
+      { cause: lastStatusError },
     )
   }
   throw new Error('Timed out waiting for AI Search indexing to complete')
@@ -988,13 +993,19 @@ export async function listOrganizationItems(env: CloudflareEnv, organizationId: 
 export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClient, organizationId: string) {
   const startedAt = Date.now()
   const [existingItems, baseRecords] = await Promise.all([listOrganizationItems(env, organizationId), buildOrganizationDocuments(db, organizationId)])
-  const result = await reconcileIndexItems(env, existingItems, expandDocumentsForSurfaces(baseRecords), { maxUploads: SYNC_UPLOADS_PER_RUN })
+  const records = expandDocumentsForSurfaces(baseRecords)
+  let result = await reconcileIndexItems(env, existingItems, records, { maxUploads: SYNC_UPLOADS_PER_RUN })
   let indexingUnconfirmedReason: string | null = null
   if (result.indexed === 0 && result.pending > 0) {
     // A pass waiting only on accepted, metadata-less items must let AI Search
     // progress instead of immediately polling and resetting the same queue.
-    try { await waitForIndexing(env, 45_000) } catch (error) {
+    try {
+      await waitForIndexing(env, 45_000, organizationId)
+    } catch (error) {
       indexingUnconfirmedReason = error instanceof Error ? error.message : String(error)
+    }
+    if (!indexingUnconfirmedReason) {
+      result = await reconcileIndexItems(env, await listOrganizationItems(env, organizationId), records, { maxUploads: SYNC_UPLOADS_PER_RUN })
     }
   }
   console.warn(`[ai-search] organization ${organizationId}: uploaded ${result.indexed}, unchanged ${result.unchanged}, pending ${result.pending}, deleted ${result.deleted} in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
