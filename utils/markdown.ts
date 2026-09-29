@@ -28,9 +28,9 @@ let headingSlugCounts = new Map<string, number>();
 export function headingAnchor(text: string) {
   return decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, "")
     .trim()
-    .replace(/\s+/g, "-");
+    .replace(/\s+/g, "-") || "section";
 }
 
 function slugifyHeading(text: string) {
@@ -52,9 +52,10 @@ marked.use({
   },
 });
 
-export function renderMarkdownToHtml(markdown: string) {
+export function renderMarkdownToHtml(markdown: string, blockIndex?: number) {
   headingSlugCounts = new Map();
-  return marked.parse(markdown, { gfm: true, breaks: true }) as string;
+  const rendered = marked.parse(markdown, { gfm: true, breaks: true }) as string;
+  return blockIndex === undefined ? rendered : rendered.replace(/(<h[23] id="[^"]+)(")/g, `$1-${blockIndex}$2`);
 }
 
 // Doc/blog pages render `title` from the DB as their own <h1>, so a body

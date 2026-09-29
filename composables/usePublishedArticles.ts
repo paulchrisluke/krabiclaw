@@ -32,7 +32,7 @@ interface PublishedArticlesResponse {
   /** The page the site publishes at the collection's index path, if any. */
   index: { title: string; summary: string | null } | null
   /** The collection's categories that hold a published article, in the owner's order. */
-  categories: Array<{ id: string; name: string; slug: string; description: string | null }>
+  categories: Array<{ id: string; name: string; slug: string; description: string | null; locales: string[] }>
   /** The languages the index is read in; a category page is the same prefix under its own path. */
   localeRepresentations: PublicLocaleRepresentation[]
 }
@@ -42,6 +42,7 @@ export interface PublishedArticleCategory {
   name: string
   slug: string
   description: string | null
+  locales: string[]
   /** The category's own page, in the page's language. */
   path: string
   posts: PublishedArticle[]
@@ -85,7 +86,7 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
       return await publicApiRequest<PublishedArticlesResponse>('/api/public/blog', {
         query: { collection: toValue(collection), locale: locale.value },
         validate: validateApiShape({ posts: { arrayOf: { id: 'string', slug: 'string', title: 'string', sort_order: 'number' } }, index: 'nullable-object',
-          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string' } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
+          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
       })
     },
   )

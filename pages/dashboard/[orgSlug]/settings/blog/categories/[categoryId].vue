@@ -9,6 +9,16 @@
     @cancel="reset"
     @save="save"
   >
+    <template v-if="category" #right>
+      <DashboardResourceLocalization
+        :organization-id="organizationId"
+        resource-type="article_category"
+        :resource-id="category.id"
+        resource-label="category"
+        :fields="localizationFields"
+        :language-settings-path="`/dashboard/${route.params.orgSlug}/settings/website/localization`"
+      />
+    </template>
     <div v-if="category" class="space-y-6">
       <UFormField label="Name" required>
         <UInput v-model="name" autofocus class="w-full" />
@@ -21,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import { isCategoryResponse, type DashboardArticleCategory } from '~/composables/useArticleCategories'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
@@ -43,6 +54,10 @@ watchEffect(() => {
 const loadFailure = computed(() => error.value && !isNotFoundError(error.value) ? getErrorMessage(error.value, 'The category could not be loaded') : '')
 
 const category = computed<DashboardArticleCategory | null>(() => data.value ?? null)
+const localizationFields = computed(() => [
+  { key: 'name', label: 'Name', source: category.value?.name },
+  { key: 'description', label: 'Description', source: category.value?.description, multiline: true },
+])
 const name = ref('')
 const description = ref('')
 function reset() {

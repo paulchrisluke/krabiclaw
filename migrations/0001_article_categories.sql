@@ -80,5 +80,5 @@ FROM (
   GROUP BY m.organization_id, m.category_id, p.locale
 );
 --> statement-breakpoint
-UPDATE `content_documents` SET `metadata_json` = json_remove(`metadata_json`, '$.category')
-WHERE kind = 'article' AND json_type(metadata_json, '$.category') IS NOT NULL;
+UPDATE `content_documents` SET `metadata_json` = json_remove(`metadata_json`, '$.category', '$.tags')
+WHERE kind = 'article' AND (json_type(metadata_json, '$.category') IS NOT NULL OR json_type(metadata_json, '$.tags') IS NOT NULL);

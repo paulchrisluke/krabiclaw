@@ -32,6 +32,10 @@ export interface ArticleCategory {
   updated_at: string
 }
 
+export interface PublicArticleCategory extends ArticleCategory {
+  locales: string[]
+}
+
 type Row = Record<string, unknown>
 
 function badRequest(message: string): never {
@@ -198,16 +202,17 @@ export async function articleCategoryMembershipQuery(db: DbClient, input: {
  * published in that language, and an untranslated category would otherwise
  * leave them in no group and its breadcrumb pointing at no page.
  */
-export async function listPublicArticleCategories(env: CloudflareEnv, db: DbClient, organizationId: string, collection: ArticleCollection, locale: string): Promise<ArticleCategory[]> {
+export async function listPublicArticleCategories(env: CloudflareEnv, db: DbClient, organizationId: string, collection: ArticleCollection, locale: string): Promise<PublicArticleCategory[]> {
   const rows = (await queryAll<Row>(db, `
-    SELECT c.*, COUNT(root.id) AS article_count
+    SELECT c.*, COUNT(DISTINCT root.id) AS article_count, json_group_array(DISTINCT p.locale) AS locales
       FROM article_categories c
       JOIN article_category_articles m ON m.category_id = c.id
       JOIN content_documents root ON root.id = m.article_id AND root.status = 'published' AND root.visibility = 'listed'
+      JOIN content_documents p ON COALESCE(p.root_id, p.id) = root.id
      WHERE c.organization_id = ? AND c.collection = ?
      GROUP BY c.id
      ORDER BY c.sort_order, c.name, c.id
-  `, [organizationId, collection])).map(mapRow)
+  `, [organizationId, collection])).map(row => ({ ...mapRow(row), locales: JSON.parse(String(row.locales)) as string[] }))
   if (locale === 'en') return rows
   const translations = new Map((await loadExactPublicLocalizations(env, db, organizationId, locale))
     .filter(localization => localization.resourceType === 'article_category')

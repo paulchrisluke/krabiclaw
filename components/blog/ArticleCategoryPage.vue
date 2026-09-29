@@ -36,6 +36,7 @@ if (!found) throw createError({ statusCode: 404, statusMessage: 'Category not fo
 const category = computed(() => categories.value.find(candidate => candidate.slug === found.slug) ?? found)
 // A category page is read in the index's languages, under the index's prefix.
 useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []).value = localeRepresentations.value
+  .filter(representation => found.locales.includes(representation.locale))
   .map(representation => ({ ...representation, route_path: `${representation.route_path}/category/${encodeURIComponent(found.slug)}` }))
 
 const indexLabel = computed(() => props.collection === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'))

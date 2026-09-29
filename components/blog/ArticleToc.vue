@@ -96,8 +96,8 @@ onMounted(() => {
   // A deep link like .../doc#some-heading should highlight that heading
   // immediately, instead of waiting for the observer's first scroll event.
   if (import.meta.client && window.location.hash) {
-    const id = window.location.hash.slice(1)
-    if (headings.value.some(h => h.id === id)) activeId.value = id
+    const heading = headings.value.find(h => window.location.hash === `#${encodeURIComponent(h.id)}` || window.location.hash === `#${h.id}`)
+    if (heading) activeId.value = heading.id
   }
   nextTick(observeHeadings)
 })

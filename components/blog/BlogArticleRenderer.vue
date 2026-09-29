@@ -102,9 +102,9 @@
           @input="updateText(index, block, $event)"
         />
         <!-- eslint-disable vue/no-v-html -->
-        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none" v-html="renderMarkdown(String(block.data.markdown || ''))" />
+        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none" v-html="renderMarkdown(String(block.data.markdown || ''), index)" />
         <!-- eslint-enable vue/no-v-html -->
-        <component :is="`h${Math.max(2, Math.min(6, block.level || 2))}`" v-else-if="block.type === 'heading'" :id="headingAnchor(String(block.data.text || ''))" class="scroll-mt-28 text-2xl font-semibold">
+        <component :is="`h${Math.max(2, Math.min(6, block.level || 2))}`" v-else-if="block.type === 'heading'" :id="`${headingAnchor(String(block.data.text || ''))}-${index}`" class="scroll-mt-28 text-2xl font-semibold">
           {{ block.data.text }}
         </component>
         <!-- The leading image block is the article's cover: same footprint as the old hero, and the share card derives from it. -->
@@ -297,7 +297,7 @@ function isBlockEmpty(block: BlogEditorBlock) {
   return false
 }
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
-function renderMarkdown(value: string) { return DOMPurify.sanitize(renderMarkdownToHtml(value)) }
+function renderMarkdown(value: string, index: number) { return DOMPurify.sanitize(renderMarkdownToHtml(value, index)) }
 function textValue(block: BlogEditorBlock) { return String(block.data[block.type === 'heading' ? 'text' : 'markdown'] || '') }
 function updateText(index: number, block: BlogEditorBlock, event: Event) {
   const key = block.type === 'heading' ? 'text' : 'markdown'

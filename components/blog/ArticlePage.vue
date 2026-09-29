@@ -94,12 +94,12 @@ const previousArticle = computed(() => currentIndex.value > 0 ? articles.value[c
 const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value < articles.value.length - 1 ? articles.value[currentIndex.value + 1] : null)
 
 const tocHtml = computed(() => post.value.content_blocks
-  .filter(block => block.type === 'heading' || block.type === 'markdown')
-  .map((block) => {
-    if (block.type !== 'heading') return DOMPurify.sanitize(renderMarkdownToHtml(String(block.data.markdown || '')))
+  .map((block, index) => {
+    if (block.type === 'markdown') return DOMPurify.sanitize(renderMarkdownToHtml(String(block.data.markdown || ''), index))
+    if (block.type !== 'heading') return ''
     const level = Math.max(2, Math.min(6, block.level || 2))
     const text = String(block.data.text || '')
-    return `<h${level} id="${headingAnchor(text)}">${DOMPurify.sanitize(text)}</h${level}>`
+    return `<h${level} id="${headingAnchor(text)}-${index}">${DOMPurify.sanitize(text)}</h${level}>`
   })
   .join('\n'))
 // The column is there only when the article has headings to list; an empty one left a blank strip beside the text.
