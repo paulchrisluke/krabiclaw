@@ -186,7 +186,8 @@ corepack yarn quality && corepack yarn test:unit && corepack yarn test:d1 && cor
 corepack yarn chatgpt:submission:check && corepack yarn lint:migrations && corepack yarn lint:schema-drift
 ```
 
-That is every CI check that runs without a deployed environment. `test:unit`
+These cover the static, D1, and migration checks before pushing. Pull-request
+CI also runs the full E2E suite against a local Worker and D1 copy. `test:unit`
 alone is not enough: D1 and migration checks cover persistence behavior that
 typecheck and unit tests cannot see.
 

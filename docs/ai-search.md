@@ -21,10 +21,7 @@ the intended outcome: it means the environment is not provisioned, not that a bl
 went wrong.
 
 ```bash
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/autorag/rags" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{"id":"<AI_SEARCH_INSTANCE_ID>"}'
+yarn wrangler ai-search create <AI_SEARCH_INSTANCE_ID> --namespace default --type builtin
 ```
 
 `ensurePlatformKnowledgeInstance()` then re-asserts the retrieval configuration
@@ -63,10 +60,10 @@ threads at intake, and Better Auth's member hooks. The drainer
 (`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
 `syncOrganizationSearchIndex()`, which lists the site's own items by its hashed
 organization key segment, rebuilds its documents from D1, uploads the ones whose
-`content_hash` changed and deletes the ones that are gone. It runs right after every
-dashboard editor response and every mutating MCP tool call, and every two minutes from the
-scheduled task. A write therefore costs one list of the site's items plus one upload per
-changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
+`content_hash` changed and deletes the ones that are gone. Dashboard editor responses
+and mutating MCP tool calls await the scoped drain before reporting success. The scheduled task also drains queued work every two minutes. A failed
+drain is reported to the caller and retained for reconciliation. A write therefore costs
+one list of the site's items plus one upload per changed record; Cloudflare indexes the upload asynchronously, usually within seconds.
 
 ## Rebuild flow
 
@@ -80,17 +77,15 @@ Required secret:
 
 - `PLATFORM_SEARCH_REINDEX_SECRET`
 
-The script calls `POST /api/internal/search/reindex` once for the platform pass, which
-reconciles the platform corpus and returns the live site ids, and then once per site with
-`?site=<id>`, which runs that site's sync. One request per pass keeps each under the
-Workers request ceiling.
+The script calls `POST /api/internal/search/reindex` for the platform corpus, then
+for each returned organization with `?organization=<id>`. Each request performs a bounded
+batch; the script repeats that pass until its reported pending count reaches zero.
 
-Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo
-secret and runs a blocking rebuild step when a file that defines the indexed corpus or its
-rendering changed. A failed production rebuild fails the deploy job instead of silently
-leaving production search stale. Staging deploys do not rebuild. Local E2E runs
-`ai-search:sync` against its dedicated instance after its Worker is healthy and
-before browser tests start.
+Staging and production CI (`.github/workflows/ci.yml`) sync the
+`PLATFORM_SEARCH_REINDEX_SECRET` repository secret and run a blocking rebuild when a file
+that defines the indexed corpus or its rendering changes. A failed rebuild fails the
+deploy job. Local and CI E2E runs bootstrap their dedicated instance with `ai-search:sync`
+after the Worker is healthy and before browser tests start.
 
 ## Environment expectations
 

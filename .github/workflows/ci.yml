@@ -1,7 +1,5 @@
 name: CI
 
-# Drafts run the static Checks; E2E starts at ready_for_review.
-
 on:
   pull_request:
     branches: [main, staging, "epoch/**"]
@@ -53,14 +51,7 @@ jobs:
 
   e2e:
     name: E2E
-    # The whole suite, on every pull request, against a local build and a local
-    # D1 pulled from production. Before this, a pull request ran Checks and
-    # nothing else, and e2e-staging ran only test:e2e:tenant-rendering after the
-    # merge had already happened — two specs of nineteen. tenant-guest-journeys,
-    # every mcp-* spec, oauth-discovery and provider-ingress had never run in CI
-    # anywhere, which is how the suite reached twenty-two failures with no one
-    # told. The playwright.config comment about "a test broken by #1001 sat
-    # failing while only the @smoke subset ran in CI" is the same gap, a year on.
+    # PRs qualify the full suite against isolated local D1 and AI Search.
     if: >-
       github.event_name == 'pull_request'
       && !(github.base_ref == 'main' && github.head_ref == 'staging')
@@ -130,9 +121,7 @@ jobs:
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    # Staging is the first deployed validation: a pull request runs Checks and
-    # nothing else. A direct push to staging is the normal way a hotfix ships,
-    # so Checks gates this exact SHA before the deploy.
+    # Staging is the first deployed validation. Checks gates this exact SHA.
     needs: [typecheck]
     runs-on: ubuntu-latest
     timeout-minutes: 90

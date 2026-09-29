@@ -882,12 +882,9 @@ export function indexItemPayload(record: ExpandedPlatformKnowledgeDocument) {
 
 // Records get expanded across every surface they support (a doc record alone spans 6:
 // public/docs/blog/help/chowbot/dashboard), so the real upload count for the full
-// corpus is a multiple of the base document count — sequential one-at-a-time uploads
-// (even with per-item retries) took ~5 minutes for production content, right at the
-// Workers platform's own request-duration ceiling, killing the whole request with a
-// raw "fetch failed" before the loop could finish. Bounded concurrency cuts wall-clock
-// time roughly by the batch factor without the instability of fully unbounded parallel
-// requests against a single AI Search instance.
+// corpus is a multiple of the base document count. Sequential uploads took about
+// five minutes for production content. Bounded concurrency reduces the time spent
+// waiting on AI Search without sending unbounded requests to one instance.
 const UPLOAD_CONCURRENCY = 10
 
 async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_item: T) => Promise<void>): Promise<void> {
@@ -929,9 +926,8 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
       // payload must overwrite the accepted item under the same key.
       return existing.metadata?.content_hash !== payload.contentHash
     })
-  // An upload takes AI Search a few seconds, so a first pass over a large
-  // business would outlast the Workers request ceiling. Each run sends a bounded
-  // batch and reports what is left; the caller runs again until nothing is.
+  // An upload takes AI Search a few seconds, so a large business may need
+  // multiple bounded batches. Report what is left for the caller's next pass.
   const changed = options.maxUploads ? outdated.slice(0, options.maxUploads) : outdated
   const pending = outdated.length - changed.length
 
@@ -992,9 +988,8 @@ export async function syncOrganizationSearchIndex(env: CloudflareEnv, db: DbClie
 /**
  * The platform's own corpus — docs, articles, FAQ, static pages — and the
  * cleanup of anything in the instance that belongs to no business. Each
- * business's slice is a request of its own (`syncOrganizationSearchIndex`), which is
- * how a full rebuild stays under the Workers request ceiling: the caller
- * takes the site ids returned here and syncs them one at a time.
+ * business's slice is a request of its own (`syncOrganizationSearchIndex`).
+ * The caller takes the site ids returned here and syncs them one at a time.
  */
 export async function rebuildPlatformKnowledgeIndex(
   env: CloudflareEnv,
@@ -1021,15 +1016,10 @@ export async function rebuildPlatformKnowledgeIndex(
   const result = await reconcileIndexItems(env, platformItems, platformRecords, { maxUploads: SYNC_UPLOADS_PER_RUN })
   console.warn(`[ai-search] rebuild uploaded ${result.indexed}/${platformRecords.length} records, pending ${result.pending}, deleted ${result.deleted} stale items in ${elapsed()}`)
 
-  // Cloudflare processes indexing asynchronously regardless of whether this request
-  // stays open to observe it, and the Workers platform enforces a request-duration
-  // ceiling (~5 minutes, observed in production as a raw connection failure — "fetch
-  // failed" — not a thrown error our own try/catch could ever see) well under
-  // waitForIndexing's original 10-minute budget. Blocking on full confirmation here
-  // risks the whole Worker being killed mid-request before it can respond at all.
-  // The uploads/deletes above are the actual mutation — give indexing a short,
-  // safe courtesy window and return regardless of whether it confirms completion
-  // within that window; a not-yet-confirmed result is not a failed rebuild.
+  // Cloudflare processes indexing asynchronously after accepting uploads.
+  // Waiting for every item would delay this response and keep its client request
+  // open. Observe indexing for a short window and report whether it completed;
+  // the caller can see an unconfirmed result separately from an upload failure.
   let indexingConfirmed = false
   let indexingUnconfirmedReason: string | null = null
   if (options.confirmIndexing !== false) {
