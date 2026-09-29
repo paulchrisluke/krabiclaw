@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:3abd45c59c7f7f43fe6d3efd49102661ffcf3355c2f83befae73b6d0fe26a91c",
+  "fingerprint": "sha256:89fe90b801f33f1c0d3e782a9332183edbbb1a357f48e612640c83c55efb46e4",
   "tools": [
     {
       "name": "append_content_block",
@@ -4656,6 +4656,14 @@
             "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
             "type": "string"
           },
+          "facebook_cursor": {
+            "description": "Opaque nextCursor from the previous Facebook result for this same selected date range and connection.",
+            "type": "string"
+          },
+          "instagram_cursor": {
+            "description": "Opaque nextCursor from the previous Instagram result for this same selected date range and connection.",
+            "type": "string"
+          },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
@@ -4922,6 +4930,453 @@
             },
             "type": "array"
           },
+          "social": {
+            "properties": {
+              "facebook": {
+                "properties": {
+                  "apiVersion": {
+                    "type": "string"
+                  },
+                  "connectionRevision": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "content": {
+                    "items": {
+                      "properties": {
+                        "caption": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "metrics": {
+                          "items": {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "period": {
+                                "type": "string"
+                              },
+                              "previousStatus": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "previousValue": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "value",
+                              "unit",
+                              "period",
+                              "status",
+                              "reason",
+                              "previousValue",
+                              "previousStatus"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "publishedAt",
+                        "permalink",
+                        "caption",
+                        "metrics"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "contentCoverage": {
+                    "type": "string"
+                  },
+                  "contentCoverageReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fetchedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "metrics": {
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "period": {
+                          "type": "string"
+                        },
+                        "previousStatus": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previousValue": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value",
+                        "unit",
+                        "period",
+                        "status",
+                        "reason",
+                        "previousValue",
+                        "previousStatus"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "nextCursor": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "targetId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "targetName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "apiVersion",
+                  "status",
+                  "targetId",
+                  "targetName",
+                  "connectionRevision",
+                  "fetchedAt",
+                  "error",
+                  "metrics",
+                  "content",
+                  "contentCoverage",
+                  "contentCoverageReason",
+                  "nextCursor"
+                ],
+                "type": "object"
+              },
+              "instagram": {
+                "properties": {
+                  "apiVersion": {
+                    "type": "string"
+                  },
+                  "connectionRevision": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "content": {
+                    "items": {
+                      "properties": {
+                        "caption": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "metrics": {
+                          "items": {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "period": {
+                                "type": "string"
+                              },
+                              "previousStatus": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "previousValue": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "value",
+                              "unit",
+                              "period",
+                              "status",
+                              "reason",
+                              "previousValue",
+                              "previousStatus"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "publishedAt",
+                        "permalink",
+                        "caption",
+                        "metrics"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "contentCoverage": {
+                    "type": "string"
+                  },
+                  "contentCoverageReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fetchedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "metrics": {
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "period": {
+                          "type": "string"
+                        },
+                        "previousStatus": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previousValue": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value",
+                        "unit",
+                        "period",
+                        "status",
+                        "reason",
+                        "previousValue",
+                        "previousStatus"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "nextCursor": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "targetId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "targetName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "apiVersion",
+                  "status",
+                  "targetId",
+                  "targetName",
+                  "connectionRevision",
+                  "fetchedAt",
+                  "error",
+                  "metrics",
+                  "content",
+                  "contentCoverage",
+                  "contentCoverageReason",
+                  "nextCursor"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "facebook",
+              "instagram"
+            ],
+            "type": "object"
+          },
           "topPages": {
             "items": {
               "properties": {
@@ -4955,7 +5410,8 @@
           "countries",
           "cities",
           "referrers",
-          "devices"
+          "devices",
+          "social"
         ],
         "type": "object"
       }
@@ -5111,6 +5567,15 @@
         "properties": {
           "settings": {
             "properties": {
+              "banner_content": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "banner_dismissible": {
+                "type": "boolean"
+              },
               "brand_description": {
                 "type": [
                   "string",
@@ -14653,6 +15118,17 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "banner_content": {
+            "description": "Blawby announcement text for source-language pages, up to 500 characters. Null clears it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "banner_dismissible": {
+            "description": "Whether guests can dismiss the Blawby announcement on their device.",
+            "type": "boolean"
+          },
           "brand_description": {
             "type": "string"
           },
