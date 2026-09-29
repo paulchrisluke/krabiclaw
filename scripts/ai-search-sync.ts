@@ -56,33 +56,39 @@ async function reindex(organization?: string) {
     },
     signal: AbortSignal.timeout(11 * 60 * 1000),
   })
-  const payload = await response.json().catch(() => null) as Record<string, unknown> | null
-  if (!response.ok) {
-    console.error(`AI Search sync failed (${response.status})${organization ? ` for site ${organization}` : ''}`, payload)
-    process.exit(1)
+  const body = await response.text()
+  const target = organization ? `site ${organization}` : 'platform'
+  if (response.status !== 200) throw new Error(`${target} returned HTTP ${response.status}: ${body}`)
+  let payload: unknown
+  try { payload = JSON.parse(body) } catch { throw new Error(`${target} returned invalid JSON`) }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+    || !('ok' in payload) || payload.ok !== true
+    || !('pending' in payload) || typeof payload.pending !== 'number' || !Number.isSafeInteger(payload.pending) || payload.pending < 0
+    || (!organization && (!('organizations' in payload) || !Array.isArray(payload.organizations)
+      || !payload.organizations.every(value => typeof value === 'string' && value.length > 0)))) {
+    throw new Error(`${target} returned an invalid AI Search sync result: ${body}`)
   }
   console.log(JSON.stringify({ organization: organization ?? 'platform', ...payload }, null, 2))
-  return payload
+  return payload as { pending: number; organizations?: string[] }
 }
 
 // A pass sends a bounded batch of uploads per request and says what is left;
 // it is repeated until nothing is.
 async function reindexUntilDone(organization?: string) {
   let payload = await reindex(organization)
-  while (Number(payload?.pending ?? 0) > 0) payload = await reindex(organization)
+  while (payload.pending > 0) payload = await reindex(organization)
   return payload
 }
 
 try {
   const platform = await reindexUntilDone()
-  const organizations = Array.isArray(platform?.organizations) ? platform.organizations.filter((organization): organization is string => typeof organization === 'string') : []
-  for (const organization of organizations) await reindexUntilDone(organization)
+  for (const organization of platform.organizations!) await reindexUntilDone(organization)
 } catch (error) {
-  const message = error instanceof Error && error.name === 'AbortError'
+  const message = error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
     ? 'Request timed out'
     : error instanceof Error
       ? error.message
       : 'Unknown request error'
-  console.error('AI Search sync failed (network)', { error: message })
+  console.error('AI Search sync failed', { error: message })
   process.exit(1)
 }
