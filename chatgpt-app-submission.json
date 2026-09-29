@@ -44,6 +44,18 @@
         "destructive_justification": "Creates products from the supplied catalog entries and records product events. Existing content is not deleted or overwritten."
       }
     },
+    "create_article_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates an empty category in the selected organization's blog or documentation; articles are placed in it separately.",
+        "open_world_justification": "Creates an empty category in the selected organization's blog or documentation; articles are placed in it separately. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates an empty category in the selected organization's blog or documentation; articles are placed in it separately. Existing content is not deleted or overwritten."
+      }
+    },
     "create_blog_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -114,6 +126,18 @@
         "read_only_justification": "Creates a tenant page and its structured content document.",
         "open_world_justification": "Creates a tenant page and its structured content document. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates a tenant page and its structured content document. Existing content is not deleted or overwritten."
+      }
+    },
+    "delete_article_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes an empty category of the selected organization's blog or documentation; a category that still has articles is refused.",
+        "open_world_justification": "Deletes an empty category of the selected organization's blog or documentation; a category that still has articles is refused. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes an empty category of the selected organization's blog or documentation; a category that still has articles is refused. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_blog_post": {
@@ -416,6 +440,18 @@
         "destructive_justification": "Reads the authenticated user workspace selection and available context. Existing content is not deleted or overwritten."
       }
     },
+    "list_article_categories": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Lists the categories of the selected organization's blog or documentation.",
+        "open_world_justification": "Lists the categories of the selected organization's blog or documentation. It does not publish content or write to an external service.",
+        "destructive_justification": "Lists the categories of the selected organization's blog or documentation. Existing content is not deleted or overwritten."
+      }
+    },
     "list_blog_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -668,6 +704,18 @@
         "destructive_justification": "Removes a product from a location, so the location no longer offers it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reorder_article_categories": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the order the categories of the selected organization's blog or documentation are presented in.",
+        "open_world_justification": "Overwrites the order the categories of the selected organization's blog or documentation are presented in. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the order the categories of the selected organization's blog or documentation are presented in. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "reorder_blog_posts": {
       "annotations": {
         "readOnlyHint": false,
@@ -846,6 +894,18 @@
         "read_only_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts.",
         "open_world_justification": "Posts and media are read from the connected Facebook Page and Instagram account and stored on the website.",
         "destructive_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "update_article_category": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the selected category's name or description.",
+        "open_world_justification": "Overwrites the selected category's name or description. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected category's name or description. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_blog_post": {

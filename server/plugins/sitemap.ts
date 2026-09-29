@@ -5,7 +5,7 @@ import { definePlugin, HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
-import { ARTICLE_COLLECTIONS, isArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, collectionCategoryPath, isArticleCollection } from '~/utils/article-collections'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -27,9 +27,10 @@ async function listPublishedTenantSitemapPages(db: DbClient, organizationId: str
 }
 
 /**
- * A site's listed articles, on every template, and the index of each
- * collection that has one: the blog at its template's prefix, the docs at
- * /docs. One query for Krabiclaw's site and every customer's.
+ * A site's listed articles, on every template, the index of each collection
+ * that has one (the blog at its template's prefix, the docs at /docs), and
+ * each category page that lists at least one of them. Krabiclaw's site and
+ * every customer's read the same queries.
  */
 async function listSitemapArticleEntries(db: DbClient, organizationId: string, template: Parameters<typeof tenantBlogPostPath>[0]): Promise<SitemapEntry[]> {
   const articles = await queryAll<{ slug: string | null; collection: string | null; updated_at: string | null }>(db, `
@@ -43,6 +44,18 @@ async function listSitemapArticleEntries(db: DbClient, organizationId: string, t
     if (!isArticleCollection(article.collection)) throw new Error(`Article ${article.slug} has no valid collection`)
     entries.push({ loc: ARTICLE_COLLECTIONS[article.collection].pathPrefix })
     entries.push({ loc: tenantBlogPostPath(template, article.slug, article.collection), lastmod: article.updated_at ?? undefined })
+  }
+  const categories = await queryAll<{ slug: string; collection: string; lastmod: string | null }>(db, `
+    SELECT c.slug, c.collection, MAX(root.updated_at) AS lastmod
+      FROM article_categories c
+      JOIN article_category_articles m ON m.category_id = c.id
+      JOIN content_documents root ON root.id = m.article_id AND root.status = 'published' AND root.visibility = 'listed'
+     WHERE c.organization_id = ?
+     GROUP BY c.id
+  `, [organizationId])
+  for (const category of categories) {
+    if (!isArticleCollection(category.collection)) throw new Error(`Category ${category.slug} has no valid collection`)
+    entries.push({ loc: collectionCategoryPath(category.collection, category.slug), lastmod: category.lastmod ?? undefined })
   }
   return entries
 }
@@ -198,6 +211,22 @@ export default definePlugin((nitroApp) => {
           const presentation = product.bookable > 0 ? presentationForSurface(organization.vertical, 'experiences') : productPresentation
           entries.push({ loc: `/${candidate.locale}${presentation.productPath(product.location_slug, product.slug)}`, lastmod: product.updated_at })
         }
+      }
+      // A collection's index and each category page are read in every published
+      // language, and listed where that language has an article in them.
+      const localizedCategories = await queryAll<{ slug: string; collection: string; lastmod: string | null }>(db, `
+        SELECT c.slug, c.collection, MAX(rep.updated_at) AS lastmod
+          FROM article_categories c
+          JOIN article_category_articles m ON m.category_id = c.id
+          JOIN content_documents root ON root.id = m.article_id AND root.status = 'published' AND root.visibility = 'listed'
+          JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
+         WHERE c.organization_id = ?
+         GROUP BY c.id
+      `, [candidate.locale, organizationId])
+      for (const category of localizedCategories) {
+        if (!isArticleCollection(category.collection)) throw new Error(`Category ${category.slug} has no valid collection`)
+        entries.push({ loc: `/${candidate.locale}${ARTICLE_COLLECTIONS[category.collection].pathPrefix}` })
+        entries.push({ loc: `/${candidate.locale}${collectionCategoryPath(category.collection, category.slug)}`, lastmod: category.lastmod ?? undefined })
       }
       for (const page of pages) {
         const localizedPath = page.path === '/' ? `/${candidate.locale}` : `/${candidate.locale}${page.path}`

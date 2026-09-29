@@ -112,7 +112,7 @@ async function loadSetupProgress(
  */
 export async function loadDashboardOrganizationAnalytics(
   event: H3Event,
-  query: { startDate?: string; endDate?: string },
+  query: { startDate?: string; endDate?: string; facebookCursor?: string; instagramCursor?: string },
 ): Promise<OrganizationAnalyticsReport> {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -128,9 +128,12 @@ export async function loadDashboardOrganizationAnalytics(
 
   const [report, reviews, setup] = await Promise.all([
     getAnalyticsReport(db, {
+      env,
       organizationId: organization.id,
       startDate: query.startDate,
       endDate: query.endDate,
+      facebookCursor: query.facebookCursor,
+      instagramCursor: query.instagramCursor,
     }),
     loadReviewsSummary(db, [organization.id]),
     loadSetupProgress(event, { id: organization.id, label: organization.name }),

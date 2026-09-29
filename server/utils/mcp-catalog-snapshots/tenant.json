@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:707dac543f48c1c21ebcafd05cd480027d2cab62b28206ab99f2951de9b36683",
+  "fingerprint": "sha256:89fe90b801f33f1c0d3e782a9332183edbbb1a357f48e612640c83c55efb46e4",
   "tools": [
     {
       "name": "append_content_block",
@@ -1121,11 +1121,103 @@
       }
     },
     {
+      "name": "create_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "description": "What the category covers, shown on its page and used as the page description.",
+            "maxLength": 500,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "additionalProperties": false,
+            "properties": {
+              "article_count": {
+                "description": "Articles in the category, drafts included.",
+                "type": "integer"
+              },
+              "collection": {
+                "enum": [
+                  "blog",
+                  "docs"
+                ],
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "collection",
+              "name",
+              "slug",
+              "description",
+              "sort_order",
+              "article_count"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_blog_post",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "category": {
+          "category_id": {
+            "description": "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first.",
             "type": "string"
           },
           "collection": {
@@ -1281,13 +1373,6 @@
               "null"
             ]
           },
-          "tags": {
-            "description": "Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "title": {
             "type": "string"
           },
@@ -1320,8 +1405,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -1548,12 +1650,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -1582,7 +1678,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -3191,6 +3286,41 @@
       }
     },
     {
+      "name": "delete_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "category_id",
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "delete_blog_post",
       "inputSchema": {
         "additionalProperties": false,
@@ -3450,6 +3580,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -3484,6 +3615,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -3589,8 +3721,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -3817,12 +3966,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -3851,7 +3994,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -4514,6 +4656,14 @@
             "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
             "type": "string"
           },
+          "facebook_cursor": {
+            "description": "Opaque nextCursor from the previous Facebook result for this same selected date range and connection.",
+            "type": "string"
+          },
+          "instagram_cursor": {
+            "description": "Opaque nextCursor from the previous Instagram result for this same selected date range and connection.",
+            "type": "string"
+          },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
@@ -4780,6 +4930,453 @@
             },
             "type": "array"
           },
+          "social": {
+            "properties": {
+              "facebook": {
+                "properties": {
+                  "apiVersion": {
+                    "type": "string"
+                  },
+                  "connectionRevision": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "content": {
+                    "items": {
+                      "properties": {
+                        "caption": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "metrics": {
+                          "items": {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "period": {
+                                "type": "string"
+                              },
+                              "previousStatus": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "previousValue": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "value",
+                              "unit",
+                              "period",
+                              "status",
+                              "reason",
+                              "previousValue",
+                              "previousStatus"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "publishedAt",
+                        "permalink",
+                        "caption",
+                        "metrics"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "contentCoverage": {
+                    "type": "string"
+                  },
+                  "contentCoverageReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fetchedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "metrics": {
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "period": {
+                          "type": "string"
+                        },
+                        "previousStatus": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previousValue": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value",
+                        "unit",
+                        "period",
+                        "status",
+                        "reason",
+                        "previousValue",
+                        "previousStatus"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "nextCursor": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "targetId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "targetName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "apiVersion",
+                  "status",
+                  "targetId",
+                  "targetName",
+                  "connectionRevision",
+                  "fetchedAt",
+                  "error",
+                  "metrics",
+                  "content",
+                  "contentCoverage",
+                  "contentCoverageReason",
+                  "nextCursor"
+                ],
+                "type": "object"
+              },
+              "instagram": {
+                "properties": {
+                  "apiVersion": {
+                    "type": "string"
+                  },
+                  "connectionRevision": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "content": {
+                    "items": {
+                      "properties": {
+                        "caption": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "metrics": {
+                          "items": {
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "period": {
+                                "type": "string"
+                              },
+                              "previousStatus": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "previousValue": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "reason": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "unit": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "value",
+                              "unit",
+                              "period",
+                              "status",
+                              "reason",
+                              "previousValue",
+                              "previousStatus"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "permalink": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "publishedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "publishedAt",
+                        "permalink",
+                        "caption",
+                        "metrics"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "contentCoverage": {
+                    "type": "string"
+                  },
+                  "contentCoverageReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fetchedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "metrics": {
+                    "items": {
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "period": {
+                          "type": "string"
+                        },
+                        "previousStatus": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "previousValue": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value",
+                        "unit",
+                        "period",
+                        "status",
+                        "reason",
+                        "previousValue",
+                        "previousStatus"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "nextCursor": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "targetId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "targetName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "apiVersion",
+                  "status",
+                  "targetId",
+                  "targetName",
+                  "connectionRevision",
+                  "fetchedAt",
+                  "error",
+                  "metrics",
+                  "content",
+                  "contentCoverage",
+                  "contentCoverageReason",
+                  "nextCursor"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "facebook",
+              "instagram"
+            ],
+            "type": "object"
+          },
           "topPages": {
             "items": {
               "properties": {
@@ -4813,7 +5410,8 @@
           "countries",
           "cities",
           "referrers",
-          "devices"
+          "devices",
+          "social"
         ],
         "type": "object"
       }
@@ -4969,6 +5567,15 @@
         "properties": {
           "settings": {
             "properties": {
+              "banner_content": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "banner_dismissible": {
+                "type": "boolean"
+              },
               "brand_description": {
                 "type": [
                   "string",
@@ -6281,6 +6888,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -6326,6 +6934,7 @@
                       "business_location",
                       "product",
                       "collection",
+                      "article_category",
                       "media_asset"
                     ],
                     "type": "string"
@@ -6764,6 +7373,86 @@
       }
     },
     {
+      "name": "list_article_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "article_count": {
+                  "description": "Articles in the category, drafts included.",
+                  "type": "integer"
+                },
+                "collection": {
+                  "enum": [
+                    "blog",
+                    "docs"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "collection",
+                "name",
+                "slug",
+                "description",
+                "sort_order",
+                "article_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_blog_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -6832,8 +7521,25 @@
                   ]
                 },
                 "category": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
                 },
@@ -6965,12 +7671,6 @@
                   ],
                   "type": "string"
                 },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "title": {
                   "type": "string"
                 },
@@ -6999,7 +7699,6 @@
                 "collection",
                 "category",
                 "sort_order",
-                "tags",
                 "seo_keywords",
                 "published",
                 "published_at",
@@ -8572,8 +9271,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -8800,12 +9516,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -8834,7 +9544,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -9045,6 +9754,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset",
               "content_document"
             ],
@@ -9105,6 +9815,7 @@
                       "business_location",
                       "product",
                       "collection",
+                      "article_category",
                       "media_asset"
                     ],
                     "type": "string"
@@ -10753,6 +11464,94 @@
       }
     },
     {
+      "name": "reorder_article_categories",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_ids": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "collection": {
+            "enum": [
+              "blog",
+              "docs"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection",
+          "category_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "article_count": {
+                  "description": "Articles in the category, drafts included.",
+                  "type": "integer"
+                },
+                "collection": {
+                  "enum": [
+                    "blog",
+                    "docs"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "slug": {
+                  "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "collection",
+                "name",
+                "slug",
+                "description",
+                "sort_order",
+                "article_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "reorder_blog_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -10795,8 +11594,25 @@
                   ]
                 },
                 "category": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug"
+                  ],
                   "type": [
-                    "string",
+                    "object",
                     "null"
                   ]
                 },
@@ -10928,12 +11744,6 @@
                   ],
                   "type": "string"
                 },
-                "tags": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                },
                 "title": {
                   "type": "string"
                 },
@@ -10962,7 +11772,6 @@
                 "collection",
                 "category",
                 "sort_order",
-                "tags",
                 "seo_keywords",
                 "published",
                 "published_at",
@@ -11442,6 +12251,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset"
             ],
             "type": "string"
@@ -11469,6 +12279,7 @@
               "business_location",
               "product",
               "collection",
+              "article_category",
               "media_asset"
             ],
             "type": "string"
@@ -13194,11 +14005,97 @@
       }
     },
     {
+      "name": "update_article_category",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category_id": {
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 500,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "additionalProperties": false,
+            "properties": {
+              "article_count": {
+                "description": "Articles in the category, drafts included.",
+                "type": "integer"
+              },
+              "collection": {
+                "enum": [
+                  "blog",
+                  "docs"
+                ],
+                "type": "string"
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
+                "type": "string"
+              },
+              "sort_order": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "collection",
+              "name",
+              "slug",
+              "description",
+              "sort_order",
+              "article_count"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "category"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "update_blog_post",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "category": {
+          "category_id": {
+            "description": "The article's category: the id of one of its collection's categories (list_article_categories). Required before publish_blog_post. To use a category that does not exist yet, create it with create_article_category first.",
             "type": "string"
           },
           "collection": {
@@ -13370,13 +14267,6 @@
               "null"
             ]
           },
-          "tags": {
-            "description": "Searchable topical tags. Use a short, deduplicated list; category remains the primary public grouping.",
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "title": {
             "type": "string"
           },
@@ -13406,8 +14296,25 @@
                 ]
               },
               "category": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "slug"
+                ],
                 "type": [
-                  "string",
+                  "object",
                   "null"
                 ]
               },
@@ -13634,12 +14541,6 @@
                 ],
                 "type": "string"
               },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
               "title": {
                 "type": "string"
               },
@@ -13668,7 +14569,6 @@
               "collection",
               "category",
               "sort_order",
-              "tags",
               "seo_keywords",
               "published",
               "published_at",
@@ -14218,6 +15118,17 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "banner_content": {
+            "description": "Blawby announcement text for source-language pages, up to 500 characters. Null clears it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "banner_dismissible": {
+            "description": "Whether guests can dismiss the Blawby announcement on their device.",
+            "type": "boolean"
+          },
           "brand_description": {
             "type": "string"
           },

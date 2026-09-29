@@ -33,6 +33,8 @@ import type { OrganizationFontPreset } from '~/shared/organization-fonts'
 export interface OrganizationSettingsForm {
   name: string
   brand_description: string
+  banner_content: string
+  banner_dismissible: boolean
   logoAssetId: string | null
   faviconAssetId: string | null
   socialShareAssetId: string | null
@@ -54,6 +56,8 @@ export interface OrganizationSettingsResponse {
   status: OrganizationStatus
   name?: string | null
   brand_description?: string | null
+  banner_content: string | null
+  banner_dismissible: boolean
   media?: Array<{ asset_id: string; slot: string; public_url?: string | null }>
   contact_email?: string | null
   brand_color?: string | null
@@ -163,6 +167,8 @@ interface SettingsPageResource {
 const isSettingsResponse = (value: unknown): value is { success: boolean; settings: OrganizationSettingsResponse } =>
   isRecord(value) && typeof value.success === 'boolean' && isRecord(value.settings)
   && (value.settings.name === undefined || value.settings.name === null || typeof value.settings.name === 'string')
+  && (value.settings.banner_content === null || typeof value.settings.banner_content === 'string')
+  && typeof value.settings.banner_dismissible === 'boolean'
   && (value.settings.font_preset === undefined || isOrganizationFontPreset(value.settings.font_preset))
   && (value.settings.default_currency === undefined || value.settings.default_currency === null || typeof value.settings.default_currency === 'string')
   && isOrganizationStatus(value.settings.status)
@@ -187,7 +193,7 @@ const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
 const supportsOrganizationFonts = computed(() => loadedSettings.value?.theme === 'saya')
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
-  name: '', brand_description: '', logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
+  name: '', brand_description: '', banner_content: '', banner_dismissible: false, logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, status: 'inactive',
   social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
@@ -220,6 +226,7 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'favicon', label: 'Favicon', summary: loadedSettings.value?.media?.some(item => item.slot === 'favicon') ? 'Icon selected' : 'Not set', icon: 'i-lucide-app-window', to: `${brandPath.value}/favicon` },
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
+  ...(loadedSettings.value?.theme === 'blawby' ? [{ id: 'banner', label: 'Announcement banner', summary: explicitSummary(loadedSettings.value?.banner_content), icon: 'i-lucide-megaphone', to: `${brandPath.value}/banner` }] : []),
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
   ...(supportsOrganizationFonts.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
@@ -262,6 +269,7 @@ function editorSignature(key: string | null) {
     case 'favicon': return JSON.stringify(form.faviconAssetId)
     case 'sharing-image': return JSON.stringify(form.socialShareAssetId)
     case 'description': return JSON.stringify(form.brand_description)
+    case 'banner': return JSON.stringify([form.banner_content, form.banner_dismissible])
     case 'color': return JSON.stringify(form.brand_color)
     case 'font': return JSON.stringify(form.font_preset)
     case 'contact': return JSON.stringify(form.contact_email)
@@ -281,6 +289,7 @@ const validationMessage = computed(() => {
   if (!dirty.value) return null
   switch (detailKey.value) {
     case 'name': return form.name.trim() ? null : 'Enter a brand name.'
+    case 'banner': return form.banner_content.length <= 500 ? null : 'Keep the announcement within 500 characters.'
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
     case 'font': return supportsOrganizationFonts.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
@@ -298,6 +307,8 @@ function fillForm(settings: OrganizationSettingsResponse) {
   loadedSettings.value = settings
   form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
+  form.banner_content = settings.banner_content ?? ''
+  form.banner_dismissible = settings.banner_dismissible === true
   form.logoAssetId = settings.media?.find(item => item.slot === 'logo')?.asset_id ?? null
   form.faviconAssetId = settings.media?.find(item => item.slot === 'favicon')?.asset_id ?? null
   form.socialShareAssetId = settings.media?.find(item => item.slot === 'social_share')?.asset_id ?? null
@@ -357,6 +368,7 @@ async function saveCurrentEditor() {
       case 'favicon': await patchSettings({ media: [{ asset_id: form.faviconAssetId, slot: 'favicon' }] }); break
       case 'sharing-image': await patchSettings({ media: [{ asset_id: form.socialShareAssetId, slot: 'social_share' }] }); break
       case 'description': await patchSettings({ brand_description: form.brand_description }); break
+      case 'banner': await patchSettings({ banner_content: form.banner_content.trim() || null, banner_dismissible: form.banner_dismissible }); break
       case 'color': await patchSettings({ brand_color: form.brand_color }); break
       case 'font': await patchSettings({ font_preset: form.font_preset }); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break

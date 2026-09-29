@@ -11,6 +11,7 @@ import { tenantBlogPostPath } from '../../utils/tenant-blog-route.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
 import { blockVideo, youTubeVideoId, youTubeWatchUrl } from '../../shared/youtube-video.ts'
 import { getPlatformOrganization } from './platform-organization.ts'
+import { articleCategoryNameSql } from './content/article-categories.ts'
 
 /** A documentation page: an ordinary site page whose path starts with /docs. */
 interface PlatformLlmDocSummary {
@@ -260,7 +261,7 @@ export function renderTenantBlogMarkdown(post: TenantLlmBlogDetail, origin: stri
   return renderBlogMarkdown(post, origin, { path, markdownPath })
 }
 
-const DOC_SUMMARY_SELECT = `SELECT id, title, slug, (metadata_json ->> '$.category') AS category, summary AS excerpt, updated_at
+const DOC_SUMMARY_SELECT = `SELECT id, title, slug, ${articleCategoryNameSql('content_documents.id')} AS category, summary AS excerpt, updated_at
      FROM content_documents
      WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
        AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?`
@@ -286,7 +287,7 @@ export async function listPublishedTenantBlogPostsForLlm(db: DbClient, organizat
   const posts = await queryAll<TenantLlmBlogSummary & { author_id: string | null }>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.published_at, p.updated_at, p.author_id
+      p.id, p.title, p.slug, p.summary AS excerpt, ${articleCategoryNameSql('p.id')} AS category, p.published_at, p.updated_at, p.author_id
      FROM content_documents p
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}
@@ -315,7 +316,7 @@ export async function getPublishedTenantBlogPostBySlug(db: DbClient, organizatio
   const detail = await queryFirst<Omit<TenantLlmBlogDetail, 'content_blocks'>>(
     db,
     `SELECT
-      p.id, p.title, p.slug, p.summary AS excerpt, (p.metadata_json ->> '$.category') AS category, p.published_at, p.updated_at
+      p.id, p.title, p.slug, p.summary AS excerpt, ${articleCategoryNameSql('p.id')} AS category, p.published_at, p.updated_at
      FROM content_documents p
      WHERE p.kind = 'article' AND p.row_role = 'root' AND p.slug = ? AND p.status = 'published' AND p.organization_id = ? AND p.visibility = 'listed'
        ${collection ? "AND (p.metadata_json ->> '$.collection') = ?" : ''}`,

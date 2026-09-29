@@ -542,7 +542,7 @@ function remapNewLocalizedBlockIds(blocks: ContentBlockInput[]): ContentBlockInp
 }
 
 const DOCUMENT_LOCALIZED_METADATA: Record<ContentDocumentKind, readonly string[]> = {
-  page: [], article: ['category', 'tags'],
+  page: [], article: [],
   social_post: ['call_to_action'], qa: [],
 }
 
@@ -573,9 +573,7 @@ export async function putLocalizationForAuthoring(env: CloudflareEnv, db: D1Data
     const metadata = copy.metadata as Record<string, unknown>
     for (const [key, value] of Object.entries(metadata)) {
       if (!DOCUMENT_LOCALIZED_METADATA[root.kind].includes(key)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'Unknown translated metadata field: ' + key)
-      if (key === 'tags') {
-        if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'tags must be an array of strings')
-      } else if (key === 'call_to_action') {
+      if (key === 'call_to_action') {
         // A translation says the button's words; where it goes is the post's.
         if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(field => field !== 'label') || typeof (value as Record<string, unknown>).label !== 'string' || !((value as Record<string, unknown>).label as string).trim()) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'call_to_action carries only a label')
       } else if (typeof value !== 'string') localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', key + ' must be a string')

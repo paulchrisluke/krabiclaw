@@ -612,8 +612,10 @@ async function publishExternal(
 function receipt(publication: PublicationRecord): PublishOutcome {
   const base = { channel: publication.channel, target_id: publication.provider_target_id, publication_id: publication.id }
   if (publication.state === 'published') return { ...base, status: 'already_published', public_url: publication.provider_permalink }
+  if (publication.state === 'failed') return { ...base, status: 'failed', code: publication.error_code ?? undefined, message: publication.error_message ?? undefined }
   if (publication.state === 'unknown') return { ...base, status: 'unknown', code: publication.error_code ?? 'unresolved', message: `${publication.error_message ?? 'The outcome of this publication is unresolved.'} Resolve it with reconcile_post_publication.` }
   if (publication.state === 'removed') return { ...base, status: 'failed', code: 'removed', message: `The ${publication.channel} post was removed. Create a new post to publish again.` }
+  if (publication.state === 'preparing' && publication.attempt_id === null) return { ...base, status: 'processing', code: 'preparation_ready', message: 'This publication is unpublished and ready to resume. Call publish_post again to finish it.' }
   return { ...base, status: 'processing', code: 'in_progress', message: 'This publication is being prepared by another call' }
 }
 
@@ -761,6 +763,7 @@ export async function reconcilePostPublication(env: CloudflareEnv, organizationI
       if (!postId.startsWith(`${target.pageId}_`) && postId !== handles.video_id) throw new HTTPError({ statusCode: 409, statusMessage: `${postId} is not a post of the Page ${target.pageId}` })
       const read = await readPagePost(target, postId, deadline)
       if (read.isPublished) await record('published', { providerPostId: read.id, permalink: read.permalink, publishedAt: read.createdTime })
+      else if (publication.state === 'failed') await record('failed', { providerPostId: read.id, code: publication.error_code ?? undefined, message: publication.error_message ?? undefined })
       else await record('preparing', { providerPostId: read.id })
     } else if (handles.video_id) {
       const read = await readVideo(target, handles.video_id, deadline)

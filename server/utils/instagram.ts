@@ -15,8 +15,8 @@ import type { MetaDeadline } from './meta-graph'
  * account publishing addresses.
  */
 
-const INSTAGRAM_API_VERSION = 'v23.0'
-const INSTAGRAM_GRAPH = `https://graph.instagram.com/${INSTAGRAM_API_VERSION}`
+export const INSTAGRAM_GRAPH_VERSION = 'v23.0'
+const INSTAGRAM_GRAPH = `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
 
 export interface InstagramConnection extends InstagramIntegration {
   organization_id: string

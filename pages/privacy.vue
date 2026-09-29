@@ -314,18 +314,22 @@
             account you connect; the Pages that account manages (Page ID, name,
             category, follower count, and picture) so you can choose one; and,
             for the Page you choose, its posts (post ID, message text, the time
-            it was posted, the post's photos and video, and its link).
+            it was posted, the post's photos and video, and its link), Page views,
+            engagement and follower counts, and performance counts for its posts.
             Krabiclaw requests the Facebook permissions
-            <code>pages_show_list</code>, <code>pages_read_engagement</code> and
-            <code>pages_manage_posts</code>.
+            <code>pages_show_list</code>, <code>pages_read_engagement</code>,
+            <code>pages_manage_posts</code> and <code>read_insights</code>.
           </li>
           <li>
             <strong>Instagram:</strong> the identifiers and username of the
             Instagram professional account you connect, and its posts (post ID,
             caption, media type, its images and videos, including every item of
-            a carousel, the time it was posted, and its link). Krabiclaw requests the Instagram permissions
+            a carousel, the time it was posted, and its link), account views,
+            reach and interactions, and performance counts for its media.
+            Krabiclaw requests the Instagram permissions
             <code>instagram_business_basic</code> and
-            <code>instagram_business_content_publish</code>.
+            <code>instagram_business_content_publish</code> and
+            <code>instagram_business_manage_insights</code>.
           </li>
           <li>
             <strong>Authorization tokens</strong> that Meta issues for the
@@ -388,6 +392,13 @@
             content. Members of your organization, and AI assistants they
             connect to Krabiclaw, can read and edit them like any other post.
             Once published on your website they are public.
+          </li>
+          <li>
+            Facebook and Instagram insights are read live for the date range
+            you request and shown to authorized organization members in the
+            dashboard or through the MCP analytics tool they connect. Krabiclaw
+            does not store these provider insight results in its database.
+            Disconnecting the selected account stops these reads.
           </li>
           <li>
             Cloudflare hosts Krabiclaw's application, database, and media

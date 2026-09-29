@@ -4,11 +4,11 @@ export default {
     "reviews": "Guest reviews & ratings."
   },
   "legal": {
-    "analytics_notice": "We use cookies to improve your experience. By using our site, you agree to our use of cookies. Learn more in our",
+    "accept": "Accept",
+    "analytics_notice": "Choose whether to allow Google Analytics cookies. Krabiclaw's own site measurement runs separately. Learn more in our",
     "analytics_notice_link": "Privacy Policy",
     "analytics_notice_label": "Analytics notice",
     "cookie_preferences": "Cookie preferences",
-    "dismiss": "Dismiss",
     "privacy": "Privacy",
     "reject": "Reject",
     "terms": "Terms"
@@ -175,13 +175,11 @@ export default {
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
-      "browse_topics": "Browse topics",
       "previous": "Previous",
       "next": "Next",
       "docs_meta_description": "Documentation from {organization}.",
-      "tagged": "Tagged",
+      "category_meta_description": "{category} articles in the {collection} of {organization}.",
       "read_time": "{count} min read",
-      "published_from": "Published from {name}",
       "updated_on": "Updated {date}",
       "title": "Latest Updates",
       "featured": "Featured",

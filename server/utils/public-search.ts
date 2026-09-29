@@ -16,6 +16,7 @@ import {
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import type { PublicSearchTypeFilter } from '~/server/utils/platform-search-types'
 import { renderContentBlocksForLlm } from '~/server/utils/platform-llm'
+import { articleCategoryNameSql } from '~/server/utils/content/article-categories'
 
 const AI_SEARCH_CUSTOM_METADATA: AiSearchConfig['custom_metadata'] = [
   { field_name: 'record_id', data_type: 'text' },
@@ -94,7 +95,6 @@ interface TenantBlogDocRow {
   slug: string
   excerpt: string | null
   category: string | null
-  tags_metadata: string | null
   seo_keywords: string | null
   collection: string | null
 }
@@ -442,8 +442,8 @@ async function waitForIndexing(env: CloudflareEnv, timeoutMs = 10 * 60 * 1000, o
 export async function buildTenantBlogDocuments(db: DbClient, platformOrganizationId?: string, organizationId?: string | null): Promise<PlatformKnowledgeDocument[]> {
   const platformId = platformOrganizationId ?? (await getPlatformOrganization(db)).id
   const [posts, contentBodies] = await Promise.all([queryAll<TenantBlogDocRow>(db, `
-    SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, d.metadata_json ->> '$.category' AS category,
-      d.metadata_json ->> '$.tags' AS tags_metadata, d.metadata_json ->> '$.collection' AS collection, d.seo_keywords, s.theme_id, s.vertical
+    SELECT d.id, d.organization_id, d.title, d.slug, d.summary AS excerpt, ${articleCategoryNameSql('d.id')} AS category,
+      d.metadata_json ->> '$.collection' AS collection, d.seo_keywords, s.theme_id, s.vertical
     FROM content_documents d JOIN organization s ON s.id = d.organization_id
     WHERE d.kind = 'article' AND d.row_role = 'root' AND d.status = 'published' AND d.organization_id <> ? AND d.visibility = 'listed'${organizationId ? ' AND d.organization_id = ?' : ''}
     ORDER BY d.organization_id, d.published_at DESC, d.updated_at DESC
@@ -452,13 +452,11 @@ export async function buildTenantBlogDocuments(db: DbClient, platformOrganizatio
   return (posts ?? []).map((post) => {
     if (!isArticleCollection(post.collection)) throw new Error(`Article ${post.id} has no valid collection`)
     const collection = post.collection
-    const tags = post.tags_metadata ? JSON.parse(post.tags_metadata) as string[] : []
     const canonicalBody = contentBodies.get(post.id) ?? ''
     const snippet = truncateSnippet(post.excerpt || canonicalBody || post.title)
     const body = [
       post.title,
       post.category ?? '',
-      tags.join(' '),
       post.seo_keywords ?? '',
       post.excerpt ?? '',
       stripMarkdown(canonicalBody),
@@ -578,7 +576,7 @@ export async function buildWorkspaceDocuments(db: DbClient, organizationId?: str
       WHERE 1 = 1${organizationWhere}
     `, organizationParams),
     queryAll<{ id: string; organization_id: string; kind: string; title: string | null; summary: string | null; status: string | null; category: string | null; location_slug: string | null }>(db, `
-      SELECT d.id, d.organization_id, d.kind, d.title, d.summary, d.status, d.metadata_json ->> '$.category' AS category, bl.slug AS location_slug
+      SELECT d.id, d.organization_id, d.kind, d.title, d.summary, d.status, ${articleCategoryNameSql('d.id')} AS category, bl.slug AS location_slug
       FROM content_documents d ${WORKSPACE_ORGANIZATION_SQL} AND s.id = d.organization_id
       LEFT JOIN business_locations bl ON bl.id = d.location_id
       WHERE d.row_role = 'root' AND d.kind IN ('qa', 'social_post', 'page', 'article')${organizationWhere}
@@ -716,14 +714,14 @@ export async function buildPlatformKnowledgeDocuments(db: DbClient): Promise<Pla
   const platformOrganizationId = (await getPlatformOrganization(db)).id
   const [docs, posts, tenantBlogRecords, contentBodies] = await Promise.all([
     queryAll<PlatformDocSearchRow>(db, `
-      SELECT id, title, slug, metadata_json ->> '$.category' AS category, summary AS excerpt, seo_keywords
+      SELECT id, title, slug, ${articleCategoryNameSql('content_documents.id')} AS category, summary AS excerpt, seo_keywords
       FROM content_documents
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'docs' AND organization_id = ?
       ORDER BY sort_order, title
     `, [platformOrganizationId]),
     queryAll<PlatformBlogSearchRow>(db, `
-      SELECT id, title, slug, summary AS excerpt, metadata_json ->> '$.category' AS category, seo_keywords
+      SELECT id, title, slug, summary AS excerpt, ${articleCategoryNameSql('content_documents.id')} AS category, seo_keywords
       FROM content_documents
       WHERE kind = 'article' AND row_role = 'root' AND status = 'published' AND organization_id = ? AND visibility = 'listed'
         AND (metadata_json ->> '$.collection') = 'blog'
@@ -1213,7 +1211,7 @@ export async function searchPublicResources(
       const likePattern = `%${escapeLikePattern(normalized)}%`
       return await queryAll<TenantBlogSearchRow>(
           env.db,
-          `SELECT DISTINCT p.id, p.title, p.slug, p.summary AS excerpt, p.metadata_json ->> '$.category' AS category, p.seo_keywords
+          `SELECT DISTINCT p.id, p.title, p.slug, p.summary AS excerpt, ${articleCategoryNameSql('p.id')} AS category, p.seo_keywords
            FROM content_documents p
            LEFT JOIN content_blocks cb ON cb.document_id = p.id
            WHERE p.kind = 'article' AND p.row_role = 'root' AND p.status = 'published'
@@ -1223,7 +1221,7 @@ export async function searchPublicResources(
                lower(p.title) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(cb.data_json, '')) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(p.summary, '')) LIKE lower(?) ESCAPE '\\'
-               OR lower(COALESCE(p.metadata_json ->> '$.category', '')) LIKE lower(?) ESCAPE '\\'
+               OR lower(COALESCE(${articleCategoryNameSql('p.id')}, '')) LIKE lower(?) ESCAPE '\\'
                OR lower(COALESCE(p.seo_keywords, '')) LIKE lower(?) ESCAPE '\\'
              )
            ORDER BY p.published_at DESC, p.updated_at DESC

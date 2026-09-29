@@ -81,6 +81,9 @@
           @click="close"
         />
 
+        <!-- On a blog or docs page, the collection's articles come first: this menu is the page's one navigation. -->
+        <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-4 border-b border-default pb-4" @navigate="close" />
+
         <div class="flex flex-col gap-0.5">
           <details class="group/dis">
             <summary class="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-3 py-2.75 text-[15px] font-medium text-muted transition-colors hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden">
@@ -144,6 +147,8 @@
 <script setup lang="ts">
 import { authClient } from '~/lib/auth-client'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
+import ArticleSidebar from '~/components/blog/ArticleSidebar.vue'
+import { articleNavKey } from '~/composables/useArticleNav'
 import type { PlatformSearchPaletteSurface } from '~/composables/usePlatformSearchPalette'
 
 const props = withDefaults(defineProps<{ section?: 'platform' | 'docs' | 'blog' }>(), {
@@ -181,6 +186,7 @@ const mounted = ref(false)
 onMounted(() => { mounted.value = true })
 const user = computed(() => mounted.value ? session.value.data?.user ?? null : null)
 const mobileOpen = ref(false)
+const articleNav = inject(articleNavKey, null)
 const toggleButton = ref<HTMLButtonElement | null>(null)
 const { acquire: acquireScrollLock, release: releaseScrollLock } = useScrollLock()
 

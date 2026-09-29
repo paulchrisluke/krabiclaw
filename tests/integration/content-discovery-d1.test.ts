@@ -31,11 +31,11 @@ test('public discovery resolves translations through current publication owners'
     // Documentation is the platform organization's docs article collection.
     await createContentDocumentWithBlocks(db, { id: 'guide', organizationId: 'platform', kind: 'article', rowRole: 'root', locale: 'en',
       title: 'guide', slug: 'guide', summary: 'guide summary', status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
-      metadata: { collection: 'docs', category: 'Getting Started', tags: [] },
+      metadata: { collection: 'docs', category: 'Getting Started' },
     }, [{ id: 'guide-body', type: 'markdown', data: { markdown: 'guide exact body', editor_mode: 'rich' } }])
     for (const [id, org] of [['news', 'platform'], ['tenant-story', 'tenant'], ['other-story', 'other']] as const) {
       await createContentDocumentWithBlocks(db, { id, organizationId: org, kind: 'article', rowRole: 'root', locale: 'en',
-        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing', tags: ['shared'] }, status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
+        title: id, slug: id, summary: id + ' summary', metadata: { collection: 'blog', category: 'Marketing' }, status: 'published', publishedAt: '2026-01-01T00:00:00.000Z', visibility: 'listed',
       }, [{ id: id + '-body', type: 'markdown', data: { markdown: id + ' exact body', editor_mode: 'rich' } }])
     }
     for (const [id, path] of [['home', '/'], ['about', '/about']]) await createContentDocumentWithBlocks(db, {

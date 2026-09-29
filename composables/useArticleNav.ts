@@ -1,12 +1,18 @@
+import type { ComputedRef, InjectionKey } from 'vue'
 import type { PublishedArticleCategory } from '~/composables/usePublishedArticles'
-import { ARTICLE_COLLECTIONS } from '~/utils/article-collections'
 
 export interface ArticleNav {
   categories: PublishedArticleCategory[]
-  indexPath: string
   indexLabel: string
   search: { surface: 'blog' | 'docs' | 'tenant_blog'; variant: 'platform' | 'saya' | 'blawby' } | null
 }
+
+/**
+ * The collection's navigation, provided by the articles layout to the
+ * template's header inside it: on a phone the header's own menu is the one
+ * navigation, so the article list lives there rather than in a second drawer.
+ */
+export const articleNavKey = Symbol('article-nav') as InjectionKey<ComputedRef<ArticleNav>>
 
 /**
  * The navigation of the collection the current page belongs to. The page names
@@ -16,7 +22,7 @@ export interface ArticleNav {
  */
 export async function useArticleNav() {
   const route = useRoute()
-  const { t, localePath } = useI18n()
+  const { t } = useI18n()
   const { template } = usePublicTemplate()
   const publicLocale = useState<string>('public-locale', () => 'en')
   const collection = computed(() => route.meta.articleCollection === 'docs' ? 'docs' as const : 'blog' as const)
@@ -24,7 +30,6 @@ export async function useArticleNav() {
 
   return computed<ArticleNav>(() => ({
     categories: categories.value,
-    indexPath: localePath(ARTICLE_COLLECTIONS[collection.value].pathPrefix),
     indexLabel: collection.value === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'),
     // Krabiclaw searches its own blog and docs; a site searches its articles, in English only.
     search: template.value.slug === 'platform'

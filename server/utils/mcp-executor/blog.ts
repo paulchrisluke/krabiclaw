@@ -6,6 +6,7 @@ import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { mcpPageWindow } from '~/server/utils/mcp-pagination'
 import { absolutizeOrganizationUrl, NOT_HANDLED, omit, optionalString, requiredString } from './shared'
 import { CONTENT_BLOCK_TYPES } from '~/server/utils/content/documents'
+import { createArticleCategory, deleteArticleCategory, listArticleCategories, reorderArticleCategories, updateArticleCategory, type ArticleCategory } from '~/server/utils/content/article-categories'
 
 const ARTICLE_COLLECTIONS_SET = new Set(['blog', 'docs'])
 
@@ -60,7 +61,6 @@ function responseNullableNumber(value: unknown, path: string) {
   return value
 }
 
-
 function responseInteger(value: unknown, path: string) {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) invalidBlogResponse(path, 'an integer')
   return value
@@ -69,13 +69,6 @@ function responseInteger(value: unknown, path: string) {
 function responseBoolean(value: unknown, path: string) {
   if (typeof value !== 'boolean') invalidBlogResponse(path, 'a boolean')
   return value
-}
-
-function responseStringArray(value: unknown, path: string) {
-  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-    invalidBlogResponse(path, 'an array of strings')
-  }
-  return value as string[]
 }
 
 function toMedia(value: unknown) {
@@ -123,6 +116,23 @@ function toContentBlockProjection(value: unknown, index: number) {
   }
 }
 
+function toCategoryRef(value: unknown) {
+  if (value === null) return null
+  const category = responseRecord(value, 'post.category')
+  return { id: responseString(category.id, 'post.category.id'), name: responseString(category.name, 'post.category.name'), slug: responseString(category.slug, 'post.category.slug') }
+}
+
+function toArticleCategory(category: ArticleCategory) {
+  return { id: category.id, collection: category.collection, name: category.name, slug: category.slug,
+    description: category.description, sort_order: category.sort_order, article_count: category.article_count }
+}
+
+function requiredArticleCollection(args: Record<string, unknown>): ArticleCollection {
+  const collection = optionalArticleCollection(args)
+  if (!collection) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection is required.')
+  return collection
+}
+
 function toBlogPostSummary(post: Record<string, unknown>, organization: McpExecutorContext['organization']) {
   const publicUrl = absolutizeOrganizationUrl(organization, responseNullableString(post.public_url, 'post.public_url'))
   return {
@@ -131,9 +141,8 @@ function toBlogPostSummary(post: Record<string, unknown>, organization: McpExecu
     slug: responseString(post.slug, 'post.slug'),
     excerpt: responseNullableString(post.excerpt, 'post.excerpt'),
     collection: responseEnumString(post.collection ?? 'blog', 'post.collection', ARTICLE_COLLECTIONS_SET),
-    category: responseNullableString(post.category, 'post.category'),
+    category: toCategoryRef(post.category),
     sort_order: responseInteger(post.sort_order, 'post.sort_order'),
-    tags: responseStringArray(post.tags, 'post.tags'),
     seo_keywords: responseNullableString(post.seo_keywords, 'post.seo_keywords'),
     published: responseBoolean(post.published, 'post.published'),
     published_at: responseNullableString(post.published_at, 'post.published_at'),
@@ -222,8 +231,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       )
     }
     case "reorder_blog_posts": {
-      const collection = optionalArticleCollection(args)
-      if (!collection) throw mcpProtocolError(MCP_ERROR.invalidParams, 'collection is required.')
+      const collection = requiredArticleCollection(args)
       if (!Array.isArray(args.post_ids) || args.post_ids.some(id => typeof id !== 'string' || !id.trim())) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, 'post_ids must contain non-empty post ids.')
       }
@@ -237,6 +245,30 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         more = page.page_info.has_more
       }
       return { posts: posts.map(post => toBlogPostSummary(post, organization)) }
+    }
+    case "list_article_categories": {
+      const categories = await listArticleCategories(organization.db, organization.organizationId, requiredArticleCollection(args))
+      return { categories: categories.map(toArticleCategory) }
+    }
+    case "create_article_category": {
+      const category = await createArticleCategory(organization.db, { organizationId: organization.organizationId,
+        collection: requiredArticleCollection(args), name: args.name, description: args.description, actorId: organization.userId })
+      return renderStructuredResponse({ category: toArticleCategory(category) }, `Created ${category.collection} category "${category.name}".`)
+    }
+    case "update_article_category": {
+      const category = await updateArticleCategory(organization.db, { organizationId: organization.organizationId,
+        categoryId: requiredString(args, 'category_id'), name: args.name, description: args.description, actorId: organization.userId })
+      return renderStructuredResponse({ category: toArticleCategory(category) }, `Saved category "${category.name}".`)
+    }
+    case "delete_article_category": {
+      const categoryId = requiredString(args, 'category_id')
+      await deleteArticleCategory(organization.db, { organizationId: organization.organizationId, categoryId })
+      return { category_id: categoryId, deleted: true }
+    }
+    case "reorder_article_categories": {
+      const categories = await reorderArticleCategories(organization.db, { organizationId: organization.organizationId,
+        collection: requiredArticleCollection(args), categoryIds: args.category_ids, actorId: organization.userId })
+      return { categories: categories.map(toArticleCategory) }
     }
     case "delete_blog_post": {
       const postId = requiredString(args, "post_id");
