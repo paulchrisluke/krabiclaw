@@ -105,7 +105,7 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
       return await publicApiRequest<PublishedArticlesResponse>('/api/public/blog', {
         query: { collection: toValue(collection), locale: locale.value },
         validate: validateApiShape({ posts: { arrayOf: { id: 'string', slug: 'string', title: 'string', sort_order: 'number' } }, index: 'nullable-object',
-          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
+          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', parent_id: 'nullable-string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
       })
     },
   )
@@ -120,7 +120,6 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
   const categoryTree = computed<PublishedArticleCategory[]>(() => {
     const nodes = (data.value?.categories ?? []).map((category): PublishedArticleCategory => ({
       ...category,
-      parent_id: category.parent_id ?? null,
       depth: 1,
       path: localePath(collectionCategoryPath(toValue(collection), category.slug)),
       posts: posts.value.filter(post => post.category?.id === category.id),
@@ -140,8 +139,11 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
   })
   /** Every category that is shown, depth-first. */
   const categories = computed(() => categoryTree.value.flatMap(categorySubtree))
-  /** The articles in the order the tree reads them: each category's own, then its subcategories'. */
-  const readingOrder = computed(() => categories.value.flatMap(category => category.posts))
+  /** Uncategorized articles first, then each category's own articles and its subcategories'. */
+  const readingOrder = computed(() => [
+    ...posts.value.filter(post => !post.category),
+    ...categories.value.flatMap(category => category.posts),
+  ])
 
   if (error.value) throw error.value
   return { posts, categories, categoryTree, readingOrder, pending, index: computed(() => data.value?.index ?? null),

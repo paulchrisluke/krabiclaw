@@ -202,14 +202,32 @@ export async function updateArticleCategory(db: DbClient, input: {
   // The slug is the category page's address; renaming or moving does not move the page.
   // A category moved under another parent goes last among its new siblings.
   try {
-    await executeBatch(db, [{
-      query: `UPDATE article_categories SET name = ?, description = ?, parent_id = ?,
+    const [updated] = await executeBatch(db, [{
+      // Recheck the live tree in the write: concurrent moves can invalidate requireParent's snapshot.
+      query: `WITH RECURSIVE
+                collection_categories AS (SELECT id, parent_id FROM article_categories WHERE organization_id = ? AND collection = ?),
+                ancestors AS (
+                  SELECT id, parent_id, 1 AS depth FROM collection_categories WHERE id = ?
+                  UNION ALL
+                  SELECT c.id, c.parent_id, a.depth + 1 FROM collection_categories c JOIN ancestors a ON c.id = a.parent_id WHERE a.depth < ?
+                ),
+                subtree AS (
+                  SELECT id, 1 AS height FROM collection_categories WHERE id = ?
+                  UNION ALL
+                  SELECT c.id, s.height + 1 FROM collection_categories c JOIN subtree s ON c.parent_id = s.id WHERE s.height <= ?
+                )
+              UPDATE article_categories SET name = ?, description = ?, parent_id = ?,
                 sort_order = CASE WHEN ? THEN (SELECT COALESCE(MAX(s.sort_order) + 1, 0) FROM article_categories s WHERE s.organization_id = ? AND s.collection = ? AND s.parent_id IS ? AND s.id <> ?) ELSE sort_order END,
-                updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?`,
-      params: [name, input.description === undefined ? existing.description : optionalDescription(input.description), parentId,
+                updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ? AND parent_id IS ?
+                AND (? IS NULL OR (EXISTS (SELECT 1 FROM ancestors WHERE parent_id IS NULL) AND NOT EXISTS (SELECT 1 FROM ancestors WHERE id = ?)))
+                AND (SELECT COALESCE(MAX(depth), 0) FROM ancestors) + (SELECT MAX(height) FROM subtree) <= ?`,
+      params: [input.organizationId, existing.collection, parentId, MAX_DEPTH, input.categoryId, MAX_DEPTH,
+        name, input.description === undefined ? existing.description : optionalDescription(input.description), parentId,
         moved ? 1 : 0, input.organizationId, existing.collection, parentId, input.categoryId,
-        new Date().toISOString(), input.actorId, input.organizationId, input.categoryId],
+        new Date().toISOString(), input.actorId, input.organizationId, input.categoryId, existing.parent_id,
+        parentId, input.categoryId, MAX_DEPTH],
     }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_updated')], { operation: 'Update article category' })
+    if (updated?.meta.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'The category hierarchy changed. Reload and try again.' })
   } catch (error) {
     if (isCategoryUniquenessConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A category with this name already exists. Reload and try again.', cause: error })
     throw error
