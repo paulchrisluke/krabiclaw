@@ -3,7 +3,7 @@ import test from 'node:test'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
-import { cleanupTenantAnalytics, getAnalyticsReport } from '../../server/utils/analytics-report.ts'
+import { getAnalyticsReport } from '../../server/utils/analytics-report.ts'
 import { deleteConfig, setConfig } from '../../server/utils/organization-config.ts'
 
 test('a new organization initializes analytics time without inventing a location timezone', { timeout: 60_000 }, async () => {
@@ -29,10 +29,6 @@ test('a new organization initializes analytics time without inventing a location
     await assert.rejects(deleteConfig(db, 'org', 'default_timezone'), /cannot be removed/)
     await setConfig(db, 'org', 'brand_color', '#123456')
     await setConfig(db, 'mcp-fixture', 'default_timezone', 'Asia/Bangkok')
-    await db.prepare(`INSERT INTO analytics_events (id, kind, organization_id, page_path, created_at, payload_json)
-      VALUES ('old-pageview', 'pageview', 'org', '/menu', '2026-01-01T00:00:00.000Z', '{}')`).run()
-    await cleanupTenantAnalytics(db, new Date('2026-09-06T12:00:00Z'))
-    assert.equal(await db.prepare("SELECT count(*) AS count FROM analytics_events WHERE id = 'old-pageview'").first('count'), 0)
     for (const { id, zone } of [{ id: 'org', zone: 'UTC' }, { id: 'platform', zone: 'UTC' }, { id: 'mcp-fixture', zone: 'Asia/Bangkok' }]) {
       const report = await getAnalyticsReport(db, { organizationId: id, startDate: '2026-09-05', endDate: '2026-09-06', now: new Date('2026-09-06T12:00:00Z') })
       assert.equal(report.period.timezone, zone)

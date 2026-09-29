@@ -9,7 +9,7 @@
       <DashboardListEditor
         v-model:editing="editing"
         title="Categories"
-        description="Readers browse articles by category, in this order. Every published article is in one."
+        description="Readers browse articles by category, in this order, with subcategories under their parent. Every published article is in one."
         :items="listItems"
         :pending="pending"
         :error="loadError"
@@ -26,9 +26,10 @@
           <UTabs v-model="collection" :items="collectionTabs" :content="false" aria-label="Collection" />
         </template>
         <template #item="{ item }">
-          <span class="min-w-0 flex-1" :data-testid="`article-category-${item.id}`">
+          <!-- A subcategory sits indented under its parent, the way the site's sidebar reads it. -->
+          <span class="min-w-0 flex-1" :style="{ paddingInlineStart: `${(item.depth - 1) * 1.5}rem` }" :data-testid="`article-category-${item.id}`">
             <span class="block truncate text-sm font-semibold text-highlighted">{{ item.row.name }}</span>
-            <span class="mt-1 block text-sm text-muted">{{ item.row.article_count === 1 ? '1 article' : `${item.row.article_count} articles` }}</span>
+            <span class="mt-1 block text-sm text-muted">{{ countSummary(item.row) }}</span>
           </span>
         </template>
       </DashboardListEditor>
@@ -73,10 +74,34 @@ const { data, pending, error, refresh } = useArticleCategories(organizationId, c
 const editing = ref(false)
 const removingId = ref<string | null>(null)
 const actionError = ref<string | null>(null)
-// Reorder is a mode: the order stands locally while editing and commits whole when it closes.
-const localOrder = ref<DashboardArticleCategory[] | null>(null)
-const categories = computed(() => localOrder.value ?? data.value ?? [])
-const listItems = computed(() => categories.value.map(row => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row })))
+// Reorder is a mode: a category moves among its siblings, taking its
+// subcategories with it, and each sibling set that changed commits whole when
+// the mode closes. The order is held as each parent's list of children.
+const localSiblings = ref<Map<string | null, DashboardArticleCategory[]> | null>(null)
+const changedParents = ref(new Set<string | null>())
+const siblingsOf = (rows: readonly DashboardArticleCategory[]) => {
+  const byParent = new Map<string | null, DashboardArticleCategory[]>()
+  for (const row of rows) byParent.set(row.parent_id, [...(byParent.get(row.parent_id) ?? []), row])
+  return byParent
+}
+/** The tree read depth-first, each row with its depth: the server's order, or the one being set. */
+const categories = computed(() => {
+  const byParent = localSiblings.value ?? siblingsOf(data.value ?? [])
+  const rows: Array<{ row: DashboardArticleCategory; depth: number }> = []
+  const walk = (parentId: string | null, depth: number) => {
+    for (const row of byParent.get(parentId) ?? []) {
+      rows.push({ row, depth })
+      walk(row.id, depth + 1)
+    }
+  }
+  walk(null, 1)
+  return rows
+})
+const listItems = computed(() => categories.value.map(({ row, depth }) => ({ id: row.id, title: row.name, to: `${level.path.value}/${row.id}`, row, depth })))
+function countSummary(row: DashboardArticleCategory) {
+  const articles = row.article_count === 1 ? '1 article' : `${row.article_count} articles`
+  return row.child_count ? `${articles} · ${row.child_count === 1 ? '1 subcategory' : `${row.child_count} subcategories`}` : articles
+}
 const loadError = computed(() => error.value ? getErrorMessage(error.value, 'Categories could not be loaded') : null)
 
 const adding = ref(false)
@@ -116,33 +141,41 @@ async function removeCategory(item: { row: DashboardArticleCategory }) {
 }
 
 function moveCategory(item: { row: DashboardArticleCategory }, direction: -1 | 1) {
-  const order = [...categories.value]
-  const from = order.findIndex(row => row.id === item.row.id)
+  const byParent = new Map(localSiblings.value ?? siblingsOf(data.value ?? []))
+  const siblings = [...(byParent.get(item.row.parent_id) ?? [])]
+  const from = siblings.findIndex(row => row.id === item.row.id)
   const to = from + direction
-  if (from < 0 || to < 0 || to >= order.length) return
-  ;[order[from], order[to]] = [order[to]!, order[from]!]
-  localOrder.value = order
+  if (from < 0 || to < 0 || to >= siblings.length) return
+  ;[siblings[from], siblings[to]] = [siblings[to]!, siblings[from]!]
+  byParent.set(item.row.parent_id, siblings)
+  localSiblings.value = byParent
+  changedParents.value = new Set([...changedParents.value, item.row.parent_id])
 }
 
 watch(editing, async (value, previous) => {
-  if (!previous || value || !localOrder.value) return
-  const order = localOrder.value.map(row => row.id)
+  if (!previous || value || !localSiblings.value) return
+  const byParent = localSiblings.value
   actionError.value = null
   try {
-    data.value = (await dashboardApi(`/api/editor/organizations/${organizationId}/blog/categories/order`, {
-      method: 'PUT', body: { collection: collection.value, category_ids: order }, validate: isCategoriesResponse,
-    })).categories
+    for (const parentId of changedParents.value) {
+      data.value = (await dashboardApi(`/api/editor/organizations/${organizationId}/blog/categories/order`, {
+        method: 'PUT', body: { collection: collection.value, parent_id: parentId, category_ids: (byParent.get(parentId) ?? []).map(row => row.id) },
+        validate: isCategoriesResponse,
+      })).categories
+    }
   } catch (cause) {
     actionError.value = getErrorMessage(cause, 'The new order could not be saved')
     await refresh()
   } finally {
-    localOrder.value = null
+    localSiblings.value = null
+    changedParents.value = new Set()
   }
 })
 
 watch(collection, () => {
   editing.value = false
-  localOrder.value = null
+  localSiblings.value = null
+  changedParents.value = new Set()
   actionError.value = null
 })
 </script>

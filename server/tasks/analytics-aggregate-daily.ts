@@ -1,11 +1,11 @@
-import { aggregatePreviousLocalDateForAllOrganizations, cleanupTenantAnalytics } from '~/server/utils/analytics-report'
+import { aggregatePreviousLocalDateForAllOrganizations } from '~/server/utils/analytics-report'
 import { cleanupMcpToolCallEvents } from '~/server/utils/mcp-telemetry'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 export default defineScheduledTask({
   meta: {
     name: 'analytics:aggregate-daily',
-    description: 'Daily aggregation of site pageview events into analytics summary, and analytics and MCP telemetry retention cleanup'
+    description: 'Daily aggregation of site pageview events into analytics summaries, and MCP telemetry retention cleanup'
   },
   async run({ context }) {
     const taskContext = context as { cloudflare?: { env?: ApiRecord } } | undefined
@@ -16,7 +16,6 @@ export default defineScheduledTask({
       return {
         result: {
           aggregated: '',
-          cleaned: 0,
           mcpToolCallEventsCleaned: 0,
           skipped: 'DB unavailable in local scheduled task context',
           message: 'Skipped analytics aggregation in dev mode',
@@ -29,13 +28,11 @@ export default defineScheduledTask({
 
     try {
       const aggregated = await aggregatePreviousLocalDateForAllOrganizations(db)
-      const cleaned = await cleanupTenantAnalytics(db)
       const mcpToolCallEventsCleaned = await cleanupMcpToolCallEvents(db)
 
       return {
         result: {
           aggregated: aggregated.join(','),
-          cleaned,
           mcpToolCallEventsCleaned,
           skipped: '',
           message: 'Analytics aggregation completed successfully',

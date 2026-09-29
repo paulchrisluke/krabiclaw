@@ -304,10 +304,12 @@ export const articleCategoryObject = {
     name: { type: 'string' },
     slug: { type: 'string', description: "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed." },
     description: { type: ['string', 'null'] },
-    sort_order: { type: 'integer' },
-    article_count: { type: 'integer', description: 'Articles in the category, drafts included.' },
+    parent_id: { type: ['string', 'null'], description: 'The category it sits under; null at the top level.' },
+    sort_order: { type: 'integer', description: 'Its place among its siblings.' },
+    article_count: { type: 'integer', description: 'Articles in the category itself, drafts included.' },
+    child_count: { type: 'integer', description: 'Subcategories directly under it.' },
   },
-  required: ['id', 'collection', 'name', 'slug', 'description', 'sort_order', 'article_count'],
+  required: ['id', 'collection', 'name', 'slug', 'description', 'parent_id', 'sort_order', 'article_count', 'child_count'],
   additionalProperties: false,
 } as const
 
@@ -883,6 +885,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_resource_localization: R,
   get_organization: R,
   get_organization_analytics: R,
+  query_organization_analytics: R,
   get_organization_media_assets: R,
   get_organization_settings: R,
   get_tenant_page: R,

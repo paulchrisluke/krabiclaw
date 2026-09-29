@@ -85,8 +85,8 @@ export const useOrganizationSubscription = () => {
       currentPlan,
       subscriptionId: subscription.id,
       onAction: action => {
-        if (action === 'upgrade') trackSubscriptionUpgrade(plan)
-        if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
+        if (action === 'upgrade') trackSubscriptionUpgrade(plan, organizationId)
+        if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan, organizationId)
       },
     })
   }

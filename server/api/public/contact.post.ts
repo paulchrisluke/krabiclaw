@@ -6,7 +6,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { notifyContactSubmitted, raiseSettledFailures } from '~/server/utils/notifications'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
-import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { ensureInteractionUser } from '~/server/utils/auth'
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
@@ -107,20 +107,25 @@ export default defineHandler(async (event) => {
   const followUps = await Promise.allSettled([
     notifyContactSubmitted(env, db, {
       organizationId: organization.id, locationId: assignedLocationId, organizationName: organization.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
-    recordOrganizationConversionEvent(db, event, {
+    recordOrganizationConversionEvent(db, event.req, {
     organizationId: organization.id,
     eventName: 'contact_submit',
     stage: 'submitted',
+    surface: 'website',
     locationId: assignedLocationId,
     entityType: 'request',
     entityId: id,
     pageType: 'contact',
-    pagePath: '/contact',
+    routePath: '/contact',
+        originEventId: readPageEventId(body.page_event_id),
     }),
   ])
-  raiseSettledFailures('contact submission follow-up', `contactId ${id}`, followUps,
-    ['notifyContactSubmitted', 'recordOrganizationConversionEvent'])
+  // Only the owner notification can fail the request. Measurement is reported beside the
+  // committed result: a guest told a confirmed submission failed would submit again.
+  raiseSettledFailures('contact submission follow-up', `contactId ${id}`, followUps.slice(0, 1),
+    ['notifyContactSubmitted'])
+  const measurement = measurementOutcome(followUps[1]!)
 
   return jsonResponse({
-    success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })
+    success: true, measurement, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })
 })

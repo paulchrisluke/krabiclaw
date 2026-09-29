@@ -7,6 +7,12 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import {
   buildStripeSubscriptionMetadata, isStripeGa4IntentAction, type StripeGa4IntentAction, } from '~/shared/stripe-ga4'
 import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
+import { readAnalyticsConsent } from '~/server/utils/ga4-delivery'
+import { withdrawStripeGaIdentifiers } from '~/server/utils/stripe-ga4'
+import { SESSION_COOKIE, isCanonicalEventId } from '~/server/utils/pageview-tracking'
+import { queryFirst } from '~/server/db'
+import type { AttributionTouch } from '~/utils/analytics-attribution'
+import { parseCookies } from 'better-auth/cookies'
 
 interface AnalyticsIntentRequest {
   organizationId?: string
@@ -48,6 +54,11 @@ async function updateStripeAttribution(
     if (contextMetadata.ga_session_captured_at) contextMetadata.pending_ga_session_captured_at = contextMetadata.ga_session_captured_at
   }
 
+  if (!contextMetadata.ga_client_id) {
+    contextMetadata.ga_client_id = ''
+    contextMetadata.pending_ga_client_id = ''
+  }
+
   if (subscription) {
     await stripe.subscriptions.update(subscription.id, {
       metadata: { ...subscription.metadata, ...contextMetadata }, })
@@ -57,7 +68,7 @@ async function updateStripeAttribution(
     if (!customer.deleted) {
       await stripe.customers.update(customerId, {
         metadata: {
-          ...customer.metadata, user_id: userId, ...(contextMetadata.ga_client_id ? { ga_client_id: contextMetadata.ga_client_id } : {}), }, })
+          ...customer.metadata, user_id: userId, ga_client_id: contextMetadata.ga_client_id || '', }, })
     }
   }
 }
@@ -104,17 +115,34 @@ export default defineHandler(async (event) => {
   if (action !== 'downgrade' && body.effectiveTiming === 'period_end') {
     return jsonResponse({ error: 'Only downgrades can be scheduled at period end' }, { status: 400 })
   }
-  const clientId = optionalString(body.gaClientId)
-  const sessionId = optionalString(body.gaSessionId, 64)
-  const sessionCapturedAt = typeof body.gaSessionCapturedAt === 'number'
-    && Number.isSafeInteger(body.gaSessionCapturedAt)
-    && body.gaSessionCapturedAt > 0
-    ? body.gaSessionCapturedAt
+  // A GA identifier is stored only for a visitor whose own request says they accepted analytics;
+  // the browser's claim is not consent, and no identifier is kept without it.
+  const cookieHeader = event.req.headers.get('cookie') ?? ''
+  const consented = readAnalyticsConsent(cookieHeader) === 'accepted'
+  // Not accepted: nothing new is stored, and what an earlier acceptance left behind is erased
+  // first, because the metadata update below merges with what Stripe already holds.
+  if (!consented) await withdrawStripeGaIdentifiers(env.DB, () => getStripe(env), session.user.id)
+  const gaBody = consented ? body : { ...body, gaClientId: null, gaSessionId: null, gaSessionCapturedAt: null }
+  const clientId = optionalString(gaBody.gaClientId)
+  const sessionId = optionalString(gaBody.gaSessionId, 64)
+  const sessionCapturedAt = typeof gaBody.gaSessionCapturedAt === 'number'
+    && Number.isSafeInteger(gaBody.gaSessionCapturedAt)
+    && gaBody.gaSessionCapturedAt > 0
+    ? gaBody.gaSessionCapturedAt
     : null
 
-  await updateStripeAttribution(env, organization.id, session.user.id, body, action)
+  // The native attribution this visitor's session has observed so far, so the payment a webhook
+  // records later carries the campaign that produced it. First-party, so consent-independent.
+  const nativeSessionId = parseCookies(cookieHeader).get(SESSION_COOKIE)
+  const observed = isCanonicalEventId(nativeSessionId) && typeof event.context.organizationId === 'string'
+    ? await queryFirst<{ attribution: string }>(env.DB, `SELECT json_extract(payload_json, '$.attribution') AS attribution FROM analytics_summaries
+        WHERE organization_id = ? AND kind = 'session' AND date = '' AND key = ?`, [event.context.organizationId, nativeSessionId])
+    : null
+  const attribution = observed?.attribution ? { touch: JSON.parse(observed.attribution) as AttributionTouch, attributedAt: new Date().toISOString() } : null
+
+  await updateStripeAttribution(env, organization.id, session.user.id, gaBody, action)
   const intent = await recordStripeGa4Intent(env.DB, {
-    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, clientId, sessionId, sessionCapturedAt, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
+    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, clientId, sessionId, sessionCapturedAt, attribution, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
   return jsonResponse({ success: true, intentId: intent.id })
 })
 import { readBody } from 'nitro/h3';

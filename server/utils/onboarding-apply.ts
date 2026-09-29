@@ -109,6 +109,8 @@ export async function ensureOnboardingTarget(
       // writes it from that answer on the save that carries it.
       defaultCurrency: null,
       activate: false,
+      // Provisioned pending; nothing here is an onboarding outcome.
+      origin: null,
     })
     if (result.status !== 200) {
       return {

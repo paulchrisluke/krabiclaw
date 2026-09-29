@@ -3,12 +3,13 @@ import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/a
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
-import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
 import { queryAll, queryFirst } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
-import { getProduct } from '~/server/utils/product-management'
+import { getProduct, resolveVariantPrice } from '~/server/utils/product-management'
+import { isCurrencyCode } from '~/shared/currencies'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
@@ -35,7 +36,7 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const organization = await queryFirst<{ id: string; name: string | null; public_url: string | null }>(db, `SELECT id, name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
+  const organization = await queryFirst<{ id: string; name: string | null; default_currency: string; public_url: string | null }>(db, `SELECT id, name, default_currency, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ? AND status = 'active' LIMIT 1`, [organizationId])
   if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -61,6 +62,7 @@ export default defineHandler(async (event) => {
   const sessionId = cleanString(body.session_id, 64)
   const requestedVariantId = cleanString(body.variant_id, 64)
   const notes = cleanString(body.notes, 1000)
+  const pageEventId = readPageEventId(body.page_event_id)
   const partySizeValue = typeof body.party_size === 'number' || typeof body.party_size === 'string' ? Number(body.party_size) : Number.NaN
   if (!Number.isInteger(partySizeValue) || partySizeValue < 1 || partySizeValue > 99) {
     return jsonResponse({ error: 'Party size must be a whole number between 1 and 99.' }, { status: 400 })
@@ -107,6 +109,8 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Choose an option before booking' }, { status: 400 })
   }
   const productVariantId = requestedVariantId || variants[0]!.id
+
+  const full = await getProduct(db, organization.id, product.id)
 
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
@@ -176,11 +180,34 @@ export default defineHandler(async (event) => {
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised: running the notification first
   // meant a failed dispatch silently cost the tenant the conversion record too.
+  // The measurement of a committed booking, quote included. The value the guest is shown is
+  // snapshotted here, after the commit: a later price edit never revalues this booking or a retried
+  // event, and a quote that cannot be resolved is a measurement failure reported beside the
+  // committed booking, never a reason the booking was not made. Seats are priced per person, as the
+  // product page states, so the quoted amount is unit price x seats. A variant with no offer has an
+  // unknown value, not a zero one.
+  const recordBookingMeasurement = async () => {
+    if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
+    const variant = full.variants.find(candidate => candidate.id === productVariantId)
+    if (!variant) throw new Error(`Variant ${productVariantId} missing from product ${product.id}`)
+    const offer = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
+    const quotedValue = offer ? {
+      basis: 'quoted' as const,
+      amount_minor: offer.unit_amount * partySize,
+      currency: offer.currency,
+      items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, amount_minor: offer.unit_amount * partySize, quantity: partySize }],
+    } : null
+    const recorded = await recordOrganizationConversionEvent(db, event.req, {
+      organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
+      locationId: session.location_id, entityType: 'request', entityId: threadId,
+      productId: product.id, variantId: productVariantId,
+      pageType: 'product', routePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
+    })
+    return { ...recorded, quotedValue }
+  }
+
   const requestedLocale = cleanString(body.locale, 10)
-  const [full, locale, ...followUps] = await Promise.all([
-    // The policy the guest is shown is the product's own attribute. There is
-    // no site or location policy merged underneath it.
-    getProduct(db, organization.id, product.id),
+  const [locale, ...followUps] = await Promise.all([
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
     ...await Promise.allSettled([
       notifyBookingCreated(env, db, {
@@ -190,18 +217,18 @@ export default defineHandler(async (event) => {
         partySize, notes: notes || null,
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
       }),
-      recordOrganizationConversionEvent(db, event, {
-        organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted',
-        locationId: session.location_id, entityType: 'request', entityId: threadId,
-        pageType: 'product', pagePath: `/products/${slug}`,
-      }),
+      recordBookingMeasurement(),
     ]),
   ])
-  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps,
-    ['notifyBookingCreated', 'recordOrganizationConversionEvent'])
+  // Only the owner notification can fail the request. Measurement is reported beside the
+  // committed result: a guest told a confirmed submission failed would submit again.
+  raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps.slice(0, 1),
+    ['notifyBookingCreated'])
+  const measurement = measurementOutcome(followUps[1]!)
+  const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
 
   return jsonResponse({
-    success: true, booking_id: threadId, cancellation_token: cancellation.token,
+    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement,
     message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })

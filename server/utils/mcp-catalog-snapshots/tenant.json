@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:89fe90b801f33f1c0d3e782a9332183edbbb1a357f48e612640c83c55efb46e4",
+  "fingerprint": "sha256:7a4fc70fa98954ada5b7e0d22b1dd93dfadf99271dbf9a62c608c2aaad34bdb2",
   "tools": [
     {
       "name": "append_content_block",
@@ -1148,6 +1148,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1163,7 +1170,11 @@
             "additionalProperties": false,
             "properties": {
               "article_count": {
-                "description": "Articles in the category, drafts included.",
+                "description": "Articles in the category itself, drafts included.",
+                "type": "integer"
+              },
+              "child_count": {
+                "description": "Subcategories directly under it.",
                 "type": "integer"
               },
               "collection": {
@@ -1185,11 +1196,19 @@
               "name": {
                 "type": "string"
               },
+              "parent_id": {
+                "description": "The category it sits under; null at the top level.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                 "type": "string"
               },
               "sort_order": {
+                "description": "Its place among its siblings.",
                 "type": "integer"
               }
             },
@@ -1199,8 +1218,10 @@
               "name",
               "slug",
               "description",
+              "parent_id",
               "sort_order",
-              "article_count"
+              "article_count",
+              "child_count"
             ],
             "type": "object"
           }
@@ -4678,6 +4699,64 @@
       },
       "outputSchema": {
         "properties": {
+          "attributedValue": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "collectedMinor": {
+                  "type": "number"
+                },
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "medium": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "netMinor": {
+                  "type": "number"
+                },
+                "purchases": {
+                  "type": "number"
+                },
+                "refundedMinor": {
+                  "type": "number"
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "currency",
+                "purchases",
+                "collectedMinor",
+                "refundedMinor",
+                "netMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "attribution": {
             "items": {
               "properties": {
@@ -4687,14 +4766,26 @@
                     "null"
                   ]
                 },
-                "conversionRate": {
-                  "type": "number"
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
-                "conversions": {
+                "convertingSessions": {
                   "type": "number"
                 },
                 "medium": {
                   "type": "string"
+                },
+                "outcomeEvents": {
+                  "type": "number"
+                },
+                "sessionConversionRate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "sessions": {
                   "type": "number"
@@ -4707,9 +4798,61 @@
                 "source",
                 "medium",
                 "campaign",
+                "content",
                 "sessions",
-                "conversions",
-                "conversionRate"
+                "outcomeEvents",
+                "convertingSessions",
+                "sessionConversionRate"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "bookingValue": {
+            "items": {
+              "properties": {
+                "bookings": {
+                  "type": "number"
+                },
+                "currency": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "locationId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "productId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "productName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "quotedValueMinor": {
+                  "type": "number"
+                },
+                "valuedBookings": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "productId",
+                "productName",
+                "locationId",
+                "currency",
+                "bookings",
+                "valuedBookings",
+                "quotedValueMinor"
               ],
               "type": "object"
             },
@@ -4747,14 +4890,32 @@
           "conversions": {
             "items": {
               "properties": {
-                "conversionRate": {
+                "conversionType": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "convertingSessions": {
                   "type": "number"
                 },
-                "count": {
+                "distinctEntities": {
                   "type": "number"
                 },
                 "eventName": {
                   "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "nonbrowserEvents": {
+                  "type": "number"
+                },
+                "sessionConversionRate": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 },
                 "stage": {
                   "type": "string"
@@ -4763,8 +4924,12 @@
               "required": [
                 "eventName",
                 "stage",
-                "count",
-                "conversionRate"
+                "conversionType",
+                "events",
+                "distinctEntities",
+                "convertingSessions",
+                "nonbrowserEvents",
+                "sessionConversionRate"
               ],
               "type": "object"
             },
@@ -4795,6 +4960,47 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "coverage": {
+            "properties": {
+              "ga4Delivery": {
+                "items": {
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    },
+                    "eventName": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "eventName",
+                    "status",
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "measurementContractStartedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "outcomeEventsWithoutAttribution": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "measurementContractStartedAt",
+              "outcomeEventsWithoutAttribution",
+              "ga4Delivery"
+            ],
+            "type": "object"
           },
           "dailyData": {
             "items": {
@@ -4882,6 +5088,76 @@
             ],
             "type": "object"
           },
+          "net": {
+            "items": {
+              "properties": {
+                "collectedMinor": {
+                  "type": "number"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "netMinor": {
+                  "type": "number"
+                },
+                "refundedMinor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "currency",
+                "collectedMinor",
+                "refundedMinor",
+                "netMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "outcomeAttribution": {
+            "items": {
+              "properties": {
+                "campaign": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "content": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "distinctEntities": {
+                  "type": "number"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "medium": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "eventName",
+                "events",
+                "distinctEntities"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "period": {
             "properties": {
               "analyticsDataStartAt": {
@@ -4929,6 +5205,115 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "signupCohort": {
+            "properties": {
+              "bySignupAttribution": {
+                "items": {
+                  "properties": {
+                    "campaign": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "content": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "firstPaidSignups": {
+                      "type": "number"
+                    },
+                    "medium": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "onboardedSignups": {
+                      "type": "number"
+                    },
+                    "revenue": {
+                      "items": {
+                        "properties": {
+                          "collectedMinor": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "netMinor": {
+                            "type": "number"
+                          },
+                          "refundedMinor": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "currency",
+                          "collectedMinor",
+                          "refundedMinor",
+                          "netMinor"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "signups": {
+                      "type": "number"
+                    },
+                    "source": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "medium",
+                    "campaign",
+                    "content",
+                    "signups",
+                    "onboardedSignups",
+                    "firstPaidSignups",
+                    "revenue"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "firstPaidBusinesses": {
+                "type": "number"
+              },
+              "firstPaidSignups": {
+                "type": "number"
+              },
+              "observedThrough": {
+                "type": "string"
+              },
+              "onboardedBusinesses": {
+                "type": "number"
+              },
+              "onboardedSignups": {
+                "type": "number"
+              },
+              "signups": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "observedThrough",
+              "signups",
+              "onboardedSignups",
+              "firstPaidSignups",
+              "bySignupAttribution",
+              "onboardedBusinesses",
+              "firstPaidBusinesses"
+            ],
+            "type": "object"
           },
           "social": {
             "properties": {
@@ -5398,6 +5783,48 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "values": {
+            "items": {
+              "properties": {
+                "basis": {
+                  "enum": [
+                    "quoted",
+                    "purchase",
+                    "refund"
+                  ],
+                  "type": "string"
+                },
+                "collectedMinor": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "eventName": {
+                  "type": "string"
+                },
+                "events": {
+                  "type": "number"
+                },
+                "valueMinor": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "eventName",
+                "basis",
+                "currency",
+                "events",
+                "valueMinor",
+                "collectedMinor"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -5406,7 +5833,14 @@
           "dailyData",
           "topPages",
           "attribution",
+          "outcomeAttribution",
+          "attributedValue",
           "conversions",
+          "values",
+          "bookingValue",
+          "net",
+          "signupCohort",
+          "coverage",
           "countries",
           "cities",
           "referrers",
@@ -7402,7 +7836,11 @@
               "additionalProperties": false,
               "properties": {
                 "article_count": {
-                  "description": "Articles in the category, drafts included.",
+                  "description": "Articles in the category itself, drafts included.",
+                  "type": "integer"
+                },
+                "child_count": {
+                  "description": "Subcategories directly under it.",
                   "type": "integer"
                 },
                 "collection": {
@@ -7424,11 +7862,19 @@
                 "name": {
                   "type": "string"
                 },
+                "parent_id": {
+                  "description": "The category it sits under; null at the top level.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "slug": {
                   "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                   "type": "string"
                 },
                 "sort_order": {
+                  "description": "Its place among its siblings.",
                   "type": "integer"
                 }
               },
@@ -7438,8 +7884,10 @@
                 "name",
                 "slug",
                 "description",
+                "parent_id",
                 "sort_order",
-                "article_count"
+                "article_count",
+                "child_count"
               ],
               "type": "object"
             },
@@ -9957,6 +10405,384 @@
       }
     },
     {
+      "name": "query_organization_analytics",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "attribution_basis": {
+            "description": "Which attribution the attribution fields read. Default event_snapshot (sessions: session_last_touch).",
+            "enum": [
+              "observed",
+              "event_snapshot",
+              "session_last_touch"
+            ],
+            "type": "string"
+          },
+          "cursor": {
+            "description": "next_cursor from the previous page of this same request.",
+            "type": "string"
+          },
+          "dimensions": {
+            "description": "breakdown only: 1-6 fields to group by.",
+            "items": {
+              "enum": [
+                "kind",
+                "event_name",
+                "stage",
+                "surface",
+                "page_path",
+                "source_path",
+                "page_id",
+                "page_type",
+                "product_id",
+                "variant_id",
+                "location_id",
+                "locale",
+                "entity_type",
+                "entity_id",
+                "session_id",
+                "visitor_id",
+                "device",
+                "country",
+                "region",
+                "city",
+                "currency",
+                "value_basis",
+                "conversion_type",
+                "attribution_basis",
+                "actor_id",
+                "ga4_delivery_status",
+                "source",
+                "medium",
+                "campaign",
+                "content",
+                "term",
+                "referrer_host",
+                "gclid",
+                "gbraid",
+                "wbraid",
+                "fbclid",
+                "msclkid"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "end_date": {
+            "description": "Inclusive local end date (YYYY-MM-DD). Defaults to today.",
+            "type": "string"
+          },
+          "filters": {
+            "additionalProperties": false,
+            "description": "Exact-match filters (all must match). path_prefix matches the public path or anything under it. Names are the queryable fields; enumerated ones list their values.",
+            "properties": {
+              "actor_id": {
+                "description": "the staff member, agent or user who acted, when not the subject",
+                "type": "string"
+              },
+              "attribution_basis": {
+                "description": "how the event snapshot arose: own_touch, inherited, session_current, checkout or none",
+                "type": "string"
+              },
+              "campaign": {
+                "description": "campaign on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "city": {
+                "description": "city",
+                "type": "string"
+              },
+              "content": {
+                "description": "content on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "conversion_type": {
+                "description": "contact, reservation, booking or subscription",
+                "type": "string"
+              },
+              "country": {
+                "description": "ISO country code",
+                "type": "string"
+              },
+              "currency": {
+                "description": "currency of a monetary outcome",
+                "type": "string"
+              },
+              "device": {
+                "description": "device class derived from the user agent",
+                "type": "string"
+              },
+              "dimension": {
+                "description": "daily_summaries with dimension_day: the dimension to read.",
+                "enum": [
+                  "country",
+                  "city",
+                  "device",
+                  "referrer"
+                ],
+                "type": "string"
+              },
+              "entity_id": {
+                "description": "the business subject of an outcome or interaction",
+                "type": "string"
+              },
+              "entity_type": {
+                "description": "the business subject type of an outcome or interaction",
+                "type": "string"
+              },
+              "event_name": {
+                "description": "pageview, or the catalog event name",
+                "type": "string"
+              },
+              "fbclid": {
+                "description": "fbclid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "ga4_delivery_status": {
+                "description": "the outcome of the optional GA4 delivery",
+                "type": "string"
+              },
+              "gbraid": {
+                "description": "gbraid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "gclid": {
+                "description": "gclid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "kind": {
+                "description": "pageview, conversion (a business outcome) or interaction",
+                "type": "string"
+              },
+              "locale": {
+                "description": "the language of the visit",
+                "type": "string"
+              },
+              "location_id": {
+                "description": "the business location",
+                "type": "string"
+              },
+              "medium": {
+                "description": "medium on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "msclkid": {
+                "description": "msclkid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "outcome_event": {
+                "description": "The outcome measured by converting_sessions and session_conversion_rate (sign_up, contact_submit, booking_submit, purchase, ...)",
+                "type": "string"
+              },
+              "page_id": {
+                "description": "the canonical page document",
+                "type": "string"
+              },
+              "page_path": {
+                "description": "the public path exactly as visited (localized visits keep their prefix)",
+                "type": "string"
+              },
+              "page_type": {
+                "description": "the page type",
+                "type": "string"
+              },
+              "path_prefix": {
+                "description": "A public path prefix such as /th/ or /locations/main",
+                "type": "string"
+              },
+              "product_id": {
+                "description": "the product the event is about",
+                "type": "string"
+              },
+              "referrer_host": {
+                "description": "referrer_host on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "region": {
+                "description": "region",
+                "type": "string"
+              },
+              "session_id": {
+                "description": "the native session; null for a server outcome with no browser",
+                "type": "string"
+              },
+              "source": {
+                "description": "source on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "source_path": {
+                "description": "the locale-bare path documents are stored under",
+                "type": "string"
+              },
+              "stage": {
+                "description": "outcome or interaction stage",
+                "type": "string"
+              },
+              "summary_kind": {
+                "description": "daily_summaries only (required): the summary grain: one row per day, per day and public page path, or per day and country/city/device/referrer value.",
+                "enum": [
+                  "organization_day",
+                  "page_day",
+                  "dimension_day"
+                ],
+                "type": "string"
+              },
+              "surface": {
+                "description": "the surface that produced the event",
+                "type": "string"
+              },
+              "term": {
+                "description": "term on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "value": {
+                "description": "daily_summaries with dimension_day: one value of the dimension.",
+                "type": "string"
+              },
+              "value_basis": {
+                "description": "quoted, purchase or refund",
+                "type": "string"
+              },
+              "variant_id": {
+                "description": "the product variant the event is about",
+                "type": "string"
+              },
+              "visitor_id": {
+                "description": "the native visitor; null for a server outcome with no browser",
+                "type": "string"
+              },
+              "wbraid": {
+                "description": "wbraid on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "limit": {
+            "description": "Rows per page (default 50). A page size is not a total-result limit.",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "metrics": {
+            "description": "breakdown only: 1-8 metrics. events (events); page_views (page views); interactions (interactions); outcomes (outcome events); sessions (distinct sessions); visitors (distinct visitors); entities (distinct business subjects); quoted_value_minor (minor units of the group currency); purchase_value_minor (minor units of the group currency); collected_minor (minor units of the group currency); refunded_minor (minor units of the group currency); net_collected_minor (minor units of the group currency); converting_sessions (distinct eligible sessions that completed the selected outcome in the range); eligible_sessions (distinct sessions with a pageview); session_conversion_rate (percent: converting sessions / eligible sessions, over the same sessions)",
+            "items": {
+              "enum": [
+                "events",
+                "page_views",
+                "interactions",
+                "outcomes",
+                "sessions",
+                "visitors",
+                "entities",
+                "quoted_value_minor",
+                "purchase_value_minor",
+                "collected_minor",
+                "refunded_minor",
+                "net_collected_minor",
+                "converting_sessions",
+                "eligible_sessions",
+                "session_conversion_rate"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "description": "events | sessions | breakdown | daily_summaries",
+            "enum": [
+              "events",
+              "sessions",
+              "breakdown",
+              "daily_summaries"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "outcome_event": {
+            "description": "The outcome measured by converting_sessions and session_conversion_rate.",
+            "type": "string"
+          },
+          "sort": {
+            "description": "events: occurred_at_desc (default) or occurred_at_asc. breakdown: { metric, direction } over a requested metric (default: the first metric, descending). Ties break deterministically.",
+            "oneOf": [
+              {
+                "enum": [
+                  "occurred_at_desc",
+                  "occurred_at_asc"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "direction": {
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "type": "string"
+                  },
+                  "metric": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            ]
+          },
+          "start_date": {
+            "description": "Inclusive local start date (YYYY-MM-DD). Defaults to 29 days before end_date.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "coverage": {
+            "type": "object"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "type": "object"
+          },
+          "rows": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "totals": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "mode",
+          "rows",
+          "next_cursor",
+          "query",
+          "totals",
+          "coverage"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "reconcile_post_publication",
       "inputSchema": {
         "additionalProperties": false,
@@ -11485,6 +12311,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "Whose subcategories are being ordered; null or omitted for the top level.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -11501,7 +12334,11 @@
               "additionalProperties": false,
               "properties": {
                 "article_count": {
-                  "description": "Articles in the category, drafts included.",
+                  "description": "Articles in the category itself, drafts included.",
+                  "type": "integer"
+                },
+                "child_count": {
+                  "description": "Subcategories directly under it.",
                   "type": "integer"
                 },
                 "collection": {
@@ -11523,11 +12360,19 @@
                 "name": {
                   "type": "string"
                 },
+                "parent_id": {
+                  "description": "The category it sits under; null at the top level.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "slug": {
                   "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                   "type": "string"
                 },
                 "sort_order": {
+                  "description": "Its place among its siblings.",
                   "type": "integer"
                 }
               },
@@ -11537,8 +12382,10 @@
                 "name",
                 "slug",
                 "description",
+                "parent_id",
                 "sort_order",
-                "article_count"
+                "article_count",
+                "child_count"
               ],
               "type": "object"
             },
@@ -14027,6 +14874,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -14041,7 +14895,11 @@
             "additionalProperties": false,
             "properties": {
               "article_count": {
-                "description": "Articles in the category, drafts included.",
+                "description": "Articles in the category itself, drafts included.",
+                "type": "integer"
+              },
+              "child_count": {
+                "description": "Subcategories directly under it.",
                 "type": "integer"
               },
               "collection": {
@@ -14063,11 +14921,19 @@
               "name": {
                 "type": "string"
               },
+              "parent_id": {
+                "description": "The category it sits under; null at the top level.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                 "type": "string"
               },
               "sort_order": {
+                "description": "Its place among its siblings.",
                 "type": "integer"
               }
             },
@@ -14077,8 +14943,10 @@
               "name",
               "slug",
               "description",
+              "parent_id",
               "sort_order",
-              "article_count"
+              "article_count",
+              "child_count"
             ],
             "type": "object"
           }

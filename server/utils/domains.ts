@@ -7,7 +7,6 @@ import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/ut
 import { organizationEventQuery } from '~/server/utils/organization-events'
 
 export interface DomainEnv {
-  GA4_MEASUREMENT_ID?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CLOUDFLARE_API_TOKEN?: string
@@ -136,14 +135,6 @@ function platformDomainCandidates(env: DomainEnv): string[] {
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
   if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   return domains
-}
-
-export function platformAnalyticsHostnames(env: DomainEnv): string[] {
-  const hostnames = new Set(platformDomainCandidates(env))
-  for (const hostname of Array.from(hostnames)) {
-    if (hostname.split('.').length === 2) hostnames.add(`www.${hostname}`)
-  }
-  return Array.from(hostnames).sort()
 }
 
 export function validateCustomDomain(env: DomainEnv, domain: string): { valid: boolean; reason?: string } {

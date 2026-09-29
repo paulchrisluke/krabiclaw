@@ -31,8 +31,8 @@ interface PublishedArticlesResponse {
   posts: Array<Omit<PublishedArticle, 'path' | 'category'> & { category: PublishedArticleCategoryRef | null }>
   /** The page the site publishes at the collection's index path, if any. */
   index: { title: string; summary: string | null } | null
-  /** The collection's categories that hold a published article, in the owner's order. */
-  categories: Array<{ id: string; name: string; slug: string; description: string | null; locales: string[] }>
+  /** The collection's categories that hold a published article, or sit above one, depth-first in the owner's order. */
+  categories: Array<{ id: string; name: string; slug: string; description: string | null; parent_id: string | null; locales: string[] }>
   /** The languages the index is read in; a category page is the same prefix under its own path. */
   localeRepresentations: PublicLocaleRepresentation[]
 }
@@ -42,10 +42,29 @@ export interface PublishedArticleCategory {
   name: string
   slug: string
   description: string | null
+  parent_id: string | null
+  /** 1 at the top of the collection. */
+  depth: number
   locales: string[]
   /** The category's own page, in the page's language. */
   path: string
+  /** Its own articles, in the collection's order. */
   posts: PublishedArticle[]
+  /** Its subcategories that hold an article in the page's language, in the owner's order. */
+  children: PublishedArticleCategory[]
+}
+
+/** A category and the categories above it, from the top of the collection down to it. */
+export function categoryTrail(categories: readonly PublishedArticleCategory[], id: string): PublishedArticleCategory[] {
+  const byId = new Map(categories.map(category => [category.id, category]))
+  const trail: PublishedArticleCategory[] = []
+  for (let current = byId.get(id); current; current = current.parent_id ? byId.get(current.parent_id) : undefined) trail.unshift(current)
+  return trail
+}
+
+/** A category and everything under it, depth-first. */
+export function categorySubtree(category: PublishedArticleCategory): PublishedArticleCategory[] {
+  return [category, ...category.children.flatMap(categorySubtree)]
 }
 
 /**
@@ -86,7 +105,7 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
       return await publicApiRequest<PublishedArticlesResponse>('/api/public/blog', {
         query: { collection: toValue(collection), locale: locale.value },
         validate: validateApiShape({ posts: { arrayOf: { id: 'string', slug: 'string', title: 'string', sort_order: 'number' } }, index: 'nullable-object',
-          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
+          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', parent_id: 'nullable-string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
       })
     },
   )
@@ -96,16 +115,38 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
     category: post.category ? { ...post.category, path: localePath(collectionCategoryPath(toValue(collection), post.category.slug)) } : null,
   })))
 
-  // The owner's categories in the owner's order, each with its articles in the
-  // collection's order — only those with an article in the page's language.
-  const categories = computed<PublishedArticleCategory[]>(() => (data.value?.categories ?? []).map(category => ({
-    ...category,
-    path: localePath(collectionCategoryPath(toValue(collection), category.slug)),
-    posts: posts.value.filter(post => post.category?.id === category.id),
-  })).filter(category => category.posts.length > 0))
+  // The owner's category tree, each category holding its own articles in the
+  // collection's order — only the branches with an article in the page's language.
+  const categoryTree = computed<PublishedArticleCategory[]>(() => {
+    const nodes = (data.value?.categories ?? []).map((category): PublishedArticleCategory => ({
+      ...category,
+      depth: 1,
+      path: localePath(collectionCategoryPath(toValue(collection), category.slug)),
+      posts: posts.value.filter(post => post.category?.id === category.id),
+      children: [],
+    }))
+    const byId = new Map(nodes.map(node => [node.id, node]))
+    // The server lists parents before their children, so each parent's depth is known when its children arrive.
+    for (const node of nodes) {
+      const parent = node.parent_id ? byId.get(node.parent_id) : undefined
+      if (!parent) continue
+      node.depth = parent.depth + 1
+      parent.children.push(node)
+    }
+    const holdsArticles = (node: PublishedArticleCategory): boolean => node.posts.length > 0 || node.children.some(holdsArticles)
+    const prune = (list: PublishedArticleCategory[]): PublishedArticleCategory[] => list.filter(holdsArticles).map(node => Object.assign(node, { children: prune(node.children) }))
+    return prune(nodes.filter(node => !node.parent_id || !byId.has(node.parent_id)))
+  })
+  /** Every category that is shown, depth-first. */
+  const categories = computed(() => categoryTree.value.flatMap(categorySubtree))
+  /** Uncategorized articles first, then each category's own articles and its subcategories'. */
+  const readingOrder = computed(() => [
+    ...posts.value.filter(post => !post.category),
+    ...categories.value.flatMap(category => category.posts),
+  ])
 
   if (error.value) throw error.value
-  return { posts, categories, pending, index: computed(() => data.value?.index ?? null),
+  return { posts, categories, categoryTree, readingOrder, pending, index: computed(() => data.value?.index ?? null),
     localeRepresentations: computed(() => data.value?.localeRepresentations ?? []) }
 }
 

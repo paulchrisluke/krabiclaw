@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 
@@ -35,19 +36,19 @@ const consultation = computed(() => shell.value.consultation)
 const submitting = ref(false)
 const submitMessage = ref('')
 const form = reactive({ name: '', email: '', subject: 'general', message: '', consent: false })
-const { mirrorSubmission } = useOrganizationConversionTracking(consultation)
+const { mirrorSubmission, pageEventId } = useOrganizationConversionTracking(consultation)
 
 async function submitContact() {
   if (!organizationId || submitting.value) return
   submitting.value = true
   submitMessage.value = ''
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
+    const response = await publicApiMutation<{ success: true; measurement?: SubmissionMeasurement }>(`/api/public/contact`, {
       method: 'POST',
-      body: form,
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+      body: { ...form, page_event_id: await pageEventId() },
+      validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
-    mirrorSubmission('contact_submit')
+    mirrorSubmission('contact_submit', response.measurement)
     setContactConfirmation({
       organizationId,
       organizationName: identity.value.name,
