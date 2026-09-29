@@ -12,12 +12,15 @@ const organization = argValue('--organization')
 if (args.includes('--organization') && (!organization || !/^\S+$/.test(organization) || organization.startsWith('--'))) {
   throw new Error('--organization requires an organization ID')
 }
+const platformOnly = args.includes('--platform-only')
+if (platformOnly && organization) throw new Error('--platform-only and --organization cannot be combined')
 
 // Stored content edits already trigger indexing through the application. A code
 // deployment only needs a rebuild when it changes the indexed corpus or renderer.
 const changedSince = argValue('--changed-since')
 if (args.includes('--changed-since') && !changedSince) throw new Error('--changed-since requires a commit')
 if (organization && changedSince) throw new Error('--organization and --changed-since cannot be combined')
+if (platformOnly && changedSince) throw new Error('--platform-only and --changed-since cannot be combined')
 if (changedSince) {
   const head = argValue('--changed-until') ?? 'HEAD'
   const changedFiles = execFileSync('git', /^0+$/.test(changedSince)
@@ -91,7 +94,9 @@ try {
     await reindexUntilDone(organization)
   } else {
     const platform = await reindexUntilDone()
-    for (const organizationId of platform.organizations!) await reindexUntilDone(organizationId)
+    if (!platformOnly) {
+      for (const organizationId of platform.organizations!) await reindexUntilDone(organizationId)
+    }
   }
 } catch (error) {
   const message = error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
