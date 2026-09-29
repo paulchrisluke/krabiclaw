@@ -57,7 +57,10 @@ test('analytics preserves duplicate, attribution, summary and retention semantic
     const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'session-first', 'visitor', ?, '2026-09-05T02:03:00.000Z')"
     await Promise.all(['conversion-first', 'conversion-duplicate'].map(id => db.prepare(insert).bind(id, conversion).run()))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
-    assert.equal((await getAnalyticsReport(db, period)).conversions[0]?.events, 1)
+    assert.deepEqual((await getAnalyticsReport(db, period)).conversions, [{
+      eventName: 'contact_submit', stage: 'submitted', conversionType: null, events: 1,
+      distinctEntities: 1, convertingSessions: 1, nonbrowserEvents: 0, sessionConversionRate: 50,
+    }])
     await cleanupTenantAnalytics(db, new Date('2027-01-06T12:00:00Z'))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'pageview'").first('count(*)'), 0)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)

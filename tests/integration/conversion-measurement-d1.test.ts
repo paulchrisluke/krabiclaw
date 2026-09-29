@@ -4,6 +4,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { handleStripeGa4Event, withdrawStripeGaIdentifiers } from '../../server/utils/stripe-ga4.ts'
+import { deliverViaMeasurementProtocol, readGa4Delivery } from '../../server/utils/ga4-delivery.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
 import { originatingOwnerId, recordAndDeliverConversion, recordOrganizationConversionEvent as recordAt, type OrganizationConversionInput } from '../../server/utils/organization-conversions.ts'
 import { getAnalyticsReport } from '../../server/utils/analytics-report.ts'
@@ -114,7 +115,7 @@ test('conversion measurement: contract, values, idempotency, report and cohort o
     assert.deepEqual([platform.signupCohort.onboardedBusinesses, platform.signupCohort.firstPaidBusinesses], [1, 1])
     // Only the nonbrowser onboarding carried no observed attribution.
     assert.equal(platform.coverage.outcomeEventsWithoutAttribution, 1)
-    assert.ok(platform.coverage.measurementContractStartedAt)
+    assert.equal(platform.coverage.measurementContractStartedAt, '2026-09-10T04:00:00.000Z')
     assert.deepEqual(platform.coverage.ga4Delivery.map(row => [row.eventName, row.status]).sort(), [['onboarding_complete', 'unrecorded'], ['purchase', 'unrecorded'], ['refund', 'unrecorded'], ['sign_up', 'unrecorded']])
 
     const customer = await getAnalyticsReport(db, { organizationId: 'org-customer', ...period })
@@ -123,6 +124,19 @@ test('conversion measurement: contract, values, idempotency, report and cohort o
     assert.equal(customer.signupCohort.signups, 0)
     // KrabiClaw's subscription revenue never appears as the subscribing customer's revenue.
     assert.equal(customer.values.some(row => row.basis !== 'quoted'), false)
+
+    // SQL keeps empty and null campaigns separate; each signup cohort gets only its revenue.
+    for (const [index, campaign] of [null, ''].entries()) {
+      const userId = `cohort-${index}`
+      await recordOrganizationConversionEvent(db, null, { ...signup, entityId: userId,
+        attribution: { touch: { ...snapshot.attribution, source: 'cohort-proof', campaign }, attributedAt: '2026-09-10T04:00:00.000Z' } })
+      await recordOrganizationConversionEvent(db, null, { ...purchase, entityId: `cohort-invoice-${index}`,
+        value: { ...purchase.value, transaction_id: `cohort-invoice-${index}`, amount_minor: (index + 1) * 100, collected_minor: (index + 1) * 100 },
+        metadata: { purchase_type: 'initial_subscription', originating_user_id: userId } })
+    }
+    const cohorts = (await getAnalyticsReport(db, { organizationId: 'org-platform', ...period })).signupCohort.bySignupAttribution
+      .filter(row => row.source === 'cohort-proof')
+    assert.deepEqual(cohorts.map(row => row.revenue.map(value => value.netMinor)).sort(), [[100], [200]])
   } finally { await runtime.dispose() }
 })
 
@@ -203,6 +217,34 @@ test('consent is enforced for GA delivery and withdrawal erases stored identifie
     assert.equal((await deliveryOf(accepted.id)).status, 'sent')
     assert.equal(sent.length, 1)
     assert.match(sent[0]!, /measurement_id=G-TEST/)
+
+    // Concurrent delivery callers share an atomic lease; a crashed sender's lease expires.
+    const pending = await recordAt(db, null, signup('user-concurrent'))
+    const input = { eventId: pending.id, organizationId: 'org-platform', event: { name: 'sign_up', params: {} },
+      clientId: '111.222', userId: null, sessionId: null, sessionCapturedAt: null }
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    let attempts = 0
+    globalThis.fetch = (async () => { attempts++; entered.resolve(undefined); await release.promise; return new Response(null, { status: 204 }) }) as typeof fetch
+    const sending = deliverViaMeasurementProtocol({ GA4_API_SECRET: 'secret' }, db, input)
+    await entered.promise
+    try {
+      const concurrent = await deliverViaMeasurementProtocol({ GA4_API_SECRET: 'secret' }, db, input)
+      assert.equal(concurrent.status, 'sending')
+      assert.ok(Date.parse(concurrent.leaseExpiresAt!) > Date.now())
+      assert.equal(attempts, 1)
+    } finally { release.resolve(undefined) }
+    assert.equal((await sending).status, 'sent')
+    assert.equal((await deliverViaMeasurementProtocol({ GA4_API_SECRET: 'secret' }, db, input)).status, 'sent')
+    assert.equal(attempts, 1)
+    assert.equal((await readGa4Delivery(db, pending.id))?.status, 'sent')
+
+    const abandoned = await recordAt(db, null, signup('user-abandoned'))
+    await db.prepare("UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?)) WHERE id = ?")
+      .bind(JSON.stringify({ transport: 'measurement_protocol', status: 'sending', claimId: 'crashed', leaseExpiresAt: '2000-01-01T00:00:00.000Z' }), abandoned.id).run()
+    assert.equal((await deliverViaMeasurementProtocol({ GA4_API_SECRET: 'secret' }, db, { ...input, eventId: abandoned.id })).status, 'sent')
+    assert.equal(attempts, 2)
+    assert.equal((await readGa4Delivery(db, abandoned.id))?.status, 'sent')
 
     // Withdrawal erases what checkout stored for this user, only where they captured it.
     await db.prepare(`INSERT INTO stripe_ga4_subscription_intents (id, organization_id, user_id, action, client_id, session_id, session_captured_at, expires_at)
@@ -292,6 +334,11 @@ test('the Stripe handler records every paid subscription invoice and refund once
     history.push({ id: 'in_1', amount_paid: 5243, created: 2_000, status_transitions: { paid_at: 2_000 } })
     await paid(makeInvoice('in_2', 5_000, 'subscription_create'), 'evt_2')
     assert.deepEqual((await purchases()).map(row => row.type), ['initial_subscription', 'resubscription'])
+
+    await paid(makeInvoice('in_renewal', 6_000, 'subscription_cycle'), 'evt_renewal')
+    await paid(makeInvoice('in_change', 7_000, 'subscription_update'), 'evt_change')
+    assert.deepEqual((await purchases()).filter(row => row.type === 'subscription_renewal' || row.type === 'plan_change')
+      .map(row => [row.type, row.campaign]), [['subscription_renewal', null], ['plan_change', null]])
 
     // A partial refund reverses the first purchase on its own basis and campaign; a redelivery is the same event.
     const refund = { id: 're_1', amount: 1_000, status: 'succeeded', charge: 'ch_1', payment_intent: null, currency: 'usd', created: 3_000, metadata: { invoice_id: 'in_1' } }

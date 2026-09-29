@@ -303,7 +303,7 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
   ])
   const text = (value: unknown) => value ? String(value) : null
   const cohortRevenue = (row: Record<string, unknown>) => cohortRevenueRows
-    .filter(revenue => text(revenue.source) === text(row.source) && text(revenue.medium) === text(row.medium) && text(revenue.campaign) === text(row.campaign) && text(revenue.content) === text(row.content))
+    .filter(revenue => revenue.source === row.source && revenue.medium === row.medium && revenue.campaign === row.campaign && revenue.content === row.content)
     .map(revenue => ({ currency: String(revenue.currency), collectedMinor: n(revenue.collected), refundedMinor: n(revenue.refunded), netMinor: n(revenue.collected) - n(revenue.refunded) }))
   return {
     outcomeAttribution: outcomeRows.map(row => ({ source: String(row.source), medium: String(row.medium), campaign: text(row.campaign), content: text(row.content), eventName: String(row.event_name), events: n(row.events), distinctEntities: n(row.entities) })),

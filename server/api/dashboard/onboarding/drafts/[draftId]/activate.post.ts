@@ -13,7 +13,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { applyOnboardingDraft, ensureOnboardingTarget } from '~/server/utils/onboarding-apply'
-import { activateOrganization } from '~/server/utils/organization-provisioning'
+import { activateOrganization, recordOnboardingComplete } from '~/server/utils/organization-provisioning'
+import { measurementOutcome } from '~/server/utils/organization-conversions'
 import { activateSessionOrganization } from '~/server/utils/session-organization'
 import { refreshSocialCard } from '~/server/utils/social-card'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
@@ -123,7 +124,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: applied.error }, { status: applied.status })
     }
     const { locationSlug } = applied
-    await activateOrganization(env, db, organizationId, event.req)
+    await activateOrganization(db, organizationId)
 
     const now = new Date().toISOString()
     await execute(db, `
@@ -132,6 +133,9 @@ export default defineHandler(async (event) => {
       WHERE id = ?
     `, [now, now, draftId])
     committed = true
+    const measurement = measurementOutcome((await Promise.allSettled([
+      recordOnboardingComplete(env, db, organizationId, event.req),
+    ]))[0]!)
 
     // The tenant is live from here, so its public cache is purged whichever of
     // the steps before it fails, and a failed purge fails the response rather
@@ -151,7 +155,7 @@ export default defineHandler(async (event) => {
     if (!orgRow) throw new HTTPError({ statusCode: 500, statusMessage: 'Activated organization not found' })
 
     return jsonResponse({
-      success: true, organizationId, orgSlug: orgRow.slug, subdomain, locationSlug,
+      success: true, organizationId, orgSlug: orgRow.slug, subdomain, locationSlug, measurement,
     })
   } catch (error) {
     console.error('onboarding_activate_failed', { draftId, organizationId, committed, error })

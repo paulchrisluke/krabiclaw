@@ -309,7 +309,7 @@ async function recordStripePurchase(
   // A failed send makes Stripe redeliver; the native event is already
   // recorded and its identity is returned on the retry. Everything else
   // (disabled, disconnected, no consent) is a recorded outcome, not an error.
-  if (delivery.status === 'failed') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
+  if (delivery.status === 'failed' || delivery.status === 'sending') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
 
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription' || purchaseType === 'resubscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
@@ -502,7 +502,7 @@ async function recordStripeRefund(
     eventId: recorded.id, organizationId: platformOrganizationId, event: projection,
     clientId: context.clientId, userId: context.userId, sessionId: null, sessionCapturedAt: null,
   })
-  if (delivery.status === 'failed') throw new Error(`GA4 refund delivery failed for refund ${refund.id}: ${delivery.detail}`)
+  if (delivery.status === 'failed' || delivery.status === 'sending') throw new Error(`GA4 refund delivery failed for refund ${refund.id}: ${delivery.detail}`)
 }
 
 /** The subscription an invoice belongs to, across both Stripe invoice shapes. */

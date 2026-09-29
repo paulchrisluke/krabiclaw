@@ -11,7 +11,7 @@ import type { CurrencyCode } from '~/shared/currencies'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { originatingOwnerId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { measurementOutcome, originatingOwnerId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 
 type SetupEnv = CloudflareEnv
@@ -168,10 +168,13 @@ export async function provisionOrganization(
 }
 
 /** Makes a pending tenant public. */
-export async function activateOrganization(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null): Promise<void> {
+export async function activateOrganization(db: D1Database, organizationId: string): Promise<void> {
   await execute(db, `UPDATE organization SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [new Date().toISOString(), organizationId])
-  // Onboarding is complete exactly when this transition commits. The event is
-  // unique per organization, so replaying a completed setup request (or
+}
+
+/** Records completion after the caller has committed its setup work. */
+export async function recordOnboardingComplete(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null): Promise<void> {
+  // The event is unique per organization, so replaying a completed setup request (or
   // retrying after a failed record) never counts a second onboarding. KrabiClaw
   // activating itself is not an acquisition.
   const platformOrganizationId = (await getPlatformOrganization(db)).id
@@ -304,7 +307,10 @@ async function performSeeding(
 
   await createSystemSubdomain(env, db, organizationId, subdomain)
 
-  if (activate) await activateOrganization(env, db, organizationId, origin)
+  if (activate) await activateOrganization(db, organizationId)
+  const measurement = activate
+    ? measurementOutcome((await Promise.allSettled([recordOnboardingComplete(env, db, organizationId, origin)]))[0]!)
+    : undefined
 
   return {
     status: 200,
@@ -313,6 +319,7 @@ async function performSeeding(
       subdomain,
       locationId,
       message: 'Organization provisioned successfully',
+      ...(measurement ? { measurement } : {}),
     }
   }
 }

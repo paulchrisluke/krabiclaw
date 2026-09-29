@@ -186,10 +186,9 @@ Zaraz-enabled environment. A desktop session must verify, recording the tested
 SHA:
 
 1. Run `reconcileZarazAnalytics` against the production zone (or the designated
-   qualification zone): `ga-platform` is gone, `settings.ecommerce` is true and
-   Confirm the
-   `Product Viewed` / `Checkout Started` ecommerce events reach GA4 with the
-   mapping Cloudflare documents only in general terms.
+   qualification zone). Then verify that `ga-platform` is gone,
+   `settings.ecommerce` is true, and both `Product Viewed` and `Checkout Started`
+   ecommerce events reach GA4 with the documented mapping.
 2. Consent: accept, pay, then withdraw and confirm the stored identifiers are gone and later payments/refunds record natively with delivery `no_consent_context`. Password and social signup, real onboarding, Stripe test payment, first
    payment after a trial, renewal and a partial refund produce the events in the
    table above and the `ga4_delivery` outcomes, in the designated GA4 property

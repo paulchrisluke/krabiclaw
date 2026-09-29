@@ -751,7 +751,7 @@ async function submitBooking(contact: ContactFormState) {
   submitting.value = true
   bookingError.value = ''
   try {
-    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value: ConversionValue | null; policy_summary?: ApiRecord | null }>(
+    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; policy_summary?: ApiRecord | null }>(
       `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
       {
         method: 'POST',
@@ -765,11 +765,11 @@ async function submitBooking(contact: ContactFormState) {
           notes: contact.notes || null,
           locale: locale.value,
         },
-        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value: ConversionValue | null } =>
+        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
       },
     )
-    mirrorSubmission('booking_submit', props.location.id, response.quoted_value)
+    if (response.quoted_value !== undefined) mirrorSubmission('booking_submit', props.location.id, response.quoted_value)
     setBookingConfirmation({
       type: 'booking',
       organizationId: props.organizationId,

@@ -54,6 +54,11 @@ async function updateStripeAttribution(
     if (contextMetadata.ga_session_captured_at) contextMetadata.pending_ga_session_captured_at = contextMetadata.ga_session_captured_at
   }
 
+  if (!contextMetadata.ga_client_id) {
+    contextMetadata.ga_client_id = ''
+    contextMetadata.pending_ga_client_id = ''
+  }
+
   if (subscription) {
     await stripe.subscriptions.update(subscription.id, {
       metadata: { ...subscription.metadata, ...contextMetadata }, })
@@ -63,7 +68,7 @@ async function updateStripeAttribution(
     if (!customer.deleted) {
       await stripe.customers.update(customerId, {
         metadata: {
-          ...customer.metadata, user_id: userId, ...(contextMetadata.ga_client_id ? { ga_client_id: contextMetadata.ga_client_id } : {}), }, })
+          ...customer.metadata, user_id: userId, ga_client_id: contextMetadata.ga_client_id || '', }, })
     }
   }
 }
