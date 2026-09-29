@@ -33,8 +33,8 @@ export interface ConversionEventDefinition {
   conversionType: ConversionType | null
   /** The GA4 event this fact projects to, or null when it is a handoff with no GA4 meaning. */
   ga4: { name: string } | null
-  /** Which sender owns the GA4 event: the visitor's browser, Zaraz's HTTP Events API, or Measurement Protocol. Exactly one. */
-  ga4Sender: 'browser' | 'zaraz_http' | 'measurement_protocol'
+  /** Which sender owns the GA4 event: the visitor's browser or Measurement Protocol. Exactly one. */
+  ga4Sender: 'browser' | 'measurement_protocol'
   /** Session conversion rate numerators: handoffs and refunds are not outcomes. */
   outcome: boolean
 }
@@ -47,8 +47,8 @@ export const CONVERSION_EVENT_CATALOG = {
   product_order_external_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'product', valueBasis: null, conversionType: null, ga4: { name: 'product_order_external_click' }, ga4Sender: 'browser', outcome: false },
   link_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_block', valueBasis: null, conversionType: null, ga4: { name: 'link_click' }, ga4Sender: 'browser', outcome: false },
   donation_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_document', valueBasis: null, conversionType: null, ga4: { name: 'donation_click' }, ga4Sender: 'browser', outcome: false },
-  sign_up: { producer: 'server', stages: ['completed'], entityType: 'user', valueBasis: null, conversionType: null, ga4: { name: 'sign_up' }, ga4Sender: 'zaraz_http', outcome: true },
-  onboarding_complete: { producer: 'server', stages: ['completed'], entityType: 'organization', valueBasis: null, conversionType: null, ga4: { name: 'tutorial_complete' }, ga4Sender: 'zaraz_http', outcome: true },
+  sign_up: { producer: 'server', stages: ['completed'], entityType: 'user', valueBasis: null, conversionType: null, ga4: { name: 'sign_up' }, ga4Sender: 'measurement_protocol', outcome: true },
+  onboarding_complete: { producer: 'server', stages: ['completed'], entityType: 'organization', valueBasis: null, conversionType: null, ga4: { name: 'tutorial_complete' }, ga4Sender: 'measurement_protocol', outcome: true },
   purchase: { producer: 'server', stages: ['completed'], entityType: 'invoice', valueBasis: 'purchase', conversionType: 'subscription', ga4: { name: 'purchase' }, ga4Sender: 'measurement_protocol', outcome: true },
   refund: { producer: 'server', stages: ['completed'], entityType: 'refund', valueBasis: 'refund', conversionType: 'subscription', ga4: { name: 'refund' }, ga4Sender: 'measurement_protocol', outcome: false },
 } as const satisfies Record<string, ConversionEventDefinition>

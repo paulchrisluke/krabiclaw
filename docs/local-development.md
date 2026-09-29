@@ -51,11 +51,6 @@ local reconcile would rewrite production's tags. With Zaraz declared absent,
 reconciliation reports `zaraz_absent` without calling Cloudflare. Declaring it
 absent while `CF_ZONE_ID` is set fails as a configuration error.
 
-With `ZARAZ_ANALYTICS=absent`, server-side GA4 delivery through Zaraz's HTTP
-Events API records `not_configured` (`zaraz_absent`) on the native event. That is
-not a verification of production Zaraz delivery; see
-`docs/operations/event-measurement.md`.
-
 `local:setup` is safe to repeat: it applies the migration chain, refreshes
 the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
 verifies the resulting D1 database. Do not replace its steps with direct

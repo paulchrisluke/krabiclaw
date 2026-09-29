@@ -17,8 +17,8 @@ enforces the shape and the once-per-subject rule.
 
 | Native event | Subject (entity) | Counted | GA4 event | GA4 sender |
 | --- | --- | --- | --- | --- |
-| `sign_up` | user | once per registered user (`databaseHooks.user.create.after`; anonymous guests, login, provider linking and existing-user invitation acceptance never reach it) | `sign_up` | Zaraz HTTP Events API |
-| `onboarding_complete` | organization | once per organization, when `activateOrganization` commits `onboarding_status = 'active'` | `tutorial_complete` | Zaraz HTTP Events API |
+| `sign_up` | user | once per registered user (`databaseHooks.user.create.after`; anonymous guests, login, provider linking and existing-user invitation acceptance never reach it) | `sign_up` | Measurement Protocol |
+| `onboarding_complete` | organization | once per organization, when `activateOrganization` commits `onboarding_status = 'active'` | `tutorial_complete` | Measurement Protocol |
 | `contact_submit` | request | persisted enquiry | `generate_lead`, `conversion_type=contact` | browser (Zaraz web API) |
 | `reservation_submit` | request | persisted reservation | `reservation_submit`, `conversion_type=reservation` | browser |
 | `booking_submit` | request | persisted booking, with its quoted value | `booking_submit`, `conversion_type=booking` | browser |
@@ -103,8 +103,7 @@ The destination is always the measuring organization's own connected property
 is no environment-level property (`GA4_MEASUREMENT_ID` was removed) and no
 platform Zaraz tool: KrabiClaw is configured like any tenant by
 `reconcileZarazAnalytics` (`server/utils/zaraz-analytics.ts`), which deletes any GA4
-tool that is not a tenant's and sets the zone's `settings.ecommerce` and
-`settings.eventsApiPath`.
+tool that is not a tenant's and sets the zone's `settings.ecommerce`.
 
 Every attempt writes its outcome to the native event (`payload.ga4_delivery`),
 surfaced as `coverage.ga4Delivery`:
@@ -112,19 +111,20 @@ surfaced as `coverage.ga4Delivery`:
 | Status | Meaning |
 | --- | --- |
 | `sent` | accepted by the transport |
-| `not_configured` | no integration, no measurement ID/host, no API secret, no events API path, or `ZARAZ_ANALYTICS=absent` |
+| `not_configured` | no integration, no measurement ID or host, or no API secret |
 | `disconnected` | the property connection is not active |
 | `no_consent_context` | no visitor request or GA client ID, so consent cannot be observed |
 | `consent_rejected` | the visitor's Zaraz consent cookie declines the `kc_analytics` purpose |
 | `failed` | provider error (`detail` has the reason) |
 
-Zaraz HTTP Events API: posts to `https://<canonical host><ZARAZ_EVENTS_API_PATH>`
-forwarding only the consent cookie and the `_ga`/`_ga_<id>` cookies; the path is
-the API's only credential (`wrangler secret put ZARAZ_EVENTS_API_PATH`).
-Measurement Protocol (Stripe family): the API secret (`GA4_API_SECRET`) belongs to
-the platform organization's property; the client ID is the visitor's own GA client
-captured in their consenting browser, never synthesized from a user ID. A `failed`
-Stripe delivery fails the webhook so Stripe redelivers; the native event is already
+Measurement Protocol (signup, onboarding and the Stripe family): the API secret
+(`GA4_API_SECRET`) belongs to the platform organization's property. For signup and
+onboarding the consent and GA client come from the visitor's own request: only the
+Zaraz consent cookie and the `_ga` cookies are read, and a request without a
+consenting visitor sends nothing and records `no_consent_context` or
+`consent_rejected`. For Stripe the client ID is the one captured in the visitor's
+consenting browser; it is never synthesized from a user ID. A `failed` Stripe
+delivery fails the webhook so Stripe redelivers; the native event is already
 recorded and is returned on the retry.
 
 ### GA4 property setup contract (manual, in the GA4 UI)
@@ -149,7 +149,7 @@ SHA:
 
 1. Run `reconcileZarazAnalytics` against the production zone (or the designated
    qualification zone): `ga-platform` is gone, `settings.ecommerce` is true and
-   `settings.eventsApiPath` equals `ZARAZ_EVENTS_API_PATH`. Confirm the
+   Confirm the
    `Product Viewed` / `Checkout Started` ecommerce events reach GA4 with the
    mapping Cloudflare documents only in general terms.
 2. Password and social signup, real onboarding, Stripe test payment, first
@@ -157,8 +157,8 @@ SHA:
    table above and the `ga4_delivery` outcomes, in the designated GA4 property
    (DebugView plus a standard report). Validate the Measurement Protocol payload
    with Google's validation server, then confirm collection.
-3. `ZARAZ_ANALYTICS=absent` environments report `not_configured`; they are not
-   evidence of production Zaraz delivery.
+3. `ZARAZ_ANALYTICS=absent` environments never reconcile the zone, so they are not
+   evidence of production Zaraz behavior (browser events, ecommerce).
 4. Read the same range through the authenticated dashboard API, MCP
    `get_organization_analytics` and CMS Insights and compare fields.
 5. Multi-organization isolation: platform subscription revenue on KrabiClaw only,

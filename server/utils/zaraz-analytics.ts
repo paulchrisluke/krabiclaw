@@ -11,12 +11,6 @@ export interface ZarazEnv extends DomainEnv {
    * would rewrite production's tags. Production leaves it unset.
    */
   ZARAZ_ANALYTICS?: string
-  /**
-   * The unguessable path of Zaraz's HTTP Events API on the zone. The API has no
-   * other authentication, so the path is the credential: it is set on the zone
-   * here and read by the sender from the same variable.
-   */
-  ZARAZ_EVENTS_API_PATH?: string
 }
 
 interface ZarazAction {
@@ -101,7 +95,6 @@ function requireZarazEnv(env: ZarazEnv): ZarazPresence {
   }
   if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
   if (!env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required')
-  if (!env.ZARAZ_EVENTS_API_PATH?.startsWith('/')) throw new Error('ZARAZ_EVENTS_API_PATH must be an absolute path')
   return 'present'
 }
 
@@ -350,7 +343,6 @@ function stableStringify(value: unknown): string {
 export function reconcileZarazAnalyticsConfig(
   config: ZarazConfig,
   input: {
-    eventsApiPath: string
     tenants: ZarazAnalyticsTenant[]
   },
 ): ZarazAnalyticsConfigChanges {
@@ -359,10 +351,10 @@ export function reconcileZarazAnalyticsConfig(
   const before = stableStringify(config)
   const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.organizationId)))
 
-  // Ecommerce events (purchase, refund) reach the GA4 tools' ecommerce action
-  // only when the zone enables Zaraz's ecommerce API, and server-side outcomes
-  // only when the HTTP Events API has a path.
-  config.settings = { ...(config.settings as Record<string, unknown> | undefined), ecommerce: true, eventsApiPath: input.eventsApiPath }
+  // The product page's ecommerce events (Product Viewed, Checkout Started)
+  // reach the GA4 tools' ecommerce action only when the zone enables Zaraz's
+  // ecommerce API.
+  config.settings = { ...(config.settings as Record<string, unknown> | undefined), ecommerce: true }
   for (const tenant of input.tenants) {
     upsertTenantZarazAnalytics(config, tenant)
   }
@@ -419,7 +411,6 @@ export async function reconcileZarazAnalytics(
   try {
     const config = await getZarazConfig(env)
     const result = reconcileZarazAnalyticsConfig(config, {
-      eventsApiPath: env.ZARAZ_EVENTS_API_PATH!,
       tenants: [...tenants.entries()].map(([organizationId, tenant]) => ({
         organizationId,
         measurementId: tenant.measurementId,

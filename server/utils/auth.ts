@@ -124,8 +124,6 @@ export interface CloudflareEnv {
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_CONNECT_WEBHOOK_SECRET?: string
   GA4_API_SECRET?: string
-  ZARAZ_ANALYTICS?: string
-  ZARAZ_EVENTS_API_PATH?: string
   AI_SEARCH?: AiSearchNamespace
   AI_SEARCH_INSTANCE_ID?: string
   PLATFORM_SEARCH_REINDEX_SECRET?: string

@@ -2,6 +2,8 @@
 // The configured GA4 tool mirrors `zaraz.track()` events while its consent
 // purpose is granted by the visitor in ZarazConsentNotice.
 
+import { parseGaClientId, parseGaSessionId } from '~/utils/ga-cookies'
+
 declare global {
   interface Window {
     zaraz?: {
@@ -115,36 +117,6 @@ export interface AnalyticsEventInput extends AnalyticsEventProperties {
 // The client_id is the last two segments of `GA1.1.<random>.<timestamp>`.
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-delivery.ts.
-function decodeCookieValue(value: string): string {
-  try {
-    return decodeURIComponent(value)
-  } catch {
-    return value
-  }
-}
-
-export function parseGaClientId(cookieHeader: string): string | null {
-  const match = cookieHeader.match(/(?:^|;\s*)_ga=([^;]+)/)
-  if (!match) return null
-  const parts = decodeCookieValue(match[1] ?? '').split('.')
-  if (parts.length < 4) return null
-  return `${parts[2]}.${parts[3]}`
-}
-
-export function parseGaSessionId(cookieHeader: string): number | null {
-  for (const cookie of cookieHeader.split(';')) {
-    const [rawName, ...rawValue] = cookie.trim().split('=')
-    if (!rawName?.startsWith('_ga_')) continue
-    const value = decodeCookieValue(rawValue.join('='))
-    const firstSessionSegment = value.match(/^GS\d+\.\d+\.(\d+)/)?.[1]
-      ?? value.match(/(?:^|[$.])s(\d+)(?:[$.]|$)/)?.[1]
-      ?? value.split('.').find((part, index) => index >= 2 && /^\d+$/.test(part))
-    const sessionId = Number(firstSessionSegment)
-    if (Number.isSafeInteger(sessionId) && sessionId > 0) return sessionId
-  }
-  return null
-}
-
 export const getGaClientId = (): string | null => {
   if (!import.meta.client) return null
   return parseGaClientId(document.cookie)

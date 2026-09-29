@@ -57,9 +57,6 @@ WHATSAPP_DELIVERY_MODE = "provider"
 # GA4 property connected to the platform organization's own Google Analytics
 # integration; there is no environment-level measurement ID:
 #   yarn wrangler secret put GA4_API_SECRET
-# ZARAZ_EVENTS_API_PATH is the unguessable path of Zaraz's HTTP Events API, the
-# API's only credential. Reconciliation sets it on the zone; the sender reads it:
-#   yarn wrangler secret put ZARAZ_EVENTS_API_PATH
 # PREVIEW_SECRET signs scoped preview/draft tokens (server/utils/preview-token.ts)
 # and is required by the onboarding draft endpoints. It must stay stable across
 # deploys/runs in a given environment — rotating it invalidates any draft preview

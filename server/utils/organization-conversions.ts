@@ -2,7 +2,7 @@ import { parseCookies } from 'better-auth/cookies'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
-import { deliverViaZarazHttp, type ZarazHttpEnv } from '~/server/utils/ga4-delivery'
+import { deliverForVisitor, type MeasurementProtocolEnv } from '~/server/utils/ga4-delivery'
 import { projectConversionToGa4 } from '~/utils/ga4-projection'
 import { SESSION_COOKIE, VISITOR_COOKIE, hashIp, isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import {
@@ -116,14 +116,14 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: { 
 
 /**
  * Records a server-produced outcome and, the first time it is recorded, sends
- * its GA4 projection through Zaraz's HTTP Events API. A repeat of the same
+ * its GA4 projection through Measurement Protocol, with the consent and GA client of the visitor's own request. A repeat of the same
  * outcome returns the persisted event and sends nothing: one outcome, one GA
  * event. The outcome of the send lives on the event (`ga4_delivery`).
  */
-export async function recordAndDeliverConversion(env: ZarazHttpEnv, db: DbClient, origin: { headers: Headers } | null, input: OrganizationConversionInput) {
+export async function recordAndDeliverConversion(env: MeasurementProtocolEnv, db: DbClient, origin: { headers: Headers } | null, input: OrganizationConversionInput) {
   const recorded = await recordOrganizationConversionEvent(db, origin, input)
   if (recorded.created) {
-    await deliverViaZarazHttp(env, db, {
+    await deliverForVisitor(env, db, {
       eventId: recorded.id, organizationId: input.organizationId, origin,
       projection: projectConversionToGa4({ eventName: input.eventName, value: input.value }),
     })

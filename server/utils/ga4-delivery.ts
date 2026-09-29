@@ -1,16 +1,15 @@
 import { parseCookies } from 'better-auth/cookies'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
-import { getClientIp } from '~/server/utils/hourly-rate-limit'
 import { ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME } from '~/utils/zaraz-consent'
+import { parseGaClientId, parseGaSessionId } from '~/utils/ga-cookies'
 import type { Ga4Projection } from '~/utils/ga4-projection'
 
 /**
  * Google Analytics delivery for outcomes the server produces. Exactly one
  * sender owns each outcome: the browser (Zaraz web API) owns what the visitor
- * does on the page, the Zaraz HTTP Events API owns server-side outcomes that
- * still have a visitor's consent context (signup, onboarding), and Measurement
- * Protocol owns the Stripe subscription family. The destination is always the
+ * does on the page, and Measurement Protocol owns everything the server
+ * records (signup, onboarding and the Stripe subscription family). The destination is always the
  * measuring organization's own connected property, resolved from its canonical
  * host; there is no environment-level property and no synthetic client.
  *
@@ -19,10 +18,8 @@ import type { Ga4Projection } from '~/utils/ga4-projection'
  * consent-rejected outcome from a provider failure without inventing zeros.
  */
 export type Ga4DeliveryStatus = 'sent' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
-export type Ga4Transport = 'zaraz_http' | 'measurement_protocol'
-
 export interface Ga4Delivery {
-  transport: Ga4Transport
+  transport: 'measurement_protocol'
   status: Ga4DeliveryStatus
   detail?: string
 }
@@ -56,65 +53,24 @@ async function recordGa4Delivery(db: DbClient, eventId: string, delivery: Ga4Del
   return delivery
 }
 
-export interface ZarazHttpEnv { ZARAZ_ANALYTICS?: string; ZARAZ_EVENTS_API_PATH?: string }
-
-// Only the cookies Zaraz needs to honor the visitor's own answer and identity.
-// The request's other cookies (sessions, credentials) are never forwarded.
-function allowlistedCookies(origin: { headers: Headers }, measurementId: string): { consent: 'accepted' | 'rejected' | 'absent'; cookies: Record<string, string> } {
-  const all = parseCookies(origin.headers.get('cookie') ?? '')
-  const rawConsent = all.get(ZARAZ_CONSENT_COOKIE_NAME)
-  if (!rawConsent) return { consent: 'absent', cookies: {} }
-  let purposes: unknown
-  try { purposes = JSON.parse(decodeURIComponent(rawConsent)) } catch { return { consent: 'absent', cookies: {} } }
-  const accepted = typeof purposes === 'object' && purposes !== null && (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] === true
-  if (!accepted) return { consent: 'rejected', cookies: {} }
-  const cookies: Record<string, string> = { [ZARAZ_CONSENT_COOKIE_NAME]: rawConsent }
-  for (const name of ['_ga', `_ga_${measurementId.replace(/^G-/, '')}`]) {
-    const value = all.get(name)
-    if (value) cookies[name] = value
-  }
-  return { consent: 'accepted', cookies }
-}
-
 /**
- * Sends a non-ecommerce outcome through Zaraz's HTTP Events API on the
- * measuring organization's host. Without the visitor's request there is no
- * consent to honor, so nothing is sent and the state says so.
+ * The visitor's own consent and GA identity, read from their request. Only the
+ * Zaraz consent cookie and the `_ga` cookies are ever looked at; the request's
+ * other cookies (sessions, credentials) are not.
  */
-export async function deliverViaZarazHttp(env: ZarazHttpEnv, db: DbClient, input: {
-  eventId: string; organizationId: string; projection: Ga4Projection; origin: { headers: Headers } | null
-}): Promise<Ga4Delivery> {
-  const transport = 'zaraz_http' as const
-  const record = (status: Ga4DeliveryStatus, detail?: string) => recordGa4Delivery(db, input.eventId, { transport, status, ...(detail ? { detail } : {}) })
-  if (input.projection.ecommerce) throw new Error(`${input.projection.name} is an ecommerce event; the Zaraz HTTP Events API path does not send ecommerce`)
-  const resolved = await resolveGa4Destination(db, input.organizationId)
-  if ('status' in resolved) return await record(resolved.status, resolved.detail)
-  if (env.ZARAZ_ANALYTICS === 'absent') return await record('not_configured', 'zaraz_absent')
-  if (!env.ZARAZ_EVENTS_API_PATH) return await record('not_configured', 'no_events_api_path')
-  if (!input.origin) return await record('no_consent_context')
-  const observed = allowlistedCookies(input.origin, resolved.destination.measurementId)
-  if (observed.consent === 'absent') return await record('no_consent_context')
-  if (observed.consent === 'rejected') return await record('consent_rejected')
-
-  try {
-    const response = await fetch(`https://${resolved.destination.host}${env.ZARAZ_EVENTS_API_PATH}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(10_000),
-      body: JSON.stringify({ events: [{
-        client: { __zarazTrack: input.projection.name, ...input.projection.params },
-        system: {
-          cookies: observed.cookies,
-          device: { ip: getClientIp({ req: input.origin }), 'user-agent': input.origin.headers.get('user-agent') ?? '', language: input.origin.headers.get('accept-language')?.split(',')[0] ?? '' },
-          page: { url: `https://${resolved.destination.host}/`, title: '', referrer: '' },
-        },
-      }] }),
-    })
-    if (!response.ok) return await record('failed', `zaraz_http_${response.status}`)
-    return await record('sent')
-  } catch (error) {
-    return await record('failed', error instanceof Error ? error.message : String(error))
-  }
+function visitorGaContext(origin: { headers: Headers } | null, nowSeconds: number):
+  { status: 'no_consent_context' | 'consent_rejected' } | { clientId: string; sessionId: number | null; sessionCapturedAt: number | null } {
+  if (!origin) return { status: 'no_consent_context' }
+  const cookieHeader = origin.headers.get('cookie') ?? ''
+  const rawConsent = parseCookies(cookieHeader).get(ZARAZ_CONSENT_COOKIE_NAME)
+  if (!rawConsent) return { status: 'no_consent_context' }
+  let purposes: unknown
+  try { purposes = JSON.parse(decodeURIComponent(rawConsent)) } catch { return { status: 'no_consent_context' } }
+  if (typeof purposes !== 'object' || purposes === null || (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] !== true) return { status: 'consent_rejected' }
+  const clientId = parseGaClientId(cookieHeader)
+  if (!clientId) return { status: 'no_consent_context' }
+  const sessionId = parseGaSessionId(cookieHeader)
+  return { clientId, sessionId, sessionCapturedAt: sessionId ? nowSeconds : null }
 }
 
 export interface MeasurementProtocolEnv { GA4_API_SECRET?: string }
@@ -175,4 +131,20 @@ export async function deliverViaMeasurementProtocol(env: MeasurementProtocolEnv,
   const existing = await readGa4Delivery(db, input.eventId)
   if (existing?.status === 'sent') return existing
   return await recordGa4Delivery(db, input.eventId, { transport: 'measurement_protocol', ...await sendMeasurementProtocol(env, db, input) })
+}
+
+/**
+ * Delivers an outcome the visitor's own request produced (signup, onboarding).
+ * Consent and the GA client come from that request; a request without a
+ * consenting visitor sends nothing and records why.
+ */
+export async function deliverForVisitor(env: MeasurementProtocolEnv, db: DbClient, input: {
+  eventId: string; organizationId: string; projection: Ga4Projection; origin: { headers: Headers } | null
+}, nowSeconds = Math.floor(Date.now() / 1000)): Promise<Ga4Delivery> {
+  const visitor = visitorGaContext(input.origin, nowSeconds)
+  if ('status' in visitor) return await recordGa4Delivery(db, input.eventId, { transport: 'measurement_protocol', status: visitor.status })
+  return await deliverViaMeasurementProtocol(env, db, {
+    eventId: input.eventId, organizationId: input.organizationId, event: input.projection,
+    clientId: visitor.clientId, userId: null, sessionId: visitor.sessionId, sessionCapturedAt: visitor.sessionCapturedAt,
+  })
 }
