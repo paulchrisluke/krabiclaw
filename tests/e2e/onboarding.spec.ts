@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { dismissPreviewToolbar } from './helpers'
-import { loginAs } from './helpers/auth'
+import { authRequestHeaders, loginAs } from './helpers/auth'
 import { tenantHostIsAddressable, testBaseUrl } from './test-env'
 import { environmentTenantAliasSlug } from '../../server/utils/tenant-hosts'
 import { formatMinorAmount } from '../../shared/prices'
@@ -305,6 +305,33 @@ test('a new owner picks their Google listing and it seeds location, contact and 
 
   const cleared = await page.request.delete('/api/dashboard/onboarding/drafts/active')
   expect(cleared.status(), await cleared.text()).toBe(200)
+})
+
+// Deleting the site from Site settings is Better Auth's organization delete, and
+// the draft that created the site goes with it. It used to survive detached, so
+// the owner signing up again was offered the deleted site to resume (#1113).
+test('deleting a site through Better Auth also deletes the draft that created it', async ({ page, baseURL }) => {
+  test.setTimeout(120_000)
+  await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
+  const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
+  expect(discarded.status(), await discarded.text()).toBe(200)
+
+  const name = `E2E Deleted ${Date.now().toString(36)}`
+  const firstSave = await page.request.post('/api/dashboard/onboarding/drafts/active', {
+    data: { sourceType: 'manual', vertical: 'restaurant', name, details: { country: 'TH', city: 'Ao Nang', streetAddress: '88 Moo 2' } },
+    timeout: 90_000,
+  })
+  expect(firstSave.status(), await firstSave.text()).toBe(200)
+  const { organizationId } = await firstSave.json() as { organizationId: string }
+
+  const deleted = await page.request.post('/api/auth/organization/delete', { headers: authRequestHeaders(baseURL!), data: { organizationId } })
+  expect(deleted.status(), await deleted.text()).toBe(200)
+
+  const organizations = await (await page.request.get('/api/auth/organization/list')).json() as Array<{ id: string }>
+  expect(organizations.map(organization => organization.id)).not.toContain(organizationId)
+  const resumed = await page.request.get('/api/dashboard/onboarding/drafts/active')
+  expect(resumed.status(), await resumed.text()).toBe(200)
+  expect(await resumed.json()).toEqual({ success: true, draft: null })
 })
 
 test('the business search API refuses what the picker would never send', async ({ request, baseURL }) => {
