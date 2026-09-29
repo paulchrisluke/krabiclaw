@@ -7,7 +7,7 @@ import type { CloudflareEnv } from '../../server/utils/auth.ts'
 import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { syncSocialPosts } from '../../server/utils/social-sync.ts'
-import { eraseMetaSubjectData, remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
+import { deauthorizeMetaSubject, eraseMetaSubjectData, remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
 import { verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 
@@ -503,16 +503,35 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     // An identical bare id in the other Meta app is another person and is untouched.
     await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, provider_post_id, published_at)
       VALUES ('other-app', 'org-a', NULL, 'instagram', 'ig-app', 'fb-subject', '${IG}', 'import', 'published', 'other-app-post', '2026-09-01T00:00:00.000Z')`)
-    // Deauthorized first: the linked account and connection are gone before the deletion request arrives.
-    await run("DELETE FROM account WHERE id = 'fb-account'")
-    await run("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook')")
     const body = Buffer.from(JSON.stringify({ algorithm: 'HMAC-SHA256', user_id: 'fb-subject' })).toString('base64url')
     const signed = `${createHmac('sha256', 'facebook-secret').update(body).digest('base64url')}.${body}`
     const subject = (await verifyMetaSignedRequest(signed, configuredMetaApps(env as unknown as Record<string, unknown>)))!
     assert.deepEqual([subject.channel, subject.providerAppId, subject.providerSubjectId], ['facebook', 'fb-app', 'fb-subject'])
+    // Deauthorization removes this person's linked account and both tenant
+    // selections, but keeps the imported and authored website content.
+    assert.deepEqual(await deauthorizeMetaSubject(env, subject), [
+      { product: 'facebook', released: true }, { product: 'facebook', released: true },
+    ])
+    assert.equal(await db.prepare("SELECT count(*) FROM account WHERE id = 'fb-account'").first('count(*)'), 0)
+    assert.equal(await db.prepare("SELECT count(*) FROM organization WHERE json_extract(integrations_json, '$.facebook') IS NOT NULL").first('count(*)'), 0)
+    assert.equal(await db.prepare("SELECT count(*) FROM organization WHERE json_extract(integrations_json, '$.instagram') IS NOT NULL").first('count(*)'), 2)
+    assert.deepEqual(await deauthorizeMetaSubject(env, subject), [])
+    assert.deepEqual(await db.prepare('SELECT status, summary FROM content_documents WHERE id = ?').bind(own.post.id).first(), { status: 'published', summary: 'Written by us' })
     const importedDocuments = Number(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'facebook' AND provider_app_id = 'fb-app' AND provider_subject_id = 'fb-subject' AND origin = 'import' AND post_id IS NOT NULL").first('count(*)'))
+    // A failed storage cleanup must not claim the subject was erased. The
+    // publication provenance remains so the next callback can resume it.
+    const imageDelete = (request: SeenRequest) => request.host === 'api.cloudflare.com' && request.method === 'DELETE'
+    const imageDeletesBeforeFailure = meta.sent(imageDelete).length
+    meta.fault('reject', imageDelete)
+    await assert.rejects(eraseMetaSubjectData(env, subject), /Cloudflare image/)
+    const failedImageDelete = meta.sent(imageDelete)[imageDeletesBeforeFailure]!
+    assert.ok(await remainingMetaSubjectData(env, subject) > 0)
+    const documentsAfterFailure = Number(await db.prepare("SELECT count(*) FROM post_publications WHERE channel = 'facebook' AND provider_app_id = 'fb-app' AND provider_subject_id = 'fb-subject' AND origin = 'import' AND post_id IS NOT NULL").first('count(*)'))
+    assert.ok(documentsAfterFailure <= importedDocuments)
+    assert.deepEqual(await db.prepare('SELECT status, summary FROM content_documents WHERE id = ?').bind(own.post.id).first(), { status: 'published', summary: 'Written by us' })
     const erased = await eraseMetaSubjectData(env, subject)
-    assert.equal(erased.erased_documents, importedDocuments)
+    assert.equal(erased.erased_documents, documentsAfterFailure)
+    assert.equal(meta.sent(request => imageDelete(request) && request.path === failedImageDelete.path).length, 2)
     assert.equal(erased.remaining, 0)
     assert.equal(await remainingMetaSubjectData(env, subject), 0)
     // The tenant's own post and upload stay; only the Facebook association went.
