@@ -457,8 +457,15 @@ test('import: every page and child, provider-owned copies, edits and deletions k
     assert.ok(!JSON.stringify(progress).includes('access_token'))
 
     // A repeat scan converges: nothing new, and no duplicate row.
+    const assetsBefore = await db.prepare("SELECT count(*) FROM media_assets WHERE organization_id = 'org-a'").first('count(*)')
+    const sentBefore = meta.sent(() => true).length
     const again = await syncSocialPosts(env, 'org-a', 60_000)
     assert.equal(again[0]!.imported + again[1]!.imported, 0)
+    // Every known post was seen in the list, so none is read again one by one
+    // and no media is stored anew.
+    const known = new Set((await db.prepare("SELECT provider_post_id FROM post_publications WHERE organization_id = 'org-a'").all<{ provider_post_id: string }>()).results.map(row => row.provider_post_id))
+    assert.deepEqual(meta.sent(() => true).slice(sentBefore).filter(request => request.method === 'GET' && known.has(request.path.split('/').at(-1)!)).map(request => request.path), [])
+    assert.equal(await db.prepare("SELECT count(*) FROM media_assets WHERE organization_id = 'org-a'").first('count(*)'), assetsBefore)
     // A native caption change updates the provider-owned copy; an edited copy keeps its words; a deleted one stays deleted.
     const note1 = (await imported(`${PAGE}_t1`))!
     const note2 = (await imported(`${PAGE}_t2`))!
