@@ -190,17 +190,16 @@ export async function getAnalyticsReport(db: DbClient, input: {
   const range = parseAnalyticsRange({ startDate: input.startDate, endDate: input.endDate, timeZone: context.timezone, now })
   const { start } = localDateBounds(range.startDate, context.timezone)
   const { end } = localDateBounds(range.endDate, context.timezone)
-  const social = input.env ? await readMetaInsights(input.env, input.organizationId, {
-    start, end,
-    previous: {
-      start: localDateBounds(range.previousStartDate, context.timezone).start,
-      end: localDateBounds(addLocalDays(range.previousEndDate, 1), context.timezone).start,
-    },
-  }, now, { facebook: input.facebookCursor, instagram: input.instagramCursor }) : undefined
   const cutoffDate = context.analyticsDataStartAt ? localDateAt(new Date(context.analyticsDataStartAt), context.timezone) : null
-  const slices = await loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate)
-  const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
-  const [sessionStats, returningStats, attributionRows, conversionRows, attributionConversions] = await Promise.all([
+  const [social, slices, sessionStats, returningStats, attributionRows, conversionRows, attributionConversions] = await Promise.all([
+    input.env ? readMetaInsights(input.env, input.organizationId, {
+      start, end,
+      previous: {
+        start: localDateBounds(range.previousStartDate, context.timezone).start,
+        end: localDateBounds(addLocalDays(range.previousEndDate, 1), context.timezone).start,
+      },
+    }, now, { facebook: input.facebookCursor, instagram: input.instagramCursor }) : undefined,
+    loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate),
     queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) sessions, COUNT(DISTINCT visitor_id) visitors,
       COALESCE(ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END)), 0) avg_duration
       FROM (${sessionFactsSql}) WHERE organization_id = ? AND started_at < ? AND last_seen_at >= ?`, [input.organizationId, end, start]),
@@ -216,6 +215,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
     queryAll<Record<string, unknown>>(db, `SELECT (payload_json ->> '$.attribution.source') source, (payload_json ->> '$.attribution.medium') medium, (payload_json ->> '$.attribution.campaign') campaign, COUNT(*) conversions FROM analytics_events
       WHERE kind = 'conversion' AND organization_id = ? AND created_at >= ? AND created_at < ? GROUP BY 1,2,3`, [input.organizationId, start, end]),
   ])
+  const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const uniqueSessions = n(sessionStats?.sessions)
   const previousStart = localDateBounds(range.previousStartDate, context.timezone).start
   const previousAvailable = !context.analyticsDataStartAt || previousStart >= context.analyticsDataStartAt
