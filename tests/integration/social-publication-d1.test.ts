@@ -322,11 +322,30 @@ test('publication: one result, one external post per target, and no blind resend
     await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, provider_post_id, provider_handles_json, payload_hash, error_code, error_message)
       VALUES ('legacy', 'org-a', '${sixth.post.id}', 'facebook', 'fb-app', 'fb-subject', '${PAGE}', 'publish', 'failed', '${draftId}', '${JSON.stringify({ photo_ids: ['photo-legacy'], post_id: draftId })}',
         '${await postPayloadFingerprint((await getPost(db, env, 'org-a', sixth.post.id))!, { channel: 'facebook', target_id: PAGE })}', 'connection_error', '(#10) Failed to publish post')`)
+    const stillUnpublished = await reconcilePostPublication(env, 'org-a', 'legacy', draftId)
+    assert.deepEqual([stillUnpublished.state, stillUnpublished.publication?.status, stillUnpublished.publication?.code, stillUnpublished.publication?.message],
+      ['failed', 'failed', 'connection_error', '(#10) Failed to publish post'])
+    assert.deepEqual(await db.prepare('SELECT state, attempt_id, error_code, error_message FROM post_publications WHERE id = ?').bind('legacy').first(),
+      { state: 'failed', attempt_id: null, error_code: 'connection_error', error_message: '(#10) Failed to publish post' })
     const republished = await publishPost(env, 'org-a', sixth.post.id, { expectedUpdatedAt: sixth.post.updated_at, targets: [targets.facebook()] }, 'owner')
     assert.equal(republished.outcomes[0]!.status, 'published', JSON.stringify(republished.outcomes))
     assert.equal(meta.fbPosts.has(draftId), false)
     assert.deepEqual(meta.sent(request => request.method === 'POST' && request.path.endsWith(`${PAGE}/feed`)).at(-1)!.body['attached_media[0]'], JSON.stringify({ media_fbid: 'photo-legacy' }))
     await publishedOnMeta(sixth.post.id, 'facebook')
+
+    // An earlier reconciliation left an unclaimed unpublished draft in preparing.
+    const seventh = await create('key-7', { body: 'Unclaimed legacy draft' })
+    const unclaimedId = `${PAGE}_unclaimed-draft`
+    meta.fbPosts.set(unclaimedId, { published: false, attached: [] })
+    await run(`INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id, origin, state, provider_post_id, provider_handles_json, payload_hash)
+      VALUES ('unclaimed', 'org-a', '${seventh.post.id}', 'facebook', 'fb-app', 'fb-subject', '${PAGE}', 'publish', 'preparing', '${unclaimedId}', '${JSON.stringify({ post_id: unclaimedId })}',
+        '${await postPayloadFingerprint((await getPost(db, env, 'org-a', seventh.post.id))!, { channel: 'facebook', target_id: PAGE })}')`)
+    const ready = await reconcilePostPublication(env, 'org-a', 'unclaimed', unclaimedId)
+    assert.deepEqual([ready.state, ready.publication?.status, ready.publication?.code], ['preparing', 'processing', 'preparation_ready'])
+    assert.match(ready.publication!.message!, /Call publish_post again/)
+    assert.equal((await publishPost(env, 'org-a', seventh.post.id, { expectedUpdatedAt: seventh.post.updated_at, targets: [targets.facebook()] }, 'owner')).outcomes[0]!.status, 'published')
+    assert.equal(meta.fbPosts.has(unclaimedId), false)
+    await publishedOnMeta(seventh.post.id, 'facebook')
 
     // A Reel still processing returns processing, keeps its container, and a later call finishes that same container.
     meta.reelProcessingReads = 10
