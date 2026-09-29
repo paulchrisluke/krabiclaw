@@ -80,6 +80,8 @@ jobs:
       GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+      PLAYWRIGHT_AI_SEARCH_INSTANCE_ID: krabiclaw-e2e-${{ github.run_id }}-${{ github.run_attempt }}
       # CIMD client metadata must be public HTTPS, which localhost cannot serve.
       # Staging's test-client documents are the ones docs/testing-strategy.md names.
       MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
@@ -101,10 +103,16 @@ jobs:
           restore-keys: yarn-${{ runner.os }}-
       - run: corepack yarn install --immutable
       - run: corepack yarn playwright install --with-deps chromium
+      - name: Create E2E AI Search instance
+        id: create_search
+        run: corepack yarn wrangler ai-search create "$PLAYWRIGHT_AI_SEARCH_INSTANCE_ID" --type builtin
       # playwright.config.ts runs e2e:local:prepare itself when the worker is not
       # already prepared: local migrations, a production snapshot into local D1,
       # development auth, and the production build.
       - run: yarn test:e2e
+      - name: Delete E2E AI Search instance
+        if: always() && steps.create_search.outcome == 'success'
+        run: corepack yarn wrangler ai-search delete "$PLAYWRIGHT_AI_SEARCH_INSTANCE_ID" --force
       # Wrangler's own log names why the local Worker stopped serving; run
       # 36298734414 died serving _nuxt chunks with nothing else to read.
       - name: Upload Playwright report

@@ -143,12 +143,20 @@ reset and restored from a production snapshot, which wrote 8-10 million D1 rows
 a day and was the whole of this account's D1 bill. It also meant one mutable
 environment that runs had to queue for.
 
-The E2E suite runs locally, against a local D1 and a Worker the suite starts:
+The E2E suite runs locally, against a local D1 and a Worker the suite starts.
+Set `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID` to a provisioned instance dedicated to
+that D1 copy, and keep `PLATFORM_SEARCH_REINDEX_SECRET` in `.env`:
 
 ```bash
 yarn e2e:local:prepare   # local D1, migrations, fixtures, production build
 yarn test:e2e:local
 ```
+
+Playwright waits for the Worker's health endpoint, then runs the existing
+`ai-search:sync` command to reconcile the copied D1 into the dedicated index
+before specs run. CI creates a unique instance for each workflow run and
+deletes only that instance afterward. Sharing an index across different local
+D1 copies lets one run overwrite another's search records.
 
 `staging` is the first deployed validation. A push to `staging` deploys it and
 then runs read-only MCP discovery and tenant rendering against staging itself.
@@ -184,4 +192,3 @@ Worker's own test-client documents when running those cases.
 Schema changes also run `yarn lint:migrations`, `yarn lint:schema-drift` and
 `yarn test:migrations`: the chain must not drop a referenced parent table,
 `db:generate` must emit nothing, and the chain must apply from zero.
-

@@ -8,7 +8,10 @@ Krabiclaw uses Cloudflare AI Search as the single retrieval backend for platform
 - Environment isolation comes from `AI_SEARCH_INSTANCE_ID`:
   - production: `krabiclaw-platform-knowledge`
   - staging: `krabiclaw-platform-knowledge-staging`
-  - preview: `krabiclaw-platform-knowledge-preview`
+  - ordinary local development: `krabiclaw-platform-knowledge-preview`
+  - local E2E: a dedicated, explicitly provisioned instance named by
+    `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID`
+  - CI E2E: `krabiclaw-e2e-<run ID>-<attempt>`, created and deleted by that run
 
 ### Provisioning an instance
 
@@ -58,8 +61,8 @@ Every write to a site's data queues a "this site changed" row
 write's own batch: content documents, products and collections, locations, media, guest
 threads at intake, and Better Auth's member hooks. The drainer
 (`drainPublicResourceCacheInvalidations`) clears the site's caches and runs
-`syncOrganizationSearchIndex()`, which lists the site's own items (`items.list` with a
-`metadata_filter` on `organization_id`), rebuilds its documents from D1, uploads the ones whose
+`syncOrganizationSearchIndex()`, which lists the site's own items by its hashed
+organization key segment, rebuilds its documents from D1, uploads the ones whose
 `content_hash` changed and deletes the ones that are gone. It runs right after every
 dashboard editor response and every mutating MCP tool call, and every two minutes from the
 scheduled task. A write therefore costs one list of the site's items plus one upload per
@@ -85,11 +88,15 @@ Workers request ceiling.
 Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo
 secret and runs a blocking rebuild step when a file that defines the indexed corpus or its
 rendering changed. A failed production rebuild fails the deploy job instead of silently
-leaving production search stale. Preview and staging deploys do not rebuild.
+leaving production search stale. Staging deploys do not rebuild. Local E2E runs
+`ai-search:sync` against its dedicated instance after its Worker is healthy and
+before browser tests start.
 
 ## Environment expectations
 
 - AI Search is required infrastructure for local, preview, staging, and production.
+- A local E2E index belongs to one D1 snapshot; concurrent runs with different
+  snapshots must use different instances.
 - `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block.
 - Local development should run with the normal Cloudflare dev environment and remote AI Search bindings available.
 - Production should not be treated as healthy after indexed content changes until the AI Search rebuild has completed successfully.

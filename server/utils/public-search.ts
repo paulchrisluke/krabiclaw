@@ -904,10 +904,12 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (_
  *
  * Re-uploading everything each time is what exhausted AI Search's rate limit on every
  * tenant MCP blog write (issue #917) — a one-post edit was spending ~222 uploads. An item
- * whose stored content_hash still matches what we would send is already correct in the
- * index, so sending it again buys nothing. Items that failed to index are re-sent
- * regardless of their hash: the stored fingerprint describes what was uploaded, not what
- * was successfully indexed. Items with no document behind them are deleted.
+ * whose stored content_hash still matches what we would send has already been accepted
+ * for indexing, so sending it again buys nothing. Failed or outdated items are
+ * re-sent regardless of their hash: the fingerprint describes what was uploaded,
+ * not what was successfully indexed. An unchanged skipped item cannot be repaired
+ * by resending the same payload and fails visibly. Items with no document behind
+ * them are deleted.
  */
 export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiSearchItemInfo[], records: ExpandedPlatformKnowledgeDocument[], options: { maxUploads?: number } = {}) {
   const nextKeys = new Set(records.map(record => record.key))
@@ -917,11 +919,12 @@ export async function reconcileIndexItems(env: CloudflareEnv, existingItems: AiS
     .map(record => ({ record, payload: indexItemPayload(record) }))
     .filter(({ record, payload }) => {
       const existing = existingByKey.get(record.key)
-      if (!existing || existing.status === 'error') return true
-      // An item Cloudflare is still processing carries no metadata yet, so its
-      // hash cannot be read; sending it again only re-queues it. The next sync
-      // after it completes compares it properly.
-      if (existing.status === 'queued' || existing.status === 'running') return false
+      if (existing?.status === 'skipped' && existing.metadata?.content_hash === payload.contentHash) {
+        throw new Error(`AI Search skipped unchanged item "${record.key}": ${existing.error || 'indexing was skipped'}`)
+      }
+      if (!existing || !['completed', 'queued', 'running'].includes(existing.status)) return true
+      // AI Search exposes the uploaded hash even while processing. A newer D1
+      // payload must overwrite the accepted item under the same key.
       return existing.metadata?.content_hash !== payload.contentHash
     })
   // An upload takes AI Search a few seconds, so a first pass over a large
