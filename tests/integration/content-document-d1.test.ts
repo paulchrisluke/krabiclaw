@@ -177,7 +177,7 @@ test('document scopes, translations, block ownership and concurrent edits persis
   }
 })
 
-test('category creation and rename enforce one case-insensitive name through D1', async () => {
+test('category names and hierarchy remain valid during concurrent D1 writes', async () => {
   const miniflare = new Miniflare({ workers: [{ config: {
     name: 'article-category-test', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
@@ -190,8 +190,8 @@ test('category creation and rename enforce one case-insensitive name through D1'
     await db.batch(statements.map(statement => db.prepare(statement)))
     await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('category-org', 'Category org', 'category-org')").run()
     await db.prepare("INSERT INTO user (id, name, email) VALUES ('category-author', 'Category author', 'category@example.test')").run()
-    const create = (name: string) => createArticleCategory(db, {
-      organizationId: 'category-org', collection: 'blog', name, actorId: 'category-author',
+    const create = (name: string, parentId?: string) => createArticleCategory(db, {
+      organizationId: 'category-org', collection: 'blog', name, parentId, actorId: 'category-author',
     })
     const attempts = await Promise.allSettled([create('News'), create('news')])
     assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1)
@@ -214,6 +214,50 @@ test('category creation and rename enforce one case-insensitive name through D1'
     })
     assert.deepEqual((await db.prepare("SELECT name FROM article_categories WHERE organization_id = 'category-org' ORDER BY name").all()).results.map(row => row.name), ['Culture', persisted[0]?.name])
     assert.equal((await db.prepare("SELECT count(*) AS n FROM public_resource_cache_invalidations WHERE organization_id = 'category-org'").first<{ n: number }>())?.n, 2)
+
+    const move = (categoryId: string, parentId: string | null) => updateArticleCategory(db, {
+      organizationId: 'category-org', categoryId, parentId, actorId: 'category-author',
+    })
+    const assertOneConflict = (results: PromiseSettledResult<unknown>[]) => {
+      assert.equal(results.filter(result => result.status === 'fulfilled').length, 1)
+      const conflict = results.find(result => result.status === 'rejected')
+      assert(conflict?.status === 'rejected')
+      assert(conflict.reason instanceof HTTPError)
+      assert.equal(conflict.reason.statusCode, 409)
+    }
+    const first = String(persisted[0]!.id)
+    assertOneConflict(await Promise.allSettled([move(first, other.id), move(other.id, first)]))
+    const parents = (await db.prepare("SELECT id, parent_id FROM article_categories WHERE organization_id = 'category-org'").all()).results
+    assert.equal(parents.filter(row => row.parent_id === null).length, 1)
+    assert.equal(parents.filter(row => row.parent_id !== null).length, 1)
+    const nested = parents.find(row => row.parent_id !== null)!
+    assert.equal(nested.parent_id, parents.find(row => row.parent_id === null)!.id)
+    await move(String(nested.id), null)
+    assert.equal(await db.prepare('SELECT parent_id FROM article_categories WHERE id = ?').bind(nested.id).first('parent_id'), null)
+
+    // Both moves fit in the original tree, but together they would put Leaf at depth four.
+    const branch = await create('Branch')
+    const leaf = await create('Leaf', branch.id)
+    const destination = await create('Destination')
+    const root = await create('Root')
+    assertOneConflict(await Promise.allSettled([move(branch.id, destination.id), move(destination.id, root.id)]))
+    const hierarchy = (await db.prepare(`WITH RECURSIVE tree AS (
+      SELECT id, 1 AS depth FROM article_categories WHERE organization_id = 'category-org' AND parent_id IS NULL
+      UNION ALL
+      SELECT c.id, tree.depth + 1 FROM article_categories c JOIN tree ON c.parent_id = tree.id
+    ) SELECT id, depth FROM tree`).all<{ id: string; depth: number }>()).results
+    assert.equal(hierarchy.length, 6, 'every category remains reachable from a root')
+    assert(hierarchy.every(row => row.depth <= 3))
+    assert.equal(await db.prepare('SELECT parent_id FROM article_categories WHERE id = ?').bind(leaf.id).first('parent_id'), branch.id)
+
+    await move(destination.id, null)
+    await move(branch.id, destination.id)
+    assert.equal(await db.prepare('SELECT parent_id FROM article_categories WHERE id = ?').bind(branch.id).first('parent_id'), destination.id)
+    await assert.rejects(move(destination.id, root.id), (error: unknown) => error instanceof HTTPError && error.statusCode === 400)
+    await assert.rejects(move(destination.id, leaf.id), (error: unknown) => error instanceof HTTPError && error.statusCode === 400)
+    await updateArticleCategory(db, { organizationId: 'category-org', categoryId: branch.id, name: 'Renamed branch', actorId: 'category-author' })
+    assert.deepEqual(await db.prepare('SELECT name, parent_id FROM article_categories WHERE id = ?').bind(branch.id).first(), { name: 'Renamed branch', parent_id: destination.id })
+    assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0)
   } finally {
     await miniflare.dispose()
   }

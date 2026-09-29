@@ -1,9 +1,9 @@
 <template>
   <!--
     One category of a collection, on every template: its name and what it
-    covers, then its articles in the collection's order. It is a page of its
-    own, so the index's heading, the sidebar, a card's chip and an article's
-    breadcrumb all link here.
+    covers, its own articles in the collection's order, then each
+    subcategory's section. It is a page of its own, so the index's heading,
+    the sidebar, a card's chip and an article's breadcrumb all link here.
   -->
   <div class="space-y-10">
     <ArticleBreadcrumb :crumbs="breadcrumbs" />
@@ -11,8 +11,11 @@
       <h1 class="text-4xl font-bold text-default sm:text-5xl">{{ category.name }}</h1>
       <p v-if="category.description" class="mt-4 text-lg text-muted">{{ category.description }}</p>
     </header>
-    <div class="grid gap-6 md:grid-cols-2" data-parity-section="articles">
-      <ArticleCard v-for="article in category.posts" :key="article.id" :article="article" />
+    <div class="space-y-12" data-parity-section="articles">
+      <div v-if="category.posts.length" class="grid gap-6 md:grid-cols-2">
+        <ArticleCard v-for="article in category.posts" :key="article.id" :article="article" />
+      </div>
+      <ArticleCategorySection v-for="child in category.children" :key="child.id" :category="child" />
     </div>
   </div>
 </template>
@@ -20,8 +23,10 @@
 <script setup lang="ts">
 import ArticleBreadcrumb from '~/components/blog/ArticleBreadcrumb.vue'
 import ArticleCard from '~/components/blog/ArticleCard.vue'
+import ArticleCategorySection from '~/components/blog/ArticleCategorySection.vue'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 import { ARTICLE_COLLECTIONS, collectionCategoryPath, type ArticleCollection } from '~/utils/article-collections'
+import { categorySubtree, categoryTrail } from '~/composables/usePublishedArticles'
 
 const props = defineProps<{ collection: ArticleCollection }>()
 const route = useRoute()
@@ -42,11 +47,12 @@ useState<PublicLocaleRepresentation[]>('public-locale-representations', () => []
 const indexLabel = computed(() => props.collection === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'))
 const indexPath = ARTICLE_COLLECTIONS[props.collection].pathPrefix
 const path = computed(() => collectionCategoryPath(props.collection, category.value.slug))
+// The index, then each category above this one, then this one.
 const breadcrumbs = computed(() => [
   { name: indexLabel.value, url: localePath(indexPath) },
-  { name: category.value.name, url: localePath(path.value) },
+  ...categoryTrail(categories.value, category.value.id).map(crumb => ({ name: crumb.name, url: crumb.path })),
 ])
-useArticleItemList(() => localePath(path.value), () => category.value.name, () => category.value.posts)
+useArticleItemList(() => localePath(path.value), () => category.value.name, () => categorySubtree(category.value).flatMap(entry => entry.posts))
 
 useSocialMetadata(() => ({
   path: path.value,

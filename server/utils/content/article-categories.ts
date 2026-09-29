@@ -11,10 +11,12 @@ import { isArticleCollection, type ArticleCollection } from '~/utils/article-col
  * An article's category: a named, ordered grouping the owner manages within
  * one of the site's article collections. Every surface — dashboard, MCP, the
  * public index, sidebar, breadcrumb and category page — reads and writes it
- * here. A category that still has articles is not deleted; the caller is told
- * to move them first.
+ * here. Categories nest up to MAX_DEPTH levels under a parent in the same
+ * collection. A category that still has articles or subcategories is not
+ * deleted; the caller is told to move them first.
  */
 
+export const MAX_DEPTH = 3
 const NAME_MAX = 100
 const DESCRIPTION_MAX = 500
 const SLUG_ATTEMPTS = 100
@@ -26,8 +28,12 @@ export interface ArticleCategory {
   name: string
   slug: string
   description: string | null
+  /** The category it sits under, or null at the top of the collection. */
+  parent_id: string | null
+  /** Its place among its siblings. */
   sort_order: number
   article_count: number
+  child_count: number
   created_at: string
   updated_at: string
 }
@@ -57,7 +63,8 @@ function mapRow(row: Row): ArticleCategory {
     id: String(row.id), organization_id: String(row.organization_id), collection: row.collection,
     name: String(row.name), slug: String(row.slug),
     description: row.description === null ? null : String(row.description),
-    sort_order: Number(row.sort_order), article_count: Number(row.article_count),
+    parent_id: row.parent_id === null || row.parent_id === undefined ? null : String(row.parent_id),
+    sort_order: Number(row.sort_order), article_count: Number(row.article_count), child_count: Number(row.child_count ?? 0),
     created_at: String(row.created_at), updated_at: String(row.updated_at),
   }
 }
@@ -80,11 +87,64 @@ function requireCollection(value: unknown): ArticleCollection {
   return value
 }
 
-const SELECT_CATEGORY = `SELECT c.*, (SELECT COUNT(*) FROM article_category_articles m WHERE m.category_id = c.id) AS article_count FROM article_categories c`
+const SELECT_CATEGORY = `SELECT c.*, (SELECT COUNT(*) FROM article_category_articles m WHERE m.category_id = c.id) AS article_count,
+  (SELECT COUNT(*) FROM article_categories k WHERE k.parent_id = c.id) AS child_count FROM article_categories c`
+
+/**
+ * A collection's categories as a tree read depth-first: each category, then its
+ * subcategories in their order, so a list reads the way the sidebar does.
+ */
+export function orderCategoryTree<T extends { id: string; parent_id: string | null; sort_order: number; name: string }>(categories: readonly T[]): T[] {
+  const byParent = new Map<string | null, T[]>()
+  for (const category of categories) byParent.set(category.parent_id, [...(byParent.get(category.parent_id) ?? []), category])
+  for (const siblings of byParent.values()) siblings.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  const ordered: T[] = []
+  const walk = (parentId: string | null) => {
+    for (const category of byParent.get(parentId) ?? []) {
+      ordered.push(category)
+      walk(category.id)
+    }
+  }
+  walk(null)
+  return ordered
+}
+
+/** How deep a category sits: 1 at the top of its collection. */
+function depthOf(categories: ReadonlyMap<string, { parent_id: string | null }>, id: string): number {
+  let depth = 0
+  for (let current: string | null = id; current; current = categories.get(current)?.parent_id ?? null) depth += 1
+  return depth
+}
+
+/** How many levels a category and everything under it span: 1 for a category with no subcategories. */
+function subtreeHeight(categories: readonly { id: string; parent_id: string | null }[], id: string): number {
+  const children = categories.filter(category => category.parent_id === id)
+  return 1 + Math.max(0, ...children.map(child => subtreeHeight(categories, child.id)))
+}
 
 export async function listArticleCategories(db: DbClient, organizationId: string, collection: ArticleCollection): Promise<ArticleCategory[]> {
-  const rows = await queryAll<Row>(db, `${SELECT_CATEGORY} WHERE c.organization_id = ? AND c.collection = ? ORDER BY c.sort_order, c.name, c.id`, [organizationId, collection])
-  return rows.map(mapRow)
+  const rows = await queryAll<Row>(db, `${SELECT_CATEGORY} WHERE c.organization_id = ? AND c.collection = ?`, [organizationId, collection])
+  return orderCategoryTree(rows.map(mapRow))
+}
+
+/**
+ * The parent a category may sit under: a category of the same collection, not
+ * the category itself or anything under it, and shallow enough that the
+ * category and its subtree stay within MAX_DEPTH levels.
+ */
+function requireParent(categories: readonly ArticleCategory[], parentId: unknown, moving: { id: string } | null): string | null {
+  if (parentId === null) return null
+  if (typeof parentId !== 'string' || !parentId.trim()) badRequest('parent_id must be a category id or null')
+  const byId = new Map(categories.map(category => [category.id, category]))
+  if (!byId.has(parentId)) badRequest(`parent_id ${parentId} is not a category of this collection`)
+  if (moving) {
+    for (let current: string | null = parentId; current; current = byId.get(current)?.parent_id ?? null) {
+      if (current === moving.id) badRequest('A category cannot sit under itself or one of its own subcategories')
+    }
+  }
+  const height = moving ? subtreeHeight(categories, moving.id) : 1
+  if (depthOf(byId, parentId) + height > MAX_DEPTH) badRequest(`Categories nest at most ${MAX_DEPTH} levels deep`)
+  return parentId
 }
 
 export async function getArticleCategory(db: DbClient, organizationId: string, categoryId: string): Promise<ArticleCategory> {
@@ -105,11 +165,12 @@ async function uniqueSlug(db: DbClient, organizationId: string, collection: Arti
 }
 
 export async function createArticleCategory(db: DbClient, input: {
-  organizationId: string; collection: unknown; name: unknown; description?: unknown; actorId: string
+  organizationId: string; collection: unknown; name: unknown; description?: unknown; parentId?: unknown; actorId: string
 }): Promise<ArticleCategory> {
   const collection = requireCollection(input.collection)
   const name = requireName(input.name)
   const description = optionalDescription(input.description)
+  const parentId = input.parentId === undefined ? null : requireParent(await listArticleCategories(db, input.organizationId, collection), input.parentId, null)
   const clash = await queryFirst<{ id: string }>(db, 'SELECT id FROM article_categories WHERE organization_id = ? AND collection = ? AND lower(name) = lower(?)', [input.organizationId, collection, name])
   if (clash) throw new HTTPError({ statusCode: 409, statusMessage: `A ${collection} category named "${name}" already exists (${clash.id})` })
   const slug = await uniqueSlug(db, input.organizationId, collection, name)
@@ -117,10 +178,10 @@ export async function createArticleCategory(db: DbClient, input: {
   const now = new Date().toISOString()
   try {
     await executeBatch(db, [{
-      // A new category goes last; the owner places it with reorder.
-      query: `INSERT INTO article_categories (id, organization_id, collection, name, slug, description, sort_order, created_at, updated_at, created_by, updated_by)
-              VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM article_categories WHERE organization_id = ? AND collection = ?), ?, ?, ?, ?)`,
-      params: [id, input.organizationId, collection, name, slug, description, input.organizationId, collection, now, now, input.actorId, input.actorId],
+      // A new category goes last among its siblings; the owner places it with reorder.
+      query: `INSERT INTO article_categories (id, organization_id, collection, name, slug, description, parent_id, sort_order, created_at, updated_at, created_by, updated_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM article_categories WHERE organization_id = ? AND collection = ? AND parent_id IS ?), ?, ?, ?, ?)`,
+      params: [id, input.organizationId, collection, name, slug, description, parentId, input.organizationId, collection, parentId, now, now, input.actorId, input.actorId],
     }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_created')], { operation: 'Create article category' })
   } catch (error) {
     if (isCategoryUniquenessConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A category with this name or slug was created. Reload and try again.', cause: error })
@@ -130,18 +191,43 @@ export async function createArticleCategory(db: DbClient, input: {
 }
 
 export async function updateArticleCategory(db: DbClient, input: {
-  organizationId: string; categoryId: string; name?: unknown; description?: unknown; actorId: string
+  organizationId: string; categoryId: string; name?: unknown; description?: unknown; parentId?: unknown; actorId: string
 }): Promise<ArticleCategory> {
   const existing = await getArticleCategory(db, input.organizationId, input.categoryId)
-  if (input.name === undefined && input.description === undefined) badRequest('Provide name or description')
+  if (input.name === undefined && input.description === undefined && input.parentId === undefined) badRequest('Provide name, description or parent_id')
   const name = input.name === undefined ? existing.name : requireName(input.name)
-  // The slug is the category page's address; renaming does not move the page.
+  const parentId = input.parentId === undefined ? existing.parent_id
+    : requireParent(await listArticleCategories(db, input.organizationId, existing.collection), input.parentId, existing)
+  const moved = parentId !== existing.parent_id
+  // The slug is the category page's address; renaming or moving does not move the page.
+  // A category moved under another parent goes last among its new siblings.
   try {
-    await executeBatch(db, [{
-      query: 'UPDATE article_categories SET name = ?, description = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?',
-      params: [name, input.description === undefined ? existing.description : optionalDescription(input.description),
-        new Date().toISOString(), input.actorId, input.organizationId, input.categoryId],
+    const [updated] = await executeBatch(db, [{
+      // Recheck the live tree in the write: concurrent moves can invalidate requireParent's snapshot.
+      query: `WITH RECURSIVE
+                collection_categories AS (SELECT id, parent_id FROM article_categories WHERE organization_id = ? AND collection = ?),
+                ancestors AS (
+                  SELECT id, parent_id, 1 AS depth FROM collection_categories WHERE id = ?
+                  UNION ALL
+                  SELECT c.id, c.parent_id, a.depth + 1 FROM collection_categories c JOIN ancestors a ON c.id = a.parent_id WHERE a.depth < ?
+                ),
+                subtree AS (
+                  SELECT id, 1 AS height FROM collection_categories WHERE id = ?
+                  UNION ALL
+                  SELECT c.id, s.height + 1 FROM collection_categories c JOIN subtree s ON c.parent_id = s.id WHERE s.height <= ?
+                )
+              UPDATE article_categories SET name = ?, description = ?, parent_id = ?,
+                sort_order = CASE WHEN ? THEN (SELECT COALESCE(MAX(s.sort_order) + 1, 0) FROM article_categories s WHERE s.organization_id = ? AND s.collection = ? AND s.parent_id IS ? AND s.id <> ?) ELSE sort_order END,
+                updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ? AND parent_id IS ?
+                AND (? IS NULL OR (EXISTS (SELECT 1 FROM ancestors WHERE parent_id IS NULL) AND NOT EXISTS (SELECT 1 FROM ancestors WHERE id = ?)))
+                AND (SELECT COALESCE(MAX(depth), 0) FROM ancestors) + (SELECT MAX(height) FROM subtree) <= ?`,
+      params: [input.organizationId, existing.collection, parentId, MAX_DEPTH, input.categoryId, MAX_DEPTH,
+        name, input.description === undefined ? existing.description : optionalDescription(input.description), parentId,
+        moved ? 1 : 0, input.organizationId, existing.collection, parentId, input.categoryId,
+        new Date().toISOString(), input.actorId, input.organizationId, input.categoryId, existing.parent_id,
+        parentId, input.categoryId, MAX_DEPTH],
     }, publicResourceCacheInvalidationQuery(input.organizationId, 'article_category_updated')], { operation: 'Update article category' })
+    if (updated?.meta.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'The category hierarchy changed. Reload and try again.' })
   } catch (error) {
     if (isCategoryUniquenessConflict(error)) throw new HTTPError({ statusCode: 409, statusMessage: 'A category with this name already exists. Reload and try again.', cause: error })
     throw error
@@ -153,6 +239,13 @@ export async function deleteArticleCategory(db: DbClient, input: { organizationI
   const existing = await getArticleCategory(db, input.organizationId, input.categoryId)
   // Deleting a category never decides where its articles go: the owner does.
   // The membership foreign key refuses it anyway; this says why.
+  if (existing.child_count > 0) {
+    throw new HTTPError({
+      statusCode: 409,
+      statusMessage: `Category "${existing.name}" still has ${existing.child_count} ${existing.child_count === 1 ? 'subcategory' : 'subcategories'}. Move or delete ${existing.child_count === 1 ? 'it' : 'them'} first, then delete this one.`,
+      data: { code: 'ARTICLE_CATEGORY_HAS_SUBCATEGORIES', category_id: existing.id, child_count: existing.child_count },
+    })
+  }
   if (existing.article_count > 0) {
     throw new HTTPError({
       statusCode: 409,
@@ -167,18 +260,27 @@ export async function deleteArticleCategory(db: DbClient, input: { organizationI
   ], { operation: 'Delete article category' })
 }
 
+/**
+ * Sets the order of one parent's subcategories, or of the collection's top
+ * level when parent_id is null. The siblings are named whole: a partial order
+ * would leave the unnamed ones wherever they were, which is not an order
+ * anyone chose.
+ */
 export async function reorderArticleCategories(db: DbClient, input: {
-  organizationId: string; collection: unknown; categoryIds: unknown; actorId: string
+  organizationId: string; collection: unknown; parentId?: unknown; categoryIds: unknown; actorId: string
 }): Promise<ArticleCategory[]> {
   const collection = requireCollection(input.collection)
   if (!Array.isArray(input.categoryIds) || input.categoryIds.some(id => typeof id !== 'string')) badRequest('category_ids must be an array of ids')
   const ids = input.categoryIds as string[]
-  const existing = await listArticleCategories(db, input.organizationId, collection)
+  const all = await listArticleCategories(db, input.organizationId, collection)
+  const parentId = input.parentId === undefined || input.parentId === null ? null : String(input.parentId)
+  if (parentId && !all.some(category => category.id === parentId)) badRequest(`parent_id ${parentId} is not a category of this collection`)
+  const existing = all.filter(category => category.parent_id === parentId)
   const intended = new Set(ids)
-  // A partial order would leave the unnamed categories wherever they were,
-  // which is not an order anyone chose.
   if (intended.size !== ids.length || intended.size !== existing.length || existing.some(category => !intended.has(category.id))) {
-    badRequest(`category_ids must list every ${collection} category exactly once`)
+    badRequest(parentId
+      ? `category_ids must list every subcategory of ${parentId} exactly once`
+      : `category_ids must list every top-level ${collection} category exactly once`)
   }
   const now = new Date().toISOString()
   await executeBatch(db, [
@@ -218,16 +320,28 @@ export async function articleCategoryMembershipQuery(db: DbClient, input: {
  * leave them in no group and its breadcrumb pointing at no page.
  */
 export async function listPublicArticleCategories(env: CloudflareEnv, db: DbClient, organizationId: string, collection: ArticleCollection, locale: string): Promise<PublicArticleCategory[]> {
-  const rows = (await queryAll<Row>(db, `
-    SELECT c.*, COUNT(DISTINCT root.id) AS article_count, json_group_array(DISTINCT p.locale) AS locales
+  const direct = (await queryAll<Row>(db, `
+    SELECT c.*, COUNT(DISTINCT root.id) AS article_count,
+      json_group_array(DISTINCT p.locale) FILTER (WHERE p.locale IS NOT NULL) AS locales
       FROM article_categories c
-      JOIN article_category_articles m ON m.category_id = c.id
-      JOIN content_documents root ON root.id = m.article_id AND root.status = 'published' AND root.visibility = 'listed'
-      JOIN content_documents p ON COALESCE(p.root_id, p.id) = root.id
+      LEFT JOIN article_category_articles m ON m.category_id = c.id
+      LEFT JOIN content_documents root ON root.id = m.article_id AND root.status = 'published' AND root.visibility = 'listed'
+      LEFT JOIN content_documents p ON COALESCE(p.root_id, p.id) = root.id
      WHERE c.organization_id = ? AND c.collection = ?
      GROUP BY c.id
-     ORDER BY c.sort_order, c.name, c.id
-  `, [organizationId, collection])).map(row => ({ ...mapRow(row), locales: JSON.parse(String(row.locales)) as string[] }))
+  `, [organizationId, collection])).map(row => ({ ...mapRow(row), locales: JSON.parse(String(row.locales ?? '[]')) as string[] }))
+  // A category is public when it or anything under it holds a published
+  // article, and it is read in every language anything under it is.
+  const byId = new Map(direct.map(category => [category.id, { ...category, locales: new Set(category.locales), public: category.article_count > 0 }]))
+  for (const category of direct) {
+    if (category.article_count === 0) continue
+    for (let current = byId.get(category.parent_id ?? ''); current; current = byId.get(current.parent_id ?? '')) {
+      current.public = true
+      for (const language of category.locales) current.locales.add(language)
+    }
+  }
+  const rows = orderCategoryTree([...byId.values()].filter(category => category.public))
+    .map(({ public: _public, locales, ...category }) => ({ ...category, locales: [...locales] }))
   if (locale === 'en') return rows
   const translations = new Map((await loadExactPublicLocalizations(env, db, organizationId, locale))
     .filter(localization => localization.resourceType === 'article_category')

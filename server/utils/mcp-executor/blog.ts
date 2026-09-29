@@ -124,7 +124,8 @@ function toCategoryRef(value: unknown) {
 
 function toArticleCategory(category: ArticleCategory) {
   return { id: category.id, collection: category.collection, name: category.name, slug: category.slug,
-    description: category.description, sort_order: category.sort_order, article_count: category.article_count }
+    description: category.description, parent_id: category.parent_id, sort_order: category.sort_order,
+    article_count: category.article_count, child_count: category.child_count }
 }
 
 function requiredArticleCollection(args: Record<string, unknown>): ArticleCollection {
@@ -252,12 +253,12 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     }
     case "create_article_category": {
       const category = await createArticleCategory(organization.db, { organizationId: organization.organizationId,
-        collection: requiredArticleCollection(args), name: args.name, description: args.description, actorId: organization.userId })
+        collection: requiredArticleCollection(args), name: args.name, description: args.description, parentId: args.parent_id, actorId: organization.userId })
       return renderStructuredResponse({ category: toArticleCategory(category) }, `Created ${category.collection} category "${category.name}".`)
     }
     case "update_article_category": {
       const category = await updateArticleCategory(organization.db, { organizationId: organization.organizationId,
-        categoryId: requiredString(args, 'category_id'), name: args.name, description: args.description, actorId: organization.userId })
+        categoryId: requiredString(args, 'category_id'), name: args.name, description: args.description, parentId: args.parent_id, actorId: organization.userId })
       return renderStructuredResponse({ category: toArticleCategory(category) }, `Saved category "${category.name}".`)
     }
     case "delete_article_category": {
@@ -267,7 +268,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     }
     case "reorder_article_categories": {
       const categories = await reorderArticleCategories(organization.db, { organizationId: organization.organizationId,
-        collection: requiredArticleCollection(args), categoryIds: args.category_ids, actorId: organization.userId })
+        collection: requiredArticleCollection(args), parentId: args.parent_id, categoryIds: args.category_ids, actorId: organization.userId })
       return { categories: categories.map(toArticleCategory) }
     }
     case "delete_blog_post": {
