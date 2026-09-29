@@ -461,8 +461,8 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 .kc-parallax-hero__mark-text {
   color: white;
   font-size: clamp(2.35rem, 6vw, 4.8rem);
-  font-weight: 600;
-  letter-spacing: -0.035em;
+  font-weight: 300;
+  letter-spacing: 0.01em;
 }
 
 .kc-parallax-intro {
