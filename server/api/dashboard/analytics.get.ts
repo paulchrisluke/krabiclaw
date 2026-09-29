@@ -8,5 +8,7 @@ export default defineHandler(async (event) => {
   return jsonResponse(await loadDashboardOrganizationAnalytics(event, {
     startDate: typeof query.startDate === 'string' ? query.startDate : undefined,
     endDate: typeof query.endDate === 'string' ? query.endDate : undefined,
+    facebookCursor: typeof query.facebookCursor === 'string' ? query.facebookCursor : undefined,
+    instagramCursor: typeof query.instagramCursor === 'string' ? query.instagramCursor : undefined,
   }))
 })

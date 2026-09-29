@@ -5,8 +5,11 @@ import { getAnalyticsReport } from '~/server/utils/analytics-report'
 export async function handleAnalyticsTools(ctx: McpExecutorContext): Promise<unknown> {
   if (ctx.toolName !== 'get_organization_analytics') return NOT_HANDLED
   return await getAnalyticsReport(ctx.organization.db, {
+    env: ctx.organization.env,
     organizationId: ctx.organization.organizationId,
     startDate: optionalString(ctx.args, 'start_date') ?? undefined,
     endDate: optionalString(ctx.args, 'end_date') ?? undefined,
+    facebookCursor: optionalString(ctx.args, 'facebook_cursor') ?? undefined,
+    instagramCursor: optionalString(ctx.args, 'instagram_cursor') ?? undefined,
   })
 }

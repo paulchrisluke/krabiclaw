@@ -3,8 +3,11 @@ import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
 import { addLocalDays, localDateAt, isValidTimezone } from '~/utils/timezone'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { readMetaInsights, type ProviderInsights } from '~/server/utils/meta-insights'
 
 export interface AnalyticsReport {
+  social?: { facebook: ProviderInsights; instagram: ProviderInsights }
   period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
   metrics: {
     pageViews: number
@@ -179,13 +182,21 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
 }
 
 export async function getAnalyticsReport(db: DbClient, input: {
-  organizationId: string; startDate?: string; endDate?: string; now?: Date
+  organizationId: string; startDate?: string; endDate?: string; now?: Date; env?: CloudflareEnv
+  facebookCursor?: string; instagramCursor?: string
 }): Promise<AnalyticsReport> {
   const now = input.now ?? new Date()
   const context = await resolveOrganizationAnalyticsContext(db, input.organizationId)
   const range = parseAnalyticsRange({ startDate: input.startDate, endDate: input.endDate, timeZone: context.timezone, now })
   const { start } = localDateBounds(range.startDate, context.timezone)
   const { end } = localDateBounds(range.endDate, context.timezone)
+  const social = input.env ? await readMetaInsights(input.env, input.organizationId, {
+    start, end,
+    previous: {
+      start: localDateBounds(range.previousStartDate, context.timezone).start,
+      end: localDateBounds(addLocalDays(range.previousEndDate, 1), context.timezone).start,
+    },
+  }, now, { facebook: input.facebookCursor, instagram: input.instagramCursor }) : undefined
   const cutoffDate = context.analyticsDataStartAt ? localDateAt(new Date(context.analyticsDataStartAt), context.timezone) : null
   const slices = await loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate)
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
@@ -236,6 +247,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
   }).sort((a, b) => b.views - a.views)
 
   return {
+    ...(social ? { social } : {}),
     period: { startDate: range.startDate, endDate: range.endDate, timezone: context.timezone, analyticsDataStartAt: context.analyticsDataStartAt },
     metrics: {
       pageViews,

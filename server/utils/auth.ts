@@ -607,7 +607,7 @@ export function createAuth(env: CloudflareEnv) {
           clientId: env.INSTAGRAM_APP_ID ?? '',
           clientSecret: env.INSTAGRAM_APP_SECRET,
           authorizationUrl: 'https://www.instagram.com/oauth/authorize',
-          scopes: ['instagram_business_basic', 'instagram_business_content_publish'],
+          scopes: ['instagram_business_basic', 'instagram_business_content_publish', 'instagram_business_manage_insights'],
           pkce: false,
           disableSignUp: true,
           getToken: async ({ code, redirectURI }) => {
