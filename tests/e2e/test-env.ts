@@ -7,6 +7,10 @@ export const POTTERY_HOUSE_CANONICAL_URL = 'https://www.potteryhousekrabi.com'
 export const KIKUZUKI_CANONICAL_URL = 'https://www.kikuzuki-thailand.com'
 export const NCLS_CANONICAL_URL = 'https://www.northcarolinalegalservices.org'
 
+export const E2E_DEMO_ORGANIZATION_ID = 'org-demo'
+export const E2E_POTTERY_ORGANIZATION_ID = 'org-user-pottery-house'
+export const E2E_KIKUZUKI_ORGANIZATION_ID = 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX'
+
 export function testBaseUrl() {
   const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
   if (previewUrl) return previewUrl

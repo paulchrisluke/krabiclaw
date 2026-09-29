@@ -11,7 +11,7 @@ Krabiclaw uses Cloudflare AI Search as the single retrieval backend for platform
   - ordinary local development: `krabiclaw-platform-knowledge-preview`
   - local E2E: a dedicated, explicitly provisioned instance named by
     `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID`
-  - CI E2E: `krabiclaw-e2e-<run ID>-<attempt>`, created and deleted by that run
+  - CI E2E: `krabiclaw-e2e-ci`, provisioned once and owned by the serialized E2E job
 
 ### Provisioning an instance
 
@@ -23,6 +23,13 @@ went wrong.
 ```bash
 yarn wrangler ai-search create <AI_SEARCH_INSTANCE_ID> --namespace default --type builtin
 ```
+
+Provision `krabiclaw-e2e-ci` once with this command. CI checks that it exists
+before running Playwright; the E2E job's GitHub concurrency group prevents
+different D1 snapshots from writing to it at the same time. CI retains the
+instance across runs so the real provider index need not process the entire
+copied corpus from scratch on every pull request. Local E2E runs must use a
+different instance.
 
 `ensurePlatformKnowledgeInstance()` then re-asserts the retrieval configuration
 (`platformKnowledgeInstanceConfig()` in `server/utils/public-search.ts`) at the start of
@@ -97,12 +104,16 @@ that defines the indexed corpus or its rendering changes. A failed rebuild fails
 deploy job. Local and CI E2E runs use dedicated instances corresponding to their D1
 snapshots. Initialize the organizations a test writes through the scoped command
 when that instance is new; the browser suite does not rebuild every tenant first.
+CI runs the platform-only pass and scoped reconciliation for the demo, Pottery
+House, and Kikuzuki test organizations before its write specs. Local runs can
+initialize only the organizations they need with `--organization`.
 
 ## Environment expectations
 
 - AI Search is required infrastructure for local, preview, staging, and production.
 - A local E2E index belongs to one D1 snapshot; concurrent runs with different
-  snapshots must use different instances.
+  snapshots must use different instances. CI owns its persistent index through
+  a serialized E2E job and does not share it with local runs.
 - `wrangler.toml` must keep the `AI_SEARCH` namespace binding in every environment block.
 - Local development should run with the normal Cloudflare dev environment and remote AI Search bindings available.
 - Production should not be treated as healthy after indexed content changes until the AI Search rebuild has completed successfully.
