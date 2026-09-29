@@ -2,7 +2,7 @@ import { execute, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { purgeOrganizationKvCache } from '~/server/utils/edge-cache'
 import { syncOrganizationSearchIndex } from '~/server/utils/public-search'
-import { normalizeHost } from '~/server/utils/tenant-hosts'
+import { isNonProductionHost, normalizeHost } from '~/server/utils/tenant-hosts'
 
 // KV read-through cache for public shell and page resource queries.
 // Mirrors edge-cache.ts's HTML cache shape, but keyed by organizationId + resource
@@ -42,7 +42,7 @@ export function publicResourceCacheInvalidationQuery(
   }
 }
 
-export type OrganizationChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN'>
+export type OrganizationChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN' | 'NUXT_PUBLIC_PLATFORM_DOMAIN'>
 
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
@@ -52,8 +52,9 @@ export async function drainPublicResourceCacheInvalidations(
 ): Promise<number> {
   const freeOrganizationDomain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   if (!freeOrganizationDomain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
-  if (!env.AI_SEARCH) throw new Error('Cloudflare AI Search binding is required to drain site changes')
-  if (!env.AI_SEARCH_INSTANCE_ID?.trim()) throw new Error('AI_SEARCH_INSTANCE_ID is required to drain site changes')
+  const productionSearch = !import.meta.dev && !isNonProductionHost(normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN))
+  if (productionSearch && !env.AI_SEARCH) throw new Error('Cloudflare AI Search binding is required to drain site changes')
+  if (productionSearch && !env.AI_SEARCH_INSTANCE_ID?.trim()) throw new Error('AI_SEARCH_INSTANCE_ID is required to drain site changes')
   const now = options.now ?? new Date()
   const nowIso = now.toISOString()
   const staleClaimCutoff = new Date(now.getTime() - CACHE_INVALIDATION_RETRY_AFTER_MS).toISOString()
@@ -104,7 +105,7 @@ export async function drainPublicResourceCacheInvalidations(
     let remainingUploads = 0
     try {
       await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
-      if (!syncedOrganizations.has(row.organization_id)) {
+      if (productionSearch && !syncedOrganizations.has(row.organization_id)) {
         const synced = await syncOrganizationSearchIndex(env as CloudflareEnv, db, row.organization_id)
         syncedOrganizations.add(row.organization_id)
         if (synced.indexingUnconfirmedReason) throw new Error(`AI Search indexing for organization ${row.organization_id} was not confirmed: ${synced.indexingUnconfirmedReason}`)

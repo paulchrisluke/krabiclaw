@@ -9,6 +9,7 @@ import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
 const searchEnv: OrganizationChangeDrainEnv = {
   NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
   AI_SEARCH_INSTANCE_ID: 'test-index',
   AI_SEARCH: {
     get: () => ({
@@ -195,6 +196,24 @@ test('cache invalidation drain enforces the durable work lifecycle', async (t) =
       },
     ])
   })
+})
+
+test('nonproduction drains cache invalidations without AI Search', async (t) => {
+  const { db, kv } = await migratedCacheD1(t)
+  await insertInvalidation(db, {
+    id: 'local-write', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:00:00.000Z',
+  })
+  await kv.put('public~org~v4~page', 'stale public resource')
+  await kv.put('html:org.krabiclaw.com:/', 'stale HTML')
+  const env: OrganizationChangeDrainEnv = {
+    NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: 'https://krabiclaw.com',
+    NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3107',
+  }
+  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org' }), 1)
+  assert.equal(await kv.get('public~org~v4~page'), null)
+  assert.equal(await kv.get('html:org.krabiclaw.com:/'), null)
+  assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'local-write'").first(),
+    { status: 'processed', attempt_count: 1 })
 })
 
 

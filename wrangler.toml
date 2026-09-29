@@ -73,7 +73,7 @@ WHATSAPP_DELIVERY_MODE = "provider"
 #   yarn wrangler secret put EMAIL_REPLY_SECRET
 # PLATFORM_SEARCH_REINDEX_SECRET protects POST /api/internal/search/reindex and is required for
 # yarn ai-search:sync. Production CI syncs it from the PLATFORM_SEARCH_REINDEX_SECRET repo
-# secret and rebuilds the production index. Preview and staging deploys do not rebuild search
+# secret and rebuilds the production index. Non-production has no AI Search binding
 # automatically (see .github/workflows/ci.yml and docs/ai-search.md). To set it by hand:
 #   yarn wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
 
@@ -146,8 +146,6 @@ NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 MEDIA_BASE_URL = "https://media.krabiclaw.com"
-AI_SEARCH_NAMESPACE = "default"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-preview"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 EMAIL_DELIVERY_MODE = "provider"
 WHATSAPP_DELIVERY_MODE = "provider"
@@ -181,11 +179,6 @@ remote = true
 [env.dev.images]
 binding = "IMAGES"
 
-[[env.dev.ai_search_namespaces]]
-binding = "AI_SEARCH"
-namespace = "default"
-remote = true
-
 [env.staging]
 routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" },
@@ -209,8 +202,6 @@ NUXT_PUBLIC_APP_NAME = "Krabiclaw Staging"
 NUXT_PUBLIC_SITE_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://staging.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-AI_SEARCH_NAMESPACE = "default"
-AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 # Analytics is intentionally disabled outside production.
 GA4_MEASUREMENT_ID = ""
 # Staging runs on a copy of production's rows and has no Zaraz zone of its own;
@@ -257,13 +248,67 @@ remote = true
 [env.staging.images]
 binding = "IMAGES"
 
-[[env.staging.ai_search_namespaces]]
-binding = "AI_SEARCH"
-namespace = "default"
-remote = true
-
 [env.staging.observability]
 enabled = true
 
 [env.staging.observability.traces]
 enabled = true
+
+# Built local Worker used by Playwright. It shares the local D1/KV identities
+# prepared by e2e:local:prepare and has its own in-process Durable Object.
+# Search remains production-only.
+[env.e2e]
+
+[env.e2e.triggers]
+crons = []
+
+[env.e2e.vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "http://localhost:3000"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "http://localhost:3000"
+NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "http://localhost:3000"
+NUXT_PUBLIC_APP_NAME = "Krabiclaw"
+NUXT_PUBLIC_SITE_URL = "http://localhost:3000"
+NUXT_PUBLIC_HELP_URL = "http://localhost:3000/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+MEDIA_BASE_URL = "http://localhost:3000/__media"
+GA4_MEASUREMENT_ID = ""
+ZARAZ_ANALYTICS = "absent"
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+
+[[env.e2e.d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-production-v5"
+database_id = "e13d856a-f02d-471c-b8d6-de5a1f33bb41"
+migrations_dir = "migrations"
+remote = false
+
+[[env.e2e.durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env.e2e.migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env.e2e.migrations]]
+tag = "v2_delete_guest_thread_command"
+deleted_classes = ["GuestThreadCommandObject"]
+
+[[env.e2e.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media"
+remote = false
+
+[[env.e2e.kv_namespaces]]
+binding = "ORGANIZATION_CACHE"
+id = "7fadf142e35745d6bec16b260eaab2f2"
+remote = false
+
+[env.e2e.ai]
+binding = "AI"
+remote = true
+
+[env.e2e.images]
+binding = "IMAGES"
