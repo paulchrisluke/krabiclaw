@@ -28,7 +28,7 @@ test('every way the inbox hub can fail rejects publication, not just the ones th
     ` } } },
     exports: { FaultHub: { type: 'durable-object', storage: 'sqlite' } },
     env: {
-      GUEST_INBOX_HUBS: { type: 'durable-object', workerName: 'inbox-publication-proof', exportName: 'FaultHub' },
+      GUEST_INBOX_HUBS: { type: 'durable-object', worker: 'inbox-publication-proof', exportName: 'FaultHub' },
       DB: { type: 'd1' },
     },
   } }] })
