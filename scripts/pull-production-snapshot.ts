@@ -118,8 +118,9 @@ function sourceRows<T>(sql: string): T[] {
   return results[0]!.results
 }
 
+const identifier = (value: string) => '"' + value.replaceAll('"', '""') + '"'
+
 function copyProductionRows(path: string) {
-  const identifier = (value: string) => '"' + value.replaceAll('"', '""') + '"'
   const literal = (value: string) => "'" + value.replaceAll("'", "''") + "'"
   // Keep D1's migration ledger in the source snapshot: the transfer must know
   // which forward files have already run, including data-only migrations.
@@ -211,7 +212,23 @@ try {
     if (JSON.stringify(ledgered) !== JSON.stringify(migrationFiles)) {
       throw new Error(`${target} D1 records migrations [${ledgered.join(', ')}] but the repository has [${migrationFiles.join(', ')}]; no data was written. Build it with \`wrangler d1 migrations apply\`, not by executing the baseline file.`)
     }
-    run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath])
+    // A remote `--file` import prints its upload progress to stdout ahead of
+    // the JSON even with `--json`, and an interrupted import exits zero with
+    // no JSON at all — so success is the parsed result, not the exit code.
+    const importOutput = run(['d1', 'execute', 'DB', ...destination, '--file', payloadPath, '--json'], true)
+    const imported = JSON.parse(importOutput.slice(importOutput.indexOf('['))) as Array<{ success: boolean }>
+    if (!Array.isArray(imported) || imported.length === 0 || imported.some(result => result.success !== true)) {
+      throw new Error(`${target} import did not return a successful D1 result`)
+    }
+    if (!deltaFrom) {
+      // One row of scalar counts: D1 refuses a UNION ALL across every table
+      // ("too many terms in compound SELECT").
+      const [loaded] = query<Record<string, number>>(`SELECT ${manifest.tables.map(table =>
+        `(SELECT count(*) FROM ${identifier(table.table)}) AS ${identifier(table.table)}`,
+      ).join(', ')}`)
+      const mismatches = manifest.tables.filter(table => loaded?.[table.table] !== table.target_rows)
+      if (mismatches.length) throw new Error(`${target} import row counts differ: ${mismatches.map(table => table.table).join(', ')}`)
+    }
     console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${target} D1${deltaFrom ? ' as a delta' : ''}.`)
   }
 } finally {
