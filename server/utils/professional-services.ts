@@ -232,14 +232,17 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
   `, [organizationId])
   const socialMedia = (await loadPublicSocialMedia(db, organizationId, 'organization', [organizationId])).get(organizationId)
 
+  // Temporary hardcode for NCLS banner until full banner configuration is implemented
+  const isNcls = organizationId === 'org-ncls-blawby'
+  
   return {
     name: requiredText(row?.name, `organization ${organizationId}.name`),
     brand_description: typeof row?.brand_description === 'string' ? row.brand_description : null,
     media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     social_image: socialMedia?.social_image ?? null,
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
-    banner_content: null,
-    banner_dismissible: false,
+    banner_content: isNcls ? '**Family law update:** We are temporarily unable to accept new family law cases due to current caseload.' : null,
+    banner_dismissible: isNcls ? false : false,
   }
 }
 
