@@ -15,8 +15,7 @@
         class="w-full"
       />
 
-      <div v-if="tab === 'views'" class="space-y-6">
-        <UCard variant="soft">
+      <UCard v-if="tab === 'views' || tab === 'social'" variant="soft">
           <div class="grid gap-4 lg:grid-cols-[13rem_1fr]">
             <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <UButton
@@ -43,7 +42,9 @@
               </UButton>
             </div>
           </div>
-        </UCard>
+      </UCard>
+
+      <div v-if="tab === 'views'" class="space-y-6">
 
         <div class="grid gap-4 xl:grid-cols-2">
           <UCard variant="soft">
@@ -198,6 +199,60 @@
         </UCard>
       </div>
 
+      <div v-else-if="tab === 'social'" class="space-y-6">
+        <p class="text-sm text-muted">Facebook and Instagram report their own audiences and periods. Counts from different networks are shown separately.</p>
+        <UCard v-for="provider in socialProviders" :key="provider.source" variant="soft">
+          <template #header>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 class="font-semibold text-highlighted">{{ provider.source === 'facebook' ? 'Facebook Page' : 'Instagram' }} · {{ provider.targetName ?? 'Not connected' }}</h2>
+                <p v-if="provider.targetId" class="text-xs text-muted">{{ provider.targetId }} · Graph API {{ provider.apiVersion }} · {{ provider.fetchedAt ? `Read ${formatDateTime(provider.fetchedAt)}` : 'No current read' }}</p>
+              </div>
+              <UBadge :color="provider.status === 'connected' ? 'success' : provider.status === 'disconnected' ? 'neutral' : 'error'" variant="soft">{{ provider.status.replaceAll('_', ' ') }}</UBadge>
+            </div>
+          </template>
+          <UAlert v-if="provider.error" :color="provider.status === 'disconnected' ? 'neutral' : 'error'" variant="soft" :description="provider.error" />
+          <UAlert v-else-if="provider.metrics.some(metric => metric.status === 'permission_denied')" color="error" variant="soft" description="This connection cannot read some insight metrics. Reconnect it with insights permission." />
+          <UButton v-if="provider.status === 'disconnected' || provider.status === 'permission_denied' || provider.metrics.some(metric => metric.status === 'permission_denied')"
+            class="mt-3" variant="soft" :to="`/dashboard/${String(route.params.orgSlug)}/settings/integrations/${provider.source}`">Connect or review {{ provider.source === 'facebook' ? 'Facebook' : 'Instagram' }}</UButton>
+          <div v-if="provider.status === 'connected'" class="space-y-6">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div v-for="metric in provider.metrics" :key="metric.name" class="rounded-lg border border-default p-3">
+                <p class="text-sm font-medium text-highlighted">{{ metricLabel(metric.name) }}</p>
+                <p class="mt-2 text-2xl tabular-nums">{{ metric.status === 'available' && metric.value !== null ? formatCount(metric.value) : '—' }}</p>
+                <p class="text-xs text-muted">{{ metric.period.replaceAll('_', ' ') }} · {{ metric.unit }} · {{ metric.status.replaceAll('_', ' ') }}</p>
+                <p v-if="metric.previousStatus === 'available' && metric.previousValue !== null" class="text-xs text-muted">Previous equal period: {{ formatCount(metric.previousValue) }}</p>
+                <p v-if="metric.status === 'available' && metric.value !== null && metric.previousStatus === 'available' && metric.previousValue !== null" class="text-xs text-muted">
+                  Change: {{ metric.value - metric.previousValue >= 0 ? '+' : '' }}{{ formatCount(metric.value - metric.previousValue) }} vs previous equal period
+                </p>
+                <p v-if="metric.reason" class="mt-1 text-xs text-muted">{{ metric.reason }}</p>
+              </div>
+            </div>
+            <div>
+              <h3 class="font-medium text-highlighted">Content published in this range · ranked by {{ provider.source === 'facebook' ? 'post media views' : 'media views' }}</h3>
+              <p v-if="provider.contentCoverageReason" class="mt-1 text-sm text-muted">{{ provider.contentCoverageReason }}</p>
+              <p v-if="provider.nextCursor" class="mt-1 text-xs text-muted">Ranked among loaded posts. Load every page to inspect all posts in this range.</p>
+              <p v-if="provider.contentCoverage === 'complete' && !provider.content.length" class="mt-2 text-sm text-muted">No native posts were published in this range.</p>
+              <div v-else class="mt-3 grid gap-3 lg:grid-cols-2">
+                <div v-for="item in sortedSocialContent(provider)" :key="item.id" class="rounded-lg border border-default p-4">
+                  <a v-if="item.permalink" :href="item.permalink" target="_blank" rel="noopener noreferrer" class="font-medium text-primary underline">{{ item.caption?.trim().slice(0, 95) || `${item.kind} post` }}</a>
+                  <p v-else class="font-medium text-highlighted">{{ item.caption?.trim().slice(0, 95) || `${item.kind} post` }}</p>
+                  <p class="mt-1 text-xs text-muted">{{ item.kind }} · {{ formatDateTime(item.publishedAt) }} · {{ item.id }}</p>
+                  <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                    <span v-for="metric in item.metrics" :key="metric.name" :title="metric.reason ?? ''">
+                      {{ metricLabel(metric.name) }}: {{ metric.status === 'available' && metric.value !== null ? formatCount(metric.value) : metric.status.replaceAll('_', ' ') }}
+                    </span>
+                  </div>
+                  <p class="mt-2 text-xs text-muted">Content metrics are lifetime counts; posts are selected by their publication date.</p>
+                </div>
+              </div>
+              <UAlert v-if="socialPageError[provider.source]" class="mt-3" color="error" variant="soft" :description="socialPageError[provider.source] ?? undefined" />
+              <UButton v-if="provider.nextCursor" class="mt-4" variant="soft" :loading="socialPageLoading[provider.source]" @click="loadMoreSocial(provider.source)">Load more {{ provider.source === 'facebook' ? 'Page posts' : 'Instagram media' }}</UButton>
+            </div>
+          </div>
+        </UCard>
+      </div>
+
       <div v-else-if="tab === 'reviews'" class="space-y-6">
         <div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
           <UCard variant="soft">
@@ -286,10 +341,12 @@ definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'
+import type { ProviderInsights, ProviderContentInsight, ProviderMetric } from '~/server/utils/meta-insights'
 
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
 interface AnalyticsResponse {
+  social: { facebook: ProviderInsights; instagram: ProviderInsights }
   metrics: {
     pageViews: number
     uniqueSessions: number
@@ -335,7 +392,7 @@ interface InsightsResponse {
 // Reviews and Opportunities read what we actually hold. There is no Superhost
 // equivalent, and a review carries one overall rating rather than per-category
 // scores, so neither is invented here.
-const TAB_VALUES = ['views', 'reviews', 'opportunities', 'activity'] as const
+const TAB_VALUES = ['views', 'social', 'reviews', 'opportunities', 'activity'] as const
 type InsightsTab = typeof TAB_VALUES[number]
 const isTab = (value: unknown): value is InsightsTab => TAB_VALUES.some(candidate => candidate === value)
 const tab = ref<InsightsTab>(isTab(route.query.tab) ? route.query.tab : 'views')
@@ -350,6 +407,7 @@ watch(tab, (next) => {
 })
 const tabItems = [
   { label: 'Views', value: 'views' as const },
+  { label: 'Social', value: 'social' as const },
   { label: 'Reviews', value: 'reviews' as const },
   { label: 'Opportunities', value: 'opportunities' as const },
   // Activity is a report like the others, not a screen of its own: it reads
@@ -377,6 +435,28 @@ const isNumberField = (row: unknown, ...fields: string[]): boolean =>
   isRecord(row) && fields.every(field => typeof row[field] === 'number')
 const isLabelled = (row: unknown, label: string, ...numbers: string[]): boolean =>
   isRecord(row) && typeof row[label] === 'string' && isNumberField(row, ...numbers)
+const isMetric = (value: unknown): value is ProviderMetric =>
+  isRecord(value) && typeof value.name === 'string' && (value.value === null || typeof value.value === 'number')
+  && typeof value.unit === 'string' && typeof value.period === 'string' && typeof value.status === 'string'
+  && (value.reason === null || typeof value.reason === 'string')
+  && (value.previousValue === null || typeof value.previousValue === 'number')
+  && (value.previousStatus === null || typeof value.previousStatus === 'string')
+const isProvider = (value: unknown): value is ProviderInsights =>
+  isRecord(value) && typeof value.source === 'string' && typeof value.apiVersion === 'string'
+  && typeof value.status === 'string' && (value.targetId === null || typeof value.targetId === 'string')
+  && (value.targetName === null || typeof value.targetName === 'string')
+  && (value.connectionRevision === null || typeof value.connectionRevision === 'string')
+  && (value.fetchedAt === null || typeof value.fetchedAt === 'string')
+  && (value.error === null || typeof value.error === 'string')
+  && typeof value.contentCoverage === 'string'
+  && (value.contentCoverageReason === null || typeof value.contentCoverageReason === 'string')
+  && (value.nextCursor === null || typeof value.nextCursor === 'string')
+  && Array.isArray(value.metrics) && value.metrics.every(isMetric)
+  && Array.isArray(value.content) && value.content.every(item => isRecord(item)
+    && typeof item.id === 'string' && typeof item.kind === 'string' && typeof item.publishedAt === 'string'
+    && (item.permalink === null || typeof item.permalink === 'string')
+    && (item.caption === null || typeof item.caption === 'string')
+    && Array.isArray(item.metrics) && item.metrics.every(isMetric))
 
 /**
  * Every field the page reads is checked, not just the containers around them.
@@ -387,6 +467,7 @@ const isLabelled = (row: unknown, label: string, ...numbers: string[]): boolean 
  */
 const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   isRecord(value)
+  && isRecord(value.social) && isProvider(value.social.facebook) && isProvider(value.social.instagram)
   && isNumberField(value.metrics, 'pageViews', 'uniqueSessions', 'uniqueVisitors', 'returningVisitors', 'avgSessionDuration', 'pagesPerSession')
   && isRecord(value.metrics)
   && (value.metrics.changePercent === null || typeof value.metrics.changePercent === 'number')
@@ -429,7 +510,7 @@ const isInsightsResponse = (value: unknown): value is InsightsResponse =>
 const initialRange = { ...range }
 let latestManualRequestId = 0
 
-async function fetchInsights(query: { startDate?: string; endDate?: string }) {
+async function fetchInsights(query: { startDate?: string; endDate?: string; facebookCursor?: string; instagramCursor?: string }) {
   return await dashboardApi<InsightsResponse>('/api/dashboard/analytics', {
     query,
     validate: isInsightsResponse,
@@ -460,6 +541,38 @@ watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, 
 }, { immediate: true })
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
+const socialProviders = computed(() => analytics.value ? [analytics.value.social.facebook, analytics.value.social.instagram] : [])
+const socialPageLoading = reactive({ facebook: false, instagram: false })
+const socialPageError = reactive<{ facebook: string | null; instagram: string | null }>({ facebook: null, instagram: null })
+async function loadMoreSocial(source: 'facebook' | 'instagram') {
+  const current = analytics.value?.social[source]
+  if (!current?.nextCursor || socialPageLoading[source]) return
+  const requestedRange = { startDate: range.startDate, endDate: range.endDate }
+  socialPageLoading[source] = true
+  socialPageError[source] = null
+  try {
+    const response = await fetchInsights({ ...requestedRange,
+      ...(source === 'facebook' ? { facebookCursor: current.nextCursor } : { instagramCursor: current.nextCursor }) })
+    const next = response.report.social[source]
+    if (next.status !== 'connected') throw new Error(next.error ?? 'The social connection could not be read')
+    if (next.connectionRevision !== current.connectionRevision || next.targetId !== current.targetId) throw new Error('The social connection changed. Reload insights.')
+    if (!analytics.value || range.startDate !== requestedRange.startDate || range.endDate !== requestedRange.endDate
+      || analytics.value.social[source] !== current) return
+    analytics.value.social[source] = { ...next, content: [...current.content, ...next.content] }
+  } catch (error) {
+    socialPageError[source] = error instanceof Error ? error.message : 'Could not load more social posts'
+  } finally {
+    socialPageLoading[source] = false
+  }
+}
+function sortedSocialContent(provider: ProviderInsights): ProviderContentInsight[] {
+  return [...provider.content].sort((left, right) => {
+    const views = (item: ProviderContentInsight) => item.metrics.find(metric => metric.name === (provider.source === 'facebook' ? 'post_media_view' : 'views') && metric.status === 'available')?.value
+    return (views(right) ?? -1) - (views(left) ?? -1)
+  })
+}
+function metricLabel(name: string): string { return name.replace(/^(page|post)_/, '').replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase()) }
+function formatDateTime(value: string): string { return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) }
 const maxTrendValue = computed(() => Math.max(1, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))))
 const pageviewPoints = computed(() => toPoints(dailyData.value.map(day => day.pageViews)))
 const sessionPoints = computed(() => toPoints(dailyData.value.map(day => day.sessions)))

@@ -49,7 +49,7 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         organization.userId
       );
       assertDomainSuccess(result);
-      const settingsResult = result.data as { updated_at: string };
+      const settingsResult = (result.data as { settings: { updated_at: string } }).settings;
       const updateSettingsContext = await mutationContextPayload(organization);
       return renderStructuredResponse(
         {

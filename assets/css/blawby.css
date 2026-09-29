@@ -162,3 +162,7 @@ html.blawby-document {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.blawby-footer-logo {
+  filter: grayscale(1) brightness(1.2);
+}

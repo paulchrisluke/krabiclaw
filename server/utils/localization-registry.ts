@@ -74,6 +74,8 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   product: { table: 'products', tenantScope: 'organization_column', fields: { name: 'text', description: 'text', tags: 'string_array',
     marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'derived' },
   collection: { table: 'collections', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
+  // A category's page is at its collection's path under the site's locale prefix; its slug is not translated.
+  article_category: { table: 'article_categories', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
   media_asset: { table: 'media_assets', tenantScope: 'organization_column', fields: { alt_text: 'text' }, route: 'none' },
 })
 

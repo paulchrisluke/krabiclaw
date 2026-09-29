@@ -77,24 +77,27 @@
 
 <script lang="ts">
 import type { Component, ComputedRef, InjectionKey, Reactive, Ref } from 'vue'
+import type { DashboardArticleCategory } from '~/composables/useArticleCategories'
 
-export type SettingsSection = 'category' | 'tags' | 'excerpt' | 'publishing' | 'share' | 'url'
-export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'tags', 'excerpt', 'publishing', 'share', 'url']
+export type SettingsSection = 'category' | 'excerpt' | 'publishing' | 'share' | 'url'
+export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'excerpt', 'publishing', 'share', 'url']
 export const SETTINGS_LABELS: Record<SettingsSection, string> = {
-  category: 'Category', tags: 'Tags', excerpt: 'Excerpt', publishing: 'When it goes live',
+  category: 'Category', excerpt: 'Excerpt', publishing: 'When it goes live',
   share: 'Share preview', url: 'URL',
 }
 
 /** The post's draft and what its leaves show beside their one field. */
 export interface BlogEditor {
-  form: Reactive<{ title: string; collection: ArticleCollection; category: string; excerpt: string; slug: string; visibility: 'listed' | 'unlisted'; redirect_old_slug: boolean }>
-  tagsText: Ref<string>
+  form: Reactive<{ title: string; collection: ArticleCollection; category_id: string; excerpt: string; slug: string; visibility: 'listed' | 'unlisted'; redirect_old_slug: boolean }>
   post: Ref<BlogPost | null>
   loadPending: Ref<boolean>
   loadError: Ref<string>
   actionError: Ref<string>
   saving: ComputedRef<boolean>
   collectionOptions: Array<{ label: string; value: ArticleCollection }>
+  /** The post's collection's categories, the Category leaf's choices. */
+  categories: Ref<DashboardArticleCategory[] | undefined>
+  categoriesError: Ref<unknown>
   lifecycleLabel: ComputedRef<string>
   generatedSlug: ComputedRef<string>
   resolvedExcerpt: ComputedRef<string>
@@ -150,10 +153,11 @@ const section = computed<SettingsSection | null>(() => {
   return segment && (SETTINGS_SECTIONS as string[]).includes(segment) ? segment as SettingsSection : null
 })
 
-const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category: '', excerpt: '', slug: '', visibility: 'listed' as 'listed' | 'unlisted', redirect_old_slug: true })
-const tagsText = ref('')
+const form = reactive({ title: '', collection: 'blog' as ArticleCollection, category_id: '', excerpt: '', slug: '', visibility: 'listed' as 'listed' | 'unlisted', redirect_old_slug: true })
 const templateName = computed(() => post.value?.editor_template || 'saya')
 const collectionOptions = ARTICLE_COLLECTION_SLUGS.map(slug => ({ label: ARTICLE_COLLECTIONS[slug].label, value: slug }))
+if (!props.organizationId) throw new Error('The blog editor needs the organization it edits')
+const { data: categories, error: categoriesError } = useArticleCategories(props.organizationId, () => form.collection)
 const editorCanvasStyle = computed(() => {
   const tokens = post.value?.editor_theme_tokens ?? {}
   if (templateName.value === 'saya') {
@@ -228,8 +232,7 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
       id: 'about',
       label: 'About this post',
       items: [
-        row('category', `${ARTICLE_COLLECTIONS[form.collection].label} · Category`, form.category),
-        row('tags', 'Tags', tagsText.value, 'None'),
+        row('category', `${ARTICLE_COLLECTIONS[form.collection].label} · Category`, categories.value?.find(category => category.id === form.category_id)?.name),
         {
           id: 'excerpt',
           label: 'Excerpt',
@@ -361,9 +364,8 @@ function applyLoadedPost(loaded: BlogPost) {
   try {
     syncServerVersion(loaded)
     post.value = loaded
-    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category: loaded.category || '', excerpt: loaded.excerpt || '', slug: loaded.slug || '', visibility: loaded.visibility || 'listed', redirect_old_slug: true })
+    Object.assign(form, { title: loaded.title, collection: loaded.collection ?? 'blog', category_id: loaded.category?.id ?? '', excerpt: loaded.excerpt || '', slug: loaded.slug || '', visibility: loaded.visibility || 'listed', redirect_old_slug: true })
     slugResetRequested.value = false
-    tagsText.value = loaded.tags?.join(', ') || ''
     if (!loaded.content_document) throw new Error('Blog content document is missing')
     blocks.value = cloneEditorBlocks(loaded.content_document.blocks || [])
     ensureTrailingTextBlock()
@@ -409,7 +411,7 @@ function savedBlocks() {
   return cloneEditorBlocks(toRaw(blocks.value)).filter(isSavable)
 }
 function buildSavePayload(): BlogPostUpdateInput {
-  return { title: form.title, collection: form.collection, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, visibility: form.visibility, content_blocks: savedBlocks() }
+  return { title: form.title, collection: form.collection, category_id: form.category_id || undefined, excerpt: form.excerpt || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, visibility: form.visibility, content_blocks: savedBlocks() }
 }
 function lifecycleVersionInput() {
   if (!serverPostUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
@@ -475,8 +477,7 @@ async function publish() {
         slug: form.slug || undefined,
         content_blocks: savedBlocks(),
         collection: form.collection,
-        category: form.category || null,
-        tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean),
+        category_id: form.category_id || undefined,
         excerpt: form.excerpt || null,
         visibility: form.visibility,
         idempotency_key: createKey,
@@ -601,13 +602,14 @@ function syncServerVersion(value: BlogPost) { serverPostUpdatedAt = value.update
 
 provide(blogEditorKey, {
   form,
-  tagsText,
   post,
   loadPending,
   loadError,
   actionError,
   saving: computed(() => savingExplicitly.value || publishing.value),
   collectionOptions,
+  categories,
+  categoriesError,
   lifecycleLabel,
   generatedSlug,
   resolvedExcerpt,

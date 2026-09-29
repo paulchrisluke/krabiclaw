@@ -103,11 +103,9 @@ function blogBlockFieldKey(blockIndex: number, path: BlogLocalizedFieldPath): st
 const sourceBlogBlocks = computed(() => (postResource.value?.post.content_document?.blocks ?? []) as BlogEditorBlock[])
 const blogLocalizationFields = computed(() => {
   const post = postResource.value?.post
-  const fields: Array<{ key: string; label: string; source: string | readonly string[] | null | undefined; kind?: 'string-list'; multiline?: boolean; rows?: number }> = [
+  const fields: Array<{ key: string; label: string; source: string | null | undefined; multiline?: boolean; rows?: number }> = [
     { key: 'title', label: 'Title', source: post?.title },
     { key: 'summary', label: 'Excerpt', source: post?.excerpt, multiline: true, rows: 4 },
-    { key: 'metadata.category', label: 'Category', source: post?.category },
-    { key: 'metadata.tags', label: 'Tags', source: post?.tags, kind: 'string-list' },
     { key: 'seo_keywords', label: 'Search keywords', source: post?.seo_keywords },
   ]
   sourceBlogBlocks.value.forEach((block, blockIndex) => {
@@ -138,8 +136,7 @@ async function loadBlogLocalization(locale: string): Promise<Record<string, unkn
       `/api/editor/organizations/${organizationId}/localization/content_document/${postId}/${encodeURIComponent(locale)}`,
       { validate: isBlogTranslationResponse },
     )
-    values = { ...response.localization, 'metadata.category': response.localization.metadata.category,
-      'metadata.tags': response.localization.metadata.tags }
+    values = { ...response.localization }
     blocks = structuredClone(response.localization.content_blocks)
     documentUpdatedAt = response.localization.updated_at
   } catch (cause) {
@@ -171,8 +168,7 @@ async function saveBlogLocalization(locale: string, submitted: Record<string, un
       if (typeof value === 'string') writeBlogLocalizedText(translated.data, field.path, value)
     })
   })
-  const values: Record<string, unknown> = { metadata: { category: submitted['metadata.category'],
-    tags: submitted['metadata.tags'] } }
+  const values: Record<string, unknown> = {}
   for (const key of ['title', 'summary', 'seo_keywords']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
   }

@@ -12,7 +12,6 @@ export const blawbyExtraHeaders = blawbyTestExtraHeaders()
 
 interface ZarazConsentApi {
   APIReady: boolean
-  get: (_purposeId: string) => boolean | undefined
 }
 
 // Inject extra headers ONLY into requests targeting the tenant's base hostname.
@@ -62,20 +61,15 @@ export async function openTenantPage(page: Page, url: string, headers: Record<st
   page.on('response', onResponse)
   report('started')
   try {
-    // A visitor who already answered keeps that answer, a rejection included;
-    // only a first visit is granted by default.
-    const answeredBefore = usesZarazConsent
-      && (await page.context().cookies(url)).some(cookie => cookie.name === 'kc_analytics_consent')
     const response = await page.goto(url, { waitUntil: 'load' })
     stage = 'consent'
     report('loaded')
-    // Analytics is on by default: a first visit has the Google Analytics
-    // purpose granted without clicking anything.
+    // Zaraz must be ready before a deployed page can present or honor a choice.
     if (usesZarazConsent) {
-      await page.waitForFunction((requireGrant) => {
+      await page.waitForFunction(() => {
         const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
-        return consent?.APIReady === true && (!requireGrant || consent.get('kc_analytics') === true)
-      }, !answeredBefore)
+        return consent?.APIReady === true
+      })
     }
 
     report('finished')

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
+import { HTTPError } from 'nitro'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { executeBatch } from '../../server/db/index.ts'
 import { buildMediaPlacementInsertQuery } from '../../server/utils/media-asset-manager.ts'
+import { createArticleCategory, updateArticleCategory } from '../../server/utils/content/article-categories.ts'
 import {
   appendContentBlock, replaceContentBlock, deleteContentBlock,
   createContentDocumentWithBlocks, getContentDocumentById, listBlocksForDocument,
@@ -170,6 +172,48 @@ test('document scopes, translations, block ownership and concurrent edits persis
     assert.equal(await db.prepare("SELECT count(*) AS count FROM organization_redirects WHERE id LIKE 'late-%'").first('count'), 0)
     assert.equal(await db.prepare("SELECT count(*) AS count FROM media_assets WHERE id='retained-asset'").first('count'), 1)
     assert.equal((await db.prepare('PRAGMA foreign_key_check').all()).results.length, 0)
+  } finally {
+    await miniflare.dispose()
+  }
+})
+
+test('category creation and rename enforce one case-insensitive name through D1', async () => {
+  const miniflare = new Miniflare({ workers: [{ config: {
+    name: 'article-category-test', type: 'worker', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': {
+      type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }',
+    } } }, env: { DB: { type: 'd1' } },
+  } }] })
+  try {
+    const db = await miniflare.getD1Database('DB')
+    const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+    await db.batch(statements.map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO organization (id, name, slug) VALUES ('category-org', 'Category org', 'category-org')").run()
+    await db.prepare("INSERT INTO user (id, name, email) VALUES ('category-author', 'Category author', 'category@example.test')").run()
+    const create = (name: string) => createArticleCategory(db, {
+      organizationId: 'category-org', collection: 'blog', name, actorId: 'category-author',
+    })
+    const attempts = await Promise.allSettled([create('News'), create('news')])
+    assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1)
+    const rejected = attempts.find(result => result.status === 'rejected')
+    assert(rejected?.status === 'rejected')
+    assert(rejected.reason instanceof HTTPError)
+    assert.equal(rejected.reason.statusCode, 409)
+    const persisted = (await db.prepare("SELECT id, name FROM article_categories WHERE organization_id = 'category-org' ORDER BY id").all()).results
+    assert.equal(persisted.length, 1)
+    assert.equal(String(persisted[0]?.name).toLowerCase(), 'news')
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM public_resource_cache_invalidations WHERE organization_id = 'category-org'").first<{ n: number }>())?.n, 1)
+
+    const other = await create('Culture')
+    await assert.rejects(updateArticleCategory(db, {
+      organizationId: 'category-org', categoryId: other.id, name: 'NeWs', actorId: 'category-author',
+    }), (error: unknown) => {
+      assert(error instanceof HTTPError)
+      assert.equal(error.statusCode, 409)
+      return true
+    })
+    assert.deepEqual((await db.prepare("SELECT name FROM article_categories WHERE organization_id = 'category-org' ORDER BY name").all()).results.map(row => row.name), ['Culture', persisted[0]?.name])
+    assert.equal((await db.prepare("SELECT count(*) AS n FROM public_resource_cache_invalidations WHERE organization_id = 'category-org'").first<{ n: number }>())?.n, 2)
   } finally {
     await miniflare.dispose()
   }

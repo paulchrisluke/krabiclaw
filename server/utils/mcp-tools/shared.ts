@@ -287,6 +287,30 @@ const blogContentBlockObject = {
   additionalProperties: false,
 }
 
+/** An article's category as posts carry it. */
+export const articleCategoryRefObject = {
+  type: ['object', 'null'],
+  properties: { id: { type: 'string' }, name: { type: 'string' }, slug: { type: 'string' } },
+  required: ['id', 'name', 'slug'],
+  additionalProperties: false,
+} as const
+
+/** One of a collection's categories, as the category tools return it. */
+export const articleCategoryObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    collection: { type: 'string', enum: ['blog', 'docs'] },
+    name: { type: 'string' },
+    slug: { type: 'string', description: "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed." },
+    description: { type: ['string', 'null'] },
+    sort_order: { type: 'integer' },
+    article_count: { type: 'integer', description: 'Articles in the category, drafts included.' },
+  },
+  required: ['id', 'collection', 'name', 'slug', 'description', 'sort_order', 'article_count'],
+  additionalProperties: false,
+} as const
+
 export const blogPostObject = {
   type: 'object',
   properties: {
@@ -295,9 +319,8 @@ export const blogPostObject = {
     slug: { type: 'string' },
     excerpt: { type: ['string', 'null'] },
     collection: { type: 'string', enum: ['blog', 'docs'] },
-    category: { type: ['string', 'null'] },
+    category: articleCategoryRefObject,
     sort_order: { type: 'integer' },
-    tags: { type: 'array', items: { type: 'string' } },
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
@@ -315,7 +338,7 @@ export const blogPostObject = {
     content_blocks: { type: 'array', items: blogContentBlockObject },
   },
   required: [
-    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order', 'tags',
+    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order',
     'seo_keywords',
     'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
@@ -333,9 +356,8 @@ export const blogPostSummaryObject = {
     slug: { type: 'string' },
     excerpt: { type: ['string', 'null'] },
     collection: { type: 'string', enum: ['blog', 'docs'] },
-    category: { type: ['string', 'null'] },
+    category: articleCategoryRefObject,
     sort_order: { type: 'integer' },
-    tags: { type: 'array', items: { type: 'string' } },
     seo_keywords: { type: ['string', 'null'] },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
@@ -352,7 +374,7 @@ export const blogPostSummaryObject = {
     view_url: { type: ['string', 'null'] },
   },
   required: [
-    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order', 'tags',
+    'id', 'title', 'slug', 'excerpt', 'collection', 'category', 'sort_order',
     'seo_keywords',
     'published', 'published_at', 'status', 'visibility',
     'created_at', 'updated_at', 'cover', 'admin_edit_url', 'edit_url',
@@ -917,6 +939,11 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   set_collection_products: D,
   reorder_collections: D,
   reorder_blog_posts: D,
+  list_article_categories: R,
+  create_article_category: W,
+  update_article_category: D,
+  delete_article_category: D,
+  reorder_article_categories: D,
   list_metafield_definitions: R,
   create_metafield_definition: W,
   delete_metafield_definition: D,

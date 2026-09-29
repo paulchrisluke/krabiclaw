@@ -16,6 +16,8 @@ export interface OrganizationSettings {
   custom_domain_status: DomainStatus | 'none'
   name: string
   brand_description: string | null
+  banner_content: string | null
+  banner_dismissible: boolean
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
@@ -37,6 +39,8 @@ export interface UpdateOrganizationSettingsRequest {
    */
   status?: 'active' | 'inactive'
   brand_description?: string
+  banner_content?: string | null
+  banner_dismissible?: boolean
   contact_email?: string
   brand_color?: string
   font_preset?: OrganizationFontPreset

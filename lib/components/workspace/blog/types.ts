@@ -7,7 +7,7 @@ export interface BlogPost {
   excerpt?: string | null
   /** Which of the site's collections the article belongs to: its blog or its docs. */
   collection?: ArticleCollection | null
-  category?: string | null
+  category?: { id: string; name: string; slug: string } | null
   /** Its place in its collection, from 1; 0 until the collection is ordered with it in it. */
   sort_order: number
   seo_keywords?: string | null
@@ -17,7 +17,6 @@ export interface BlogPost {
   slug_manually_overridden?: boolean | number | null
   status?: 'draft' | 'published'
   visibility?: 'listed' | 'unlisted'
-  tags?: string[]
   /** The leading image block's asset, or null when the article opens with text. */
   cover?: { asset_id: string; public_url?: string | null; thumbnail_url?: string | null; kind?: string | null; alt_text?: string | null; width?: number | null; height?: number | null } | null
   edit_url?: string | null
@@ -50,8 +49,7 @@ export interface BlogPostCreateInput {
   content_blocks: BlogEditorBlock[]
   excerpt?: string | null
   collection?: ArticleCollection | null
-  category?: string | null
-  tags?: string[] | null
+  category_id?: string
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   /** Made once per new article, so a retried create makes one. */
@@ -62,8 +60,7 @@ export interface BlogPostUpdateInput {
   title?: string
   excerpt?: string | null
   collection?: ArticleCollection | null
-  category?: string | null
-  tags?: string[] | null
+  category_id?: string
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   slug?: string | null

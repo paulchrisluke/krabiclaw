@@ -4,17 +4,42 @@ import { organizationTool } from './shared'
 const number = { type: 'number' } as const
 const string = { type: 'string' } as const
 const nullableString = { type: ['string', 'null'] } as const
+const providerMetric = {
+  type: 'object',
+  properties: {
+    name: string, value: { type: ['number', 'null'] }, unit: string,
+    period: string, status: string, reason: nullableString,
+    previousValue: { type: ['number', 'null'] }, previousStatus: nullableString,
+  },
+  required: ['name', 'value', 'unit', 'period', 'status', 'reason', 'previousValue', 'previousStatus'],
+} as const
+const providerReport = {
+  type: 'object',
+  properties: {
+    source: string, apiVersion: string, status: string, targetId: nullableString,
+    targetName: nullableString, connectionRevision: nullableString, fetchedAt: nullableString,
+    error: nullableString, metrics: { type: 'array', items: providerMetric },
+    content: { type: 'array', items: { type: 'object', properties: {
+      id: string, kind: string, publishedAt: string, permalink: nullableString,
+      caption: nullableString, metrics: { type: 'array', items: providerMetric },
+    }, required: ['id', 'kind', 'publishedAt', 'permalink', 'caption', 'metrics'] } },
+    contentCoverage: string, contentCoverageReason: nullableString, nextCursor: nullableString,
+  },
+  required: ['source', 'apiVersion', 'status', 'targetId', 'targetName', 'connectionRevision', 'fetchedAt', 'error', 'metrics', 'content', 'contentCoverage', 'contentCoverageReason', 'nextCursor'],
+} as const
 
 export const ANALYTICS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_organization_analytics',
-    description: 'Get the canonical read-only traffic, attribution, and conversion report for the site. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates.',
+    description: 'Get website traffic, attribution and conversions plus live Facebook Page and Instagram professional-account insights for the selected organization. Dates are inclusive in the site reporting timezone and default to exactly 30 calendar dates. Each provider returns one newest-first page of native content and a nextCursor; pass facebook_cursor or instagram_cursor to continue. Rank content only among pages fetched, and check each metric status. Do not add unique audiences across providers or treat unavailable as zero.',
     domain: 'analytics',
     minimumRole: 'admin',
     confirmRequired: false,
     inputSchema: {
       start_date: { type: 'string', description: 'Inclusive local start date in YYYY-MM-DD format. Defaults to 29 days before end_date.' },
       end_date: { type: 'string', description: 'Inclusive local end date in YYYY-MM-DD format. Defaults to today.' },
+      facebook_cursor: { type: 'string', description: 'Opaque nextCursor from the previous Facebook result for this same selected date range and connection.' },
+      instagram_cursor: { type: 'string', description: 'Opaque nextCursor from the previous Instagram result for this same selected date range and connection.' },
     },
     outputSchema: {
       type: 'object',
@@ -50,8 +75,9 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         cities: { type: 'array', items: { type: 'object', properties: { city: string, region: nullableString, countryCode: string, views: number }, required: ['city', 'region', 'countryCode', 'views'] } },
         referrers: { type: 'array', items: { type: 'object', properties: { source: string, views: number, percentOfTotal: number }, required: ['source', 'views', 'percentOfTotal'] } },
         devices: { type: 'array', items: { type: 'object', properties: { type: string, views: number, percentOfTotal: number }, required: ['type', 'views', 'percentOfTotal'] } },
+        social: { type: 'object', properties: { facebook: providerReport, instagram: providerReport }, required: ['facebook', 'instagram'] },
       },
-      required: ['period', 'metrics', 'dailyData', 'topPages', 'attribution', 'conversions', 'countries', 'cities', 'referrers', 'devices'],
+      required: ['period', 'metrics', 'dailyData', 'topPages', 'attribution', 'conversions', 'countries', 'cities', 'referrers', 'devices', 'social'],
     },
   }),
 ]

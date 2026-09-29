@@ -20,8 +20,8 @@ import type { MetaDeadline } from './meta-graph'
  * same video.
  */
 
-const GRAPH_API_VERSION = 'v25.0'
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`
+export const FACEBOOK_GRAPH_VERSION = 'v25.0'
+const GRAPH_BASE = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`
 
 export interface FacebookPagesConnection extends FacebookIntegration {
   organization_id: string

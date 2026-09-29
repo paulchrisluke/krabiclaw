@@ -24,12 +24,17 @@ export function decodeHtmlEntities(value: string): string {
 // renders (e.g. FAQ/How-To sections) don't bleed into each other's numbering.
 let headingSlugCounts = new Map<string, number>();
 
-function slugifyHeading(text: string) {
-  const base = decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
+/** A heading's anchor: the id a heading block and a markdown heading both carry, and ArticleToc links to. */
+export function headingAnchor(text: string) {
+  return decodeHtmlEntities(text.replace(/<[^>]+>/g, ""))
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, "")
     .trim()
-    .replace(/\s+/g, "-");
+    .replace(/\s+/g, "-") || "section";
+}
+
+function slugifyHeading(text: string) {
+  const base = headingAnchor(text);
   const count = headingSlugCounts.get(base) ?? 0;
   headingSlugCounts.set(base, count + 1);
   return count === 0 ? base : `${base}-${count}`;
@@ -47,9 +52,10 @@ marked.use({
   },
 });
 
-export function renderMarkdownToHtml(markdown: string) {
+export function renderMarkdownToHtml(markdown: string, blockIndex?: number) {
   headingSlugCounts = new Map();
-  return marked.parse(markdown, { gfm: true, breaks: true }) as string;
+  const rendered = marked.parse(markdown, { gfm: true, breaks: true }) as string;
+  return blockIndex === undefined ? rendered : rendered.replace(/(<h[23] id="[^"]+)(")/g, `$1-${blockIndex}$2`);
 }
 
 // Doc/blog pages render `title` from the DB as their own <h1>, so a body

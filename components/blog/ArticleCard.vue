@@ -2,25 +2,27 @@
   <!--
     One article, as every list of articles shows it — an index, a home page's
     latest-posts grid — on every template. The template's tokens colour it.
+    The title is the article's link and covers the card; the category chip is
+    its own link above it, since a link cannot sit inside another.
   -->
-  <NuxtLink :to="article.path" class="group block h-full no-underline">
-    <div
-      class="h-full overflow-hidden rounded-2xl border border-default bg-elevated transition-shadow hover:shadow-md"
-      :class="featured && still ? 'md:grid md:grid-cols-2' : ''"
-    >
-      <div v-if="still" :class="featured ? 'aspect-video md:aspect-auto md:min-h-72' : 'aspect-video'" class="overflow-hidden">
-        <img :src="still" :alt="article.cover?.alt_text ?? ''" loading="lazy" class="size-full object-cover transition-transform group-hover:scale-[1.02]">
-      </div>
-      <div :class="featured ? 'p-8' : 'p-6'">
-        <p v-if="article.category || article.published_at" class="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
-          <span v-if="article.category" class="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">{{ article.category }}</span>
-          <NuxtTime v-if="article.published_at" :datetime="article.published_at" :locale="locale" year="numeric" month="long" day="numeric" time-zone="UTC" />
-        </p>
-        <component :is="featured ? 'h2' : 'h3'" class="font-bold text-default" :class="featured ? 'mb-4 text-2xl sm:text-3xl' : 'mb-2 text-xl'">{{ article.title }}</component>
-        <p v-if="article.excerpt" class="text-muted" :class="featured ? 'text-lg leading-relaxed' : 'line-clamp-3 text-sm'">{{ article.excerpt }}</p>
-      </div>
+  <article
+    class="group relative h-full overflow-hidden rounded-2xl border border-default bg-elevated transition-shadow hover:shadow-md"
+    :class="featured && still ? 'md:grid md:grid-cols-2' : ''"
+  >
+    <div v-if="still" :class="featured ? 'aspect-video md:aspect-auto md:min-h-72' : 'aspect-video'" class="overflow-hidden">
+      <img :src="still" :alt="article.cover?.alt_text ?? ''" loading="lazy" class="size-full object-cover transition-transform group-hover:scale-[1.02]">
     </div>
-  </NuxtLink>
+    <div :class="featured ? 'p-8' : 'p-6'">
+      <p v-if="article.category || article.published_at" class="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted">
+        <NuxtLink v-if="article.category" :to="article.category.path" class="relative z-10 rounded-full bg-muted px-3 py-1 text-sm font-medium no-underline hover:bg-accented">{{ article.category.name }}</NuxtLink>
+        <NuxtTime v-if="article.published_at" :datetime="article.published_at" :locale="locale" year="numeric" month="long" day="numeric" time-zone="UTC" />
+      </p>
+      <component :is="featured ? 'h2' : 'h3'" class="font-bold text-default" :class="featured ? 'mb-4 text-2xl sm:text-3xl' : 'mb-2 text-xl'">
+        <NuxtLink :to="article.path" class="text-inherit no-underline after:absolute after:inset-0">{{ article.title }}</NuxtLink>
+      </component>
+      <p v-if="article.excerpt" class="text-muted" :class="featured ? 'text-lg leading-relaxed' : 'line-clamp-3 text-sm'">{{ article.excerpt }}</p>
+    </div>
+  </article>
 </template>
 
 <script setup lang="ts">
@@ -30,7 +32,8 @@ export interface ArticleCardData {
   path: string
   title: string
   excerpt?: string | null
-  category?: string | null
+  /** Its category and the category's page, when the list shows one. */
+  category?: { name: string; path: string } | null
   published_at?: string | null
   cover?: { kind?: string | null; public_url?: string | null; thumbnail_url?: string | null; alt_text?: string | null } | null
 }

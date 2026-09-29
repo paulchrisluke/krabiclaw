@@ -2084,6 +2084,58 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),
 ]);
 
+// An article's category: a named, ordered grouping the owner manages within
+// one of the site's article collections (the blog or the docs). It is the
+// public grouping of the collection's index, sidebar and breadcrumb, and it
+// has its own page, so it is a record rather than text typed on each article.
+// Row meaning: one category of one collection on one site.
+// Deletion: cascades from the site. A category that still has articles is not
+//   deleted; the owner moves them first (NO ACTION on the membership FK).
+// Read/write: server/utils/content/article-categories.ts.
+export const article_categories = sqliteTable("article_categories", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	collection: text().$type<'blog' | 'docs'>().notNull(),
+	name: text().notNull(),
+	slug: text().notNull(),
+	description: text(),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	created_by: text().notNull(),
+	updated_by: text().notNull(),
+}, (table) => [
+	check("article_categories_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	unique("article_categories_org_id_unique").on(table.organization_id, table.id),
+	uniqueIndex("article_categories_slug_unique").on(table.organization_id, table.collection, table.slug),
+	uniqueIndex("article_categories_name_unique").on(table.organization_id, table.collection, sql`lower(${table.name})`),
+	index("article_categories_org_sort_idx").on(table.organization_id, table.collection, table.sort_order),
+	check("article_categories_collection_check", sql`collection IN ('blog', 'docs')`),
+	check("article_categories_name_not_blank_check", sql`trim(name) <> ''`),
+	check("article_categories_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
+	check("article_categories_sort_order_check", sql`sort_order >= 0`),
+]);
+
+// Which category an article is in: exactly one, so the article is the key.
+// Deletion: cascades from the article; a category with rows here cannot be
+//   deleted (NO ACTION), which is what makes the owner move its articles.
+// Read/write: server/utils/content/article-categories.ts.
+export const article_category_articles = sqliteTable("article_category_articles", {
+	article_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	category_id: text().notNull(),
+	article_row_role: text().$type<'root'>().default("root").notNull(),
+	article_kind: text().$type<'article'>().default("article").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	check("article_category_articles_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
+	foreignKey({ columns: [table.organization_id, table.category_id], foreignColumns: [article_categories.organization_id, article_categories.id], name: "article_category_articles_category_scope_fk" }),
+	foreignKey({ columns: [table.organization_id, table.article_id, table.article_row_role, table.article_kind], foreignColumns: [content_documents.organization_id, content_documents.id, content_documents.row_role, content_documents.kind], name: "article_category_articles_article_scope_fk" }).onDelete("cascade"),
+	index("article_category_articles_category_idx").on(table.category_id),
+	check("article_category_articles_constants_check", sql`article_row_role = 'root' AND article_kind = 'article'`),
+]);
+
 export const content_blocks = sqliteTable("content_blocks", {
 	id: text().primaryKey(),
 	source_block_id: text(),

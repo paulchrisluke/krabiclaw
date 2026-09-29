@@ -1,7 +1,9 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import type { ArticleCollection } from '~/utils/article-collections'
+import { collectionCategoryPath, type ArticleCollection } from '~/utils/article-collections'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { validateApiShape } from '~/utils/api-validation'
+import { resolveSeoUrl } from '~/composables/useSeoUrls'
+import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import type { SocialImageSource } from '~/utils/social-metadata'
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
@@ -12,33 +14,38 @@ export interface PublishedArticle {
   slug: string
   title: string
   excerpt?: string | null
-  category?: string | null
-  tags?: string[] | null
+  /** Its category, with the category page's path in the page's language. */
+  category: (PublishedArticleCategoryRef & { path: string }) | null
   published_at?: string | null
   updated_at?: string | null
   sort_order: number
   cover?: { asset_id: string; public_url: string | null; thumbnail_url: string | null; kind: string | null; alt_text: string | null; width: number | null; height: number | null } | null
   /** Where this site serves the article, in the page's language. */
   path: string
-  categorySlug: string
 }
 
+/** An article's category as the article carries it. */
+export interface PublishedArticleCategoryRef { id: string; name: string; slug: string }
+
 interface PublishedArticlesResponse {
-  posts: Array<Omit<PublishedArticle, 'path' | 'categorySlug'>>
+  posts: Array<Omit<PublishedArticle, 'path' | 'category'> & { category: PublishedArticleCategoryRef | null }>
   /** The page the site publishes at the collection's index path, if any. */
   index: { title: string; summary: string | null } | null
+  /** The collection's categories that hold a published article, in the owner's order. */
+  categories: Array<{ id: string; name: string; slug: string; description: string | null; locales: string[] }>
+  /** The languages the index is read in; a category page is the same prefix under its own path. */
+  localeRepresentations: PublicLocaleRepresentation[]
 }
 
 export interface PublishedArticleCategory {
-  category: string
-  categorySlug: string
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  locales: string[]
+  /** The category's own page, in the page's language. */
+  path: string
   posts: PublishedArticle[]
-}
-
-const categoryOf = (post: { category?: string | null }) => post.category?.trim() || 'Uncategorized'
-
-function slugifyCategory(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'uncategorized'
 }
 
 /**
@@ -61,42 +68,45 @@ export async function usePublishedArticles(collection: MaybeRefOrGetter<ArticleC
     async () => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { getArticleCollectionIndex, listPublishedArticles }] = await Promise.all([
+        const [{ cloudflareEnv }, { getArticleCollectionIndex, listArticleCollectionRepresentations, listPublishedArticles }, { listPublicArticleCategories }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/content/publishing'),
+          import('~/server/utils/content/article-categories'),
         ])
         const env = cloudflareEnv(requestEvent)
         if (!env.db) throw createError({ statusCode: 503, statusMessage: 'Articles are temporarily unavailable' })
-        const [posts, index] = await Promise.all([
+        const [posts, index, categories, localeRepresentations] = await Promise.all([
           listPublishedArticles(env.db, env, organizationId, toValue(collection), locale.value),
           getArticleCollectionIndex(env.db, organizationId, toValue(collection), locale.value),
+          listPublicArticleCategories(env, env.db, organizationId, toValue(collection), locale.value),
+          listArticleCollectionRepresentations(env, env.db, organizationId, toValue(collection)),
         ])
-        return { posts, index } as unknown as PublishedArticlesResponse
+        return { posts, index, categories, localeRepresentations } as unknown as PublishedArticlesResponse
       }
       return await publicApiRequest<PublishedArticlesResponse>('/api/public/blog', {
         query: { collection: toValue(collection), locale: locale.value },
-        validate: validateApiShape({ posts: { arrayOf: { id: 'string', slug: 'string', title: 'string', sort_order: 'number' } }, index: 'nullable-object' }),
+        validate: validateApiShape({ posts: { arrayOf: { id: 'string', slug: 'string', title: 'string', sort_order: 'number' } }, index: 'nullable-object',
+          categories: { arrayOf: { id: 'string', name: 'string', slug: 'string', locales: { arrayOf: 'string' } } }, localeRepresentations: { arrayOf: { locale: 'string', route_path: 'string' } } }),
       })
     },
   )
   const posts = computed<PublishedArticle[]>(() => (data.value?.posts ?? []).map(post => ({
     ...post,
     path: localePath(tenantBlogPostPath(template.value, post.slug, toValue(collection))),
-    categorySlug: slugifyCategory(categoryOf(post)),
+    category: post.category ? { ...post.category, path: localePath(collectionCategoryPath(toValue(collection), post.category.slug)) } : null,
   })))
 
-  const categories = computed<PublishedArticleCategory[]>(() => {
-    const groups = new Map<string, PublishedArticleCategory>()
-    for (const post of posts.value) {
-      const group = groups.get(post.categorySlug) ?? { category: categoryOf(post), categorySlug: post.categorySlug, posts: [] }
-      group.posts.push(post)
-      groups.set(post.categorySlug, group)
-    }
-    return [...groups.values()]
-  })
+  // The owner's categories in the owner's order, each with its articles in the
+  // collection's order — only those with an article in the page's language.
+  const categories = computed<PublishedArticleCategory[]>(() => (data.value?.categories ?? []).map(category => ({
+    ...category,
+    path: localePath(collectionCategoryPath(toValue(collection), category.slug)),
+    posts: posts.value.filter(post => post.category?.id === category.id),
+  })).filter(category => category.posts.length > 0))
 
   if (error.value) throw error.value
-  return { posts, categories, pending, index: computed(() => data.value?.index ?? null) }
+  return { posts, categories, pending, index: computed(() => data.value?.index ?? null),
+    localeRepresentations: computed(() => data.value?.localeRepresentations ?? []) }
 }
 
 export interface PublishedArticleDetail {
@@ -104,8 +114,7 @@ export interface PublishedArticleDetail {
   title: string
   slug: string
   excerpt?: string | null
-  category?: string | null
-  tags?: string[] | null
+  category: PublishedArticleCategoryRef | null
   seo_keywords?: string | null
   visibility?: 'listed' | 'unlisted'
   published_at?: string | null
@@ -166,4 +175,27 @@ export async function usePublishedArticle(collection: ArticleCollection, slug: M
   // The language switcher offers this article's own translations.
   localeRepresentations.value = data.value.localeRepresentations
   return computed(() => data.value!)
+}
+
+/**
+ * The `ItemList` an index or a category page publishes, on every template: the
+ * articles it lists, in its order, by their absolute URLs on this site. Tenant
+ * pages publish their lists this way too (a product collection's ItemList).
+ */
+export function useArticleItemList(listPath: MaybeRefOrGetter<string>, name: MaybeRefOrGetter<string>, articles: MaybeRefOrGetter<readonly PublishedArticle[]>) {
+  const { template } = usePublicTemplate()
+  const requestURL = useRequestURL()
+  const runtimeConfig = useRuntimeConfig()
+  useSchemaOrg(computed(() => {
+    const origin = template.value.slug === 'platform' ? runtimeConfig.public.platformUrl : requestURL.origin
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      '@id': `${resolveSeoUrl(toValue(listPath), origin)}#articles`,
+      name: toValue(name),
+      itemListElement: toValue(articles).map((article, index) => ({
+        '@type': 'ListItem', position: index + 1, name: article.title, url: resolveSeoUrl(article.path, origin),
+      })),
+    }
+  }))
 }

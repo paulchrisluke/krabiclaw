@@ -16,6 +16,9 @@
       @remove="removePost"
       @move="moveArticle"
     >
+      <template #actions>
+        <UButton label="Categories" icon="i-lucide-folder" color="neutral" variant="soft" :to="`${level.path.value}/categories`" data-testid="blog-categories-link" />
+      </template>
       <template #filters>
         <UTabs v-model="activeTab" :items="statusTabs" :content="false" aria-label="Post status" />
       </template>
@@ -191,7 +194,7 @@ function postSummary(post: BlogPost): string {
   const parts: string[] = [post.status ? STATUS_LABELS[post.status] ?? post.status : 'Live']
   // The blog is implied; a doc says it is one.
   if (post.collection && post.collection !== 'blog') parts.push(ARTICLE_COLLECTIONS[post.collection].label)
-  if (post.category) parts.push(post.category)
+  if (post.category) parts.push(post.category.name)
   parts.push(postWhen(post))
   return parts.filter(Boolean).join(' · ')
 }

@@ -23,8 +23,8 @@ export function resolveBlawbyRouteTarget(path: string): BlawbyRouteTarget {
   if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
   if (routePath === '/posts' || /^\/posts\/[^/]+$/.test(routePath)) return { recipe: 'posts', slug: null }
-  // Every article-collection route: an article, and the docs index and a doc.
-  if (/^\/article\/[^/]+$/.test(routePath) || /^\/docs(?:\/[^/]+)?$/.test(routePath)) return { recipe: 'article', slug: null }
+  // Every article-collection route: an article, the docs index and a doc, and a category page.
+  if (/^\/article\/[^/]+$/.test(routePath) || /^\/docs(?:\/[^/]+)?$/.test(routePath) || /^\/(?:blog|docs)\/category\/[^/]+$/.test(routePath)) return { recipe: 'article', slug: null }
   if (routePath === '/donate') return { recipe: 'donate', slug: null }
   if (routePath === '/policies/privacy') return { recipe: 'privacy', slug: null }
   if (routePath === '/policies/terms') return { recipe: 'terms', slug: null }

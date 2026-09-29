@@ -2,16 +2,14 @@
   <article ref="rootEl" class="blog-article min-w-0" :data-template="template">
     <header v-if="showHeader" class="blog-article-header mb-10">
       <!-- The category is the site's navigation, so the article does not repeat it. -->
-      <p v-if="showMeta" class="mb-4 text-sm opacity-70">{{ t('saya.posts.read_time', { count: readMinutes }) }}</p>
       <textarea v-if="editable" :value="title" rows="1" class="field-sizing-content w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-4xl font-bold leading-tight text-inherit outline-none sm:text-5xl" aria-label="Post title" placeholder="Post title" @input="$emit('update:title', ($event.target as HTMLTextAreaElement).value)" @keydown.enter.prevent />
       <h1 v-else class="text-4xl font-bold leading-tight sm:text-5xl">{{ title }}</h1>
       <p v-if="excerpt" class="mt-5 text-xl leading-relaxed opacity-75">{{ excerpt }}</p>
-      <ul v-if="showMeta && tags.length" class="mt-5 flex flex-wrap gap-2" :aria-label="t('saya.posts.tagged')">
-        <li v-for="tag in tags" :key="tag">
-          <NuxtLink :to="{ path: tagIndexPath, query: { tag } }" class="inline-flex rounded-full bg-current/10 px-3 py-1 text-sm font-medium no-underline transition hover:bg-current/20">{{ tag }}</NuxtLink>
-        </li>
-      </ul>
-      <!-- Who published it and when, on one line: the dates belong to the byline, not above the headline. -->
+      <!--
+        Who wrote it, then one date and the read time, on one line. The date is
+        the latest edition's: an update replaces the publication date rather
+        than sitting beside it. The site's own name is not repeated on its own site.
+      -->
       <div v-if="showMeta && (authorName || authorImage || publishedAt || $slots.author || $slots.share)" class="mt-7 flex flex-wrap items-center justify-between gap-4 border-y border-current/15 py-4">
         <slot name="author">
           <div class="flex items-center gap-3">
@@ -19,16 +17,11 @@
             <span v-else class="grid size-11 shrink-0 place-items-center rounded-full bg-current/10 text-sm font-semibold">{{ authorInitials }}</span>
             <div>
               <p v-if="authorName" class="font-semibold">{{ authorName }}</p>
-              <p v-if="organizationName || publishedAt" class="flex flex-wrap items-center gap-x-2 text-sm opacity-65">
-                <span v-if="organizationName">{{ t('saya.posts.published_from', { name: organizationName }) }}</span>
-                <template v-if="publishedAt">
-                  <span v-if="organizationName" aria-hidden="true">·</span>
-                  <time :datetime="publishedAt">{{ formatDate(publishedAt) }}</time>
-                </template>
-                <template v-if="revisedAt">
-                  <span aria-hidden="true">·</span>
-                  <time :datetime="revisedAt">{{ t('saya.posts.updated_on', { date: formatDate(revisedAt) }) }}</time>
-                </template>
+              <p class="flex flex-wrap items-center gap-x-2 text-sm opacity-65">
+                <time v-if="revisedAt" :datetime="revisedAt">{{ t('saya.posts.updated_on', { date: formatDate(revisedAt) }) }}</time>
+                <time v-else-if="publishedAt" :datetime="publishedAt">{{ formatDate(publishedAt) }}</time>
+                <span v-if="revisedAt || publishedAt" aria-hidden="true">·</span>
+                <span>{{ t('saya.posts.read_time', { count: readMinutes }) }}</span>
               </p>
             </div>
           </div>
@@ -109,9 +102,9 @@
           @input="updateText(index, block, $event)"
         />
         <!-- eslint-disable vue/no-v-html -->
-        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none" v-html="renderMarkdown(String(block.data.markdown || ''))" />
+        <div v-else-if="block.type === 'markdown'" class="prose prose-lg max-w-none" v-html="renderMarkdown(String(block.data.markdown || ''), index)" />
         <!-- eslint-enable vue/no-v-html -->
-        <component :is="`h${Math.max(2, Math.min(6, block.level || 2))}`" v-else-if="block.type === 'heading'" class="text-2xl font-semibold">
+        <component :is="`h${Math.max(2, Math.min(6, block.level || 2))}`" v-else-if="block.type === 'heading'" :id="`${headingAnchor(String(block.data.text || ''))}-${index}`" class="scroll-mt-28 text-2xl font-semibold">
           {{ block.data.text }}
         </component>
         <!-- The leading image block is the article's cover: same footprint as the old hero, and the share card derives from it. -->
@@ -199,7 +192,7 @@ import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import ContentAiAssistanceSection from '~/components/content/ContentAiAssistanceSection.vue'
 import ContentVideoEmbed from '~/components/content/ContentVideoEmbed.vue'
 import { youTubeVideoId } from '~/shared/youtube-video'
-import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { headingAnchor, renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { sanitizeUrl } from '~/utils/sanitize'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import { formatTimestamp } from '~/utils/timezone'
@@ -208,9 +201,6 @@ const props = withDefaults(defineProps<{
   title: string
   blocks: BlogEditorBlock[]
   excerpt?: string | null
-  tags?: string[] | null
-  /** The blog index a tag pill filters. */
-  tagIndexPath?: string
   publishedAt?: string | null
   updatedAt?: string | null
   authorName?: string | null
@@ -221,12 +211,11 @@ const props = withDefaults(defineProps<{
   showHeader?: boolean
   showMeta?: boolean
 }>(), {
-  excerpt: null, tags: null, tagIndexPath: '/blog', publishedAt: null, updatedAt: null, authorName: null, authorImage: null, organizationName: null,
+  excerpt: null, publishedAt: null, updatedAt: null, authorName: null, authorImage: null, organizationName: null,
   editable: false, template: 'saya', showHeader: true, showMeta: true,
 })
 const emit = defineEmits<{ 'update:title': [value: string]; 'update:block': [index: number, block: BlogEditorBlock]; 'insert-block': [index: number, cursorPosition: number]; 'insert-block-type': [index: number, type: string]; 'move-block': [index: number, delta: -1 | 1]; 'merge-block': [index: number, direction: 'back' | 'forward']; 'split-insert': [index: number, payload: { after: string; blockType: 'image' | 'faq' | 'how_to'; editorMode: 'rich' | 'source' }] }>()
 const authorInitials = computed(() => String(props.authorName || props.organizationName || 'A').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase())
-const tags = computed(() => props.tags ?? [])
 const hasCover = computed(() => props.blocks[0]?.type === 'image')
 const { t, locale } = useI18n()
 function formatDate(value: string) { return formatTimestamp(value, locale.value, 'UTC', { dateStyle: 'medium' }) }
@@ -308,7 +297,7 @@ function isBlockEmpty(block: BlogEditorBlock) {
   return false
 }
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
-function renderMarkdown(value: string) { return DOMPurify.sanitize(renderMarkdownToHtml(value)) }
+function renderMarkdown(value: string, index: number) { return DOMPurify.sanitize(renderMarkdownToHtml(value, index)) }
 function textValue(block: BlogEditorBlock) { return String(block.data[block.type === 'heading' ? 'text' : 'markdown'] || '') }
 function updateText(index: number, block: BlogEditorBlock, event: Event) {
   const key = block.type === 'heading' ? 'text' : 'markdown'
