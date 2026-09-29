@@ -355,15 +355,9 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
       return { published: read.published, providerPostId: read.postId ?? handles.video_id!, permalink: read.permalink, retryable: !read.published && read.processing === 'ready' }
     })
   }
-  const images = post.media.filter(item => item.kind === 'image')
-  handles.photo_ids ??= []
-  for (const [index, image] of images.entries()) {
-    if (handles.photo_ids[index]) continue
-    handles.photo_ids[index] = await createUnpublishedPhoto(target, { url: image.public_url, altText: image.alt_text }, deadline)
-    await fence.saveHandles(handles)
-  }
   // An unpublished feed post an earlier version prepared can never be
-  // published; it goes, and the photos it carried are attached to the real post.
+  // published; it goes, and the photos it carried go with it — Meta refuses
+  // them as `attached_media` afterwards — so the real post gets new ones.
   if (handles.post_id) {
     try {
       await deleteUnpublishedObject(target, handles.post_id, deadline)
@@ -372,7 +366,15 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
       if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
     }
     delete handles.post_id
+    delete handles.photo_ids
     await fence.forgetProviderPost(handles)
+  }
+  const images = post.media.filter(item => item.kind === 'image')
+  handles.photo_ids ??= []
+  for (const [index, image] of images.entries()) {
+    if (handles.photo_ids[index]) continue
+    handles.photo_ids[index] = await createUnpublishedPhoto(target, { url: image.public_url, altText: image.alt_text }, deadline)
+    await fence.saveHandles(handles)
   }
   const deferred = await deferFinalWithoutTime(context, fence)
   if (deferred) return deferred
