@@ -69,8 +69,13 @@ export interface ConversionItem {
   item_category?: string
   item_category2?: string
   item_category3?: string
-  price_minor: number
   quantity: number
+  /**
+   * The line's total in minor units (an integer): net of the line's discounts and of any tax
+   * included in its price. The unit price is derived from it at projection, so a line of 1,000
+   * across three seats keeps its exact total instead of a rounded unit amount.
+   */
+  amount_minor: number
 }
 
 /** The immutable event-time value snapshot. Amounts stay in minor units; providers convert once. */

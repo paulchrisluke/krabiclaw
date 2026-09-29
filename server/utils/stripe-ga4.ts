@@ -7,7 +7,6 @@ import {
   invoiceLinePrice,
   invoiceLineQuantity,
   invoiceLineSubscriptionId,
-  invoiceLineUnitAmount,
   loadStripeInvoiceLines,
   type StripeInvoiceLine,
 } from '~/server/utils/stripe-invoice-lines'
@@ -15,6 +14,7 @@ import {
   consumeStripeGa4Intent,
   findConsumedStripeGa4CancellationIntent,
   findPendingInitialStripeGa4Intent,
+  findStripeGa4CheckoutAttribution,
   findPendingStripeGa4Intent,
   markStripeGa4IntentLifecycleSent,
   attachStripeGa4IntentToSubscription,
@@ -71,17 +71,22 @@ function billingIntervalLabel(price: Stripe.Price | null): string | null {
   return count === 1 ? label : `${count}_${label}`
 }
 
+const sumMinor = (rows: ReadonlyArray<{ amount: number }> | null | undefined) => (rows ?? []).reduce((total, row) => total + row.amount, 0)
+
+/**
+ * One invoice line as an item: its exact total (an integer), net of the discounts and pretax credits
+ * allocated to it and of any tax its price includes. Unit price is derived later from the total, so
+ * fractional per-seat allocations neither throw nor round into a different total.
+ */
 function itemFromInvoiceLine(line: StripeInvoiceLine): ConversionItem | null {
   const price = invoiceLinePrice(line)
   const priceObject = typeof price === 'string' || !price ? null : price
   const product = priceObject?.product
   const productName = product && typeof product !== 'string' && !product.deleted ? product.name : null
   const itemId = priceObject?.id ?? line.id
-  const invoiceUnitAmount = invoiceLineUnitAmount(line)
-  const resolvedUnitAmount = invoiceUnitAmount
-    ?? (typeof priceObject?.unit_amount === 'number' ? priceObject.unit_amount : null)
-  const quantity = invoiceLineQuantity(line)
-  if (!itemId || !resolvedUnitAmount || resolvedUnitAmount <= 0) return null
+  const includedTax = sumMinor((line.taxes ?? []).filter(tax => tax.tax_behavior === 'inclusive'))
+  const amountMinor = line.amount - sumMinor(line.discount_amounts) - sumMinor(line.pretax_credit_amounts) - includedTax
+  if (!itemId || !Number.isSafeInteger(amountMinor) || amountMinor < 0) return null
 
   const recurring = priceObject?.recurring
   const interval = billingIntervalLabel(priceObject)
@@ -92,31 +97,9 @@ function itemFromInvoiceLine(line: StripeInvoiceLine): ConversionItem | null {
     item_category: 'Subscription',
     ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
     ...(metered ? { item_category3: 'Metered' } : {}),
-    price_minor: resolvedUnitAmount,
-    quantity,
+    quantity: invoiceLineQuantity(line),
+    amount_minor: amountMinor,
   }
-}
-
-function subscriptionFallbackItems(subscription: Stripe.Subscription): ConversionItem[] {
-  return subscription.items.data.flatMap((item) => {
-    const price = typeof item.price === 'string' ? null : item.price
-    if (!price) return []
-    const product = price.product
-    const productName = product && typeof product !== 'string' && !product.deleted ? product.name : null
-    const unitAmount = typeof price.unit_amount === 'number' ? price.unit_amount : null
-    if (!unitAmount || unitAmount <= 0) return []
-    const interval = billingIntervalLabel(price)
-    const metered = price.recurring?.usage_type === 'metered'
-    return [{
-      item_id: price.id,
-      item_name: productName || price.nickname || 'Subscription',
-      item_category: 'Subscription',
-      ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
-      ...(metered ? { item_category3: 'Metered' } : {}),
-      price_minor: unitAmount,
-      quantity: item.quantity ?? 1,
-    }]
-  })
 }
 
 function positiveSubscriptionLines(lines: StripeInvoiceLine[], subscriptionId: string): StripeInvoiceLine[] {
@@ -128,18 +111,19 @@ function positiveSubscriptionLines(lines: StripeInvoiceLine[], subscriptionId: s
 }
 
 /**
- * The purchase's value is the invoice total excluding tax (Stripe applies
- * discounts to it and reports tax and shipping separately), which is what GA4
- * ecommerce `value` means. What was actually collected, tax included, is kept
- * beside it and reported separately. Missing required amounts fail visibly.
+ * The purchase's value is the invoice total excluding tax (Stripe applies discounts to it and
+ * reports tax and shipping separately), which is what GA4 ecommerce `value` means. What was
+ * actually collected, tax included, is kept beside it and reported separately. Items are kept only
+ * when their totals reconcile with that value exactly; an invoice with credits, one-off charges or
+ * unallocated components sends its value without items rather than with a balancing item.
  */
 export function buildStripePurchaseValue(invoice: StripeInvoiceWithSubscription, items: ConversionItem[]): ConversionValue {
-  if (items.length === 0) throw new Error(`Stripe invoice ${invoice.id} has no subscription items; retrying`)
   if (!Number.isSafeInteger(invoice.amount_paid) || invoice.amount_paid <= 0) throw new Error(`Stripe invoice ${invoice.id} has no positive paid amount`)
   if (typeof invoice.total_excluding_tax !== 'number') throw new Error(`Stripe invoice ${invoice.id} has no total excluding tax`)
+  const reconciled = items.length > 0 && items.reduce((total, item) => total + item.amount_minor, 0) === invoice.total_excluding_tax
   return {
     basis: 'purchase', amount_minor: invoice.total_excluding_tax, collected_minor: invoice.amount_paid,
-    currency: invoice.currency.toUpperCase(), transaction_id: invoice.id, items,
+    currency: invoice.currency.toUpperCase(), transaction_id: invoice.id, ...(reconciled ? { items } : {}),
   }
 }
 
@@ -147,10 +131,10 @@ export function buildStripePurchaseValue(invoice: StripeInvoiceWithSubscription,
  * A refund keeps the purchase's accounting basis: `amount_minor` is the refunded share of the
  * tax-exclusive value (pro rata by cash; exact for a full refund) and `collected_minor` is the
  * cash actually returned, tax included. Stripe does not itemize a refund, so items are sent only
- * when the whole payment is refunded and the original quantities are therefore the refunded ones;
+ * when the whole payment is refunded, and they are the purchase's own recorded (reconciled) items;
  * a partial refund names no items rather than substituting the original purchase.
  */
-export function buildStripeRefundValue(input: { invoice: StripeInvoiceWithSubscription; refundAmount: number; currency: string; lineItems: ConversionItem[] }): ConversionValue {
+export function buildStripeRefundValue(input: { invoice: StripeInvoiceWithSubscription; refundAmount: number; currency: string; purchaseItems: ConversionItem[] | null }): ConversionValue {
   const { invoice, refundAmount } = input
   if (typeof invoice.total_excluding_tax !== 'number' || invoice.amount_paid <= 0) throw new Error(`Stripe invoice ${invoice.id} cannot be refunded against: missing tax-exclusive total or paid amount`)
   if (!Number.isSafeInteger(refundAmount) || refundAmount <= 0 || refundAmount > invoice.amount_paid) throw new Error(`Refund of ${refundAmount} is outside invoice ${invoice.id}'s paid amount ${invoice.amount_paid}`)
@@ -158,7 +142,7 @@ export function buildStripeRefundValue(input: { invoice: StripeInvoiceWithSubscr
   return {
     basis: 'refund', currency: input.currency.toUpperCase(), transaction_id: invoice.id, collected_minor: refundAmount,
     amount_minor: full ? invoice.total_excluding_tax : Math.round(refundAmount * invoice.total_excluding_tax / invoice.amount_paid),
-    ...(full && input.lineItems.length > 0 ? { items: input.lineItems } : {}),
+    ...(full && input.purchaseItems ? { items: input.purchaseItems } : {}),
   }
 }
 
@@ -171,8 +155,18 @@ export function buildStripeRefundValue(input: { invoice: StripeInvoiceWithSubscr
 async function hasEarlierPositivePayment(stripe: Stripe, invoice: StripeInvoiceWithSubscription): Promise<boolean> {
   const customerId = customerIdValue(invoice.customer)
   if (!customerId) throw new Error(`Stripe invoice ${invoice.id} has no customer`)
+  const paidAt = (paid: Stripe.Invoice) => {
+    const at = paid.status_transitions?.paid_at
+    if (typeof at !== 'number') throw new Error(`Stripe invoice ${paid.id} is paid but has no paid_at`)
+    return at
+  }
+  // "Earlier" is payment order, not creation order: an invoice created first but paid later is
+  // not earlier. Equal payment times are ordered by invoice id so exactly one of them is first.
+  const current = paidAt(invoice)
   for await (const prior of stripe.invoices.list({ customer: customerId, status: 'paid', limit: 100 })) {
-    if (prior.id !== invoice.id && prior.amount_paid > 0 && prior.created <= invoice.created) return true
+    if (prior.id === invoice.id || prior.amount_paid <= 0) continue
+    const priorPaidAt = paidAt(prior)
+    if (priorPaidAt < current || (priorPaidAt === current && prior.id < invoice.id)) return true
   }
   return false
 }
@@ -290,20 +284,20 @@ async function recordStripePurchase(
   if (purchaseType === 'initial_subscription' || purchaseType === 'subscription_renewal') {
     candidateLines = candidateLines.filter(line => !invoiceLineIsProration(line))
   }
-  const lineItems = candidateLines.flatMap(line => itemFromInvoiceLine(line) ?? [])
-  const value = buildStripePurchaseValue(invoice, lineItems.length > 0 ? lineItems : subscriptionFallbackItems(subscription))
+  const value = buildStripePurchaseValue(invoice, candidateLines.flatMap(line => itemFromInvoiceLine(line) ?? []))
 
   const platformOrganizationId = (await getPlatformOrganization(db)).id
   const recorded = await recordOrganizationConversionEvent(db, null, {
     organizationId: platformOrganizationId, eventName: 'purchase', stage: 'completed', surface: 'stripe',
     entityType: 'invoice', entityId: invoice.id, value,
     occurredAt: invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : undefined,
-    // The checkout that started this subscription observed the visitor's attribution; a renewal
+    // The checkout that started this subscription observed the visitor's attribution, found through
+    // that subscription whatever the state of its intent by the time the payment arrives. A renewal
     // has none of its own and is attributed through the signup cohort instead.
-    attribution: context.intent?.attribution ?? null,
+    attribution: await findStripeGa4CheckoutAttribution(db, subscriptionId, purchaseType),
     metadata: {
       purchase_type: purchaseType, subscription_id: subscriptionId,
-      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, context.organizationId) } : {}),
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, platformOrganizationId, context.organizationId) } : {}),
       ...(context.userId ? { user_id: context.userId } : {}),
     },
   })
@@ -477,27 +471,30 @@ async function recordStripeRefund(
     expand: ['items.data.price.product'],
   })
   const context = await resolveStripeGa4Context(db, stripe, subscription, null)
-  const lines = await loadStripeInvoiceLines(stripe, invoice)
   const platformOrganizationId = (await getPlatformOrganization(db)).id
-  // Linked to the original transaction: the refund carries the purchase's own
-  // classification. A purchase recorded before this coverage began has none.
-  const original = await queryFirst<{ purchase_type: string | null; attribution: string | null; attributed_at: string | null }>(db, `SELECT (payload_json ->> '$.metadata.purchase_type') AS purchase_type,
-      json_extract(payload_json, '$.attribution') AS attribution, (payload_json ->> '$.attributed_at') AS attributed_at FROM analytics_events
+  // The refund is the purchase's reversal: it keeps that purchase's own identity, attribution,
+  // classification and reconciled items. Only a purchase recorded before this coverage has none,
+  // and then the established relationship is used.
+  const original = await queryFirst<{ purchase_type: string | null; attribution: string | null; attributed_at: string | null; originating_user_id: string | null; items: string | null }>(db,
+    `SELECT (payload_json ->> '$.metadata.purchase_type') AS purchase_type, json_extract(payload_json, '$.attribution') AS attribution,
+      (payload_json ->> '$.attributed_at') AS attributed_at, (payload_json ->> '$.metadata.originating_user_id') AS originating_user_id,
+      json_extract(payload_json, '$.value.items') AS items FROM analytics_events
     WHERE kind = 'conversion' AND organization_id = ? AND (payload_json ->> '$.event_name') = 'purchase'
       AND (payload_json ->> '$.entity_type') = 'invoice' AND (payload_json ->> '$.entity_id') = ?`, [platformOrganizationId, invoiceId])
   const value = buildStripeRefundValue({
     invoice, refundAmount: refund.amount, currency: refund.currency ?? invoice.currency,
-    lineItems: positiveSubscriptionLines(lines, subscriptionId).flatMap(line => itemFromInvoiceLine(line) ?? []),
+    purchaseItems: original?.items ? JSON.parse(original.items) as ConversionItem[] : null,
   })
+  const originatingUserId = original ? original.originating_user_id
+    : context.organizationId ? await originatingOwnerId(db, platformOrganizationId, context.organizationId) : null
   const recorded = await recordOrganizationConversionEvent(db, null, {
     organizationId: platformOrganizationId, eventName: 'refund', stage: 'completed', surface: 'stripe',
     entityType: 'refund', entityId: refund.id, value,
     occurredAt: new Date(refund.created * 1000).toISOString(),
-    // The refund is attributed exactly as the purchase it reverses.
     attribution: original?.attribution && original.attributed_at ? { touch: JSON.parse(original.attribution), attributedAt: original.attributed_at } : null,
     metadata: {
       subscription_id: subscriptionId, ...(original?.purchase_type ? { purchase_type: original.purchase_type } : {}),
-      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: await originatingOwnerId(db, context.organizationId) } : {}),
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId, originating_user_id: originatingUserId } : {}),
     },
   })
   const projection = projectConversionToGa4({ eventName: 'refund', value, params: { refund_id: refund.id, subscription_id: subscriptionId } })

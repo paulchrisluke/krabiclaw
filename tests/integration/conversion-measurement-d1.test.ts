@@ -91,7 +91,7 @@ test('conversion measurement: contract, values, idempotency, report and cohort o
 
     // A priced and an unpriced booking on a customer site: value is known or absent, never invented.
     await recordOrganizationConversionEvent(db, null, { organizationId: 'org-customer', eventName: 'booking_submit', stage: 'submitted', surface: 'website', entityType: 'request', entityId: 'req-1', pageType: 'product',
-      value: { basis: 'quoted', amount_minor: 240000, currency: 'THB', items: [{ item_id: 'prod-1', item_name: 'Pottery', item_variant: 'Adult', price_minor: 120000, quantity: 2 }] } })
+      value: { basis: 'quoted', amount_minor: 240000, currency: 'THB', items: [{ item_id: 'prod-1', item_name: 'Pottery', item_variant: 'Adult', amount_minor: 240000, quantity: 2 }] } })
     await recordOrganizationConversionEvent(db, null, { organizationId: 'org-customer', eventName: 'booking_submit', stage: 'submitted', surface: 'website', entityType: 'request', entityId: 'req-2', pageType: 'product' })
 
     const period = { startDate: '2026-09-10', endDate: '2026-09-12', now: new Date('2026-09-13T00:00:00Z') }
@@ -159,13 +159,13 @@ test('attribution rates share one population; cohorts follow the acquiring owner
     assert.ok(founderSignup.created)
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('m-owner', 'org-paying', 'owner', 'owner', 1000), ('m-newcomer', 'org-paying', 'newcomer', 'owner', 2000)`).run()
     await recordAt(db, null, { organizationId: 'org-platform', eventName: 'sign_up', stage: 'completed', surface: 'auth', entityType: 'user', entityId: 'newcomer', occurredAt: '2026-09-10T06:00:00.000Z' })
-    assert.equal(await originatingOwnerId(db, 'org-paying'), 'owner')
+    assert.equal(await originatingOwnerId(db, 'org-platform', 'org-paying'), 'owner')
     await recordAt(db, null, { organizationId: 'org-platform', eventName: 'purchase', stage: 'completed', surface: 'stripe', entityType: 'invoice', entityId: 'in_old', occurredAt: '2026-09-10T02:00:00.000Z',
       value: { basis: 'purchase', amount_minor: 4900, collected_minor: 4900, currency: 'USD', transaction_id: 'in_old' },
       metadata: { purchase_type: 'initial_subscription', subscribing_organization_id: 'org-paying', originating_user_id: 'owner' } })
     // A business the founder actually created, onboarded and paid for after the signup.
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('m-founder', 'org-new', 'founder', 'owner', 3000)`).run()
-    await recordAt(db, null, { organizationId: 'org-platform', eventName: 'onboarding_complete', stage: 'completed', surface: 'dashboard', entityType: 'organization', entityId: 'org-new', occurredAt: '2026-09-10T07:00:00.000Z', metadata: { originating_user_id: await originatingOwnerId(db, 'org-new') } })
+    await recordAt(db, null, { organizationId: 'org-platform', eventName: 'onboarding_complete', stage: 'completed', surface: 'dashboard', entityType: 'organization', entityId: 'org-new', occurredAt: '2026-09-10T07:00:00.000Z', metadata: { originating_user_id: await originatingOwnerId(db, 'org-platform', 'org-new') } })
     await recordAt(db, null, { organizationId: 'org-platform', eventName: 'purchase', stage: 'completed', surface: 'stripe', entityType: 'invoice', entityId: 'in_new', occurredAt: '2026-09-10T08:00:00.000Z',
       value: { basis: 'purchase', amount_minor: 4900, collected_minor: 4900, currency: 'USD', transaction_id: 'in_new' },
       metadata: { purchase_type: 'initial_subscription', subscribing_organization_id: 'org-new', originating_user_id: 'founder' } })
@@ -258,7 +258,7 @@ test('the Stripe handler records every paid subscription invoice and refund once
       invoices.set(id, value)
       return value
     }
-    const history = [{ id: 'in_trial', amount_paid: 0, created: 1_000 }]
+    const history = [{ id: 'in_trial', amount_paid: 0, created: 1_000, status_transitions: { paid_at: 1_000 } }]
     const stripe = {
       subscriptions: {
         retrieve: async () => ({ id: 'sub_1', status: 'active', customer: 'cus_1', metadata: { referenceId: 'org-customer' }, items: { data: [{ price, quantity: 1 }] } }),
@@ -289,7 +289,7 @@ test('the Stripe handler records every paid subscription invoice and refund once
     assert.equal(sent.length, 1, 'a redelivered invoice does not send a second GA event')
 
     // The customer cancels and later starts a new subscription: still revenue, classified apart from acquisition.
-    history.push({ id: 'in_1', amount_paid: 5243, created: 2_000 })
+    history.push({ id: 'in_1', amount_paid: 5243, created: 2_000, status_transitions: { paid_at: 2_000 } })
     await paid(makeInvoice('in_2', 5_000, 'subscription_create'), 'evt_2')
     assert.deepEqual((await purchases()).map(row => row.type), ['initial_subscription', 'resubscription'])
 
@@ -299,6 +299,83 @@ test('the Stripe handler records every paid subscription invoice and refund once
     const refunds = (await db.prepare(`SELECT json_extract(payload_json, '$.value.amount_minor') value, json_extract(payload_json, '$.value.collected_minor') cash, json_extract(payload_json, '$.value.items') items,
       json_extract(payload_json, '$.attribution.campaign') campaign, json_extract(payload_json, '$.metadata.purchase_type') type FROM analytics_events WHERE json_extract(payload_json, '$.event_name') = 'refund'`).all()).results
     assert.deepEqual(refunds, [{ value: Math.round(1_000 * 4_900 / 5_243), cash: 1_000, items: null, campaign: 'launch', type: 'initial_subscription' }])
+  } finally {
+    globalThis.fetch = realFetch
+    await runtime.dispose()
+  }
+})
+
+test('Stripe payments keep exact line totals, checkout attribution after expiry, and the originating owner through an ownership change', { timeout: 60_000 }, async () => {
+  const { runtime, db } = await openDb()
+  const realFetch = globalThis.fetch
+  try {
+    const timezone = '{"config":{"default_timezone":"Asia/Bangkok"}}'
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, status, onboarding_status, integrations_json) VALUES
+      ('org-platform', 'p', 'p', 'p', ?, ?, 'active', 'active', '{}')`).bind(timezone, PLATFORM_TEMPLATE.themeId).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json) VALUES ('org-customer', 'c', 'c', 'c', ?, '{}')`).bind(timezone).run()
+    for (const id of ['user-a', 'user-b']) await db.prepare(`INSERT INTO user (id, name, email) VALUES (?, ?, ?)`).bind(id, id, `${id}@example.com`).run()
+    await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('m-a', 'org-customer', 'user-a', 'owner', 1000)`).run()
+    // The checkout intent is long expired by the time the first payment arrives (a trial), but still names its subscription.
+    await db.prepare(`INSERT INTO stripe_ga4_subscription_intents (id, organization_id, user_id, stripe_subscription_id, action, attribution_json, status, expires_at, created_at)
+      VALUES ('intent-old', 'org-customer', 'user-a', 'sub_1', 'initial_subscription', ?, 'expired', '2026-01-08T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`)
+      .bind(JSON.stringify({ touch: { source: 'meta', medium: 'paid', campaign: 'launch', term: null, content: 'video-a', referrerHost: null, gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null }, attributedAt: '2026-01-01T00:00:00.000Z' })).run()
+    globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch
+
+    const seatLine = (amount: number, discount: number, quantity: number) => ({
+      id: `il_${amount}`, type: 'subscription', amount, quantity, subscription: 'sub_1', discount_amounts: discount ? [{ amount: discount, discount: 'di_1' }] : [], taxes: [],
+      price: { id: 'price_seats', unit_amount: 1000, nickname: null, product: { name: 'Seats', deleted: false }, recurring: { interval: 'month', interval_count: 1 } },
+    })
+    let lines: Array<Record<string, unknown>> = []
+    const history: Array<Record<string, unknown>> = []
+    const stripe = {
+      subscriptions: { retrieve: async () => ({ id: 'sub_1', status: 'active', customer: 'cus_1', metadata: { referenceId: 'org-customer' }, items: { data: [] } }), update: async () => ({}) },
+      customers: { retrieve: async () => ({ deleted: false, metadata: { customerType: 'organization', organizationId: 'org-customer' } }) },
+      invoices: {
+        list: () => (async function* () { for (const item of history) yield item })(),
+        listLineItems: async () => ({ data: lines, has_more: false }),
+        retrieve: async (id: string) => ({ id, created: 1, subscription: 'sub_1', customer: 'cus_1', billing_reason: 'subscription_cycle', currency: 'usd', amount_paid: 1000, total_excluding_tax: 1000, status_transitions: { paid_at: 1 } }),
+      },
+      prices: { retrieve: async (id: string) => ({ id, unit_amount: 1000, nickname: null, product: { name: 'Seats', deleted: false }, recurring: { interval: 'month', interval_count: 1 } }) },
+      charges: { retrieve: async () => ({ invoice: null }) },
+    } as never
+    const env = {} as never // no GA4 secret: delivery is `not_configured`, which must not affect native recording
+    const pay = async (id: string, paidAt: number, totalExTax: number, amountPaid: number, billingReason = 'subscription_cycle') => {
+      const invoice = { id, created: paidAt, billing_reason: billingReason, currency: 'usd', customer: 'cus_1', subscription: 'sub_1', amount_paid: amountPaid, total_excluding_tax: totalExTax, status_transitions: { paid_at: paidAt } }
+      await handleStripeGa4Event(env, db, stripe, { id: `evt_${id}`, type: 'invoice.paid', data: { object: invoice } } as never)
+      history.push({ id, amount_paid: amountPaid, created: paidAt, status_transitions: { paid_at: paidAt } })
+    }
+    const purchase = async (id: string) => await db.prepare(`SELECT json_extract(payload_json, '$.value.items') items, json_extract(payload_json, '$.attribution.campaign') campaign,
+      json_extract(payload_json, '$.metadata.originating_user_id') owner, json_extract(payload_json, '$.ga4_delivery.status') delivery, json_extract(payload_json, '$.metadata.purchase_type') type
+      FROM analytics_events WHERE json_extract(payload_json, '$.entity_id') = ?`).bind(id).first<Record<string, unknown>>()
+
+    // 1,000 minor units across three seats: the exact line total survives; GA being unconfigured changes nothing native.
+    lines = [seatLine(1000, 0, 3)]
+    await pay('in_1', 1_000, 1000, 1000)
+    const first = await purchase('in_1')
+    assert.deepEqual(JSON.parse(String(first?.items)), [{ item_id: 'price_seats', item_name: 'Seats', item_category: 'Subscription', item_category2: 'monthly', quantity: 3, amount_minor: 1000 }])
+    assert.deepEqual([first?.type, first?.delivery, first?.owner], ['initial_subscription', 'not_configured', 'user-a'])
+    // The expired intent is still the checkout that started this subscription.
+    assert.equal(first?.campaign, 'launch')
+
+    // A discounted line: the item is the discounted total, and it reconciles with the invoice value.
+    lines = [seatLine(10_000, 2_000, 1)]
+    await pay('in_2', 2_000, 8_000, 8_000)
+    assert.deepEqual(JSON.parse(String((await purchase('in_2'))?.items)).map((item: Record<string, unknown>) => item.amount_minor), [8_000])
+    // Items that cannot be reconciled with the invoice's value are left out rather than balanced.
+    lines = [seatLine(10_000, 0, 1)]
+    await pay('in_3', 3_000, 8_000, 8_000)
+    assert.equal((await purchase('in_3'))?.items, null)
+
+    // Ownership moves from A to B and A leaves; a later payment and a refund still belong to A's acquisition.
+    await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('m-b', 'org-customer', 'user-b', 'owner', 2000)`).run()
+    await db.prepare(`DELETE FROM member WHERE id = 'm-a'`).run()
+    assert.equal(await originatingOwnerId(db, 'org-platform', 'org-customer'), 'user-a', 'the recorded relationship wins over current membership')
+    lines = [seatLine(1000, 0, 1)]
+    await pay('in_4', 4_000, 1000, 1000)
+    assert.equal((await purchase('in_4'))?.owner, 'user-a')
+    await handleStripeGa4Event(env, db, stripe, { id: 'evt_refund', type: 'refund.created', data: { object: { id: 're_1', amount: 1000, status: 'succeeded', charge: 'ch_1', payment_intent: null, currency: 'usd', created: 5_000, metadata: { invoice_id: 'in_4' } } } } as never)
+    const refund = await purchase('re_1')
+    assert.deepEqual([refund?.owner, refund?.type], ['user-a', 'subscription_renewal'])
   } finally {
     globalThis.fetch = realFetch
     await runtime.dispose()

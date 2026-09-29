@@ -32,8 +32,14 @@ export function ga4Major(amountMinor: number, currency: string): number {
   return Number(minorAmountToMajor(amountMinor, currency))
 }
 
+// GA4 item `price` is the (discounted) unit price. It is the exact line total over the quantity,
+// so quantity x price reconciles with the line and no total is rounded into a different one.
+function ga4UnitPrice(item: ConversionItem, currency: string): number {
+  return ga4Major(item.amount_minor, currency) / item.quantity
+}
+
 export function ga4Items(items: readonly ConversionItem[], currency: string): Ga4Item[] {
-  return items.map(({ price_minor, ...item }) => ({ ...item, price: ga4Major(price_minor, currency) }))
+  return items.map(({ amount_minor: _amount, ...item }) => ({ ...item, price: ga4UnitPrice({ ...item, amount_minor: _amount }, currency) }))
 }
 
 export interface Ga4ProjectionInput {
@@ -57,7 +63,7 @@ export function projectConversionToGa4(input: Ga4ProjectionInput): Ga4Projection
     // A custom event: flat dimensions, not ecommerce items. A quote is not revenue.
     params.value_basis = 'quoted'
     const item = value.items?.[0]
-    if (item) Object.assign(params, { item_id: item.item_id, item_name: item.item_name, item_variant: item.item_variant, quantity: item.quantity, price: ga4Major(item.price_minor, value.currency) })
+    if (item) Object.assign(params, { item_id: item.item_id, item_name: item.item_name, item_variant: item.item_variant, quantity: item.quantity, price: ga4UnitPrice(item, value.currency) })
     return { name: definition.ga4.name, params, ecommerce: false }
   }
   if (!value.transaction_id) throw new Error(`${input.eventName} requires a transaction identity`)

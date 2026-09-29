@@ -56,13 +56,15 @@ Revenue is attributed without a browser session: checkout stores the visitor's
 native attribution on the subscription intent
 (`stripe_ga4_subscription_intents.attribution_json`, read from their `kc_session_id`
 session), and the payment a webhook records later carries that snapshot
-(`attributedValue`). Refunds carry their purchase's snapshot. Renewals have no
+(`attributedValue`), found through the subscription and checkout kind whatever the
+intent's status or expiry, so a first payment after a trial still carries it. Refunds carry their purchase's snapshot. Renewals have no
 snapshot of their own; they belong to the signup cohort.
 
 `signupCohort` groups signups by the signup event's own snapshot and follows the
 organization the user originated (the first owner, recorded as
-`metadata.originating_user_id` on the onboarding and purchase events when they
-happened, so later ownership changes never rewrite a result) to onboarding, first
+`metadata.originating_user_id` on the first onboarding or purchase event; every later
+event of that organization, including refunds, reuses that recorded relationship, so
+ownership changes never rewrite a result) to onboarding, first
 payment and cohort revenue, counting only outcomes after the signup. It never
 rewrites the later events' own attribution. `attribution` groups sessions by their
 current last touch and counts, in the same group, the sessions that completed an
@@ -80,7 +82,12 @@ Amounts are stored in minor units with an ISO currency in the event payload
   never revalues it. Experience seats are priced per person, as the product page
   states. A variant with no offer has no value, not a zero. A quote is not revenue.
 - `purchase`: `value` is the invoice total excluding tax (GA4 ecommerce `value`);
-  `collected_minor` is `amount_paid`, tax included. Report both.
+  `collected_minor` is `amount_paid`, tax included. Report both. Items carry each
+  invoice line's exact integer total (`amount_minor`), net of its discounts, pretax
+  credits and included tax; GA4's unit `price` is derived as total / quantity, so a
+  line of 1,000 across three seats neither throws nor rounds. Items are kept only
+  when they sum exactly to `value`; otherwise the purchase is sent without items,
+  never with a balancing item.
 - `refund`: keeps the purchase's basis. `value` is the refunded share of the
   tax-exclusive value (pro rata by cash, exact for a full refund) and
   `collected_minor` is the cash returned, tax included. Stripe does not itemize a
@@ -90,7 +97,8 @@ Amounts are stored in minor units with an ISO currency in the event payload
   and a redelivery is not a second refund.
 
 Purchases are typed `initial_subscription` (the first positive payment the
-customer ever made, including the first charge after a zero-value trial),
+customer ever made, by payment time (`status_transitions.paid_at`, ties broken by
+invoice id) rather than invoice creation order, including the first charge after a zero-value trial),
 `resubscription` (a new subscription by a customer who has paid before),
 `subscription_renewal`, `upgrade`, `downgrade` or `plan_change`, from Stripe's
 paid-invoice history, not a shadow lifecycle. Every paid subscription invoice is a
@@ -146,10 +154,14 @@ consenting browser; it is never synthesized from a user ID. An identifier is not
 consent, so it is enforced at both ends: the browser reads GA identifiers only while
 the analytics purpose is accepted, `POST /api/billing/analytics-intent` stores them
 only when the request's own Zaraz consent cookie says accepted, and withdrawing
-consent (`zarazConsentChoicesUpdated`) calls
-`POST /api/billing/analytics-consent-withdrawn`, which erases the identifiers from the
-user's intents and from the Stripe customer and subscription metadata they captured
-(`withdrawStripeGaIdentifiers`). Native recording never depends on consent. A `failed` Stripe
+consent is reconciled by `POST /api/billing/analytics-consent`: the server reads the
+request's own consent cookie and, for anything but "accepted", erases the identifiers
+from the signed-in user's intents and from the Stripe customer and subscription
+metadata they captured (`withdrawStripeGaIdentifiers`). It runs when the choice
+changes (`zarazConsentChoicesUpdated`) and whenever the authenticated dashboard
+mounts, so a choice made while signed out is honored when billing resumes; the
+intent endpoint also erases what an earlier acceptance left behind before it merges
+metadata. Native recording never depends on consent. A `failed` Stripe
 delivery fails the webhook so Stripe redelivers; the native event is already
 recorded and is returned on the retry.
 

@@ -179,7 +179,7 @@ export async function activateOrganization(env: SetupEnv, db: D1Database, organi
   await recordAndDeliverConversion(env, db, origin, {
     organizationId: platformOrganizationId, eventName: 'onboarding_complete', stage: 'completed', surface: 'dashboard',
     entityType: 'organization', entityId: organizationId,
-    metadata: { originating_user_id: await originatingOwnerId(db, organizationId) },
+    metadata: { originating_user_id: await originatingOwnerId(db, platformOrganizationId, organizationId) },
   })
 }
 

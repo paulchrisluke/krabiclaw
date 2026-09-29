@@ -122,7 +122,7 @@ export default defineHandler(async (event) => {
     basis: 'quoted' as const,
     amount_minor: offer.unit_amount * partySize,
     currency: offer.currency,
-    items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, price_minor: offer.unit_amount, quantity: partySize }],
+    items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, amount_minor: offer.unit_amount * partySize, quantity: partySize }],
   } : null
 
   const clientIp = getClientIp(event)

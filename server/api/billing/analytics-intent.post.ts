@@ -8,6 +8,7 @@ import {
   buildStripeSubscriptionMetadata, isStripeGa4IntentAction, type StripeGa4IntentAction, } from '~/shared/stripe-ga4'
 import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
 import { readAnalyticsConsent } from '~/server/utils/ga4-delivery'
+import { withdrawStripeGaIdentifiers } from '~/server/utils/stripe-ga4'
 import { SESSION_COOKIE, isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import { queryFirst } from '~/server/db'
 import type { AttributionTouch } from '~/utils/analytics-attribution'
@@ -113,6 +114,9 @@ export default defineHandler(async (event) => {
   // the browser's claim is not consent, and no identifier is kept without it.
   const cookieHeader = event.req.headers.get('cookie') ?? ''
   const consented = readAnalyticsConsent(cookieHeader) === 'accepted'
+  // Not accepted: nothing new is stored, and what an earlier acceptance left behind is erased
+  // first, because the metadata update below merges with what Stripe already holds.
+  if (!consented) await withdrawStripeGaIdentifiers(env.DB, () => getStripe(env), session.user.id)
   const gaBody = consented ? body : { ...body, gaClientId: null, gaSessionId: null, gaSessionCapturedAt: null }
   const clientId = optionalString(gaBody.gaClientId)
   const sessionId = optionalString(gaBody.gaSessionId, 64)

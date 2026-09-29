@@ -2,6 +2,9 @@ import { execute, queryFirst, type DbClient } from '~/server/db'
 import type { StripeGa4IntentAction } from '~/shared/stripe-ga4'
 import type { AttributionTouch } from '~/utils/analytics-attribution'
 
+/** The visitor's native attribution when checkout began. */
+export interface CheckoutAttribution { touch: AttributionTouch; attributedAt: string }
+
 export interface StripeGa4Intent {
   id: string
   organizationId: string
@@ -11,8 +14,6 @@ export interface StripeGa4Intent {
   clientId: string | null
   sessionId: string | null
   sessionCapturedAt: number | null
-  /** The visitor's native attribution when checkout began; null when they had no observed session. */
-  attribution: { touch: AttributionTouch; attributedAt: string } | null
   previousPriceId: string | null
   newPriceId: string | null
   effectiveTiming: 'immediate' | 'period_end'
@@ -33,7 +34,7 @@ export interface CreateStripeGa4IntentInput {
   clientId?: string | null
   sessionId?: string | null
   sessionCapturedAt?: number | null
-  attribution?: { touch: AttributionTouch; attributedAt: string } | null
+  attribution?: CheckoutAttribution | null
   previousPriceId?: string | null
   newPriceId?: string | null
   effectiveTiming?: 'immediate' | 'period_end'
@@ -128,7 +129,6 @@ function mapIntent(row: StripeGa4IntentRow | null): StripeGa4Intent | null {
     clientId: row.clientId,
     sessionId: row.sessionId,
     sessionCapturedAt: row.sessionCapturedAt,
-    attribution: row.attributionJson ? JSON.parse(row.attributionJson) as StripeGa4Intent['attribution'] : null,
     previousPriceId: row.previousPriceId,
     newPriceId: row.newPriceId,
     effectiveTiming: row.effectiveTiming,
@@ -142,7 +142,7 @@ function mapIntent(row: StripeGa4IntentRow | null): StripeGa4Intent | null {
   }
 }
 
-type StripeGa4IntentRow = Omit<StripeGa4Intent, 'attribution'> & { attributionJson: string | null }
+type StripeGa4IntentRow = StripeGa4Intent
 
 const INTENT_SELECT = `
   SELECT id,
@@ -153,7 +153,6 @@ const INTENT_SELECT = `
          client_id AS clientId,
          session_id AS sessionId,
          session_captured_at AS sessionCapturedAt,
-         attribution_json AS attributionJson,
          previous_price_id AS previousPriceId,
          new_price_id AS newPriceId,
          effective_timing AS effectiveTiming,
@@ -257,4 +256,23 @@ export async function expireStripeGa4Intents(
     DELETE FROM stripe_ga4_subscription_intents
      WHERE status = 'consumed' AND consumed_at IS NOT NULL AND consumed_at < ?
   `, [retentionCutoff])
+}
+
+/**
+ * The attribution the checkout observed, found through the exact subscription and the kind of
+ * checkout that produced the payment, whatever the intent's status or expiry: a first payment after
+ * a trial or delayed collection arrives long after the seven-day pending window.
+ */
+export async function findStripeGa4CheckoutAttribution(
+  db: DbClient,
+  stripeSubscriptionId: string,
+  purchaseType: string,
+): Promise<CheckoutAttribution | null> {
+  const action = purchaseType === 'initial_subscription' || purchaseType === 'resubscription' ? 'initial_subscription'
+    : purchaseType === 'upgrade' || purchaseType === 'downgrade' ? purchaseType
+      : null
+  if (!action) return null
+  const row = await queryFirst<{ attribution: string }>(db, `SELECT attribution_json AS attribution FROM stripe_ga4_subscription_intents
+    WHERE stripe_subscription_id = ? AND action = ? AND attribution_json IS NOT NULL ORDER BY created_at DESC LIMIT 1`, [stripeSubscriptionId, action])
+  return row ? JSON.parse(row.attribution) as CheckoutAttribution : null
 }

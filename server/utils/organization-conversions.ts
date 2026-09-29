@@ -141,15 +141,23 @@ export async function recordAndDeliverConversion(env: MeasurementProtocolEnv, db
 }
 
 /**
- * The person an organization's acquisition is attributed to: the first owner
- * it ever had (the one who created it). Recorded on the onboarding and purchase
- * events when they happen, so a signup cohort follows this relationship and a
- * later ownership change never rewrites a historical campaign result.
+ * The person an organization's acquisition is attributed to. Once any event has recorded it
+ * (onboarding or a payment), that established relationship is the answer for every later event of
+ * that organization: an ownership transfer never reassigns a payment or refund to a new owner.
+ * Only the first recording falls back to the first owner the organization ever had (the one who
+ * created it), read from membership. Cohorts follow this, so a later ownership change never
+ * rewrites a historical campaign result.
  */
-export async function originatingOwnerId(db: DbClient, organizationId: string): Promise<string | null> {
-  const row = await queryFirst<{ userId: string }>(db,
+export async function originatingOwnerId(db: DbClient, measuringOrganizationId: string, organizationId: string): Promise<string | null> {
+  const recorded = await queryFirst<{ id: string }>(db, `SELECT (payload_json ->> '$.metadata.originating_user_id') AS id FROM analytics_events
+    WHERE kind = 'conversion' AND organization_id = ? AND json_type(payload_json, '$.metadata.originating_user_id') IS 'text'
+      AND (((payload_json ->> '$.event_name') = 'onboarding_complete' AND (payload_json ->> '$.entity_id') = ?)
+        OR ((payload_json ->> '$.event_name') = 'purchase' AND (payload_json ->> '$.metadata.subscribing_organization_id') = ?))
+    ORDER BY created_at, id LIMIT 1`, [measuringOrganizationId, organizationId, organizationId])
+  if (recorded) return recorded.id
+  const first = await queryFirst<{ userId: string }>(db,
     `SELECT "userId" FROM member WHERE "organizationId" = ? AND role = 'owner' ORDER BY "createdAt", id LIMIT 1`, [organizationId])
-  return row?.userId ?? null
+  return first?.userId ?? null
 }
 
 /**
