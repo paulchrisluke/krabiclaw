@@ -6,6 +6,7 @@ declare global {
   interface Window {
     zaraz?: {
       track: (_eventName: string, _params?: Record<string, unknown>) => void
+      ecommerce?: (_eventName: string, _params?: Record<string, unknown>) => void
       set: (_key: string, _value: string | undefined | Record<string, string>, _options?: { scope?: 'page' | 'session' | 'persist' }) => void
       consent?: {
         APIReady?: boolean
@@ -20,9 +21,10 @@ declare global {
 
 export type AnalyticsEventName =
   // User Acquisition & Onboarding
-  | 'sign_up'
+  // sign_up and onboarding_complete are recorded by the server when the
+  // registration and the onboarding transition commit (server/utils/auth.ts,
+  // organization-provisioning.ts); this composable never emits them.
   | 'organization_created'
-  | 'onboarding_completed'
   | 'domain_connected'
   // Billing & Subscription
   // subscription_created/plan_upgraded/plan_downgraded/subscription_cancelled
@@ -112,7 +114,7 @@ export interface AnalyticsEventInput extends AnalyticsEventProperties {
 // Reads the GA4 client_id out of the `_ga` cookie Zaraz's GA4 tool sets.
 // The client_id is the last two segments of `GA1.1.<random>.<timestamp>`.
 // Used to stitch server-side Stripe webhook events back to the browsing
-// session that started checkout — see server/utils/ga4-measurement-protocol.ts.
+// session that started checkout — see server/utils/ga4-delivery.ts.
 function decodeCookieValue(value: string): string {
   try {
     return decodeURIComponent(value)
@@ -210,10 +212,6 @@ export const useAnalytics = () => {
   }
 
   // User Acquisition & Onboarding
-  const trackSignUp = (method: string) => {
-    trackEvent('sign_up', { method })
-  }
-
   const trackOrganizationCreated = (organizationId: string) => {
     trackEvent('organization_created', { organization_id: organizationId })
   }
@@ -319,7 +317,6 @@ export const useAnalytics = () => {
 
   return {
     trackEvent,
-    trackSignUp,
     trackOrganizationCreated,
     trackDomainConnected,
     trackPlanViewed,

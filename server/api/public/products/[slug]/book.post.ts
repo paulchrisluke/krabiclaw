@@ -215,7 +215,7 @@ export default defineHandler(async (event) => {
     ['notifyBookingCreated', 'recordOrganizationConversionEvent'])
 
   return jsonResponse({
-    success: true, booking_id: threadId, cancellation_token: cancellation.token,
+    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValue,
     message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })

@@ -1,5 +1,6 @@
 import type { PublicConsultationSettings } from '~/types/blawby'
-import type { OrganizationConversionEventName } from '~/utils/organization-conversion-events'
+import { projectConversionToGa4 } from '~/utils/ga4-projection'
+import type { ConversionValue, OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
 
@@ -27,15 +28,30 @@ function nativeConversion(organizationId: string, payload: ConversionPayload) {
   }).catch(() => {})
 }
 
-function mirrorConversion(payload: ConversionPayload) {
+// The browser owns what the visitor does on the page. The name, dimensions and
+// value come from the shared projection, so the same fact reads the same in
+// every sender. `value` is what the server resolved for a submission it
+// already committed; the browser never computes or asserts an amount.
+function mirrorConversion(payload: ConversionPayload, value?: ConversionValue | null) {
   if (!import.meta.client) return
-  const params = {
-    stage: payload.stage,
-    ...(payload.page_type ? { page_type: payload.page_type } : {}),
-    ...(payload.page_path ? { page_path: payload.page_path } : {}),
-    ...(payload.location_id ? { location_id: payload.location_id } : {}),
-  }
-  window.zaraz?.track(payload.event_name, params)
+  const projection = projectConversionToGa4({
+    eventName: payload.event_name,
+    value,
+    params: {
+      stage: payload.stage,
+      ...(payload.page_type ? { page_type: payload.page_type } : {}),
+      ...(payload.page_path ? { page_path: payload.page_path } : {}),
+      ...(payload.location_id ? { location_id: payload.location_id } : {}),
+    },
+  })
+  window.zaraz?.track(projection.name, projection.params)
+}
+
+// view_item and begin_checkout at the real boundaries of a product page, sent
+// through Zaraz's ecommerce API (which the zone enables and the GA4 tool maps).
+function trackEcommerce(name: 'Product Viewed' | 'Checkout Started', params: Record<string, unknown>) {
+  if (!import.meta.client) return
+  window.zaraz?.ecommerce?.(name, params)
 }
 
 export function useOrganizationConversionTracking(consultationSource?: MaybeRefOrGetter<PublicConsultationSettings>) {
@@ -59,8 +75,8 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     })
   }
 
-  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'booking_submit', locationId?: string | null) {
-    mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId })
+  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'booking_submit', locationId?: string | null, value?: ConversionValue | null) {
+    mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId }, value)
   }
 
   function trackDonationClick(documentId: string, pagePath: string, tierLabel: string, tierAmount: number | null) {
@@ -75,5 +91,5 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     track({ event_name: 'product_order_external_click', stage: 'external_handoff', location_id: locationId, product_id: productId, page_type: 'product', page_path: pagePath })
   }
 
-  return { track, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder }
+  return { track, trackEcommerce, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder }
 }

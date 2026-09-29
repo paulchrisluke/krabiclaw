@@ -368,6 +368,8 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
+import { ga4Major } from '~/utils/ga4-projection'
+import type { ConversionValue } from '~/utils/organization-conversion-events'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
@@ -406,7 +408,7 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const { trackProductOrder } = useOrganizationConversionTracking()
+const { trackProductOrder, trackEcommerce, mirrorSubmission } = useOrganizationConversionTracking()
 const { locale, localePath, t } = useI18n()
 const collectionLabel = computed(() => {
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
@@ -659,6 +661,8 @@ async function loadSessions() {
 }
 
 async function openBooking() {
+  // The option and its price are not chosen yet, so none is claimed here.
+  if (offer.value) trackEcommerce('Checkout Started', { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] })
   bookingStep.value = 1
   bookingError.value = ''
   await loadSessions()
@@ -674,6 +678,7 @@ async function openBookingAt(session: PublicProductSession) {
 // has it, so a tab left open does not offer a seat that has since gone. Only
 // for a product a guest can book here; an enquiry has no calendar.
 onMounted(() => {
+  if (offer.value && !enquiryOnly.value) trackEcommerce('Product Viewed', { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) })
   if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
 })
 
@@ -746,7 +751,7 @@ async function submitBooking(contact: ContactFormState) {
   submitting.value = true
   bookingError.value = ''
   try {
-    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; policy_summary?: ApiRecord | null }>(
+    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value: ConversionValue | null; policy_summary?: ApiRecord | null }>(
       `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
       {
         method: 'POST',
@@ -760,10 +765,11 @@ async function submitBooking(contact: ContactFormState) {
           notes: contact.notes || null,
           locale: locale.value,
         },
-        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string } =>
+        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value: ConversionValue | null } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
       },
     )
+    mirrorSubmission('booking_submit', props.location.id, response.quoted_value)
     setBookingConfirmation({
       type: 'booking',
       organizationId: props.organizationId,
