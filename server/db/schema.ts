@@ -2099,6 +2099,11 @@ export const article_categories = sqliteTable("article_categories", {
 	name: text().notNull(),
 	slug: text().notNull(),
 	description: text(),
+	// The category it sits under, in the same collection; NULL at the top.
+	// A category with subcategories is not deleted (NO ACTION), like one with
+	// articles. Its page's address is its slug alone, so moving it moves no URL.
+	parent_id: text().references((): AnySQLiteColumn => article_categories.id),
+	// Its place among its siblings.
 	sort_order: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -2110,6 +2115,7 @@ export const article_categories = sqliteTable("article_categories", {
 	uniqueIndex("article_categories_slug_unique").on(table.organization_id, table.collection, table.slug),
 	uniqueIndex("article_categories_name_unique").on(table.organization_id, table.collection, sql`lower(${table.name})`),
 	index("article_categories_org_sort_idx").on(table.organization_id, table.collection, table.sort_order),
+	index("article_categories_parent_idx").on(table.parent_id, table.sort_order),
 	check("article_categories_collection_check", sql`collection IN ('blog', 'docs')`),
 	check("article_categories_name_not_blank_check", sql`trim(name) <> ''`),
 	check("article_categories_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),

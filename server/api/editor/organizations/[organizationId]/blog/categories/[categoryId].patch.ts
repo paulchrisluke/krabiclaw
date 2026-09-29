@@ -11,8 +11,8 @@ export default defineHandler(async (event) => {
   if (!organizationId || !categoryId) return jsonResponse({ error: 'Organization ID and category ID are required' }, { status: 400 })
   try {
     const { db, session, organization } = await requireOrganizationAccess(event, organizationId)
-    const body = await readStrictBody<{ name?: unknown; description?: unknown }>(event, { name: 'unknown', description: 'unknown' })
-    const category = await updateArticleCategory(db, { organizationId: organization.id, categoryId, name: body.name, description: body.description, actorId: session.user.id })
+    const body = await readStrictBody<{ name?: unknown; description?: unknown; parent_id?: unknown }>(event, { name: 'unknown', description: 'unknown', parent_id: 'unknown' })
+    const category = await updateArticleCategory(db, { organizationId: organization.id, categoryId, name: body.name, description: body.description, parentId: body.parent_id, actorId: session.user.id })
     return jsonResponse({ category })
   } catch (error) {
     rethrowHttpError(error)

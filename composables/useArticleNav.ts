@@ -2,6 +2,7 @@ import type { ComputedRef, InjectionKey } from 'vue'
 import type { PublishedArticleCategory } from '~/composables/usePublishedArticles'
 
 export interface ArticleNav {
+  /** The collection's top-level categories; each holds its subcategories. */
   categories: PublishedArticleCategory[]
   indexLabel: string
   search: { surface: 'blog' | 'docs' | 'tenant_blog'; variant: 'platform' | 'saya' | 'blawby' } | null
@@ -26,10 +27,10 @@ export async function useArticleNav() {
   const { template } = usePublicTemplate()
   const publicLocale = useState<string>('public-locale', () => 'en')
   const collection = computed(() => route.meta.articleCollection === 'docs' ? 'docs' as const : 'blog' as const)
-  const { categories } = await usePublishedArticles(collection)
+  const { categoryTree } = await usePublishedArticles(collection)
 
   return computed<ArticleNav>(() => ({
-    categories: categories.value,
+    categories: categoryTree.value,
     indexLabel: collection.value === 'docs' ? t('saya.footer.docs') : t('saya.footer.blog'),
     // Krabiclaw searches its own blog and docs; a site searches its articles, in English only.
     search: template.value.slug === 'platform'

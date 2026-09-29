@@ -152,7 +152,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'list_article_categories',
-      description: "List one collection's categories (the blog's or the documentation's) in the order they are read in publicly, with how many articles each holds. Every published article is in exactly one; each category has its own public page at /blog/category/{slug} or /docs/category/{slug}.",
+      description: "List one collection's categories (the blog's or the documentation's) as a tree read depth-first — each category, then its subcategories — in the order they are read in publicly, with how many articles and subcategories each holds. Every published article is in exactly one; each category has its own public page at /blog/category/{slug} or /docs/category/{slug}.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: { collection: { type: 'string', enum: ['blog', 'docs'] } },
       required: ['collection'],
@@ -160,11 +160,12 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_article_category',
-      description: 'Create a category in the blog or the documentation. It goes last; place it with reorder_article_categories. Its slug comes from the name and does not change later.',
+      description: 'Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later.',
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
         name: { type: 'string', minLength: 1, maxLength: 100 },
+        parent_id: { type: ['string', 'null'], description: 'The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.' },
         description: { type: ['string', 'null'], maxLength: 500, description: 'What the category covers, shown on its page and used as the page description.' },
       },
       required: ['collection', 'name'],
@@ -172,10 +173,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_article_category',
-      description: "Rename a category or change its description. Its page's address (slug) stays the same.",
+      description: "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: {
         category_id: { type: 'string' },
+        parent_id: { type: ['string', 'null'], description: 'The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.' },
         name: { type: 'string', minLength: 1, maxLength: 100 },
         description: { type: ['string', 'null'], maxLength: 500 },
       },
@@ -184,7 +186,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_article_category',
-      description: 'Delete an empty category. A category that still has articles is refused with the number it holds: ask the user which category those articles should move to, move each with update_blog_post (category_id), then delete it.',
+      description: 'Delete an empty category. A category that still has articles or subcategories is refused with how many it holds: ask the user where they should go, move each article with update_blog_post (category_id) and each subcategory with update_article_category (parent_id), then delete it.',
       domain: 'blog', minimumRole: 'admin', confirmRequired: true,
       inputSchema: { category_id: { type: 'string' } },
       required: ['category_id'],
@@ -197,10 +199,11 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'reorder_article_categories',
-      description: "Set the order one collection's categories are read in on the public site: the index, its sidebar and the menu. Send every category id in that collection exactly once; a partial order is rejected.",
+      description: "Set the order of one set of sibling categories on the public site — the index, its sidebar and the menu: the collection's top level (parent_id null or omitted), or one category's subcategories. Send every sibling id exactly once; a partial order is rejected.",
       domain: 'blog', minimumRole: 'admin', confirmRequired: false,
       inputSchema: {
         collection: { type: 'string', enum: ['blog', 'docs'] },
+        parent_id: { type: ['string', 'null'], description: 'Whose subcategories are being ordered; null or omitted for the top level.' },
         category_ids: { type: 'array', items: { type: 'string' }, minItems: 1 },
       },
       required: ['collection', 'category_ids'],

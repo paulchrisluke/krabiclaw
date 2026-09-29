@@ -59,7 +59,8 @@ import { headingAnchor, renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import { resolveSocialImageUrl } from '~/utils/social-metadata'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
-import { ARTICLE_COLLECTIONS, collectionCategoryPath, type ArticleCollection } from '~/utils/article-collections'
+import { ARTICLE_COLLECTIONS, type ArticleCollection } from '~/utils/article-collections'
+import { categoryTrail } from '~/composables/usePublishedArticles'
 
 const props = defineProps<{ collection: ArticleCollection }>()
 
@@ -73,7 +74,7 @@ const locale = useState<string>('public-locale', () => 'en')
 const slug = computed(() => String(route.params.slug || '').trim())
 if (!slug.value) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
 const post = await usePublishedArticle(props.collection, slug)
-const { posts: articles } = await usePublishedArticles(props.collection)
+const { readingOrder: articles, categories } = await usePublishedArticles(props.collection)
 
 const organizationName = computed(() => organization?.name?.trim() || null)
 const authorName = computed(() => post.value.author?.name ?? null)
@@ -84,11 +85,12 @@ const articlePath = computed(() => localePath(tenantBlogPostPath(template.value,
 // The index, the article's category, the article: the category is a page of its own.
 const breadcrumbs = computed(() => [
   { name: indexLabel.value, url: indexPath.value },
-  ...(post.value.category ? [{ name: post.value.category.name, url: localePath(collectionCategoryPath(props.collection, post.value.category.slug)) }] : []),
+  // Every category above the article's own, then its own.
+  ...(post.value.category ? categoryTrail(categories.value, post.value.category.id).map(crumb => ({ name: crumb.name, url: crumb.path })) : []),
   { name: post.value.title, url: articlePath.value },
 ])
 
-// Previous and next walk the collection in the order its index and sidebar list it.
+// Previous and next walk the collection in the order the sidebar reads it: each category's articles, then its subcategories'.
 const currentIndex = computed(() => articles.value.findIndex(item => item.id === post.value.id || item.slug === post.value.slug))
 const previousArticle = computed(() => currentIndex.value > 0 ? articles.value[currentIndex.value - 1] : null)
 const nextArticle = computed(() => currentIndex.value >= 0 && currentIndex.value < articles.value.length - 1 ? articles.value[currentIndex.value + 1] : null)
