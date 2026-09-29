@@ -137,11 +137,10 @@ contract, not whether it expects success or failure.
 
 ## Release feedback loop
 
-A pull request runs `Checks` and nothing else. There is no preview deployment
-and no E2E job: the suite ran against a shared preview database that every run
-reset and restored from a production snapshot, which wrote 8-10 million D1 rows
-a day and was the whole of this account's D1 bill. It also meant one mutable
-environment that runs had to queue for.
+A pull request targeting `staging` runs `Checks` and the full E2E suite
+against a local Worker and D1 copy. Each CI E2E run provisions its own AI
+Search instance. There is no pull-request preview deployment; `staging` is the
+first deployed validation.
 
 The E2E suite runs locally, against a local D1 and a Worker the suite starts.
 Set `PLAYWRIGHT_AI_SEARCH_INSTANCE_ID` to a provisioned instance dedicated to

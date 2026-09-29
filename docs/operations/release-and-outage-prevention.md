@@ -53,7 +53,8 @@ inspection once to determine ownership, then report the actual result.
 1. Keep one coherent bugfix or feature in one ready pull request targeting
    `staging`. Split work only when the changes are independently releasable.
 2. Run the E2E suite locally against a local D1 (`yarn e2e:local:prepare &&
-   yarn test:e2e:local`). CI owns `Checks`; there is no preview deployment.
+   yarn test:e2e:local`). Pull-request CI runs `Checks` and its own isolated
+   local-D1 E2E suite; there is no preview deployment.
 3. Merge to `staging` after required PR checks and local validation pass.
 4. When staging deploys, begin read-only MCP and tenant browser validation
    immediately.
