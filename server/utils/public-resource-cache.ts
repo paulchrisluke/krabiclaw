@@ -52,6 +52,8 @@ export async function drainPublicResourceCacheInvalidations(
 ): Promise<number> {
   const freeOrganizationDomain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   if (!freeOrganizationDomain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
+  if (!env.AI_SEARCH) throw new Error('Cloudflare AI Search binding is required to drain site changes')
+  if (!env.AI_SEARCH_INSTANCE_ID?.trim()) throw new Error('AI_SEARCH_INSTANCE_ID is required to drain site changes')
   const now = options.now ?? new Date()
   const nowIso = now.toISOString()
   const staleClaimCutoff = new Date(now.getTime() - CACHE_INVALIDATION_RETRY_AFTER_MS).toISOString()
@@ -79,24 +81,30 @@ export async function drainPublicResourceCacheInvalidations(
      LIMIT ?
   `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : []), options.limit ?? 50])
   let processed = 0
+  const failures: Error[] = []
+  const failedOrganizations = new Set<string>()
   // Several rows for one site in one drain are one change to converge on: the
   // site's slice is listed and diffed once, and the rest of its rows ride along.
   const syncedOrganizations = new Set<string>()
   for (const row of rows) {
+    if (failedOrganizations.has(row.organization_id)) continue
     const claim = await execute(db, `
-      UPDATE public_resource_cache_invalidations
+      UPDATE public_resource_cache_invalidations AS current
          SET status = 'processing', claimed_at = ?, attempt_count = attempt_count + 1
        WHERE id = ? AND attempt_count = ? AND attempt_count < ?
          AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
-    `, [nowIso, row.id, row.attempt_count, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff])
+         AND NOT EXISTS (
+           SELECT 1 FROM public_resource_cache_invalidations AS other
+            WHERE other.organization_id = current.organization_id AND other.id <> current.id
+              AND other.status = 'processing' AND other.claimed_at >= ?
+         )
+    `, [nowIso, row.id, row.attempt_count, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, staleClaimCutoff])
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
     const claimedAttemptCount = row.attempt_count + 1
+    let remainingUploads = 0
     try {
       await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
-      // A process without the binding has no index to keep: `nuxt dev`, where
-      // the binding is remote-only, and the test runtime. The served worker
-      // (`wrangler dev`) and every deploy have it and keep it.
-      if (env.AI_SEARCH && !import.meta.dev && !syncedOrganizations.has(row.organization_id)) {
+      if (!syncedOrganizations.has(row.organization_id)) {
         const synced = await syncOrganizationSearchIndex(env as CloudflareEnv, db, row.organization_id)
         syncedOrganizations.add(row.organization_id)
         // A bounded run that left uploads behind is not a failure to retry; it
@@ -104,6 +112,17 @@ export async function drainPublicResourceCacheInvalidations(
         if (synced.pending > 0) {
           const more = publicResourceCacheInvalidationQuery(row.organization_id, 'search-sync-continue')
           await execute(db, more.query, more.params ?? [])
+          remainingUploads = synced.pending
+        } else {
+          // This complete reconciliation rebuilt the organization's desired
+          // state from D1. It also repairs changes behind older terminal rows,
+          // which the retry selector can no longer claim. Do not clear a failure
+          // created after this drain began or one belonging to another site.
+          await execute(db, `
+            UPDATE public_resource_cache_invalidations
+               SET status = 'processed', processed_at = ?, last_error = NULL
+             WHERE organization_id = ? AND status = 'failed' AND created_at < ?
+          `, [nowIso, row.organization_id, nowIso])
         }
       }
       const finalized = await execute(db, `
@@ -120,7 +139,26 @@ export async function drainPublicResourceCacheInvalidations(
            SET status = ?, claimed_at = NULL, processed_at = ?, last_error = ?
          WHERE id = ? AND status = 'processing' AND claimed_at = ? AND attempt_count = ?
       `, [failed ? 'failed' : 'pending', failed ? nowIso : null, message.slice(0, 2000), row.id, nowIso, claimedAttemptCount])
-      console.warn('[public-resource-cache] durable purge failed:', message)
+      if (options.organizationId) throw error
+      failures.push(error instanceof Error ? error : new Error(String(error)))
+      failedOrganizations.add(row.organization_id)
+      continue
+    }
+    if (remainingUploads > 0 && options.organizationId) {
+      throw new Error(`Site changes for organization ${row.organization_id} were saved, but ${remainingUploads} search index uploads remain pending; a queued continuation will finish them`)
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `Failed to drain site changes for ${failedOrganizations.size} organization(s): ${failures.map(error => error.message).join('; ')}`)
+  }
+  if (options.organizationId) {
+    const unfinished = await queryAll<{ status: string }>(db, `
+      SELECT status FROM public_resource_cache_invalidations
+       WHERE organization_id = ? AND status IN ('pending', 'processing', 'failed')
+       LIMIT 1
+    `, [options.organizationId])
+    if (unfinished.length > 0) {
+      throw new Error(`Site changes for organization ${options.organizationId} were saved, but ${unfinished[0]!.status} cache or search index work remains`)
     }
   }
   return processed
