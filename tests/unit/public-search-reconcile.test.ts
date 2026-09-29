@@ -48,6 +48,30 @@ test('a newer document overwrites an item that AI Search is still indexing', asy
   assert.deepEqual(uploads, [])
 })
 
+test('queued items without provider metadata stay pending while later keys upload', async () => {
+  const { env, uploads } = provider()
+  const later = { ...record, id: 'article-2', key: 'dashboard/org/article/2.md' }
+  const queued = [{ id: 'item-1', key: record.key, status: 'queued' as const, metadata: null }]
+
+  assert.deepEqual(await reconcileIndexItems(env, queued, [record, later], { maxUploads: 1 }),
+    { indexed: 1, unchanged: 0, pending: 1, deleted: 0 })
+  assert.deepEqual(uploads.map(item => item.key), [later.key])
+
+  uploads.length = 0
+  assert.deepEqual(await reconcileIndexItems(env, [
+    { ...queued[0]!, status: 'running' as const },
+    { id: 'item-2', key: later.key, status: 'queued' as const, metadata: null },
+  ], [record, later]), { indexed: 0, unchanged: 0, pending: 2, deleted: 0 })
+  assert.deepEqual(uploads, [])
+
+  const oldHash = indexItemPayload({ ...record, body: 'Previous body' }).contentHash
+  assert.deepEqual(await reconcileIndexItems(env, [
+    { ...queued[0]!, status: 'running' as const, metadata: { content_hash: oldHash } },
+    { id: 'item-2', key: later.key, status: 'completed' as const, metadata: { content_hash: indexItemPayload(later).contentHash } },
+  ], [record, later]), { indexed: 1, unchanged: 1, pending: 0, deleted: 0 })
+  assert.deepEqual(uploads.map(item => item.key), [record.key])
+})
+
 test('an unchanged skipped item reports its indexing failure', async () => {
   const { env, uploads } = provider()
   await assert.rejects(
