@@ -52,10 +52,10 @@
             <div class="space-y-3">
               <DashboardAnalyticsRow
                 v-for="row in analytics?.attribution || []"
-                :key="`${row.source}-${row.medium}-${row.campaign || ''}`"
-                :label="`${row.source} / ${row.medium}${row.campaign ? ` · ${row.campaign}` : ''}`"
-                :value="`${formatCount(row.sessions)} sessions · ${formatCount(row.conversions)} conversions`"
-                :percent="row.conversionRate"
+                :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
+                :label="`${row.source} / ${row.medium}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
+                :value="`${formatCount(row.sessions)} sessions · ${formatCount(row.convertingSessions)} converting`"
+                :percent="row.sessionConversionRate ?? 0"
               />
               <p v-if="!loading && !(analytics?.attribution || []).length" class="text-sm text-muted">No attribution data yet.</p>
             </div>
@@ -67,10 +67,50 @@
                 v-for="row in analytics?.conversions || []"
                 :key="`${row.eventName}-${row.stage}`"
                 :label="`${row.eventName.replaceAll('_', ' ')} · ${row.stage.replaceAll('_', ' ')}`"
-                :value="formatCount(row.count)"
-                :percent="row.conversionRate"
+                :value="`${formatCount(row.events)} events · ${formatCount(row.convertingSessions)} sessions${row.nonbrowserEvents ? ` · ${formatCount(row.nonbrowserEvents)} without a browser` : ''}`"
+                :percent="row.sessionConversionRate ?? 0"
               />
               <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
+            </div>
+          </UCard>
+          <UCard v-if="(analytics?.values || []).length || (analytics?.bookingValue || []).length" variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Value</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.values || []"
+                :key="`${row.eventName}-${row.basis}-${row.currency}`"
+                :label="`${row.eventName.replaceAll('_', ' ')} · ${row.basis}`"
+                :value="`${formatMoney(row.valueMinor, row.currency)}${row.collectedMinor !== null ? ` (${formatMoney(row.collectedMinor, row.currency)} collected)` : ''} · ${formatCount(row.events)} events`"
+                :percent="0"
+              />
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.net || []"
+                :key="`net-${row.currency}`"
+                :label="`Net collected · ${row.currency}`"
+                :value="`${formatMoney(row.netMinor, row.currency)} (${formatMoney(row.collectedMinor, row.currency)} − ${formatMoney(row.refundedMinor, row.currency)} refunded)`"
+                :percent="0"
+              />
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.bookingValue || []"
+                :key="`booking-${row.productId}-${row.locationId}-${row.currency}`"
+                :label="`Quoted booking value · ${row.productName || 'price unknown'}`"
+                :value="`${row.currency ? formatMoney(row.quotedValueMinor, row.currency) : 'value unknown'} · ${formatCount(row.valuedBookings)} of ${formatCount(row.bookings)} bookings valued`"
+                :percent="0"
+              />
+              <p class="text-xs text-muted">Quoted booking value is the price shown when a booking was made, not revenue. Currencies are never added together.</p>
+            </div>
+          </UCard>
+          <UCard v-if="analytics?.signupCohort.signups" variant="soft">
+            <template #header><h2 class="font-semibold text-highlighted">Signup cohort</h2></template>
+            <div class="space-y-3">
+              <DashboardAnalyticsRow
+                v-for="row in analytics?.signupCohort.bySignupAttribution || []"
+                :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
+                :label="`${row.source || 'unattributed'} / ${row.medium || 'unattributed'}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
+                :value="`${formatCount(row.signups)} signups · ${formatCount(row.onboardedSignups)} onboarded · ${formatCount(row.firstPaidSignups)} paid`"
+                :percent="row.signups ? Math.round(row.firstPaidSignups / row.signups * 100) : 0"
+              />
+              <p class="text-xs text-muted">Counted per signup, through the organizations that user owns, observed through {{ analytics?.signupCohort.observedThrough }}.</p>
             </div>
           </UCard>
         </div>
@@ -342,6 +382,8 @@ definePageMeta({ layout: 'dashboard' })
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'
 import type { ProviderInsights, ProviderContentInsight, ProviderMetric } from '~/server/utils/meta-insights'
+import type { AnalyticsReport } from '~/server/utils/analytics-report'
+import { currencyFractionDigits, isCurrencyCode } from '~/shared/currencies'
 
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
@@ -362,8 +404,13 @@ interface AnalyticsResponse {
   cities: Array<{ city: string; region: string | null; countryCode: string; views: number }>
   referrers: Array<{ source: string; views: number; percentOfTotal: number }>
   devices: Array<{ type: string; views: number; percentOfTotal: number }>
-  attribution: Array<{ source: string; medium: string; campaign: string | null; sessions: number; conversions: number; conversionRate: number }>
-  conversions: Array<{ eventName: string; stage: string; count: number; conversionRate: number }>
+  attribution: AnalyticsReport['attribution']
+  conversions: AnalyticsReport['conversions']
+  values: AnalyticsReport['values']
+  bookingValue: AnalyticsReport['bookingValue']
+  net: AnalyticsReport['net']
+  signupCohort: AnalyticsReport['signupCohort']
+  coverage: AnalyticsReport['coverage']
   period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
 }
 
@@ -489,9 +536,19 @@ const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
   && Array.isArray(value.devices)
   && value.devices.every(row => isLabelled(row, 'type', 'views', 'percentOfTotal'))
   && Array.isArray(value.attribution)
-  && value.attribution.every(row => isLabelled(row, 'source', 'sessions', 'conversions', 'conversionRate') && typeof (row as Record<string, unknown>).medium === 'string')
+  && value.attribution.every(row => isLabelled(row, 'source', 'sessions', 'outcomeEvents', 'convertingSessions') && typeof (row as Record<string, unknown>).medium === 'string'
+    && ((row as Record<string, unknown>).sessionConversionRate === null || typeof (row as Record<string, unknown>).sessionConversionRate === 'number'))
   && Array.isArray(value.conversions)
-  && value.conversions.every(row => isLabelled(row, 'eventName', 'count', 'conversionRate') && typeof (row as Record<string, unknown>).stage === 'string')
+  && value.conversions.every(row => isLabelled(row, 'eventName', 'events', 'distinctEntities', 'convertingSessions', 'nonbrowserEvents') && typeof (row as Record<string, unknown>).stage === 'string'
+    && ((row as Record<string, unknown>).sessionConversionRate === null || typeof (row as Record<string, unknown>).sessionConversionRate === 'number'))
+  && Array.isArray(value.values)
+  && value.values.every(row => isLabelled(row, 'eventName', 'events', 'valueMinor') && typeof (row as Record<string, unknown>).currency === 'string')
+  && Array.isArray(value.bookingValue)
+  && value.bookingValue.every(row => isLabelled(row, 'bookings', 'valuedBookings', 'quotedValueMinor'))
+  && Array.isArray(value.net)
+  && value.net.every(row => isLabelled(row, 'currency', 'collectedMinor', 'refundedMinor', 'netMinor'))
+  && isRecord(value.signupCohort) && isNumberField(value.signupCohort, 'signups', 'onboardedSignups', 'firstPaidSignups', 'onboardedBusinesses', 'firstPaidBusinesses')
+  && isRecord(value.coverage) && Array.isArray(value.coverage.ga4Delivery)
 
 const isInsightsResponse = (value: unknown): value is InsightsResponse =>
   isRecord(value)
@@ -653,6 +710,11 @@ function toDots(values: number[]) {
     x: 40 + (index * step),
     y: 218 - ((value / maxTrendValue.value) * 178)
   }))
+}
+
+function formatMoney(minor: number, currency: string): string {
+  if (!isCurrencyCode(currency)) throw new Error(`Unsupported currency in analytics report: ${currency}`)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(minor / 10 ** currencyFractionDigits(currency))
 }
 
 function formatCount(value: number): string {

@@ -33,22 +33,24 @@ export interface ConversionEventDefinition {
   conversionType: ConversionType | null
   /** The GA4 event this fact projects to, or null when it is a handoff with no GA4 meaning. */
   ga4: { name: string } | null
-  /** Session conversion rate numerators: handoffs are not outcomes. */
+  /** Which sender owns the GA4 event: the visitor's browser, Zaraz's HTTP Events API, or Measurement Protocol. Exactly one. */
+  ga4Sender: 'browser' | 'zaraz_http' | 'measurement_protocol'
+  /** Session conversion rate numerators: handoffs and refunds are not outcomes. */
   outcome: boolean
 }
 
 export const CONVERSION_EVENT_CATALOG = {
-  consultation_cta_click: { producer: 'browser', stages: ['schedule_navigation', 'external_booking_handoff'], entityType: null, valueBasis: null, conversionType: null, ga4: { name: 'consultation_cta_click' }, outcome: false },
-  contact_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'contact', ga4: { name: 'generate_lead' }, outcome: true },
-  reservation_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'reservation', ga4: { name: 'reservation_submit' }, outcome: true },
-  booking_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: 'quoted', conversionType: 'booking', ga4: { name: 'booking_submit' }, outcome: true },
-  product_order_external_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'product', valueBasis: null, conversionType: null, ga4: { name: 'product_order_external_click' }, outcome: false },
-  link_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_block', valueBasis: null, conversionType: null, ga4: { name: 'link_click' }, outcome: false },
-  donation_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_document', valueBasis: null, conversionType: null, ga4: { name: 'donation_click' }, outcome: false },
-  sign_up: { producer: 'server', stages: ['completed'], entityType: 'user', valueBasis: null, conversionType: null, ga4: { name: 'sign_up' }, outcome: true },
-  onboarding_complete: { producer: 'server', stages: ['completed'], entityType: 'organization', valueBasis: null, conversionType: null, ga4: { name: 'tutorial_complete' }, outcome: true },
-  purchase: { producer: 'server', stages: ['completed'], entityType: 'invoice', valueBasis: 'purchase', conversionType: 'subscription', ga4: { name: 'purchase' }, outcome: true },
-  refund: { producer: 'server', stages: ['completed'], entityType: 'refund', valueBasis: 'refund', conversionType: 'subscription', ga4: { name: 'refund' }, outcome: false },
+  consultation_cta_click: { producer: 'browser', stages: ['schedule_navigation', 'external_booking_handoff'], entityType: null, valueBasis: null, conversionType: null, ga4: { name: 'consultation_cta_click' }, ga4Sender: 'browser', outcome: false },
+  contact_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'contact', ga4: { name: 'generate_lead' }, ga4Sender: 'browser', outcome: true },
+  reservation_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'reservation', ga4: { name: 'reservation_submit' }, ga4Sender: 'browser', outcome: true },
+  booking_submit: { producer: 'server', stages: ['submitted'], entityType: 'request', valueBasis: 'quoted', conversionType: 'booking', ga4: { name: 'booking_submit' }, ga4Sender: 'browser', outcome: true },
+  product_order_external_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'product', valueBasis: null, conversionType: null, ga4: { name: 'product_order_external_click' }, ga4Sender: 'browser', outcome: false },
+  link_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_block', valueBasis: null, conversionType: null, ga4: { name: 'link_click' }, ga4Sender: 'browser', outcome: false },
+  donation_click: { producer: 'browser', stages: ['external_handoff'], entityType: 'content_document', valueBasis: null, conversionType: null, ga4: { name: 'donation_click' }, ga4Sender: 'browser', outcome: false },
+  sign_up: { producer: 'server', stages: ['completed'], entityType: 'user', valueBasis: null, conversionType: null, ga4: { name: 'sign_up' }, ga4Sender: 'zaraz_http', outcome: true },
+  onboarding_complete: { producer: 'server', stages: ['completed'], entityType: 'organization', valueBasis: null, conversionType: null, ga4: { name: 'tutorial_complete' }, ga4Sender: 'zaraz_http', outcome: true },
+  purchase: { producer: 'server', stages: ['completed'], entityType: 'invoice', valueBasis: 'purchase', conversionType: 'subscription', ga4: { name: 'purchase' }, ga4Sender: 'measurement_protocol', outcome: true },
+  refund: { producer: 'server', stages: ['completed'], entityType: 'refund', valueBasis: 'refund', conversionType: 'subscription', ga4: { name: 'refund' }, ga4Sender: 'measurement_protocol', outcome: false },
 } as const satisfies Record<string, ConversionEventDefinition>
 
 export type OrganizationConversionEventName = keyof typeof CONVERSION_EVENT_CATALOG
