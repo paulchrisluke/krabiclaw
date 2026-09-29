@@ -1,80 +1,90 @@
 <template>
   <!--
-    The platform homepage keeps the original vKirirom hero's authored scene:
-    five independently moving artwork planes, one static foreground plane, the
-    same breakpoint-specific crops, and the same 1600px composition ratios.
-    KrabiClaw's page-document copy remains live CMS content over that artwork.
+    The artwork is the visual hero; the same CMS hero block supplies the
+    semantic intro immediately below it. Keeping the H1 and descriptive copy
+    out of the illustration restores the original scene's visual hierarchy
+    without giving up server-rendered homepage content.
   -->
-  <section
-    v-if="variant === 'home'"
-    ref="homeHero"
-    class="kc-parallax-hero"
-    data-parity-section="hero"
-  >
-    <div class="kc-parallax-hero__art" aria-hidden="true">
-      <picture
-        v-for="(layer, index) in parallaxLayers"
-        :key="layer.name"
-        class="kc-parallax-hero__layer"
-        :class="'kc-parallax-hero__layer--' + (index + 1)"
-        :style="{
-          '--kc-layer-compensation': String(layer.compensation),
-          '--kc-layer-top': layer.top + 'px',
-        }"
-      >
-        <source media="(min-width: 1264px)" :srcset="layer.sources.lg">
-        <source media="(min-width: 960px)" :srcset="layer.sources.md">
-        <source media="(min-width: 600px)" :srcset="layer.sources.sm">
-        <source media="(min-width: 376px)" :srcset="layer.sources.xs">
-        <img
-          :src="layer.sources.xxs"
-          alt=""
-          loading="eager"
-          :fetchpriority="index === 0 ? 'high' : 'auto'"
-          decoding="async"
+  <template v-if="variant === 'home'">
+    <section
+      ref="homeHero"
+      class="kc-parallax-hero"
+      data-parity-section="hero"
+      aria-label="Krabiclaw"
+    >
+      <div class="kc-parallax-hero__art" aria-hidden="true">
+        <picture
+          v-for="(layer, index) in parallaxLayers"
+          :key="layer.name"
+          class="kc-parallax-hero__layer"
+          :class="'kc-parallax-hero__layer--' + (index + 1)"
+          :style="{
+            '--kc-layer-compensation': String(layer.compensation),
+            '--kc-layer-top': layer.top + 'px',
+          }"
         >
-      </picture>
+          <source media="(min-width: 1264px)" :srcset="layer.sources.lg">
+          <source media="(min-width: 960px)" :srcset="layer.sources.md">
+          <source media="(min-width: 600px)" :srcset="layer.sources.sm">
+          <source media="(min-width: 376px)" :srcset="layer.sources.xs">
+          <img
+            :src="layer.sources.xxs"
+            alt=""
+            loading="eager"
+            :fetchpriority="index === 0 ? 'high' : 'auto'"
+            decoding="async"
+          >
+        </picture>
 
-      <picture class="kc-parallax-hero__foreground">
-        <source media="(min-width: 1264px)" :srcset="parallaxForeground.lg">
-        <source media="(min-width: 960px)" :srcset="parallaxForeground.md">
-        <source media="(min-width: 600px)" :srcset="parallaxForeground.sm">
-        <source media="(min-width: 376px)" :srcset="parallaxForeground.xs">
-        <img :src="parallaxForeground.xxs" alt="" loading="eager" decoding="async">
-      </picture>
-    </div>
-
-    <div class="kc-parallax-hero__copy">
-      <span v-if="eyebrow" class="kc-parallax-hero__eyebrow">
-        <span class="size-1.5 rounded-full bg-(--kc-teal) shrink-0 animate-pulse" />
-        {{ eyebrow }}
-      </span>
-
-      <h1 class="kc-parallax-hero__title">
-        <template v-for="(line, index) in titleLines" :key="index">
-          <br v-if="index > 0">
-          <span v-if="line.highlighted" class="kc-parallax-hero__highlight">{{ line.text }}</span>
-          <span v-else>{{ line.text }}</span>
-        </template>
-      </h1>
-
-      <p v-if="subtitle" class="kc-parallax-hero__subtitle">{{ subtitle }}</p>
-
-      <div v-if="ctaLabel || secondaryLabel" class="kc-parallax-hero__actions">
-        <PlatformAccountCta v-if="ctaLabel" :label="ctaLabel" :to="ctaUrl || '/signup'" variant="gradient" size="xl" />
-        <PlatformButton
-          v-if="secondaryLabel && secondaryUrl"
-          :to="secondaryUrl"
-          variant="outline"
-          size="xl"
-          class="kc-parallax-hero__secondary"
-        >
-          <PlatformIcon name="puzzle" class="size-4" />
-          {{ secondaryLabel }}
-        </PlatformButton>
+        <picture class="kc-parallax-hero__foreground">
+          <source media="(min-width: 1264px)" :srcset="parallaxForeground.lg">
+          <source media="(min-width: 960px)" :srcset="parallaxForeground.md">
+          <source media="(min-width: 600px)" :srcset="parallaxForeground.sm">
+          <source media="(min-width: 376px)" :srcset="parallaxForeground.xs">
+          <img :src="parallaxForeground.xxs" alt="" loading="eager" decoding="async">
+        </picture>
       </div>
-    </div>
-  </section>
+
+      <div class="kc-parallax-hero__mark" aria-hidden="true">
+        <span class="kc-wordmark">
+          <span class="kc-parallax-hero__mark-text">krabiclaw</span>
+        </span>
+      </div>
+    </section>
+
+    <section class="kc-parallax-intro">
+      <div class="kc-parallax-intro__inner">
+        <span v-if="eyebrow" class="kc-parallax-intro__eyebrow">
+          <span class="size-1.5 rounded-full bg-(--kc-teal) shrink-0" />
+          {{ eyebrow }}
+        </span>
+
+        <h1 class="kc-parallax-intro__title">
+          <template v-for="(line, index) in titleLines" :key="index">
+            <br v-if="index > 0">
+            <span v-if="line.highlighted" class="kc-parallax-intro__highlight">{{ line.text }}</span>
+            <span v-else>{{ line.text }}</span>
+          </template>
+        </h1>
+
+        <p v-if="subtitle" class="kc-parallax-intro__subtitle">{{ subtitle }}</p>
+
+        <div v-if="ctaLabel || secondaryLabel" class="kc-parallax-intro__actions">
+          <PlatformAccountCta v-if="ctaLabel" :label="ctaLabel" :to="ctaUrl || '/signup'" variant="gradient" size="xl" />
+          <PlatformButton
+            v-if="secondaryLabel && secondaryUrl"
+            :to="secondaryUrl"
+            variant="outline"
+            size="xl"
+            class="kc-parallax-intro__secondary"
+          >
+            <PlatformIcon name="puzzle" class="size-4" />
+            {{ secondaryLabel }}
+          </PlatformButton>
+        </div>
+      </div>
+    </section>
+  </template>
 
   <!-- The About header: a pill, a headline, a lede. Nothing else. -->
   <div v-else-if="variant === 'about'" class="text-center space-y-4" data-parity-section="hero">
@@ -436,83 +446,106 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   object-position: top center;
 }
 
-.kc-parallax-hero__copy {
+.kc-parallax-hero__mark {
   position: absolute;
   z-index: 15;
-  top: calc(120px / var(--kc-scene-ratio));
+  top: 19%;
   left: 50%;
-  display: flex;
-  width: min(92vw, 760px);
-  flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
   color: white;
   text-align: center;
-  text-shadow: 0 2px 18px rgb(0 0 0 / 45%);
+  text-shadow: 0 2px 18px rgb(0 0 0 / 35%);
   transform: translate3d(-50%, var(--kc-parallax-offset), 0);
   will-change: transform;
 }
 
-.kc-parallax-hero__eyebrow {
+.kc-parallax-hero__mark-text {
+  color: white;
+  font-size: clamp(2.35rem, 6vw, 4.8rem);
+  font-weight: 300;
+  letter-spacing: 0.01em;
+}
+
+.kc-parallax-intro {
+  position: relative;
+  z-index: 30;
+  margin-top: -1px;
+  overflow: hidden;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.kc-parallax-intro::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: clamp(7rem, 16vw, 12rem);
+  background: linear-gradient(to bottom, #070b13 0%, rgb(7 11 19 / 82%) 30%, transparent 100%);
+  content: "";
+  pointer-events: none;
+}
+
+.kc-parallax-intro__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(92vw, 860px);
+  margin: 0 auto;
+  padding: clamp(8rem, 15vw, 11rem) 0 clamp(5rem, 9vw, 7rem);
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+  text-align: center;
+}
+
+.kc-parallax-intro__eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid rgb(255 255 255 / 32%);
-  border-radius: 999px;
-  padding: 0.375rem 0.875rem;
-  background: rgb(7 11 19 / 38%);
-  box-shadow: 0 10px 36px rgb(0 0 0 / 18%);
-  font-size: 0.6875rem;
+  color: var(--ui-text-dimmed);
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.2em;
   line-height: 1.25rem;
   text-transform: uppercase;
-  backdrop-filter: blur(8px);
 }
 
-.kc-parallax-hero__title {
+.kc-parallax-intro__title {
   margin: 0;
-  max-width: 13ch;
-  font-size: clamp(2.25rem, 6vw, 4.25rem);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 0.98;
+  max-width: 16ch;
+  color: var(--ui-text-highlighted);
+  font-size: clamp(2.4rem, 6vw, 4.75rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
   text-wrap: balance;
 }
 
-.kc-parallax-hero__highlight {
-  background: linear-gradient(135deg, #ff8d80 0%, #ffd0c7 52%, #ffffff 100%);
-  background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.kc-parallax-intro__highlight {
+  color: var(--kc-coral-400);
 }
 
-.kc-parallax-hero__subtitle {
+.kc-parallax-intro__subtitle {
   margin: 0;
-  max-width: 36rem;
-  color: rgb(255 255 255 / 92%);
-  font-size: clamp(1rem, 2vw, 1.2rem);
-  line-height: 1.65;
-  text-wrap: balance;
+  max-width: 52rem;
+  color: var(--ui-text-muted);
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  line-height: 1.75;
+  text-wrap: pretty;
 }
 
-.kc-parallax-hero__actions {
+.kc-parallax-intro__actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.75rem;
+  margin-top: 0.25rem;
 }
 
-.kc-parallax-hero__secondary {
-  border-color: rgb(255 255 255 / 55%);
-  background: rgb(7 11 19 / 28%);
-  color: white;
-  backdrop-filter: blur(8px);
-}
-
-.kc-parallax-hero__secondary:hover {
-  background: rgb(7 11 19 / 48%);
+.kc-parallax-intro__secondary {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
 }
 
 @media (min-width: 376px) {
@@ -540,37 +573,36 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 }
 
 @media (max-width: 599px) {
-  .kc-parallax-hero__copy {
-    width: min(90vw, 34rem);
-    gap: 0.875rem;
+  .kc-parallax-intro__inner {
+    width: min(88vw, 34rem);
+    padding-top: 8rem;
   }
 
-  .kc-parallax-hero__title {
+  .kc-parallax-intro__title {
     max-width: 12ch;
-    font-size: clamp(2rem, 10vw, 3.25rem);
+    font-size: clamp(2.15rem, 10vw, 3.15rem);
   }
 
-  .kc-parallax-hero__subtitle {
-    max-width: 29rem;
-    font-size: 0.95rem;
-    line-height: 1.5;
+  .kc-parallax-intro__subtitle {
+    font-size: 0.96rem;
+    line-height: 1.65;
   }
 
-  .kc-parallax-hero__actions {
-    gap: 0.5rem;
+  .kc-parallax-intro__actions {
+    width: 100%;
+    gap: 0.65rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .kc-parallax-hero__layer,
-  .kc-parallax-hero__copy {
+  .kc-parallax-hero__layer {
     transform: none;
     will-change: auto;
   }
 
-  .kc-parallax-hero__copy {
-    left: 50%;
+  .kc-parallax-hero__mark {
     transform: translateX(-50%);
+    will-change: auto;
   }
 }
 </style>
