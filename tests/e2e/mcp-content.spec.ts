@@ -162,13 +162,24 @@ test.describe('stateless MCP server', () => {
     const validateBlog = new Ajv({ strict: false, allErrors: true }).compile(blogTool!.outputSchema)
     let postId = ''
     try {
+      const categoryList = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'list_article_categories',
+        args: { organization_id: organizationId, collection: 'blog' },
+      })
+      expect(categoryList.status()).toBe(200)
+      const categories = mcpData<{ categories: Array<{ id: string; name: string }> }>(await categoryList.json()).categories
+      const kitchenCategories = categories.filter(category => category.name === 'Kitchen')
+      expect(kitchenCategories).toHaveLength(1)
+      const categoryId = kitchenCategories[0]!.id
+      expect(categoryId).toEqual(expect.any(String))
+
       const create = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'create_blog_post',
         args: {
           organization_id: organizationId,
           idempotency_key: `mcp-canonical-blog-${Date.now()}`,
           title: `MCP canonical blog ${Date.now()}`,
-          category: 'Guides',
+          category_id: categoryId,
           content_blocks: [
             { type: 'heading', level: 2, data: { text: 'Created through MCP' } },
             { type: 'markdown', data: { markdown: 'One shared **document**.', editor_mode: 'rich' } },
@@ -196,6 +207,7 @@ test.describe('stateless MCP server', () => {
       expect(readPost.public_url).toBeNull()
       expect(readPost.preview_url).toContain('?preview_token=')
       expect(readPost.updated_at).toEqual(created.updated_at)
+      expect(readPost.category).toMatchObject({ id: categoryId, name: 'Kitchen' })
       expect(readPost.content_blocks.map(block => block.type)).toEqual(['heading', 'markdown'])
 
       const update = await mcpRequest(request, baseURL!, {
