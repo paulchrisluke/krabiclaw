@@ -286,7 +286,7 @@ async function updateNonOrganizationConfigFields(
 
 async function attemptOrganizationUpdate(
   db: D1Database,
-  env: SetupEnv,
+  env: SetupEnv & CloudflareEnv,
   organization: OrganizationSettingsRow,
   organizationId: string,
   updates: UpdateOrganizationSettingsRequest,
