@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "6",
-      "when": 1790687235973,
-      "tag": "0003_conversion_measurement",
+      "when": 1790678285043,
+      "tag": "0003_nested_article_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790692706254,
+      "tag": "0004_conversion_measurement",
       "breakpoints": true
     }
   ]

@@ -103,14 +103,17 @@ export const useAnalytics = () => {
     const occurredAt = new Date().toISOString()
     const path = window.location.pathname
     const native = Promise.race([pageEventIdFor(path), whenLeaving()]).then(pageEventId => postAuthenticatedInteraction({ event_id: eventId, occurred_at: occurredAt, event_name: eventName, organization_id: organizationId, page_event_id: pageEventId, properties: kept }))
-    // A collection failure is reported through the application's error hook. The error tracker's
-    // own event is the one exception: reporting its failure as an error would report itself again
-    // without end, so that failure is written to the console and nowhere else.
-    void native.catch((error) => {
-      if (eventName === 'error_encountered') console.error('analytics_error_event_not_recorded', error)
-      else void nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
-    })
-    window.zaraz?.track(eventName, { event_id: eventId, ...kept, ...(organizationId ? { organization_id: organizationId } : {}), device_language: navigator.language, is_prod: import.meta.env.PROD })
+    // The Google Analytics copy is a projection of the native event: it is sent only after the native
+    // record accepted it, with the same id. A collection failure is reported through the application's
+    // error hook; the error tracker's own event is the one exception, since reporting its failure as an
+    // error would report itself again without end, so that failure is written to the console only.
+    void native.then(
+      () => window.zaraz?.track(eventName, { event_id: eventId, ...kept, ...(organizationId ? { organization_id: organizationId } : {}), device_language: navigator.language, is_prod: import.meta.env.PROD }),
+      (error) => {
+        if (eventName === 'error_encountered') console.error('analytics_error_event_not_recorded', error)
+        else void nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
+      },
+    )
   }
 
   const setUserId = (userId: string | null | undefined) => {

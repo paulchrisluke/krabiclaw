@@ -152,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import { $fetch } from 'ofetch'
 import BookingContactForm from '@/components/booking/BookingContactForm.vue'
 import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
@@ -390,7 +391,7 @@ async function handleReservation() {
     // into "Failed to submit" — which the guest answers by booking a second one.
     const startsAt = localDateTimeToInstant(reservationForm.value.date, reservationForm.value.time, reservationTimezone.value).toISOString()
     const timezone = reservationTimezone.value
-    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null }>(`/api/public/reservations`, {
+    const res = await $fetch<{ id: string; cancellationToken: string; policy_summary?: ApiRecord | null; measurement?: SubmissionMeasurement }>(`/api/public/reservations`, {
       method: 'POST',
       body: { ...reservationForm.value, page_event_id: await pageEventId() },
     })
@@ -414,7 +415,7 @@ async function handleReservation() {
       locationAddress: formatPostalAddress((selectedLocation.value?.address ?? null) as PostalAddress | null) || null,
       locationSlug: typeof selectedLocation.value?.slug === 'string' ? selectedLocation.value.slug : null,
     })
-    mirrorSubmission('reservation_submit', selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
+    mirrorSubmission('reservation_submit', res.measurement, selectedLocation.value?.id ? String(selectedLocation.value.id) : null)
     await navigateTo('/reservations/confirmed')
   } catch (err) {
     const error = err as { data?: { error?: string }; status?: number }

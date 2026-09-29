@@ -38,7 +38,16 @@ definePageMeta({ layout: 'dashboard' })
 const editor = inject(blogEditorKey)!
 const route = useRoute()
 const categoriesPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/blog/categories`)
-const categoryOptions = computed(() => (editor.categories.value ?? []).map(category => ({ label: category.name, value: category.id })))
+// A nested category reads with the categories above it: "Integrations › Google".
+const categoryOptions = computed(() => {
+  const all = editor.categories.value ?? []
+  const byId = new Map(all.map(category => [category.id, category]))
+  const trail = (id: string | null): string[] => {
+    const category = id ? byId.get(id) : undefined
+    return category ? [...trail(category.parent_id), category.name] : []
+  }
+  return all.map(category => ({ label: trail(category.id).join(' › '), value: category.id }))
+})
 const categoriesFailure = computed(() => editor.categoriesError.value ? getErrorMessage(editor.categoriesError.value, 'Categories could not be loaded') : '')
 
 // A category of the other collection is not a choice here: switching the

@@ -276,8 +276,11 @@ export async function originatingOwnerId(db: DbClient, measuringOrganizationId: 
  * failure is reported next to the committed result and never in place of it:
  * a guest told their confirmed booking failed would book again.
  */
-export function measurementOutcome(result: PromiseSettledResult<unknown>): { status: 'recorded' } | { status: 'failed'; reason: string } {
+export function measurementOutcome(result: PromiseSettledResult<unknown>): { status: 'recorded'; event_id?: string } | { status: 'failed'; reason: string } {
+  // `event_id` is the canonical native event a Google Analytics projection may mirror: a browser
+  // sends its GA copy only for a recorded event, and carries this id so both name one fact.
+  const id = result.status === 'fulfilled' && result.value && typeof result.value === 'object' && 'id' in result.value && typeof result.value.id === 'string' ? result.value.id : undefined
   return result.status === 'fulfilled'
-    ? { status: 'recorded' }
+    ? { status: 'recorded', ...(id ? { event_id: id } : {}) }
     : { status: 'failed', reason: result.reason instanceof Error ? result.reason.message : String(result.reason) }
 }

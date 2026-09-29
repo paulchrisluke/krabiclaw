@@ -5,7 +5,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { recordTenantPageview, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
-import { recordOrganizationConversionEvent } from '../../server/utils/organization-conversions.ts'
+import { measurementOutcome, recordOrganizationConversionEvent } from '../../server/utils/organization-conversions.ts'
 import { handleAnalyticsTools } from '../../server/utils/mcp-executor/analytics.ts'
 import type { queryOrganizationAnalytics } from '../../server/utils/analytics-query.ts'
 
@@ -77,6 +77,9 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     const b = await recordOrganizationConversionEvent(db, cookieFor(S1, V1), { ...view, id: uuid(20), ...at('2026-09-10T03:06:00.000Z') })
     const c = await recordOrganizationConversionEvent(db, cookieFor(S1, V1), { ...view, id: uuid(21), ...at('2026-09-10T03:07:00.000Z') })
     assert.deepEqual([a.created, b.created, c.created], [true, false, true])
+    // The submission response names the native event a GA projection may mirror; a failure names none.
+    assert.deepEqual(measurementOutcome({ status: 'fulfilled', value: a }), { status: 'recorded', event_id: uuid(20) })
+    assert.deepEqual(measurementOutcome({ status: 'rejected', reason: new Error('quote unresolved') }), { status: 'failed', reason: 'quote unresolved' })
     await assert.rejects(recordOrganizationConversionEvent(db, cookieFor(S1, V1), { ...view, organizationId: OTHER, id: uuid(20) }), /another organization/)
     const views = await mcp(db, ORG, { mode: 'events', ...range, filters: { event_name: 'product_view' } })
     assert.equal(views.rows.length, 2)

@@ -34,16 +34,20 @@ async function postNativeInteraction(payload: ConversionPayload & { event_id: st
   if (!response.ok) throw new Error(`Native analytics collection was rejected (${response.status})`)
 }
 
+/** A submission's measurement as the server reports it beside the committed result. */
+export type SubmissionMeasurement = { status: 'recorded'; event_id?: string } | { status: 'failed'; reason: string } | undefined
+
 // The browser owns what the visitor does on the page. The name, dimensions and
 // value come from the shared projection, so the same fact reads the same in
 // every sender. `value` is what the server resolved for a submission it
 // already committed; the browser never computes or asserts an amount.
-function mirrorConversion(payload: ConversionPayload, value?: ConversionValue | null) {
+function mirrorConversion(payload: ConversionPayload, eventId: string, value?: ConversionValue | null) {
   if (!import.meta.client) return
   const projection = projectConversionToGa4({
     eventName: payload.event_name,
     value,
     params: {
+      event_id: eventId,
       stage: payload.stage,
       ...(payload.page_type ? { page_type: payload.page_type } : {}),
       ...(payload.page_path ? { page_path: payload.page_path } : {}),
@@ -57,21 +61,30 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
   const { organizationId } = useTenantOrganization()
   const nuxtApp = useNuxtApp()
 
-  function recordNative(payload: ConversionPayload, variantId?: string | null) {
-    if (!import.meta.client || !organizationId) return
+  /**
+   * Captures the interaction now and resolves with its native event id once the native record has
+   * accepted it, or null when there is none (no tenant, or the collection failed, which is reported
+   * through the application's error hook). Google Analytics is only ever a projection of a recorded
+   * native event, so every GA send waits on this result. The visitor's own action never does.
+   */
+  function recordNative(payload: ConversionPayload, variantId?: string | null): Promise<string | null> {
+    if (!import.meta.client || !organizationId) return Promise.resolve(null)
     // The interaction is captured now: its identity, moment and page are fixed here. Only its delivery
     // waits for the pageview it happened on to be recorded, so the server can attach that visit's
-    // page, language and attribution. The visitor's own action never waits on it.
+    // page, language and attribution.
     const captured = { ...payload, event_id: crypto.randomUUID(), occurred_at: new Date().toISOString(), ...(variantId ? { variant_id: variantId } : {}) }
     const path = window.location.pathname
-    void Promise.race([pageEventIdFor(path), whenLeaving()])
+    return Promise.race([pageEventIdFor(path), whenLeaving()])
       .then(pageEventId => postNativeInteraction({ ...captured, page_event_id: pageEventId }))
-      .catch(error => nuxtApp.callHook('vue:error', error, null, 'analytics-interaction'))
+      .then(() => captured.event_id)
+      .catch(async (error) => {
+        await nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
+        return null
+      })
   }
 
   function track(payload: ConversionPayload) {
-    recordNative(payload)
-    mirrorConversion(payload)
+    void recordNative(payload).then((eventId) => { if (eventId) mirrorConversion(payload, eventId) })
   }
 
   /** The pageview a form submission came from, for the server to verify and attach. */
@@ -82,13 +95,13 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
   // A product was viewed / a booking was started: native interactions first, then the GA4
   // ecommerce event through Zaraz's ecommerce API. Neither is an outcome.
   function trackProductView(productId: string, locationId: string, ecommerce: Record<string, unknown> | null) {
-    recordNative({ event_name: 'product_view', stage: 'viewed', product_id: productId, location_id: locationId, page_type: 'product' })
-    if (import.meta.client && ecommerce) window.zaraz?.ecommerce?.('Product Viewed', ecommerce)
+    void recordNative({ event_name: 'product_view', stage: 'viewed', product_id: productId, location_id: locationId, page_type: 'product' })
+      .then((eventId) => { if (eventId && ecommerce) window.zaraz?.ecommerce?.('Product Viewed', { ...ecommerce, event_id: eventId }) })
   }
 
   function trackCheckoutStart(productId: string, locationId: string, ecommerce: Record<string, unknown>, variantId?: string | null) {
-    recordNative({ event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: 'product' }, variantId)
-    if (import.meta.client) window.zaraz?.ecommerce?.('Checkout Started', ecommerce)
+    void recordNative({ event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: 'product' }, variantId)
+      .then((eventId) => { if (eventId) window.zaraz?.ecommerce?.('Checkout Started', { ...ecommerce, event_id: eventId }) })
   }
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
@@ -103,8 +116,14 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     })
   }
 
-  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'booking_submit', locationId?: string | null, value?: ConversionValue | null) {
-    mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId }, value)
+  /**
+   * The GA copy of a submission the server committed. It is sent only when the server recorded the
+   * native event, and carries that event's id; a submission whose measurement failed has no native
+   * fact to mirror, so GA receives nothing. The committed submission is successful either way.
+   */
+  function mirrorSubmission(eventName: 'contact_submit' | 'reservation_submit' | 'booking_submit', measurement: SubmissionMeasurement, locationId?: string | null, value?: ConversionValue | null) {
+    if (measurement?.status !== 'recorded' || !measurement.event_id) return
+    mirrorConversion({ event_name: eventName, stage: 'submitted', location_id: locationId }, measurement.event_id, value)
   }
 
   function trackDonationClick(documentId: string, pagePath: string, tierLabel: string, tierAmount: number | null) {

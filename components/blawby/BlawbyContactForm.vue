@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 
@@ -42,12 +43,12 @@ async function submitContact() {
   submitting.value = true
   submitMessage.value = ''
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
+    const response = await publicApiMutation<{ success: true; measurement?: SubmissionMeasurement }>(`/api/public/contact`, {
       method: 'POST',
       body: { ...form, page_event_id: await pageEventId() },
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+      validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
-    mirrorSubmission('contact_submit')
+    mirrorSubmission('contact_submit', response.measurement)
     setContactConfirmation({
       organizationId,
       organizationName: identity.value.name,

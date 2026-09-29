@@ -110,21 +110,7 @@ export default defineHandler(async (event) => {
   }
   const productVariantId = requestedVariantId || variants[0]!.id
 
-  // The value the guest is shown, snapshotted now: a later price edit never
-  // revalues this booking or a retried event. Seats are priced per person, as
-  // the product page states, so the quoted amount is unit price x seats. A
-  // variant with no offer has an unknown value, not a zero one.
   const full = await getProduct(db, organization.id, product.id)
-  if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
-  const variant = full.variants.find(candidate => candidate.id === productVariantId)
-  if (!variant) throw new Error(`Variant ${productVariantId} missing from product ${product.id}`)
-  const offer = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
-  const quotedValue = offer ? {
-    basis: 'quoted' as const,
-    amount_minor: offer.unit_amount * partySize,
-    currency: offer.currency,
-    items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, amount_minor: offer.unit_amount * partySize, quantity: partySize }],
-  } : null
 
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
@@ -194,6 +180,32 @@ export default defineHandler(async (event) => {
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised: running the notification first
   // meant a failed dispatch silently cost the tenant the conversion record too.
+  // The measurement of a committed booking, quote included. The value the guest is shown is
+  // snapshotted here, after the commit: a later price edit never revalues this booking or a retried
+  // event, and a quote that cannot be resolved is a measurement failure reported beside the
+  // committed booking, never a reason the booking was not made. Seats are priced per person, as the
+  // product page states, so the quoted amount is unit price x seats. A variant with no offer has an
+  // unknown value, not a zero one.
+  const recordBookingMeasurement = async () => {
+    if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
+    const variant = full.variants.find(candidate => candidate.id === productVariantId)
+    if (!variant) throw new Error(`Variant ${productVariantId} missing from product ${product.id}`)
+    const offer = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
+    const quotedValue = offer ? {
+      basis: 'quoted' as const,
+      amount_minor: offer.unit_amount * partySize,
+      currency: offer.currency,
+      items: [{ item_id: product.id, item_name: product.name, item_variant: variant.name, amount_minor: offer.unit_amount * partySize, quantity: partySize }],
+    } : null
+    const recorded = await recordOrganizationConversionEvent(db, event.req, {
+      organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
+      locationId: session.location_id, entityType: 'request', entityId: threadId,
+      productId: product.id, variantId: productVariantId,
+      pageType: 'product', routePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
+    })
+    return { ...recorded, quotedValue }
+  }
+
   const requestedLocale = cleanString(body.locale, 10)
   const [locale, ...followUps] = await Promise.all([
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
@@ -205,12 +217,7 @@ export default defineHandler(async (event) => {
         partySize, notes: notes || null,
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
       }),
-      recordOrganizationConversionEvent(db, event.req, {
-        organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
-        locationId: session.location_id, entityType: 'request', entityId: threadId,
-        productId: product.id, variantId: productVariantId,
-        pageType: 'product', routePath: `/products/${slug}`, value: quotedValue, originEventId: pageEventId,
-      }),
+      recordBookingMeasurement(),
     ]),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the
@@ -218,9 +225,10 @@ export default defineHandler(async (event) => {
   raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps.slice(0, 1),
     ['notifyBookingCreated'])
   const measurement = measurementOutcome(followUps[1]!)
+  const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
 
   return jsonResponse({
-    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValue, measurement,
+    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement,
     message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })

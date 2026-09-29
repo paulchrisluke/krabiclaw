@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:a737e8d2058ffe5ae7a389fee719671ad96fa18e7f39bfa2271b3b7a4e70fe47",
+  "fingerprint": "sha256:3c66053934ae182ed52c4400ad01b43ab049d04159e264c82207dbc272041ece",
   "tools": [
     {
       "name": "append_content_block",
@@ -1148,6 +1148,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -1163,7 +1170,11 @@
             "additionalProperties": false,
             "properties": {
               "article_count": {
-                "description": "Articles in the category, drafts included.",
+                "description": "Articles in the category itself, drafts included.",
+                "type": "integer"
+              },
+              "child_count": {
+                "description": "Subcategories directly under it.",
                 "type": "integer"
               },
               "collection": {
@@ -1185,11 +1196,19 @@
               "name": {
                 "type": "string"
               },
+              "parent_id": {
+                "description": "The category it sits under; null at the top level.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                 "type": "string"
               },
               "sort_order": {
+                "description": "Its place among its siblings.",
                 "type": "integer"
               }
             },
@@ -1199,8 +1218,10 @@
               "name",
               "slug",
               "description",
+              "parent_id",
               "sort_order",
-              "article_count"
+              "article_count",
+              "child_count"
             ],
             "type": "object"
           }
@@ -7839,7 +7860,11 @@
               "additionalProperties": false,
               "properties": {
                 "article_count": {
-                  "description": "Articles in the category, drafts included.",
+                  "description": "Articles in the category itself, drafts included.",
+                  "type": "integer"
+                },
+                "child_count": {
+                  "description": "Subcategories directly under it.",
                   "type": "integer"
                 },
                 "collection": {
@@ -7861,11 +7886,19 @@
                 "name": {
                   "type": "string"
                 },
+                "parent_id": {
+                  "description": "The category it sits under; null at the top level.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "slug": {
                   "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                   "type": "string"
                 },
                 "sort_order": {
+                  "description": "Its place among its siblings.",
                   "type": "integer"
                 }
               },
@@ -7875,8 +7908,10 @@
                 "name",
                 "slug",
                 "description",
+                "parent_id",
                 "sort_order",
-                "article_count"
+                "article_count",
+                "child_count"
               ],
               "type": "object"
             },
@@ -12300,6 +12335,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "Whose subcategories are being ordered; null or omitted for the top level.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -12316,7 +12358,11 @@
               "additionalProperties": false,
               "properties": {
                 "article_count": {
-                  "description": "Articles in the category, drafts included.",
+                  "description": "Articles in the category itself, drafts included.",
+                  "type": "integer"
+                },
+                "child_count": {
+                  "description": "Subcategories directly under it.",
                   "type": "integer"
                 },
                 "collection": {
@@ -12338,11 +12384,19 @@
                 "name": {
                   "type": "string"
                 },
+                "parent_id": {
+                  "description": "The category it sits under; null at the top level.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "slug": {
                   "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                   "type": "string"
                 },
                 "sort_order": {
+                  "description": "Its place among its siblings.",
                   "type": "integer"
                 }
               },
@@ -12352,8 +12406,10 @@
                 "name",
                 "slug",
                 "description",
+                "parent_id",
                 "sort_order",
-                "article_count"
+                "article_count",
+                "child_count"
               ],
               "type": "object"
             },
@@ -14842,6 +14898,13 @@
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
+          },
+          "parent_id": {
+            "description": "The category this one sits under, in the same collection; null or omitted for the top level. Categories nest at most 3 levels deep.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -14856,7 +14919,11 @@
             "additionalProperties": false,
             "properties": {
               "article_count": {
-                "description": "Articles in the category, drafts included.",
+                "description": "Articles in the category itself, drafts included.",
+                "type": "integer"
+              },
+              "child_count": {
+                "description": "Subcategories directly under it.",
                 "type": "integer"
               },
               "collection": {
@@ -14878,11 +14945,19 @@
               "name": {
                 "type": "string"
               },
+              "parent_id": {
+                "description": "The category it sits under; null at the top level.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "description": "The category page's address: /blog/category/{slug} or /docs/category/{slug}. It does not change when the category is renamed.",
                 "type": "string"
               },
               "sort_order": {
+                "description": "Its place among its siblings.",
                 "type": "integer"
               }
             },
@@ -14892,8 +14967,10 @@
               "name",
               "slug",
               "description",
+              "parent_id",
               "sort_order",
-              "article_count"
+              "article_count",
+              "child_count"
             ],
             "type": "object"
           }

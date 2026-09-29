@@ -247,6 +247,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
@@ -369,18 +370,19 @@ const handleTenantContact = async () => {
   if (tenantErrors.value.length > 0) return
 
   tenantSubmitting.value = true
+  let submitted: { success: true; measurement?: SubmissionMeasurement }
   try {
-    await publicApiMutation<{ success: true }>(`/api/public/contact`, {
+    submitted = await publicApiMutation<{ success: true; measurement?: SubmissionMeasurement }>(`/api/public/contact`, {
       method: 'POST',
       body: { ...tenantForm.value, page_event_id: await pageEventId() },
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+      validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
   } catch {
     tenantSubmitError.value = t('saya.contact_page.message_failed')
     tenantSubmitting.value = false
     return
   }
-  mirrorSubmission('contact_submit')
+  mirrorSubmission('contact_submit', submitted.measurement)
 
   // Best-effort only — a failure here (private browsing, storage quota) must
   // never make a successful submission look like it failed.

@@ -363,6 +363,7 @@
 </template>
 
 <script setup lang="ts">
+import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
@@ -754,7 +755,7 @@ async function submitBooking(contact: ContactFormState) {
   submitting.value = true
   bookingError.value = ''
   try {
-    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; policy_summary?: ApiRecord | null }>(
+    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
       `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
       {
         method: 'POST',
@@ -769,11 +770,11 @@ async function submitBooking(contact: ContactFormState) {
           locale: locale.value,
           page_event_id: await pageEventId(),
         },
-        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null } =>
+        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
       },
     )
-    if (response.quoted_value !== undefined) mirrorSubmission('booking_submit', props.location.id, response.quoted_value)
+    mirrorSubmission('booking_submit', response.measurement, props.location.id, response.quoted_value)
     setBookingConfirmation({
       type: 'booking',
       organizationId: props.organizationId,

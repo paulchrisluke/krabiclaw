@@ -37,7 +37,10 @@ test('validateApiShape validates every nested array item', () => {
   })
 
   assert.equal(validate({ rows: [{ id: 'one', label: null }] }), true)
+  assert.equal(validate({ rows: [{ id: 'one', label: 'Parent' }] }), true)
   assert.equal(validate({ rows: [{ id: 'one', label: 3 }] }), false)
+  assert.equal(validate({ rows: [{ id: 'one' }] }), false)
+  assert.equal(validate({ rows: [{ id: 'one', label: undefined }] }), false)
   assert.equal(validate({ rows: [{ label: null }] }), false)
 })
 

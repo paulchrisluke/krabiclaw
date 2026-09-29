@@ -39,8 +39,18 @@ by its producer: the same ID delivered twice is one event, two views of a
 product are two events. `POST /api/analytics/interactions` (public origin) and
 `POST /api/public/conversion-events` (product views and booking starts) are the
 only browser entrances; both write through
-`recordOrganizationConversionEvent`. The GA4 copy is a mirror sent through Zaraz
-only when consent allows; the native event is written first and regardless.
+`recordOrganizationConversionEvent`. Google Analytics is only ever a projection of a
+recorded native event: the browser sends the Zaraz copy after the native
+endpoint accepted the event, with the native event UUID as GA `event_id`, and
+only when consent allows. A rejected or failed native write sends nothing to
+GA. For a server-owned submission (contact, reservation, booking) the response
+carries `measurement` (`{status: "recorded", event_id}` or
+`{status: "failed", reason}`) beside the committed result; the browser mirrors
+to GA only for `recorded`, and the submission is successful either way. The
+booking quote is resolved inside that measurement, so an unresolvable quote is a
+measurement failure, never a reason the booking was not made. One consequence:
+a click that navigates away before the native response arrives has its native
+event (delivered with keepalive) but no GA copy.
 
 | Interaction | Canonical producer | GA4 name |
 | --- | --- | --- |
