@@ -57,6 +57,7 @@ export default defineHandler(async (event) => {
     subdomain,
     vertical: vertical as OrganizationVertical,
     defaultCurrency,
+    origin: event.req,
   })
   // Provisioning is not finished until the caller's session is on the new
   // organization; without it they are returned to a dashboard that cannot see

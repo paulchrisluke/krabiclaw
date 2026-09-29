@@ -176,7 +176,7 @@ export default defineHandler(async (event) => {
     ...await Promise.allSettled([
       notifyReservationCreated(env, db, {
         organizationId: organization.id, organizationName: organization.name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, ownerInboxUrl, }),
-      recordOrganizationConversionEvent(db, event, {
+      recordOrganizationConversionEvent(db, event.req, {
         organizationId: organization.id,
         eventName: 'reservation_submit',
         stage: 'submitted',

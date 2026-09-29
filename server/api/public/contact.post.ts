@@ -107,7 +107,7 @@ export default defineHandler(async (event) => {
   const followUps = await Promise.allSettled([
     notifyContactSubmitted(env, db, {
       organizationId: organization.id, locationId: assignedLocationId, organizationName: organization.name, contactId: id, guestName: name, email, subject: subject || topic || null, message, consentAcknowledged, }),
-    recordOrganizationConversionEvent(db, event, {
+    recordOrganizationConversionEvent(db, event.req, {
     organizationId: organization.id,
     eventName: 'contact_submit',
     stage: 'submitted',

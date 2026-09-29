@@ -137,7 +137,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })
   }
 
-  const result = await recordOrganizationConversionEvent(db, event, {
+  const result = await recordOrganizationConversionEvent(db, event.req, {
     organizationId: organization.id, eventName: eventName as OrganizationConversionEventName,
     stage, locationId, entityType, entityId, pageType, pagePath, ctaDestination, metadata, surface: 'website',
   })

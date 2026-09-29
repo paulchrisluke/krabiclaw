@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst } from '~/server/db'
-import { platformAnalyticsHostnames, type DomainEnv } from '~/server/utils/domains'
+import type { DomainEnv } from '~/server/utils/domains'
 import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME, ZARAZ_CONSENT_MODAL_INTRO_HTML } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
@@ -11,6 +11,12 @@ export interface ZarazEnv extends DomainEnv {
    * would rewrite production's tags. Production leaves it unset.
    */
   ZARAZ_ANALYTICS?: string
+  /**
+   * The unguessable path of Zaraz's HTTP Events API on the zone. The API has no
+   * other authentication, so the path is the credential: it is set on the zone
+   * here and read by the sender from the same variable.
+   */
+  ZARAZ_EVENTS_API_PATH?: string
 }
 
 interface ZarazAction {
@@ -78,7 +84,6 @@ const LOCK_STALE_MS = 60_000
 const LOCK_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
 const ANALYTICS_KEY_PREFIX = 'ga-'
 const TENANT_KEY_PREFIX = 'ga-tenant-'
-const PLATFORM_KEY = 'ga-platform'
 const GOOGLE_VENDOR_NAME = 'Google Analytics'
 const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
@@ -96,6 +101,7 @@ function requireZarazEnv(env: ZarazEnv): ZarazPresence {
   }
   if (!env.CF_ZONE_ID) throw new Error('CF_ZONE_ID is required')
   if (!env.CLOUDFLARE_API_TOKEN) throw new Error('CLOUDFLARE_API_TOKEN is required')
+  if (!env.ZARAZ_EVENTS_API_PATH?.startsWith('/')) throw new Error('ZARAZ_EVENTS_API_PATH must be an absolute path')
   return 'present'
 }
 
@@ -158,10 +164,6 @@ function escapeRegex(value: string): string {
 
 export function tenantPageLocationRegex(hostnames: string[]): string {
   return `^(${hostnames.map(escapeRegex).join('|')})$`
-}
-
-export function platformPageLocationRegex(hostnames: string[]): string {
-  return tenantPageLocationRegex(hostnames)
 }
 
 function configureZarazConsentManagement(config: ZarazConfig) {
@@ -275,25 +277,6 @@ function upsertGa4Tool(
   }
 }
 
-export function upsertPlatformZarazAnalytics(
-  config: ZarazConfig,
-  input: { measurementId: string | null | undefined; hostnames: string[] },
-) {
-  if (!input.measurementId || !input.hostnames.length) return
-  config.triggers ||= {}
-  config.tools ||= {}
-  configureZarazConsentManagement(config)
-  config.historyChange = true
-  config.triggers[PLATFORM_KEY] = makeHostBlockTrigger('Block non-platform hosts', input.hostnames)
-
-  upsertGa4Tool(config, PLATFORM_KEY, {
-    name: 'Platform GA4',
-    measurementId: input.measurementId,
-    triggerKey: PLATFORM_KEY,
-    existing: config.tools[PLATFORM_KEY],
-  })
-}
-
 export function upsertTenantZarazAnalytics(
   config: ZarazConfig,
   input: { organizationId: string; measurementId: string | null | undefined; hostnames: string[] },
@@ -367,8 +350,7 @@ function stableStringify(value: unknown): string {
 export function reconcileZarazAnalyticsConfig(
   config: ZarazConfig,
   input: {
-    platformMeasurementId?: string | null
-    platformHostnames: string[]
+    eventsApiPath: string
     tenants: ZarazAnalyticsTenant[]
   },
 ): ZarazAnalyticsConfigChanges {
@@ -376,12 +358,11 @@ export function reconcileZarazAnalyticsConfig(
   config.tools ||= {}
   const before = stableStringify(config)
   const desiredKeys = new Set(input.tenants.map(tenant => tenantKey(tenant.organizationId)))
-  if (input.platformMeasurementId && input.platformHostnames.length) desiredKeys.add(PLATFORM_KEY)
 
-  upsertPlatformZarazAnalytics(config, {
-    measurementId: input.platformMeasurementId,
-    hostnames: input.platformHostnames,
-  })
+  // Ecommerce events (purchase, refund) reach the GA4 tools' ecommerce action
+  // only when the zone enables Zaraz's ecommerce API, and server-side outcomes
+  // only when the HTTP Events API has a path.
+  config.settings = { ...(config.settings as Record<string, unknown> | undefined), ecommerce: true, eventsApiPath: input.eventsApiPath }
   for (const tenant of input.tenants) {
     upsertTenantZarazAnalytics(config, tenant)
   }
@@ -438,8 +419,7 @@ export async function reconcileZarazAnalytics(
   try {
     const config = await getZarazConfig(env)
     const result = reconcileZarazAnalyticsConfig(config, {
-      platformMeasurementId: env.GA4_MEASUREMENT_ID,
-      platformHostnames: platformAnalyticsHostnames(env),
+      eventsApiPath: env.ZARAZ_EVENTS_API_PATH!,
       tenants: [...tenants.entries()].map(([organizationId, tenant]) => ({
         organizationId,
         measurementId: tenant.measurementId,

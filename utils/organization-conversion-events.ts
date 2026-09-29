@@ -65,6 +65,8 @@ export interface ConversionItem {
   item_name: string
   item_variant?: string
   item_category?: string
+  item_category2?: string
+  item_category3?: string
   price_minor: number
   quantity: number
 }
@@ -72,7 +74,10 @@ export interface ConversionItem {
 /** The immutable event-time value snapshot. Amounts stay in minor units; providers convert once. */
 export interface ConversionValue {
   basis: ConversionValueBasis
+  /** The event's value: what a quote showed, what a purchase earned excluding tax and shipping, or what a refund returned. */
   amount_minor: number
+  /** Purchases only: the amount actually collected, tax included. Reported separately from `amount_minor`. */
+  collected_minor?: number
   currency: string
   transaction_id?: string
   items?: ConversionItem[]

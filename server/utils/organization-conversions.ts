@@ -1,8 +1,9 @@
-import { getCookie } from 'nitro/h3'
-import type { H3Event } from 'nitro'
+import { parseCookies } from 'better-auth/cookies'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp } from '~/server/utils/hourly-rate-limit'
+import { deliverViaZarazHttp, type ZarazHttpEnv } from '~/server/utils/ga4-delivery'
+import { projectConversionToGa4 } from '~/utils/ga4-projection'
 import { SESSION_COOKIE, VISITOR_COOKIE, hashIp, isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import {
   CONVERSION_EVENT_CATALOG,
@@ -39,14 +40,14 @@ export interface OrganizationConversionInput {
 /**
  * Records one conversion for `input.organizationId`.
  *
- * `origin` is the request made by the person who produced the outcome, or null
+ * `origin` is the request (`event.req`) made by the person who produced the outcome, or null
  * when nobody was there (webhook, MCP, scheduled work). Only a request that
  * already carries this platform's own analytics cookies gives the event a
  * browser session and attribution snapshot; anything else is recorded as a
  * nonbrowser outcome with no attribution. A browser session is never minted
  * here.
  */
-export async function recordOrganizationConversionEvent(db: DbClient, origin: H3Event | null, input: OrganizationConversionInput) {
+export async function recordOrganizationConversionEvent(db: DbClient, origin: { headers: Headers } | null, input: OrganizationConversionInput) {
   const rule = CONVERSION_EVENT_CATALOG[input.eventName]
   if (!(rule.stages as readonly ConversionStage[]).includes(input.stage)) throw new Error(`Invalid stage for ${input.eventName}`)
   if (rule.entityType !== null && input.entityType !== rule.entityType) throw new Error(`Invalid entity type for ${input.eventName}`)
@@ -66,8 +67,9 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: H3
   }
 
   const now = input.occurredAt ?? new Date().toISOString()
-  const sessionId = origin ? getCookie(origin, SESSION_COOKIE) : undefined
-  const visitorId = origin ? getCookie(origin, VISITOR_COOKIE) : undefined
+  const cookies = parseCookies(origin?.headers.get('cookie') ?? '')
+  const sessionId = cookies.get(SESSION_COOKIE)
+  const visitorId = cookies.get(VISITOR_COOKIE)
   const browser = isCanonicalEventId(sessionId) && isCanonicalEventId(visitorId) ? { sessionId, visitorId } : null
 
   let attribution: unknown = null
@@ -89,12 +91,12 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: H3
   }
 
   const id = crypto.randomUUID()
-  const ipHash = origin ? await hashIp(getClientIp(origin)) : null
+  const ipHash = origin ? await hashIp(getClientIp({ req: origin })) : null
   const payload = JSON.stringify({ event_name: input.eventName, stage: input.stage, entity_type: input.entityType ?? null,
     entity_id: input.entityId ?? null, page_type: input.pageType ?? null, cta_destination: input.ctaDestination ?? null,
     conversion_type: rule.conversionType, surface: input.surface, actor: input.actor ?? null,
     attribution, attributed_at: browser ? now : null, value: input.value ?? null, metadata: input.metadata ?? null,
-    ip_hash: ipHash, user_agent: (origin?.req.headers.get('user-agent') || '').slice(0, 1024) || null })
+    ip_hash: ipHash, user_agent: (origin?.headers.get('user-agent') || '').slice(0, 1024) || null })
   const inserted = await execute(db, `INSERT OR IGNORE INTO analytics_events (
     id, kind, organization_id, session_id, visitor_id, location_id, page_path, payload_json, created_at
   ) VALUES (?, 'conversion', ?, ?, ?, ?, ?, ?, ?)`, [
@@ -110,4 +112,21 @@ export async function recordOrganizationConversionEvent(db: DbClient, origin: H3
   [input.organizationId, input.eventName, input.entityType ?? null, input.entityId ?? null])
   if (!existing) throw new Error(`Conversion ${input.eventName} was neither inserted nor found`)
   return { id: existing.id, created: false }
+}
+
+/**
+ * Records a server-produced outcome and, the first time it is recorded, sends
+ * its GA4 projection through Zaraz's HTTP Events API. A repeat of the same
+ * outcome returns the persisted event and sends nothing: one outcome, one GA
+ * event. The outcome of the send lives on the event (`ga4_delivery`).
+ */
+export async function recordAndDeliverConversion(env: ZarazHttpEnv, db: DbClient, origin: { headers: Headers } | null, input: OrganizationConversionInput) {
+  const recorded = await recordOrganizationConversionEvent(db, origin, input)
+  if (recorded.created) {
+    await deliverViaZarazHttp(env, db, {
+      eventId: recorded.id, organizationId: input.organizationId, origin,
+      projection: projectConversionToGa4({ eventName: input.eventName, value: input.value }),
+    })
+  }
+  return recorded
 }

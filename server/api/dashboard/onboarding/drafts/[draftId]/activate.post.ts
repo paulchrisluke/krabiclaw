@@ -123,7 +123,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: applied.error }, { status: applied.status })
     }
     const { locationSlug } = applied
-    await activateOrganization(db, organizationId)
+    await activateOrganization(env, db, organizationId, event.req)
 
     const now = new Date().toISOString()
     await execute(db, `

@@ -204,7 +204,7 @@ export default defineHandler(async (event) => {
         partySize, notes: notes || null,
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
       }),
-      recordOrganizationConversionEvent(db, event, {
+      recordOrganizationConversionEvent(db, event.req, {
         organizationId: organization.id, eventName: 'booking_submit', stage: 'submitted', surface: 'website',
         locationId: session.location_id, entityType: 'request', entityId: threadId,
         pageType: 'product', pagePath: `/products/${slug}`, value: quotedValue,

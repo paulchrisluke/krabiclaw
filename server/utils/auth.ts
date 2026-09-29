@@ -16,6 +16,8 @@ import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-reso
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
+import { recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
 import { validatePassword } from '~/utils/password-validation'
 import { organizationEventQuery } from '~/server/utils/organization-events'
@@ -121,8 +123,9 @@ export interface CloudflareEnv {
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
   STRIPE_CONNECT_WEBHOOK_SECRET?: string
-  GA4_MEASUREMENT_ID?: string
   GA4_API_SECRET?: string
+  ZARAZ_ANALYTICS?: string
+  ZARAZ_EVENTS_API_PATH?: string
   AI_SEARCH?: AiSearchNamespace
   AI_SEARCH_INSTANCE_ID?: string
   PLATFORM_SEARCH_REINDEX_SECRET?: string
@@ -326,7 +329,7 @@ export function createAuth(env: CloudflareEnv) {
           }
         },
         create: {
-          after: async (user) => {
+          after: async (user, context) => {
             if ((user as { isAnonymous?: boolean }).isAnonymous) return
             // Organizations are created on demand — either by organization-provisioning.ts
             // (first site) or by an admin/invitation flow the user is joining.
@@ -334,6 +337,19 @@ export function createAuth(env: CloudflareEnv) {
             // accepting an invitation into an existing org, in which case a
             // personal org here would just be an orphaned, siteless duplicate.
             await notifyNewUserSignup(db)
+            // One registered account, once per user, through every way an
+            // account is created (password, social, phone, an anonymous guest
+            // becoming a user). Login, provider linking and invitation
+            // acceptance by an existing user never reach this hook. A user an
+            // admin created did not register. Only a request that already
+            // carries the visitor's analytics cookies gives the event a
+            // browser session.
+            if (context?.path === '/admin/create-user') return
+            await recordAndDeliverConversion(env, db, context?.request ?? null, {
+              organizationId: (await getPlatformOrganization(db)).id,
+              eventName: 'sign_up', stage: 'completed', surface: 'auth',
+              entityType: 'user', entityId: user.id,
+            })
           }
         }
       },

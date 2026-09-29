@@ -46,7 +46,6 @@ NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 MEDIA_BASE_URL = "https://media.krabiclaw.com"
 AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
-GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 # Production is the only environment that should send real email/WhatsApp — made explicit
 # here rather than relying on getEmailDeliveryMode/getWhatsAppDeliveryMode's default, since
 # that default now fails closed (log_only) precisely so a missing var elsewhere never sends real messages.
@@ -54,8 +53,13 @@ EMAIL_DELIVERY_MODE = "provider"
 WHATSAPP_DELIVERY_MODE = "provider"
 # Internal cron/API endpoints use CRON_SECRET:
 #   yarn wrangler secret put CRON_SECRET
-# GA4_API_SECRET (Measurement Protocol) is a secret, not a var:
+# GA4_API_SECRET (Measurement Protocol) is a secret, not a var. It belongs to the
+# GA4 property connected to the platform organization's own Google Analytics
+# integration; there is no environment-level measurement ID:
 #   yarn wrangler secret put GA4_API_SECRET
+# ZARAZ_EVENTS_API_PATH is the unguessable path of Zaraz's HTTP Events API, the
+# API's only credential. Reconciliation sets it on the zone; the sender reads it:
+#   yarn wrangler secret put ZARAZ_EVENTS_API_PATH
 # PREVIEW_SECRET signs scoped preview/draft tokens (server/utils/preview-token.ts)
 # and is required by the onboarding draft endpoints. It must stay stable across
 # deploys/runs in a given environment — rotating it invalidates any draft preview
@@ -146,7 +150,6 @@ NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 MEDIA_BASE_URL = "https://media.krabiclaw.com"
-GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
 EMAIL_DELIVERY_MODE = "provider"
 WHATSAPP_DELIVERY_MODE = "provider"
 
@@ -202,8 +205,6 @@ NUXT_PUBLIC_APP_NAME = "Krabiclaw Staging"
 NUXT_PUBLIC_SITE_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://staging.krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
-# Analytics is intentionally disabled outside production.
-GA4_MEASUREMENT_ID = ""
 # Staging runs on a copy of production's rows and has no Zaraz zone of its own;
 # reconciling would rewrite production's tags. Production leaves this unset.
 ZARAZ_ANALYTICS = "absent"
@@ -272,7 +273,6 @@ NUXT_PUBLIC_SITE_URL = "http://localhost:3000"
 NUXT_PUBLIC_HELP_URL = "http://localhost:3000/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 MEDIA_BASE_URL = "http://localhost:3000/__media"
-GA4_MEASUREMENT_ID = ""
 ZARAZ_ANALYTICS = "absent"
 EMAIL_DELIVERY_MODE = "log_only"
 WHATSAPP_DELIVERY_MODE = "log_only"

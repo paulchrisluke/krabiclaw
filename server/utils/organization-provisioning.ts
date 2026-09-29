@@ -11,6 +11,8 @@ import type { CurrencyCode } from '~/shared/currencies'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { isOrganizationWideRole, organizationAdapter, type OrganizationAdapter } from '~/server/utils/member-access'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
+import { recordAndDeliverConversion } from '~/server/utils/organization-conversions'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
 
 type SetupEnv = CloudflareEnv
 
@@ -77,7 +79,7 @@ export async function provisionOrganization(
   // `defaultCurrency` is the owner's answer or null. A tenant that goes live on
   // creation has to carry one; onboarding's first save has not asked yet, and
   // stores null until the currency step answers it.
-  params: { organizationId: string; name: string; subdomain: string; vertical: OrganizationVertical; defaultCurrency: CurrencyCode | null; activate?: boolean },
+  params: { organizationId: string; name: string; subdomain: string; vertical: OrganizationVertical; defaultCurrency: CurrencyCode | null; activate?: boolean; origin: { headers: Headers } | null },
 ): Promise<OrganizationProvisioningResult> {
   const { organizationId, name, vertical, defaultCurrency } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
@@ -107,7 +109,7 @@ export async function provisionOrganization(
       // correct both here so a professional-service retry can never be left on Saya.
       await execute(db, `UPDATE organization SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
         [themeId, vertical, now, organizationId])
-      return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
+      return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false, params.origin)
     }
     // The guard above answers "is this subdomain taken", which was the only
     // question while provisioning inserted a `organizations` row: a second run made a
@@ -156,7 +158,7 @@ export async function provisionOrganization(
       throw provisioningError
     }
 
-    return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false)
+    return await performSeeding(env, db, organizationId, name, vertical, normalizedSubdomain, params.activate !== false, params.origin)
 
   } catch (error) {
     console.error('Organization provisioning failed:', asError(error))
@@ -166,8 +168,18 @@ export async function provisionOrganization(
 }
 
 /** Makes a pending tenant public. */
-export async function activateOrganization(db: D1Database, organizationId: string): Promise<void> {
+export async function activateOrganization(env: SetupEnv, db: D1Database, organizationId: string, origin: { headers: Headers } | null): Promise<void> {
   await execute(db, `UPDATE organization SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [new Date().toISOString(), organizationId])
+  // Onboarding is complete exactly when this transition commits. The event is
+  // unique per organization, so replaying a completed setup request (or
+  // retrying after a failed record) never counts a second onboarding. KrabiClaw
+  // activating itself is not an acquisition.
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
+  if (organizationId === platformOrganizationId) return
+  await recordAndDeliverConversion(env, db, origin, {
+    organizationId: platformOrganizationId, eventName: 'onboarding_complete', stage: 'completed', surface: 'dashboard',
+    entityType: 'organization', entityId: organizationId,
+  })
 }
 
 // Creates a brand-new organization owned by `userId`. Callers decide when a new
@@ -283,12 +295,15 @@ async function performSeeding(
   // with its preview token, but it is not public until activateOrganization()
   // is called.
   activate: boolean,
+  // The request of the person finishing setup, when there is one: the only
+  // source of the consent GA4 delivery of the onboarding outcome must honor.
+  origin: { headers: Headers } | null,
 ): Promise<OrganizationProvisioningResult> {
   const locationId = await seedNewOrganization(db, { env: env as CloudflareEnv, organizationId, name, vertical })
 
   await createSystemSubdomain(env, db, organizationId, subdomain)
 
-  if (activate) await activateOrganization(db, organizationId)
+  if (activate) await activateOrganization(env, db, organizationId, origin)
 
   return {
     status: 200,

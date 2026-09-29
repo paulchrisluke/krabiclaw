@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import type { DbClient } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import {
   invoiceLineIsProration,
@@ -20,48 +20,15 @@ import {
   attachStripeGa4IntentToSubscription,
   type StripeGa4Intent,
 } from '~/server/utils/stripe-ga4-intents'
-import { sendGa4Event, type Ga4Event, type Ga4Item } from '~/server/utils/ga4-measurement-protocol'
+import { deliverViaMeasurementProtocol, sendMeasurementProtocol } from '~/server/utils/ga4-delivery'
+import { recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
+import { getPlatformOrganization } from '~/server/utils/platform-organization'
+import { projectConversionToGa4 } from '~/utils/ga4-projection'
+import type { ConversionItem, ConversionValue } from '~/utils/organization-conversion-events'
 import type { StripeGa4PurchaseType } from '~/shared/stripe-ga4'
-
-const ZERO_DECIMAL_CURRENCIES = new Set([
-  'bif', 'clp', 'djf', 'gnf', 'jpy', 'kmf', 'krw', 'mga', 'pyg',
-  'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf',
-])
-const THREE_DECIMAL_CURRENCIES = new Set(['bhd', 'jod', 'kwd', 'omr', 'tnd'])
 
 type StripeInvoiceWithSubscription = Stripe.Invoice & {
   subscription?: string | { id: string } | null
-}
-
-interface StripeGa4PurchaseEventInput {
-  invoiceId: string
-  amountPaid: number
-  currency: string
-  purchaseType: StripeGa4PurchaseType
-  subscriptionId: string
-  lines: StripeInvoiceLine[]
-  fallbackItems?: Ga4Item[]
-}
-
-export interface StripeGa4RefundEventInput {
-  invoiceId: string
-  refundId: string
-  amount: number
-  currency: string
-  subscriptionId: string
-  lines: StripeInvoiceLine[]
-  purchaseType?: StripeGa4PurchaseType
-}
-
-function currencyDivisor(currency: string): number {
-  const normalized = currency.toLowerCase()
-  if (ZERO_DECIMAL_CURRENCIES.has(normalized)) return 1
-  if (THREE_DECIMAL_CURRENCIES.has(normalized)) return 1000
-  return 100
-}
-
-export function stripeMinorToMajor(amount: number, currency: string): number {
-  return amount / currencyDivisor(currency)
 }
 
 function stripeMetadataValue(metadata: Stripe.Metadata | null | undefined, ...keys: string[]): string | null {
@@ -78,6 +45,11 @@ function stripeMetadataNumber(metadata: Stripe.Metadata | null | undefined, ...k
   if (!value) return null
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function gaSessionNumber(value: string | null): number | null {
+  const parsed = Number(value)
+  return value !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
 function customerIdValue(customer: Stripe.Subscription['customer'] | Stripe.Invoice['customer']): string | null {
@@ -99,18 +71,15 @@ function billingIntervalLabel(price: Stripe.Price | null): string | null {
   return count === 1 ? label : `${count}_${label}`
 }
 
-function itemFromInvoiceLine(line: StripeInvoiceLine, currency: string): Ga4Item | null {
+function itemFromInvoiceLine(line: StripeInvoiceLine): ConversionItem | null {
   const price = invoiceLinePrice(line)
   const priceObject = typeof price === 'string' || !price ? null : price
   const product = priceObject?.product
   const productName = product && typeof product !== 'string' && !product.deleted ? product.name : null
   const itemId = priceObject?.id ?? line.id
   const invoiceUnitAmount = invoiceLineUnitAmount(line)
-  const unitAmount = invoiceUnitAmount === null ? null : stripeMinorToMajor(invoiceUnitAmount, currency)
-  const resolvedUnitAmount = unitAmount
-    ?? (typeof priceObject?.unit_amount === 'number'
-      ? stripeMinorToMajor(priceObject.unit_amount, currency)
-      : null)
+  const resolvedUnitAmount = invoiceUnitAmount
+    ?? (typeof priceObject?.unit_amount === 'number' ? priceObject.unit_amount : null)
   const quantity = invoiceLineQuantity(line)
   if (!itemId || !resolvedUnitAmount || resolvedUnitAmount <= 0) return null
 
@@ -123,20 +92,18 @@ function itemFromInvoiceLine(line: StripeInvoiceLine, currency: string): Ga4Item
     item_category: 'Subscription',
     ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
     ...(metered ? { item_category3: 'Metered' } : {}),
-    price: resolvedUnitAmount,
+    price_minor: resolvedUnitAmount,
     quantity,
   }
 }
 
-function subscriptionFallbackItems(subscription: Stripe.Subscription, currency: string): Ga4Item[] {
+function subscriptionFallbackItems(subscription: Stripe.Subscription): ConversionItem[] {
   return subscription.items.data.flatMap((item) => {
     const price = typeof item.price === 'string' ? null : item.price
     if (!price) return []
     const product = price.product
     const productName = product && typeof product !== 'string' && !product.deleted ? product.name : null
-    const unitAmount = typeof price.unit_amount === 'number'
-      ? stripeMinorToMajor(price.unit_amount, currency)
-      : null
+    const unitAmount = typeof price.unit_amount === 'number' ? price.unit_amount : null
     if (!unitAmount || unitAmount <= 0) return []
     const interval = billingIntervalLabel(price)
     const metered = price.recurring?.usage_type === 'metered'
@@ -146,7 +113,7 @@ function subscriptionFallbackItems(subscription: Stripe.Subscription, currency: 
       item_category: 'Subscription',
       ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
       ...(metered ? { item_category3: 'Metered' } : {}),
-      price: unitAmount,
+      price_minor: unitAmount,
       quantity: item.quantity ?? 1,
     }]
   })
@@ -160,62 +127,57 @@ function positiveSubscriptionLines(lines: StripeInvoiceLine[], subscriptionId: s
   })
 }
 
-export function buildStripeGa4PurchaseEvent(input: StripeGa4PurchaseEventInput): Ga4Event {
-  const items = input.lines
-    .map(line => itemFromInvoiceLine(line, input.currency))
-    .filter((item): item is Ga4Item => item !== null)
-  const resolvedItems = items.length > 0 ? items : (input.fallbackItems ?? [])
-  if (resolvedItems.length === 0) {
-    throw new Error(`Stripe invoice ${input.invoiceId} has no GA4 subscription items; retrying`)
-  }
-  if (!Number.isFinite(input.amountPaid) || input.amountPaid <= 0) {
-    throw new Error(`Stripe invoice ${input.invoiceId} has no positive paid amount`)
-  }
-
+/**
+ * The purchase's value is the invoice total excluding tax (Stripe applies
+ * discounts to it and reports tax and shipping separately), which is what GA4
+ * ecommerce `value` means. What was actually collected, tax included, is kept
+ * beside it and reported separately. Missing required amounts fail visibly.
+ */
+export function buildStripePurchaseValue(invoice: StripeInvoiceWithSubscription, items: ConversionItem[]): ConversionValue {
+  if (items.length === 0) throw new Error(`Stripe invoice ${invoice.id} has no subscription items; retrying`)
+  if (!Number.isSafeInteger(invoice.amount_paid) || invoice.amount_paid <= 0) throw new Error(`Stripe invoice ${invoice.id} has no positive paid amount`)
+  if (typeof invoice.total_excluding_tax !== 'number') throw new Error(`Stripe invoice ${invoice.id} has no total excluding tax`)
   return {
-    name: 'purchase',
-    params: {
-      transaction_id: input.invoiceId,
-      value: stripeMinorToMajor(input.amountPaid, input.currency),
-      currency: input.currency.toUpperCase(),
-      purchase_type: input.purchaseType,
-      subscription_id: input.subscriptionId,
-      items: resolvedItems,
-    },
+    basis: 'purchase', amount_minor: invoice.total_excluding_tax, collected_minor: invoice.amount_paid,
+    currency: invoice.currency.toUpperCase(), transaction_id: invoice.id, items,
   }
 }
 
-export function buildStripeGa4RefundEvent(input: StripeGa4RefundEventInput): Ga4Event {
-  const items = input.lines
-    .map(line => itemFromInvoiceLine(line, input.currency))
-    .filter((item): item is Ga4Item => item !== null)
+export function buildStripeRefundValue(input: { invoiceId: string; amount: number; currency: string; items: ConversionItem[] }): ConversionValue {
   return {
-    name: 'refund',
-    params: {
-      transaction_id: input.invoiceId,
-      value: stripeMinorToMajor(input.amount, input.currency),
-      currency: input.currency.toUpperCase(),
-      refund_id: input.refundId,
-      subscription_id: input.subscriptionId,
-      ...(input.purchaseType ? { purchase_type: input.purchaseType } : {}),
-      ...(items.length > 0 ? { items } : {}),
-    },
+    basis: 'refund', amount_minor: input.amount, currency: input.currency.toUpperCase(), transaction_id: input.invoiceId,
+    ...(input.items.length > 0 ? { items: input.items } : {}),
   }
 }
 
-export function classifyStripeInvoicePurchase(
-  billingReason: string | null | undefined,
+/**
+ * The first positive payment a customer ever makes is their first paid
+ * conversion, whatever Stripe's billing reason says: after a zero-value trial
+ * the first charge arrives as a cycle. Payment history is read from Stripe's
+ * paid invoices, not from a shadow lifecycle.
+ */
+async function hasEarlierPositivePayment(stripe: Stripe, invoice: StripeInvoiceWithSubscription): Promise<boolean> {
+  const customerId = customerIdValue(invoice.customer)
+  if (!customerId) throw new Error(`Stripe invoice ${invoice.id} has no customer`)
+  for await (const prior of stripe.invoices.list({ customer: customerId, status: 'paid', limit: 100 })) {
+    if (prior.id !== invoice.id && prior.amount_paid > 0 && prior.created <= invoice.created) return true
+  }
+  return false
+}
+
+export async function classifyStripeInvoicePurchase(
+  stripe: Stripe,
+  invoice: StripeInvoiceWithSubscription,
   intentAction?: StripeGa4Intent['action'] | null,
   metadataAction?: string | null,
-): StripeGa4PurchaseType | null {
-  if (billingReason === 'subscription_create') return 'initial_subscription'
-  if (billingReason === 'subscription_cycle' || billingReason === 'subscription_threshold') {
-    return 'subscription_renewal'
-  }
-  if (billingReason !== 'subscription_update') return null
+): Promise<StripeGa4PurchaseType | null> {
+  if (!await hasEarlierPositivePayment(stripe, invoice)) return 'initial_subscription'
+  if (invoice.billing_reason === 'subscription_cycle' || invoice.billing_reason === 'subscription_threshold') return 'subscription_renewal'
+  // Invoices outside the subscription lifecycle (manual, upcoming) are not a supported payment path.
+  if (invoice.billing_reason !== 'subscription_update') return null
   if (intentAction === 'upgrade' || intentAction === 'downgrade') return intentAction
   if (metadataAction === 'upgrade' || metadataAction === 'downgrade') return metadataAction
-  return null
+  return 'plan_change'
 }
 
 interface StripeGa4Context {
@@ -283,7 +245,11 @@ async function resolveStripeGa4Context(
   return { organizationId, userId, clientId, intent, sessionId, sessionCapturedAt, customerId }
 }
 
-async function sendStripeGa4Purchase(
+// KrabiClaw is the seller of every subscription this handler sees, so the
+// measuring organization is the platform organization; the organization that
+// subscribed is the subject, kept in the event's metadata. Invoice ids are
+// unique within the seller's Stripe account, which is that same namespace.
+async function recordStripePurchase(
   env: CloudflareEnv,
   db: DbClient,
   stripe: Stripe,
@@ -296,21 +262,11 @@ async function sendStripeGa4Purchase(
     expand: ['items.data.price.product'],
   })
   const metadataAction = stripeMetadataValue(subscription.metadata, 'analytics_action', 'pending_change_type')
-  const preliminaryPurchaseType = classifyStripeInvoicePurchase(invoice.billing_reason, null, metadataAction)
-  const context = await resolveStripeGa4Context(db, stripe, subscription, preliminaryPurchaseType)
-  const purchaseType = classifyStripeInvoicePurchase(
-    invoice.billing_reason,
-    context.intent?.action,
-    metadataAction,
-  )
+  let purchaseType = await classifyStripeInvoicePurchase(stripe, invoice, null, metadataAction)
   if (!purchaseType) return
-  if (!context.clientId && !context.userId) {
-    console.warn('stripe_ga4_purchase_unattributed', {
-      invoiceId: invoice.id,
-      subscriptionId,
-      eventId: event.id,
-    })
-    return
+  const context = await resolveStripeGa4Context(db, stripe, subscription, purchaseType)
+  if (purchaseType === 'plan_change' && (context.intent?.action === 'upgrade' || context.intent?.action === 'downgrade')) {
+    purchaseType = context.intent.action
   }
 
   const lines = await loadStripeInvoiceLines(stripe, invoice)
@@ -318,28 +274,29 @@ async function sendStripeGa4Purchase(
   if (purchaseType === 'initial_subscription' || purchaseType === 'subscription_renewal') {
     candidateLines = candidateLines.filter(line => !invoiceLineIsProration(line))
   }
-  const eventPayload = buildStripeGa4PurchaseEvent({
-    invoiceId: invoice.id,
-    amountPaid: invoice.amount_paid,
-    currency: invoice.currency ?? 'usd',
-    purchaseType,
-    subscriptionId,
-    lines: candidateLines,
-    fallbackItems: subscriptionFallbackItems(subscription, invoice.currency ?? 'usd'),
-  })
+  const lineItems = candidateLines.flatMap(line => itemFromInvoiceLine(line) ?? [])
+  const value = buildStripePurchaseValue(invoice, lineItems.length > 0 ? lineItems : subscriptionFallbackItems(subscription))
 
-  // Sent once per delivery. Stripe redelivers an event only when this handler
-  // did not answer 2xx, and never spontaneously: a sandbox run of 34 events on
-  // 2026-09-14 delivered 34 distinct ids. A purchase counted twice in GA4 in
-  // that failure case is accepted (owner decision, 2026-09-14) over keeping a
-  // delivery ledger for analytics.
-  await sendGa4Event(env, {
-    clientId: context.clientId,
-    userId: context.userId,
-    sessionId: context.sessionId,
-    sessionCapturedAt: context.sessionCapturedAt,
-    event: eventPayload,
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
+  const recorded = await recordOrganizationConversionEvent(db, null, {
+    organizationId: platformOrganizationId, eventName: 'purchase', stage: 'completed', surface: 'stripe',
+    entityType: 'invoice', entityId: invoice.id, value,
+    occurredAt: invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000).toISOString() : undefined,
+    metadata: {
+      purchase_type: purchaseType, subscription_id: subscriptionId,
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId } : {}),
+      ...(context.userId ? { user_id: context.userId } : {}),
+    },
   })
+  const projection = projectConversionToGa4({ eventName: 'purchase', value, params: { purchase_type: purchaseType, subscription_id: subscriptionId } })
+  const delivery = await deliverViaMeasurementProtocol(env, db, {
+    eventId: recorded.id, organizationId: platformOrganizationId, event: projection,
+    clientId: context.clientId, userId: context.userId, sessionId: gaSessionNumber(context.sessionId), sessionCapturedAt: context.sessionCapturedAt,
+  })
+  // A failed send makes Stripe redeliver; the native event is already
+  // recorded and its identity is returned on the retry. Everything else
+  // (disabled, disconnected, no consent) is a recorded outcome, not an error.
+  if (delivery.status === 'failed') throw new Error(`GA4 purchase delivery failed for invoice ${invoice.id}: ${delivery.detail}`)
 
   if (context.intent && (purchaseType === 'upgrade' || purchaseType === 'downgrade' || purchaseType === 'initial_subscription')) {
     await consumeStripeGa4Intent(db, context.intent.id, event.id)
@@ -385,10 +342,6 @@ async function sendStripeGa4Lifecycle(
 ): Promise<void> {
   if (intent?.lifecycleSentAt) return
   const context = await resolveStripeGa4Context(db, stripe, subscription, null)
-  if (!context.clientId && !context.userId) {
-    console.warn('stripe_ga4_lifecycle_unattributed', { subscriptionId: subscription.id, eventName })
-    return
-  }
   const params: Record<string, unknown> = {
     subscription_id: subscription.id,
     ...(context.organizationId ? { organization_id: context.organizationId } : {}),
@@ -397,13 +350,18 @@ async function sendStripeGa4Lifecycle(
   if (intent?.newPriceId) params.new_price_id = intent.newPriceId
   if (intent?.action === 'downgrade') params.effective_timing = intent.effectiveTiming
 
-  await sendGa4Event(env, {
-    clientId: context.clientId,
-    userId: context.userId,
-    sessionId: intent?.sessionId,
-    sessionCapturedAt: intent?.sessionCapturedAt,
+  // A lifecycle event is GA-only (it is not a business outcome in the native
+  // catalog), so a send that could not happen for lack of consent evidence or
+  // configuration has no event row to note it on; only a provider failure is an
+  // error, and it makes Stripe redeliver.
+  const sent = await sendMeasurementProtocol(env, db, {
+    organizationId: (await getPlatformOrganization(db)).id,
+    clientId: context.clientId, userId: context.userId,
+    sessionId: gaSessionNumber(intent?.sessionId ?? null),
+    sessionCapturedAt: intent?.sessionCapturedAt ?? null,
     event: { name: eventName, params },
   })
+  if (sent.status === 'failed') throw new Error(`GA4 ${eventName} delivery failed for subscription ${subscription.id}: ${sent.detail}`)
   if (intent) {
     await markStripeGa4IntentLifecycleSent(db, intent.id)
     await consumeStripeGa4Intent(db, intent.id, event.id)
@@ -425,14 +383,15 @@ async function attachCheckoutIntent(
   if (intent) await attachStripeGa4IntentToSubscription(db, intent.id, subscriptionId)
 }
 
-async function sendStripeGa4Refund(
+async function recordStripeRefund(
   env: CloudflareEnv,
   db: DbClient,
   stripe: Stripe,
   refund: Stripe.Refund,
 ): Promise<void> {
   const chargeId = typeof refund.charge === 'string' ? refund.charge : refund.charge?.id ?? null
-  if (refund.amount <= 0) return
+  // Only a refund Stripe reports as succeeded is verified evidence; a pending one arrives again as an update.
+  if (refund.amount <= 0 || refund.status !== 'succeeded') return
   const invoiceIdFromMetadata = stripeMetadataValue(refund.metadata, 'invoice_id')
   const paymentIntentId = typeof refund.payment_intent === 'string'
     ? refund.payment_intent
@@ -466,20 +425,31 @@ async function sendStripeGa4Refund(
   })
   const context = await resolveStripeGa4Context(db, stripe, subscription, null)
   const lines = await loadStripeInvoiceLines(stripe, invoice)
-  const purchaseType = classifyStripeInvoicePurchase(invoice.billing_reason, null, null)
-  await sendGa4Event(env, {
-    clientId: context.clientId,
-    userId: context.userId,
-    event: buildStripeGa4RefundEvent({
-      invoiceId,
-      refundId: refund.id,
-      amount: refund.amount,
-      currency: refund.currency ?? invoice.currency ?? 'usd',
-      subscriptionId,
-      lines: positiveSubscriptionLines(lines, subscriptionId),
-      purchaseType: purchaseType ?? undefined,
-    }),
+  const platformOrganizationId = (await getPlatformOrganization(db)).id
+  // Linked to the original transaction: the refund carries the purchase's own
+  // classification. A purchase recorded before this coverage began has none.
+  const original = await queryFirst<{ purchase_type: string | null }>(db, `SELECT (payload_json ->> '$.metadata.purchase_type') AS purchase_type FROM analytics_events
+    WHERE kind = 'conversion' AND organization_id = ? AND (payload_json ->> '$.event_name') = 'purchase'
+      AND (payload_json ->> '$.entity_type') = 'invoice' AND (payload_json ->> '$.entity_id') = ?`, [platformOrganizationId, invoiceId])
+  const value = buildStripeRefundValue({
+    invoiceId, amount: refund.amount, currency: refund.currency ?? invoice.currency,
+    items: positiveSubscriptionLines(lines, subscriptionId).flatMap(line => itemFromInvoiceLine(line) ?? []),
   })
+  const recorded = await recordOrganizationConversionEvent(db, null, {
+    organizationId: platformOrganizationId, eventName: 'refund', stage: 'completed', surface: 'stripe',
+    entityType: 'refund', entityId: refund.id, value,
+    occurredAt: new Date(refund.created * 1000).toISOString(),
+    metadata: {
+      subscription_id: subscriptionId, ...(original?.purchase_type ? { purchase_type: original.purchase_type } : {}),
+      ...(context.organizationId ? { subscribing_organization_id: context.organizationId } : {}),
+    },
+  })
+  const projection = projectConversionToGa4({ eventName: 'refund', value, params: { refund_id: refund.id, subscription_id: subscriptionId } })
+  const delivery = await deliverViaMeasurementProtocol(env, db, {
+    eventId: recorded.id, organizationId: platformOrganizationId, event: projection,
+    clientId: context.clientId, userId: context.userId, sessionId: null, sessionCapturedAt: null,
+  })
+  if (delivery.status === 'failed') throw new Error(`GA4 refund delivery failed for refund ${refund.id}: ${delivery.detail}`)
 }
 
 /** The subscription an invoice belongs to, across both Stripe invoice shapes. */
@@ -509,12 +479,12 @@ export async function handleStripeGa4Event(
     }
 
     if (event.type === 'invoice.paid') {
-      await sendStripeGa4Purchase(env, db, stripe, event.data.object as StripeInvoiceWithSubscription, event)
+      await recordStripePurchase(env, db, stripe, event.data.object as StripeInvoiceWithSubscription, event)
       return
     }
 
-    if (event.type === 'refund.created') {
-      await sendStripeGa4Refund(env, db, stripe, event.data.object as Stripe.Refund)
+    if (event.type === 'refund.created' || event.type === 'refund.updated') {
+      await recordStripeRefund(env, db, stripe, event.data.object as Stripe.Refund)
       return
     }
 
