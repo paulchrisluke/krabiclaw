@@ -2,7 +2,6 @@ import type { DbClient } from '~/server/db'
 import { queryAll, queryFirst } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
 import { resolveOrganizationAnalyticsContext } from '~/server/utils/analytics-report'
-import { PAGEVIEW_DETAIL_RETENTION_DAYS, SESSION_AND_SUMMARY_RETENTION_DAYS } from '~/utils/analytics-retention'
 import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
 
 /**
@@ -11,9 +10,9 @@ import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~
  *
  * Three modes read what the collector stored, never a projection of it:
  *  - events: individual events with every observation the collector kept;
- *  - sessions: the retained session records and their derived last-touch state;
+ *  - sessions: the native session records and their derived last-touch state;
  *  - breakdown: complete grouped results over the whole filtered population;
- *  - daily_summaries: the retained daily summary rows (organization, page and dimension days) at their
+ *  - daily_summaries: the daily summary rows (organization, page and dimension days) at their
  *    own grain. They outlive raw pageview detail, so a period past it is answered from them, and each
  *    row says it is a summary, not events.
  *
@@ -75,7 +74,7 @@ function attributionSql(field: AttributionField): EventField['sql'] {
 /**
  * The session's last touch as it stood at the query's `as_of` boundary, not as it is now. A session
  * record that has not changed since the boundary is exact; one that has changed is rebuilt from the
- * retained pageviews that had been received by then (the latest one that carried a touch of its
+ * pageviews that had been received by then (the latest one that carried a touch of its
  * own), so a touch that arrives between two pages of a result never moves earlier events between
  * groups. A session with no touch by the boundary was Direct.
  */
@@ -407,8 +406,8 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
   const rows = await queryAll<Record<string, unknown>>(db, bindWindow(`SELECT s.key AS session_id, s.created_at, s.payload_json,
       ${startedAt} AS started_at_asof, ${lastSeenAt} AS last_seen_at_asof,
       ${['source', 'medium', 'campaign', 'content', 'term', 'referrerHost', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid'].map(key => `${sessionTouchAsOf(key, null)} AS t_${key}`).join(', ')},
-      (SELECT COUNT(*) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS events_retained,
-      (SELECT COALESCE(SUM(e.kind = 'pageview'), 0) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS page_views_retained
+      (SELECT COUNT(*) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS events,
+      (SELECT COALESCE(SUM(e.kind = 'pageview'), 0) FROM analytics_events e WHERE e.organization_id = s.organization_id AND e.session_id = s.key AND e.received_at <= @asof) AS page_views
     FROM analytics_summaries s WHERE ${base} ${keyset}
     ORDER BY started_at_asof DESC, s.key DESC LIMIT ?`, ctx), [...baseParams, ...(ctx.cursorKey ?? []), ctx.limit + 1])
   const page = rows.slice(0, ctx.limit)
@@ -423,7 +422,7 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
         // Derived view: the session's last touch as of the query boundary. Each event keeps the attribution it had.
         last_touch: { attribution: { source: row.t_source, medium: row.t_medium, campaign: row.t_campaign, term: row.t_term, content: row.t_content, referrerHost: row.t_referrerHost,
           gclid: row.t_gclid, gbraid: row.t_gbraid, wbraid: row.t_wbraid, fbclid: row.t_fbclid, msclkid: row.t_msclkid }, as_of: ctx.asOf, derived: true },
-        events_retained: Number(row.events_retained), page_views_retained: Number(row.page_views_retained),
+        events: Number(row.events), page_views: Number(row.page_views),
       }
     }),
     nextKey: rows.length > ctx.limit && last ? [last.started_at_asof, last.session_id] : null,
@@ -468,7 +467,7 @@ const SUMMARY_METRICS = {
 } as const
 
 /**
- * The retained daily summaries, complete and paginated at their stored grain: one row per day
+ * The daily summaries, complete and paginated at their stored grain: one row per day
  * (organization_day), per day and page path (page_day) or per day and dimension value
  * (dimension_day). Nothing is reconstructed into events, and distinct counts are those the summary
  * stored for its own grain, not sums of other rows. A summary rewritten after `as_of` makes the
@@ -513,9 +512,9 @@ async function summariesMode(db: DbClient, input: AnalyticsQueryInput, ctx: Mode
     totals,
     source: {
       table: 'analytics_summaries', summary_kind: summary.kind, grain: summary.kind === 'organization_day' ? 'day' : summary.kind === 'page_day' ? 'day and public page path' : 'day and dimension value (country, city, device or referrer)',
-      supported_metrics: SUMMARY_METRICS[summary.kind], derived_from: 'pageview events aggregated per local day; not individual events',
+      supported_metrics: SUMMARY_METRICS[summary.kind], derived_from: 'pageview events aggregated per local day; a derived view of the native events, not the events themselves',
       days_in_range: daysInRange, days_summarized: Number(summarizedDays?.n ?? 0),
-      note: 'Days without an organization_day summary have not been aggregated (the current day, or a day the aggregation has not reached); their pageviews are in events and breakdown while raw detail is retained.',
+      note: 'Days without an organization_day summary have not been aggregated (the current day, or a day the aggregation has not reached); their pageviews are in events and breakdown.',
     },
   }
 }
@@ -606,14 +605,12 @@ async function breakdownMode(db: DbClient, input: AnalyticsQueryInput, ctx: Mode
 // ---------------------------------------------------------------------------------------------
 
 async function coverageFor(db: DbClient, organizationId: string, ctx: { start: string; end: string; now: Date; analyticsDataStartAt: string | null; filters: ResolvedFilters; basis: AttributionBasis }): Promise<Record<string, unknown>> {
-  const pageviewDetailFrom = new Date(ctx.now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
-  const summaryFrom = new Date(ctx.now.getTime() - SESSION_AND_SUMMARY_RETENTION_DAYS * 86_400_000).toISOString()
   const first = await queryFirst<Record<string, unknown>>(db, `SELECT
       MIN(CASE WHEN json_type(payload_json, '$.observed') IS NOT NULL THEN created_at END) AS observed_from,
       MIN(CASE WHEN json_type(payload_json, '$.source_path') IS NOT NULL THEN created_at END) AS page_identity_from,
       MIN(CASE WHEN json_type(payload_json, '$.attribution_basis') IS NOT NULL THEN created_at END) AS snapshot_from,
-      MIN(CASE WHEN kind = 'pageview' THEN created_at END) AS oldest_pageview_detail,
-      MIN(CASE WHEN kind IN ('conversion', 'interaction') THEN created_at END) AS oldest_outcome_detail
+      MIN(CASE WHEN kind = 'pageview' THEN created_at END) AS oldest_pageview,
+      MIN(CASE WHEN kind IN ('conversion', 'interaction') THEN created_at END) AS oldest_outcome
     FROM analytics_events WHERE organization_id = ?`, [organizationId])
   const missing = await queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) AS total,
       COALESCE(SUM(json_type(e.payload_json, '$.observed') IS NULL), 0) AS observed,
@@ -621,24 +618,14 @@ async function coverageFor(db: DbClient, organizationId: string, ctx: { start: s
       COALESCE(SUM(e.kind = 'pageview' AND json_type(e.payload_json, '$.source_path') IS NULL), 0) AS page_identity,
       COALESCE(SUM(e.kind = 'pageview'), 0) AS pageviews
     FROM analytics_events e WHERE e.organization_id = ? AND e.created_at >= ? AND e.created_at < ?`, [organizationId, ctx.start, ctx.end])
-  const detailComplete = ctx.start >= pageviewDetailFrom
   return {
-    event_detail: {
-      pageview_retention_days: PAGEVIEW_DETAIL_RETENTION_DAYS,
-      pageview_detail_available_from: pageviewDetailFrom,
-      oldest_retained_pageview_at: first?.oldest_pageview_detail ?? null,
-      outcome_and_interaction_retention: 'not expired by the current retention policy',
-      oldest_retained_outcome_or_interaction_at: first?.oldest_outcome_detail ?? null,
+    // Native events are never expired: the history is everything KrabiClaw has collected for the organization.
+    event_history: {
+      oldest_pageview_at: first?.oldest_pageview ?? null,
+      oldest_outcome_or_interaction_at: first?.oldest_outcome ?? null,
     },
-    summaries: { session_and_daily_summary_retention_days: SESSION_AND_SUMMARY_RETENTION_DAYS, available_from: summaryFrom,
-      note: 'Sessions and daily summaries outlive pageview detail. They answer session and daily questions; they are not multidimensional event history.' },
-    requested_range: {
-      start: ctx.start, end: ctx.end,
-      pageview_detail_complete: detailComplete,
-      pageview_detail_unavailable_before: detailComplete ? null : pageviewDetailFrom,
-      unavailable: detailComplete ? null : 'Pageview events older than the detail retention window are not retained: they are unavailable, not zero.',
-      analytics_data_start_at: ctx.analyticsDataStartAt,
-    },
+    summaries: { note: 'Daily summaries are derived from native events for faster reporting; they add nothing the events do not hold and are not a substitute for them.' },
+    requested_range: { start: ctx.start, end: ctx.end, analytics_data_start_at: ctx.analyticsDataStartAt },
     instrumentation: {
       observed_attribution_recorded_from: first?.observed_from ?? null,
       page_identity_recorded_from: first?.page_identity_from ?? null,

@@ -137,27 +137,44 @@ for these metrics.
 `attribution_basis=session_last_touch` reads a session's last touch as of the
 cursor's `as_of` boundary, not as it is now: a session no event has touched
 since the boundary is read from its record, otherwise it is rebuilt from the
-retained pageviews received by then (a session with no touch by then is
-Direct). A touch that arrives between two pages therefore never moves earlier
-events between groups. Pageview detail older than its retention cannot be
-replayed; such a session reads from its record.
+pageviews received by then (a session with no touch by then is Direct). A
+touch that arrives between two pages therefore never moves earlier events
+between groups.
 
 `daily_summaries` (`filters.summary_kind`: `organization_day`, `page_day` or
 `dimension_day`, plus `dimension`/`value`/`path_prefix`) pages completely
-through the retained summaries, including days older than raw pageview detail.
-Each row carries its `summary_kind`, grain and stored metrics
+through the daily summaries, a derived view of the native events kept for fast
+reporting. Each row carries its `summary_kind`, grain and stored metrics
 (`coverage.summary_source` lists them). Nothing is reconstructed into events.
 A summary rewritten after the first page makes the cursor stale and it is
 rejected.
 
 ## Retention and coverage
 
-Retention policy is unchanged: pageview detail 90 days
-(`PAGEVIEW_DETAIL_RETENTION_DAYS`), sessions and daily summaries about 740 days
-(`SESSION_AND_SUMMARY_RETENTION_DAYS`), outcomes and interactions not expired by
-the cleanup. Every query response reports this in `coverage` and marks a range
-reaching past pageview detail as unavailable, not zero. Events recorded before
-a fact existed list it under `missing`.
+Native analytics facts are not aged out. Pageviews, interactions, outcomes and
+sessions stay in D1 for the life of the organization, so `mode=events` reads
+everything KrabiClaw has collected for it, and no scheduled task deletes
+`analytics_events` or session summaries. Data is deleted when the organization
+itself is deleted (its rows cascade), never because it is old. Daily summaries
+are caches derived from those events; they can be rebuilt from them and never
+replace them. Rejecting Google Analytics consent stops the GA copy and nothing
+native.
+
+`coverage` reports the oldest native pageview and outcome/interaction, the
+instrumentation dates (`observed_attribution_recorded_from` and the like), and
+per range the events recorded before a fact existed, which list it under
+`missing` instead of reading as zero.
+
+## Google Analytics pageviews
+
+A page view reaches Google Analytics only after the native pageview was
+accepted. The collector sends the pageview to `/api/analytics/track` and, when
+that request confirms it recorded the event, calls
+`zaraz.track('krabiclaw_native_pageview', { event_id })`. The reconciled Zaraz
+configuration fires the GA4 pageview action on a trigger that matches exactly
+that event, and turns off Zaraz's automatic page-load and single-page-app
+(`historyChange`) pageviews, so an ignored or failed native pageview sends
+nothing and a navigation cannot be counted twice.
 
 ## Attribution
 

@@ -156,13 +156,11 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     const perDay = await mcp(db, ORG, { mode: 'breakdown', ...range, dimensions: ['device'], metrics: ['sessions'], filters: { session_id: S3 } })
     assert.equal(perDay.totals.sessions!.value, 1, 'a session spanning midnight is one distinct session over the range')
 
-    // Coverage states retention without changing it.
+    // Coverage describes the whole native history; nothing is expired.
     const coverage = events.coverage as Record<string, any>
-    assert.equal(coverage.event_detail.pageview_retention_days, 90)
-    assert.equal(coverage.summaries.session_and_daily_summary_retention_days, 740)
-    assert.equal(coverage.requested_range.pageview_detail_complete, true)
-    const old = (await mcp(db, ORG, { mode: 'events', start_date: '2026-01-01', end_date: '2026-01-31' })).coverage as Record<string, any>
-    assert.equal(old.requested_range.pageview_detail_complete, false, 'a range older than the detail window says unavailable, not zero')
+    assert.equal(coverage.event_history.oldest_pageview_at, '2026-09-10T03:00:00.000Z')
+    assert.equal(coverage.requested_range.pageview_detail_complete, undefined)
+    assert.equal(coverage.event_detail, undefined)
 
     // A tenant never reads another tenant's events.
     assert.equal((await mcp(db, OTHER, { mode: 'events', ...range })).rows.length, 0)
@@ -246,8 +244,9 @@ test('native analytics: rates share one population, cursors survive attribution 
     assert.equal((await readSummaries({ summary_kind: 'organization_day' }))[0].metrics.page_views, 5)
     assert.deepEqual((await readSummaries({ summary_kind: 'dimension_day', dimension: 'device' }))
       .map(row => ({ device: row.value, pageViews: row.metrics.page_views })), [{ device: 'Desktop', pageViews: 5 }])
+    // The raw events of that old day are still there, next to the summary of them.
     const oldEvents = await mcp(db, ORG, { mode: 'events', start_date: '2026-06-01', end_date: '2026-06-01' })
-    assert.equal((oldEvents.coverage as any).requested_range.pageview_detail_complete, false)
+    assert.equal(oldEvents.rows.length, 5)
     // A summary rewritten between pages makes the cursor stale instead of skipping rows.
     const firstSummary = await mcp(db, ORG, { mode: 'daily_summaries', start_date: '2026-06-01', end_date: '2026-06-01', filters: { summary_kind: 'page_day' }, limit: 2 })
     await aggregateOrganizationAnalyticsDate(db, ORG, '2026-06-01')

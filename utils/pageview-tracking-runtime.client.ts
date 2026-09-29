@@ -1,9 +1,10 @@
 import type { RouteLocationNormalized } from 'vue-router'
 import { normalizeReferrerHost, readAttributionParams } from '~/utils/analytics-attribution'
 import { isTrackablePath } from '~/utils/pageview-path'
+import { NATIVE_PAGEVIEW_ZARAZ_EVENT } from '~/utils/zaraz-consent'
 
 interface ZarazPageviewApi {
-  spaPageview?: () => void
+  track?: (name: string, properties?: Record<string, unknown>) => void
 }
 
 /**
@@ -98,6 +99,14 @@ export function registerPageviewTracking() {
   }
   const deliver = (after: Promise<boolean>, payload: Record<string, unknown>) =>
     after.then(() => send(payload)).catch(report)
+  // Google Analytics is a destination of the native record: its page view is sent, manually, only
+  // once the collector accepted this exact pageview, and names it by the native event id. An
+  // ignored or failed pageview sends nothing.
+  const deliverPageview = async (after: Promise<boolean>, page: TrackedPage): Promise<boolean> => {
+    const recorded = await deliver(after, page.pageview!)
+    if (recorded) win.zaraz?.track?.(NATIVE_PAGEVIEW_ZARAZ_EVENT, { event_id: page.eventId })
+    return recorded
+  }
 
   // Observed at navigation time: the destination's own query parameters, its path, and the moment.
   // The referrer is the browser's for the first page only; later pages are internal navigations.
@@ -145,7 +154,7 @@ export function registerPageviewTracking() {
   // not stop a later public navigation from being recorded.
   let currentPage = observe(router.currentRoute.value, true)
   remember(currentPage)
-  if (currentPage.pageview) currentPage.pageviewReady = deliver(Promise.resolve(true), currentPage.pageview)
+  if (currentPage.pageview) currentPage.pageviewReady = deliverPageview(Promise.resolve(true), currentPage)
   settleRegistration()
 
   router.afterEach((to, from, failure) => {
@@ -158,8 +167,7 @@ export function registerPageviewTracking() {
     if (nextPage.pageview) {
       // Sent after the previous page's event, so the session exists before this one lands, but with
       // the payload captured now.
-      nextPage.pageviewReady = deliver(previousPage.pageviewReady, nextPage.pageview)
-      win.zaraz?.spaPageview?.()
+      nextPage.pageviewReady = deliverPageview(previousPage.pageviewReady, nextPage)
     }
   })
 

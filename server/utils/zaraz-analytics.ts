@@ -1,6 +1,6 @@
 import { execute, queryAll, queryFirst } from '~/server/db'
 import type { DomainEnv } from '~/server/utils/domains'
-import { ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME, ZARAZ_CONSENT_MODAL_INTRO_HTML } from '~/utils/zaraz-consent'
+import { NATIVE_PAGEVIEW_ZARAZ_EVENT, ZARAZ_ANALYTICS_PURPOSE, ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME, ZARAZ_CONSENT_MODAL_INTRO_HTML } from '~/utils/zaraz-consent'
 
 export interface ZarazEnv extends DomainEnv {
   CLOUDFLARE_API_TOKEN?: string
@@ -78,6 +78,8 @@ const LOCK_STALE_MS = 60_000
 const LOCK_RETRY_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
 const ANALYTICS_KEY_PREFIX = 'ga-'
 const TENANT_KEY_PREFIX = 'ga-tenant-'
+// Not under ANALYTICS_KEY_PREFIX: it is shared by every GA4 tool and outlives any one tenant's.
+const NATIVE_PAGEVIEW_TRIGGER_KEY = 'krabiclaw-native-pageview'
 const GOOGLE_VENDOR_NAME = 'Google Analytics'
 const GOOGLE_VENDOR_POLICY_URL = 'https://policies.google.com/privacy'
 
@@ -201,7 +203,9 @@ function makeHostBlockTrigger(name: string, hostnames: string[]): ZarazTrigger {
 }
 
 function firingTriggersForAction(action: ZarazAction): string[] {
-  if (action.actionType === 'pageview') return ['Pageview']
+  // A page view is sent to GA only when the collector reports that the native pageview was accepted;
+  // Zaraz's own automatic pageview trigger (page load and history changes) never fires it.
+  if (action.actionType === 'pageview') return [NATIVE_PAGEVIEW_TRIGGER_KEY]
   if (action.actionType === 'event') return ['AllTracks']
   return action.firingTriggers?.length ? action.firingTriggers : ['Pageview']
 }
@@ -278,7 +282,16 @@ export function upsertTenantZarazAnalytics(
   config.triggers ||= {}
   config.tools ||= {}
   configureZarazConsentManagement(config)
-  config.historyChange = true
+  // No automatic single-page-application pageviews: the collector sends each one, manually, after the
+  // native record accepted it.
+  config.historyChange = false
+  config.triggers[NATIVE_PAGEVIEW_TRIGGER_KEY] = {
+    name: 'Native pageview accepted',
+    description: 'Fires when the KrabiClaw collector reports a recorded native pageview',
+    loadRules: [{ match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: NATIVE_PAGEVIEW_ZARAZ_EVENT }],
+    excludeRules: [],
+    system: 'pageload',
+  }
   const key = tenantKey(input.organizationId)
   config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.organizationId})`, input.hostnames)
   upsertGa4Tool(config, key, {

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:3c66053934ae182ed52c4400ad01b43ab049d04159e264c82207dbc272041ece",
+  "fingerprint": "sha256:7a4fc70fa98954ada5b7e0d22b1dd93dfadf99271dbf9a62c608c2aaad34bdb2",
   "tools": [
     {
       "name": "append_content_block",
@@ -4993,35 +4993,11 @@
               },
               "outcomeEventsWithoutAttribution": {
                 "type": "number"
-              },
-              "retention": {
-                "properties": {
-                  "pageviewDetailAvailableFrom": {
-                    "type": "string"
-                  },
-                  "pageviewDetailDays": {
-                    "type": "number"
-                  },
-                  "rangeDetailComplete": {
-                    "type": "boolean"
-                  },
-                  "summaryDays": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "pageviewDetailDays",
-                  "pageviewDetailAvailableFrom",
-                  "summaryDays",
-                  "rangeDetailComplete"
-                ],
-                "type": "object"
               }
             },
             "required": [
               "measurementContractStartedAt",
               "outcomeEventsWithoutAttribution",
-              "retention",
               "ga4Delivery"
             ],
             "type": "object"
@@ -10643,7 +10619,7 @@
                 "type": "string"
               },
               "summary_kind": {
-                "description": "daily_summaries only (required): the retained summary grain: one row per day, per day and public page path, or per day and country/city/device/referrer value.",
+                "description": "daily_summaries only (required): the summary grain: one row per day, per day and public page path, or per day and country/city/device/referrer value.",
                 "enum": [
                   "organization_day",
                   "page_day",

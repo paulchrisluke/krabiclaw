@@ -4,9 +4,9 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { recordTenantPageview, updateTenantPageviewDuration, type TenantPageviewInput } from '../../server/utils/pageview-tracking.ts'
-import { aggregateOrganizationAnalyticsDate, cleanupTenantAnalytics, getAnalyticsReport } from '../../server/utils/analytics-report.ts'
+import { aggregateOrganizationAnalyticsDate, getAnalyticsReport } from '../../server/utils/analytics-report.ts'
 
-test('analytics preserves duplicate, attribution, summary and retention semantics on D1', { timeout: 60_000 }, async () => {
+test('analytics preserves duplicate, attribution, summary semantics on D1', { timeout: 60_000 }, async () => {
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'analytics-proof', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
@@ -61,13 +61,10 @@ test('analytics preserves duplicate, attribution, summary and retention semantic
       eventName: 'contact_submit', stage: 'submitted', conversionType: null, events: 1,
       distinctEntities: 1, convertingSessions: 1, nonbrowserEvents: 0, sessionConversionRate: 50,
     }])
-    await cleanupTenantAnalytics(db, new Date('2027-01-06T12:00:00Z'))
-    assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'pageview'").first('count(*)'), 0)
+    // Native facts are never aged out: every pageview, session and outcome is still there.
+    assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'pageview'").first('count(*)'), 4)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_summaries WHERE kind = 'session'").first('count(*)'), 2)
-    assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2027-01-06T12:00:00Z') })).metrics.pageViews, 4)
-    await cleanupTenantAnalytics(db, new Date('2029-01-06T12:00:00Z'))
-    assert.equal(await db.prepare('SELECT count(*) FROM analytics_summaries').first('count(*)'), 0)
-    assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
+    assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2029-01-06T12:00:00Z') })).metrics.pageViews, 4)
   } finally { await runtime.dispose() }
 })

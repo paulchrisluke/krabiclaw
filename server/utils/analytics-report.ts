@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { PAGEVIEW_DETAIL_RETENTION_DAYS, SESSION_AND_SUMMARY_RETENTION_DAYS } from '~/utils/analytics-retention'
 import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
@@ -72,8 +71,6 @@ export interface AnalyticsReport {
     measurementContractStartedAt: string | null
     /** Outcome events with no browser attribution (nonbrowser or attribution unobserved). */
     outcomeEventsWithoutAttribution: number
-    /** The retention policy this report is bound by. Pageview detail expires first; a range that reaches past it is incomplete, not zero. Full event history is available through query_organization_analytics. */
-    retention: { pageviewDetailDays: number; pageviewDetailAvailableFrom: string; summaryDays: number; rangeDetailComplete: boolean }
     /** GA4 delivery outcome of server-delivered events; provider failure is distinct from disabled, disconnected or consent-rejected. */
     ga4Delivery: Array<{ eventName: string; status: string; count: number }>
   }
@@ -226,7 +223,6 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
   if (dates.length === 0) return []
   const rows = await queryAll<AnalyticsSummaryRow>(db, `SELECT kind, date, key, payload_json FROM analytics_summaries
     WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date BETWEEN ? AND ?`, [organizationId, dates[0]!, dates.at(-1)!])
-  const rawRetentionCutoff = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
   const result: DailySlice[] = []
   for (const date of dates) {
     const dayRows = rows.filter(row => row.date === date)
@@ -239,14 +235,13 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
       continue
     }
     const { start, end } = localDateBounds(date, timezone)
-    if (start < rawRetentionCutoff) throw new HTTPError({ statusCode: 500, statusMessage: `Analytics aggregate missing for retained date ${date}` })
     result.push(dailySlice(date, await queryAll<Omit<AnalyticsSummaryRow, 'date'>>(db, daySummariesSql, [organizationId, start, end])))
   }
   return result
 }
 
 interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number }
-type ConversionReport = Pick<AnalyticsReport, 'outcomeAttribution' | 'attributedValue' | 'conversions' | 'values' | 'bookingValue' | 'net' | 'signupCohort'> & { coverage: Omit<AnalyticsReport['coverage'], 'retention'> }
+type ConversionReport = Pick<AnalyticsReport, 'outcomeAttribution' | 'attributedValue' | 'conversions' | 'values' | 'bookingValue' | 'net' | 'signupCohort'> & { coverage: AnalyticsReport['coverage'] }
 
 async function loadConversionReport(db: DbClient, organizationId: string, window: ConversionReportWindow): Promise<ConversionReport> {
   const { start, end, observedEnd, uniqueSessions } = window
@@ -346,11 +341,6 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
       ga4Delivery: deliveryRows.map(row => ({ eventName: String(row.event_name), status: String(row.status), count: n(row.count) })),
     },
   }
-}
-
-function retentionFor(now: Date, rangeStart: string): AnalyticsReport['coverage']['retention'] {
-  const pageviewDetailAvailableFrom = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
-  return { pageviewDetailDays: PAGEVIEW_DETAIL_RETENTION_DAYS, pageviewDetailAvailableFrom, summaryDays: SESSION_AND_SUMMARY_RETENTION_DAYS, rangeDetailComplete: rangeStart >= pageviewDetailAvailableFrom }
 }
 
 function netByCurrency(valueRows: Array<Record<string, unknown>>): AnalyticsReport['net'] {
@@ -453,7 +443,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
       return { source: String(row.source), medium: String(row.medium), campaign: row.campaign ? String(row.campaign) : null, content: row.content ? String(row.content) : null,
         sessions, outcomeEvents: n(row.outcome_events), convertingSessions: n(row.converting), sessionConversionRate: rate(n(row.converting), sessions) }
     }).sort((a, b) => b.sessions - a.sessions),
-    ...{ ...conversionReport, coverage: { ...conversionReport.coverage, retention: retentionFor(now, start) } },
+    ...conversionReport,
     countries: dimensionRows('country').slice(0, 12).map(row => ({ country: row.value, countryCode: row.value, views: row.views, percentOfTotal: percent(row.views) })),
     cities: dimensionRows('city').slice(0, 10).map(row => {
       const [region, countryCode = 'XX'] = row.subvalue.split('|')
@@ -475,27 +465,4 @@ export async function aggregatePreviousLocalDateForAllOrganizations(db: DbClient
     aggregated.push(`${organization.id}:${date}`)
   }
   return aggregated
-}
-
-export async function cleanupTenantAnalytics(db: DbClient, now = new Date()): Promise<number> {
-  const rawCutoff = new Date(now.getTime() - PAGEVIEW_DETAIL_RETENTION_DAYS * 86_400_000).toISOString()
-  const retainedCutoff = new Date(now.getTime() - SESSION_AND_SUMMARY_RETENTION_DAYS * 86_400_000).toISOString()
-  const organizations = await queryAll<{ id: string; timezone: string | null }>(db, `
-    SELECT s.id, json_extract(s.settings_json, '$.config.default_timezone') AS timezone FROM organization s
-  `)
-  const initialResults = await executeBatch(db, [
-    { query: "DELETE FROM analytics_events WHERE kind = 'pageview' AND created_at < ?", params: [rawCutoff] },
-    { query: "DELETE FROM analytics_summaries WHERE kind = 'session' AND (payload_json ->> '$.last_seen_at') < ?", params: [retainedCutoff] },
-  ], { operation: 'clean retained tenant analytics events and sessions' })
-  let changes = initialResults.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0)
-  for (const organization of organizations) {
-    if (!isValidTimezone(organization.timezone)) throw new Error(`Organization ${organization.id} default_timezone is missing or invalid`)
-    const timezone = organization.timezone
-    const retainedDate = addLocalDays(localDateAt(now, timezone), -(SESSION_AND_SUMMARY_RETENTION_DAYS - 1))
-    const results = await executeBatch(db, [
-      { query: "DELETE FROM analytics_summaries WHERE organization_id = ? AND kind IN ('organization_day', 'page_day', 'dimension_day') AND date < ?", params: [organization.id, retainedDate] },
-    ], { operation: `clean retained tenant analytics aggregates for ${organization.id}` })
-    changes += results.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0)
-  }
-  return changes
 }
