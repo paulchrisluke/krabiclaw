@@ -19,7 +19,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 /**
  * A short post: the website document every surface reads and writes.
  *
- * MCP, the dashboard and the importer all go through these functions. A post
+ * MCP and the dashboard all go through these functions. A post
  * is created as a draft, is published only by `publishPost`, and has one
  * route from the moment it exists.
  */
@@ -48,7 +48,6 @@ export interface PostPublicationSummary {
   id: string
   channel: 'facebook' | 'instagram'
   target_id: string
-  origin: 'import' | 'publish'
   state: 'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'
   provider_post_id: string | null
   public_url: string | null
@@ -69,7 +68,7 @@ export interface Post {
   call_to_action: PostCallToAction | null
   status: 'draft' | 'published'
   visibility: 'listed' | 'unlisted'
-  source: 'manual' | 'template' | 'facebook' | 'instagram'
+  source: 'manual' | 'template'
   published_at: string | null
   public_path: string
   canonical_url: string | null
@@ -178,11 +177,10 @@ interface PublicationRow {
   post_id: string
   channel: 'facebook' | 'instagram'
   provider_target_id: string
-  origin: 'import' | 'publish'
   state: PostPublicationSummary['state']
   provider_post_id: string | null
   provider_permalink: string | null
-  payload_hash: string | null
+  payload_hash: string
   error_code: string | null
   error_message: string | null
   published_at: string | null
@@ -190,7 +188,7 @@ interface PublicationRow {
 
 async function loadPublicationRows(db: DbClient, organizationId: string, postIds: string[]) {
   if (!postIds.length) return new Map<string, PublicationRow[]>()
-  const rows = await queryAll<PublicationRow>(db, `SELECT id, post_id, channel, provider_target_id, origin, state, provider_post_id, provider_permalink,
+  const rows = await queryAll<PublicationRow>(db, `SELECT id, post_id, channel, provider_target_id, state, provider_post_id, provider_permalink,
       payload_hash, error_code, error_message, published_at
     FROM post_publications WHERE organization_id = ? AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
   [organizationId, d1JsonStringSet(postIds)])
@@ -225,11 +223,10 @@ async function attachPostFields(db: DbClient, env: CloudflareEnv | null, rows: P
       preview_url: row.status === 'draft' && previewToken ? absoluteUrl(origin, `${publicPath}?${PREVIEW_TOKEN_QUERY}=${encodeURIComponent(previewToken)}`) : null,
       social_image: social.get(row.id)?.social_image ?? null,
       publications: await Promise.all((publications.get(row.id) ?? []).map(async publication => ({
-        id: publication.id, channel: publication.channel, target_id: publication.provider_target_id, origin: publication.origin,
+        id: publication.id, channel: publication.channel, target_id: publication.provider_target_id,
         state: publication.state, provider_post_id: publication.provider_post_id, public_url: publication.provider_permalink,
         code: publication.error_code, message: publication.error_message, published_at: publication.published_at,
-        local_content_changed: publication.origin === 'publish' && publication.payload_hash !== null
-          && publication.payload_hash !== await postPayloadFingerprint(post, { channel: publication.channel, target_id: publication.provider_target_id }),
+        local_content_changed: publication.payload_hash !== await postPayloadFingerprint(post, { channel: publication.channel, target_id: publication.provider_target_id }),
       }))),
     }
   }))
@@ -392,8 +389,7 @@ export async function createPost(
 /**
  * Changes what the caller names. `expected_updated_at` is the caller's own
  * token; nothing reads a fresh one on its behalf. Editing the words, the call
- * to action or the media makes the post the tenant's own (`manual`), so a sync
- * never overwrites it; visibility alone does not.
+ * to action or the media marks the post as authored (`manual`).
  */
 export async function updatePost(
   db: DbClient,
@@ -408,8 +404,7 @@ export async function updatePost(
   if (existing.updated_at !== input.expectedUpdatedAt) throw new HTTPError({ statusCode: 409, statusMessage: 'The post changed since it was read; read it again' })
   const data: PostMutation = parsePostInput(input.changes, 'update')
   if (!Object.keys(data).length) throw new PostValidationError('Name at least one field to change')
-  // A field sent with the value it already has is not a change: it neither
-  // makes an imported post the tenant's own nor waits on a publication.
+  // A field sent with its existing value does not wait on a publication.
   if (data.title !== undefined && data.title === existing.title) delete data.title
   if (data.body !== undefined && data.body === existing.body) delete data.body
   if (data.call_to_action !== undefined && JSON.stringify(data.call_to_action) === JSON.stringify(callToActionOf(existing.metadata_json))) delete data.call_to_action
@@ -449,8 +444,7 @@ export async function updatePost(
 
 /**
  * Deletes the website post. Its external publications are detached, not
- * erased: the provider identities stay so the next sync does not bring back a
- * copy the tenant deleted. The Facebook or Instagram post itself is untouched.
+ * erased: receipts retain what was published. The Facebook or Instagram post itself is untouched.
  */
 export async function deletePost(db: DbClient, organizationId: string, postId: string, actorId: string | null): Promise<boolean> {
   const existing = await readPostRow(db, organizationId, postId)

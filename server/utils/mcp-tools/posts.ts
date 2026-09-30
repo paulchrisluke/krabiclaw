@@ -29,16 +29,40 @@ const socialConnectionObject = {
     connection_revision: { type: ['string', 'null'] },
     supported_formats: { type: 'array', items: { type: 'string' } },
     problems: { type: 'array', items: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } }, required: ['code', 'message'] } },
-    sync: { type: ['object', 'null'], description: 'Import progress: cursor, last completed scan, last success, last error and any publication it is waiting on.' },
+    supported_operations: { type: 'array', items: { type: 'string', enum: ['list', 'read', 'publish', 'delete'] } },
+    deletion_unavailable_reason: { type: ['string', 'null'] },
     connect_url: { type: 'string', description: 'Where a person connects or changes this account in the dashboard.' },
   },
-  required: ['channel', 'connected', 'target_id', 'target_name', 'connection_revision', 'supported_formats', 'problems', 'sync', 'connect_url'],
+  required: ['channel', 'connected', 'target_id', 'target_name', 'connection_revision', 'supported_formats', 'problems', 'supported_operations', 'deletion_unavailable_reason', 'connect_url'],
+}
+
+const channelTargetProperties = {
+  channel: { type: 'string', enum: ['facebook', 'instagram'] },
+  target_id: { type: 'string', description: 'The exact target_id returned by get_social_connections.' },
+  connection_revision: { type: 'string', description: 'The connection_revision returned with that target.' },
+} as const
+const channelTargetRequired = ['channel', 'target_id', 'connection_revision']
+const channelPostObject = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    channel: { type: 'string', enum: ['facebook', 'instagram'] },
+    target_id: { type: 'string' },
+    provider_post_id: { type: 'string', description: 'Native provider identity, not a website post_id.' },
+    body: { type: ['string', 'null'] },
+    public_url: { type: ['string', 'null'] },
+    published_at: { type: 'string' },
+    media: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
+      provider_media_id: { type: ['string', 'null'] }, kind: { type: 'string', enum: ['image', 'video'] },
+      public_url: { type: ['string', 'null'] }, thumbnail_url: { type: ['string', 'null'] },
+    }, required: ['provider_media_id', 'kind', 'public_url', 'thumbnail_url'] } },
+  },
+  required: ['channel', 'target_id', 'provider_post_id', 'body', 'public_url', 'published_at', 'media'],
 }
 
 export const POSTS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_social_connections',
-    description: 'Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), its import progress, and the dashboard URL where a person connects it. Never returns a token.',
+    description: 'Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), the supported channel operations, and the dashboard URL where a person connects it. Never returns a token.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -53,8 +77,35 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     },
   }),
   organizationTool({
+    name: 'list_channel_posts',
+    description: 'Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta\'s cursor; pass it as after for the next page.',
+    domain: 'posts', minimumRole: 'admin', confirmRequired: false,
+    inputSchema: { ...channelTargetProperties, after: { type: 'string' }, limit: { type: 'integer', minimum: 1, maximum: 100, default: 25 } },
+    required: channelTargetRequired,
+    outputSchema: { type: 'object', properties: { posts: { type: 'array', items: channelPostObject }, next_after: { type: ['string', 'null'] } }, required: ['posts', 'next_after'] },
+  }),
+  organizationTool({
+    name: 'get_channel_post',
+    description: 'Read one live native provider post from the explicitly selected connected channel. provider_post_id comes from list_channel_posts; it is not a website post_id. Does not import or change website content.',
+    domain: 'posts', minimumRole: 'admin', confirmRequired: false,
+    inputSchema: { ...channelTargetProperties, provider_post_id: { type: 'string' } },
+    required: [...channelTargetRequired, 'provider_post_id'],
+    outputSchema: { type: 'object', properties: { post: channelPostObject }, required: ['post'] },
+  }),
+  organizationTool({
+    name: 'delete_channel_post',
+    description: 'Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page. Keeps the website post and marks its publication receipt removed. Read get_social_connections and list_channel_posts first. Instagram deletion is unavailable with this app\'s Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.',
+    domain: 'posts', minimumRole: 'admin', confirmRequired: true,
+    inputSchema: { ...channelTargetProperties, provider_post_id: { type: 'string' } },
+    required: [...channelTargetRequired, 'provider_post_id'],
+    outputSchema: { type: 'object', properties: {
+      channel: { type: 'string', enum: ['facebook'] }, target_id: { type: 'string' }, provider_post_id: { type: 'string' }, deleted: { type: 'boolean' },
+      publication: { type: ['object', 'null'], properties: { id: { type: 'string' }, state: { type: 'string', enum: ['removed'] } }, required: ['id', 'state'] },
+    }, required: ['channel', 'target_id', 'provider_post_id', 'deleted', 'publication'] },
+  }),
+  organizationTool({
     name: 'list_posts',
-    description: 'List short posts, newest change first, a page at a time. Pass location_id for one location\'s posts; omit it for all of them.',
+    description: 'List website posts (not live Facebook or Instagram inventory), newest change first, a page at a time. Pass location_id for one location\'s posts; omit it for all of them.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -135,21 +186,8 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
     },
   }),
   organizationTool({
-    name: 'sync_social_posts',
-    description: 'Read the connected Facebook Page and Instagram account now, as the hourly sync does: new posts become website posts with their media, provider-owned copies take Meta\'s changes, and edited or deleted website copies are left alone. Reports per channel whether the scan completed, what it imported, and any error or publication it is waiting on.',
-    domain: 'posts',
-    minimumRole: 'admin',
-    confirmRequired: true,
-    inputSchema: {},
-    outputSchema: {
-      type: 'object',
-      properties: { results: { type: 'array', items: { type: 'object' } } },
-      required: ['results'],
-    },
-  }),
-  organizationTool({
     name: 'delete_post',
-    description: 'Delete a post from the website. Its Facebook and Instagram posts are not deleted, and a later sync does not bring an imported one back. Refused while a publication of it is in progress or unresolved.',
+    description: 'Delete a post from the website. Its Facebook and Instagram posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.',
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: true,

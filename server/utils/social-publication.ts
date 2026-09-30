@@ -8,7 +8,7 @@ import { getPost, postPayloadFingerprint, type Post, type PostMedia } from '~/se
 import { providerCaption } from '~/shared/posts'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import {
-  createUnpublishedPhoto, createUnpublishedVideo, deleteUnpublishedObject, facebookPageToken,
+  createUnpublishedPhoto, createUnpublishedVideo, deletePageObject, facebookPageToken,
   getFacebookPagesConnection, publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
 } from '~/server/utils/facebook-pages'
 import {
@@ -87,18 +87,17 @@ interface ConnectionRead {
   revision: string | null
   status: string | null
   accountId: string | null
-  sync: unknown
 }
 
 async function readConnection(env: CloudflareEnv, organizationId: string, channel: SocialChannel): Promise<ConnectionRead> {
   if (channel === 'facebook') {
     const connection = await getFacebookPagesConnection(env, organizationId)
     return { channel, connected: Boolean(connection), targetId: connection?.page_id ?? null, targetName: connection?.page_name ?? null,
-      revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null, sync: connection?.sync ?? null }
+      revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null }
   }
   const connection = await readInstagramConnection(env, organizationId)
   return { channel, connected: Boolean(connection), targetId: connection?.instagram_user_id ?? null, targetName: connection ? `@${connection.username}` : null,
-    revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null, sync: connection?.sync ?? null }
+    revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null }
 }
 
 const SUPPORTED_FORMATS: Record<SocialChannel, string[]> = {
@@ -109,7 +108,7 @@ const SUPPORTED_FORMATS: Record<SocialChannel, string[]> = {
 /**
  * What the organization can publish to, exactly: each channel's selected
  * target and the revision a publish call must present, what formats it takes,
- * what stands in the way, how its import is doing, and where a person connects
+ * what stands in the way, and where a person connects
  * it. Never a token.
  */
 export async function getSocialConnections(env: CloudflareEnv, organizationId: string, links: { dashboardBase: string }) {
@@ -120,7 +119,7 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
     if (!entitled) problems.push({ code: 'growth_plan_required', message: 'Publishing to Facebook and Instagram requires the Growth plan.' })
     if (!connection.connected) problems.push({ code: 'not_connected', message: `No ${channel === 'facebook' ? 'Facebook Page' : 'Instagram professional account'} is connected.` })
     else if (!connection.accountId || !(await readLinkedAccount(env, connection.accountId))) problems.push({ code: 'account_unlinked', message: `The ${channel} account this connection was made through is no longer linked. Connect it again.` })
-    else if (connection.status === 'error') problems.push({ code: 'connection_error', message: `The last ${channel} sync failed; see sync.last_error.` })
+    else if (connection.status === 'error') problems.push({ code: 'connection_error', message: `The ${channel} connection needs attention. Read or publish to receive the provider's current error.` })
     return {
       channel,
       connected: connection.connected,
@@ -128,12 +127,24 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
       target_name: connection.targetName,
       connection_revision: connection.revision,
       supported_formats: SUPPORTED_FORMATS[channel],
+      supported_operations: channel === 'facebook' ? ['list', 'read', 'publish', 'delete'] : ['list', 'read', 'publish'],
+      deletion_unavailable_reason: channel === 'instagram' ? 'Meta supports media deletion only with Facebook Login; this account uses Instagram Login. Delete it in Instagram.' : null,
       problems,
-      sync: connection.sync,
       connect_url: `${links.dashboardBase}/settings/integrations/${channel}`,
     }
   }))
   return { website: { channel: 'organization' as const, target_id: organizationId, label: 'Website' }, channels }
+}
+
+/** Resolve exactly the connected target named by the caller. No default channel or account. */
+export async function connectedSocialTarget(env: CloudflareEnv, organizationId: string, target: Extract<PublishTarget, { channel: SocialChannel }>) {
+  if (!(await hasOrganizationEntitlement(env, organizationId, 'managed_service'))) throw new HTTPError({ statusCode: 403, statusMessage: 'Channel management requires the Growth plan.' })
+  const connection = await readConnection(env, organizationId, target.channel)
+  if (!connection.connected) throw new HTTPError({ statusCode: 409, statusMessage: `No ${target.channel} account is connected.` })
+  if (connection.targetId !== target.target_id || connection.revision !== target.connection_revision) throw new HTTPError({ statusCode: 409, statusMessage: 'The channel connection changed; read get_social_connections again.' })
+  if (target.channel === 'facebook') return { channel: 'facebook' as const, target: await facebookTargetFor(env, organizationId) }
+  if (!connection.targetName?.startsWith('@') || connection.targetName.length < 2) throw new Error('The Instagram connection has no username. Connect Instagram again.')
+  return { channel: 'instagram' as const, target: await instagramTargetFor(env, organizationId), username: connection.targetName.slice(1) }
 }
 
 // ── Payload validation ────────────────────────────────────────────────────
@@ -199,7 +210,6 @@ interface PublicationRecord {
   provider_app_id: string
   provider_subject_id: string
   provider_target_id: string
-  origin: 'import' | 'publish'
   state: 'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'
   provider_post_id: string | null
   provider_permalink: string | null
@@ -360,7 +370,7 @@ async function publishToFacebook(context: ChannelContext, target: FacebookPageTa
   // them as `attached_media` afterwards — so the real post gets new ones.
   if (handles.post_id) {
     try {
-      await deleteUnpublishedObject(target, handles.post_id, deadline)
+      await deletePageObject(target, handles.post_id, deadline)
     } catch (error) {
       // Already gone is the state this wants.
       if (!(error instanceof MetaGraphError && error.objectMissing)) throw error
@@ -530,7 +540,7 @@ async function discardPreparation(env: CloudflareEnv, organizationId: string, pu
   const ids = [handles.post_id, handles.video_id, ...(handles.photo_ids ?? [])].filter((id): id is string => Boolean(id))
   if (!ids.length) return
   const target = await facebookTargetFor(env, organizationId)
-  for (const id of ids) await deleteUnpublishedObject(target, id, deadline)
+  for (const id of ids) await deletePageObject(target, id, deadline)
 }
 
 /** Claims the publication row for this invocation, or says why it cannot. */
@@ -545,8 +555,8 @@ async function claimPublication(
     try {
       // A batch, so the unique index's refusal reaches here as D1 states it.
       await executeBatch(db, [{ query: `INSERT INTO post_publications (id, organization_id, post_id, channel, provider_app_id, provider_subject_id, provider_target_id,
-          origin, state, payload_hash, attempt_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'publish', 'preparing', ?, ?, ?, ?)`,
+          state, payload_hash, attempt_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'preparing', ?, ?, ?, ?)`,
       params: [id, organizationId, post.id, target.channel, identity.appId, identity.subjectId, target.target_id, payloadHash, attemptId, nowIso(), nowIso()] }])
     } catch (error) {
       if (!/UNIQUE constraint failed/.test(messageOf(error))) throw error

@@ -67,27 +67,24 @@ CREATE TABLE `analytics_events` (
 	`duration_seconds` integer,
 	`payload_json` text NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`received_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`location_id`) REFERENCES `business_locations`(`id`) ON UPDATE no action ON DELETE set null,
-	CONSTRAINT "analytics_events_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (received_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', received_at, '+0 days') IS received_at)),
+	CONSTRAINT "analytics_events_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at)),
 	CONSTRAINT "analytics_events_payload_check" CHECK(json_valid(payload_json) AND json_type(payload_json) IS 'object'),
-	CONSTRAINT "analytics_events_shape_check" CHECK((kind = 'pageview' AND page_path IS NOT NULL) OR (kind IN ('conversion', 'interaction') AND organization_id IS NOT NULL AND duration_seconds IS NULL
+	CONSTRAINT "analytics_events_shape_check" CHECK((kind = 'pageview' AND page_path IS NOT NULL) OR (kind = 'conversion' AND organization_id IS NOT NULL AND session_id IS NOT NULL AND visitor_id IS NOT NULL AND duration_seconds IS NULL
     AND json_type(payload_json, '$.event_name') IS 'text' AND length(payload_json ->> '$.event_name') BETWEEN 1 AND 64
     AND (payload_json ->> '$.event_name') GLOB '[a-z]*' AND (payload_json ->> '$.event_name') NOT GLOB '*[^a-z0-9_]*'
-    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff', 'completed', 'viewed', 'started', 'occurred')
-    AND ((session_id IS NULL) = (visitor_id IS NULL))
-    AND ((json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text' AND json_type(payload_json, '$.attributed_at') IS 'text')
-      OR (json_type(payload_json, '$.attribution') IS 'null' AND json_type(payload_json, '$.attributed_at') IS 'null'))))
+    AND json_type(payload_json, '$.stage') IS 'text' AND (payload_json ->> '$.stage') IN ('schedule_navigation', 'external_booking_handoff', 'submitted', 'external_handoff')
+    AND json_type(payload_json, '$.attribution.source') IS 'text' AND json_type(payload_json, '$.attribution.medium') IS 'text'
+    AND json_type(payload_json, '$.attributed_at') IS 'text'))
 );
 --> statement-breakpoint
 CREATE INDEX `analytics_events_org_kind_created_idx` ON `analytics_events` (`organization_id`,`kind`,`created_at`);--> statement-breakpoint
-CREATE INDEX `analytics_events_org_received_idx` ON `analytics_events` (`organization_id`,`received_at`);--> statement-breakpoint
 CREATE INDEX `analytics_events_org_session_idx` ON `analytics_events` (`organization_id`,`kind`,`session_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_org_visitor_idx` ON `analytics_events` (`organization_id`,`kind`,`visitor_id`);--> statement-breakpoint
 CREATE INDEX `analytics_events_conversion_name_idx` ON `analytics_events` (`kind`,(payload_json ->> '$.event_name'),`created_at`);--> statement-breakpoint
-CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`organization_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind IN ('conversion', 'interaction');--> statement-breakpoint
-CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit', 'sign_up', 'onboarding_complete', 'purchase', 'refund');--> statement-breakpoint
+CREATE INDEX `analytics_events_conversion_entity_idx` ON `analytics_events` (`organization_id`,(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion';--> statement-breakpoint
+CREATE UNIQUE INDEX `analytics_events_conversion_entity_unique` ON `analytics_events` (`organization_id`,(payload_json ->> '$.event_name'),(payload_json ->> '$.entity_type'),(payload_json ->> '$.entity_id')) WHERE kind = 'conversion' AND (payload_json ->> '$.entity_type') IS NOT NULL AND (payload_json ->> '$.entity_id') IS NOT NULL AND (payload_json ->> '$.event_name') IN ('contact_submit', 'reservation_submit', 'booking_submit');--> statement-breakpoint
 CREATE TABLE `analytics_summaries` (
 	`id` text PRIMARY KEY NOT NULL,
 	`kind` text NOT NULL,
@@ -123,49 +120,6 @@ CREATE UNIQUE INDEX `analytics_summaries_grain_unique` ON `analytics_summaries` 
 CREATE INDEX `analytics_summaries_session_started_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
 CREATE INDEX `analytics_summaries_session_seen_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.last_seen_at')) WHERE kind = 'session';--> statement-breakpoint
 CREATE INDEX `analytics_summaries_session_visitor_idx` ON `analytics_summaries` (`organization_id`,(payload_json ->> '$.visitor_id'),(payload_json ->> '$.started_at')) WHERE kind = 'session';--> statement-breakpoint
-CREATE TABLE `article_categories` (
-	`id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`collection` text NOT NULL,
-	`name` text NOT NULL,
-	`slug` text NOT NULL,
-	`description` text,
-	`parent_id` text,
-	`sort_order` integer DEFAULT 0 NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`created_by` text NOT NULL,
-	`updated_by` text NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`parent_id`) REFERENCES `article_categories`(`id`) ON UPDATE no action ON DELETE no action,
-	CONSTRAINT "article_categories_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "article_categories_collection_check" CHECK(collection IN ('blog', 'docs')),
-	CONSTRAINT "article_categories_name_not_blank_check" CHECK(trim(name) <> ''),
-	CONSTRAINT "article_categories_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
-	CONSTRAINT "article_categories_sort_order_check" CHECK(sort_order >= 0)
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `article_categories_slug_unique` ON `article_categories` (`organization_id`,`collection`,`slug`);--> statement-breakpoint
-CREATE UNIQUE INDEX `article_categories_name_unique` ON `article_categories` (`organization_id`,`collection`,lower("name"));--> statement-breakpoint
-CREATE INDEX `article_categories_org_sort_idx` ON `article_categories` (`organization_id`,`collection`,`sort_order`);--> statement-breakpoint
-CREATE INDEX `article_categories_parent_idx` ON `article_categories` (`parent_id`,`sort_order`);--> statement-breakpoint
-CREATE UNIQUE INDEX `article_categories_org_id_unique` ON `article_categories` (`organization_id`,`id`);--> statement-breakpoint
-CREATE TABLE `article_category_articles` (
-	`article_id` text PRIMARY KEY NOT NULL,
-	`organization_id` text NOT NULL,
-	`category_id` text NOT NULL,
-	`article_row_role` text DEFAULT 'root' NOT NULL,
-	`article_kind` text DEFAULT 'article' NOT NULL,
-	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`,`category_id`) REFERENCES `article_categories`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
-	FOREIGN KEY (`organization_id`,`article_id`,`article_row_role`,`article_kind`) REFERENCES `content_documents`(`organization_id`,`id`,`row_role`,`kind`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "article_category_articles_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
-	CONSTRAINT "article_category_articles_constants_check" CHECK(article_row_role = 'root' AND article_kind = 'article')
-);
---> statement-breakpoint
-CREATE INDEX `article_category_articles_category_idx` ON `article_category_articles` (`category_id`);--> statement-breakpoint
 CREATE TABLE `bookings` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -370,7 +324,7 @@ CREATE TABLE `content_documents` (
 	CONSTRAINT "content_documents_social_lifecycle_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR ((status = 'draft' AND published_at IS NULL) OR (status = 'published' AND published_at IS NOT NULL))),
 	CONSTRAINT "content_documents_article_lifecycle_check" CHECK(kind <> 'article' OR row_role <> 'root' OR status <> 'published' OR published_at IS NOT NULL),
 	CONSTRAINT "content_documents_copy_required_check" CHECK(row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind NOT IN ('article','social_post') OR slug IS NOT NULL))),
-	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1)
+	CONSTRAINT "content_documents_social_source_check" CHECK(kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1)
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `content_documents_product_root_unique` ON `content_documents` (`organization_id`,`product_id`) WHERE row_role = 'root' AND product_id IS NOT NULL;--> statement-breakpoint
@@ -547,15 +501,18 @@ CREATE TABLE `media_assets` (
 	`category` text,
 	`status` text DEFAULT 'active' NOT NULL,
 	`created_by_user_id` text,
+	`origin_publication_id` text,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`created_by_user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`organization_id`,`origin_publication_id`) REFERENCES `post_publications`(`organization_id`,`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "media_assets_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "media_assets_video_thumbnail_check" CHECK(kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)),
 	CONSTRAINT "media_assets_category_check" CHECK(category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog'))
 );
 --> statement-breakpoint
+CREATE INDEX `media_assets_origin_publication_idx` ON `media_assets` (`organization_id`,`origin_publication_id`) WHERE origin_publication_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `media_assets_org_id_unique` ON `media_assets` (`organization_id`,`id`);--> statement-breakpoint
 CREATE TABLE `media_placements` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -759,7 +716,7 @@ CREATE TABLE `onboarding_drafts` (
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE set null,
 	CONSTRAINT "onboarding_drafts_instants_check" CHECK((committed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', committed_at, '+0 days') IS committed_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "onboarding_drafts_payload_json_check" CHECK(payload_json IS NULL OR (json_valid(payload_json) AND json_type(payload_json) IS 'object'))
 );
@@ -940,11 +897,12 @@ CREATE TABLE `post_publications` (
 	`provider_app_id` text NOT NULL,
 	`provider_subject_id` text NOT NULL,
 	`provider_target_id` text NOT NULL,
+	`origin` text NOT NULL,
 	`state` text NOT NULL,
 	`provider_post_id` text,
 	`provider_permalink` text,
 	`provider_handles_json` text DEFAULT '{}' NOT NULL,
-	`payload_hash` text NOT NULL,
+	`payload_hash` text,
 	`attempt_id` text,
 	`error_code` text,
 	`error_message` text,
@@ -956,17 +914,20 @@ CREATE TABLE `post_publications` (
 	CONSTRAINT "post_publications_instants_check" CHECK((published_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', published_at, '+0 days') IS published_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "post_publications_constants_check" CHECK(post_row_role = 'root' AND post_kind = 'social_post'),
 	CONSTRAINT "post_publications_channel_check" CHECK(channel IN ('facebook', 'instagram')),
+	CONSTRAINT "post_publications_origin_check" CHECK(origin IN ('import', 'publish')),
 	CONSTRAINT "post_publications_state_check" CHECK(state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')),
 	CONSTRAINT "post_publications_identity_check" CHECK(length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)),
 	CONSTRAINT "post_publications_handles_check" CHECK(json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'),
 	CONSTRAINT "post_publications_permalink_check" CHECK(provider_permalink IS NULL OR provider_permalink LIKE 'https://%'),
 	CONSTRAINT "post_publications_published_check" CHECK(state NOT IN ('published', 'removed') OR (published_at IS NOT NULL AND (provider_post_id IS NOT NULL OR (channel = 'instagram' AND json_type(provider_handles_json, '$.container_id') IS 'text')))),
 	CONSTRAINT "post_publications_failed_check" CHECK((state IN ('failed', 'unknown')) = (error_code IS NOT NULL)),
-	CONSTRAINT "post_publications_attempt_check" CHECK(attempt_id IS NULL OR state IN ('preparing', 'publishing'))
+	CONSTRAINT "post_publications_attempt_check" CHECK(attempt_id IS NULL OR state IN ('preparing', 'publishing')),
+	CONSTRAINT "post_publications_origin_shape_check" CHECK((origin = 'publish' AND payload_hash IS NOT NULL) OR (origin = 'import' AND provider_post_id IS NOT NULL AND state IN ('published', 'removed') AND attempt_id IS NULL))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `post_publications_post_channel_unique` ON `post_publications` (`organization_id`,`post_id`,`channel`) WHERE post_id IS NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `post_publications_provider_post_unique` ON `post_publications` (`organization_id`,`channel`,`provider_app_id`,`provider_post_id`) WHERE provider_post_id IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX `post_publications_import_post_unique` ON `post_publications` (`organization_id`,`post_id`) WHERE origin = 'import' AND post_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `post_publications_subject_idx` ON `post_publications` (`channel`,`provider_app_id`,`provider_subject_id`);--> statement-breakpoint
 CREATE INDEX `post_publications_target_state_idx` ON `post_publications` (`organization_id`,`channel`,`provider_target_id`,`state`);--> statement-breakpoint
 CREATE UNIQUE INDEX `post_publications_org_id_unique` ON `post_publications` (`organization_id`,`id`);--> statement-breakpoint
@@ -1512,7 +1473,6 @@ CREATE TABLE `stripe_ga4_subscription_intents` (
 	`user_id` text NOT NULL,
 	`stripe_subscription_id` text,
 	`action` text NOT NULL,
-	`attribution_json` text,
 	`client_id` text,
 	`session_id` text,
 	`session_captured_at` integer,
@@ -1529,7 +1489,6 @@ CREATE TABLE `stripe_ga4_subscription_intents` (
 	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
 	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "stripe_ga4_subscription_intents_attribution_check" CHECK(attribution_json IS NULL OR (json_valid(attribution_json) AND json_type(attribution_json) IS 'object')),
 	CONSTRAINT "stripe_ga4_subscription_intents_instants_check" CHECK((lifecycle_sent_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', lifecycle_sent_at, '+0 days') IS lifecycle_sent_at) AND (consumed_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', consumed_at, '+0 days') IS consumed_at) AND (expires_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', expires_at, '+0 days') IS expires_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at))
 );
 --> statement-breakpoint

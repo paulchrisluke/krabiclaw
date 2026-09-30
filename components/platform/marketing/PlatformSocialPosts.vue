@@ -19,7 +19,7 @@
       </div>
 
       <ul class="kc-social__grid">
-        <li v-for="(post, index) in view.posts" :key="post.id" :class="['kc-social__post', index === 0 && 'kc-social__post--lead']">
+        <li v-for="post in view.posts" :key="post.id" class="kc-social__post">
           <button type="button" class="kc-social__open" :aria-label="post.title || post.body || undefined" @click="open(post.id)">
             <span class="kc-social__frame">
               <template v-if="post.media[0] && mediaStillUrl(post.media[0])">
@@ -88,7 +88,7 @@ function open(postId: string) {
 }
 
 .kc-social__inner {
-  width: min(100% - clamp(2rem, 6vw, 6rem), 118rem);
+  width: min(100% - clamp(2rem, 6vw, 6rem), 80rem);
   margin: 0 auto;
 }
 
@@ -128,17 +128,14 @@ function open(postId: string) {
 
 .kc-social__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.5rem, 3vw, 3rem);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.kc-social__post--lead {
-  grid-column: span 2;
-  grid-row: span 2;
-}
+
 
 .kc-social__open {
   display: block;
@@ -152,7 +149,7 @@ function open(postId: string) {
 .kc-social__frame {
   position: relative;
   display: block;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   border-radius: 1rem;
   background: var(--ui-bg-elevated);
@@ -161,7 +158,7 @@ function open(postId: string) {
 .kc-social__frame img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   transition: transform 0.5s ease;
 }
 
@@ -225,11 +222,8 @@ function open(postId: string) {
 
 @media (max-width: 767px) {
   .kc-social__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
-  .kc-social__post--lead {
-    grid-row: auto;
-  }
 }
 </style>

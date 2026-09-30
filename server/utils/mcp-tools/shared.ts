@@ -401,7 +401,6 @@ const postPublicationObject = {
     id: { type: 'string', description: 'The publication_id reconcile_post_publication takes.' },
     channel: { type: 'string', enum: ['facebook', 'instagram'] },
     target_id: { type: 'string' },
-    origin: { type: 'string', enum: ['import', 'publish'] },
     state: { type: 'string', enum: ['preparing', 'publishing', 'published', 'failed', 'unknown', 'removed'] },
     provider_post_id: { type: ['string', 'null'] },
     public_url: { type: ['string', 'null'], description: 'The provider\'s own permalink, when it returned one.' },
@@ -410,7 +409,7 @@ const postPublicationObject = {
     published_at: { type: ['string', 'null'] },
     local_content_changed: { type: 'boolean', description: 'The website copy changed after this was sent. The external post was not edited.' },
   },
-  required: ['id', 'channel', 'target_id', 'origin', 'state', 'provider_post_id', 'public_url', 'code', 'message', 'published_at', 'local_content_changed'],
+  required: ['id', 'channel', 'target_id', 'state', 'provider_post_id', 'public_url', 'code', 'message', 'published_at', 'local_content_changed'],
   additionalProperties: false,
 }
 
@@ -426,7 +425,7 @@ export const postObject = {
     call_to_action: { anyOf: [{ type: 'object', properties: { label: { type: 'string' }, url: { type: 'string' } }, required: ['label', 'url'], additionalProperties: false }, { type: 'null' }] },
     status: { type: 'string', enum: ['draft', 'published'] },
     visibility: { type: 'string', enum: ['listed', 'unlisted'] },
-    source: { type: 'string', enum: ['manual', 'template', 'facebook', 'instagram'], description: 'Who owns the words: the organization, or the provider it was imported from until someone edits it.' },
+    source: { type: 'string', enum: ['manual', 'template'], description: 'The organization authored this website post or created it from a template.' },
     published_at: { type: ['string', 'null'] },
     public_path: { type: 'string' },
     canonical_url: { type: ['string', 'null'] },
@@ -899,9 +898,9 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
   reconcile_post_publication: W,
-  // Reads Meta into website posts: it creates them, and updates or unpublishes
-  // provider-owned copies when Meta's changed.
-  sync_social_posts: D,
+  list_channel_posts: { ...R, openWorldHint: true },
+  get_channel_post: { ...R, openWorldHint: true },
+  delete_channel_post: D,
   list_organization_locales: R,
   list_organization_qa: R,
   list_organization_reviews: R,

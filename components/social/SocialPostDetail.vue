@@ -16,7 +16,7 @@
 
     <div :class="['overflow-hidden rounded-[calc(var(--ui-radius)*3)] border border-default bg-default', post.media.length ? 'lg:grid lg:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.85fr)]' : 'mx-auto max-w-3xl']">
       <section v-if="post.media.length" class="min-w-0 bg-black" :aria-label="t('social_posts.media_label', { count: post.media.length })">
-        <SocialPostMedia :media="post.media" fit="contain" eager frame-class="h-[360px] sm:h-[520px] lg:h-[640px]" />
+        <SocialPostMedia :media="post.media" :title="post.title ?? undefined" :description="post.body ?? undefined" fit="contain" eager frame-class="h-[360px] sm:h-[520px] lg:h-[640px]" />
       </section>
 
       <section class="flex min-w-0 flex-col px-5 py-6 sm:px-7 sm:py-8">

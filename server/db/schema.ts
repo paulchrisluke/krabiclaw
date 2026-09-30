@@ -238,21 +238,9 @@ export const media_assets = sqliteTable("media_assets", {
 	category: text().$type<MediaCategory>(),
 	status: text().$type<'pending' | 'active' | 'deleted' | 'failed'>().default("active").notNull(),
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	// The provider publication this asset was imported from, and its generated
-	// derivatives. Null for everything the tenant uploaded or generated, even
-	// when it was later sent to Facebook or Instagram: an outbound post uses
-	// the tenant's media, it does not make that media the provider's. This is
-	// what a Meta data-deletion request erases by, instead of guessing from
-	// which documents a placement happens to sit on.
-	origin_publication_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	// NO ACTION: the organization's cascade removes both rows in one statement,
-	// and a standalone publication delete is refused while an asset still
-	// names it — erasure detaches or deletes the media first.
-	foreignKey({ columns: [table.organization_id, table.origin_publication_id], foreignColumns: [post_publications.organization_id, post_publications.id], name: "media_assets_origin_publication_fk" }).onDelete("no action"),
-	index("media_assets_origin_publication_idx").on(table.organization_id, table.origin_publication_id).where(sql`origin_publication_id IS NOT NULL`),
 	check("media_assets_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	check("media_assets_video_thumbnail_check", sql`kind <> 'video' OR (thumbnail_url IS NOT NULL AND length(trim(thumbnail_url)) > 0)`),
 	// The subject vocabulary lived only in this file's `$type` and in the MCP
@@ -1977,21 +1965,16 @@ export const content_documents = sqliteTable("content_documents", {
 	// draft has an address before it has words. The caption itself is optional:
 	// an empty draft is a draft, and publication decides what is publishable.
 	check("content_documents_copy_required_check", sql`row_role <> 'root' OR ((kind NOT IN ('page','article','qa') OR title IS NOT NULL) AND (kind NOT IN ('article','social_post') OR slug IS NOT NULL))`),
-	// Who owns a social post's words: the tenant (`manual`, `template`) or the
-	// provider it was imported from, until the tenant edits it.
-	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template','facebook','instagram')) IS 1`),
+	// Website social posts are explicitly authored by the organization.
+	check("content_documents_social_source_check", sql`kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1`),
 ]);
 
 // One local social post and one actual Facebook or Instagram object.
-// Row meaning: this post was published to, or imported from, this provider
+// Row meaning: this post was published to this provider
 //   target, and this is what the provider has said about it. It is not a job
 //   queue and not a delivery log: there is one row per post and channel, and
 //   it carries the provider's identifiers, never its credentials. Tokens stay
 //   on the Better Auth account that `provider_subject_id` names.
-// `origin` is how the association began and never changes: an `import` stays
-//   an import after the tenant edits the local copy, which is what a Meta
-//   data-deletion request erases by. Who owns the words is the document's
-//   `source`, a different fact.
 // `state`: `preparing` holds native containers/uploads that are not public;
 //   `publishing` is committed immediately before the irreversible final call,
 //   so a crash after it reads `unknown`, never a retryable failure; `failed`
@@ -2000,9 +1983,8 @@ export const content_documents = sqliteTable("content_documents", {
 // `attempt_id` fences one invocation's updates; a preparation claim older
 //   than a minute may be taken over by compare-and-set.
 // Deletion: a local post's deletion sets `post_id` NULL in the same batch and
-//   keeps the provider identity, so the next sync does not resurrect a copy
-//   the tenant deleted. The organization's cascade removes the rest.
-// Read/write: server/utils/social-publication.ts and server/utils/social-sync.ts.
+//   retains the publication receipt independently of the website document. The organization's cascade removes the rest.
+// Read/write: server/utils/social-publication.ts.
 export const post_publications = sqliteTable("post_publications", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
@@ -2015,12 +1997,11 @@ export const post_publications = sqliteTable("post_publications", {
 	provider_app_id: text().notNull(),
 	provider_subject_id: text().notNull(),
 	provider_target_id: text().notNull(),
-	origin: text().$type<'import' | 'publish'>().notNull(),
 	state: text().$type<'preparing' | 'publishing' | 'published' | 'failed' | 'unknown' | 'removed'>().notNull(),
 	provider_post_id: text(),
 	provider_permalink: text(),
 	provider_handles_json: text().default("{}").notNull(),
-	payload_hash: text(),
+	payload_hash: text().notNull(),
 	attempt_id: text(),
 	error_code: text(),
 	error_message: text(),
@@ -2035,12 +2016,10 @@ export const post_publications = sqliteTable("post_publications", {
 	unique("post_publications_org_id_unique").on(table.organization_id, table.id),
 	uniqueIndex("post_publications_post_channel_unique").on(table.organization_id, table.post_id, table.channel).where(sql`post_id IS NOT NULL`),
 	uniqueIndex("post_publications_provider_post_unique").on(table.organization_id, table.channel, table.provider_app_id, table.provider_post_id).where(sql`provider_post_id IS NOT NULL`),
-	uniqueIndex("post_publications_import_post_unique").on(table.organization_id, table.post_id).where(sql`origin = 'import' AND post_id IS NOT NULL`),
 	index("post_publications_subject_idx").on(table.channel, table.provider_app_id, table.provider_subject_id),
 	index("post_publications_target_state_idx").on(table.organization_id, table.channel, table.provider_target_id, table.state),
 	check("post_publications_constants_check", sql`post_row_role = 'root' AND post_kind = 'social_post'`),
 	check("post_publications_channel_check", sql`channel IN ('facebook', 'instagram')`),
-	check("post_publications_origin_check", sql`origin IN ('import', 'publish')`),
 	check("post_publications_state_check", sql`state IN ('preparing', 'publishing', 'published', 'failed', 'unknown', 'removed')`),
 	check("post_publications_identity_check", sql`length(trim(provider_app_id)) > 0 AND length(trim(provider_subject_id)) > 0 AND length(trim(provider_target_id)) > 0 AND (provider_post_id IS NULL OR length(trim(provider_post_id)) > 0)`),
 	check("post_publications_handles_check", sql`json_valid(provider_handles_json) AND json_type(provider_handles_json) IS 'object'`),
@@ -2050,7 +2029,6 @@ export const post_publications = sqliteTable("post_publications", {
 	check("post_publications_published_check", sql`state NOT IN ('published', 'removed') OR (published_at IS NOT NULL AND (provider_post_id IS NOT NULL OR (channel = 'instagram' AND json_type(provider_handles_json, '$.container_id') IS 'text')))`),
 	check("post_publications_failed_check", sql`(state IN ('failed', 'unknown')) = (error_code IS NOT NULL)`),
 	check("post_publications_attempt_check", sql`attempt_id IS NULL OR state IN ('preparing', 'publishing')`),
-	check("post_publications_origin_shape_check", sql`(origin = 'publish' AND payload_hash IS NOT NULL) OR (origin = 'import' AND provider_post_id IS NOT NULL AND state IN ('published', 'removed') AND attempt_id IS NULL)`),
 ]);
 
 export const resource_localizations = sqliteTable("resource_localizations", {

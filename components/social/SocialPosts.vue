@@ -22,6 +22,8 @@
           <SocialPostMedia
             v-if="post.media.length"
             :media="post.media"
+            :title="post.title ?? undefined"
+            :description="post.body ?? undefined"
             :eager="index === 0 && !block"
             :frame-class="`${index === 0 ? 'aspect-video' : 'aspect-square'} overflow-hidden rounded-[calc(var(--ui-radius)*2)] bg-elevated`"
           />

@@ -49,50 +49,27 @@ export interface GoogleSearchConsoleIntegration {
   updated_at: string
 }
 
-/**
- * Where a Facebook or Instagram import has got to, on the integration it
- * belongs to. Only Meta's own cursor is kept — never the token-bearing `next`
- * URL — and a new selection (a new `revision`) starts again from the head.
- */
-export interface SocialSyncProgress {
-  /** The connection revision this progress was made for. */
-  revision: string
-  target_id: string
-  /** Meta's `after` cursor into the history walk; null at the head. */
-  cursor: string | null
-  /** When the current full walk began; unseen known posts are checked at its end. */
-  cycle_started_at: string | null
-  last_completed_scan_at: string | null
-  last_success_at: string | null
-  last_error: string | null
-  last_error_item: string | null
-  /** An outbound publication to this target whose identity is unresolved; new imports wait for it. */
-  blocked_by_publication_id: string | null
-}
-
 export interface FacebookIntegration {
   revision: string
-  /** The Better Auth Facebook account whose Page access publishes and syncs. */
+  /** The Better Auth Facebook account whose Page access manages posts. */
   account_id: string
   page_id: string
   page_name: string
   status: 'active' | 'disabled' | 'error'
   created_at: string
   updated_at: string
-  sync?: SocialSyncProgress | null
 }
 
 export interface InstagramIntegration {
   revision: string
-  /** The Better Auth Instagram account publishing and sync read their token through. */
+  /** The Better Auth Instagram account post management reads its token through. */
   account_id: string
-  /** The professional account id publishing and sync address. */
+  /** The professional account id post management addresses. */
   instagram_user_id: string
   username: string
   status: 'active' | 'disabled' | 'error'
   created_at: string
   updated_at: string
-  sync?: SocialSyncProgress | null
 }
 
 export interface OrganizationIntegrations {

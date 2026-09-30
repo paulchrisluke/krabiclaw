@@ -56,10 +56,12 @@
           >
 
           <!-- Bottom caption gradient -->
-          <div class="absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pb-8 pt-40">
-            <slot name="caption" :item="item" :index="i">
-              <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
-            </slot>
+          <div class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pt-40" :class="item.kind === 'video' ? 'pb-20' : 'pb-8'">
+            <div class="pointer-events-auto">
+              <slot name="caption" :item="item" :index="i">
+                <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
+              </slot>
+            </div>
           </div>
         </section>
       </div>
