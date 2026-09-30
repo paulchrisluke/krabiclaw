@@ -18,11 +18,11 @@
 
         <p v-if="body" class="kc-media-feature__body">
           <template v-for="(part, index) in bodyParts" :key="index">
-            <NuxtLink v-if="part.link" :to="url!" class="kc-media-feature__link">{{ part.text }}</NuxtLink>
+            <NuxtLink v-if="part.link" :to="route(url!)" class="kc-media-feature__link">{{ part.text }}</NuxtLink>
             <template v-else>{{ part.text }}</template>
           </template>
         </p>
-        <NuxtLink v-if="label && url && !linkInBody" :to="url" class="kc-media-feature__link">{{ label }}</NuxtLink>
+        <NuxtLink v-if="label && url && !linkInBody" :to="route(url)" class="kc-media-feature__link">{{ label }}</NuxtLink>
       </div>
 
       <div class="kc-media-feature__media">
@@ -53,10 +53,12 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockMedia, blockTextOrNull } from '~/utils/tenant-page-block-data'
+import { blockMedia, blockTextOrNull, isInternalRoute } from '~/utils/tenant-page-block-data'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const { localePath } = useI18n()
+function route(url: string) { return isInternalRoute(url) ? localePath(url) : url }
 
 const CLIENTS = [
   { name: 'ChatGPT', icon: 'simple-icons:openai', color: '#000000' },

@@ -24,7 +24,7 @@
         </li>
       </ul>
       <div v-if="ctaLabel && ctaUrl" class="kc-picture-cards__actions">
-        <NuxtLink :to="ctaUrl" class="kc-picture-cards__cta">{{ ctaLabel }}</NuxtLink>
+        <NuxtLink :to="route(ctaUrl)" class="kc-picture-cards__cta">{{ ctaLabel }}</NuxtLink>
       </div>
     </div>
   </section>
@@ -131,7 +131,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockTextOrNull, blockRecords, blockStrings } from '~/utils/tenant-page-block-data'
+import { blockText, blockTextOrNull, blockRecords, blockStrings, isInternalRoute } from '~/utils/tenant-page-block-data'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
@@ -173,6 +173,8 @@ const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.dat
 })).filter(item => item.title))
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
 const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
+const { localePath } = useI18n()
+function route(url: string) { return isInternalRoute(url) ? localePath(url) : url }
 
 function itemImage(index: number) {
   const media = props.block.media.find(asset => asset.slot === `items.${index}.image`)
