@@ -29,6 +29,7 @@ export type TenantPageBlockType =
   | 'comparison'
   | 'stat_grid'
   | 'workflow_grid'
+  | 'showcase'
   | 'video_feature'
   | 'media_text'
   | 'contact_form'
@@ -363,6 +364,21 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         prompt: prose('What to ask'),
         description: prose('What happens'),
         icon: { kind: 'enum', label: 'Icon', translatable: false, section: 'icon' },
+      },
+    },
+  }),
+
+  // Statements that take turns, each shown by its own three pictures: a wide
+  // one, a tall one and a wide one. The pictures are the block's placements at
+  // `items.<index>.left`, `.center` and `.right`.
+  showcase: blockDefinitionWithMetadata('showcase', 'Showcase', 'Statements that take turns, each with three pictures.', ALL_RECIPES, {
+    items: {
+      kind: 'list', label: 'Statements', section: 'items',
+      of: {
+        title: text('Statement', { required: true }),
+        left: { kind: 'media', label: 'Left picture (wide)', translatable: false, section: 'pictures', slot: 'left' },
+        center: { kind: 'media', label: 'Middle picture (tall)', translatable: false, section: 'pictures', slot: 'center' },
+        right: { kind: 'media', label: 'Right picture (wide)', translatable: false, section: 'pictures', slot: 'right' },
       },
     },
   }),

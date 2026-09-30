@@ -35,6 +35,10 @@ export function isEditableMediaPlacementOwnerType(value: string): value is Edita
 
 const INDEXED_SLOTS = [
   { ownerType: 'content_block', runtime: /^items\.\d+\.image$/, sqlGlob: 'items.[0-9]*.image' },
+  // A showcase statement's three pictures.
+  { ownerType: 'content_block', runtime: /^items\.\d+\.left$/, sqlGlob: 'items.[0-9]*.left' },
+  { ownerType: 'content_block', runtime: /^items\.\d+\.center$/, sqlGlob: 'items.[0-9]*.center' },
+  { ownerType: 'content_block', runtime: /^items\.\d+\.right$/, sqlGlob: 'items.[0-9]*.right' },
   { ownerType: 'content_block', runtime: /^images\.\d+$/, sqlGlob: 'images.[0-9]*' },
   { ownerType: 'content_block', runtime: /^features\.\d+\.icon$/, sqlGlob: 'features.[0-9]*.icon' },
   { ownerType: 'content_block', runtime: /^people\.\d+\.image$/, sqlGlob: 'people.[0-9]*.image' },

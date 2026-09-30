@@ -131,6 +131,11 @@ const FEATURE_ITEM_SECTIONS: readonly TenantPageRecordSection[] = [
   { key: 'link', label: 'Link' },
 ]
 
+const SHOWCASE_ITEM_SECTIONS: readonly TenantPageRecordSection[] = [
+  { key: 'copy', label: 'Statement' },
+  { key: 'pictures', label: 'Pictures' },
+]
+
 const PERSON_SECTIONS: readonly TenantPageRecordSection[] = [
   { key: 'name', label: 'Name' },
   { key: 'role', label: 'Role' },
@@ -151,6 +156,7 @@ export function tenantPageRecordSections(
   if (collection !== 'items') return []
   if (blockType === 'team_grid') return PERSON_SECTIONS
   if (blockType === 'feature_grid') return FEATURE_ITEM_SECTIONS
+  if (blockType === 'showcase') return SHOWCASE_ITEM_SECTIONS
   return GRID_ITEM_SECTIONS
 }
 

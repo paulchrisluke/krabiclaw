@@ -8,13 +8,11 @@
   <PlatformPlansSection v-if="isPlans" :block="block" :page="page" />
 
   <!--
-    The homepage feature band: a gradient wash, hairlines top and bottom, and
-    cards with navy gradient icon tiles that lift on hover.
+    The homepage feature band: a gradient wash and cards with navy gradient
+    icon tiles that lift on hover.
   -->
   <section v-else-if="variant === 'home'" id="features" class="relative py-24 overflow-hidden" data-parity-section="features">
     <div class="absolute inset-0 -z-10" style="background: linear-gradient(180deg, var(--ui-bg-elevated) 0%, var(--ui-bg) 100%);"></div>
-    <div class="absolute top-0 inset-x-0 h-px" style="background: linear-gradient(90deg, transparent 0%, var(--kc-border) 50%, transparent 100%);"></div>
-    <div class="absolute bottom-0 inset-x-0 h-px" style="background: linear-gradient(90deg, transparent 0%, var(--kc-border) 50%, transparent 100%);"></div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-2xl mx-auto mb-14 flex flex-col items-center gap-4">
