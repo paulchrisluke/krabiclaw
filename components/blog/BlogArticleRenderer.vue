@@ -38,6 +38,8 @@
     -->
     <slot v-if="editable && !hasCover" name="cover-empty" />
 
+    <slot name="before-content" />
+
     <div class="space-y-4">
       <template v-for="(block, index) in blocks" :key="block.id || index">
         <section :data-block-index="index" :tabindex="editable && !hasTextCaret(block) ? 0 : undefined" class="group relative outline-none" @focusin="focusedIndex = index" @focusout="releaseFocus(index, $event)" @keydown="handleStructuralKey(index, block, $event)">
@@ -399,7 +401,7 @@ function aiAssistanceProps(block: BlogEditorBlock) {
     if (typeof prompt.prompt !== 'string' || !prompt.prompt.trim()) return []
     return [{ title: typeof prompt.title === 'string' ? prompt.title : null, prompt: prompt.prompt, description: typeof prompt.description === 'string' ? prompt.description : null, copyLabel: typeof prompt.copy_label === 'string' ? prompt.copy_label : 'Copy prompt' }]
   })
-  return normalized.length ? { label: typeof block.data.label === 'string' ? block.data.label : 'AI Assistance', intro: typeof block.data.intro === 'string' ? block.data.intro : null, prompts: normalized } : null
+  return normalized.length ? { label: typeof block.data.label === 'string' ? block.data.label : 'AI Assistance', intro: typeof block.data.intro === 'string' ? block.data.intro : null, collapsed: block.data.collapsed !== false, maxVisibleLines: typeof block.data.max_visible_lines === 'number' ? block.data.max_visible_lines : undefined, prompts: normalized } : null
 }
 </script>
 

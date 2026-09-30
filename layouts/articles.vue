@@ -22,6 +22,15 @@
       </aside>
 
       <div class="min-w-0">
+        <PlatformCommandSearchTrigger
+          v-if="nav.search && route.meta.articleCollection === 'docs'"
+          :surface="nav.search.surface"
+          :variant="nav.search.variant"
+          :label="searchLabel"
+          :aria-label="searchLabel"
+          class="mb-6"
+          :class="template.slug === 'platform' ? 'nav:hidden' : 'lg:hidden'"
+        />
         <slot />
       </div>
     </div>
@@ -37,6 +46,7 @@ import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformC
 import { articleNavKey } from '~/composables/useArticleNav'
 
 const { t } = useI18n()
+const route = useRoute()
 const { template } = usePublicTemplate()
 const nav = await useArticleNav()
 provide(articleNavKey, nav)

@@ -8,14 +8,14 @@
   <div class="space-y-10">
     <ArticleBreadcrumb :crumbs="breadcrumbs" />
     <header class="max-w-3xl">
-      <h1 class="text-4xl font-bold text-default sm:text-5xl">{{ category.name }}</h1>
+      <h1 class="font-bold text-default" :class="collection === 'docs' ? 'text-3xl sm:text-4xl' : 'text-4xl sm:text-5xl'">{{ category.name }}</h1>
       <p v-if="category.description" class="mt-4 text-lg text-muted">{{ category.description }}</p>
     </header>
     <div class="space-y-12" data-parity-section="articles">
-      <div v-if="category.posts.length" class="grid gap-6 md:grid-cols-2">
-        <ArticleCard v-for="article in category.posts" :key="article.id" :article="article" />
+      <div v-if="category.posts.length" :class="collection === 'docs' ? 'rounded-xl border border-default px-5 sm:px-6' : 'grid gap-6 md:grid-cols-2'">
+        <ArticleCard v-for="article in category.posts" :key="article.id" :article="article" :compact="collection === 'docs'" />
       </div>
-      <ArticleCategorySection v-for="child in category.children" :key="child.id" :category="child" />
+      <ArticleCategorySection v-for="child in category.children" :key="child.id" :category="child" :compact="collection === 'docs'" />
     </div>
   </div>
 </template>
@@ -52,7 +52,7 @@ const breadcrumbs = computed(() => [
   { name: indexLabel.value, url: localePath(indexPath) },
   ...categoryTrail(categories.value, category.value.id).map(crumb => ({ name: crumb.name, url: crumb.path })),
 ])
-useArticleItemList(() => localePath(path.value), () => category.value.name, () => categorySubtree(category.value).flatMap(entry => entry.posts))
+const itemList = useArticleItemList(() => localePath(path.value), () => category.value.name, () => categorySubtree(category.value).flatMap(entry => entry.posts))
 
 useSocialMetadata(() => ({
   path: path.value,
@@ -61,6 +61,7 @@ useSocialMetadata(() => ({
   description: category.value.description || t('saya.posts.category_meta_description', { category: category.value.name, collection: indexLabel.value, organization: organizationName.value }),
   brand: { organizationName: organizationName.value },
   schemaPageType: 'CollectionPage',
+  schemaNodes: [itemList.value],
   breadcrumbs: [
     { name: t('saya.experience_detail.home'), url: localePath('/') },
     ...breadcrumbs.value,

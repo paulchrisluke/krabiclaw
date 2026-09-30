@@ -1,6 +1,6 @@
 # Docs layout, copy controls, and search audit — #1178
 
-Audited 2026-09-30 against live public pages in the owner's Chrome browser. Source inspected at staging `979591131`; this PR records evidence and remediation specifications, not a redesign or CMS rewrite. Existing `/docs/*` slugs, the canonical docs collection, and shared article renderer remain the implementation boundary. Tenant-host routing work in #1175 stays separate.
+Audited 2026-09-30 against live public pages in the owner's Chrome browser. Source inspected at staging `979591131`; this baseline records evidence and remediation specifications. The subsequent application changes and before/after evidence are in [IMPLEMENTATION.md](IMPLEMENTATION.md). Existing `/docs/*` slugs, the canonical docs collection, and shared article renderer remain the implementation boundary. Tenant-host routing work in #1175 stays separate.
 
 ## Reproduction and evidence
 
