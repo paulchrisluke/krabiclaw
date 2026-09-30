@@ -142,5 +142,16 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     track({ event_name: 'product_order_external_click', stage: 'external_handoff', location_id: locationId, product_id: productId, page_type: 'product', page_path: pagePath })
   }
 
-  return { track, pageEventId, trackProductView, trackCheckoutStart, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder }
+  function trackAnnouncementView(pagePath: string) {
+    track({ event_name: 'announcement_view', stage: 'viewed', page_path: pagePath })
+  }
+
+  // The destination is resolved server-side from the organization's current announcement
+  // config, the same way link_click resolves its host from the stored link — the client never
+  // asserts which URL it actually reached.
+  function trackAnnouncementCtaClick(pagePath: string) {
+    track({ event_name: 'announcement_cta_click', stage: 'external_handoff', page_path: pagePath })
+  }
+
+  return { track, pageEventId, trackProductView, trackCheckoutStart, trackConsultationClick, mirrorSubmission, trackDonationClick, trackLinkClick, trackProductOrder, trackAnnouncementView, trackAnnouncementCtaClick }
 }

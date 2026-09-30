@@ -65,6 +65,9 @@ export const CONVERSION_EVENT_CATALOG = {
   // A product was viewed / a booking was started. Interactions: neither is a sale nor a booking.
   product_view: interaction({ origin: 'public', stages: ['viewed'], entityType: 'product', ga4: { name: 'view_item' }, ga4Sender: 'browser' }),
   checkout_start: interaction({ origin: 'public', stages: ['started'], entityType: null, ga4: { name: 'begin_checkout' }, ga4Sender: 'browser' }),
+  // The universal announcement modal (organization-level, not tied to a page or product).
+  announcement_view: interaction({ origin: 'public', stages: ['viewed'], entityType: null, ga4: { name: 'announcement_view' }, ga4Sender: 'browser' }),
+  announcement_cta_click: interaction({ origin: 'public', stages: ['external_handoff'], entityType: null, ga4: { name: 'announcement_cta_click' }, ga4Sender: 'browser' }),
   contact_submit: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'contact', ga4: { name: 'generate_lead' }, ga4Sender: 'browser', outcome: true },
   reservation_submit: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['submitted'], entityType: 'request', valueBasis: null, conversionType: 'reservation', ga4: { name: 'reservation_submit' }, ga4Sender: 'browser', outcome: true },
   booking_submit: { kind: 'conversion', producer: 'server', origin: 'public', stages: ['submitted'], entityType: 'request', valueBasis: 'quoted', conversionType: 'booking', ga4: { name: 'booking_submit' }, ga4Sender: 'browser', outcome: true },

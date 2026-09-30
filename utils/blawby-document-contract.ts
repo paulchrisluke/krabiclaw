@@ -27,8 +27,6 @@ function hasValidIdentity(value: unknown) {
       && typeof item.slot === 'string'
       && isNullableString(item.public_url))
     && isNullableString(value.phone)
-    && isNullableString(value.banner_content)
-    && typeof value.banner_dismissible === 'boolean'
 }
 
 function hasValidConsultation(value: unknown) {

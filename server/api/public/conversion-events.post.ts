@@ -171,6 +171,21 @@ export default defineHandler(async (event) => {
     if (!choice) return jsonResponse({ error: 'Donation choice is not published' }, { status: 400 })
     entityType = 'content_document'; entityId = page.id; pageType = 'donate'; pagePath = page.path; ctaDestination = choice.host
     metadata = { tier_label: tierLabel, ...(tierAmount === null ? {} : { tier_amount: tierAmount }), destination_hostname: choice.host }
+  } else if (eventName === 'announcement_view') {
+    stage = 'viewed'
+    pagePath = cleanString(body.page_path, 300) || null
+    if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
+  } else if (eventName === 'announcement_cta_click') {
+    stage = 'external_handoff'
+    pagePath = cleanString(body.page_path, 300) || null
+    if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
+    // The destination is this organization's currently configured announcement CTA, never
+    // whatever the client claims it followed.
+    const announcement = await queryFirst<{ cta_url: string | null }>(db, `SELECT json_extract(settings_json, '$.config.announcement.cta_url') AS cta_url FROM organization WHERE id = ? LIMIT 1`, [organizationId])
+    if (!announcement?.cta_url) return jsonResponse({ error: 'Announcement CTA is unavailable' }, { status: 404 })
+    const host = destinationHost(announcement.cta_url)
+    ctaDestination = host ?? announcement.cta_url
+    metadata = { destination_hostname: host }
   } else {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })
   }
