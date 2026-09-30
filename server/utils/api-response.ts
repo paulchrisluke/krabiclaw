@@ -1,7 +1,6 @@
 import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro';
 import {  getRequestHost, readBody  } from 'nitro/h3';
-import { useRuntimeConfig } from 'nitro/runtime-config';
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 import { isNonProductionHost } from '~/server/utils/tenant-hosts'
@@ -147,23 +146,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
 
     return env ?? {}
   })()
-  // nitro-dev's rolldown builder inlines a separate, independently-snapshotted copy of
-  // #nitro/virtual/runtime-config for any module reached only through a dynamic import() (proven
-  // by inspecting .nuxt/dev/index.mjs: two distinct `useRuntimeConfig`/`useRuntimeConfig$N`
-  // function bodies, each closing over its own `runtimeConfig` object) — this file is one such
-  // module (server/utils/api-response.ts is reached through dynamic import() per the AGENTS.md
-  // self-fetch pattern), and the inlined copy's snapshot is taken
-  // before Nuxt modules finish registering their runtimeConfig.public keys, so `.public` itself is
-  // absent rather than merely incomplete. `?? {}` is scoped to exactly that dev-bundler defect, not
-  // a stand-in for a real API contract — every value read off `publicConfig` below is optional
-  // already and process.env (merged in afterward with higher precedence) supplies the same values.
-  const publicConfig = (useRuntimeConfig().public ?? {}) as Record<string, unknown>
-  const configuredEnv = {
-    ...(typeof publicConfig.platformDomain === 'string' && { NUXT_PUBLIC_PLATFORM_DOMAIN: publicConfig.platformDomain }),
-    ...(typeof publicConfig.freeOrganizationDomain === 'string' && { NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN: publicConfig.freeOrganizationDomain }),
-    ...(typeof publicConfig.platformUrl === 'string' && { NUXT_PUBLIC_SITE_URL: publicConfig.platformUrl }),
-  }
-  const effectiveEnv: Record<string, unknown> = { ...configuredEnv, ...processEnv, ...runtimeEnv }
+  const effectiveEnv: Record<string, unknown> = { ...processEnv, ...runtimeEnv }
   const emailDeliveryMode = typeof effectiveEnv.EMAIL_DELIVERY_MODE === 'string' ? effectiveEnv.EMAIL_DELIVERY_MODE : undefined
   const whatsappDeliveryMode = typeof effectiveEnv.WHATSAPP_DELIVERY_MODE === 'string' ? effectiveEnv.WHATSAPP_DELIVERY_MODE : undefined
 

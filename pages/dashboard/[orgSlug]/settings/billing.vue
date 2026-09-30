@@ -47,7 +47,7 @@ const dashboardApi = useDashboardApi()
 const dashboard = useDashboardOrganization()
 const { trackSubscriptionCheckoutSuccess } = useAnalytics()
 const { startOrganizationCheckout, openBillingPortal } = useOrganizationSubscription()
-const { plans, displayPrice } = usePlans()
+const { plans, displayPrice } = await usePlans()
 const { formatExactDateTime } = useHumanTime()
 
 const errorMessage = ref('')
@@ -77,7 +77,7 @@ const { data: billingResponse, error: billingError, pending: loading } = await u
 const billing = computed(() => billingResponse.value?.billing ?? null)
 watch(billingError, (error) => { if (error) errorMessage.value = error.message || 'Failed to load billing' }, { immediate: true })
 
-const currentPlan = computed(() => plans.value?.find(plan => plan.id === billing.value?.plan) ?? null)
+const currentPlan = computed(() => plans.value.find(plan => plan.id === billing.value?.plan) ?? null)
 const onStarter = computed(() => billing.value?.plan === STARTER_PLAN_ID)
 
 /** One line: the price, then what happens on the period boundary. */
