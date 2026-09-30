@@ -59,7 +59,7 @@
         </div>
 
         <!-- Lightbox -->
-        <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="organizationName" />
+        <MediaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="lightboxItems" :title="organizationName" />
       </template>
     </template>
   </div>
