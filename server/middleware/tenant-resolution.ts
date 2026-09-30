@@ -231,10 +231,11 @@ export default defineHandler(async (event) => {
   }
 
   // A platform host serves Krabiclaw's own tenant. Tenant hosts own their public
-  // route families.
+  // route families. The platform is live, so authorization only settles preview:
+  // an unpublished doc or article is previewed here like on any other site.
   if (isPlatformHost(host, env)) {
     const tenant = env.db ? await resolvePlatformTenant(env.db) : null
-    if (!tenant) {
+    if (!tenant || !await authorizeTenant(event, tenant)) {
       throw new HTTPError({ statusCode: 500, statusMessage: 'No active organization runs the platform template', data: { code: 'PLATFORM_TENANT_MISSING' } })
     }
     setResolvedTenantContext(event, tenant, host, tenant.canonical_domain)
