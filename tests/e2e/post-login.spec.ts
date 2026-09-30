@@ -2,6 +2,14 @@ import { expect, test } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 
+test('signed-out dashboard deep links preserve their destination through login', async ({ request }) => {
+  const target = '/dashboard/ember-slice-demo/messages/thread-from-notification?source=whatsapp'
+  const response = await request.get(target, { maxRedirects: 0 })
+
+  expect(response.status()).toBe(302)
+  expect(response.headers().location).toBe(`/login?redirect=${encodeURIComponent(target)}`)
+})
+
 test('a verified user without an organization starts onboarding and can explicitly visit their profile', async ({ request, baseURL }) => {
   await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
 
