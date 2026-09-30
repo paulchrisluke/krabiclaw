@@ -51,16 +51,19 @@ export async function resolveOrganizationAnalyticsContext(db: DbClient, organiza
   }
 }
 
-const sessionFactsSql = `SELECT id, organization_id, key session_id,
-  (payload_json ->> '$.visitor_id') visitor_id,
-  (payload_json ->> '$.started_at') started_at,
-  (payload_json ->> '$.last_seen_at') last_seen_at,
-  (payload_json ->> '$.duration_seconds') duration_seconds,
-  (payload_json ->> '$.attribution.source') source,
-  (payload_json ->> '$.attribution.medium') medium,
-  (payload_json ->> '$.attribution.campaign') campaign,
-  (payload_json ->> '$.attribution.content') content
-  FROM analytics_summaries WHERE kind = 'session'`
+// Events are the complete record, including visits collected before session
+// summaries existed. A summary contributes last-touch context, never eligibility.
+const sessionFactsSql = (organization: string, candidates: string) => `SELECT e.organization_id, e.session_id, e.visitor_id,
+  MIN(e.created_at) started_at, MAX(e.created_at) last_seen_at,
+  SUM(e.duration_seconds) duration_seconds,
+  COALESCE(s.payload_json ->> '$.attribution.source', 'Attribution not recorded') source,
+  COALESCE(s.payload_json ->> '$.attribution.medium', '(not recorded)') medium,
+  (s.payload_json ->> '$.attribution.campaign') campaign,
+  (s.payload_json ->> '$.attribution.content') content
+  FROM analytics_events e LEFT JOIN analytics_summaries s ON s.organization_id = e.organization_id
+    AND s.kind = 'session' AND s.date = '' AND s.key = e.session_id
+  WHERE e.organization_id = ${organization} AND e.kind = 'pageview' AND e.session_id IN (${candidates})
+  GROUP BY e.organization_id, e.session_id`
 
 // `views` is materialized: inlined, the planner folded it into the
 // returning-visitor subquery and scanned every organization's pageviews on every
@@ -72,7 +75,12 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
       (payload_json ->> '$.user_agent') user_agent, (payload_json ->> '$.referrer') referrer
     FROM analytics_events e JOIN input i ON e.organization_id = i.organization_id
     WHERE e.kind = 'pageview' AND e.created_at >= i.starts_at AND e.created_at < i.ends_at
-  ), sessions AS (SELECT * FROM (${sessionFactsSql}) WHERE organization_id = (SELECT organization_id FROM input)),
+  ), session_candidates AS MATERIALIZED (
+    SELECT DISTINCT candidate.session_id FROM analytics_events candidate JOIN input i ON candidate.organization_id = i.organization_id
+    WHERE candidate.kind = 'pageview' AND candidate.created_at >= i.starts_at
+      AND EXISTS (SELECT 1 FROM analytics_events previous WHERE previous.organization_id = candidate.organization_id
+        AND previous.kind = 'pageview' AND previous.session_id = candidate.session_id AND previous.created_at < i.ends_at)
+  ), sessions AS (${sessionFactsSql('(SELECT organization_id FROM input)', 'SELECT session_id FROM session_candidates')}),
   metrics AS (SELECT COUNT(*) page_views, COUNT(DISTINCT session_id) unique_sessions,
     COUNT(DISTINCT visitor_id) unique_visitors FROM views),
   dimensions AS (
@@ -91,8 +99,9 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
   SELECT 'organization_day' kind, '' key, json_object(
     'page_views', page_views, 'unique_sessions', unique_sessions, 'unique_visitors', unique_visitors,
     'returning_visitors', (SELECT COUNT(DISTINCT current.visitor_id) FROM views current WHERE EXISTS (
-      SELECT 1 FROM sessions previous WHERE previous.visitor_id = current.visitor_id
-        AND previous.session_id <> current.session_id AND previous.started_at < (SELECT starts_at FROM input))),
+      SELECT 1 FROM analytics_events previous INDEXED BY analytics_events_org_visitor_idx WHERE previous.organization_id = current.organization_id
+        AND previous.kind = 'pageview' AND previous.visitor_id = current.visitor_id
+        AND previous.session_id <> current.session_id AND previous.created_at < (SELECT starts_at FROM input))),
     'avg_session_duration', COALESCE((SELECT ROUND(AVG(duration_seconds)) FROM sessions
       WHERE started_at < (SELECT ends_at FROM input) AND last_seen_at >= (SELECT starts_at FROM input) AND duration_seconds > 0), 0),
     'pages_per_session', CASE WHEN unique_sessions = 0 THEN 0 ELSE ROUND(CAST(page_views AS REAL) / unique_sessions, 2) END
@@ -302,14 +311,16 @@ export async function getAnalyticsReport(db: DbClient, input: {
   const cutoffDate = context.analyticsDataStartAt ? localDateAt(new Date(context.analyticsDataStartAt), context.timezone) : null
   const [slices, sessionStats, returningStats, attributionRows] = await Promise.all([
     loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate),
-    queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) sessions, COUNT(DISTINCT visitor_id) visitors,
+    queryFirst<Record<string, unknown>>(db, `SELECT COUNT(DISTINCT session_id) sessions, COUNT(DISTINCT visitor_id) visitors,
       COALESCE(ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END)), 0) avg_duration
-      FROM (${sessionFactsSql}) WHERE organization_id = ? AND started_at < ? AND last_seen_at >= ?`, [input.organizationId, end, start]),
-    queryFirst<{ count: number }>(db, `SELECT COUNT(DISTINCT current.visitor_id) count FROM (${sessionFactsSql}) current
-      WHERE current.organization_id = ? AND current.started_at < ? AND current.last_seen_at >= ?
-      AND EXISTS (SELECT 1 FROM (${sessionFactsSql}) previous WHERE previous.organization_id = current.organization_id
-        AND previous.visitor_id = current.visitor_id AND previous.session_id <> current.session_id
-        AND previous.started_at < ?)`, [input.organizationId, end, start, start]),
+      FROM (SELECT session_id, visitor_id, SUM(duration_seconds) duration_seconds FROM analytics_events
+        WHERE organization_id = ? AND kind = 'pageview' AND created_at >= ? AND created_at < ?
+        GROUP BY session_id, visitor_id)`, [input.organizationId, start, end]),
+    queryFirst<{ count: number }>(db, `SELECT COUNT(DISTINCT current.visitor_id) count FROM analytics_events current
+      WHERE current.organization_id = ? AND current.kind = 'pageview' AND current.created_at >= ? AND current.created_at < ?
+      AND EXISTS (SELECT 1 FROM analytics_events previous INDEXED BY analytics_events_org_visitor_idx WHERE previous.organization_id = current.organization_id
+        AND previous.kind = 'pageview' AND previous.visitor_id = current.visitor_id
+        AND previous.session_id <> current.session_id AND previous.created_at < ?)`, [input.organizationId, start, end, start]),
     // Sessions and their converting sessions are counted over the same population: each session
     // grouped by its current last touch, converting when it has an outcome event in the range.
     queryAll<Record<string, unknown>>(db, `SELECT source, medium, campaign, content, COUNT(*) sessions,
@@ -317,7 +328,9 @@ export async function getAnalyticsReport(db: DbClient, input: {
           AND e.created_at >= ? AND e.created_at < ? AND (e.payload_json ->> '$.event_name') IN (${OUTCOME_EVENT_SQL_LIST}))) converting,
         COALESCE(SUM((SELECT COUNT(*) FROM analytics_events e WHERE e.kind = 'conversion' AND e.organization_id = facts.organization_id AND e.session_id = facts.session_id
           AND e.created_at >= ? AND e.created_at < ? AND (e.payload_json ->> '$.event_name') IN (${OUTCOME_EVENT_SQL_LIST}))), 0) outcome_events
-      FROM (${sessionFactsSql}) facts WHERE organization_id = ? AND started_at < ? AND last_seen_at >= ? GROUP BY 1,2,3,4`, [start, end, start, end, input.organizationId, end, start]),
+      FROM (${sessionFactsSql('?', `SELECT DISTINCT session_id FROM analytics_events
+        WHERE organization_id = ? AND kind = 'pageview' AND created_at >= ? AND created_at < ?`)}) facts
+      GROUP BY 1,2,3,4`, [start, end, start, end, input.organizationId, input.organizationId, start, end]),
   ])
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const uniqueSessions = n(sessionStats?.sessions)

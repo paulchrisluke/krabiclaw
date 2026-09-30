@@ -1,3 +1,5 @@
+import english from '~/i18n/locales/en'
+
 export const ZARAZ_ANALYTICS_PURPOSE_ID = 'kc_analytics'
 
 // Zaraz owns this cookie: it holds the visitor's answer for every purpose. Its
@@ -9,10 +11,10 @@ export const ZARAZ_CONSENT_COOKIE_NAME = 'kc_analytics_consent'
 // not a Zaraz tool and does not read this consent.
 export const ZARAZ_ANALYTICS_PURPOSE = {
   name: 'Google Analytics',
-  description: 'Google Analytics sets cookies and measures how visitors use this site if you accept. This choice controls Google Analytics only; Krabiclaw\'s own first-party site measurement is separate and is not controlled here.',
+  description: `${english.legal.analytics_notice} ${english.legal.analytics_notice_link}.`,
 }
 
-export const ZARAZ_CONSENT_MODAL_INTRO_HTML = 'You can choose whether this site uses Google Analytics. Krabiclaw also measures site usage with its own first-party analytics, which runs separately from this choice. Read our <a href="https://krabiclaw.com/privacy">privacy policy</a>.'
+export const ZARAZ_CONSENT_MODAL_INTRO_HTML = `${english.legal.analytics_notice} <a href="https://krabiclaw.com/privacy">${english.legal.analytics_notice_link}</a>.`
 
 /**
  * The event name the collector sends to Zaraz once the native pageview is accepted. The GA4

@@ -1,4 +1,4 @@
-import { parseCookies } from 'better-auth/cookies'
+import { parseCookie } from 'cookie-es'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME } from '~/utils/zaraz-consent'
@@ -17,9 +17,9 @@ import type { Ga4Projection } from '~/utils/ga4-projection'
  * (`payload.ga4_delivery`), so reporting can tell a disabled, disconnected or
  * consent-rejected outcome from a provider failure without inventing zeros.
  */
-export type Ga4DeliveryStatus = 'sending' | 'sent' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
+export type Ga4DeliveryStatus = 'sending' | 'sent' | 'dispatched' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
 export interface Ga4Delivery {
-  transport: 'measurement_protocol'
+  transport: 'measurement_protocol' | 'zaraz'
   status: Ga4DeliveryStatus
   detail?: string
   claimId?: string
@@ -61,15 +61,42 @@ async function recordGa4Delivery(db: DbClient, eventId: string, delivery: Ga4Del
   return delivery
 }
 
+/** Claim a single browser handoff after native persistence. Dispatched means Zaraz accepted it, not Google acknowledgement. */
+export async function claimZarazPageview(db: DbClient, input: { eventId: string; organizationId: string; sessionId: string; cookieHeader: string }): Promise<{ claimId?: string; status: Ga4DeliveryStatus }> {
+  const destination = await resolveGa4Destination(db, input.organizationId)
+  const consent = readAnalyticsConsent(input.cookieHeader)
+  const status: Ga4DeliveryStatus = 'status' in destination ? destination.status
+    : consent === 'accepted' ? 'sending' : consent === 'rejected' ? 'consent_rejected' : 'no_consent_context'
+  const claimId = crypto.randomUUID()
+  const delivery: Ga4Delivery = { transport: 'zaraz', status, ...(status === 'sending' ? { claimId } : {}) }
+  const claimed = await execute(db, `UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?))
+    WHERE id = ? AND organization_id = ? AND session_id = ? AND kind = 'pageview' AND json_extract(payload_json, '$.ga4_delivery') IS NULL`, [JSON.stringify(delivery), input.eventId, input.organizationId, input.sessionId])
+  if (!claimed.meta.changes) {
+    const existing = await queryFirst<{ status: Ga4DeliveryStatus }>(db, `SELECT json_extract(payload_json, '$.ga4_delivery.status') status
+      FROM analytics_events WHERE id = ? AND organization_id = ? AND session_id = ? AND kind = 'pageview'`, [input.eventId, input.organizationId, input.sessionId])
+    if (!existing?.status) throw new Error('Native pageview does not match the GA4 delivery context')
+    return existing
+  }
+  return { status, ...(status === 'sending' ? { claimId } : {}) }
+}
+
+export async function finishZarazPageview(db: DbClient, input: { eventId: string; organizationId: string; sessionId: string; claimId: string; status: 'dispatched' | 'failed' }): Promise<boolean> {
+  const result = await execute(db, `UPDATE analytics_events SET payload_json = json_set(payload_json, '$.ga4_delivery', json(?))
+    WHERE id = ? AND organization_id = ? AND session_id = ? AND kind = 'pageview'
+      AND json_extract(payload_json, '$.ga4_delivery.claimId') = ? AND json_extract(payload_json, '$.ga4_delivery.status') = 'sending'`,
+  [JSON.stringify({ transport: 'zaraz', status: input.status }), input.eventId, input.organizationId, input.sessionId, input.claimId])
+  return result.meta.changes === 1
+}
+
 /**
  * The visitor's own answer to the analytics purpose, from their Zaraz consent cookie. `absent`
  * means they have not answered (or the cookie is unreadable): that is not consent.
  */
 export function readAnalyticsConsent(cookieHeader: string): 'accepted' | 'rejected' | 'absent' {
-  const raw = parseCookies(cookieHeader).get(ZARAZ_CONSENT_COOKIE_NAME)
+  const raw = parseCookie(cookieHeader)[ZARAZ_CONSENT_COOKIE_NAME]
   if (!raw) return 'absent'
   let purposes: unknown
-  try { purposes = JSON.parse(decodeURIComponent(raw)) } catch { return 'absent' }
+  try { purposes = JSON.parse(raw) } catch { return 'absent' }
   if (typeof purposes !== 'object' || purposes === null) return 'absent'
   return (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] === true ? 'accepted' : 'rejected'
 }

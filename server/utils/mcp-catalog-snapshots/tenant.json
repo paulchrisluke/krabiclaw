@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:078d9c2435e43b2e78275429834c276b86bb0215d034a54c98120cec45ec48bf",
+  "fingerprint": "sha256:1b9ecbea0c6168fb5e96739303e1d0c270a0fddad2bb4cb09647a233772a1e1f",
   "tools": [
     {
       "name": "append_content_block",
@@ -10232,6 +10232,10 @@
               },
               "campaign": {
                 "description": "campaign on the requested attribution_basis (observed: as the event carried it; event_snapshot: the attribution in force for the event when it happened; session_last_touch: the session's current last touch)",
+                "type": "string"
+              },
+              "campaign_prefix": {
+                "description": "Literal, case-sensitive campaign prefix under the selected attribution basis; % and _ are ordinary characters.",
                 "type": "string"
               },
               "city": {

@@ -299,8 +299,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   }),
 
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Features', 'A grid you write, or rows read from your site.', ALL_RECIPES, {
-    title: text('Section title', { section: 'settings' }),
-    description: prose('Description', { section: 'settings' }),
+    title: text('Section title', { section: 'copy' }),
+    description: prose('Description', { section: 'copy' }),
     source: {
       kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
       options: [
@@ -399,9 +399,9 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   // the places its readers find it. A language's picture is the block's
   // placement at `items.<index>.image`.
   language_reach: blockDefinitionWithMetadata('language_reach', 'Languages', 'The languages your site speaks, and where each is found.', ALL_RECIPES, {
-    title: text('Section title', { section: 'settings' }),
-    subtitle: text('Card title', { section: 'settings' }),
-    description: prose('Description', { section: 'settings' }),
+    title: text('Section title', { section: 'copy' }),
+    subtitle: text('Card title', { section: 'copy' }),
+    description: prose('Description', { section: 'copy' }),
     pin_label: text('Map marker label', { section: 'settings' }),
     items: {
       kind: 'list', label: 'Languages', section: 'items',
