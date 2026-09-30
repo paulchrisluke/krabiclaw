@@ -1,3 +1,4 @@
+import { defineHandler } from 'nitro'
 import { redirect } from 'nitro/h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
