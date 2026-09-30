@@ -1,4 +1,5 @@
 import { HTTPError, defineHandler  } from 'nitro';
+import { useRuntimeConfig } from 'nitro/runtime-config'
 
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getRequestDataMetrics } from '../../utils/request-metrics'
@@ -16,7 +17,7 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const plans = await getCachedPlans(env as EnvWithOrganizationCache)
+    const plans = await getCachedPlans(env as EnvWithOrganizationCache, useRuntimeConfig().app.buildId)
     return jsonResponse(plans)
   } catch (error) {
     const planError = error instanceof BillingPlansError

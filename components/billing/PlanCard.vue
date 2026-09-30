@@ -107,7 +107,7 @@ const props = defineProps<{
   highlighted?: boolean
 }>()
 
-const { displayPrice, annualPrice, monthlyPrice } = usePlans()
+const { displayPrice, annualPrice, monthlyPrice } = await usePlans()
 
 const isHighlighted = computed(() => props.highlighted ?? props.plan.highlighted)
 

@@ -8,15 +8,13 @@
         <h2 class="text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight leading-[1.05] m-0 text-default">{{ title }}</h2>
         <p v-if="description" class="text-lg leading-relaxed text-muted m-0">{{ description }}</p>
       </div>
-      <BillingPricingTable v-if="plans" :plans="plans" />
-      <p v-else data-billing-plans-unavailable class="rounded-2xl border border-dashed border-default p-6 text-center text-sm text-muted">Pricing is unavailable right now.</p>
+      <BillingPricingTable :plans="plans" />
     </div>
   </section>
 
   <!-- The Pricing page's glass shell around the same table. -->
   <div v-else class="relative bg-elevated/20 backdrop-blur-md border border-default/50 rounded-[32px] p-6 sm:p-10 shadow-2xl transition-all duration-500 hover:shadow-primary/5" data-parity-section="plans">
-    <BillingPricingTable v-if="plans" :plans="plans" />
-    <p v-else data-billing-plans-unavailable class="rounded-2xl border border-dashed border-default p-6 text-center text-sm text-muted">Pricing is unavailable right now.</p>
+    <BillingPricingTable :plans="plans" />
   </div>
 </template>
 
@@ -47,7 +45,7 @@ const description = computed(() => blockTextOrNull(props.block.data.description)
 /** The Pricing page leads with plans; the home page mentions them. */
 const variant = computed<'home' | 'pricing'>(() => (props.page.path === '/pricing' ? 'pricing' : 'home'))
 
-const { plans, monthlyPrice } = usePlans()
+const { plans, monthlyPrice } = await usePlans()
 const config = useRuntimeConfig()
 const pageUrl = resolveSeoUrl('/pricing', config.public.platformUrl)
 
@@ -76,9 +74,7 @@ function offerFor(plan: Plan) {
 // table but not the structured data.
 useSchemaOrg(() => {
   if (variant.value !== 'pricing') return null
-  const available = plans.value
-  if (!available) return null
-  const offers = available.map(offerFor).filter((offer): offer is NonNullable<ReturnType<typeof offerFor>> => offer !== null)
+  const offers = plans.value.map(offerFor).filter((offer): offer is NonNullable<ReturnType<typeof offerFor>> => offer !== null)
   if (!offers.length) return null
   return {
     '@context': 'https://schema.org',
