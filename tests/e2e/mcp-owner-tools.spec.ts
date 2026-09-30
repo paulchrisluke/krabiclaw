@@ -242,6 +242,127 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('get_reservation_inquiries')
   })
 
+  test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, baseURL }, testInfo) => {
+    test.setTimeout(90_000)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const locationId = 'loc-demo'
+    // Far enough out that nothing else in the suite books it, and on a
+    // Tuesday and Wednesday: a day the hours never open is unavailable for
+    // its own reason, which would make the reopening look like it failed.
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
+    let firstOffset = 45
+    while (new Date(day(firstOffset)).getUTCDay() !== 2) firstOffset += 1
+    const from = day(firstOffset)
+    const to = day(firstOffset + 1)
+    const before_ = day(firstOffset - 1)
+    const after_ = day(firstOffset + 2)
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
+    let priorPolicy: Record<string, unknown> | null = null
+    try {
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const asTenant = { 'x-preview-tenant': 'demo' }
+      const guestSlots = async (date: string) => {
+        const response = await request.get(`${baseURL}/api/public/reservations/availability`, { headers: asTenant, params: { location_id: locationId, date, days: 1 } })
+        expect(response.status(), await response.text()).toBe(200)
+        return (await response.json() as { dates: Array<{ slots: unknown[] }> }).dates[0]!.slots.length
+      }
+      const calendar = async () => {
+        const response = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'get_calendar',
+          args: { organization_id: organizationId, location_id: locationId, from: before_, to: after_ },
+        })
+        expect(response.status(), await response.text()).toBe(200)
+        return mcpData<{ items: unknown[]; available_kinds: string[]; unavailable_dates: Array<{ date: string; reason: string }> }>(await response.json())
+      }
+
+      const before = await calendar()
+      expect(before.available_kinds).toContain('reservation')
+      expect(before.unavailable_dates.map(entry => entry.date)).not.toContain(from)
+      expect(await guestSlots(from)).toBeGreaterThan(0)
+
+      const blocked = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'block_dates',
+        args: { organization_id: organizationId, location_id: locationId, from, to, note: 'Private event' },
+      })
+      expect(blocked.status(), await blocked.text()).toBe(200)
+      expect(mcpData<{ ok: boolean; changed_fields: string[] }>(await blocked.json())).toMatchObject({ ok: true, changed_fields: ['special_hours'] })
+
+      // The calendar says the days and why, the guest is offered nothing on
+      // them, and the days either side are untouched.
+      const during = await calendar()
+      expect(during.unavailable_dates).toEqual(expect.arrayContaining([{ date: from, reason: 'Private event' }, { date: to, reason: 'Private event' }]))
+      expect(during.unavailable_dates.map(entry => entry.date)).not.toContain(before_)
+      expect(await guestSlots(from)).toBe(0)
+      expect(await guestSlots(to)).toBe(0)
+      expect(await guestSlots(after_)).toBeGreaterThan(0)
+
+      // Opening only the first day cuts the closure, so the second stays closed.
+      const opened = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'open_dates',
+        args: { organization_id: organizationId, location_id: locationId, from, to: from },
+      })
+      expect(opened.status(), await opened.text()).toBe(200)
+      const after = await calendar()
+      expect(after.unavailable_dates.map(entry => entry.date)).not.toContain(from)
+      expect(after.unavailable_dates).toEqual(expect.arrayContaining([{ date: to, reason: 'Private event' }]))
+      expect(await guestSlots(from)).toBeGreaterThan(0)
+      expect(await guestSlots(to)).toBe(0)
+
+      const cleared = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'open_dates',
+        args: { organization_id: organizationId, location_id: locationId, from: to, to },
+      })
+      expect(cleared.status(), await cleared.text()).toBe(200)
+      expect((await calendar()).unavailable_dates.map(entry => entry.date)).not.toContain(to)
+      expect(await guestSlots(to)).toBeGreaterThan(0)
+
+      // The calendar's settings are MCP's too: a named cancellation policy is
+      // what the dashboard's card reads back, and advance notice is what the
+      // guest is offered. Notice longer than the days to `from` empties it.
+      const policy = async () => {
+        const response = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'get_reservation_policy', args: { organization_id: organizationId, location_id: locationId },
+        })
+        expect(response.status(), await response.text()).toBe(200)
+        return mcpData<{ policy: Record<string, unknown>; cancellation_policy: string | null }>(await response.json())
+      }
+      priorPolicy = (await policy()).policy
+      const firm = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'update_reservation_policy',
+        args: { organization_id: organizationId, location_id: locationId, cancellation_policy: 'firm', advance_notice_minutes: (firstOffset + 2) * 1440 },
+      })
+      expect(firm.status(), await firm.text()).toBe(200)
+      const dashboardConfig = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
+      expect(dashboardConfig.status(), await dashboardConfig.text()).toBe(200)
+      expect((await dashboardConfig.json()).config).toMatchObject({ free_cancellation_until_minutes: 2880, reschedule_allowed: true, reschedule_cutoff_minutes: 2880 })
+      expect((await policy()).cancellation_policy).toBe('firm')
+      expect(await guestSlots(from)).toBe(0)
+    } finally {
+      // Whatever failed above, loc-demo is handed back open and on the policy
+      // it had: a closure or a notice left behind would fail every later
+      // journey that books it.
+      const handedBack = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'open_dates',
+        args: { organization_id: organizationId, location_id: locationId, from, to },
+      })
+      expect(handedBack.status(), await handedBack.text()).toBe(200)
+      if (priorPolicy) {
+        const restored = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'update_reservation_policy',
+          args: {
+            organization_id: organizationId, location_id: locationId,
+            advance_notice_minutes: priorPolicy.advance_notice_minutes ?? null,
+            free_cancellation_until_minutes: priorPolicy.free_cancellation_until_minutes ?? null,
+            reschedule_allowed: priorPolicy.reschedule_allowed ?? true,
+            reschedule_cutoff_minutes: priorPolicy.reschedule_cutoff_minutes ?? null,
+          },
+        })
+        expect(restored.status(), await restored.text()).toBe(200)
+      }
+      await releaseTenantMutationLock()
+    }
+  })
+
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)

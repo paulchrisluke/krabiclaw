@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:997056a9b5c01ee40a790551d150b989b015b80753fb727c27045265dfc19ab6",
+  "fingerprint": "sha256:afef480d50ae51195261d5ad416c45e2e2e8ba4c2d27e7a96c32c911d5eb5950",
   "tools": [
     {
       "name": "append_content_block",
@@ -1119,6 +1119,84 @@
         },
         "required": [
           "products"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "block_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First closed day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why, for the team; guests never see it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last closed day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }
@@ -4114,6 +4192,95 @@
         },
         "required": [
           "post"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_calendar",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "Limit to these kinds. Defaults to every kind the location offers.",
+            "items": {
+              "enum": [
+                "reservation",
+                "booking",
+                "post"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last day, YYYY-MM-DD, inclusive.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "available_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "unavailable_dates": {
+            "items": {
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "date",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "available_kinds",
+          "unavailable_dates"
         ],
         "type": "object"
       }
@@ -7148,6 +7315,19 @@
       },
       "outputSchema": {
         "properties": {
+          "cancellation_policy": {
+            "description": "The named cancellation policy the dashboard shows, or null when the stored cutoffs match none of them.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "policy": {
             "properties": {
               "accessibility_contact_required": {
@@ -7268,6 +7448,7 @@
         },
         "required": [
           "policy",
+          "cancellation_policy",
           "summary"
         ],
         "type": "object"
@@ -9796,6 +9977,77 @@
         "required": [
           "pages",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "open_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First reopened day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last reopened day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }
@@ -17418,6 +17670,15 @@
               "number",
               "null"
             ]
+          },
+          "cancellation_policy": {
+            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm"
+            ],
+            "type": "string"
           },
           "deposit_required": {
             "type": "boolean"
