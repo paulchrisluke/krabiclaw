@@ -425,7 +425,9 @@ test('channel inventory and deletion stay separate from authored website content
     assert.equal(deleted.deleted, true)
     assert.equal(deleted.publication!.state, 'removed')
     assert.equal(meta.fbPosts.has(externalId), false)
-    assert.equal((await getPost(db, env, 'org-a', own.post.id))!.status, 'published')
+    const websiteReadback = (await getPost(db, env, 'org-a', own.post.id))!
+    assert.equal(websiteReadback.status, 'published')
+    assert.equal(websiteReadback.publications.find(item => item.channel === 'facebook')!.state, 'removed')
     const deletes = meta.sent(request => request.method === 'DELETE').length
     await deleteChannelPost(env, 'org-a', channelTarget, externalId, 'owner')
     assert.equal(meta.sent(request => request.method === 'DELETE').length, deletes)
