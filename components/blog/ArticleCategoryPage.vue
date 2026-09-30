@@ -7,17 +7,16 @@
     </header>
 
     <div v-if="collection === 'docs'" class="space-y-9" data-parity-section="articles">
-      <section v-if="featured" class="docs-category-feature grid items-center gap-7 border-b border-default pb-8" :class="illustration ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''" data-category-feature>
-        <div class="max-w-xl">
+      <section v-if="featured" class="docs-category-feature grid items-end gap-7 border-b border-default" :class="illustration ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''" data-category-feature>
+        <div class="max-w-xl pb-8">
           <h2 class="text-xl font-semibold leading-7 text-default">{{ featured.title }}</h2>
           <p v-if="featured.excerpt" class="mt-3 text-sm leading-6 text-muted">{{ featured.excerpt }}</p>
           <NuxtLink :to="featured.path" class="mt-5 inline-flex min-h-11 items-center gap-3 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white no-underline hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
             {{ t('saya.posts.read_guide') }} <PlatformIcon name="arrow-right" class="size-4" />
           </NuxtLink>
         </div>
-        <figure v-if="illustration" class="min-w-0 space-y-2">
-          <img :src="illustration.src" :alt="illustration.alt" class="max-h-64 w-full rounded-lg object-contain" data-category-illustration>
-          <figcaption v-if="illustration.caption" class="text-xs leading-5 text-muted">{{ illustration.caption }}</figcaption>
+        <figure v-if="illustration" class="min-w-0 self-end">
+          <img :src="illustration.src" :alt="illustration.alt" class="block max-h-80 w-full object-contain object-bottom" data-category-illustration>
         </figure>
       </section>
 
@@ -86,17 +85,7 @@ const featured = computed(() => (isPlatform && props.collection === 'docs' && ca
   : null) ?? category.value.posts[0] ?? null)
 const guides = computed(() => category.value.posts.filter(article => article.id !== featured.value?.id))
 const intro = computed(() => category.value.description || (props.collection === 'docs' ? category.value.posts[0]?.excerpt : null))
-const illustrationArticle = computed(() => isPlatform && category.value.slug === 'getting-started'
-  ? category.value.posts.find(article => article.slug === 'deploy-your-site')
-  : featured.value)
-const illustrationPost = props.collection === 'docs' && illustrationArticle.value
-  ? await usePublishedArticle(props.collection, () => illustrationArticle.value!.slug, { publishLocaleRepresentations: false })
-  : null
-const illustration = computed(() => {
-  const block = illustrationPost?.value.content_blocks.find(block => block.type === 'image' && block.media?.some(media => media.slot === 'media' && media.kind === 'image' && media.public_url))
-  const media = block?.media?.find(media => media.slot === 'media' && media.kind === 'image' && media.public_url)
-  return media ? { src: media.public_url!, alt: media.alt_text ?? '', caption: String(block?.data.caption || '') } : null
-})
+const illustration = computed(() => isPlatform && props.collection === 'docs' ? docsCategoryArt(category.value.slug) : null)
 const nextCategories = computed(() => {
   if (!isPlatform || props.collection !== 'docs') return []
   const nextByCategory: Record<string, string[]> = {
@@ -130,7 +119,7 @@ const itemList = useArticleItemList(() => localePath(path.value), () => category
 
 useSocialMetadata(() => ({
   path: path.value,
-  socialImage: organization?.social_image ?? null,
+  socialImage: illustration.value ? { url: illustration.value.og, width: 1200, height: 630, type: 'image/png', alt: illustration.value.alt } : organization?.social_image ?? null,
   title: isPlatform || !organizationName.value ? `${category.value.name} | ${indexLabel.value}` : `${category.value.name} | ${indexLabel.value} | ${organizationName.value}`,
   description: category.value.description || t('saya.posts.category_meta_description', { category: category.value.name, collection: indexLabel.value, organization: organizationName.value }),
   brand: { organizationName: organizationName.value },

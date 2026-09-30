@@ -178,7 +178,7 @@ const isArticleResponse = (value: unknown): value is { post: PublishedArticleDet
  * the server and its public route in the browser. A missing article is a 404;
  * a failed read is the failure it was, not a 404.
  */
-export async function usePublishedArticle(collection: ArticleCollection, slug: MaybeRefOrGetter<string>, options: { publishLocaleRepresentations?: boolean } = {}) {
+export async function usePublishedArticle(collection: ArticleCollection, slug: MaybeRefOrGetter<string>) {
   const requestEvent = useRequestEvent()
   const { organizationId } = useTenantOrganization()
   if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Unknown tenant' })
@@ -213,7 +213,7 @@ export async function usePublishedArticle(collection: ArticleCollection, slug: M
   if (!data.value) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
   if (!data.value.content_blocks.length) throw createError({ statusCode: 500, statusMessage: 'Published article content is missing its canonical blocks' })
   // The language switcher offers this article's own translations.
-  if (options.publishLocaleRepresentations !== false) localeRepresentations.value = data.value.localeRepresentations
+  localeRepresentations.value = data.value.localeRepresentations
   return computed(() => data.value!)
 }
 

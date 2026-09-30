@@ -227,9 +227,19 @@ test('docs category landings explain published tasks and preserve canonical guid
     if (category.slug === 'getting-started') {
       await expect(feature.getByRole('heading')).toHaveText('Create your KrabiClaw account')
       const image = page.locator('[data-category-illustration]')
-      await expect(image).toHaveAttribute('src', /c1bd5b0f-f722-42e4-abcb-b2ea1c334500/)
+      await expect(image).toHaveAttribute('src', '/platform/docs/categories/krabiclaw-getting-started-category.png')
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
     }
+    await expect(page.locator('[data-category-illustration]')).toHaveCount(1)
+    await expect(feature.locator('figcaption')).toHaveCount(0)
+    const og = await page.locator('meta[property="og:image"]').getAttribute('content')
+    expect(og).toMatch(/\/platform\/docs\/categories\/.+-og\.png$/)
+    await expect(page.locator('meta[name="twitter:image"]')).toHaveAttribute('content', og!)
+    await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200')
+    await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630')
+    const ogResponse = await page.request.get(og!)
+    expect(ogResponse.status()).toBe(200)
+    expect(ogResponse.headers()['content-type']).toContain('image/png')
     for (const image of await page.locator('[data-category-illustration]').all()) {
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
     }
