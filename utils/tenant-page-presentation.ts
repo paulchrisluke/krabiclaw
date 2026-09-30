@@ -22,6 +22,7 @@ import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import PlatformMarketingHero from '~/components/platform/marketing/PlatformMarketingHero.vue'
 import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatureCards.vue'
 import PlatformShowcase from '~/components/platform/marketing/PlatformShowcase.vue'
+import PlatformMediaFeature from '~/components/platform/marketing/PlatformMediaFeature.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
 import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
 import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
@@ -82,6 +83,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:stat_grid': PlatformProofBand,
   'platform:workflow_grid': PlatformWorkflows,
   'platform:showcase': PlatformShowcase,
+  'platform:media_text': PlatformMediaFeature,
   'platform:callout': PlatformSeoBand,
   'platform:how_to': PlatformPluginSections,
   'platform:markdown': PlatformProseCard,
