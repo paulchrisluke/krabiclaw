@@ -1,6 +1,6 @@
 # Docs implementation — #1178
 
-Implemented on `audit/docs-quality-1178` after merging staging `8d1b435a1`. The original [audit](README.md) is the live-site baseline. After captures use the production-built Cloudflare Worker on `http://localhost:3118`, backed by the canonical local snapshot containing the published docs and seven illustrations. No CMS content, slugs, deployment, or membership changes were made.
+Implemented on `audit/docs-quality-1178` after merging staging `7f05fd6c5` (including its independent lightbox keyboard fix). The original [audit](README.md) is the live-site baseline. After captures use the production-built Cloudflare Worker on `http://localhost:3118`, backed by the canonical local snapshot containing the published docs and seven illustrations. No CMS content, slugs, deployment, or membership changes were made.
 
 ## Changes
 
