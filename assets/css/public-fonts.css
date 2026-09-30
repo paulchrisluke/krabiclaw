@@ -35,6 +35,14 @@
 }
 
 @font-face {
+  font-family: "Jost";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/jost-variable.woff2") format("woff2");
+}
+
+@font-face {
   font-family: "Marcellus";
   font-style: normal;
   font-weight: 400;

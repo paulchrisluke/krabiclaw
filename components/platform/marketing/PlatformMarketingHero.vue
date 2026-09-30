@@ -68,18 +68,9 @@
 
         <p v-if="subtitle" class="kc-parallax-intro__subtitle">{{ subtitle }}</p>
 
-        <div v-if="ctaLabel || secondaryLabel" class="kc-parallax-intro__actions">
-          <PlatformAccountCta v-if="ctaLabel" :label="ctaLabel" :to="ctaUrl || '/signup'" variant="gradient" size="xl" />
-          <PlatformButton
-            v-if="secondaryLabel && secondaryUrl"
-            :to="secondaryUrl"
-            variant="outline"
-            size="xl"
-            class="kc-parallax-intro__secondary"
-          >
-            <PlatformIcon name="puzzle" class="size-4" />
-            {{ secondaryLabel }}
-          </PlatformButton>
+        <!-- One action: sign up when signed out, the dashboard when signed in. -->
+        <div v-if="ctaLabel && ctaUrl" class="kc-parallax-intro__actions">
+          <PlatformAccountCta :label="ctaLabel" :to="ctaUrl" variant="gradient" size="xl" />
         </div>
       </div>
     </section>
@@ -546,15 +537,8 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 
 .kc-parallax-intro__actions {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 0.75rem;
   margin-top: 0.25rem;
-}
-
-.kc-parallax-intro__secondary {
-  border-color: var(--ui-border);
-  color: var(--ui-text);
 }
 
 @media (min-width: 376px) {
@@ -595,11 +579,6 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   .kc-parallax-intro__subtitle {
     font-size: 0.96rem;
     line-height: 1.65;
-  }
-
-  .kc-parallax-intro__actions {
-    width: 100%;
-    gap: 0.65rem;
   }
 }
 
