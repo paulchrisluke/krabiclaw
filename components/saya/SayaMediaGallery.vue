@@ -108,11 +108,11 @@
       </div>
     </div>
 
-    <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="items" :title="title">
+    <MediaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="items" :title="title">
       <template v-if="$slots.caption" #caption="slotProps">
         <slot name="caption" v-bind="slotProps" />
       </template>
-    </SayaLightbox>
+    </MediaLightbox>
   </div>
 </template>
 
