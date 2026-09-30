@@ -21,6 +21,7 @@ import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { normalizeReferrerHost, sanitizeAttributionParams } from '~/utils/analytics-attribution'
 import { defineHandler } from 'nitro'
 import { getCookie, readBody } from 'nitro/h3'
+import { claimZarazPageview, finishZarazPageview } from '~/server/utils/ga4-delivery'
 
 interface PageviewRequest {
   eventId?: unknown
@@ -31,6 +32,8 @@ interface PageviewRequest {
   attribution?: unknown
   durationSeconds?: unknown
   occurredAt?: unknown
+  claimId?: unknown
+  deliveryStatus?: unknown
 }
 
 const RATE_LIMIT_MAX = 120
@@ -46,7 +49,7 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Invalid analytics payload' }, { status: 400 })
     }
 
-    const eventType = body.eventType === 'duration' ? 'duration' : body.eventType === 'pageview' ? 'pageview' : null
+    const eventType = body.eventType === 'duration' ? 'duration' : body.eventType === 'pageview' ? 'pageview' : body.eventType === 'ga4_delivery' ? 'ga4_delivery' : null
     if (!eventType || !isCanonicalEventId(body.eventId)) {
       return jsonResponse({ error: 'eventId and a valid eventType are required' }, { status: 400 })
     }
@@ -93,10 +96,15 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'Too many requests' }, { status: 429 })
     }
 
-    if (eventType === 'duration') {
+    if (eventType === 'duration' || eventType === 'ga4_delivery') {
       const sessionId = getCookie(event, SESSION_COOKIE)
       if (!isCanonicalEventId(sessionId)) {
         return jsonResponse({ error: 'A valid analytics session is required' }, { status: 400 })
+      }
+      if (eventType === 'ga4_delivery') {
+        if (!isCanonicalEventId(body.claimId) || (body.deliveryStatus !== 'dispatched' && body.deliveryStatus !== 'failed')) return jsonResponse({ error: 'Invalid GA4 delivery receipt' }, { status: 400 })
+        const accepted = await finishZarazPageview(db, { eventId: body.eventId, organizationId, sessionId, claimId: body.claimId, status: body.deliveryStatus })
+        return accepted ? jsonResponse({ ok: true }) : jsonResponse({ error: 'GA4 delivery claim does not match this session' }, { status: 409 })
       }
       await updateTenantPageviewDuration(db, { eventId: body.eventId, organizationId, sessionId, durationSeconds: durationSeconds!, now })
       return jsonResponse({ ok: true })
@@ -143,7 +151,8 @@ export default defineHandler(async (event) => {
       occurredAt: boundedOccurrence(body.occurredAt, now),
       now,
     })
-    return jsonResponse({ ok: true })
+    const ga4Delivery = await claimZarazPageview(db, { eventId: body.eventId, organizationId, sessionId, cookieHeader: event.req.headers.get('cookie') ?? '' })
+    return jsonResponse({ ok: true, ga4_delivery: ga4Delivery })
   } catch (error) {
     console.error('Analytics track error:', error instanceof Error ? error.message : String(error))
     return jsonResponse({ error: 'Failed to log analytics event' }, { status: 500 })

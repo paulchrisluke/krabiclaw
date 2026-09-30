@@ -87,7 +87,7 @@ export async function runScheduledTasks(
     })
   }))
   const failures = outcomes.flatMap((outcome, index) => outcome.status === 'rejected'
-    ? [new Error(`Scheduled task "${names[index]}" failed`, { cause: outcome.reason })]
+    ? [new Error(`Scheduled task "${names[index]}" failed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`, { cause: outcome.reason })]
     : [])
-  if (failures.length) throw new AggregateError(failures, `${failures.length} of ${names.length} scheduled tasks failed for "${cron}"`)
+  if (failures.length) throw new AggregateError(failures, `${failures.length} of ${names.length} scheduled tasks failed for "${cron}": ${failures.map(error => error.message).join('; ')}`)
 }

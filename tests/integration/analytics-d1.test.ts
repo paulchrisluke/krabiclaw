@@ -47,6 +47,8 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
     assert.equal(before.metrics.uniqueSessions, 2)
     assert.equal(before.countries[0]?.countryCode, 'TH')
     for (const date of ['2026-09-05', '2026-09-06']) await aggregateOrganizationAnalyticsDate(db, 'org-proof', date)
+    assert.equal(await db.prepare(`SELECT json_extract(payload_json, '$.returning_visitors') returning_count
+      FROM analytics_summaries WHERE organization_id = 'org-proof' AND kind = 'organization_day' AND date = '2026-09-06'`).first('returning_count'), 1)
     const after = await getAnalyticsReport(db, period)
     assert.deepEqual(after, before)
     await aggregateOrganizationAnalyticsDate(db, 'org-proof', '2026-09-05')
@@ -66,5 +68,12 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
       { date: '2026-09-06', events: 1 },
     ])
     assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2029-01-06T12:00:00Z') })).metrics.pageViews, 4)
+    // Historical collector rows have session/visitor IDs but predate session summaries.
+    await db.prepare(`INSERT INTO analytics_events (id, kind, organization_id, session_id, visitor_id, page_path, payload_json, created_at)
+      VALUES ('historical-view', 'pageview', 'org-proof', 'historical-session', 'historical-visitor', '/menu', '{}', '2026-09-05T03:00:00.000Z')`).run()
+    const historical = await getAnalyticsReport(db, period)
+    assert.equal(historical.metrics.uniqueSessions, 3)
+    assert.equal(historical.metrics.uniqueVisitors, 2)
+    assert.equal(historical.attribution.find(row => row.source === 'Attribution not recorded')?.sessions, 1)
   } finally { await runtime.dispose() }
 })
