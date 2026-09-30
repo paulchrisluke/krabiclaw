@@ -24,6 +24,7 @@ import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatur
 import PlatformShowcase from '~/components/platform/marketing/PlatformShowcase.vue'
 import PlatformMediaFeature from '~/components/platform/marketing/PlatformMediaFeature.vue'
 import PlatformSocialPosts from '~/components/platform/marketing/PlatformSocialPosts.vue'
+import PlatformLanguageReach from '~/components/platform/marketing/PlatformLanguageReach.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
 import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
 import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
@@ -91,6 +92,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
   'platform:social_posts': PlatformSocialPosts,
+  'platform:language_reach': PlatformLanguageReach,
 
   // The Blawby template, for professional-services sites.
   'blawby:hero': BlawbyPageHero,

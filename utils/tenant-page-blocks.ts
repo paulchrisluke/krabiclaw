@@ -30,6 +30,7 @@ export type TenantPageBlockType =
   | 'stat_grid'
   | 'workflow_grid'
   | 'showcase'
+  | 'language_reach'
   | 'video_feature'
   | 'media_text'
   | 'contact_form'
@@ -379,6 +380,27 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         left: { kind: 'media', label: 'Left picture (wide)', translatable: false, section: 'pictures', slot: 'left' },
         center: { kind: 'media', label: 'Middle picture (tall)', translatable: false, section: 'pictures', slot: 'center' },
         right: { kind: 'media', label: 'Right picture (wide)', translatable: false, section: 'pictures', slot: 'right' },
+      },
+    },
+  }),
+
+  // The languages a site is read in, each with a picture of the site in it and
+  // the places its readers find it. A language's picture is the block's
+  // placement at `items.<index>.image`.
+  language_reach: blockDefinitionWithMetadata('language_reach', 'Languages', 'The languages your site speaks, and where each is found.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    subtitle: text('Card title', { section: 'settings' }),
+    description: prose('Description', { section: 'settings' }),
+    pin_label: text('Map marker label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Languages', section: 'items',
+      of: {
+        title: text('Language name', { required: true }),
+        locale: {
+          kind: 'enum', label: 'Language', translatable: false, required: true,
+          options: [{ value: 'en', label: 'English' }, { value: 'ja', label: 'Japanese' }, { value: 'th', label: 'Thai' }],
+        },
+        image: { kind: 'media', label: 'Picture of the site in this language', translatable: false, section: 'image', slot: 'image' },
       },
     },
   }),
