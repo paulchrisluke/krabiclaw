@@ -431,9 +431,6 @@ export default defineNuxtConfig({
     cloudflare: {
       deployConfig: false,
     },
-    devServer: {
-      watch: ['server']
-    },
     rolldownConfig: {
       output: {
         strictExecutionOrder: true,
