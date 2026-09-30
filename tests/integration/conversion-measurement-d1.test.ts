@@ -4,7 +4,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import { handleStripeGa4Event, withdrawStripeGaIdentifiers } from '../../server/utils/stripe-ga4.ts'
-import { deliverViaMeasurementProtocol, readGa4Delivery } from '../../server/utils/ga4-delivery.ts'
+import { claimZarazPageview, finishZarazPageview, deliverViaMeasurementProtocol, readGa4Delivery } from '../../server/utils/ga4-delivery.ts'
 import { PLATFORM_TEMPLATE } from '../../utils/template-registry.ts'
 import { originatingOwnerId, recordAndDeliverConversion, recordOrganizationConversionEvent as recordAt, type OrganizationConversionInput } from '../../server/utils/organization-conversions.ts'
 import { findStripeGa4CheckoutAttribution } from '../../server/utils/stripe-ga4-intents.ts'
@@ -212,6 +212,17 @@ test('consent is enforced for GA delivery and withdrawal erases stored identifie
     const rejected = await recordAndDeliverConversion({ GA4_API_SECRET: 'secret' }, db, request('{"kc_analytics":false}'), signup('user-b'))
     assert.deepEqual([(await deliveryOf(noAnswer.id)).status, (await deliveryOf(rejected.id)).status], ['no_consent_context', 'consent_rejected'])
     assert.equal(sent.length, 0)
+    await recordTenantPageview(db, { eventId: 'browser-pageview', organizationId: 'org-platform', sessionId: SESSION, visitorId: VISITOR,
+      pagePath: '/', locale: 'en', referrerHost: null, attribution: {}, internalHosts: ['platform.example'], userAgent: 'Desktop', ipHash: 'h',
+      country: null, region: null, city: null, locationId: null, pageId: null, pageType: null, recipe: null, now: '2026-09-10T03:00:00.000Z' })
+    const claimInput = { eventId: 'browser-pageview', organizationId: 'org-platform', sessionId: SESSION, cookieHeader: `kc_analytics_consent=${encodeURIComponent('{"kc_analytics":true}')}` }
+    const claims = await Promise.all([claimZarazPageview(db, claimInput), claimZarazPageview(db, claimInput)])
+    assert.equal(claims.filter(claim => claim.claimId).length, 1)
+    const claimId = claims.find(claim => claim.claimId)!.claimId!
+    assert.equal(await finishZarazPageview(db, { ...claimInput, sessionId: 'other-session', claimId, status: 'dispatched' }), false)
+    assert.equal(await finishZarazPageview(db, { ...claimInput, sessionId: SESSION, claimId, status: 'dispatched' }), true)
+    assert.equal((await readGa4Delivery(db, claimInput.eventId))?.status, 'dispatched')
+    assert.equal((await claimZarazPageview(db, claimInput)).claimId, undefined)
     // The native events exist regardless of the consent decision.
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE json_extract(payload_json, '$.event_name') = 'sign_up'").first('count(*)'), 2)
     const accepted = await recordAndDeliverConversion({ GA4_API_SECRET: 'secret' }, db, request('{"kc_analytics":true}'), { ...signup('user-c') })

@@ -130,9 +130,9 @@ const ENUM_FILTERS: Record<string, readonly string[]> = {
   value_basis: ['quoted', 'purchase', 'refund'],
   event_name: ['pageview', ...ORGANIZATION_CONVERSION_EVENT_NAMES],
   attribution_basis: ['own_touch', 'inherited', 'session_current', 'checkout', 'none'],
-  ga4_delivery_status: ['sending', 'sent', 'not_configured', 'disconnected', 'no_consent_context', 'consent_rejected', 'failed'],
+  ga4_delivery_status: ['sending', 'sent', 'dispatched', 'not_configured', 'disconnected', 'no_consent_context', 'consent_rejected', 'failed'],
 }
-const FILTER_KEYS = new Set([...Object.keys(EVENT_FIELDS), 'path_prefix', 'outcome_event'])
+const FILTER_KEYS = new Set([...Object.keys(EVENT_FIELDS), 'path_prefix', 'campaign_prefix', 'outcome_event'])
 export const ANALYTICS_QUERY_DIMENSIONS = Object.keys(EVENT_FIELDS)
 
 // ---------------------------------------------------------------------------------------------
@@ -238,6 +238,12 @@ function resolveFilters(mode: AnalyticsQueryMode, raw: Record<string, unknown> |
     const text = value as string
     if (ENUM_FILTERS[name] && !ENUM_FILTERS[name]!.includes(text)) invalid(`Filter "${name}" must be one of: ${ENUM_FILTERS[name]!.join(', ')}.`)
     echo[name] = text
+    if (name === 'campaign_prefix') {
+      if (basis === 'session_last_touch') needsSession = true
+      where.push(`substr(${EVENT_FIELDS.campaign!.sql(basis)}, 1, length(?)) = ?`)
+      params.push(text, text)
+      continue
+    }
     if (name === 'path_prefix') {
       if (!text.startsWith('/')) invalid('path_prefix must start with "/".')
       where.push(`(e.page_path = ? OR e.page_path LIKE ? ESCAPE '\\')`)
@@ -384,7 +390,7 @@ function eventRow(row: Record<string, unknown>): Record<string, unknown> {
 
 async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeContext) {
   if (input.dimensions || input.metrics) invalid('dimensions and metrics apply to breakdown mode only.')
-  const supported = new Set(['session_id', 'visitor_id', 'source', 'medium', 'campaign', 'content', 'term', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'path_prefix'])
+  const supported = new Set(['session_id', 'visitor_id', 'source', 'medium', 'campaign', 'campaign_prefix', 'content', 'term', 'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'path_prefix'])
   for (const name of Object.keys(ctx.filters.echo)) if (!supported.has(name)) invalid(`Filter "${name}" does not apply to sessions. Supported: ${[...supported].join(', ')}.`)
   ctx.resolved.sort = 'started_at_desc'
   // Everything a session record says that later activity can change is read as it stood at `as_of`.
@@ -395,6 +401,7 @@ async function sessionsMode(db: DbClient, input: AnalyticsQueryInput, ctx: ModeC
   const where: string[] = []
   const params: unknown[] = []
   for (const [name, text] of Object.entries(ctx.filters.echo)) {
+    if (name === 'campaign_prefix') { where.push(`substr(${sessionTouchAsOf('campaign', null)}, 1, length(?)) = ?`); params.push(text, text); continue }
     if (name === 'path_prefix') { where.push(`(json_extract(s.payload_json, '$.landing_path') = ? OR json_extract(s.payload_json, '$.landing_path') LIKE ? ESCAPE '\\')`); params.push(text.replace(/\/$/, '') || '/', `${text.replace(/[\\%_]/g, '\\$&')}%`); continue }
     where.push(name === 'session_id' ? 's.key = ?' : name === 'visitor_id' ? `json_extract(s.payload_json, '$.visitor_id') = ?` : `${sessionTouchAsOf(ATTRIBUTION_FIELDS[name as AttributionField], null)} = ?`)
     params.push(text)

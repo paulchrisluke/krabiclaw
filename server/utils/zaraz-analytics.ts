@@ -35,7 +35,7 @@ interface ZarazTool {
 
 interface ZarazTrigger {
   name?: string
-  loadRules: Array<{ match: string; op: string; value: string }>
+  loadRules: Array<{ id?: string; match: string; op: string; value: string }>
   [key: string]: unknown
 }
 
@@ -288,9 +288,12 @@ export function upsertTenantZarazAnalytics(
   config.triggers[NATIVE_PAGEVIEW_TRIGGER_KEY] = {
     name: 'Native pageview accepted',
     description: 'Fires when the KrabiClaw collector reports a recorded native pageview',
-    loadRules: [{ match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: NATIVE_PAGEVIEW_ZARAZ_EVENT }],
+    loadRules: [{ id: 'kc-native-pageview', match: '{{ client.__zarazTrack }}', op: 'EQUALS', value: NATIVE_PAGEVIEW_ZARAZ_EVENT }],
     excludeRules: [],
-    system: 'pageload',
+  }
+  const allTracks = config.triggers.AllTracks as ZarazTrigger | undefined
+  if (allTracks && !allTracks.loadRules.some(rule => rule.id === 'kc-exclude-native-pageview')) {
+    allTracks.loadRules.push({ id: 'kc-exclude-native-pageview', match: '{{ client.__zarazTrack }}', op: 'NOT_MATCH_REGEX', value: `^${NATIVE_PAGEVIEW_ZARAZ_EVENT}$` })
   }
   const key = tenantKey(input.organizationId)
   config.triggers[key] = makeHostBlockTrigger(`Block non-tenant hosts (${input.organizationId})`, input.hostnames)
@@ -423,14 +426,19 @@ export async function reconcileZarazAnalytics(
   const lockedAt = await acquireLock(db, env.CF_ZONE_ID!)
   try {
     const config = await getZarazConfig(env)
-    const result = reconcileZarazAnalyticsConfig(config, {
-      tenants: [...tenants.entries()].map(([organizationId, tenant]) => ({
+    const configuredTenants = [...tenants.entries()].map(([organizationId, tenant]) => ({
         organizationId,
         measurementId: tenant.measurementId,
         hostnames: [...new Set(tenant.hostnames)].sort(),
-      })),
-    })
-    if (result.updated) await putZarazConfig(env, config)
+      }))
+    const result = reconcileZarazAnalyticsConfig(config, { tenants: configuredTenants })
+    if (result.updated) {
+      await putZarazConfig(env, config)
+      const persisted = await getZarazConfig(env)
+      if (reconcileZarazAnalyticsConfig(persisted, { tenants: configuredTenants }).updated) {
+        throw new Error('Zaraz configuration did not retain the reconciled native analytics settings')
+      }
+    }
     return { status: 'reconciled', ...result }
   } finally {
     await releaseLock(db, env.CF_ZONE_ID!, lockedAt)

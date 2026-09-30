@@ -65,6 +65,9 @@ test('native analytics: producers → D1 → MCP query contract', { timeout: 120
     assert.equal(snap(uuid(12)).campaign, 'B', 'an untouched later visit inherits the touch in force at that moment')
     const observed = await mcp(db, ORG, { mode: 'events', ...range, attribution_basis: 'observed', filters: { campaign: 'B' } })
     assert.equal(observed.rows.length, 1, 'observed attribution is only what the event itself carried')
+    const prefix = await mcp(db, ORG, { mode: 'events', ...range, attribution_basis: 'observed', filters: { campaign_prefix: 'B' } })
+    assert.deepEqual(prefix.rows, observed.rows)
+    assert.equal((await mcp(db, ORG, { mode: 'events', ...range, filters: { campaign_prefix: '%' } })).rows.length, 0, 'prefixes are literal, not SQL wildcards')
 
     // Session last touch is a derived view; it does not rewrite A's event.
     const sessions = await mcp(db, ORG, { mode: 'sessions', ...range })

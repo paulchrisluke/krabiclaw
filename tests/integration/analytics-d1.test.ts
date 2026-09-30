@@ -66,5 +66,12 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
       { date: '2026-09-06', events: 1 },
     ])
     assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2029-01-06T12:00:00Z') })).metrics.pageViews, 4)
+    // Historical collector rows have session/visitor IDs but predate session summaries.
+    await db.prepare(`INSERT INTO analytics_events (id, kind, organization_id, session_id, visitor_id, page_path, payload_json, created_at)
+      VALUES ('historical-view', 'pageview', 'org-proof', 'historical-session', 'historical-visitor', '/menu', '{}', '2026-09-05T03:00:00.000Z')`).run()
+    const historical = await getAnalyticsReport(db, period)
+    assert.equal(historical.metrics.uniqueSessions, 3)
+    assert.equal(historical.metrics.uniqueVisitors, 2)
+    assert.equal(historical.attribution.find(row => row.source === 'Attribution not recorded')?.sessions, 1)
   } finally { await runtime.dispose() }
 })

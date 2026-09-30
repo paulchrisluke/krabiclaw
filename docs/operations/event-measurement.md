@@ -176,6 +176,20 @@ that event, and turns off Zaraz's automatic page-load and single-page-app
 (`historyChange`) pageviews, so an ignored or failed native pageview sends
 nothing and a navigation cannot be counted twice.
 
+The native response grants one atomic Zaraz delivery claim. The browser awaits
+the handoff and records `payload.ga4_delivery` through the collector, bound to
+that event, organization, session, and claim. `dispatched` means Zaraz accepted
+the call, not confirmation from Google. Rejected/absent consent and missing
+destinations record their own status; a failed handoff records `failed`.
+Historical rows without an audit remain unknown.
+
+`query_organization_analytics` accepts `filters.campaign_prefix` in events,
+sessions, and breakdown modes. It is a literal, case-sensitive prefix under the
+selected attribution basis: a run ID matches its sub-campaigns in one query,
+and `%`/`_` have no wildcard meaning. CMS session and visitor totals count
+distinct identifiers on pageviews in the selected range, including historical
+events recorded before session summaries existed.
+
 ## Attribution
 
 Only a request that already carries `kc_session_id` and `kc_visitor_id` gives an
