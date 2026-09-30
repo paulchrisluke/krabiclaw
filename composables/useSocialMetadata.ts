@@ -160,7 +160,8 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
   useSchemaOrg(computed(() => {
     if (!normalized.value) return null
     const { value, origin, template, tags } = normalized.value
-    if (template !== 'platform' || value.schema === false) return null
+    const isArticleCollection = value.schemaPageType === 'CollectionPage' && value.schemaNodes?.some(node => node['@type'] === 'ItemList')
+    if ((template !== 'platform' && !isArticleCollection) || value.schema === false) return null
     const organizationRoot = resolveSeoUrl('/', origin).replace(/\/$/, '')
     const websiteId = `${organizationRoot}/#website`
     const organizationId = `${organizationRoot}/#organization`
@@ -168,21 +169,25 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     const webpageId = `${url}#webpage`
     const breadcrumbId = `${url}#breadcrumb`
     const graph: ApiRecord[] = []
+    const publisherName = template === 'platform' ? PLATFORM_NAME : tenant.organization?.name?.trim()
+    if (!publisherName) throw new Error('Collection schema requires the site publisher name')
+    const publisherDescription = template === 'platform' ? PLATFORM_DESCRIPTION : tenant.organization?.brand_description || undefined
+    const publisherLogo = template === 'platform' ? `${organizationRoot}/krabi-claw-logo.png` : tenant.organization?.media?.find(item => item.slot === 'logo')?.public_url
 
     graph.push({
       '@type': 'Organization',
       '@id': organizationId,
-      name: PLATFORM_NAME,
+      name: publisherName,
       url: organizationRoot,
-      logo: `${organizationRoot}/krabi-claw-logo.png`,
-      description: PLATFORM_DESCRIPTION,
+      logo: publisherLogo ? resolveSeoUrl(publisherLogo, origin) : undefined,
+      description: publisherDescription,
     })
     graph.push({
       '@type': 'WebSite',
       '@id': websiteId,
       url: organizationRoot,
-      name: PLATFORM_NAME,
-      description: PLATFORM_DESCRIPTION,
+      name: publisherName,
+      description: publisherDescription,
       publisher: { '@id': organizationId },
     })
 
@@ -228,7 +233,10 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
     }
     if (value.schemaNodes?.length) {
       for (const node of value.schemaNodes) {
-        if (node?.['@id']) hasPart.push({ '@id': node['@id'] })
+        if (node?.['@id']) {
+          if (value.schemaPageType === 'CollectionPage' && node['@type'] === 'ItemList') webpageNode.mainEntity = { '@id': node['@id'] }
+          else hasPart.push({ '@id': node['@id'] })
+        }
       }
       graph.push(...value.schemaNodes)
     }

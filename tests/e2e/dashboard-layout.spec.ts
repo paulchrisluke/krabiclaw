@@ -128,6 +128,32 @@ test.describe('dashboard pane hierarchy', () => {
     await expect(page).toHaveURL(change)
   })
 
+  test('a booking opened from the calendar goes Back to its day, and from Today to Today', async ({ page }) => {
+    const agenda = await page.request.get('/api/dashboard/agenda', { params: { org: 'ember-slice-demo', from: '2000-01-01', to: '2100-01-01' } })
+    expect(agenda.status()).toBe(200)
+    const { items } = await agenda.json() as { items: Array<{ kind: string; dayKey: string; to: string }> }
+    const reservation = items.find(item => item.kind === 'reservation' && item.to.includes('/bookings/'))
+    expect(reservation, 'the demo fixture carries a reservation').toBeTruthy()
+    const day = `${ORG}/calendar/${reservation!.dayKey}`
+    const fromCalendar = `${day}/reservation/${reservation!.to.split('/').at(-1)}`
+
+    // The same record, mounted under the day: Back is the day and Calendar is the lit tab.
+    await page.setViewportSize(NARROW)
+    await open(page, fromCalendar)
+    await expectPanes(page, ['booking-details'])
+    const back = page.locator('#dashboard-panel-booking-details [data-testid="dashboard-navbar-back"]')
+    await expect(back).toHaveAttribute('href', day)
+    await expect(page.locator('[aria-current="page"]', { hasText: 'Calendar' }).first()).toBeVisible()
+    await expect(page.locator('[aria-current="page"]', { hasText: 'Today' })).toHaveCount(0)
+    await back.click()
+    await expect(page).toHaveURL(day)
+    await expectPanes(page, ['calendar-day'])
+
+    await open(page, reservation!.to)
+    await expect(page.locator('#dashboard-panel-booking-details [data-testid="dashboard-navbar-back"]')).toHaveAttribute('href', ORG)
+    await expect(page.locator('[aria-current="page"]', { hasText: 'Today' }).first()).toBeVisible()
+  })
+
   test('below lg every level is one screen and nothing opens itself', async ({ page }) => {
     await page.setViewportSize(NARROW)
     for (const [path, pane] of [['pages', 'organization-pages'], ['brand', 'organization-brand'], ['settings/integrations', 'organization-integrations']] as const) {

@@ -1,4 +1,4 @@
-import type { InstagramIntegration, SocialSyncProgress } from '~/shared/organization-settings'
+import type { InstagramIntegration } from '~/shared/organization-settings'
 import { setTokenUtil } from 'better-auth/oauth2'
 import { execute, queryFirst } from '~/server/db'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
@@ -20,7 +20,6 @@ const INSTAGRAM_GRAPH = `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
 
 export interface InstagramConnection extends InstagramIntegration {
   organization_id: string
-  sync: SocialSyncProgress | null
 }
 
 /**
@@ -103,16 +102,12 @@ export async function storeInstagramConnection(
   }
 }
 
-/**
- * The connected account. One whose last sync failed is still connected —
- * `status` says so — and publishing still tries it, so the failure a tenant
- * sees is the provider's own answer rather than "not connected".
- */
+/** The organization's selected professional account. */
 export async function readInstagramConnection(
   env: CloudflareEnv,
   organizationId: string,
 ): Promise<InstagramConnection | null> {
-  const row = await queryFirst<Omit<InstagramConnection, 'sync'> & { sync: string | null }>(env.DB, `
+  const row = await queryFirst<InstagramConnection>(env.DB, `
     SELECT id AS organization_id,
            json_extract(integrations_json, '$.instagram.revision') AS revision,
            json_extract(integrations_json, '$.instagram.account_id') AS account_id,
@@ -120,14 +115,14 @@ export async function readInstagramConnection(
            json_extract(integrations_json, '$.instagram.username') AS username,
            json_extract(integrations_json, '$.instagram.status') AS status,
            json_extract(integrations_json, '$.instagram.created_at') AS created_at,
-           json_extract(integrations_json, '$.instagram.updated_at') AS updated_at,
-           json_extract(integrations_json, '$.instagram.sync') AS sync
+           json_extract(integrations_json, '$.instagram.updated_at') AS updated_at
       FROM organization
      WHERE id = ?
        AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'error')
      LIMIT 1
   `, [organizationId])
-  return row ? { ...row, sync: row.sync ? JSON.parse(row.sync) as SocialSyncProgress : null } : null
+  if (row && (typeof row.username !== 'string' || !row.username.trim())) throw new Error('The Instagram connection has no username. Connect Instagram again.')
+  return row
 }
 
 export interface InstagramTarget {
@@ -204,5 +199,7 @@ export async function listMedia(target: InstagramTarget, input: { after: string 
   const params = new URLSearchParams({ fields: MEDIA_FIELDS, limit: String(input.limit), ...(input.after ? { after: input.after } : {}) })
   const page = await metaGraphRequest<{ data?: InstagramMediaRecord[]; paging?: { cursors?: { after?: string }; next?: string } }>(
     `${INSTAGRAM_GRAPH}/${target.userId}/media?${params}`, withToken(target, { deadline }))
-  return { items: page.data ?? [], after: page.paging?.next ? page.paging.cursors?.after ?? null : null }
+  if (!Array.isArray(page.data)) throw new Error('Meta returned no post inventory')
+  if (page.paging?.next && !page.paging.cursors?.after) throw new Error('Meta returned another page without its cursor')
+  return { items: page.data, after: page.paging?.next ? page.paging.cursors!.after! : null }
 }

@@ -5,7 +5,7 @@
     template's layout is the chrome around it and its design tokens are the
     only other difference.
   -->
-  <div :class="hasToc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10' : undefined">
+  <div :data-collection="collection" :class="hasToc ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_240px] xl:gap-10' : undefined">
     <div class="min-w-0">
       <ArticleBreadcrumb :crumbs="breadcrumbs" />
 
@@ -20,22 +20,26 @@
           :organization-name="organizationName"
           :blocks="post.content_blocks"
           :template="template.slug"
-        />
+        >
+          <template #before-content>
+            <ArticleToc v-if="hasToc" :html="tocHtml" collapsible class="mb-8 xl:hidden" />
+          </template>
+        </BlogArticleRenderer>
       </div>
 
-      <nav v-if="previousArticle || nextArticle" :aria-label="indexLabel" class="mt-16 flex items-start justify-between gap-6 border-t border-default pt-8">
+      <nav v-if="previousArticle || nextArticle" :aria-label="indexLabel" class="mt-12 grid gap-6 border-t border-default pt-6 sm:grid-cols-2">
         <NuxtLink v-if="previousArticle" :to="previousArticle.path" class="group flex min-w-0 flex-initial flex-col gap-1 no-underline">
           <span class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{{ t('saya.posts.previous') }}</span>
           <span class="flex w-full min-w-0 items-center gap-1.5 text-lg font-semibold text-default group-hover:text-primary">
             <PlatformIcon name="arrow-left" class="size-4 shrink-0" />
-            <span class="min-w-0 truncate">{{ previousArticle.title }}</span>
+            <span class="min-w-0 break-words">{{ previousArticle.title }}</span>
           </span>
         </NuxtLink>
         <span v-else />
-        <NuxtLink v-if="nextArticle" :to="nextArticle.path" class="group flex min-w-0 flex-initial flex-col items-end gap-1 text-right no-underline">
+        <NuxtLink v-if="nextArticle" :to="nextArticle.path" class="group flex min-w-0 flex-initial flex-col items-start gap-1 sm:items-end sm:text-right no-underline">
           <span class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">{{ t('saya.posts.next') }}</span>
           <span class="flex w-full min-w-0 items-center gap-1.5 text-lg font-semibold text-default group-hover:text-primary">
-            <span class="min-w-0 truncate">{{ nextArticle.title }}</span>
+            <span class="min-w-0 break-words">{{ nextArticle.title }}</span>
             <PlatformIcon name="arrow-right" class="size-4 shrink-0" />
           </span>
         </NuxtLink>
@@ -156,3 +160,9 @@ useContentPageSchema(computed(() => ({
   organizationDescription: organization?.brand_description || undefined,
 })))
 </script>
+
+<style scoped>
+[data-collection="docs"] :deep(.blog-article-header h1) { font-size: clamp(1.875rem, 4vw, 2.75rem); overflow-wrap: anywhere; }
+[data-collection="docs"] :deep(.blog-article-header > p) { font-size: 1.125rem; line-height: 1.75; }
+[data-collection="docs"] :deep(.blog-article figure img) { height: auto; object-fit: contain; }
+</style>

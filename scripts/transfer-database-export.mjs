@@ -6,8 +6,8 @@
 //     [--payload <payload.sql>] [--without-jwks] [--delta-from <earlier-target.sqlite>]
 //
 // A source is copied at the migration recorded in its D1 ledger, then the
-// pending forward migrations run on the copy. The archived v5 schema is the
-// one exception during its replacement by v6. Any ledger/schema mismatch
+// pending forward migrations run on the copy. Recognized archived schemas are
+// transferred into the current baseline. Any ledger/schema mismatch
 // fails visibly. The result is audited under CHECK and foreign-key enforcement.
 //
 // With --payload the script also writes the data-only replacement that
@@ -134,10 +134,7 @@ export const TARGET_INVARIANT_QUERIES = {
   // a grid that copied them, or a block holding its own copy, is stale data.
   social_posts_are_read_not_copied: `SELECT id FROM content_blocks WHERE (type = 'feature_grid' AND data_json ->> '$.source' = 'organization_updates')
     OR (type = 'social_posts' AND json_type(data_json, '$.items') IS NOT NULL)`,
-  // Provider media belongs to an imported publication of its own tenant; the
-  // foreign key proves the tenant, this proves the origin.
-  imported_media_comes_from_imports: `SELECT a.id FROM media_assets a JOIN post_publications p ON p.organization_id = a.organization_id AND p.id = a.origin_publication_id
-    WHERE p.origin <> 'import'`,
+
 }
 
 export function auditTargetInvariants(target) {
@@ -305,12 +302,12 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
  */
 
 /**
- * Copy a v5 or current-schema export through the canonical migration chain.
+ * Copy a recognized archived or current export through the canonical migration chain.
  * A v5 source is loaded into the v6 baseline before forward migrations run.
  * For a v6 source, its D1 ledger determines the exact migration prefix, so
  * data-only migrations are not skipped and existing category IDs are copied.
- * The v6 replacement itself has only 0000; its delta therefore never remints
- * a category ID during the short repoint window.
+ * Existing category IDs are carried into the current baseline, including
+ * during the final delta after a binding repoint.
  * @param {string} sourcePath
  * @param {string} targetPath
  * @param {{ payloadPath?: string | null, withoutJwks?: boolean, deltaFrom?: string | null }} [options]
@@ -337,25 +334,31 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     const hasLedger = source.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE type = 'table' AND name = 'd1_migrations'").get().n === 1
     const ledger = hasLedger ? source.prepare('SELECT name FROM d1_migrations ORDER BY id').all().map(row => row.name) : []
     manifest.source_migrations = ledger
-    const prior = new Database(':memory:')
-    prior.exec(readFileSync('migrations-history/v5/0000_baseline.sql', 'utf8'))
-    const fromV5 = sameSchema(source, prior)
-    prior.close()
-    if (fromV5) {
-      assert(JSON.stringify(ledger) === JSON.stringify(['0000_baseline.sql']),
-        `v5 source has an unexpected migration ledger: ${ledger.join(', ')}`)
-    } else {
-      assert(ledger.length > 0, 'Source migration ledger is missing; cannot choose forward migrations by schema shape')
-      assert(ledger.length <= files.length && ledger.every((name, index) => name === files[index]),
-        `Source migrations [${ledger.join(', ')}] are not a prefix of [${files.join(', ')}]`)
+    let sourceDirectory = MIGRATIONS_DIRECTORY
+    let sourceFiles = files
+    assert(ledger.length > 0, 'Source migration ledger is missing')
+    let recognized = false
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v6', 'migrations-history/v5']) {
+      const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
+      if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
-      expected.exec(files.slice(0, ledger.length).map(name => readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8')).join('\n'))
-      assert(sameSchema(source, expected), 'Source schema differs from its migration ledger; no rows were copied')
+      expected.exec(candidates.slice(0, ledger.length).map(name => readFileSync(resolve(directory, name), 'utf8')).join('\n'))
+      const matches = sameSchema(source, expected)
       expected.close()
+      if (!matches) continue
+      sourceDirectory = directory
+      sourceFiles = candidates
+      recognized = true
+      break
     }
-
+    assert(recognized, 'Source schema differs from every recorded migration chain; no rows were copied')
+    const fromV5 = sourceDirectory === 'migrations-history/v5'
     const appliedCount = fromV5 ? 1 : ledger.length
-    stage.exec(files.slice(0, appliedCount).map(name => readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8')).join('\n'))
+    if (fromV5) {
+      sourceDirectory = 'migrations-history/v6'
+      sourceFiles = readdirSync(resolve(sourceDirectory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
+    }
+    stage.exec(sourceFiles.slice(0, appliedCount).map(name => readFileSync(resolve(sourceDirectory, name), 'utf8')).join('\n'))
     stage.pragma('foreign_keys = OFF')
     const sourceTables = tableNames(source)
     const baseTables = tableNames(stage)
@@ -372,12 +375,30 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       for (const row of rows) insert.run(...targetColumns.map(name => row[name]))
       assert(digest(rows, targetColumns) === digest(stage.prepare(`SELECT * FROM ${qi(table)}`).all(), targetColumns), `${table}: copy differs`)
     }
-    for (const name of files.slice(appliedCount)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
+    for (const name of sourceFiles.slice(appliedCount)) stage.exec(readFileSync(resolve(sourceDirectory, name), 'utf8'))
     for (const transform of TRANSFORMS) {
       const result = stage.prepare(transform.sql).run()
       manifest.transforms.push({ name: transform.name, changes: result.changes, sql_sha256: hash(transform.sql) })
     }
 
+    // Retiring imports may discard only receipts whose website and stored media
+    // were already erased through the application. Required content fails here.
+    const retiresImports = columns(stage, 'post_publications').includes('origin')
+    if (retiresImports) {
+      assert(stage.prepare("SELECT count(*) AS n FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND source IN ('facebook','instagram')").get().n === 0,
+        'Imported website posts remain. Remove approved content through MCP before transfer.')
+      assert(stage.prepare("SELECT count(*) AS n FROM post_publications WHERE origin = 'import' AND post_id IS NOT NULL").get().n === 0,
+        'Imported publication documents remain; no provenance was discarded.')
+      assert(stage.prepare("SELECT count(*) AS n FROM media_assets WHERE origin_publication_id IS NOT NULL AND status <> 'deleted'").get().n === 0,
+        'Imported media remains active. Remove approved unused assets through MCP before transfer.')
+      const result = stage.prepare("DELETE FROM post_publications WHERE origin = 'import'").run()
+      manifest.transforms.push({ name: 'retire_erased_import_receipts', changes: result.changes })
+      stage.prepare(`UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'active')
+        WHERE json_extract(integrations_json, '$.facebook.status') = 'error' AND json_extract(integrations_json, '$.facebook.sync.last_error') IS NOT NULL`).run()
+      stage.prepare(`UPDATE organization SET integrations_json = json_set(integrations_json, '$.instagram.status', 'active')
+        WHERE json_extract(integrations_json, '$.instagram.status') = 'error' AND json_extract(integrations_json, '$.instagram.sync.last_error') IS NOT NULL`).run()
+      stage.prepare("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook.sync', '$.instagram.sync')").run()
+    }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n
     target.exec(schemaSql)
@@ -385,7 +406,10 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     const copy = target.transaction(() => {
       for (const table of names) {
         const targetColumns = columns(target, table)
-        const rows = stage.prepare(`SELECT * FROM ${qi(table)}`).all()
+        const retiredColumns = columns(stage, table).filter(name => !targetColumns.includes(name))
+        const allowedRetired = table === 'media_assets' ? ['origin_publication_id'] : table === 'post_publications' ? ['origin'] : []
+        assert(retiredColumns.every(name => allowedRetired.includes(name)), `${table}: unmapped columns [${retiredColumns.join(', ')}]`)
+        const rows = stage.prepare(`SELECT ${targetColumns.map(qi).join(',')} FROM ${qi(table)}`).all()
         const insert = target.prepare(`INSERT INTO ${qi(table)} (${targetColumns.map(qi).join(',')}) VALUES (${targetColumns.map(() => '?').join(',')})`)
         for (const row of rows) insert.run(...targetColumns.map(name => row[name]))
         assert(digest(rows, targetColumns) === digest(target.prepare(`SELECT * FROM ${qi(table)}`).all(), targetColumns), `${table}: target copy differs`)
@@ -396,9 +420,11 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     const violations = target.pragma('foreign_key_check')
     assert(violations.length === 0, `Foreign key violations after transfer (${violations.length}): ${JSON.stringify(violations.slice(0, 8))}`)
     assert(target.pragma('integrity_check', { simple: true }) === 'ok', 'Integrity check failed')
-    const expected = stage.prepare(SCHEMA_OBJECTS_QUERY).all()
+    const expected = new Database(':memory:')
+    expected.exec(schemaSql)
     manifest.schema = target.prepare(SCHEMA_OBJECTS_QUERY).all()
-    assert(JSON.stringify(manifest.schema) === JSON.stringify(expected), 'Target schema differs from the migration chain')
+    assert(sameSchema(target, expected), 'Target schema differs from the migration chain')
+    expected.close()
     manifest.invariants = auditTargetInvariants(target)
     const broken = manifest.invariants.filter(result => result.violations > 0)
     assert(broken.length === 0, `Invariant violations: ${broken.map(result => `${result.name}=${result.violations}`).join(', ')}`)

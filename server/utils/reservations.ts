@@ -333,7 +333,9 @@ export async function listReservationSlots(db: DbClient, input: {
     // nobody chose.
     try { startsAt = localDateTimeToInstant(input.date, time, timezone, 'reject').toISOString() }
     catch (error) { if (error instanceof RangeError) continue; throw error }
-    if (!input.includePast && Date.parse(startsAt) <= Date.now()) continue
+    // Advance notice is the policy the guest reads, applied: a start inside the
+    // notice is not offered, and the booking endpoint reads the same list.
+    if (!input.includePast && Date.parse(startsAt) <= Date.now() + (config.advance_notice_minutes ?? 0) * 60_000) continue
 
     const capacity = config.slot_capacity
     const claimed = claimedByInstant.get(startsAt) ?? 0

@@ -23,7 +23,7 @@ test('the migration chain applies from zero and builds every table the schema de
   }
 })
 
-test('the deployed v5 schema transfers into the v6 baseline', async () => {
+test('archived schemas transfer into the current baseline', async () => {
   const { transferDatabaseExport } = await import('../../scripts/transfer-database-export.mjs')
   const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-v6-transfer-'))
   try {

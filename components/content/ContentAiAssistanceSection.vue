@@ -26,15 +26,19 @@
             </div>
             <button
               type="button"
-              class="inline-flex items-center justify-center gap-2 rounded-md border border-default px-3 py-1.5 text-sm font-medium text-default transition-colors hover:bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-default px-3 py-1.5 text-sm font-medium text-default transition-colors hover:bg-elevated focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               @click="copyPrompt(item.prompt, index)"
             >
               <PlatformIcon name="copy" class="size-4" />
-              <span>{{ copiedIndex === index ? 'Copied' : item.copyLabel }}</span>
+              <span>{{ copyState[index] === 'copied' ? 'Copied' : item.copyLabel }}</span>
             </button>
           </div>
 
+          <p v-if="copyState[index] === 'failed'" role="status" class="mt-3 text-sm text-error">Could not copy. Select the prompt and copy it manually.</p>
+          <span v-else role="status" aria-live="polite" class="sr-only">{{ copyState[index] === 'copied' ? 'Prompt copied to clipboard.' : '' }}</span>
+
           <pre
+            :id="`${promptId}-${index}`"
             class="mt-4 overflow-hidden whitespace-pre-wrap break-words rounded-lg bg-elevated p-3 font-mono text-sm leading-6 text-default"
             :style="promptStyle(index, item.prompt)"
           >{{ item.prompt }}</pre>
@@ -43,6 +47,8 @@
             v-if="shouldCollapse(item.prompt)"
             type="button"
             class="mt-3 text-sm font-medium text-(--kc-teal) hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            :aria-expanded="Boolean(expanded[index])"
+            :aria-controls="`${promptId}-${index}`"
             @click="toggleExpanded(index)"
           >
             {{ expanded[index] ? 'Show less' : 'Show more' }}
@@ -67,7 +73,10 @@ const props = defineProps<{
   }>
 }>()
 
-const copiedIndex = ref<number | null>(null)
+const promptId = useId()
+const copyState = reactive<Record<number, 'copied' | 'failed' | null>>({})
+const resetTimers = new Map<number, ReturnType<typeof setTimeout>>()
+onUnmounted(() => { for (const timer of resetTimers.values()) clearTimeout(timer) })
 const expanded = reactive<Record<number, boolean>>({})
 
 const visibleLines = computed(() => Math.max(1, Math.min(12, props.maxVisibleLines ?? 4)))
@@ -91,10 +100,14 @@ function toggleExpanded(index: number) {
 }
 
 async function copyPrompt(prompt: string, index: number) {
-  await navigator.clipboard.writeText(prompt)
-  copiedIndex.value = index
-  window.setTimeout(() => {
-    if (copiedIndex.value === index) copiedIndex.value = null
-  }, 1800)
+  clearTimeout(resetTimers.get(index))
+  copyState[index] = null
+  try {
+    await navigator.clipboard.writeText(prompt)
+    copyState[index] = 'copied'
+    resetTimers.set(index, setTimeout(() => { copyState[index] = null }, 2500))
+  } catch {
+    copyState[index] = 'failed'
+  }
 }
 </script>

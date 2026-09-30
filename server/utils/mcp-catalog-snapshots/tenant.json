@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:cf9ea30f55e3c3be1c8e11460087174bc768fcc1532a69088354e559da50f626",
+  "fingerprint": "sha256:afef480d50ae51195261d5ad416c45e2e2e8ba4c2d27e7a96c32c911d5eb5950",
   "tools": [
     {
       "name": "append_content_block",
@@ -1124,6 +1124,84 @@
       }
     },
     {
+      "name": "block_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First closed day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why, for the team; guests never see it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last closed day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_article_category",
       "inputSchema": {
         "additionalProperties": false,
@@ -2231,13 +2309,6 @@
                         "null"
                       ]
                     },
-                    "origin": {
-                      "enum": [
-                        "import",
-                        "publish"
-                      ],
-                      "type": "string"
-                    },
                     "provider_post_id": {
                       "type": [
                         "string",
@@ -2276,7 +2347,6 @@
                     "id",
                     "channel",
                     "target_id",
-                    "origin",
                     "state",
                     "provider_post_id",
                     "public_url",
@@ -2299,12 +2369,10 @@
                 "type": "string"
               },
               "source": {
-                "description": "Who owns the words: the organization, or the provider it was imported from until someone edits it.",
+                "description": "The organization authored this website post or created it from a template.",
                 "enum": [
                   "manual",
-                  "template",
-                  "facebook",
-                  "instagram"
+                  "template"
                 ],
                 "type": "string"
               },
@@ -3381,6 +3449,91 @@
       }
     },
     {
+      "name": "delete_channel_post",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "enum": [
+              "facebook",
+              "instagram"
+            ],
+            "type": "string"
+          },
+          "connection_revision": {
+            "description": "The connection_revision returned with that target.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "provider_post_id": {
+            "type": "string"
+          },
+          "target_id": {
+            "description": "The exact target_id returned by get_social_connections.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "target_id",
+          "connection_revision",
+          "provider_post_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "channel": {
+            "enum": [
+              "facebook"
+            ],
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "provider_post_id": {
+            "type": "string"
+          },
+          "publication": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "enum": [
+                  "removed"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "state"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "target_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "target_id",
+          "provider_post_id",
+          "deleted",
+          "publication"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "delete_collection",
       "inputSchema": {
         "additionalProperties": false,
@@ -4033,6 +4186,224 @@
               "preview_url",
               "view_url",
               "content_blocks"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "post"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_calendar",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "Limit to these kinds. Defaults to every kind the location offers.",
+            "items": {
+              "enum": [
+                "reservation",
+                "booking",
+                "post"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last day, YYYY-MM-DD, inclusive.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "available_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "unavailable_dates": {
+            "items": {
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "date",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "available_kinds",
+          "unavailable_dates"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_channel_post",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "enum": [
+              "facebook",
+              "instagram"
+            ],
+            "type": "string"
+          },
+          "connection_revision": {
+            "description": "The connection_revision returned with that target.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "provider_post_id": {
+            "type": "string"
+          },
+          "target_id": {
+            "description": "The exact target_id returned by get_social_connections.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "target_id",
+          "connection_revision",
+          "provider_post_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "post": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "channel": {
+                "enum": [
+                  "facebook",
+                  "instagram"
+                ],
+                "type": "string"
+              },
+              "media": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "image",
+                        "video"
+                      ],
+                      "type": "string"
+                    },
+                    "provider_media_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "public_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "thumbnail_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "provider_media_id",
+                    "kind",
+                    "public_url",
+                    "thumbnail_url"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "provider_post_id": {
+                "description": "Native provider identity, not a website post_id.",
+                "type": "string"
+              },
+              "public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "published_at": {
+                "type": "string"
+              },
+              "target_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "channel",
+              "target_id",
+              "provider_post_id",
+              "body",
+              "public_url",
+              "published_at",
+              "media"
             ],
             "type": "object"
           }
@@ -6141,13 +6512,6 @@
                         "null"
                       ]
                     },
-                    "origin": {
-                      "enum": [
-                        "import",
-                        "publish"
-                      ],
-                      "type": "string"
-                    },
                     "provider_post_id": {
                       "type": [
                         "string",
@@ -6186,7 +6550,6 @@
                     "id",
                     "channel",
                     "target_id",
-                    "origin",
                     "state",
                     "provider_post_id",
                     "public_url",
@@ -6209,12 +6572,10 @@
                 "type": "string"
               },
               "source": {
-                "description": "Who owns the words: the organization, or the provider it was imported from until someone edits it.",
+                "description": "The organization authored this website post or created it from a template.",
                 "enum": [
                   "manual",
-                  "template",
-                  "facebook",
-                  "instagram"
+                  "template"
                 ],
                 "type": "string"
               },
@@ -6954,6 +7315,19 @@
       },
       "outputSchema": {
         "properties": {
+          "cancellation_policy": {
+            "description": "The named cancellation policy the dashboard shows, or null when the stored cutoffs match none of them.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "policy": {
             "properties": {
               "accessibility_contact_required": {
@@ -7074,6 +7448,7 @@
         },
         "required": [
           "policy",
+          "cancellation_policy",
           "summary"
         ],
         "type": "object"
@@ -7325,6 +7700,12 @@
                     "null"
                   ]
                 },
+                "deletion_unavailable_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "problems": {
                   "items": {
                     "properties": {
@@ -7349,12 +7730,17 @@
                   },
                   "type": "array"
                 },
-                "sync": {
-                  "description": "Import progress: cursor, last completed scan, last success, last error and any publication it is waiting on.",
-                  "type": [
-                    "object",
-                    "null"
-                  ]
+                "supported_operations": {
+                  "items": {
+                    "enum": [
+                      "list",
+                      "read",
+                      "publish",
+                      "delete"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 "target_id": {
                   "type": [
@@ -7377,7 +7763,8 @@
                 "connection_revision",
                 "supported_formats",
                 "problems",
-                "sync",
+                "supported_operations",
+                "deletion_unavailable_reason",
                 "connect_url"
               ],
               "type": "object"
@@ -7948,6 +8335,150 @@
         "required": [
           "posts",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_channel_posts",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "facebook",
+              "instagram"
+            ],
+            "type": "string"
+          },
+          "connection_revision": {
+            "description": "The connection_revision returned with that target.",
+            "type": "string"
+          },
+          "limit": {
+            "default": 25,
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "The exact target_id returned by get_social_connections.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "target_id",
+          "connection_revision"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "next_after": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "posts": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "body": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "channel": {
+                  "enum": [
+                    "facebook",
+                    "instagram"
+                  ],
+                  "type": "string"
+                },
+                "media": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video"
+                        ],
+                        "type": "string"
+                      },
+                      "provider_media_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "public_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "provider_media_id",
+                      "kind",
+                      "public_url",
+                      "thumbnail_url"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "provider_post_id": {
+                  "description": "Native provider identity, not a website post_id.",
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "published_at": {
+                  "type": "string"
+                },
+                "target_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "channel",
+                "target_id",
+                "provider_post_id",
+                "body",
+                "public_url",
+                "published_at",
+                "media"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "posts",
+          "next_after"
         ],
         "type": "object"
       }
@@ -9138,13 +9669,6 @@
                           "null"
                         ]
                       },
-                      "origin": {
-                        "enum": [
-                          "import",
-                          "publish"
-                        ],
-                        "type": "string"
-                      },
                       "provider_post_id": {
                         "type": [
                           "string",
@@ -9183,7 +9707,6 @@
                       "id",
                       "channel",
                       "target_id",
-                      "origin",
                       "state",
                       "provider_post_id",
                       "public_url",
@@ -9206,12 +9729,10 @@
                   "type": "string"
                 },
                 "source": {
-                  "description": "Who owns the words: the organization, or the provider it was imported from until someone edits it.",
+                  "description": "The organization authored this website post or created it from a template.",
                   "enum": [
                     "manual",
-                    "template",
-                    "facebook",
-                    "instagram"
+                    "template"
                   ],
                   "type": "string"
                 },
@@ -9456,6 +9977,77 @@
         "required": [
           "pages",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "open_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First reopened day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last reopened day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }
@@ -14606,34 +15198,6 @@
       }
     },
     {
-      "name": "sync_social_posts",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "results": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "results"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "update_article_category",
       "inputSchema": {
         "additionalProperties": false,
@@ -16214,13 +16778,6 @@
                         "null"
                       ]
                     },
-                    "origin": {
-                      "enum": [
-                        "import",
-                        "publish"
-                      ],
-                      "type": "string"
-                    },
                     "provider_post_id": {
                       "type": [
                         "string",
@@ -16259,7 +16816,6 @@
                     "id",
                     "channel",
                     "target_id",
-                    "origin",
                     "state",
                     "provider_post_id",
                     "public_url",
@@ -16282,12 +16838,10 @@
                 "type": "string"
               },
               "source": {
-                "description": "Who owns the words: the organization, or the provider it was imported from until someone edits it.",
+                "description": "The organization authored this website post or created it from a template.",
                 "enum": [
                   "manual",
-                  "template",
-                  "facebook",
-                  "instagram"
+                  "template"
                 ],
                 "type": "string"
               },
@@ -17116,6 +17670,15 @@
               "number",
               "null"
             ]
+          },
+          "cancellation_policy": {
+            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm"
+            ],
+            "type": "string"
           },
           "deposit_required": {
             "type": "boolean"

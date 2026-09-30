@@ -44,6 +44,18 @@
         "destructive_justification": "Creates products from the supplied catalog entries and records product events. Existing content is not deleted or overwritten."
       }
     },
+    "block_dates": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website.",
+        "open_world_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "create_article_category": {
       "annotations": {
         "readOnlyHint": false,
@@ -152,6 +164,18 @@
         "destructive_justification": "Deletes the selected tenant blog article and its associated content. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "delete_channel_post": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes the explicitly named Facebook Page post and updates its publication receipt; website content is retained.",
+        "open_world_justification": "The explicitly selected Facebook Page post is deleted through Meta.",
+        "destructive_justification": "Deletes the explicitly named Facebook Page post and updates its publication receipt; website content is retained. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "delete_collection": {
       "annotations": {
         "readOnlyHint": false,
@@ -258,6 +282,30 @@
         "read_only_justification": "Reads the selected tenant blog article and content for editing.",
         "open_world_justification": "Reads the selected tenant blog article and content for editing. It does not publish content or write to an external service.",
         "destructive_justification": "Reads the selected tenant blog article and content for editing. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_calendar": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written.",
+        "open_world_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_channel_post": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one live post belonging to the explicitly selected connected channel.",
+        "open_world_justification": "The connected provider is queried for one current post.",
+        "destructive_justification": "Reads one live post belonging to the explicitly selected connected channel. Existing content is not deleted or overwritten."
       }
     },
     "get_contact_inquiries": {
@@ -464,6 +512,18 @@
         "destructive_justification": "Lists the selected organization blog articles. Existing content is not deleted or overwritten."
       }
     },
+    "list_channel_posts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads live posts from the explicitly selected connected channel; it does not create website content.",
+        "open_world_justification": "The connected provider is queried for its current posts and media URLs without copying them.",
+        "destructive_justification": "Reads live posts from the explicitly selected connected channel; it does not create website content. Existing content is not deleted or overwritten."
+      }
+    },
     "list_collections": {
       "annotations": {
         "readOnlyHint": true,
@@ -618,6 +678,18 @@
         "read_only_justification": "Lists tenant pages for the selected organization.",
         "open_world_justification": "Lists tenant pages for the selected organization. It does not publish content or write to an external service.",
         "destructive_justification": "Lists tenant pages for the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "open_dates": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again.",
+        "open_world_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "publish_blog_post": {
@@ -894,18 +966,6 @@
         "read_only_justification": "Overwrites the authenticated user selected workspace organization or location.",
         "open_world_justification": "Overwrites the authenticated user selected workspace organization or location. It does not publish content or write to an external service.",
         "destructive_justification": "Overwrites the authenticated user selected workspace organization or location. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "sync_social_posts": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts.",
-        "open_world_justification": "Posts and media are read from the connected Facebook Page and Instagram account and stored on the website.",
-        "destructive_justification": "Reads the connected Facebook Page and Instagram account and imports or updates provider-owned website posts. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_article_category": {

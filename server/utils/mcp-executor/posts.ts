@@ -5,7 +5,7 @@ import type { CloudflareEnv } from '~/server/utils/auth'
 import { createPost, deletePost, getPost, listPosts, updatePost, type Post } from '~/server/utils/post-management'
 import { PostValidationError } from '~/shared/posts'
 import { getSocialConnections, parsePublishTargets, publishPost, reconcilePostPublication } from '~/server/utils/social-publication'
-import { syncSocialPosts } from '~/server/utils/social-sync'
+import { listChannelPosts, getChannelPost, deleteChannelPost, parseChannelTarget } from '~/server/utils/social-channel-posts'
 import { dashboardOrigin } from '~/server/utils/dashboard-notification-links'
 import { findOrganizationById } from '~/server/utils/member-access'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -15,7 +15,7 @@ import { absolutizeOrganizationUrl, attachViewUrlToRecord, NOT_HANDLED, mutation
 /**
  * The MCP adapter for short posts: it authorizes nothing the domain does not,
  * and serializes the domain's own results. Every rule lives in
- * post-management, social-publication and social-sync, which the dashboard
+ * post-management, social-publication and social-channel-posts, which the dashboard
  * calls too.
  */
 
@@ -90,8 +90,24 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case 'reconcile_post_publication': {
       return await reconcilePostPublication(env, organization.organizationId, requiredString(args, 'publication_id'), optionalString(args, 'provider_post_id') ?? null)
     }
-    case 'sync_social_posts': {
-      return { results: await syncSocialPosts(env, organization.organizationId) }
+    case 'list_channel_posts':
+    case 'get_channel_post':
+    case 'delete_channel_post': {
+      try {
+        const target = parseChannelTarget(args)
+        if (toolName === 'list_channel_posts') {
+          return await listChannelPosts(env, organization.organizationId, target, {
+            after: optionalString(args, 'after') ?? null, limit: args.limit === undefined ? 25 : args.limit as number,
+          })
+        }
+        if (toolName === 'get_channel_post') {
+          return { post: await getChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id')) }
+        }
+        return await deleteChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id'), organization.userId)
+      } catch (error) {
+        if (error instanceof HTTPError && error.statusCode === 400) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
+        throw error
+      }
     }
     case 'delete_post': {
       const postId = requiredString(args, 'post_id')
