@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { closeDates, closureOnDate, getDateIntervals, openDates, parseOpeningHours, parseSpecialHours, type SpecialHours } from '~/shared/reservation-hours'
+import { closeDates, closureOnDate, datedHours, getDateIntervals, openDates, parseOpeningHours, parseSpecialHours, type SpecialHours } from '~/shared/reservation-hours'
 import { formatCalendarDate } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaPayload } from '~/server/utils/dashboard-agenda'
@@ -94,6 +94,8 @@ const availability = computed<{ open: boolean; reason: string; action: 'open' | 
   if (record.status !== 'active') return { open: false, reason: 'This location is not active.', action: null }
   const closure = closureOnDate(specialHours.value, day.value)
   if (closure) return { open: false, reason: closure.note || 'You blocked this date.', action: 'open' }
+  const dated = datedHours(specialHours.value, day.value)
+  if (dated?.kind === 'hours' && dated.periods.length === 0) return { open: false, reason: dated.note || 'You closed this date.', action: 'open' }
   const intervals = getDateIntervals(parseOpeningHours(record.opening_hours), specialHours.value, day.value)
   if (intervals !== null && intervals.length === 0) {
     return { open: false, reason: `No hours on ${formatCalendarDate(day.value, 'en', { weekday: 'long' })}s.`, action: null }
@@ -114,12 +116,13 @@ async function toggleClosure(): Promise<void> {
   try {
     await dashboardApi(`/api/organizations/${organizationId}/locations/${record.id}`, {
       method: 'PATCH',
-      body: { special_hours: next },
+      body: { special_hours: next, expected_updated_at: record.updated_at },
       validate: isLocationResponse,
     })
     await refreshLocation()
   } catch (cause) {
     saveError.value = cause
+    await refreshLocation()
   } finally {
     saving.value = false
   }

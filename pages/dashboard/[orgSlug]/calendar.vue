@@ -242,6 +242,7 @@ import type { ComponentPublicInstance, InjectionKey, Ref } from 'vue'
 export interface CalendarLocation {
   id: string
   status: string
+  updated_at: string
   opening_hours: unknown
   special_hours: unknown
 }
@@ -349,7 +350,7 @@ const locations = ref<AgendaLocation[]>([])
 // is no one answer, so nothing is struck.
 const isLocationHours = (value: unknown): value is { location: CalendarLocation } =>
   isRecord(value) && isRecord(value.location) && typeof value.location.id === 'string' && typeof value.location.status === 'string'
-  && 'opening_hours' in value.location && 'special_hours' in value.location
+  && typeof value.location.updated_at === 'string' && 'opening_hours' in value.location && 'special_hours' in value.location
 const organizationId = await useDashboardOrganizationId()
 const { data: chosenLocation, error: locationError, refresh: refreshLocation } = await useAsyncData(
   () => `calendar-location:${organizationId}:${filters.locationId}`,
@@ -583,13 +584,16 @@ async function writeSelection(action: 'block' | 'open'): Promise<void> {
   try {
     await dashboardApi(`/api/organizations/${organizationId}/locations/${record.id}`, {
       method: 'PATCH',
-      body: { special_hours: action === 'block' ? closeDates(special, range.from, range.to) : openDates(special, range.from, range.to) },
+      body: { special_hours: action === 'block' ? closeDates(special, range.from, range.to) : openDates(special, range.from, range.to), expected_updated_at: record.updated_at },
       validate: isLocationHours,
     })
     await refreshLocation()
     stopSelecting()
   } catch (cause) {
+    // A refusal means the location moved under us; the next attempt starts
+    // from what is there now.
     writeError.value = cause
+    await refreshLocation()
   } finally {
     writing.value = null
   }
@@ -618,7 +622,14 @@ function registerMonth(key: string, el: Element | ComponentPublicInstance | null
 }
 
 function scrollToToday(): void {
-  monthElements.get(monthKeyOf(todayDate))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const key = monthKeyOf(todayDate)
+  // Month may have been opened from Year on a month far from today; then the
+  // scroll starts over at today, as it does on arrival.
+  if (!monthKeys.value.includes(key)) {
+    void openMonth(key)
+    return
+  }
+  monthElements.get(key)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(async () => {

@@ -244,21 +244,21 @@ test.describe('stateless MCP server', () => {
 
   test('owner reads the calendar and blocks and opens dates through MCP, and guests see it', async ({ request, baseURL }, testInfo) => {
     test.setTimeout(90_000)
-    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    const organizationId = MCP_GROWTH_ORGANIZATION_ID
+    const locationId = 'loc-demo'
+    // Far enough out that nothing else in the suite books it, and on a
+    // Tuesday and Wednesday: a day the hours never open is unavailable for
+    // its own reason, which would make the reopening look like it failed.
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
+    let firstOffset = 45
+    while (new Date(day(firstOffset)).getUTCDay() !== 2) firstOffset += 1
+    const from = day(firstOffset)
+    const to = day(firstOffset + 1)
+    const before_ = day(firstOffset - 1)
+    const after_ = day(firstOffset + 2)
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
     try {
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-      const organizationId = MCP_GROWTH_ORGANIZATION_ID
-      const locationId = 'loc-demo'
-      // Far enough out that nothing else in the suite books it, and on a
-      // Tuesday and Wednesday: a day the hours never open is unavailable for
-      // its own reason, which would make the reopening look like it failed.
-      const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
-      let firstOffset = 45
-      while (new Date(day(firstOffset)).getUTCDay() !== 2) firstOffset += 1
-      const from = day(firstOffset)
-      const to = day(firstOffset + 1)
-      const before_ = day(firstOffset - 1)
-      const after_ = day(firstOffset + 2)
       const asTenant = { 'x-preview-tenant': 'demo' }
       const guestSlots = async (date: string) => {
         const response = await request.get(`${baseURL}/api/public/reservations/availability`, { headers: asTenant, params: { location_id: locationId, date, days: 1 } })
@@ -315,6 +315,13 @@ test.describe('stateless MCP server', () => {
       expect((await calendar()).unavailable_dates.map(entry => entry.date)).not.toContain(to)
       expect(await guestSlots(to)).toBeGreaterThan(0)
     } finally {
+      // Whatever failed above, loc-demo is handed back open: a closure left
+      // behind would fail every later journey that books it.
+      const handedBack = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'open_dates',
+        args: { organization_id: organizationId, location_id: locationId, from, to },
+      })
+      expect(handedBack.status(), await handedBack.text()).toBe(200)
       await releaseTenantMutationLock()
     }
   })

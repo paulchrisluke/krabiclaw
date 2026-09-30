@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro'
 import type { McpExecutorContext } from './shared'
 import { getLocation, updateLocation, type LocationRecord } from '~/server/utils/location-management'
 import { AGENDA_KINDS, listAgenda, type AgendaKind } from '~/server/utils/dashboard-agenda'
-import { closeDates, closureOnDate, getDateIntervals, openDates } from '~/shared/reservation-hours'
+import { closeDates, closureOnDate, datedHours, getDateIntervals, openDates } from '~/shared/reservation-hours'
 import { addLocalDays, assertCalendarDate, formatCalendarDate } from '~/utils/timezone'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
@@ -98,6 +98,8 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         if (location.status !== "active") return [{ date, reason: "This location is not active." }];
         const closure = closureOnDate(location.special_hours, date);
         if (closure) return [{ date, reason: closure.note || "Closed by you." }];
+        const dated = datedHours(location.special_hours, date);
+        if (dated?.kind === "hours" && dated.periods.length === 0) return [{ date, reason: dated.note || "Closed by you." }];
         const intervals = getDateIntervals(location.opening_hours, location.special_hours, date);
         return intervals !== null && intervals.length === 0 ? [{ date, reason: `No hours on ${formatCalendarDate(date, "en", { weekday: "long" })}s.` }] : [];
       });
@@ -112,24 +114,33 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     // the calendar uses, onto the one field the hours leaf edits.
     case "block_dates":
     case "open_dates": {
-      const location = await requireLocation(organization, requiredString(args, "location_id"));
+      const locationIdOrSlug = requiredString(args, "location_id");
       const from = requiredString(args, "from");
       const to = requiredString(args, "to");
-      const special = toolName === "block_dates"
-        ? closeDates(location.special_hours, from, to)
-        : openDates(location.special_hours, from, to);
       const note = toolName === "block_dates" ? optionalString(args, "note") ?? null : null;
-      const withNote = note && special ? special.map((entry, index) => index === special.length - 1 && entry.kind === "closure" ? { ...entry, note } : entry) : special;
-      const result = await updateLocation(
-        organization.db,
-        organization.organizationId,
-        location.id,
-        { special_hours: withNote } as never,
-        organization.userId,
-        organization.env,
-      );
-      assertDomainSuccess(result);
-      const updated = (result.data as { location: LocationRecord }).location;
+      // The write names the row it read. If the location moved in between,
+      // the row is read again and the range applied to what is there now —
+      // once; a second refusal is reported.
+      let result: Awaited<ReturnType<typeof updateLocation>> | null = null;
+      let location = await requireLocation(organization, locationIdOrSlug);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const special = toolName === "block_dates"
+          ? closeDates(location.special_hours, from, to)
+          : openDates(location.special_hours, from, to);
+        const withNote = note && special ? special.map((entry, index) => index === special.length - 1 && entry.kind === "closure" ? { ...entry, note } : entry) : special;
+        result = await updateLocation(
+          organization.db,
+          organization.organizationId,
+          location.id,
+          { special_hours: withNote, expected_updated_at: location.updated_at } as never,
+          organization.userId,
+          organization.env,
+        );
+        if (result.status !== 409) break;
+        location = await requireLocation(organization, location.id);
+      }
+      assertDomainSuccess(result!);
+      const updated = (result!.data as { location: LocationRecord }).location;
       const context = await mutationContextPayload(organization, { locationId: location.id });
       const span = from === to ? from : `${from} to ${to}`;
       return renderStructuredResponse(
@@ -143,7 +154,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
           context,
         },
         toolName === "block_dates" ? `Blocked ${span} at "${updated.title}".` : `Opened ${span} at "${updated.title}".`,
-        { ...result.data, context },
+        { ...result!.data, context },
       );
     }
     default:
