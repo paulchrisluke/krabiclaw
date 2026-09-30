@@ -41,7 +41,7 @@
           variant="ghost"
           size="sm"
           square
-          aria-label="Reservation settings"
+          aria-label="Settings"
           :to="{ path: `${level.path.value}/settings`, query: route.query }"
         />
       </div>
@@ -147,9 +147,9 @@
               </div>
               <div class="min-w-0">
                 <template v-if="itemsByDay.get(dayKey)?.length">
-                  <div v-for="item in itemsByDay.get(dayKey)" :key="item.id" class="grid grid-cols-[4rem_1fr] gap-2 py-1 text-sm">
-                    <span class="tabular-nums text-highlighted">{{ timeOf(item) }}</span>
-                    <span class="min-w-0"><span class="block truncate text-highlighted">{{ item.title }}</span><span class="block truncate text-xs text-muted">{{ item.subtitle }}</span></span>
+                  <div v-for="item in itemsByDay.get(dayKey)" :key="item.id" class="grid grid-cols-[4rem_1fr] gap-2 py-1 text-sm" :class="item.status === 'cancelled' ? 'text-muted line-through' : 'text-highlighted'">
+                    <span class="tabular-nums">{{ timeOf(item) }}</span>
+                    <span class="min-w-0"><span class="block truncate">{{ item.title }}</span><span class="block truncate text-xs text-muted">{{ item.status === 'cancelled' ? 'Cancelled' : item.subtitle }}</span></span>
                   </div>
                 </template>
                 <p v-else class="py-1 text-sm text-muted">{{ isUnavailableKey(dayKey) ? 'Unavailable' : 'Nothing scheduled' }}</p>
@@ -264,10 +264,12 @@ useSeoMeta({ title: 'Calendar | Krabiclaw', robots: 'noindex, nofollow' })
 
 const FILTER_ALL = '__all__'
 const INITIAL_MONTHS = 3
+// Named here rather than imported: the agenda module is the server's, and a value import would bundle it.
+const AGENDA_KINDS = ['reservation', 'booking', 'post'] as const satisfies readonly AgendaKind[]
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
+const routeKind = typeof route.query.kinds === 'string' && AGENDA_KINDS.includes(route.query.kinds as AgendaKind) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
 
@@ -321,7 +323,8 @@ const calendarUi = {
     'transition-colors hover:bg-elevated hover:not-data-selected:bg-elevated',
     'data-[outside-view]:invisible',
     'data-[selected]:bg-elevated/70 data-[selected]:text-highlighted data-[selected]:ring-2 data-[selected]:ring-primary data-[selected]:ring-inset',
-    'data-[today]:text-highlighted',
+    // reka keeps a focus day per month — the 1st — and Nuxt UI tints it; the tile is not a control state.
+    'data-[today]:text-highlighted data-[highlighted]:bg-elevated/70',
     'has-[[data-closed]]:bg-elevated/30',
     'has-[[data-in-range]]:bg-primary/15 has-[[data-range-edge]]:bg-primary/25 has-[[data-range-edge]]:ring-2 has-[[data-range-edge]]:ring-primary has-[[data-range-edge]]:ring-inset',
   ].join(' '),
@@ -334,7 +337,7 @@ const yearUi = {
   gridBody: 'grid gap-0.5',
   gridRow: 'grid grid-cols-7 gap-0.5 place-items-stretch',
   cell: 'w-full p-0',
-  cellTrigger: 'm-0 flex h-7 w-full flex-col items-center justify-center rounded-md hover:bg-elevated data-[outside-view]:invisible data-[selected]:bg-transparent data-[today]:font-semibold',
+  cellTrigger: 'm-0 flex h-7 w-full flex-col items-center justify-center rounded-md hover:bg-elevated data-[outside-view]:invisible data-[selected]:bg-transparent data-[highlighted]:bg-transparent data-[today]:font-semibold',
 }
 
 type MonthBlock = { key: string; first: CalendarDate; label: string; items: AgendaItem[] } & (
@@ -404,7 +407,7 @@ const isAgendaItem = (value: unknown): value is AgendaItem =>
 const isLocation = (value: unknown): value is AgendaLocation => isRecord(value) && typeof value.id === 'string' && typeof value.title === 'string'
 const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   isRecord(value) && Array.isArray(value.items) && value.items.every(isAgendaItem)
-  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'session', 'post'].includes(String(kind)))
+  && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => AGENDA_KINDS.includes(kind as AgendaKind))
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
 async function loadMonth(key: string): Promise<void> {
@@ -478,8 +481,10 @@ const itemsByDay = computed(() => {
   return groups
 })
 
+// A tile counts what is still happening; a cancelled booking is listed on its
+// day, marked, and not counted.
 function countFor(day: DateValue): number {
-  return itemsByDay.value.get(day.toString())?.length ?? 0
+  return itemsByDay.value.get(day.toString())?.filter(item => item.status !== 'cancelled').length ?? 0
 }
 function isToday(day: DateValue): boolean {
   return day.toString() === todayKey
@@ -602,7 +607,7 @@ async function writeSelection(action: 'block' | 'open'): Promise<void> {
 const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...locations.value.map(location => ({ label: location.title, value: location.id }))])
 const kindOptions = computed(() => [{ label: 'All kinds', value: FILTER_ALL }, ...availableKinds.value.map(kind => ({ label: kindLabel(kind), value: kind }))])
 function kindLabel(kind: AgendaKind) {
-  return ({ reservation: 'Reservation', booking: 'Booking', session: 'Session', post: 'Post' })[kind]
+  return ({ reservation: 'Reservation', booking: 'Booking', post: 'Post' })[kind]
 }
 
 // The months keep scrolling: a sentinel below the last one asks for the next.

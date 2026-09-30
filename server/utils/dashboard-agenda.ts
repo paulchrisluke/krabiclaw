@@ -4,10 +4,9 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import type { ResolvedMembership } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 import { loadOwnerPictures } from '~/server/notifications/hero'
 
-export const AGENDA_KINDS = ['reservation', 'booking', 'session', 'post'] as const
+export const AGENDA_KINDS = ['reservation', 'booking', 'post'] as const
 export type AgendaKind = typeof AGENDA_KINDS[number]
 
 export interface AgendaItem {
@@ -147,12 +146,9 @@ export async function listAgenda(
     })
     const features = new Set([...capabilities.pages.map(page => page.feature), ...capabilities.managers.map(manager => manager.id)])
     if (features.has('reservations')) available.add('reservation')
-    if (features.has('products')) {
-      available.add('booking')
-      // A scheduled class is on the calendar whether or not anyone has booked
-      // it yet: the merchant is looking for what runs, not only who is coming.
-      available.add('session')
-    }
+    // A class's schedule is the product's own; the calendar carries who is
+    // coming to it, not every session it could run.
+    if (features.has('products')) available.add('booking')
   }
   const availableKinds = AGENDA_KINDS.filter(kind => available.has(kind))
   const requestedKinds = new Set((query.kinds?.length ? query.kinds : availableKinds).filter(kind => available.has(kind)))
@@ -203,34 +199,6 @@ export async function listAgenda(
     pictureOwner: { type: `'product'`, id: 'agenda_booking.product_id' },
     resourceTitle: 'COALESCE(agenda_product.name, l.title, s.name, s.subdomain, s.id)',
   })} AND agenda_session.starts_at BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
-  // The class itself: one row per scheduled session in the window, titled by
-  // its product, with seats taken over seats offered. Cancelled sessions stay
-  // out; a cancelled class is not something to arrive for.
-  if (requestedKinds.has('session')) sourceQueries.push(queryAll(db, `
-    SELECT agenda_session.id, 'session' AS kind, agenda_session.starts_at, agenda_session.ends_at,
-           agenda_product.name AS title,
-           CASE WHEN agenda_session.capacity IS NULL THEN printf('%d booked', COALESCE(agenda_claimed.claimed, 0))
-                ELSE printf('%d of %d booked', COALESCE(agenda_claimed.claimed, 0), agenda_session.capacity) END AS subtitle,
-           agenda_session.capacity AS party_size, agenda_session.status,
-           pub.organization_id, agenda_session.location_id,
-           l.slug AS location_slug, l.title AS location_title,
-           agenda_session.timezone AS timezone,
-           NULL AS guest_image_url,
-           'product' AS picture_owner_type, agenda_session.product_id AS picture_owner_id,
-           agenda_product.name AS resource_title
-    FROM product_sessions agenda_session
-    JOIN products agenda_product ON agenda_product.id = agenda_session.product_id AND agenda_product.organization_id = agenda_session.organization_id
-    LEFT JOIN business_locations l ON l.id = agenda_session.location_id
-    JOIN product_publications pub ON pub.product_id = agenda_session.product_id AND pub.organization_id = agenda_session.organization_id
-      AND pub.published = 1 AND (agenda_session.location_id IS NULL OR pub.organization_id = l.organization_id)
-    JOIN organization s ON s.id = pub.organization_id
-    LEFT JOIN (SELECT b.product_session_id, SUM(b.party_size) AS claimed FROM bookings b WHERE ${CAPACITY_CONSUMING_SQL} GROUP BY b.product_session_id) agenda_claimed
-      ON agenda_claimed.product_session_id = agenda_session.id
-    WHERE agenda_session.organization_id = ? AND agenda_session.status = 'scheduled'
-      ${query.organizationId ? 'AND pub.organization_id = ?' : ''}
-      ${query.locationId ? 'AND agenda_session.location_id = ?' : ''}
-      AND agenda_session.starts_at BETWEEN ? AND ?
-  `, [...params(), broadFrom, broadTo]))
   // A post is on the agenda on the day it was published; nothing is due.
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `p.published_at AS starts_at, NULL AS ends_at,
     NULLIF(p.title, '') AS title, NULL AS subtitle, NULL AS party_size, p.status`, {
@@ -254,11 +222,9 @@ export async function listAgenda(
     if (dayKey < query.from || dayKey > query.to) return []
     const organizationBase = `/dashboard/${organizationSlug}`
     const locationSegment = row.location_slug ? `/locations/${row.location_slug}` : ''
-    const to = row.kind === 'reservation' || row.kind === 'booking'
-      ? `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
-      : row.kind === 'session'
-        ? `${organizationBase}${locationSegment}/products`
-        : `${organizationBase}${locationSegment}/posts`
+    const to = row.kind === 'post'
+      ? `${organizationBase}${locationSegment}/posts`
+      : `/dashboard/${organizationSlug}/bookings/${row.kind}/${encodeURIComponent(row.id)}`
     return [{
       id: `${row.kind}:${row.id}`, kind: row.kind, startsAt,
       endsAt: row.ends_at === null ? null : instantDate(row.ends_at).toISOString(),

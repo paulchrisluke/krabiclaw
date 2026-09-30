@@ -101,7 +101,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         const dated = datedHours(location.special_hours, date);
         if (dated?.kind === "hours" && dated.periods.length === 0) return [{ date, reason: dated.note || "Closed by you." }];
         const intervals = getDateIntervals(location.opening_hours, location.special_hours, date);
-        return intervals !== null && intervals.length === 0 ? [{ date, reason: `No hours on ${formatCalendarDate(date, "en", { weekday: "long" })}s.` }] : [];
+        return intervals !== null && intervals.length === 0 ? [{ date, reason: `Closed on ${formatCalendarDate(date, "en", { weekday: "long" })}s in your hours.` }] : [];
       });
       return {
         items: agenda.items,

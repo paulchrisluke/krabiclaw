@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:eb5eb279a2461f1a56db0c5fbc2b11e3f704a8f554c02188c74c4b1287b054a8",
+  "fingerprint": "sha256:2b05941450e7c54a9f2298c350c9270bff10875040afb1cec0b65d7b146dc850",
   "tools": [
     {
       "name": "append_content_block",
@@ -4138,7 +4138,6 @@
               "enum": [
                 "reservation",
                 "booking",
-                "session",
                 "post"
               ],
               "type": "string"
@@ -7122,6 +7121,19 @@
       },
       "outputSchema": {
         "properties": {
+          "cancellation_policy": {
+            "description": "The named cancellation policy the dashboard shows, or null when the stored cutoffs match none of them.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "policy": {
             "properties": {
               "accessibility_contact_required": {
@@ -7242,6 +7254,7 @@
         },
         "required": [
           "policy",
+          "cancellation_policy",
           "summary"
         ],
         "type": "object"
@@ -17355,6 +17368,15 @@
               "number",
               "null"
             ]
+          },
+          "cancellation_policy": {
+            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "enum": [
+              "flexible",
+              "moderate",
+              "firm"
+            ],
+            "type": "string"
           },
           "deposit_required": {
             "type": "boolean"

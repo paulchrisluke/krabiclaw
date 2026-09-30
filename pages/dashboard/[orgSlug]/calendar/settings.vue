@@ -1,41 +1,51 @@
 <template>
   <!--
-    Airbnb reaches the listing's availability settings from the calendar's gear
-    as well as from the listing; this is the location's reservation policy, the
-    same record its own leaf edits, opened from the calendar.
+    The calendar's gear, Airbnb's Settings sheet (measured live 2026-10-01):
+    a rail of cards, each showing its value and opening a picker of a few
+    choices. Availability is when guests can book — the hours the slots come
+    from, how far ahead, how many seats. Cancellations is one policy chosen
+    by name. Closures are the calendar's own: block a day on it.
   -->
-  <DashboardLeafPanel
-    id="calendar-settings"
-    title="Reservation settings"
-    :ready="!editor.loading.value"
-    :saving="editor.saving.value"
-    :disabled="editor.saveDisabled.value"
-    :error="editor.editorError.value ?? ''"
-    @cancel="editor.revert"
-    @save="editor.save"
-  >
-    <div class="mx-auto w-full max-w-md space-y-6">
-      <UAlert
-        v-if="!editor.reservationConfigExists.value"
-        color="neutral"
-        variant="soft"
-        icon="i-lucide-calendar-off"
-        description="This location does not take reservations yet. Saving a policy opens them."
-      />
-      <ReservationPolicyForm v-model="editor.reservationForm.value" />
+  <DashboardIndexPanel id="calendar-settings" title="Settings" :auto-open="groups[0]?.items[0]?.to ?? null">
+    <div v-if="editor.loading.value" class="space-y-4">
+      <USkeleton v-for="index in 4" :key="index" class="h-32 rounded-xl" />
     </div>
-    <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
-  </DashboardLeafPanel>
+    <UAlert v-else-if="editor.error.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.error.value" />
+    <p v-else-if="!editor.location.value" class="text-sm text-muted">Choose a location on the calendar to change its settings.</p>
+    <EditorNavigationList v-else :groups="groups" :active-item="level.child.value" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
-import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { useLocationEditor } from '~/lib/components/workspace/settings/LocationSettingsPage.vue'
+import { cancellationSummary, hoursSummary, noticeSummary, seatsSummary } from '~/shared/availability-settings'
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
+const level = useRouteLevel()
 const organizationId = await useDashboardOrganizationId()
 const locationId = computed(() => typeof route.query.locationId === 'string' ? route.query.locationId : null)
-const editor = await useLocationEditor(organizationId, locationId, 'reservations')
+const editor = await useLocationEditor(organizationId, locationId, null)
+
+const to = (segment: string) => `${level.path.value}/${segment}?locationId=${encodeURIComponent(locationId.value ?? '')}`
+const groups = computed<EditorNavigationGroup[]>(() => [
+  {
+    id: 'availability',
+    label: 'Availability',
+    items: [
+      { id: 'hours', label: 'Hours', summary: hoursSummary(editor.hoursForm.value.hours), to: to('hours') },
+      { id: 'notice', label: 'Advance notice', summary: noticeSummary(editor.reservationForm.value.advance_notice_minutes), to: to('notice') },
+      { id: 'seats', label: 'Seats per time slot', summary: seatsSummary(editor.reservationForm.value.slot_capacity), to: to('seats') },
+    ],
+  },
+  {
+    id: 'cancellations',
+    label: 'Cancellations',
+    items: [
+      { id: 'cancellation', label: 'Cancellation policy', summary: cancellationSummary(editor.reservationForm.value), to: to('cancellation') },
+    ],
+  },
+])
 </script>

@@ -5,8 +5,8 @@
 <script setup lang="ts">
 import BookingDetails from '~/components/dashboard/BookingDetails.vue'
 
-// A booking is reached from Today, which is where Back goes.
-definePageMeta({ layout: 'dashboard', back: 'dashboard-orgSlug', key: route => `${route.params.orgSlug}:${route.params.bookingType}:${route.params.bookingId}` })
+// Back is the mount's, not the page's: Today from here, the day from the calendar (build/booking-routes.ts).
+definePageMeta({ layout: 'dashboard', key: route => `${route.params.orgSlug}:${route.params.bookingType}:${route.params.bookingId}` })
 useSeoMeta({ title: 'Booking details | Krabiclaw', robots: 'noindex, nofollow' })
 
 const route = useRoute()

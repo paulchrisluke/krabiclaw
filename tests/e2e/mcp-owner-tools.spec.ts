@@ -242,7 +242,7 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('get_reservation_inquiries')
   })
 
-  test('owner reads the calendar and blocks and opens dates through MCP, and guests see it', async ({ request, baseURL }, testInfo) => {
+  test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, baseURL }, testInfo) => {
     test.setTimeout(90_000)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const locationId = 'loc-demo'
@@ -257,6 +257,7 @@ test.describe('stateless MCP server', () => {
     const before_ = day(firstOffset - 1)
     const after_ = day(firstOffset + 2)
     const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
+    let priorPolicy: Record<string, unknown> | null = null
     try {
       await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
       const asTenant = { 'x-preview-tenant': 'demo' }
@@ -314,14 +315,50 @@ test.describe('stateless MCP server', () => {
       expect(cleared.status(), await cleared.text()).toBe(200)
       expect((await calendar()).unavailable_dates.map(entry => entry.date)).not.toContain(to)
       expect(await guestSlots(to)).toBeGreaterThan(0)
+
+      // The calendar's settings are MCP's too: a named cancellation policy is
+      // what the dashboard's card reads back, and advance notice is what the
+      // guest is offered. Notice longer than the days to `from` empties it.
+      const policy = async () => {
+        const response = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'get_reservation_policy', args: { organization_id: organizationId, location_id: locationId },
+        })
+        expect(response.status(), await response.text()).toBe(200)
+        return mcpData<{ policy: Record<string, unknown>; cancellation_policy: string | null }>(await response.json())
+      }
+      priorPolicy = (await policy()).policy
+      const firm = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'update_reservation_policy',
+        args: { organization_id: organizationId, location_id: locationId, cancellation_policy: 'firm', advance_notice_minutes: (firstOffset + 2) * 1440 },
+      })
+      expect(firm.status(), await firm.text()).toBe(200)
+      const dashboardConfig = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
+      expect(dashboardConfig.status(), await dashboardConfig.text()).toBe(200)
+      expect((await dashboardConfig.json()).config).toMatchObject({ free_cancellation_until_minutes: 2880, reschedule_allowed: true, reschedule_cutoff_minutes: 2880 })
+      expect((await policy()).cancellation_policy).toBe('firm')
+      expect(await guestSlots(from)).toBe(0)
     } finally {
-      // Whatever failed above, loc-demo is handed back open: a closure left
-      // behind would fail every later journey that books it.
+      // Whatever failed above, loc-demo is handed back open and on the policy
+      // it had: a closure or a notice left behind would fail every later
+      // journey that books it.
       const handedBack = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'open_dates',
         args: { organization_id: organizationId, location_id: locationId, from, to },
       })
       expect(handedBack.status(), await handedBack.text()).toBe(200)
+      if (priorPolicy) {
+        const restored = await mcpRequest(request, baseURL!, {
+          method: 'tools/call', toolName: 'update_reservation_policy',
+          args: {
+            organization_id: organizationId, location_id: locationId,
+            advance_notice_minutes: priorPolicy.advance_notice_minutes ?? null,
+            free_cancellation_until_minutes: priorPolicy.free_cancellation_until_minutes ?? null,
+            reschedule_allowed: priorPolicy.reschedule_allowed ?? true,
+            reschedule_cutoff_minutes: priorPolicy.reschedule_cutoff_minutes ?? null,
+          },
+        })
+        expect(restored.status(), await restored.text()).toBe(200)
+      }
       await releaseTenantMutationLock()
     }
   })

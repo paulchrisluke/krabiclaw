@@ -58,7 +58,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_calendar',
-      description: 'What is on one location\'s calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking, scheduled class session and scheduled post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location\'s local calendar days. At most 62 days per call.',
+      description: 'What is on one location\'s calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking and published post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location\'s local calendar days. At most 62 days per call.',
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -66,7 +66,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string', description: 'Location id or slug.' },
         from: { ...calendarDateSchema, description: 'First day, YYYY-MM-DD.' },
         to: { ...calendarDateSchema, description: 'Last day, YYYY-MM-DD, inclusive.' },
-        kinds: { type: 'array', items: { type: 'string', enum: ['reservation', 'booking', 'session', 'post'] }, description: 'Limit to these kinds. Defaults to every kind the location offers.' },
+        kinds: { type: 'array', items: { type: 'string', enum: ['reservation', 'booking', 'post'] }, description: 'Limit to these kinds. Defaults to every kind the location offers.' },
       },
       required: ['location_id', 'from', 'to'],
       outputSchema: {

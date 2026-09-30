@@ -1,4 +1,5 @@
 import { HTTPError } from 'nitro';
+import { CANCELLATION_TIER_IDS, cancellationPatch, cancellationTierOf, type CancellationTierId } from "~/shared/availability-settings";
 
 import type { McpExecutorContext } from './shared'
 import {
@@ -241,15 +242,25 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       // answer; there is no site-level policy underneath it to merge in.
       return {
         policy: config,
+        cancellation_policy: config ? cancellationTierOf(config) : null,
         summary: config ? renderBookingPolicySummary(reservationPolicySummarySource(config), locale) : null,
       };
     }
     case "update_reservation_policy": {
       const locationId = requiredString(args, "location_id");
       const locale = optionalString(args, "locale") ?? "en";
-      const patch = await validateLocationReservationConfigPatch(
-        omit(args as Record<string, unknown>, ["location_id", "locale"]),
-      );
+      // A named policy is its two cutoffs, written as the dashboard writes them.
+      const tier = optionalString(args, "cancellation_policy");
+      if (tier !== undefined && !CANCELLATION_TIER_IDS.includes(tier as CancellationTierId)) {
+        throw new Error(`cancellation_policy must be one of ${CANCELLATION_TIER_IDS.join(", ")}`);
+      }
+      if (tier !== undefined && ["free_cancellation_until_minutes", "reschedule_allowed", "reschedule_cutoff_minutes"].some((field) => field in args)) {
+        throw new Error("Pass cancellation_policy or the cancellation cutoffs, not both");
+      }
+      const patch = await validateLocationReservationConfigPatch({
+        ...omit(args as Record<string, unknown>, ["location_id", "locale", "cancellation_policy"]),
+        ...(tier === undefined ? {} : cancellationPatch(tier as CancellationTierId)),
+      });
       const config = await upsertLocationReservationConfig(organization.db, {
         organizationId: organization.organizationId,
         locationId,

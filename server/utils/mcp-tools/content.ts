@@ -1,4 +1,5 @@
 import { CONTENT_BLOCK_TYPES, describeContentBlockTextFields } from '~/shared/content-registries'
+import { CANCELLATION_TIER_IDS } from '~/shared/availability-settings'
 import type { McpToolDefinition } from './shared'
 import { contentBlockMediaInputObject, contentBlockUpdatedAtInput, locationReservationConfigObject, locationReservationConfigWriteSchema, pageInfoObject, paginationInputSchema, renderedBookingPolicySummaryObject, organizationTool } from './shared'
 
@@ -198,14 +199,15 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           policy: { ...locationReservationConfigObject, type: ['object', 'null'] },
+          cancellation_policy: { type: ['string', 'null'], enum: [...CANCELLATION_TIER_IDS, null], description: 'The named cancellation policy the dashboard shows, or null when the stored cutoffs match none of them.' },
           summary: { ...renderedBookingPolicySummaryObject, type: ['object', 'null'] },
         },
-        required: ['policy', 'summary'],
+        required: ['policy', 'cancellation_policy', 'summary'],
       },
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and the guest-facing rules. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -213,6 +215,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.' },
       },
       required: ['location_id'],
       outputSchema: {
