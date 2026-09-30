@@ -1,6 +1,6 @@
 ﻿import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseOpeningHours, parseSpecialHours, normalizeGoogleOpeningHours, getDateIntervals, generateReservationTimes, isOpenNow } from '../../shared/reservation-hours.ts'
+import { parseOpeningHours, parseSpecialHours, normalizeGoogleOpeningHours, getDateIntervals, generateReservationTimes, isOpenNow, closeDates, openDates, closureOnDate } from '../../shared/reservation-hours.ts'
 
 test('weekly hours retain close weekdays, Sunday rollover and exact 23:59 endpoints', () => {
   const hours = parseOpeningHours({ periods: [{ open: { day: 6, hour: 22, minute: 0 }, close: { day: 0, hour: 2, minute: 0 } }] })
@@ -42,4 +42,26 @@ test('overnight starts retain the opening minute grid and short closures do not 
   const continuous = parseOpeningHours({ periods: [{ open: { day: 1, hour: 9, minute: 0 }, close: { day: 5, hour: 17, minute: 0 } }] })
   const closure = parseSpecialHours([{ kind: 'closure', starts_on: '2099-01-06', ends_on: '2099-01-06', note: null }])
   assert.equal(generateReservationTimes(continuous, '2099-01-07', { specialHours: closure }).length, 48)
+})
+
+test('closing dates adds one closure and opening them cuts every covering closure around the range', () => {
+  const closed = closeDates(null, '2099-03-10', '2099-03-12')
+  assert.deepEqual(closed, [{ kind: 'closure', starts_on: '2099-03-10', ends_on: '2099-03-12', note: null }])
+  assert.equal(openDates(closed, '2099-03-10', '2099-03-12'), null)
+
+  const noted = parseSpecialHours([{ kind: 'closure', starts_on: '2099-03-01', ends_on: '2099-03-31', note: 'Renovation' }])
+  const reopened = openDates(noted, '2099-03-10', '2099-03-12')
+  assert.deepEqual(reopened, [
+    { kind: 'closure', starts_on: '2099-03-01', ends_on: '2099-03-09', note: 'Renovation' },
+    { kind: 'closure', starts_on: '2099-03-13', ends_on: '2099-03-31', note: 'Renovation' },
+  ])
+  assert.equal(closureOnDate(reopened, '2099-03-11'), undefined)
+  assert.equal(closureOnDate(reopened, '2099-03-09')?.note, 'Renovation')
+
+  const indefinite = parseSpecialHours([{ kind: 'closure', starts_on: '2099-01-01', ends_on: null, note: null }])
+  assert.deepEqual(openDates(indefinite, '2099-01-01', '2099-01-01'), [{ kind: 'closure', starts_on: '2099-01-02', ends_on: null, note: null }])
+
+  const untouched = parseSpecialHours([{ kind: 'hours', date: '2099-03-11', periods: [], note: null }, { kind: 'closure', starts_on: '2099-04-01', ends_on: '2099-04-02', note: null }])
+  assert.deepEqual(openDates(untouched, '2099-03-10', '2099-03-12'), untouched)
+  assert.throws(() => closeDates(null, '2099-03-12', '2099-03-10'))
 })

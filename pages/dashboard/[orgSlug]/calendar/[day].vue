@@ -34,8 +34,8 @@
 </template>
 
 <script setup lang="ts">
-import { closureOnDate, getDateIntervals, parseOpeningHours, parseSpecialHours, type SpecialHours } from '~/shared/reservation-hours'
-import { addLocalDays, formatCalendarDate } from '~/utils/timezone'
+import { closeDates, closureOnDate, getDateIntervals, openDates, parseOpeningHours, parseSpecialHours, type SpecialHours } from '~/shared/reservation-hours'
+import { formatCalendarDate } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaPayload } from '~/server/utils/dashboard-agenda'
 import { calendarLocationKey } from '../calendar.vue'
@@ -103,28 +103,12 @@ const availability = computed<{ open: boolean; reason: string; action: 'open' | 
 
 const saving = ref(false)
 
-/**
- * Block writes one closure for the day. Open removes the closure that covers
- * it; a range that covers more than this day is cut around it, so the other
- * days stay closed.
- */
-function withoutDay(special: SpecialHours, date: string): SpecialHours {
-  if (!special) return null
-  const next = special.flatMap((entry) => {
-    if (entry.kind !== 'closure' || entry.starts_on > date || (entry.ends_on !== null && entry.ends_on < date)) return [entry]
-    const before = entry.starts_on < date ? [{ ...entry, ends_on: addLocalDays(date, -1) }] : []
-    const after = entry.ends_on === null || entry.ends_on > date ? [{ ...entry, starts_on: addLocalDays(date, 1) }] : []
-    return [...before, ...after]
-  })
-  return next.length ? next : null
-}
-
 async function toggleClosure(): Promise<void> {
   const record = location.value
   if (!record || !availability.value.action) return
   const next: SpecialHours = availability.value.action === 'block'
-    ? [...(specialHours.value ?? []), { kind: 'closure' as const, starts_on: day.value, ends_on: day.value, note: null }]
-    : withoutDay(specialHours.value, day.value)
+    ? closeDates(specialHours.value, day.value, day.value)
+    : openDates(specialHours.value, day.value, day.value)
   saving.value = true
   saveError.value = null
   try {

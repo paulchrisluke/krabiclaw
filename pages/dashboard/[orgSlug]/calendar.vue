@@ -4,6 +4,14 @@
       <div class="flex items-center gap-2">
         <USelect v-model="filters.locationId" :items="locationOptions" size="sm" class="w-44" aria-label="Location" />
         <USelect v-model="filters.kind" :items="kindOptions" size="sm" class="w-36" aria-label="Kind" />
+        <UButton
+          v-if="chosenLocation && !selecting"
+          label="Select dates"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          @click="startSelecting"
+        />
       </div>
     </template>
 
@@ -43,13 +51,15 @@
           :fixed-weeks="false"
           :week-starts-on="0"
           :ui="calendarUi"
-          :is-date-unavailable="isUnavailable"
           @update:model-value="selectDay"
         >
           <template #day="{ day }">
             <span
               class="flex size-7 items-center justify-center rounded-full text-sm font-medium"
               :class="isToday(day) ? 'bg-primary text-inverted' : isUnavailable(day) ? 'text-muted line-through' : 'text-highlighted'"
+              :data-closed="isUnavailable(day) ? '' : undefined"
+              :data-in-range="inSelection(day) ? '' : undefined"
+              :data-range-edge="isSelectionEdge(day) ? '' : undefined"
             >{{ day.day }}</span>
             <span v-if="countFor(day)" class="mt-1 text-xs tabular-nums text-muted">{{ countFor(day) }}</span>
           </template>
@@ -60,9 +70,23 @@
       <div ref="sentinel" class="h-px" />
     </div>
 
+    <template v-if="selecting" #footer>
+      <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-highlighted">{{ selectionLabel }}</p>
+          <p class="text-xs text-muted">{{ selectionHint }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="stopSelecting" />
+          <UButton :label="selectionRange ? `Open ${selectionCountLabel}` : 'Open'" color="neutral" variant="soft" :disabled="!selectionRange" :loading="writing === 'open'" @click="writeSelection('open')" />
+          <UButton :label="selectionRange ? `Block ${selectionCountLabel}` : 'Block'" :disabled="!selectionRange" :loading="writing === 'block'" @click="writeSelection('block')" />
+        </div>
+      </div>
+    </template>
+
     <!-- Airbnb's floating Today: appears once today has scrolled away, and brings it back. -->
     <UButton
-      v-if="!todayInView"
+      v-if="!todayInView && !selecting"
       icon="i-lucide-arrow-up"
       label="Today"
       color="neutral"
@@ -92,7 +116,7 @@ export const calendarLocationKey = Symbol('calendar-location') as InjectionKey<{
 
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, parseDate, today, type DateValue } from '@internationalized/date'
-import { closureOnDate, getDateIntervals, parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
+import { closeDates, closureOnDate, getDateIntervals, openDates, parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { formatCalendarDate } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
@@ -130,7 +154,8 @@ const calendarUi = {
     'data-[outside-view]:invisible',
     'data-[selected]:bg-elevated/70 data-[selected]:text-highlighted data-[selected]:ring-2 data-[selected]:ring-primary data-[selected]:ring-inset',
     'data-[today]:text-highlighted',
-    'data-[unavailable]:bg-elevated/30 data-[unavailable]:pointer-events-auto data-[unavailable]:no-underline',
+    'has-[[data-closed]]:bg-elevated/30',
+    'has-[[data-in-range]]:bg-primary/15 has-[[data-range-edge]]:bg-primary/25 has-[[data-range-edge]]:ring-2 has-[[data-range-edge]]:ring-primary has-[[data-range-edge]]:ring-inset',
   ].join(' '),
 }
 
@@ -264,7 +289,97 @@ const selectedDate = computed<CalendarDate | null>(() => typeof route.params.day
 function selectDay(value: unknown): void {
   const chosen = value instanceof CalendarDate ? value : value ? parseDate(String(value)) : null
   if (!chosen) return
+  if (selecting.value) {
+    extendSelection(chosen.toString())
+    return
+  }
   void navigateTo({ path: `${level.path.value}/${chosen.toString()}`, query: route.query })
+}
+
+// Select dates — Airbnb's Select nights. A first tap starts the range, a
+// second ends it (either order), a third starts over. Each month is its own
+// UCalendar, so the range is kept here rather than in any one of them.
+const selecting = ref(false)
+const selection = reactive<{ start: string | null; end: string | null }>({ start: null, end: null })
+const writing = ref<'block' | 'open' | null>(null)
+const writeError = ref<unknown>(null)
+
+function startSelecting(): void {
+  selecting.value = true
+  selection.start = null
+  selection.end = null
+  writeError.value = null
+  if (typeof route.params.day === 'string') void navigateTo({ path: level.path.value, query: route.query })
+}
+function stopSelecting(): void {
+  selecting.value = false
+  selection.start = null
+  selection.end = null
+}
+function extendSelection(day: string): void {
+  if (!selection.start || selection.end) {
+    selection.start = day
+    selection.end = null
+    return
+  }
+  if (day < selection.start) {
+    selection.end = selection.start
+    selection.start = day
+  } else {
+    selection.end = day
+  }
+}
+const selectionRange = computed(() => selection.start ? { from: selection.start, to: selection.end ?? selection.start } : null)
+const selectionDays = computed(() => {
+  const range = selectionRange.value
+  if (!range) return 0
+  return parseDate(range.to).compare(parseDate(range.from)) + 1
+})
+const selectionCountLabel = computed(() => selectionDays.value === 1 ? '1 day' : `${selectionDays.value} days`)
+const selectionLabel = computed(() => {
+  const range = selectionRange.value
+  if (!range) return 'Choose a start date'
+  const from = formatCalendarDate(range.from, 'en', { month: 'short', day: 'numeric' })
+  if (!selection.end) return `${from} — choose an end date, or block this day`
+  return `${from} – ${formatCalendarDate(range.to, 'en', { month: 'short', day: 'numeric' })}`
+})
+const selectionHint = computed(() => writeError.value
+  ? getErrorMessage(writeError.value, 'The dates were not saved')
+  : selectionRange.value ? `${selectionCountLabel.value} selected` : 'Tap a day to start')
+
+function inSelection(day: DateValue): boolean {
+  const range = selectionRange.value
+  if (!range) return false
+  const key = day.toString()
+  return key >= range.from && key <= range.to
+}
+function isSelectionEdge(day: DateValue): boolean {
+  const range = selectionRange.value
+  if (!range) return false
+  const key = day.toString()
+  return key === range.from || key === range.to
+}
+
+async function writeSelection(action: 'block' | 'open'): Promise<void> {
+  const record = chosenLocation.value
+  const range = selectionRange.value
+  if (!record || !range) return
+  const special = parseSpecialHours(record.special_hours ?? null)
+  writing.value = action
+  writeError.value = null
+  try {
+    await dashboardApi(`/api/organizations/${organizationId}/locations/${record.id}`, {
+      method: 'PATCH',
+      body: { special_hours: action === 'block' ? closeDates(special, range.from, range.to) : openDates(special, range.from, range.to) },
+      validate: isLocationHours,
+    })
+    await refreshLocation()
+    stopSelecting()
+  } catch (cause) {
+    writeError.value = cause
+  } finally {
+    writing.value = null
+  }
 }
 
 const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...locations.value.map(location => ({ label: location.title, value: location.id }))])
