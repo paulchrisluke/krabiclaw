@@ -5,19 +5,26 @@
         <USelect v-model="filters.locationId" :items="locationOptions" size="sm" class="w-44" aria-label="Location" />
         <USelect v-model="filters.kind" :items="kindOptions" size="sm" class="w-36" aria-label="Kind" />
         <UButton
-          v-if="chosenLocation && !selecting"
+          v-if="chosenLocation && !selecting && view === 'month'"
           label="Select dates"
           color="neutral"
           variant="outline"
           size="sm"
           @click="startSelecting"
         />
+        <!-- List, Month, Year behind one icon, as Airbnb's view menu. -->
+        <UDropdownMenu :items="viewItems" :content="{ align: 'end' }" :ui="{ content: 'w-40' }">
+          <UButton :icon="VIEWS[view].icon" color="neutral" variant="ghost" size="sm" square :aria-label="`View: ${VIEWS[view].label}`" />
+        </UDropdownMenu>
       </div>
     </template>
 
     <div class="mx-auto w-full max-w-3xl pb-28">
       <!-- One weekday bar for every month below it, as Airbnb's calendar draws it. -->
-      <div class="sticky -top-4 z-10 -mx-4 -mt-4 grid grid-cols-7 border-b border-default bg-default px-4 pb-2 pt-6 text-center text-xs font-medium text-muted sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-8">
+      <div
+        v-if="view === 'month'"
+        class="sticky -top-4 z-10 -mx-4 -mt-4 grid grid-cols-7 border-b border-default bg-default px-4 pb-2 pt-6 text-center text-xs font-medium text-muted sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-8"
+      >
         <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
       </div>
 
@@ -30,44 +37,123 @@
         :description="getErrorMessage(agendaError, 'Calendar request failed')"
       />
 
-      <section
-        v-for="month in months"
-        :key="month.key"
-        :ref="(el) => registerMonth(month.key, el)"
-        :data-month="month.key"
-        class="pt-8"
-      >
-        <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
-
-        <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
-
-        <UCalendar
-          v-else
-          :placeholder="month.first"
-          :model-value="selectedDate"
-          :month-controls="false"
-          :year-controls="false"
-          :view-control="false"
-          :fixed-weeks="false"
-          :week-starts-on="0"
-          :ui="calendarUi"
-          @update:model-value="selectDay"
+      <template v-if="view === 'month'">
+        <section
+          v-for="month in months"
+          :key="month.key"
+          :ref="(el) => registerMonth(month.key, el)"
+          :data-month="month.key"
+          class="pt-8"
         >
-          <template #day="{ day }">
-            <span
-              class="flex size-7 items-center justify-center rounded-full text-sm font-medium"
-              :class="isToday(day) ? 'bg-primary text-inverted' : isUnavailable(day) ? 'text-muted line-through' : 'text-highlighted'"
-              :data-closed="isUnavailable(day) ? '' : undefined"
-              :data-in-range="inSelection(day) ? '' : undefined"
-              :data-range-edge="isSelectionEdge(day) ? '' : undefined"
-            >{{ day.day }}</span>
-            <span v-if="countFor(day)" class="mt-1 text-xs tabular-nums text-muted">{{ countFor(day) }}</span>
-          </template>
-        </UCalendar>
+          <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
 
-      </section>
+          <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
 
-      <div ref="sentinel" class="h-px" />
+          <UCalendar
+            v-else
+            :placeholder="month.first"
+            :model-value="selectedDate"
+            :month-controls="false"
+            :year-controls="false"
+            :view-control="false"
+            :fixed-weeks="false"
+            :week-starts-on="0"
+            :ui="calendarUi"
+            @update:model-value="selectDay"
+          >
+            <template #day="{ day }">
+              <span
+                class="flex size-7 items-center justify-center rounded-full text-sm font-medium"
+                :class="isToday(day) ? 'bg-primary text-inverted' : isUnavailable(day) ? 'text-muted line-through' : 'text-highlighted'"
+                :data-closed="isUnavailable(day) ? '' : undefined"
+                :data-in-range="inSelection(day) ? '' : undefined"
+                :data-range-edge="isSelectionEdge(day) ? '' : undefined"
+              >{{ day.day }}</span>
+              <span v-if="countFor(day)" class="mt-1 text-xs tabular-nums text-muted">{{ countFor(day) }}</span>
+            </template>
+          </UCalendar>
+        </section>
+      </template>
+
+      <!-- List: every day as a row under its month, Airbnb's agenda. -->
+      <template v-else-if="view === 'list'">
+        <section
+          v-for="month in months"
+          :key="month.key"
+          :ref="(el) => registerMonth(month.key, el)"
+          :data-month="month.key"
+          class="pt-8"
+        >
+          <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
+          <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
+          <div v-else class="divide-y divide-default border-y border-default">
+            <NuxtLink
+              v-for="dayKey in daysOf(month)"
+              :key="dayKey"
+              :to="{ path: `${level.path.value}/${dayKey}`, query: route.query }"
+              class="grid grid-cols-[3.5rem_1fr] gap-3 py-3 hover:bg-elevated/50"
+              :data-day="dayKey"
+            >
+              <div class="pt-1 text-center">
+                <span
+                  class="mx-auto flex size-7 items-center justify-center rounded-full text-sm font-medium"
+                  :class="dayKey === todayKey ? 'bg-primary text-inverted' : isUnavailableKey(dayKey) ? 'text-muted line-through' : 'text-highlighted'"
+                >{{ Number(dayKey.slice(-2)) }}</span>
+                <span class="block text-[11px] text-muted">{{ weekdayOf(dayKey) }}</span>
+              </div>
+              <div class="min-w-0">
+                <template v-if="itemsByDay.get(dayKey)?.length">
+                  <div v-for="item in itemsByDay.get(dayKey)" :key="item.id" class="grid grid-cols-[4rem_1fr] gap-2 py-1 text-sm">
+                    <span class="tabular-nums text-highlighted">{{ timeOf(item) }}</span>
+                    <span class="min-w-0"><span class="block truncate text-highlighted">{{ item.title }}</span><span class="block truncate text-xs text-muted">{{ item.subtitle }}</span></span>
+                  </div>
+                </template>
+                <p v-else class="py-1 text-sm text-muted">{{ isUnavailableKey(dayKey) ? 'Unavailable' : 'Nothing scheduled' }}</p>
+              </div>
+            </NuxtLink>
+          </div>
+        </section>
+      </template>
+
+      <!-- Year: twelve small months, a dot where the day has something. -->
+      <template v-else>
+        <div class="flex items-center justify-between pt-6">
+          <h2 class="text-2xl font-semibold text-highlighted">{{ shownYear }}</h2>
+          <div class="flex gap-1">
+            <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous year" @click="showYear(shownYear - 1)" />
+            <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next year" @click="showYear(shownYear + 1)" />
+          </div>
+        </div>
+        <div class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+          <section v-for="month in months" :key="month.key" :data-month="month.key">
+            <button type="button" class="mb-2 px-1 text-base font-semibold text-highlighted hover:text-primary" @click="openMonth(month.key)">
+              {{ formatCalendarDate(month.first.toString(), 'en', { month: 'long' }) }}
+            </button>
+            <USkeleton v-if="month.status === 'loading'" class="h-40 w-full" />
+            <UCalendar
+              v-else
+              :placeholder="month.first"
+              :month-controls="false"
+              :year-controls="false"
+              :view-control="false"
+              :fixed-weeks="false"
+              :week-starts-on="0"
+              :ui="yearUi"
+              @update:model-value="openDay"
+            >
+              <template #day="{ day }">
+                <span
+                  class="text-[11px] leading-none"
+                  :class="isToday(day) ? 'font-semibold text-primary' : isUnavailable(day) ? 'text-dimmed line-through' : 'text-highlighted'"
+                >{{ day.day }}</span>
+                <span class="mt-0.5 size-1 rounded-full" :class="countFor(day) ? 'bg-primary' : 'bg-transparent'" />
+              </template>
+            </UCalendar>
+          </section>
+        </div>
+      </template>
+
+      <div v-if="view !== 'year'" ref="sentinel" class="h-px" />
     </div>
 
     <template v-if="selecting" #footer>
@@ -86,7 +172,7 @@
 
     <!-- Airbnb's floating Today: appears once today has scrolled away, and brings it back. -->
     <UButton
-      v-if="!todayInView && !selecting"
+      v-if="!todayInView && !selecting && view !== 'year'"
       icon="i-lucide-arrow-up"
       label="Today"
       color="neutral"
@@ -117,7 +203,7 @@ export const calendarLocationKey = Symbol('calendar-location') as InjectionKey<{
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, parseDate, today, type DateValue } from '@internationalized/date'
 import { closeDates, closureOnDate, getDateIntervals, openDates, parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
-import { formatCalendarDate } from '~/utils/timezone'
+import { formatCalendarDate, formatTimestamp } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
 
@@ -139,6 +225,22 @@ const timeZone = getLocalTimeZone()
 const todayDate = today(timeZone)
 const todayKey = todayDate.toString()
 
+// The three views of Airbnb's calendar; the URL carries which, so it survives a reload.
+type CalendarView = 'list' | 'month' | 'year'
+const VIEWS: Record<CalendarView, { label: string; icon: string }> = {
+  list: { label: 'List', icon: 'i-lucide-list' },
+  month: { label: 'Month', icon: 'i-lucide-layout-grid' },
+  year: { label: 'Year', icon: 'i-lucide-grid-3x3' },
+}
+const view = ref<CalendarView>(route.query.view === 'list' || route.query.view === 'year' ? route.query.view : 'month')
+const viewItems = computed(() => (Object.keys(VIEWS) as CalendarView[]).map(key => ({
+  label: VIEWS[key].label,
+  icon: VIEWS[key].icon,
+  type: 'checkbox' as const,
+  checked: view.value === key,
+  onSelect: () => { view.value = key },
+})))
+
 // Reka draws the outside-view days as cells; Airbnb leaves those blank, so
 // they are made invisible rather than removed, which keeps the grid aligned.
 const calendarUi = {
@@ -157,6 +259,16 @@ const calendarUi = {
     'has-[[data-closed]]:bg-elevated/30',
     'has-[[data-in-range]]:bg-primary/15 has-[[data-range-edge]]:bg-primary/25 has-[[data-range-edge]]:ring-2 has-[[data-range-edge]]:ring-primary has-[[data-range-edge]]:ring-inset',
   ].join(' '),
+}
+const yearUi = {
+  header: 'hidden',
+  grid: 'w-full',
+  gridWeekDaysRow: 'grid grid-cols-7 mb-1',
+  headCell: 'text-[10px] font-medium text-muted text-center',
+  gridBody: 'grid gap-0.5',
+  gridRow: 'grid grid-cols-7 gap-0.5 place-items-stretch',
+  cell: 'w-full p-0',
+  cellTrigger: 'm-0 flex h-7 w-full flex-col items-center justify-center rounded-md hover:bg-elevated data-[outside-view]:invisible data-[selected]:bg-transparent data-[today]:font-semibold',
 }
 
 interface MonthBlock {
@@ -184,15 +296,17 @@ const { data: chosenLocation, refresh: refreshLocation } = await useAsyncData(
   { watch: [() => filters.locationId] },
 )
 provide(calendarLocationKey, { location: chosenLocation, refresh: async () => { await refreshLocation() } })
-function isUnavailable(day: DateValue): boolean {
+function isUnavailableKey(key: string): boolean {
   const record = chosenLocation.value
   if (!record) return false
   if (record.status !== 'active') return true
-  const key = day.toString()
   const special = parseSpecialHours(record.special_hours ?? null)
   if (closureOnDate(special, key)) return true
   const intervals = getDateIntervals(parseOpeningHours(record.opening_hours ?? null), special, key)
   return intervals !== null && intervals.length === 0
+}
+function isUnavailable(day: DateValue): boolean {
+  return isUnavailableKey(day.toString())
 }
 const availableKinds = ref<AgendaKind[]>([])
 const generation = ref(0)
@@ -212,7 +326,11 @@ function monthLabelOf(first: CalendarDate): string {
   return formatCalendarDate(first.toString(), 'en', first.year === todayDate.year && first.month !== 1 ? { month: 'long' } : { month: 'short', year: 'numeric' })
 }
 
-const months = computed(() => monthKeys.value.map(key => monthData.value.get(key)!).filter(Boolean))
+// Year shows twelve months of one year; the other views walk forward from today.
+const shownYear = ref(todayDate.year)
+const yearKeys = computed(() => Array.from({ length: 12 }, (_, index) => `${shownYear.value}-${String(index + 1).padStart(2, '0')}`))
+const visibleKeys = computed(() => view.value === 'year' ? yearKeys.value : monthKeys.value)
+const months = computed(() => visibleKeys.value.map(key => monthData.value.get(key)!).filter(Boolean))
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
@@ -251,11 +369,15 @@ async function loadMonth(key: string): Promise<void> {
   }
 }
 
+async function ensureLoaded(keys: string[]): Promise<void> {
+  await Promise.all(keys.filter(key => !monthData.value.has(key)).map(loadMonth))
+}
+
 async function resetMonths(): Promise<void> {
   generation.value += 1
   monthData.value = new Map()
   monthKeys.value = Array.from({ length: INITIAL_MONTHS }, (_, offset) => monthKeyOf(todayDate.add({ months: offset })))
-  await Promise.all(monthKeys.value.map(loadMonth))
+  await ensureLoaded(view.value === 'year' ? yearKeys.value : monthKeys.value)
 }
 
 function loadNextMonth(): void {
@@ -263,7 +385,26 @@ function loadNextMonth(): void {
   if (!lastKey) return
   const next = monthKeyOf(firstOf(lastKey).add({ months: 1 }))
   monthKeys.value = [...monthKeys.value, next]
-  void loadMonth(next)
+  void ensureLoaded([next])
+}
+
+function showYear(year: number): void {
+  shownYear.value = year
+  void ensureLoaded(yearKeys.value)
+}
+
+// A month chosen from the year opens the month view on it: the scroll starts
+// there and walks forward, as it does from today.
+async function openMonth(key: string): Promise<void> {
+  monthKeys.value = Array.from({ length: INITIAL_MONTHS }, (_, offset) => monthKeyOf(firstOf(key).add({ months: offset })))
+  view.value = 'month'
+  await ensureLoaded(monthKeys.value)
+  await nextTick()
+  monthElements.get(key)?.scrollIntoView({ block: 'start' })
+}
+function openDay(value: unknown): void {
+  const chosen = value instanceof CalendarDate ? value : value ? parseDate(String(value)) : null
+  if (chosen) void openMonth(monthKeyOf(chosen))
 }
 
 const itemsByDay = computed(() => {
@@ -279,6 +420,16 @@ function countFor(day: DateValue): number {
 }
 function isToday(day: DateValue): boolean {
   return day.toString() === todayKey
+}
+function daysOf(month: MonthBlock): string[] {
+  const count = month.first.add({ months: 1 }).subtract({ days: 1 }).day
+  return Array.from({ length: count }, (_, index) => month.first.add({ days: index }).toString())
+}
+function weekdayOf(dayKey: string): string {
+  return formatCalendarDate(dayKey, 'en', { weekday: 'short' })
+}
+function timeOf(item: AgendaItem): string {
+  return formatTimestamp(item.startsAt, 'en', item.timeZone, { hour: 'numeric', minute: '2-digit' })
 }
 
 // The open day is the route below this level, so a reload and a deep link ring
@@ -412,12 +563,21 @@ onMounted(async () => {
   todayObserver = new IntersectionObserver(([entry]) => { todayInView.value = entry?.isIntersecting ?? true })
   sentinelObserver = new IntersectionObserver(([entry]) => { if (entry?.isIntersecting) loadNextMonth() })
   await resetMonths()
-  await nextTick()
-  if (sentinel.value) sentinelObserver.observe(sentinel.value)
+})
+// The sentinel comes and goes with the view, so it is observed whenever it is there.
+watch(sentinel, (el, previous) => {
+  if (previous) sentinelObserver?.unobserve(previous)
+  if (el) sentinelObserver?.observe(el)
 })
 onBeforeUnmount(() => {
   sentinelObserver?.disconnect()
   todayObserver?.disconnect()
+})
+
+watch(view, (next) => {
+  if (selecting.value) stopSelecting()
+  void router.replace({ query: { ...route.query, view: next === 'month' ? undefined : next } })
+  void ensureLoaded(next === 'year' ? yearKeys.value : monthKeys.value)
 })
 
 watch(() => [filters.locationId, filters.kind], () => {
