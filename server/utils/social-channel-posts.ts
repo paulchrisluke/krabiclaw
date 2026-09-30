@@ -3,7 +3,7 @@ import { executeBatch, queryFirst } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 import { deletePageObject, listPagePosts, readPagePostRecord, type FacebookAttachment, type FacebookPagePostRecord } from './facebook-pages'
 import { listMedia, readMedia, type InstagramMediaRecord } from './instagram'
-import { MetaDeadline, MetaGraphError } from './meta-graph'
+import { MetaDeadline } from './meta-graph'
 import { organizationEventQuery } from './organization-events'
 import { publicResourceCacheInvalidationQuery } from './public-resource-cache'
 import { connectedSocialTarget, parsePublishTargets, type PublishTarget, type SocialChannel } from './social-publication'
@@ -86,12 +86,8 @@ export async function deleteChannelPost(env: CloudflareEnv, organizationId: stri
   if (previous?.state === 'removed') return { channel: input.channel, target_id: input.target_id, provider_post_id: providerPostId, deleted: true, publication: previous }
   if (previous && previous.state !== 'published') throw new HTTPError({ statusCode: 409, statusMessage: 'Resolve the existing publication before deleting its provider post.' })
   const deadline = new MetaDeadline(30_000)
-  try {
-    facebookPost(await readPagePostRecord(connection.target, providerPostId, deadline), input.target_id)
-    await deletePageObject(connection.target, providerPostId, deadline)
-  } catch (error) {
-    if (!(error instanceof MetaGraphError && error.objectMissing && previous?.state === 'published')) throw error
-  }
+  facebookPost(await readPagePostRecord(connection.target, providerPostId, deadline), input.target_id)
+  await deletePageObject(connection.target, providerPostId, deadline)
   const now = new Date().toISOString()
   await executeBatch(env.DB, [
     { query: `UPDATE post_publications SET state = 'removed', attempt_id = NULL, error_code = NULL, error_message = NULL, updated_at = ?

@@ -504,7 +504,7 @@ test('channel MCP tools report invalid parameters while preserving connection an
 })
 
 for (const method of ['GET', 'DELETE']) {
-  test(`channel deletion accepts a missing object during ${method} only with a published receipt`, async () => {
+  test(`channel deletion propagates ambiguous missing-object errors during ${method}`, async () => {
     const { runtime, db, env, cardless, meta, restore } = await setUp()
     try {
       const target = { channel: 'facebook' as const, target_id: PAGE, connection_revision: 'fb-rev-org-a' }
@@ -518,9 +518,11 @@ for (const method of ['GET', 'DELETE']) {
       assert.equal((await getPost(db, env, 'org-a', post.id))!.publications[0]!.state, 'published')
 
       meta.fault('missing', matches)
-      assert.equal((await deleteChannelPost(env, 'org-a', target, providerId, 'owner')).deleted, true)
-      assert.equal((await getPost(db, env, 'org-a', post.id))!.publications[0]!.state, 'removed')
-      assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE event_name = 'post.channel_deleted' AND json_extract(payload_json, '$.entityId') = ?").bind(providerId).first('count'), 1)
+      await assert.rejects(deleteChannelPost(env, 'org-a', target, providerId, 'owner'),
+        (error: unknown) => error instanceof MetaGraphError && error.objectMissing)
+      assert.equal((await getPost(db, env, 'org-a', post.id))!.publications[0]!.state, 'published')
+      assert.equal(meta.fbPosts.has(providerId), true)
+      assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE event_name = 'post.channel_deleted' AND json_extract(payload_json, '$.entityId') = ?").bind(providerId).first('count'), 0)
 
       const unknownId = `${PAGE}_untracked`
       meta.fbPosts.set(unknownId, { published: true, attached: [] })
