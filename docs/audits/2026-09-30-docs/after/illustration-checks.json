@@ -1,0 +1,93 @@
+[
+  {
+    "images": [
+      {
+        "alt": "Notification categories and the Reservations and bookings delivery options, including Email and WhatsApp.",
+        "height": 768,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/c720c1d9-9ebb-4e62-f48f-4fea0a8ecc00/public",
+        "width": 1152
+      },
+      {
+        "alt": "Personal profile WhatsApp controls showing the Verified state and the Verify and save action, with the phone number hidden.",
+        "height": 768,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/589c81d4-82bd-4f89-c17e-3414fb705a00/public",
+        "width": 1152
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/set-up-notifications",
+    "title": "Set up notifications"
+  },
+  {
+    "images": [
+      {
+        "alt": "Invite a team member form with a blank email field and the Admin and Owner role options.",
+        "height": 768,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/dbafea03-a3e8-47f6-d895-c83792697400/public",
+        "width": 1152
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/invite-your-team",
+    "title": "Invite your team"
+  },
+  {
+    "images": [
+      {
+        "alt": "Illustration of Brand settings and the Logo editor in KrabiClaw.",
+        "height": 648,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a8ca1d32-15bd-4407-d1cc-e764ce1dd100/public",
+        "width": 1366
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/customize-brand-theme",
+    "title": "Customize your brand and theme"
+  },
+  {
+    "images": [
+      {
+        "alt": "Select logo media picker with Add files and a drag-and-drop upload area.",
+        "height": 497,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1bbe327e-5a0e-485f-5b42-152b81887300/public",
+        "width": 1366
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/add-photos-and-video",
+    "title": "Add photos and video"
+  },
+  {
+    "images": [
+      {
+        "alt": "Three-step dashboard route from Pages to the About page and its Sections list.",
+        "height": 508,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/54eaec22-0bf2-4e60-0c71-6a05022e8b00/public",
+        "width": 1366
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/make-your-first-site-edit",
+    "title": "Make your first site edit"
+  },
+  {
+    "images": [
+      {
+        "alt": "New organization introduction with Tell us about your business, Make it yours, Publish, and Get started.",
+        "height": 768,
+        "loaded": true,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/c1bd5b0f-f722-42e4-abcb-b2ea1c334500/public",
+        "width": 863
+      }
+    ],
+    "overflow": false,
+    "path": "/docs/deploy-your-site",
+    "title": "Create and publish your first site"
+  }
+]

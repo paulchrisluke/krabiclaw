@@ -5,19 +5,24 @@
     categories in the owner's order, subcategories under their parent, each
     heading linking to its category page.
   -->
-  <div class="space-y-14">
-    <header class="max-w-3xl">
-      <h1 class="text-4xl font-bold text-default sm:text-5xl">{{ title }}</h1>
-      <p v-if="index?.summary" class="mt-4 text-lg text-muted">{{ index.summary }}</p>
+  <div :class="collection === 'docs' ? 'space-y-8' : 'space-y-14'">
+    <header class="max-w-3xl" :class="collection === 'docs' ? 'pb-5' : ''">
+      <h1 class="font-bold text-default" :class="collection === 'docs' ? 'text-3xl tracking-tight sm:text-4xl' : 'text-4xl sm:text-5xl'">{{ title }}</h1>
+      <p v-if="index?.summary || (collection === 'docs' && featured?.excerpt)" class="mt-4 max-w-2xl text-lg leading-8 text-muted">{{ index?.summary || featured?.excerpt }}</p>
+      <NuxtLink v-if="collection === 'docs' && featured" :to="featured.path" class="mt-6 inline-flex min-h-11 items-center gap-3 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white no-underline hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary">
+        {{ featured.title }} <PlatformIcon name="arrow-right" class="size-4" />
+      </NuxtLink>
     </header>
 
     <div v-if="posts.length === 0" class="py-16 text-center text-muted">
       <p class="text-lg font-medium">{{ t('saya.posts.empty_title') }}</p>
     </div>
 
-    <div v-else class="space-y-14" data-parity-section="articles">
-      <ArticleCard v-if="featured" :article="featured" featured />
-      <ArticleCategorySection v-for="category in categoryTree" :key="category.id" :category="category" :exclude="featured?.id ?? null" />
+    <div v-else :class="collection === 'docs' ? 'space-y-10' : 'space-y-14'" data-parity-section="articles">
+      <ArticleCard v-if="featured && collection !== 'docs'" :article="featured" featured />
+      <div :class="collection === 'docs' ? 'grid items-start gap-x-10 gap-y-9 md:grid-cols-2 xl:grid-cols-3' : 'space-y-14'">
+        <ArticleCategorySection v-for="category in categoryTree" :key="category.id" :category="category" :exclude="featured?.id ?? null" :compact="collection === 'docs'" />
+      </div>
     </div>
   </div>
 </template>
@@ -43,10 +48,11 @@ const title = computed(() => index.value?.title?.trim() || label.value)
 const featured = computed(() => posts.value[0] ?? null)
 
 const path = ARTICLE_COLLECTIONS[props.collection].pathPrefix
-useArticleItemList(() => localePath(path), title, posts)
+const itemList = useArticleItemList(() => localePath(path), title, posts)
 useSocialMetadata(() => ({
   path,
   schemaPageType: 'CollectionPage',
+  schemaNodes: [itemList.value],
   // A page about the business: its image is the organization's.
   socialImage: organization?.social_image ?? null,
   // Krabiclaw's layout already titles every page with its own name.

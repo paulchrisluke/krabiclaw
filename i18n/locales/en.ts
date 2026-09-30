@@ -175,6 +175,9 @@ export default {
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
+      "read_guide": "Read guide",
+      "category_guides": "Guides in this category",
+      "next_steps": "Next steps",
       "previous": "Previous",
       "next": "Next",
       "docs_meta_description": "Documentation from {organization}.",

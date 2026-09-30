@@ -38,7 +38,7 @@
       </SayaReviewCard>
     </section>
 
-    <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="lightboxItems" :title="review?.title || 'Review media'" />
+    <MediaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="lightboxItems" :title="review?.title || 'Review media'" />
   </div>
 </template>
 

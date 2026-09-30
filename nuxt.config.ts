@@ -319,6 +319,11 @@ export default defineNuxtConfig({
   // Components configuration
   components: [
     {
+      path: '~/components',
+      pattern: '*.vue',
+      pathPrefix: false,
+    },
+    {
       path: '~/components/tenant-pages',
       pathPrefix: false,
     },

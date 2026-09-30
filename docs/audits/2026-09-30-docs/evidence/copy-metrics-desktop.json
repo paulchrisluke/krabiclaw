@@ -1,0 +1,53 @@
+{
+  "blocks": [
+    {
+      "button": [
+        {
+          "label": "Copy code",
+          "rect": {
+            "bottom": 465.6640625,
+            "height": 31.671875,
+            "left": 546.1875,
+            "right": 577.859375,
+            "top": 433.9921875,
+            "width": 31.671875,
+            "x": 546.1875,
+            "y": 433.9921875
+          },
+          "style": {
+            "position": "absolute",
+            "right": "456.578px",
+            "top": "114.469px"
+          }
+        }
+      ],
+      "clientWidth": 644,
+      "padding": "12.72px",
+      "rect": {
+        "bottom": 472.1484375,
+        "height": 152.625,
+        "left": 390.5625,
+        "right": 1034.4375,
+        "top": 319.5234375,
+        "width": 643.875,
+        "x": 390.5625,
+        "y": 319.5234375
+      },
+      "scrollWidth": 644
+    }
+  ],
+  "copyButtons": [
+    {
+      "label": null,
+      "text": "Copy prompt"
+    },
+    {
+      "label": "Copy code",
+      "text": ""
+    }
+  ],
+  "viewport": {
+    "height": 900,
+    "width": 1440
+  }
+}

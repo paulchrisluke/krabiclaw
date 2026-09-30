@@ -1,5 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../../utils/form-constants.ts";
+/* Markdown copy controls are created by this composable, not a Vue template. */
+@source "../../composables/useCopyableCodeBlocks.ts";
 
 @plugin "@tailwindcss/typography";
 

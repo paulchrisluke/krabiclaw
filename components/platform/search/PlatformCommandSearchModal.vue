@@ -13,6 +13,7 @@
         class="flex max-h-[min(80vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
         :class="panelClass"
         @keydown.tab="onTabKeydown"
+        @keydown.esc.prevent="close"
       >
         <h2 :id="dialogTitleId" class="sr-only">{{ dialogTitle }}</h2>
         <div class="flex items-center gap-3 border-b px-4 py-3 sm:px-5" :class="headerBorderClass">
@@ -29,7 +30,6 @@
             @keydown.down.prevent="moveSelection(1)"
             @keydown.up.prevent="moveSelection(-1)"
             @keydown.enter.prevent="void openSelectedResult()"
-            @keydown.esc.prevent="close"
           >
           <button
             type="button"

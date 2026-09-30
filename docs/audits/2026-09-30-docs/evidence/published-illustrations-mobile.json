@@ -1,0 +1,86 @@
+[
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "Notification categories and the Reservations and bookings delivery options, including Email and WhatsApp.",
+        "complete": true,
+        "naturalWidth": 1152,
+        "width": 341.09375
+      },
+      {
+        "alt": "Personal profile WhatsApp controls showing the Verified state and the Verify and save action, with the phone number hidden.",
+        "complete": true,
+        "naturalWidth": 1152,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/set-up-notifications",
+    "viewport": 390
+  },
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "Invite a team member form with a blank email field and the Admin and Owner role options.",
+        "complete": true,
+        "naturalWidth": 1152,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/invite-your-team",
+    "viewport": 390
+  },
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "Illustration of Brand settings and the Logo editor in KrabiClaw.",
+        "complete": true,
+        "naturalWidth": 1366,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/customize-brand-theme",
+    "viewport": 390
+  },
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "Select logo media picker with Add files and a drag-and-drop upload area.",
+        "complete": true,
+        "naturalWidth": 1366,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/add-photos-and-video",
+    "viewport": 390
+  },
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "Three-step dashboard route from Pages to the About page and its Sections list.",
+        "complete": true,
+        "naturalWidth": 1366,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/make-your-first-site-edit",
+    "viewport": 390
+  },
+  {
+    "documentWidth": 375,
+    "images": [
+      {
+        "alt": "New organization introduction with Tell us about your business, Make it yours, Publish, and Get started.",
+        "complete": true,
+        "naturalWidth": 863,
+        "width": 341.09375
+      }
+    ],
+    "url": "https://krabiclaw.com/docs/deploy-your-site",
+    "viewport": 390
+  }
+]

@@ -1,0 +1,4457 @@
+{
+  "capturedAt": "2026-09-30T14:27:17.971974+00:00",
+  "method": "Unsigned curl GET, follow redirects; parse initial server HTML, no JavaScript execution.",
+  "robotsTxt": "# START nuxt-robots (indexable)\nUser-agent: *\nAllow: /\nDisallow: /api\nDisallow: /auth\nDisallow: /dashboard\nDisallow: /dev\nDisallow: /oauth\nDisallow: /transfer\nDisallow: /accept-invitation\nDisallow: /contact/confirmed\nDisallow: /forgot-password\nDisallow: /login\nDisallow: /reservations/cancel\nDisallow: /reservations/confirmed\nDisallow: /reset-password\nDisallow: /signup\nDisallow: /tenant-404\nDisallow: /tenant-setup-incomplete\nDisallow: /tenant-setup-pending\nDisallow: /_next\n\nSitemap: https://krabiclaw.com/sitemap.xml\n# END nuxt-robots",
+  "sitemapDocs": [
+    {
+      "loc": "https://krabiclaw.com/docs"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/add-photos-and-video",
+      "lastmod": "2026-09-30T13:48:23Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/connect-facebook-to-krabiclaw",
+      "lastmod": "2026-09-30T13:49:56Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/connect-instagram-to-krabiclaw",
+      "lastmod": "2026-09-30T13:50:16Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/connect-your-accounts-to-krabiclaw",
+      "lastmod": "2026-09-30T13:45:15Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/connect-your-google-account-to-krabiclaw",
+      "lastmod": "2026-09-30T13:44:31Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/create-your-first-site-with-chatgpt",
+      "lastmod": "2026-09-30T13:43:55Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/create-your-krabiclaw-account",
+      "lastmod": "2026-09-30T13:43:43Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/customize-brand-theme",
+      "lastmod": "2026-09-30T13:45:11Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/deploy-your-site",
+      "lastmod": "2026-09-30T13:48:43Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/getting-started",
+      "lastmod": "2026-09-30T13:48:32Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/handle-inquiries-and-reservation-requests",
+      "lastmod": "2026-09-30T13:48:53Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/invite-your-team",
+      "lastmod": "2026-09-30T14:02:14Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/make-your-first-site-edit",
+      "lastmod": "2026-09-30T13:47:50Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/mcp-setup",
+      "lastmod": "2026-09-30T13:46:26Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/publish-a-post",
+      "lastmod": "2026-09-30T13:48:41Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/read-your-site-analytics",
+      "lastmod": "2026-09-30T13:49:04Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/refresh-krabiclaw-tools-in-chatgpt",
+      "lastmod": "2026-09-30T13:44:51Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/set-up-notifications",
+      "lastmod": "2026-09-30T13:45:28Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/update-locations-and-hours",
+      "lastmod": "2026-09-30T13:48:32Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/what-you-can-edit-through-chatgpt",
+      "lastmod": "2026-09-30T13:46:16Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/category/ai-assistants",
+      "lastmod": "2026-09-30T13:46:26Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/category/build-and-edit",
+      "lastmod": "2026-09-30T13:48:32Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/category/getting-started",
+      "lastmod": "2026-09-30T13:48:43Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/category/integrations",
+      "lastmod": "2026-09-30T14:02:14Z"
+    },
+    {
+      "loc": "https://krabiclaw.com/docs/category/run-your-business",
+      "lastmod": "2026-09-30T13:50:16Z"
+    }
+  ],
+  "indexLinkedArticles": 20,
+  "sitemapArticles": 20,
+  "missingFromSitemap": [],
+  "notLinkedFromIndex": [],
+  "responses": [
+    {
+      "requestedUrl": "https://krabiclaw.com/docs",
+      "effectiveUrl": "https://krabiclaw.com/docs",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:02 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eacf47243a-YVR"
+        }
+      ],
+      "title": "Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Documentation from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Docs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 3712,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/add-photos-and-video",
+      "effectiveUrl": "https://krabiclaw.com/docs/add-photos-and-video",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:03 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eab82f252d-SEA"
+        }
+      ],
+      "title": "Add photos and video | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Upload media, place it on the right part of your site, and check the result without deleting a shared asset by mistake."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/add-photos-and-video"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h2",
+          "id": "1-prepare-the-files-1",
+          "text": "1. Prepare the files"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Uploads are public media"
+        },
+        {
+          "tag": "h2",
+          "id": "2-upload-or-reuse-4",
+          "text": "2. Upload or reuse"
+        },
+        {
+          "tag": "h2",
+          "id": "3-choose-the-placement-7",
+          "text": "3. Choose the placement"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Replace one hero image"
+        },
+        {
+          "tag": "h2",
+          "id": "4-verify-and-remove-safely-10",
+          "text": "4. Verify and remove safely"
+        }
+      ],
+      "articleTextLength": 2458,
+      "articleOpening": "Add photos and videoUpload media, place it on the right part of your site, and check the result without deleting a shared asset by mistake.Chris LukeUpdated Sep 30, 2026\u00b72 min readAdding media has two separate steps: upload the file, then place it on the intended page, post, product or location. A file in the media library is not automatically the hero photo or part of a gallery.\n1. Prepare the filesUse media you own or have permission to publish. Remove private information and check whether rec",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/connect-facebook-to-krabiclaw",
+      "effectiveUrl": "https://krabiclaw.com/docs/connect-facebook-to-krabiclaw",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:03 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eabeaa0907-SEA"
+        }
+      ],
+      "title": "Connect Facebook to KrabiClaw | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Connect a Facebook Page to your business so KrabiClaw can import its posts and publish posts to that Page."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/connect-facebook-to-krabiclaw"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-2",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "connect-your-page-4",
+          "text": "Connect your Page"
+        },
+        {
+          "tag": "h2",
+          "id": "what-the-connection-allows-6",
+          "text": "What the connection allows"
+        },
+        {
+          "tag": "h2",
+          "id": "change-or-disconnect-the-page-8",
+          "text": "Change or disconnect the Page"
+        },
+        {
+          "tag": "h2",
+          "id": "if-the-page-does-not-appear-10",
+          "text": "If the Page does not appear"
+        },
+        {
+          "tag": "h2",
+          "id": "next-publish-your-first-post-12",
+          "text": "Next: publish your first post"
+        }
+      ],
+      "articleTextLength": 2760,
+      "articleOpening": "Connect Facebook to KrabiClawConnect a Facebook Page to your business so KrabiClaw can import its posts and publish posts to that Page.Chris LukeUpdated Sep 30, 2026\u00b73 min readConnect a Facebook Page to your business so KrabiClaw can import its posts and publish posts to that Page.\n2 minutesBefore you start\nYour business needs the Growth plan.\nSign in to KrabiClaw and select the business you want to connect.\nHave access to a Facebook account that manages the Page you want to use.\n\nConnect your P",
+      "schemaTypes": [
+        "VideoObject",
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/connect-instagram-to-krabiclaw",
+      "effectiveUrl": "https://krabiclaw.com/docs/connect-instagram-to-krabiclaw",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:03 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eacc4c3240-YVR"
+        }
+      ],
+      "title": "Connect Instagram to KrabiClaw | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Connect an Instagram professional account to your business so KrabiClaw can import its posts and publish posts to that account."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/connect-instagram-to-krabiclaw"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-2",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "connect-your-account-4",
+          "text": "Connect your account"
+        },
+        {
+          "tag": "h2",
+          "id": "what-the-connection-allows-6",
+          "text": "What the connection allows"
+        },
+        {
+          "tag": "h2",
+          "id": "change-or-disconnect-the-account-8",
+          "text": "Change or disconnect the account"
+        },
+        {
+          "tag": "h2",
+          "id": "if-the-connection-does-not-finish-10",
+          "text": "If the connection does not finish"
+        },
+        {
+          "tag": "h2",
+          "id": "next-publish-your-first-post-12",
+          "text": "Next: publish your first post"
+        }
+      ],
+      "articleTextLength": 2454,
+      "articleOpening": "Connect Instagram to KrabiClawConnect an Instagram professional account to your business so KrabiClaw can import its posts and publish posts to that account.Chris LukeUpdated Sep 30, 2026\u00b72 min readConnect an Instagram professional account to your business so KrabiClaw can import its posts and publish posts to that account.\n56 secondsBefore you start\nYour business needs the Growth plan.\nUse an Instagram professional account.\nSign in to KrabiClaw and select the business you want to connect.\n\nConn",
+      "schemaTypes": [
+        "VideoObject",
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/connect-your-accounts-to-krabiclaw",
+      "effectiveUrl": "https://krabiclaw.com/docs/connect-your-accounts-to-krabiclaw",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:01 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eacef0d95b-YVR"
+        }
+      ],
+      "title": "Connect your accounts to KrabiClaw | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Connect the services your business already uses from Menu \u2192 Integrations in the KrabiClaw dashboard. Choose your business before you begin, then open the\u2026"
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/connect-your-accounts-to-krabiclaw"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": "choose-an-integration-1",
+          "text": "Choose an integration"
+        },
+        {
+          "tag": "h2",
+          "id": "linking-an-account-and-connecting-a-service-3",
+          "text": "Linking an account and connecting a service"
+        },
+        {
+          "tag": "h2",
+          "id": "check-the-connection-5",
+          "text": "Check the connection"
+        },
+        {
+          "tag": "h2",
+          "id": "change-or-disconnect-an-account-7",
+          "text": "Change or disconnect an account"
+        },
+        {
+          "tag": "h2",
+          "id": "import-a-location-from-google-maps-9",
+          "text": "Import a location from Google Maps"
+        }
+      ],
+      "articleTextLength": 3535,
+      "articleOpening": "Connect your accounts to KrabiClawConnect the services your business already uses from Menu \u2192 Integrations in the KrabiClaw dashboard. Choose your business before you begin, then open the service you want to connect.Chris LukeUpdated Sep 30, 2026\u00b73 min readConnect the services your business already uses from Menu \u2192 Integrations in the KrabiClaw dashboard. Choose your business before you begin, then open the service you want to connect.\nChoose an integration\nFacebook: connect a Page you manage so",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw#connect-google-analytics-4",
+        "/docs/connect-your-google-account-to-krabiclaw#connect-google-search-console-8",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/connect-your-google-account-to-krabiclaw",
+      "effectiveUrl": "https://krabiclaw.com/docs/connect-your-google-account-to-krabiclaw",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:03 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7eacb2d88d9-YVR"
+        }
+      ],
+      "title": "Connect Google Analytics and Search Console | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Connect Google Analytics or Google Search Console from the KrabiClaw dashboard. Each service has its own connection and property selection, even when both use\u2026"
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/connect-your-google-account-to-krabiclaw"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-2",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "connect-google-analytics-4",
+          "text": "Connect Google Analytics"
+        },
+        {
+          "tag": "h3",
+          "id": "analytics-permissions-6",
+          "text": "Analytics permissions"
+        },
+        {
+          "tag": "h2",
+          "id": "connect-google-search-console-8",
+          "text": "Connect Google Search Console"
+        },
+        {
+          "tag": "h3",
+          "id": "search-console-permissions-10",
+          "text": "Search Console permissions"
+        },
+        {
+          "tag": "h2",
+          "id": "change-or-disconnect-a-property-12",
+          "text": "Change or disconnect a property"
+        },
+        {
+          "tag": "h2",
+          "id": "troubleshooting-14",
+          "text": "Troubleshooting"
+        },
+        {
+          "tag": "h2",
+          "id": "looking-for-google-maps-instead-16",
+          "text": "Looking for Google Maps instead"
+        }
+      ],
+      "articleTextLength": 4815,
+      "articleOpening": "Connect Google Analytics and Search ConsoleConnect Google Analytics or Google Search Console from the KrabiClaw dashboard. Each service has its own connection and property selection, even when both use the same Google account.Chris LukeUpdated Sep 30, 2026\u00b74 min readConnect Google Analytics or Google Search Console from the KrabiClaw dashboard. Each service has its own connection and property selection, even when both use the same Google account.\n3 minutes 17 secondsBefore you startSign in to Kr",
+      "schemaTypes": [
+        "VideoObject",
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/create-your-first-site-with-chatgpt",
+      "effectiveUrl": "https://krabiclaw.com/docs/create-your-first-site-with-chatgpt",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:04 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7faacbeb4a4-YVR"
+        }
+      ],
+      "title": "Prepare your site with ChatGPT, then create it in KrabiClaw | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Use ChatGPT to prepare your business details and homepage copy, create the site in the KrabiClaw dashboard, then connect ChatGPT for existing-site edits."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/create-your-first-site-with-chatgpt"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": "1-prepare-the-details-and-copy-1",
+          "text": "1. Prepare the details and copy"
+        },
+        {
+          "tag": "h2",
+          "id": "2-create-the-site-in-the-dashboard-3",
+          "text": "2. Create the site in the dashboard"
+        },
+        {
+          "tag": "h2",
+          "id": "3-connect-chatgpt-to-the-existing-site-5",
+          "text": "3. Connect ChatGPT to the existing site"
+        },
+        {
+          "tag": "h2",
+          "id": "4-make-one-specific-edit-and-verify-it-7",
+          "text": "4. Make one specific edit and verify it"
+        },
+        {
+          "tag": "h2",
+          "id": "if-a-request-does-not-work-9",
+          "text": "If a request does not work"
+        }
+      ],
+      "articleTextLength": 2598,
+      "articleOpening": "Prepare your site with ChatGPT, then create it in KrabiClawUse ChatGPT to prepare your business details and homepage copy, create the site in the KrabiClaw dashboard, then connect ChatGPT for existing-site edits.Chris LukeUpdated Sep 30, 2026\u00b72 min readChatGPT can help you prepare your website's words and plan your first edit. Creating a new KrabiClaw site happens in the KrabiClaw dashboard. The connected assistant manages sites that already exist; it does not create a new site or location.\n1. P",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/create-your-krabiclaw-account",
+      "effectiveUrl": "https://krabiclaw.com/docs/create-your-krabiclaw-account",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:06 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e7ff3c9427a4-SEA"
+        }
+      ],
+      "title": "Create your KrabiClaw account | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Sign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/create-your-krabiclaw-account"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h2",
+          "id": "create-your-account-1",
+          "text": "Create your account"
+        },
+        {
+          "tag": "h2",
+          "id": "what-happens-next-3",
+          "text": "What happens next"
+        },
+        {
+          "tag": "h2",
+          "id": "if-you-cannot-find-your-business-5",
+          "text": "If you cannot find your business"
+        }
+      ],
+      "articleTextLength": 1306,
+      "articleOpening": "Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.KUpdated Sep 30, 2026\u00b71 min readYour KrabiClaw account gives you access to the dashboard where you create and manage your business website. ChatGPT is optional and can be connected after the site exists.\nCreate your account\nOpen Create your account.\nComplete the sign-up steps shown on the page and any verification requested.\nAfter signing in, continue to onboarding to set up your f",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/customize-brand-theme",
+      "effectiveUrl": "https://krabiclaw.com/docs/customize-brand-theme",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:06 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8026ed257bb-YVR"
+        }
+      ],
+      "title": "Customize your brand and theme | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Set your site's accent color, logo, homepage photo, and headline, then check the result customers see."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/customize-brand-theme"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h2",
+          "id": "during-first-site-setup-1",
+          "text": "During first-site setup"
+        },
+        {
+          "tag": "h2",
+          "id": "change-an-existing-sites-color-3",
+          "text": "Change an existing site's color"
+        },
+        {
+          "tag": "h2",
+          "id": "replace-the-logo-or-homepage-image-5",
+          "text": "Replace the logo or homepage image"
+        },
+        {
+          "tag": "h2",
+          "id": "keep-the-headline-useful-8",
+          "text": "Keep the headline useful"
+        },
+        {
+          "tag": "h2",
+          "id": "check-that-it-worked-10",
+          "text": "Check that it worked"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-12",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 3395,
+      "articleOpening": "Customize your brand and themeSet your site's accent color, logo, homepage photo, and headline, then check the result customers see.KUpdated Sep 30, 2026\u00b73 min readStart with a clear headline, a recognizable logo, and a photo that represents your business. Brand color, logo, and photo are optional during setup; the homepage headline is required before creating a new site.\nDuring first-site setupOn the Last look at the front of house step:\n\nSet Brand color using a preset swatch or the custom colo",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/deploy-your-site",
+      "effectiveUrl": "https://krabiclaw.com/docs/deploy-your-site",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:05 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e80328892ed2-YVR"
+        }
+      ],
+      "title": "Create and publish your first site | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Create a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/deploy-your-site"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-1",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "1-choose-your-business-type-4",
+          "text": "1. Choose your business type"
+        },
+        {
+          "tag": "h2",
+          "id": "2-find-your-business-or-enter-it-manually-6",
+          "text": "2. Find your business or enter it manually"
+        },
+        {
+          "tag": "h2",
+          "id": "3-check-the-address-8",
+          "text": "3. Check the address"
+        },
+        {
+          "tag": "h2",
+          "id": "4-add-the-business-contact-number-10",
+          "text": "4. Add the business contact number"
+        },
+        {
+          "tag": "h2",
+          "id": "5-add-hours-or-continue-without-them-12",
+          "text": "5. Add hours, or continue without them"
+        },
+        {
+          "tag": "h2",
+          "id": "6-choose-your-currency-14",
+          "text": "6. Choose your currency"
+        },
+        {
+          "tag": "h2",
+          "id": "7-add-your-first-offerings-if-applicable-16",
+          "text": "7. Add your first offerings, if applicable"
+        },
+        {
+          "tag": "h2",
+          "id": "8-set-the-homepage-headline-and-look-18",
+          "text": "8. Set the homepage headline and look"
+        },
+        {
+          "tag": "h2",
+          "id": "9-review-then-choose-create-my-site-20",
+          "text": "9. Review, then choose Create my site"
+        },
+        {
+          "tag": "h2",
+          "id": "check-the-public-result-22",
+          "text": "Check the public result"
+        },
+        {
+          "tag": "h2",
+          "id": "troubleshooting-24",
+          "text": "Troubleshooting"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-26",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 5517,
+      "articleOpening": "Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.KUpdated Sep 30, 2026\u00b75 min readUse the KrabiClaw dashboard to create your first business website. The setup has nine steps for restaurant and experience businesses, or eight for professional services, which skips the products step. ChatGPT is optional and connects after the site exists.\nBefore you startSign in to yo",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/getting-started",
+      "effectiveUrl": "https://krabiclaw.com/docs/getting-started",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:06 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e803ba7333d4-SEA"
+        }
+      ],
+      "title": "Start here | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Create your first KrabiClaw site, check the live result, then choose how to make your next useful update."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/getting-started"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": "i-am-creating-my-first-site-1",
+          "text": "I am creating my first site"
+        },
+        {
+          "tag": "h2",
+          "id": "i-already-have-a-site-3",
+          "text": "I already have a site"
+        },
+        {
+          "tag": "h2",
+          "id": "add-the-extras-when-you-need-them-5",
+          "text": "Add the extras when you need them"
+        }
+      ],
+      "articleTextLength": 1605,
+      "articleOpening": "Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.KUpdated Sep 30, 2026\u00b72 min readStart with the path that matches where you are. Create a new site in the KrabiClaw dashboard; connect an AI assistant afterward if you want help managing it.\nI am creating my first site\nCreate your KrabiClaw account. Sign in before starting your business setup.\nCreate and publish your first site. Find your business by name or enter its details manuall",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/handle-inquiries-and-reservation-requests",
+      "effectiveUrl": "https://krabiclaw.com/docs/handle-inquiries-and-reservation-requests",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:06 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e805b8fd2afc-YVR"
+        }
+      ],
+      "title": "Handle inquiries and reservation requests | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Review the right type of customer request, check its location and status, and keep responses and private details under control."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/handle-inquiries-and-reservation-requests"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h2",
+          "id": "1-choose-the-right-view-1",
+          "text": "1. Choose the right view"
+        },
+        {
+          "tag": "h2",
+          "id": "2-read-before-taking-action-3",
+          "text": "2. Read before taking action"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Review recent table reservations"
+        },
+        {
+          "tag": "h2",
+          "id": "3-respond-through-a-supported-channel-6",
+          "text": "3. Respond through a supported channel"
+        },
+        {
+          "tag": "h2",
+          "id": "4-check-reservation-availability-and-alerts-8",
+          "text": "4. Check reservation availability and alerts"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Protect customer details"
+        }
+      ],
+      "articleTextLength": 1807,
+      "articleOpening": "Handle inquiries and reservation requestsReview the right type of customer request, check its location and status, and keep responses and private details under control.Chris LukeSep 30, 2026\u00b72 min readStart by identifying what the customer submitted. A contact inquiry, a table reservation and a booking for a bookable Product are different records. Do not use a table-reservation summary as a complete list of all bookings.\n1. Choose the right viewSelect the business in the dashboard and use its in",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/invite-your-team",
+      "effectiveUrl": "https://krabiclaw.com/docs/invite-your-team",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:07 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e808f835decc-SEA"
+        }
+      ],
+      "title": "Invite your team | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Invite an Admin or Owner, check pending invitations, and manage organization-wide team access in KrabiClaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/invite-your-team"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h2",
+          "id": "1-open-the-correct-organizations-members-page-0",
+          "text": "1. Open the correct organization's Members page"
+        },
+        {
+          "tag": "h2",
+          "id": "2-choose-the-role-0",
+          "text": "2. Choose the role"
+        },
+        {
+          "tag": "h2",
+          "id": "3-send-the-invitation-2",
+          "text": "3. Send the invitation"
+        },
+        {
+          "tag": "h2",
+          "id": "4-check-acceptance-2",
+          "text": "4. Check acceptance"
+        },
+        {
+          "tag": "h2",
+          "id": "change-or-remove-access-2",
+          "text": "Change or remove access"
+        },
+        {
+          "tag": "h2",
+          "id": "common-questions-2",
+          "text": "Common questions"
+        },
+        {
+          "tag": "h3",
+          "id": "why-can-i-only-invite-an-admin-2",
+          "text": "Why can I only invite an Admin?"
+        },
+        {
+          "tag": "h3",
+          "id": "can-i-limit-this-person-to-one-branch-2",
+          "text": "Can I limit this person to one branch?"
+        },
+        {
+          "tag": "h3",
+          "id": "will-new-teammates-receive-my-notifications-2",
+          "text": "Will new teammates receive my notifications?"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-2",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 3123,
+      "articleOpening": "Invite your teamInvite an Admin or Owner, check pending invitations, and manage organization-wide team access in KrabiClaw.KUpdated Sep 30, 2026\u00b73 min readInvite teammates from your organization's Team \u2192 Members page. Current invitations offer Admin and, when you are an Owner, Owner.\nBoth roles have organization-wide access. Review the recipient and role before sending an invitation.\n1. Open the correct organization's Members page\nIn the dashboard, select the business you want to share, then ope",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/make-your-first-site-edit",
+      "effectiveUrl": "https://krabiclaw.com/docs/make-your-first-site-edit",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:08 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e815ab5d58e5-YVR"
+        }
+      ],
+      "title": "Make your first site edit | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Change one piece of content on an existing site, keep the rest intact, and verify the customer-facing result."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/make-your-first-site-edit"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h2",
+          "id": "1-choose-the-exact-destination-1",
+          "text": "1. Choose the exact destination"
+        },
+        {
+          "tag": "h2",
+          "id": "2-make-one-specific-change-4",
+          "text": "2. Make one specific change"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Change one paragraph"
+        },
+        {
+          "tag": "h2",
+          "id": "3-check-the-result-7",
+          "text": "3. Check the result"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Keep the task small"
+        }
+      ],
+      "articleTextLength": 1901,
+      "articleOpening": "Make your first site editChange one piece of content on an existing site, keep the rest intact, and verify the customer-facing result.Chris LukeUpdated Sep 30, 2026\u00b72 min readStart with a small, useful change: correct a sentence on an existing page. You need an existing KrabiClaw site and permission to edit its content. If you have not created a site yet, follow Create and publish your first site.\n1. Choose the exact destinationIn the dashboard, select your business and open the page you want to",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/mcp-setup",
+      "effectiveUrl": "https://krabiclaw.com/docs/mcp-setup",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:08 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e813ffc64ad5-YVR"
+        }
+      ],
+      "title": "Connect KrabiClaw to ChatGPT | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Choose the setup route available to your ChatGPT account, connect KrabiClaw with OAuth, and verify access to your existing business."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/mcp-setup"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": "choose-the-setup-route-you-have-0",
+          "text": "Choose the setup route you have"
+        },
+        {
+          "tag": "h2",
+          "id": "developer-connection-0",
+          "text": "Developer connection"
+        },
+        {
+          "tag": "h3",
+          "id": "1-open-the-custom-app-controls-0",
+          "text": "1. Open the custom-app controls"
+        },
+        {
+          "tag": "h3",
+          "id": "2-enter-the-krabiclaw-connection-details-0",
+          "text": "2. Enter the KrabiClaw connection details"
+        },
+        {
+          "tag": "h3",
+          "id": "3-authorize-and-finish-creating-the-app-0",
+          "text": "3. Authorize and finish creating the app"
+        },
+        {
+          "tag": "h3",
+          "id": "4-start-a-new-chat-and-select-krabiclaw-0",
+          "text": "4. Start a new chat and select KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": "check-the-connection-without-changing-anything-0",
+          "text": "Check the connection without changing anything"
+        },
+        {
+          "tag": "h2",
+          "id": "what-the-connection-can-do-0",
+          "text": "What the connection can do"
+        },
+        {
+          "tag": "h2",
+          "id": "troubleshooting-0",
+          "text": "Troubleshooting"
+        },
+        {
+          "tag": "h3",
+          "id": "the-mcp-server-address-opens-this-help-page-0",
+          "text": "The MCP server address opens this help page"
+        },
+        {
+          "tag": "h3",
+          "id": "chatgpt-cannot-connect-0",
+          "text": "ChatGPT cannot connect"
+        },
+        {
+          "tag": "h3",
+          "id": "i-cannot-find-developer-mode-or-create-app-0",
+          "text": "I cannot find Developer mode or Create app"
+        },
+        {
+          "tag": "h3",
+          "id": "new-krabiclaw-tools-are-missing-0",
+          "text": "New KrabiClaw tools are missing"
+        },
+        {
+          "tag": "h3",
+          "id": "the-tools-appear-but-my-business-is-missing-0",
+          "text": "The tools appear, but my business is missing"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-0",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 6097,
+      "articleOpening": "Connect KrabiClaw to ChatGPTChoose the setup route available to your ChatGPT account, connect KrabiClaw with OAuth, and verify access to your existing business.KUpdated Sep 30, 2026\u00b74 min readConnect KrabiClaw to ChatGPT to read your business information and make supported updates to an existing site. Create your first site in the KrabiClaw dashboard before using the connection to edit it.\nChoose the setup route you have\nThere are two different flows. Follow the one available to your account:\n\nP",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "HowTo",
+        "HowToStep",
+        "HowToStep",
+        "HowToStep",
+        "HowToStep",
+        "HowToStep",
+        "HowToStep"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/publish-a-post",
+      "effectiveUrl": "https://krabiclaw.com/docs/publish-a-post",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:08 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e814e8c25f04-YVR"
+        }
+      ],
+      "title": "Publish a post | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Draft a short update, approve exact website and social destinations, and check every publication outcome."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/publish-a-post"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h2",
+          "id": "1-check-the-destinations-1",
+          "text": "1. Check the destinations"
+        },
+        {
+          "tag": "h2",
+          "id": "2-draft-and-preview-3",
+          "text": "2. Draft and preview"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare a website-only draft"
+        },
+        {
+          "tag": "h2",
+          "id": "3-approve-exact-targets-6",
+          "text": "3. Approve exact targets"
+        },
+        {
+          "tag": "h2",
+          "id": "4-check-every-result-8",
+          "text": "4. Check every result"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Changes after publication"
+        }
+      ],
+      "articleTextLength": 1655,
+      "articleOpening": "Publish a postDraft a short update, approve exact website and social destinations, and check every publication outcome.Chris LukeSep 30, 2026\u00b72 min readUse a short post for news, an announcement or a timely update. A post is different from a long-form blog article or a permanent site page. You can publish to your website, a connected Facebook Page, a connected Instagram professional account, or an explicit combination.\n1. Check the destinationsChoose the correct business and, if relevant, locati",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/read-your-site-analytics",
+      "effectiveUrl": "https://krabiclaw.com/docs/read-your-site-analytics",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:09 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8182eac9673-YVR"
+        }
+      ],
+      "title": "Read your site analytics | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Understand native traffic, conversion and value reports with the right date range, timezone and missing-data checks."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/read-your-site-analytics"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h2",
+          "id": "1-set-the-business-and-period-1",
+          "text": "1. Set the business and period"
+        },
+        {
+          "tag": "h2",
+          "id": "2-separate-visits-from-outcomes-3",
+          "text": "2. Separate visits from outcomes"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Explain a monthly report"
+        },
+        {
+          "tag": "h2",
+          "id": "3-check-attribution-and-value-6",
+          "text": "3. Check attribution and value"
+        },
+        {
+          "tag": "h2",
+          "id": "4-investigate-gaps-before-drawing-conclusions-8",
+          "text": "4. Investigate gaps before drawing conclusions"
+        },
+        {
+          "tag": "h2",
+          "id": "use-google-reports-when-useful-10",
+          "text": "Use Google reports when useful"
+        }
+      ],
+      "articleTextLength": 1784,
+      "articleOpening": "Read your site analyticsUnderstand native traffic, conversion and value reports with the right date range, timezone and missing-data checks.Chris LukeSep 30, 2026\u00b73 min readKrabiClaw has native site analytics. You do not need to connect Google Analytics to read the native record. Use analytics to answer one question at a time, such as which pages attract visits or which campaigns lead to a recorded customer action.\n1. Set the business and periodChoose the correct business and state a start and e",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/refresh-krabiclaw-tools-in-chatgpt",
+      "effectiveUrl": "https://krabiclaw.com/docs/refresh-krabiclaw-tools-in-chatgpt",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:09 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8181dc48d3e-YVR"
+        }
+      ],
+      "title": "Get the latest KrabiClaw tools in ChatGPT | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Reinstall KrabiClaw during the plugin approval period, start a new ChatGPT conversation, and check the latest tools and business access."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/refresh-krabiclaw-tools-in-chatgpt"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-1",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "1-open-krabiclaw-in-your-added-plugins-3",
+          "text": "1 Open KrabiClaw in your added plugins"
+        },
+        {
+          "tag": "h2",
+          "id": "2-uninstall-the-current-plugin-6",
+          "text": "2 Uninstall the current plugin"
+        },
+        {
+          "tag": "h2",
+          "id": "3-reinstall-in-a-desktop-or-tablet-browser-9",
+          "text": "3 Reinstall in a desktop or tablet browser"
+        },
+        {
+          "tag": "h2",
+          "id": "4-start-a-completely-new-chat-16",
+          "text": "4 Start a completely new chat"
+        },
+        {
+          "tag": "h2",
+          "id": "5-check-that-the-tools-and-your-business-are-available-19",
+          "text": "5 Check that the tools and your business are available"
+        },
+        {
+          "tag": "h2",
+          "id": "if-something-still-looks-wrong-21",
+          "text": "If something still looks wrong"
+        }
+      ],
+      "articleTextLength": 3885,
+      "articleOpening": "Get the latest KrabiClaw tools in ChatGPTReinstall KrabiClaw during the plugin approval period, start a new ChatGPT conversation, and check the latest tools and business access.Chris LukeUpdated Sep 30, 2026\u00b73 min readIf ChatGPT is missing newly added KrabiClaw tools, reinstall the plugin and start a completely new chat. This guide shows the current workaround during the plugin approval period.\nIn the flow tested in September 2026, Refresh tools alone did not load the updated tool catalog. The s",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/set-up-notifications",
+      "effectiveUrl": "https://krabiclaw.com/docs/set-up-notifications",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:09 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e81b6e1c70f4-YVR"
+        }
+      ],
+      "title": "Set up notifications | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Choose your personal email and WhatsApp preferences by notification category, and verify the phone number on your KrabiClaw account."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/set-up-notifications"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-0",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "1-open-your-notification-preferences-0",
+          "text": "1. Open your notification preferences"
+        },
+        {
+          "tag": "h2",
+          "id": "2-choose-a-category-and-its-channels-0",
+          "text": "2. Choose a category and its channels"
+        },
+        {
+          "tag": "h2",
+          "id": "3-verify-your-personal-whatsapp-number-2",
+          "text": "3. Verify your personal WhatsApp number"
+        },
+        {
+          "tag": "h2",
+          "id": "4-check-that-your-settings-saved-4",
+          "text": "4. Check that your settings saved"
+        },
+        {
+          "tag": "h2",
+          "id": "common-questions-4",
+          "text": "Common questions"
+        },
+        {
+          "tag": "h3",
+          "id": "who-receives-business-alerts-4",
+          "text": "Who receives business alerts?"
+        },
+        {
+          "tag": "h3",
+          "id": "can-i-enter-a-shared-alert-number-or-a-location-managers-number-4",
+          "text": "Can I enter a shared alert number or a location manager's number?"
+        },
+        {
+          "tag": "h3",
+          "id": "why-did-a-teammate-receive-an-alert-but-i-did-not-4",
+          "text": "Why did a teammate receive an alert but I did not?"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-4",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 3313,
+      "articleOpening": "Set up notificationsChoose your personal email and WhatsApp preferences by notification category, and verify the phone number on your KrabiClaw account.KUpdated Sep 30, 2026\u00b73 min readKrabiClaw notification preferences belong to your account. Each person on a business's team chooses which categories reach their account email and verified WhatsApp number.\nBefore you start\nSign in to your own KrabiClaw account. To receive a business's internal alerts, you need an accepted Owner or Admin membership",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/update-locations-and-hours",
+      "effectiveUrl": "https://krabiclaw.com/docs/update-locations-and-hours",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:13 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8223a5f75b2-SEA"
+        }
+      ],
+      "title": "Update locations and hours | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Change an existing branch\u2019s contact details, weekly hours or dated exceptions, then verify the public location page."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/update-locations-and-hours"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": "1-read-the-current-details-1",
+          "text": "1. Read the current details"
+        },
+        {
+          "tag": "h2",
+          "id": "2-choose-regular-hours-or-an-exception-3",
+          "text": "2. Choose regular hours or an exception"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Try with your connected assistant"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set a one-day exception"
+        },
+        {
+          "tag": "h2",
+          "id": "3-save-and-check-the-customer-view-6",
+          "text": "3. Save and check the customer view"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Adding another location"
+        }
+      ],
+      "articleTextLength": 1835,
+      "articleOpening": "Update locations and hoursChange an existing branch\u2019s contact details, weekly hours or dated exceptions, then verify the public location page.Chris LukeSep 30, 2026\u00b72 min readLocation details belong to individual branches. Before changing an address, phone number or opening time, select the correct business and location. An organization-wide change is not a substitute for updating the intended branch.\n1. Read the current detailsIn the dashboard, open the existing location. Check its name, addres",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/what-you-can-edit-through-chatgpt",
+      "effectiveUrl": "https://krabiclaw.com/docs/what-you-can-edit-through-chatgpt",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:11 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8231d9cc4cb-SEA"
+        }
+      ],
+      "title": "What AI assistants can and cannot do | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "See which existing-site tasks KrabiClaw assistants can edit, which information is read-only, and when to use the dashboard."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/what-you-can-edit-through-chatgpt"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h2",
+          "id": "what-assistants-can-edit-0",
+          "text": "What assistants can edit"
+        },
+        {
+          "tag": "h3",
+          "id": "site-content-and-branding-0",
+          "text": "Site content and branding"
+        },
+        {
+          "tag": "h3",
+          "id": "existing-locations-and-reservation-policies-0",
+          "text": "Existing locations and reservation policies"
+        },
+        {
+          "tag": "h3",
+          "id": "products-menus-and-collections-0",
+          "text": "Products, menus, and collections"
+        },
+        {
+          "tag": "h3",
+          "id": "photos-and-video-0",
+          "text": "Photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": "short-posts-and-social-publishing-0",
+          "text": "Short posts and social publishing"
+        },
+        {
+          "tag": "h3",
+          "id": "manually-authored-languages-0",
+          "text": "Manually authored languages"
+        },
+        {
+          "tag": "h2",
+          "id": "what-assistants-can-read-and-help-you-understand-0",
+          "text": "What assistants can read and help you understand"
+        },
+        {
+          "tag": "h2",
+          "id": "tasks-that-need-the-dashboard-or-another-service-0",
+          "text": "Tasks that need the dashboard or another service"
+        },
+        {
+          "tag": "h2",
+          "id": "make-one-safe-first-edit-0",
+          "text": "Make one safe first edit"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-0",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 5781,
+      "articleOpening": "What AI assistants can and cannot doSee which existing-site tasks KrabiClaw assistants can edit, which information is read-only, and when to use the dashboard.Chris LukeUpdated Sep 30, 2026\u00b75 min readConnect an AI assistant to KrabiClaw to manage an existing business website. The available actions depend on the tools loaded in your chat, your account's access, and any feature or plan requirements.\nStart by asking: \u201cWhich businesses can I manage with KrabiClaw?\u201d Name the business and location bef",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "Person",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/category/ai-assistants",
+      "effectiveUrl": "https://krabiclaw.com/docs/category/ai-assistants",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:11 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8253c7188d9-YVR"
+        }
+      ],
+      "title": "AI Assistants | Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Connect an assistant and manage your existing website through conversation."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/category/ai-assistants"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        }
+      ],
+      "articleTextLength": 577,
+      "articleOpening": "AI AssistantsJuly 1, 2026Connect KrabiClaw to ChatGPTChoose the setup route available to your ChatGPT account, connect KrabiClaw with OAuth, and verify access to your existing business.AI AssistantsJuly 6, 2026What AI assistants can and cannot doSee which existing-site tasks KrabiClaw assistants can edit, which information is read-only, and when to use the dashboard.AI AssistantsSeptember 30, 2026Get the latest KrabiClaw tools in ChatGPTReinstall KrabiClaw during the plugin approval period, star",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/category/build-and-edit",
+      "effectiveUrl": "https://krabiclaw.com/docs/category/build-and-edit",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:11 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e8274d89ebbe-SEA"
+        }
+      ],
+      "title": "Build & Edit | Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Update your pages, media, branding, and business information."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/category/build-and-edit"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        }
+      ],
+      "articleTextLength": 661,
+      "articleOpening": "Build & EditSeptember 30, 2026Make your first site editChange one piece of content on an existing site, keep the rest intact, and verify the customer-facing result.Build & EditJuly 1, 2026Customize your brand and themeSet your site's accent color, logo, homepage photo, and headline, then check the result customers see.Build & EditSeptember 30, 2026Add photos and videoUpload media, place it on the right part of your site, and check the result without deleting a shared asset by mistake.Build & Edi",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/category/getting-started",
+      "effectiveUrl": "https://krabiclaw.com/docs/category/getting-started",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:12 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e82749867588-SEA"
+        }
+      ],
+      "title": "Getting Started | Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Getting Started articles in the Docs of Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/category/getting-started"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        }
+      ],
+      "articleTextLength": 733,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/category/integrations",
+      "effectiveUrl": "https://krabiclaw.com/docs/category/integrations",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:11 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e829bf6f2724-YVR"
+        }
+      ],
+      "title": "Account & Settings | Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Manage your team, account connections, and website settings."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/category/integrations"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 405,
+      "articleOpening": "Account & SettingsJuly 1, 2026Invite your teamInvite an Admin or Owner, check pending invitations, and manage organization-wide team access in KrabiClaw.Account & SettingsSeptember 30, 2026Connect your accounts to KrabiClawConnect the services your business already uses from Menu \u2192 Integrations in the KrabiClaw dashboard. Choose your business before you begin, then open the service you want to connect.",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/category/run-your-business",
+      "effectiveUrl": "https://krabiclaw.com/docs/category/run-your-business",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:13 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e832ae4c5edc-YVR"
+        }
+      ],
+      "title": "Run Your Business | Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Publish updates, handle customer requests, and understand performance."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/category/run-your-business"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        }
+      ],
+      "articleTextLength": 1336,
+      "articleOpening": "Run Your BusinessSeptember 30, 2026Handle inquiries and reservation requestsReview the right type of customer request, check its location and status, and keep responses and private details under control.Run Your BusinessJuly 1, 2026Set up notificationsChoose your personal email and WhatsApp preferences by notification category, and verify the phone number on your KrabiClaw account.Run Your BusinessSeptember 30, 2026Publish a postDraft a short update, approve exact website and social destinations",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/",
+      "effectiveUrl": "https://krabiclaw.com/docs/",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:13 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e834e9c62086-YVR"
+        }
+      ],
+      "title": "Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Documentation from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Docs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 3712,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/docs/deploy-your-site/",
+      "effectiveUrl": "https://krabiclaw.com/docs/deploy-your-site/",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:15 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e83d5f256951-YVR"
+        }
+      ],
+      "title": "Create and publish your first site | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Create a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs/deploy-your-site"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h2",
+          "id": "before-you-start-1",
+          "text": "Before you start"
+        },
+        {
+          "tag": "h2",
+          "id": "1-choose-your-business-type-4",
+          "text": "1. Choose your business type"
+        },
+        {
+          "tag": "h2",
+          "id": "2-find-your-business-or-enter-it-manually-6",
+          "text": "2. Find your business or enter it manually"
+        },
+        {
+          "tag": "h2",
+          "id": "3-check-the-address-8",
+          "text": "3. Check the address"
+        },
+        {
+          "tag": "h2",
+          "id": "4-add-the-business-contact-number-10",
+          "text": "4. Add the business contact number"
+        },
+        {
+          "tag": "h2",
+          "id": "5-add-hours-or-continue-without-them-12",
+          "text": "5. Add hours, or continue without them"
+        },
+        {
+          "tag": "h2",
+          "id": "6-choose-your-currency-14",
+          "text": "6. Choose your currency"
+        },
+        {
+          "tag": "h2",
+          "id": "7-add-your-first-offerings-if-applicable-16",
+          "text": "7. Add your first offerings, if applicable"
+        },
+        {
+          "tag": "h2",
+          "id": "8-set-the-homepage-headline-and-look-18",
+          "text": "8. Set the homepage headline and look"
+        },
+        {
+          "tag": "h2",
+          "id": "9-review-then-choose-create-my-site-20",
+          "text": "9. Review, then choose Create my site"
+        },
+        {
+          "tag": "h2",
+          "id": "check-the-public-result-22",
+          "text": "Check the public result"
+        },
+        {
+          "tag": "h2",
+          "id": "troubleshooting-24",
+          "text": "Troubleshooting"
+        },
+        {
+          "tag": "h2",
+          "id": "next-step-26",
+          "text": "Next step"
+        }
+      ],
+      "articleTextLength": 5517,
+      "articleOpening": "Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.KUpdated Sep 30, 2026\u00b75 min readUse the KrabiClaw dashboard to create your first business website. The setup has nine steps for restaurant and experience businesses, or eight for professional services, which skips the products step. ChatGPT is optional and connects after the site exists.\nBefore you startSign in to yo",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage",
+        "TechArticle",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "http://krabiclaw.com/docs",
+      "effectiveUrl": "https://krabiclaw.com/docs",
+      "status": 200,
+      "redirects": 1,
+      "headers": [
+        {
+          "status": "HTTP/1.1 301 Moved Permanently",
+          "date": "Wed, 30 Sep 2026 14:27:12 GMT",
+          "content-type": "text/html; charset=UTF-8",
+          "location": "https://krabiclaw.com/docs",
+          "cf-ray": "a433e835ff4e7522-SEA"
+        },
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:13 GMT",
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "cf-ray": "a433e83a0a8f1c74-YVR"
+        }
+      ],
+      "title": "Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Documentation from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Docs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 3712,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://www.krabiclaw.com/docs",
+      "effectiveUrl": "https://krabiclaw.com/docs",
+      "status": 200,
+      "redirects": 1,
+      "headers": [
+        {
+          "status": "HTTP/2 301 ",
+          "date": "Wed, 30 Sep 2026 14:27:15 GMT",
+          "content-type": "text/html; charset=UTF-8",
+          "location": "https://krabiclaw.com/docs",
+          "cf-ray": "a433e847295ac6c5-YVR"
+        },
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:16 GMT",
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "cf-ray": "a433e84b6f6f8f72-YVR"
+        }
+      ],
+      "title": "Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Documentation from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Docs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 3712,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.krabiclaw.com/docs",
+      "effectiveUrl": "https://krabiclaw.krabiclaw.com/docs",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:15 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e841bdd2d214-YVR"
+        }
+      ],
+      "title": "Docs | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Documentation from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/docs"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Docs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Start here"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Getting Started"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create your KrabiClaw account"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Create and publish your first site"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Prepare your site with ChatGPT, then create it in KrabiClaw"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Build & Edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Make your first site edit"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Customize your brand and theme"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Add photos and video"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Update locations and hours"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Run Your Business"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Handle inquiries and reservation requests"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Set up notifications"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Publish a post"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Facebook to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Instagram to KrabiClaw"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Read your site analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect Google Analytics and Search Console"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "AI Assistants"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect KrabiClaw to ChatGPT"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What AI assistants can and cannot do"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get the latest KrabiClaw tools in ChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Account & Settings"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Invite your team"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Connect your accounts to KrabiClaw"
+        }
+      ],
+      "articleTextLength": 3712,
+      "articleOpening": "Getting StartedJuly 7, 2026Start hereCreate your first KrabiClaw site, check the live result, then choose how to make your next useful update.Getting StartedJuly 1, 2026Create your KrabiClaw accountSign up for KrabiClaw, open your dashboard, and continue to the first-site walkthrough.Getting StartedJuly 1, 2026Create and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.Gettin",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/add-photos-and-video",
+        "/docs/category/ai-assistants",
+        "/docs/category/build-and-edit",
+        "/docs/category/getting-started",
+        "/docs/category/integrations",
+        "/docs/category/run-your-business",
+        "/docs/connect-facebook-to-krabiclaw",
+        "/docs/connect-instagram-to-krabiclaw",
+        "/docs/connect-your-accounts-to-krabiclaw",
+        "/docs/connect-your-google-account-to-krabiclaw",
+        "/docs/create-your-first-site-with-chatgpt",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/customize-brand-theme",
+        "/docs/deploy-your-site",
+        "/docs/getting-started",
+        "/docs/handle-inquiries-and-reservation-requests",
+        "/docs/invite-your-team",
+        "/docs/make-your-first-site-edit",
+        "/docs/mcp-setup",
+        "/docs/publish-a-post",
+        "/docs/read-your-site-analytics",
+        "/docs/refresh-krabiclaw-tools-in-chatgpt",
+        "/docs/set-up-notifications",
+        "/docs/update-locations-and-hours",
+        "/docs/what-you-can-edit-through-chatgpt"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/",
+      "effectiveUrl": "https://krabiclaw.com/",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:16 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e840cc502c2e-YVR"
+        }
+      ],
+      "title": "Home | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Krabiclaw is a website builder and content management system for local businesses, managed from the Krabiclaw dashboard or through Claude and ChatGPT."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Automate your website usingChatGPT, Claude, MCPChatGPT"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Be visible everywhere people look online. Across AI, social, and Google Maps. Locally and globally. "
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Your brand has entered the chat."
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Show up everywhere.Without going anywhere."
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Grow around the world"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Get found across borders"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "For anyone from their first site to their fifth location"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Start free"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Grow as big as you want"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Launch in minutes with Krabiclaw"
+        }
+      ],
+      "articleTextLength": 2995,
+      "articleOpening": "Ready whenYou are.Automate your website usingChatGPT, Claude, MCPChatGPTGet online in minutes with Krabiclaw. The AI-first, MCP-native platform for building, managing, and growing your business online.Start for freeBe visible everywhere people look online. Across AI, social, and Google Maps. Locally and globally. ChatGPTClaudeMCPYour brand has entered the chat.Update your website from ChatGPT, Claude, or any MCP client.\nChange menus, services, photos, hours, and more.\nPowered by Krabiclaw MCP.Sh",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "WebPage"
+      ],
+      "docsLinks": [
+        "/docs",
+        "/docs/create-your-krabiclaw-account",
+        "/docs/deploy-your-site",
+        "/docs/mcp-setup"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/blog",
+      "effectiveUrl": "https://krabiclaw.com/blog",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:15 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e842ec1bc12d-YVR"
+        }
+      ],
+      "title": "Blog | Krabiclaw",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Stories, news, and updates from Krabiclaw."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/blog"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Blog"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "What\u2019s New in Krabiclaw: Smoother Bookings, Thai SEO, Claude & More"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Marketing"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "What Restaurants Should Ask ChatGPT About Their Website Analytics"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "How To Turn Google Reviews Into Website FAQs, Social Posts, And SEO Pages"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "SEO"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Google Business Profile Is Not A Website"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Why Restaurant Menus Should Be Real Web Pages, Not PDFs"
+        },
+        {
+          "tag": "h2",
+          "id": null,
+          "text": "Technology"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "Krabiclaw Is Coming to the ChatGPT Store: Why We Built a Website Manager You Talk To"
+        },
+        {
+          "tag": "h3",
+          "id": null,
+          "text": "New in Krabiclaw: better analytics, guest messaging, AI, and business listing updates"
+        }
+      ],
+      "articleTextLength": 1892,
+      "articleOpening": "TechnologySeptember 28, 2026What\u2019s New in Krabiclaw: Smoother Bookings, Thai SEO, Claude & MoreMarketingJune 25, 2026What Restaurants Should Ask ChatGPT About Their Website AnalyticsRestaurant analytics should not just sit in dashboards. When ChatGPT can read traffic, pages, and customer actions, it can help owners decide what to update next: menus, posts, Google content, social ideas, translations, and local SEO pages.MarketingApril 28, 2026How To Turn Google Reviews Into Website FAQs, Social P",
+      "schemaTypes": [
+        "ItemList",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "ListItem",
+        "Organization",
+        "WebSite",
+        "CollectionPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs"
+      ]
+    },
+    {
+      "requestedUrl": "https://krabiclaw.com/help",
+      "effectiveUrl": "https://krabiclaw.com/help",
+      "status": 200,
+      "redirects": 0,
+      "headers": [
+        {
+          "status": "HTTP/2 200 ",
+          "date": "Wed, 30 Sep 2026 14:27:17 GMT",
+          "content-type": "text/html;charset=utf-8",
+          "cache-control": "public, s-maxage=60, stale-while-revalidate=300, max-age=0",
+          "x-robots-tag": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+          "cf-ray": "a433e845edcc57e1-YVR"
+        }
+      ],
+      "title": "Support",
+      "meta": [
+        {
+          "name": "description",
+          "content": "Get help with Krabiclaw, browse docs and product updates, or open a support request through ChowBot support."
+        },
+        {
+          "name": "robots",
+          "content": "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+        }
+      ],
+      "canonical": [
+        "https://krabiclaw.com/help"
+      ],
+      "headings": [
+        {
+          "tag": "h1",
+          "id": null,
+          "text": "Krabiclaw Support"
+        }
+      ],
+      "articleTextLength": 0,
+      "articleOpening": "",
+      "schemaTypes": [
+        "Organization",
+        "WebSite",
+        "FAQPage",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "Question",
+        "Answer",
+        "WebPage",
+        "BreadcrumbList",
+        "ListItem",
+        "ListItem"
+      ],
+      "docsLinks": [
+        "/docs"
+      ]
+    }
+  ]
+}
