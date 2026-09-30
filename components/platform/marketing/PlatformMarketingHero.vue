@@ -412,7 +412,8 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   height: calc(1600px / var(--kc-scene-ratio));
   overflow: hidden;
   overflow: clip;
-  background: #070b13;
+  /* The artwork's own black, so no strip of another shade shows at its foot. */
+  background: #010000;
 }
 
 .kc-parallax-hero__art {
@@ -508,8 +509,15 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   top: 0;
   right: 0;
   left: 0;
-  height: clamp(7rem, 16vw, 12rem);
-  background: linear-gradient(to bottom, #070b13 0%, rgb(7 11 19 / 82%) 30%, transparent 100%);
+  height: clamp(9rem, 20vw, 16rem);
+  /* Starts on the artwork's own black so the scene has no bottom edge, then
+     spills down in soft, uneven lobes like the canopy above it. */
+  background: linear-gradient(to bottom, #010000 0%, #010000 22%, rgb(1 0 0 / 70%) 48%, transparent 100%);
+  /* The solid layer keeps the blur off the top edge, which meets the art. */
+  mask-image: linear-gradient(#000, #000), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 240' preserveAspectRatio='none'%3E%3Cfilter id='b'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3Cpath filter='url(%23b)' d='M0 0H1440V132C1392 168 1338 196 1276 178C1214 160 1180 118 1112 126C1044 134 1014 198 944 204C874 210 842 150 772 144C702 138 676 186 606 196C536 206 498 142 428 136C358 130 330 184 262 190C194 196 158 150 96 146C58 144 26 158 0 170Z'/%3E%3C/svg%3E");
+  mask-size: 100% 40%, 100% 100%;
+  mask-position: top;
+  mask-repeat: no-repeat;
   content: "";
   pointer-events: none;
 }
@@ -541,7 +549,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 
 .kc-parallax-intro__title {
   margin: 0;
-  max-width: 24ch;
+  max-width: 30ch;
   color: var(--ui-text-highlighted);
   font-size: clamp(2.4rem, 6vw, 4.75rem);
   font-weight: 700;
