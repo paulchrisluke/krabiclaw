@@ -70,6 +70,8 @@ test('refunds keep the purchase basis and never substitute the whole original pu
 })
 
 test('an identifier is not consent: only an accepted analytics purpose counts', () => {
+  assert.equal(readAnalyticsConsent('kc_analytics_consent={"kc_analytics":true}'), 'accepted')
+  assert.equal(readAnalyticsConsent('kc_analytics_consent={"kc_analytics":false}'), 'rejected')
   const cookie = (value: string) => `a=b; kc_analytics_consent=${encodeURIComponent(value)}; _ga=GA1.1.1.2`
   assert.equal(readAnalyticsConsent(cookie('{"kc_analytics":true}')), 'accepted')
   assert.equal(readAnalyticsConsent(cookie('{"kc_analytics":false}')), 'rejected')

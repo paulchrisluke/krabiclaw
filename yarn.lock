@@ -10835,6 +10835,7 @@ __metadata:
     autoprefixer: "npm:^10.5.4"
     better-auth: "npm:1.7.4"
     better-sqlite3: "npm:^12.11.1"
+    cookie-es: "npm:^3.1.1"
     cross-env: "npm:^10.1.0"
     drizzle-kit: "npm:0.31.10"
     drizzle-orm: "npm:^0.45.2"

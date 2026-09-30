@@ -1,4 +1,4 @@
-import { parseCookies } from 'better-auth/cookies'
+import { parseCookie } from 'cookie-es'
 import type { DbClient } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME } from '~/utils/zaraz-consent'
@@ -93,10 +93,10 @@ export async function finishZarazPageview(db: DbClient, input: { eventId: string
  * means they have not answered (or the cookie is unreadable): that is not consent.
  */
 export function readAnalyticsConsent(cookieHeader: string): 'accepted' | 'rejected' | 'absent' {
-  const raw = parseCookies(cookieHeader).get(ZARAZ_CONSENT_COOKIE_NAME)
+  const raw = parseCookie(cookieHeader)[ZARAZ_CONSENT_COOKIE_NAME]
   if (!raw) return 'absent'
   let purposes: unknown
-  try { purposes = JSON.parse(decodeURIComponent(raw)) } catch { return 'absent' }
+  try { purposes = JSON.parse(raw) } catch { return 'absent' }
   if (typeof purposes !== 'object' || purposes === null) return 'absent'
   return (purposes as Record<string, unknown>)[ZARAZ_ANALYTICS_PURPOSE_ID] === true ? 'accepted' : 'rejected'
 }
