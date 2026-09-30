@@ -130,6 +130,11 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
+All Cloudflare D1 databases, including replacements, must be created with
+`--location wnam` (Western North America). Do not omit the location hint or
+create an APAC database. Confirm the creation result reports WNAM before
+adding the binding or loading any data.
+
 Change `server/db/schema.ts` first, then use `yarn db:generate` to add a forward
 migration under `migrations/`. Keep every migration already applied to a live D1
 immutable. A normal staging or production deployment runs `wrangler d1
