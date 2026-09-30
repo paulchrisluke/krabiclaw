@@ -64,8 +64,8 @@
           v-for="(statement, index) in statements"
           :key="index"
           type="button"
-          class="kc-showcase__dot"
-          :class="{ 'kc-showcase__dot--active': index === active }"
+          class="gallery-dot"
+          :class="{ 'gallery-dot--active': index === active }"
           :aria-label="`Show ${statement.text}`"
           :aria-pressed="index === active"
           :aria-controls="galleryId"
@@ -233,22 +233,6 @@ onBeforeUnmount(stop)
   margin-top: 1.5rem;
 }
 
-.kc-showcase__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--ui-border-accented);
-  cursor: pointer;
-  transition: width 0.4s ease, background-color 0.4s ease;
-}
-
-.kc-showcase__dot--active {
-  width: 1.75rem;
-  background: var(--ui-text-highlighted);
-}
-
 /* Narrow screens keep each picture readable: the set scrolls sideways at a
    fixed height rather than shrinking three pictures into one row. */
 @media (max-width: 767px) {
@@ -278,7 +262,7 @@ onBeforeUnmount(stop)
 @media (prefers-reduced-motion: reduce) {
   .kc-showcase__track,
   .kc-showcase__statement,
-  .kc-showcase__dot {
+  .gallery-dot {
     transition: none;
   }
 }

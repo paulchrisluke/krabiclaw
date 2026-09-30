@@ -13,7 +13,6 @@ export type ScheduledTaskName =
   | 'domain-reconciliation-daily'
   | 'analytics-aggregate-daily'
   | 'google-places-sync'
-  | 'social-post-sync'
   | 'review-request-automation'
   | 'social-card-backfill'
   | 'social-card-cleanup'
@@ -31,7 +30,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'stripe-ga4-intent-retention'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['social-post-sync', 'review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
+  '0 * * * *': ['review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
@@ -45,7 +44,6 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'stripe-ga4-intent-retention': async () => import('./tasks/stripe-ga4-intent-retention'),
   'sessions-materialize': async () => import('./tasks/sessions-materialize'),
   'google-places-sync': async () => import('./tasks/google-places-sync'),
-  'social-post-sync': async () => import('./tasks/social-post-sync'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
   'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
   'article-broadcast-send': async () => import('./tasks/article-broadcast-send'),
