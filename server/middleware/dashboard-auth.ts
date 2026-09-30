@@ -4,6 +4,7 @@ import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { buildLoginUrl } from '~/shared/auth/return-target'
 
+// Keep authentication at the private dashboard boundary so external deep links survive sign-in.
 export default defineHandler(async (event) => {
   const path = event.url.pathname
   if (event.req.method !== 'GET') return
