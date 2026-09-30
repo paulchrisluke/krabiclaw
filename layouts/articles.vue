@@ -7,11 +7,11 @@
     second drawer beside the hamburger.
   -->
   <NuxtLayout :name="template.slug">
-    <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8" :class="split.grid">
+    <div class="mx-auto px-5 py-8 sm:px-8 lg:px-10" :class="[split.grid, isDocs ? 'docs-shell max-w-360' : 'max-w-7xl']">
       <aside class="hidden" :class="split.aside">
         <!-- Desktop search leads the sidebar; collapsed, it leads the header's menu. -->
         <PlatformCommandSearchTrigger
-          v-if="nav.search"
+          v-if="nav.search && template.slug !== 'platform'"
           :surface="nav.search.surface"
           :variant="nav.search.variant"
           :label="searchLabel"
@@ -22,15 +22,6 @@
       </aside>
 
       <div class="min-w-0">
-        <PlatformCommandSearchTrigger
-          v-if="nav.search && route.meta.articleCollection === 'docs'"
-          :surface="nav.search.surface"
-          :variant="nav.search.variant"
-          :label="searchLabel"
-          :aria-label="searchLabel"
-          class="mb-6"
-          :class="template.slug === 'platform' ? 'nav:hidden' : 'lg:hidden'"
-        />
         <slot />
       </div>
     </div>
@@ -47,6 +38,7 @@ import { articleNavKey } from '~/composables/useArticleNav'
 
 const { t } = useI18n()
 const route = useRoute()
+const isDocs = computed(() => route.meta.articleCollection === 'docs')
 const { template } = usePublicTemplate()
 const nav = await useArticleNav()
 provide(articleNavKey, nav)
@@ -55,6 +47,20 @@ const searchLabel = computed(() => t('saya.search.dialog_title', { surface: nav.
 // The sidebar shows exactly where the template's header stops collapsing:
 // Krabiclaw's header at `nav` (1080px), the tenant templates' at `lg`.
 const split = computed(() => template.value.slug === 'platform'
-  ? { grid: 'nav:grid nav:grid-cols-[240px_minmax(0,1fr)] nav:gap-10', aside: 'nav:sticky nav:top-28 nav:block nav:h-fit nav:max-h-[calc(100vh-8rem)] nav:overflow-y-auto' }
+  ? { grid: 'nav:grid nav:grid-cols-[220px_minmax(0,1fr)] nav:gap-12', aside: 'nav:sticky nav:top-28 nav:block nav:h-fit nav:max-h-[calc(100vh-8rem)] nav:overflow-y-auto' }
   : { grid: 'lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10', aside: 'lg:sticky lg:top-28 lg:block lg:h-fit lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto' })
 </script>
+
+<style>
+.docs-shell { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.docs-shell h1, .docs-shell h2, .docs-shell h3 { font-family: inherit; }
+.docs-shell h1 { font-weight: 650; }
+.docs-shell section > h2 { font-weight: 650; }
+.docs-shell > aside { border-right: 1px solid var(--ui-border); padding-right: 1.5rem; }
+.docs-shell .docs-task a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.docs-shell .blog-article-header { margin-bottom: 2rem; }
+.docs-shell .blog-article-header > div { border: 0; padding: 0; margin-top: 1.25rem; }
+.docs-shell .blog-article-header .size-11 { display: none; }
+.docs-shell .blog-article { max-width: 48rem; }
+.docs-shell .blog-article .prose { font-size: 1rem; line-height: 1.8; }
+</style>

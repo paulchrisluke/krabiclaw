@@ -34,3 +34,18 @@ Viewports are 1440×900 and 390×844; browser screenshot exports trim scrollbar 
 - Manual Chrome inspection of index/category/article at desktop and mobile, expanded contents and copied feedback: passed.
 
 These are rendered JSON/semantic assertions, not a promise of search ranking or a Google rich-result validation. The owner's browser permissions were not modified; clipboard denial and a standalone Markdown code block were not manually exercised. Search Console remains owner-managed. No merge or deployment was performed.
+
+
+## Revision 2 — owner visual feedback
+
+The first implementation retained too much blog-card styling. The revised platform docs surface now uses a white reading canvas, system typography, compact expanded category navigation, a single primary start link, and plain task links in three desktop columns. It retains KrabiClaw's coral identity. There are no bordered index/category cards. Article prose uses a quieter 16px reading scale, a bounded reading column, and compact text-only author metadata. Tenant docs inherit their theme colors while sharing the plain task layout and navigation; platform blog keeps its existing article cards and dark identity.
+
+Platform docs/blog now have a collection header with a desktop search field rather than the marketing pill. Mobile presents the wordmark, an accessible 44px search action and menu, with no conversion CTA crowding the reading header and no duplicate search bar in article content. Existing menu search remains an alternate entry to the same dialog. Escape now closes the dialog from any focused control, rather than only its input.
+
+[Previous desktop](after/index-desktop.jpg) → [revised desktop](revision-2/docs-index-desktop.png). [Previous mobile](after/index-mobile.jpg) → [revised mobile](revision-2/docs-index-mobile.png). [Article desktop](revision-2/docs-article-desktop.png), [article mobile](revision-2/docs-article-mobile.png), [category mobile](revision-2/docs-category-mobile.png), [mobile search](revision-2/docs-search-mobile.png).
+
+Rebuilt production Worker, repeated quality checks and five Chromium tests passed for this revision. The new runtime check verifies one visible mobile header search action, no content search bar, keyboard opening/Escape closing, 19 non-featured task links, and no mobile horizontal overflow. Existing canonical-schema, mobile contents and real prompt clipboard checks continue to pass. No schema/CMS writes or deployment were made.
+
+### Proposed search follow-up across themes
+
+Use one collection-aware header contract for platform, Saya and Blawby blogs/docs: desktop search field, mobile 44px magnifier beside the menu, existing menu search as a secondary entry, and one shared dialog/state. Keep tenant searches scoped to their own organization and active collection; platform docs search can offer Docs/Blog/Help groups. Use short trigger labels (Search docs/Search blog) and explain the broader scope inside the dialog. Apply each theme's typography/colors to the dialog and results. Preserve keyboard shortcuts, autofocus, focus return, Escape and arrow-key navigation. Verify keyboard/mobile behavior, empty/error/results states and tenant isolation for each theme before rollout. This is a plan; tenant header/search changes have not been implemented in this revision.

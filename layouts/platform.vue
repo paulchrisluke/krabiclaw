@@ -1,5 +1,5 @@
 <template>
-  <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
+  <div :class="{ 'platform-docs': section === 'docs' }" class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
     <PlatformHeader :section="section" />
     <main class="grow">
       <slot />
@@ -28,10 +28,10 @@ const section = computed(() => route.meta.articleCollection === 'docs' ? 'docs' 
 
 // Krabiclaw's public pages have one theme: dark. It is rendered on the server
 // so a visitor never sees a light frame first.
-useHead({
-  htmlAttrs: { class: 'dark', 'data-theme': 'dark' },
+useHead(() => ({
+  htmlAttrs: { class: section.value === 'docs' ? 'light' : 'dark', 'data-theme': section.value === 'docs' ? 'light' : 'dark' },
   titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
-})
+}))
 </script>
 
 <style>
@@ -40,4 +40,21 @@ useHead({
   background-color: var(--ui-bg);
   color: var(--ui-text);
 }
+.platform-docs {
+  --ui-bg: #fff;
+  --ui-bg-elevated: #f7f8fa;
+  --ui-bg-muted: #f3f4f6;
+  --ui-bg-accented: #eef0f3;
+  --ui-text: #303744;
+  --ui-text-muted: #566171;
+  --ui-text-dimmed: #677181;
+  --ui-text-highlighted: #202632;
+  --ui-text-toned: #454e5d;
+  --ui-border: #e6e9ef;
+  --ui-border-muted: #d8dde5;
+  --ui-border-accented: #c5ccd7;
+  --ui-primary: #aa4437;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.platform-docs h1, .platform-docs h2, .platform-docs h3 { font-family: inherit; }
 </style>

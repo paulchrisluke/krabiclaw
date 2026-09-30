@@ -5,11 +5,11 @@
     index and a category page draw the same section, so a subcategory reads
     the same wherever it appears.
   -->
-  <section v-if="posts.length || children.length" :id="category.slug" class="scroll-mt-28" :class="compact ? 'rounded-xl border border-default p-5 sm:p-6' : 'space-y-6'">
-    <component :is="`h${Math.min(level, 6)}`" class="font-bold text-default" :class="compact ? 'mb-1 text-lg' : level === 2 ? 'border-b border-default pb-3 text-2xl' : 'text-xl'">
+  <section v-if="posts.length || children.length" :id="category.slug" class="scroll-mt-28" :class="compact ? 'space-y-3' : 'space-y-6'">
+    <component :is="`h${Math.min(level, 6)}`" class="font-bold text-default" :class="compact ? 'text-base leading-6' : level === 2 ? 'border-b border-default pb-3 text-2xl' : 'text-xl'">
       <NuxtLink :to="category.path" class="text-inherit no-underline hover:text-primary">{{ category.name }}</NuxtLink>
     </component>
-    <div v-if="posts.length" :class="compact ? 'divide-y divide-default' : 'grid gap-6 md:grid-cols-2'">
+    <div v-if="posts.length" :class="compact ? 'space-y-0.5' : 'grid gap-6 md:grid-cols-2'">
       <ArticleCard v-for="article in posts" :key="article.id" :article="article" :compact="compact" />
     </div>
     <ArticleCategorySection v-for="child in children" :key="child.id" :category="child" :level="level + 1" :exclude="exclude" :compact="compact" />

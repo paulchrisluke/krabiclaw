@@ -12,7 +12,7 @@
       <p v-if="category.description" class="mt-4 text-lg text-muted">{{ category.description }}</p>
     </header>
     <div class="space-y-12" data-parity-section="articles">
-      <div v-if="category.posts.length" :class="collection === 'docs' ? 'rounded-xl border border-default px-5 sm:px-6' : 'grid gap-6 md:grid-cols-2'">
+      <div v-if="category.posts.length" :class="collection === 'docs' ? 'space-y-2 border-t border-default pt-5' : 'grid gap-6 md:grid-cols-2'">
         <ArticleCard v-for="article in category.posts" :key="article.id" :article="article" :compact="collection === 'docs'" />
       </div>
       <ArticleCategorySection v-for="child in category.children" :key="child.id" :category="child" :compact="collection === 'docs'" />
