@@ -70,7 +70,7 @@ const title = computed(() => blockTextOrNull(props.block.data.title))
 const body = computed(() => blockTextOrNull(props.block.data.body))
 const label = computed(() => blockTextOrNull(props.block.data.label))
 const url = computed(() => blockTextOrNull(props.block.data.url))
-const media = computed(() => blockMedia(props.block, 'media'))
+const media = computed(() => blockMedia(props.block, 'media')[0] ?? null)
 
 /** The link's words, where the body already says them, become the link. */
 const linkInBody = computed(() => Boolean(label.value && url.value && body.value?.includes(label.value)))

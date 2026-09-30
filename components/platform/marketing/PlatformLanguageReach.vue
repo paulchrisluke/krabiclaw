@@ -101,7 +101,7 @@ const languages = computed(() => blockRecords(props.block.data.items).flatMap((i
   const locale = blockText(item.locale)
   const places = LANGUAGE_PLACES[locale]
   if (!places) return []
-  const media = blockMedia(props.block, `items.${index}.image`)
+  const media = blockMedia(props.block, `items.${index}.image`)[0]
   return [{ locale, name: blockText(item.title) || locale, flag: places.flag, pins: places.pins, image: mediaStillUrl(media), alt: media?.alt_text ?? '' }]
 }))
 
