@@ -64,6 +64,20 @@
             <span v-if="line.highlighted" class="kc-parallax-intro__highlight">{{ line.text }}</span>
             <span v-else>{{ line.text }}</span>
           </template>
+          <template v-if="rotatingAccents.length">
+            <br>
+            <!-- Read once, whole; the turning phrase is for the eye. -->
+            <span class="sr-only">{{ rotatingAccents.join(', ') }}</span>
+            <span class="kc-parallax-intro__rotator" aria-hidden="true">
+              <Transition name="kc-rotate" mode="out-in">
+                <span
+                  :key="rotatingIndex"
+                  class="kc-parallax-intro__rotating"
+                  :class="'kc-parallax-intro__rotating--' + (rotatingIndex % 3)"
+                >{{ rotatingAccents[rotatingIndex] }}</span>
+              </Transition>
+            </span>
+          </template>
         </h1>
 
         <p v-if="subtitle" class="kc-parallax-intro__subtitle">{{ subtitle }}</p>
@@ -143,7 +157,7 @@
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
+import { blockStrings, blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 
 /**
  * The hero of one of Krabiclaw's own marketing pages.
@@ -155,8 +169,9 @@ import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
  * chosen by `variant` the way BlawbyPageHero chooses its own.
  *
  * `title` may carry "\n" where the original forced a line break, and
- * `highlight` names the part of it rendered in the gradient. The vertical
- * accent decides which gradient that is.
+ * `accent` names the part of it rendered in the gradient. The vertical
+ * accent decides which gradient that is. On the home shape,
+ * `rotating_accents` closes the headline with one phrase at a time.
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
@@ -320,7 +335,19 @@ onMounted(() => {
   window.addEventListener('scroll', homeHeroScrollListener, { passive: true })
 })
 
+const ROTATION_INTERVAL_MS = 2600
+const rotatingIndex = ref(0)
+let rotationTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  if (rotatingAccents.value.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  rotationTimer = setInterval(() => {
+    rotatingIndex.value = (rotatingIndex.value + 1) % rotatingAccents.value.length
+  }, ROTATION_INTERVAL_MS)
+})
+
 onBeforeUnmount(() => {
+  if (rotationTimer !== null) clearInterval(rotationTimer)
   if (homeHeroScrollListener) window.removeEventListener('scroll', homeHeroScrollListener)
   if (homeHeroFrame !== null) window.cancelAnimationFrame(homeHeroFrame)
 })
@@ -328,7 +355,8 @@ onBeforeUnmount(() => {
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const eyebrowIcon = computed(() => blockTextOrNull(props.block.data.eyebrow_icon) as PlatformIconName | null)
 const title = computed(() => blockText(props.block.data.title))
-const highlight = computed(() => blockTextOrNull(props.block.data.highlight))
+const accent = computed(() => blockTextOrNull(props.block.data.accent))
+const rotatingAccents = computed(() => blockStrings(props.block.data.rotating_accents))
 const subtitle = computed(() => blockTextOrNull(props.block.data.subtitle))
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
 const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
@@ -337,15 +365,15 @@ const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_u
 
 interface TitlePart { text: string; highlighted: boolean }
 
-/** One entry per forced line; a line is highlighted when it is the highlight. */
+/** One entry per forced line; a line is highlighted when it is the accent. */
 const titleLines = computed<TitlePart[]>(() => title.value.split('\n').map(line => line.trim()).filter(Boolean).map(line => ({
   text: line,
-  highlighted: Boolean(highlight.value) && line === highlight.value!.trim(),
+  highlighted: Boolean(accent.value) && line === accent.value!.trim(),
 })))
 
-/** The title as one line with the highlight cut out of it, for the Pricing shape. */
+/** The title as one line with the accent cut out of it, for the Pricing shape. */
 const inlineParts = computed<TitlePart[]>(() => {
-  const marked = highlight.value?.trim()
+  const marked = accent.value?.trim()
   const oneLine = title.value.replace(/\n/g, ' ')
   if (!marked) return [{ text: oneLine, highlighted: false }]
   const index = oneLine.indexOf(marked)
@@ -513,7 +541,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 
 .kc-parallax-intro__title {
   margin: 0;
-  max-width: 16ch;
+  max-width: 24ch;
   color: var(--ui-text-highlighted);
   font-size: clamp(2.4rem, 6vw, 4.75rem);
   font-weight: 700;
@@ -524,6 +552,33 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 
 .kc-parallax-intro__highlight {
   color: var(--kc-coral-400);
+}
+
+.kc-parallax-intro__rotator {
+  display: inline-block;
+}
+
+.kc-parallax-intro__rotating {
+  display: inline-block;
+}
+
+.kc-parallax-intro__rotating--0 { color: var(--kc-coral-400); }
+.kc-parallax-intro__rotating--1 { color: var(--kc-teal-400); }
+.kc-parallax-intro__rotating--2 { color: var(--kc-navy-300); }
+
+.kc-rotate-enter-active,
+.kc-rotate-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.kc-rotate-enter-from {
+  opacity: 0;
+  transform: translateY(0.35em);
+}
+
+.kc-rotate-leave-to {
+  opacity: 0;
+  transform: translateY(-0.35em);
 }
 
 .kc-parallax-intro__subtitle {

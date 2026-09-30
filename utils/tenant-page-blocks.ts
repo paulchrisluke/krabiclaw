@@ -278,6 +278,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     // leaf (DESIGN.md).
     title: text('Headline', { required: true, section: 'headline' }),
     accent: text('Emphasised phrase', { section: 'headline' }),
+    // Phrases that take turns as the headline's closing line, one at a time.
+    rotating_accents: { kind: 'list', label: 'Rotating closing phrases', section: 'headline' },
     eyebrow: text('Eyebrow'),
     subtitle: prose('Subheading'),
     media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
