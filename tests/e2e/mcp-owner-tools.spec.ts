@@ -58,6 +58,29 @@ test.describe('stateless MCP server', () => {
         blocks: Array<{ id: string; type: string; level: number | null; parent_block_id: string | null; source_block_id: string | null; data: Record<string, unknown>; media: unknown[] }>
       }
     }>(await pageBefore.json()).page
+    for (const [type, data, message] of [
+      ['showcase', { items: [{ title: ' ' }] }, 'showcase.items[0].title is required.'],
+      ['steps', { items: [{}] }, 'steps.items[0].title is required.'],
+      ['language_reach', { items: [{ title: 'English', locale: 'invalid' }] }, 'language_reach.items[0].locale must be one of: en, ja, th.'],
+      ['language_reach', { items: [{ locale: 'en' }] }, 'language_reach.items[0].title is required.'],
+    ] as const) {
+      const invalid = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'append_content_block',
+        args: { organization_id: organizationId, document_id: homeVariant!.id, type, data },
+      })
+      expect(invalid.status()).toBe(200)
+      const rejected = await invalid.json()
+      expect(rejected.result.isError).toBe(true)
+      expect(rejected.result.content[0].text).toContain(message)
+    }
+    const unchanged = await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName: 'get_tenant_page',
+      args: { organization_id: organizationId, variant_id: homeVariant!.id },
+    })
+    expect(unchanged.status()).toBe(200)
+    const unchangedPage = mcpData<{ page: { blocks: unknown[]; updated_at: string } }>(await unchanged.json()).page
+    expect(unchangedPage.blocks).toEqual(pageBeforeData.blocks)
+    expect(unchangedPage.updated_at).toBe(pageBeforeData.updated_at)
     // update_tenant_page replaces the document, so the writer states the path,
     // title and identity it read rather than leaving them to be filled in from
     // the stored row. Order is the array's; there is no position to send.

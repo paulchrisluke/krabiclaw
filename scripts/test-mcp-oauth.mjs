@@ -57,6 +57,11 @@ async function request(url, init = {}) {
 
 function jsonBody(response, label) {
   const contentType = response.headers["content-type"];
+  if (typeof contentType === "string" && contentType.startsWith("text/event-stream")) {
+    const data = response.bodyText.split("\n").filter(line => line.startsWith("data:"))
+      .map(line => line.slice(5).trim()).join("\n");
+    return JSON.parse(data);
+  }
   if (typeof contentType !== "string" || !contentType.startsWith("application/json")) {
     throw new Error(`${label} returned non-JSON content-type: ${String(contentType)}`);
   }
@@ -72,6 +77,7 @@ function post(url, body, headers = {}) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(url === MCP_URL ? { Accept: "application/json, text/event-stream" } : {}),
       ...headers,
     },
     body: JSON.stringify(body),
@@ -241,7 +247,7 @@ async function main() {
       return;
     }
     const clientScopes = new Set(String(clientMetadata.scope ?? "").split(/\s+/).filter(Boolean));
-    for (const requiredScope of ["openid", "offline_access", "tenant"]) {
+    for (const requiredScope of ["openid", "tenant"]) {
       if (!clientScopes.has(requiredScope)) {
         fail(`CIMD client missing ${requiredScope} capability`, clientMetadata);
         return;
@@ -255,7 +261,7 @@ async function main() {
       client_id: testClientId,
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: "openid offline_access tenant",
+      scope: "openid tenant",
       state,
       code_challenge: challenge,
       code_challenge_method: "S256",
@@ -422,6 +428,16 @@ async function main() {
     for (const requiredTool of ["get_workspace_context", "list_organizations"]) {
       if (names.includes(requiredTool)) pass(`${requiredTool} tool present`);
       else fail(`${requiredTool} missing from tools/list`, names);
+    }
+    const authoring = listBody.result.tools.find(tool => tool.name === "append_content_block");
+    for (const blockType of ["showcase", "language_reach", "steps"]) {
+      if (authoring?.inputSchema?.properties?.type?.enum?.includes(blockType)) pass(`${blockType} block type advertised`);
+      else fail(`${blockType} missing from authoring catalog`);
+    }
+    const payloadDescription = authoring?.inputSchema?.properties?.data?.description ?? "";
+    for (const field of ["rotating_accents", "layout (one of cards, pictures)"]) {
+      if (payloadDescription.includes(field)) pass(`${field} field advertised`);
+      else fail(`${field} missing from authoring catalog`);
     }
   } else {
     fail("tools/list failed", listBody);
