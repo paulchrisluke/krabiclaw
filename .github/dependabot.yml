@@ -16,6 +16,11 @@ updates:
       # Pinned Better Auth requires better-sqlite3 ^12; revisit with the auth upgrade (#809).
       - dependency-name: "better-sqlite3"
         update-types: ["version-update:semver-major"]
+      # satori 0.33 imports harfbuzzjs, which loads hb.wasm from disk or a relative
+      # URL at import time; neither exists in a Worker, and standalone init() has no
+      # way to supply it. Social cards render on 0.32 until satori can take the wasm.
+      - dependency-name: "satori"
+        versions: [">=0.33.0"]
 
     groups:
       better-auth:

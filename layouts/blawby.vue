@@ -33,18 +33,16 @@ const publicLocale = useState<string>('public-locale', () => 'en')
 const isHome = computed(() => route.path === '/'
   || (publicLocale.value !== 'en' && route.path === `/${publicLocale.value}`)
   || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
-const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
-const blawbyStylesheetForRoute = computed(() => {
-  return blawbyStylesheetHref
-})
 
 useHead(() => ({
   link: [
-    {
+    // The stable surface file is written by `nuxt build`; under `nuxt dev`
+    // Vite serves the imported entry itself.
+    ...(import.meta.dev ? [] : [{
       key: isHome.value ? 'blawby-home-stylesheet' : 'blawby-surface-stylesheet',
-      rel: 'stylesheet',
-      href: blawbyStylesheetForRoute.value,
-    },
+      rel: 'stylesheet' as const,
+      href: '/_nuxt/surfaces/blawby.css',
+    }]),
     { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
   ],
   style: isHome.value
