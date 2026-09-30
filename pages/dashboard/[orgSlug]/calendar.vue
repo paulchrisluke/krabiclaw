@@ -1,92 +1,89 @@
 <template>
   <DashboardIndexPanel id="org-calendar" title="Calendar">
-    <div class="mx-auto w-full max-w-[var(--ws-page-wide,90rem)] space-y-6 pb-24">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div class="space-y-3">
-          <div class="flex items-center gap-1">
-            <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" square aria-label="Previous month" @click="moveMonth(-1)" />
-            <UButton label="Today" color="neutral" variant="soft" @click="goToday" />
-            <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" square aria-label="Next month" @click="moveMonth(1)" />
-            <h2 class="ml-3 text-lg font-semibold text-highlighted">{{ monthLabel }}</h2>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[26rem]">
-          <UFormField label="Location">
-            <USelect v-model="filters.locationId" :items="locationOptions" class="w-full" />
-          </UFormField>
-          <UFormField label="Kind">
-            <USelect v-model="filters.kind" :items="kindOptions" class="w-full" />
-          </UFormField>
-        </div>
+    <template #right>
+      <div class="flex items-center gap-2">
+        <USelect v-model="filters.locationId" :items="locationOptions" size="sm" class="w-44" aria-label="Location" />
+        <USelect v-model="filters.kind" :items="kindOptions" size="sm" class="w-36" aria-label="Kind" />
+      </div>
+    </template>
+
+    <div class="mx-auto w-full max-w-3xl pb-28">
+      <!-- One weekday bar for every month below it, as Airbnb's calendar draws it. -->
+      <div class="sticky -top-4 z-10 -mx-4 -mt-4 grid grid-cols-7 border-b border-default bg-default px-4 pb-2 pt-6 text-center text-xs font-medium text-muted sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-8">
+        <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
       </div>
 
-        <UAlert
-          v-if="agendaError"
-          color="error"
-          variant="soft"
-          title="Calendar could not be loaded"
-          :description="getErrorMessage(agendaError, 'Calendar request failed')"
-        />
-        <USkeleton v-if="loading && !agendaData" class="h-[38rem] w-full" />
+      <UAlert
+        v-if="agendaError"
+        class="mt-6"
+        color="error"
+        variant="soft"
+        title="Calendar could not be loaded"
+        :description="getErrorMessage(agendaError, 'Calendar request failed')"
+      />
 
-        <template v-else-if="agendaData && !agendaError">
-        <div data-testid="calendar-month-grid" class="hidden overflow-hidden rounded-lg border border-default lg:block">
-          <div class="grid grid-cols-7 border-b border-default bg-muted/30">
-            <div v-for="day in weekdayLabels" :key="day" class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted">{{ day }}</div>
-          </div>
-          <div class="grid grid-cols-7">
-            <a
-              v-for="cell in monthCells"
-              :key="cell.dayKey"
-              href="#calendar-day-list"
-              class="min-h-32 border-b border-r border-default p-2 text-left last:border-r-0"
-              :class="cell.inMonth ? 'bg-default' : 'bg-muted/20 text-dimmed'"
-              @click="selectedDay = cell.dayKey"
-            >
-              <span class="inline-flex size-7 items-center justify-center rounded-full text-xs font-medium" :class="cell.isToday ? 'bg-primary text-inverted' : ''">{{ cell.day }}</span>
-              <ul class="mt-1 space-y-1">
-                <li v-for="item in cell.items.slice(0, 3)" :key="item.id" class="flex min-w-0 items-center gap-1 rounded px-1.5 py-1 text-[11px]" :class="kindStyle(item.kind)">
-                  <UIcon :name="kindIcon(item.kind)" class="size-3 shrink-0" />
-                  <span class="truncate">{{ kindLabel(item.kind) }} · {{ item.title }}</span>
-                </li>
-                <li v-if="cell.items.length > 3" class="px-1.5 text-[11px] font-medium text-muted">+{{ cell.items.length - 3 }} more</li>
-              </ul>
-            </a>
-          </div>
-        </div>
+      <section
+        v-for="month in months"
+        :key="month.key"
+        :ref="(el) => registerMonth(month.key, el)"
+        :data-month="month.key"
+        class="pt-8"
+      >
+        <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
 
-        <section v-if="selectedDayItems.length" id="calendar-day-list" class="hidden scroll-mt-20 space-y-2 lg:block">
-          <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDay) }}</h3>
-          <div class="divide-y divide-default border-y border-default">
+        <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
+
+        <UCalendar
+          v-else
+          :placeholder="month.first"
+          :model-value="selectedDate"
+          :month-controls="false"
+          :year-controls="false"
+          :view-control="false"
+          :fixed-weeks="false"
+          :week-starts-on="0"
+          :ui="calendarUi"
+          @update:model-value="selectDay"
+        >
+          <template #day="{ day }">
+            <span
+              class="flex size-7 items-center justify-center rounded-full text-sm font-medium"
+              :class="isToday(day) ? 'bg-primary text-inverted' : 'text-highlighted'"
+            >{{ day.day }}</span>
+            <span v-if="countFor(day)" class="mt-1 text-xs tabular-nums text-muted">{{ countFor(day) }}</span>
+          </template>
+        </UCalendar>
+
+        <!-- The chosen day's rows sit under the month that holds it. -->
+        <div v-if="selectedDayKey?.startsWith(month.key)" class="mt-6 space-y-2">
+          <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDayKey) }}</h3>
+          <div v-if="selectedDayItems.length" class="divide-y divide-default border-y border-default">
             <AgendaRow v-for="item in selectedDayItems" :key="item.id" :item="item" />
           </div>
-        </section>
-
-        <div data-testid="calendar-mobile-list" class="space-y-8 lg:hidden">
-          <section v-for="group in mobileGroups" :id="`day-${group.dayKey}`" :key="group.dayKey" class="scroll-mt-20 space-y-2">
-            <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(group.dayKey) }}</h3>
-            <div class="divide-y divide-default border-y border-default">
-              <AgendaRow v-for="item in group.items" :key="item.id" :item="item" />
-            </div>
-          </section>
+          <p v-else class="py-6 text-sm text-muted">Nothing scheduled.</p>
         </div>
+      </section>
 
-        <div v-if="agendaData.items.length === 0" class="py-20 text-center">
-          <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bb1d388b-61f1-4027-5457-0909965c8300/thumbnail"
-            alt=""
-            aria-hidden="true"
-            class="mx-auto size-28 object-contain"
-          >
-          <p class="mt-6 text-base font-semibold text-highlighted">Nothing scheduled this month</p>
-          <p class="mt-1 text-sm text-muted">Try another month or adjust the filters.</p>
-        </div>
-        </template>
+      <div ref="sentinel" class="h-px" />
     </div>
+
+    <!-- Airbnb's floating Today: appears once today has scrolled away, and brings it back. -->
+    <UButton
+      v-if="!todayInView"
+      icon="i-lucide-arrow-up"
+      label="Today"
+      color="neutral"
+      variant="solid"
+      size="lg"
+      class="fixed bottom-24 right-6 z-20 rounded-full shadow-lg lg:bottom-8"
+      @click="scrollToToday"
+    />
   </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
+import { CalendarDate, getLocalTimeZone, parseDate, today, type DateValue } from '@internationalized/date'
+import type { ComponentPublicInstance } from 'vue'
 import { formatCalendarDate } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
@@ -95,38 +92,68 @@ definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Calendar | Krabiclaw', robots: 'noindex, nofollow' })
 
 const FILTER_ALL = '__all__'
+const INITIAL_MONTHS = 3
 const route = useRoute()
 const router = useRouter()
 const dashboardApi = useDashboardApi()
-const orgSlug = computed(() => String(route.params.orgSlug ?? ''))
-const currentMonth = ref(new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)))
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
-const agendaData = ref<AgendaPayload | null>(null)
 const agendaError = ref<unknown>(null)
-const loading = ref(false)
-// The viewer's own date, not UTC. toISOString() is a day behind for anyone east
-// of Greenwich in the evening, which made the calendar open on yesterday and
-// ask the availability API about the wrong date.
-function localDayKey(date = new Date()): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+
+const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const timeZone = getLocalTimeZone()
+const todayDate = today(timeZone)
+const todayKey = todayDate.toString()
+
+// Reka draws the outside-view days as cells; Airbnb leaves those blank, so
+// they are made invisible rather than removed, which keeps the grid aligned.
+const calendarUi = {
+  header: 'hidden',
+  gridWeekDaysRow: 'hidden',
+  grid: 'w-full',
+  gridBody: 'grid gap-1.5',
+  gridRow: 'grid grid-cols-7 gap-1.5 place-items-stretch',
+  cell: 'w-full p-0',
+  cellTrigger: [
+    'm-0 flex h-20 w-full flex-col items-center justify-start rounded-xl bg-elevated/70 pt-2 lg:h-24',
+    'transition-colors hover:bg-elevated hover:not-data-selected:bg-elevated',
+    'data-[outside-view]:invisible',
+    'data-[selected]:bg-elevated/70 data-[selected]:text-highlighted data-[selected]:ring-2 data-[selected]:ring-primary data-[selected]:ring-inset',
+    'data-[today]:text-highlighted',
+  ].join(' '),
 }
 
-const selectedDay = ref(localDayKey())
+interface MonthBlock {
+  key: string
+  first: CalendarDate
+  label: string
+  status: 'loading' | 'ready' | 'error'
+  items: AgendaItem[]
+}
 
-const monthStart = computed(() => currentMonth.value.toISOString().slice(0, 10))
-const monthEnd = computed(() => new Date(Date.UTC(currentMonth.value.getUTCFullYear(), currentMonth.value.getUTCMonth() + 1, 0)).toISOString().slice(0, 10))
-const monthLabel = computed(() => formatCalendarDate(currentMonth.value.toISOString().slice(0, 10), 'en', { month: 'long', year: 'numeric' }))
-const query = computed(() => ({
-  from: monthStart.value, to: monthEnd.value,
-  locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
-  kinds: filters.kind !== FILTER_ALL ? [filters.kind as AgendaKind] : undefined,
-}))
-const requestKey = computed(() => `dashboard-calendar-${orgSlug.value}-${JSON.stringify(query.value)}`)
+const monthKeys = ref<string[]>([])
+const monthData = shallowRef(new Map<string, MonthBlock>())
+const locations = ref<AgendaLocation[]>([])
+const availableKinds = ref<AgendaKind[]>([])
+const generation = ref(0)
+
+function putMonth(block: MonthBlock): void {
+  monthData.value = new Map(monthData.value).set(block.key, block)
+}
+function monthKeyOf(date: CalendarDate): string {
+  return `${date.year}-${String(date.month).padStart(2, '0')}`
+}
+function firstOf(key: string): CalendarDate {
+  const [year, month] = key.split('-').map(Number)
+  return new CalendarDate(year!, month!, 1)
+}
+function monthLabelOf(first: CalendarDate): string {
+  // The year is said when it changes, which is how Airbnb heads January.
+  return formatCalendarDate(first.toString(), 'en', first.year === todayDate.year && first.month !== 1 ? { month: 'long' } : { month: 'short', year: 'numeric' })
+}
+
+const months = computed(() => monthKeys.value.map(key => monthData.value.get(key)!).filter(Boolean))
 
 const isAgendaItem = (value: unknown): value is AgendaItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.kind === 'string'
@@ -139,79 +166,120 @@ const isAgendaPayload = (value: unknown): value is AgendaPayload =>
   && Array.isArray(value.availableKinds) && value.availableKinds.every(kind => ['reservation', 'booking', 'session', 'post'].includes(String(kind)))
   && Array.isArray(value.locations) && value.locations.every(isLocation)
 
-async function fetchAgenda(): Promise<AgendaPayload> {
-  return await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {
-    query: { ...query.value, kinds: query.value.kinds?.join(',') }, validate: isAgendaPayload,
-  })
+async function loadMonth(key: string): Promise<void> {
+  const first = firstOf(key)
+  const last = first.add({ months: 1 }).subtract({ days: 1 })
+  const requested = generation.value
+  putMonth({ key, first, label: monthLabelOf(first), status: 'loading', items: [] })
+  try {
+    const payload = await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {
+      query: {
+        from: first.toString(), to: last.toString(),
+        locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
+        kinds: filters.kind !== FILTER_ALL ? filters.kind : undefined,
+      },
+      validate: isAgendaPayload,
+    })
+    if (requested !== generation.value) return
+    locations.value = payload.locations
+    availableKinds.value = payload.availableKinds
+    putMonth({ key, first, label: monthLabelOf(first), status: 'ready', items: payload.items })
+    agendaError.value = null
+  } catch (error) {
+    if (requested !== generation.value) return
+    putMonth({ key, first, label: monthLabelOf(first), status: 'error', items: [] })
+    agendaError.value = error
+  }
 }
 
-const { data: initialData, error: initialError } = await useAsyncData(requestKey, fetchAgenda)
-agendaData.value = initialData.value ?? null
-agendaError.value = initialError.value
+async function resetMonths(): Promise<void> {
+  generation.value += 1
+  monthData.value = new Map()
+  monthKeys.value = Array.from({ length: INITIAL_MONTHS }, (_, offset) => monthKeyOf(todayDate.add({ months: offset })))
+  await Promise.all(monthKeys.value.map(loadMonth))
+}
 
-watch(requestKey, async (key) => {
-  const requestedKey = key
-  loading.value = true
-  agendaError.value = null
-  try {
-    const result = await fetchAgenda()
-    if (requestedKey !== requestKey.value) return
-    agendaData.value = result
-  } catch (error) {
-    if (requestedKey !== requestKey.value) return
-    agendaError.value = error
-  } finally {
-    if (requestedKey === requestKey.value) loading.value = false
-  }
-})
+function loadNextMonth(): void {
+  const lastKey = monthKeys.value.at(-1)
+  if (!lastKey) return
+  const next = monthKeyOf(firstOf(lastKey).add({ months: 1 }))
+  monthKeys.value = [...monthKeys.value, next]
+  void loadMonth(next)
+}
 
-watch(() => filters.locationId, (locationId) => {
-  void router.replace({
-    query: { ...route.query, locationId: locationId === FILTER_ALL ? undefined : locationId },
-  })
-})
-watch(() => filters.kind, async kind => {
-  await router.replace({ query: { ...route.query, kinds: kind === FILTER_ALL ? undefined : kind } })
-})
-
-const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...(agendaData.value?.locations ?? []).map(location => ({ label: location.title, value: location.id }))])
-const kindOptions = computed(() => [{ label: 'All kinds', value: FILTER_ALL }, ...(agendaData.value?.availableKinds ?? []).map(kind => ({ label: kindLabel(kind), value: kind }))])
 const itemsByDay = computed(() => {
   const groups = new Map<string, AgendaItem[]>()
-  for (const item of agendaData.value?.items ?? []) groups.set(item.dayKey, [...(groups.get(item.dayKey) ?? []), item])
+  for (const month of months.value) {
+    for (const item of month.items) groups.set(item.dayKey, [...(groups.get(item.dayKey) ?? []), item])
+  }
   return groups
 })
-const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const monthCells = computed(() => {
-  const year = currentMonth.value.getUTCFullYear()
-  const month = currentMonth.value.getUTCMonth()
-  const firstWeekday = currentMonth.value.getUTCDay()
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(Date.UTC(year, month, index - firstWeekday + 1))
-    const dayKey = date.toISOString().slice(0, 10)
-    return { dayKey, day: date.getUTCDate(), inMonth: date.getUTCMonth() === month, isToday: dayKey === localDayKey(), items: itemsByDay.value.get(dayKey) ?? [] }
-  })
-})
-const mobileGroups = computed(() => [...itemsByDay.value.entries()].map(([dayKey, items]) => ({ dayKey, items })))
-const selectedDayItems = computed(() => itemsByDay.value.get(selectedDay.value) ?? [])
 
-function moveMonth(offset: number) {
-  currentMonth.value = new Date(Date.UTC(currentMonth.value.getUTCFullYear(), currentMonth.value.getUTCMonth() + offset, 1))
+function countFor(day: DateValue): number {
+  return itemsByDay.value.get(day.toString())?.length ?? 0
 }
-function goToday() {
-  const now = new Date()
-  currentMonth.value = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+function isToday(day: DateValue): boolean {
+  return day.toString() === todayKey
 }
+
+const selectedDate = shallowRef<CalendarDate | null>(null)
+const selectedDayKey = computed(() => selectedDate.value?.toString() ?? null)
+const selectedDayItems = computed(() => (selectedDayKey.value && itemsByDay.value.get(selectedDayKey.value)) || [])
+
+function selectDay(value: unknown): void {
+  selectedDate.value = value instanceof CalendarDate ? value : value ? parseDate(String(value)) : null
+}
+
 function dayLabel(dayKey: string) {
   return formatCalendarDate(dayKey, 'en', { weekday: 'long', month: 'long', day: 'numeric' })
 }
+
+const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...locations.value.map(location => ({ label: location.title, value: location.id }))])
+const kindOptions = computed(() => [{ label: 'All kinds', value: FILTER_ALL }, ...availableKinds.value.map(kind => ({ label: kindLabel(kind), value: kind }))])
 function kindLabel(kind: AgendaKind) {
   return ({ reservation: 'Reservation', booking: 'Booking', session: 'Session', post: 'Post' })[kind]
 }
-function kindIcon(kind: AgendaKind) {
-  return ({ reservation: 'i-lucide-utensils', booking: 'i-lucide-ticket', session: 'i-lucide-calendar-clock', post: 'i-lucide-send' })[kind]
+
+// The months keep scrolling: a sentinel below the last one asks for the next.
+const sentinel = ref<HTMLElement | null>(null)
+const monthElements = new Map<string, HTMLElement>()
+const todayInView = ref(true)
+let sentinelObserver: IntersectionObserver | null = null
+let todayObserver: IntersectionObserver | null = null
+
+function registerMonth(key: string, el: Element | ComponentPublicInstance | null): void {
+  if (el instanceof HTMLElement) {
+    monthElements.set(key, el)
+    if (key === monthKeyOf(todayDate)) todayObserver?.observe(el)
+  } else {
+    monthElements.delete(key)
+  }
 }
-function kindStyle(kind: AgendaKind) {
-  return ({ reservation: 'bg-blue-500/10 text-blue-700 dark:text-blue-300', booking: 'bg-violet-500/10 text-violet-700 dark:text-violet-300', session: 'bg-amber-500/10 text-amber-700 dark:text-amber-300', post: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' })[kind]
+
+function scrollToToday(): void {
+  monthElements.get(monthKeyOf(todayDate))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+
+onMounted(async () => {
+  todayObserver = new IntersectionObserver(([entry]) => { todayInView.value = entry?.isIntersecting ?? true })
+  sentinelObserver = new IntersectionObserver(([entry]) => { if (entry?.isIntersecting) loadNextMonth() })
+  await resetMonths()
+  await nextTick()
+  if (sentinel.value) sentinelObserver.observe(sentinel.value)
+})
+onBeforeUnmount(() => {
+  sentinelObserver?.disconnect()
+  todayObserver?.disconnect()
+})
+
+watch(() => [filters.locationId, filters.kind], () => {
+  void router.replace({
+    query: {
+      ...route.query,
+      locationId: filters.locationId === FILTER_ALL ? undefined : filters.locationId,
+      kinds: filters.kind === FILTER_ALL ? undefined : filters.kind,
+    },
+  })
+  void resetMonths()
+})
 </script>
