@@ -9,7 +9,7 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div class="fixed inset-0 z-[60] bg-black/50" @click="dismiss" />
+      <div class="fixed inset-0 z-[60] bg-black/50" />
     </Transition>
     <Transition
       appear
@@ -25,8 +25,9 @@
         aria-modal="true"
         :aria-label="announcement?.headline"
         class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        @click="dismiss"
       >
-        <div class="relative w-full max-w-sm">
+        <div class="relative w-full max-w-sm" @click.stop>
           <button
             type="button"
             class="absolute -right-3 -top-3 z-10 flex size-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-lg ring-1 ring-black/5 hover:bg-gray-50 hover:text-gray-800"

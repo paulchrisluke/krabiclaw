@@ -616,11 +616,12 @@ export async function updateOrganizationSettingsFields(
     }
     // A disabled announcement may be saved with a blank headline — the owner is turning it off,
     // not necessarily deleting draft text they intend to re-enable later. It still has to be a
-    // string within the length limit, whether or not it's currently shown.
-    if (headline !== undefined && headline !== null && (typeof headline !== 'string' || headline.trim().length > 120)) {
-      return { status: 400, data: { error: 'Announcement headline must be 120 characters or fewer' } }
+    // string within the length limit either way: attemptOrganizationUpdate trims it unconditionally,
+    // and a missing/null headline would throw there rather than fail this validation cleanly.
+    if (typeof headline !== 'string' || headline.trim().length > 120) {
+      return { status: 400, data: { error: 'Announcement headline must be a string of 120 characters or fewer' } }
     }
-    if (enabled !== false && (typeof headline !== 'string' || !headline.trim())) {
+    if (enabled !== false && !headline.trim()) {
       return { status: 400, data: { error: 'Announcement headline is required' } }
     }
     if (description !== undefined && description !== null && (typeof description !== 'string' || description.trim().length > 500)) {

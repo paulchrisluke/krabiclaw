@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4b313a5d700d1f20e0a579bcb9ee2f7fee74dbe04fc995e40b3494e0b090ed66",
+  "fingerprint": "sha256:2d02a936e29b7ee9c4d48059da0f25cf8301739d9ca0f4f24ea8219228fe3992",
   "tools": [
     {
       "name": "append_content_block",
@@ -5776,6 +5776,7 @@
                     "type": "boolean"
                   },
                   "headline": {
+                    "description": "Required in every write, even an empty string when disabling without discarding it.",
                     "type": "string"
                   }
                 },
@@ -15796,6 +15797,7 @@
                 "type": "boolean"
               },
               "headline": {
+                "description": "Required in every write, even an empty string when disabling without discarding it.",
                 "type": "string"
               }
             },

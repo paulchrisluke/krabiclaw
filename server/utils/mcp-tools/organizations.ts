@@ -17,7 +17,7 @@ const ANNOUNCEMENT_SCHEMA = {
   type: ['object', 'null'],
   description: 'The universal announcement modal shown to visitors on the public website, available to every theme. An image, when set, is a separate organization media placement (slot "announcement"), not a field here.',
   properties: {
-    headline: { type: 'string' },
+    headline: { type: 'string', description: 'Required in every write, even an empty string when disabling without discarding it.' },
     description: { type: ['string', 'null'] },
     cta_label: { type: ['string', 'null'], description: 'Button label. Requires cta_url and vice versa.' },
     cta_url: { type: ['string', 'null'], description: 'Button destination, http or https. Requires cta_label and vice versa.' },
