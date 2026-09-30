@@ -53,12 +53,12 @@
       </div>
 
       <UAlert
-        v-if="agendaError"
+        v-if="locationError"
         class="mt-6"
         color="error"
         variant="soft"
-        title="Calendar could not be loaded"
-        :description="getErrorMessage(agendaError, 'Calendar request failed')"
+        title="The location could not be loaded"
+        :description="getErrorMessage(locationError, 'Location request failed')"
       />
 
       <template v-if="view === 'month'">
@@ -72,6 +72,14 @@
           <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
 
           <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
+          <UAlert
+            v-else-if="month.status === 'error'"
+            color="error"
+            variant="soft"
+            :title="`${month.label} could not be loaded`"
+            :description="getErrorMessage(month.cause, 'Calendar request failed')"
+            :actions="[{ label: 'Try again', color: 'neutral', variant: 'soft', onClick: () => loadMonth(month.key) }]"
+          />
 
           <UCalendar
             v-else
@@ -110,6 +118,14 @@
         >
           <h2 class="mb-4 px-1 text-2xl font-semibold text-highlighted">{{ month.label }}</h2>
           <USkeleton v-if="month.status === 'loading'" class="h-80 w-full" />
+          <UAlert
+            v-else-if="month.status === 'error'"
+            color="error"
+            variant="soft"
+            :title="`${month.label} could not be loaded`"
+            :description="getErrorMessage(month.cause, 'Calendar request failed')"
+            :actions="[{ label: 'Try again', color: 'neutral', variant: 'soft', onClick: () => loadMonth(month.key) }]"
+          />
           <div v-else class="divide-y divide-default border-y border-default">
             <NuxtLink
               v-for="dayKey in daysOf(month)"
@@ -154,6 +170,13 @@
               {{ formatCalendarDate(month.first.toString(), 'en', { month: 'long' }) }}
             </button>
             <USkeleton v-if="month.status === 'loading'" class="h-40 w-full" />
+            <UAlert
+              v-else-if="month.status === 'error'"
+              color="error"
+              variant="soft"
+              :description="getErrorMessage(month.cause, 'Calendar request failed')"
+              :actions="[{ label: 'Try again', color: 'neutral', variant: 'soft', onClick: () => loadMonth(month.key) }]"
+            />
             <UCalendar
               v-else
               :placeholder="month.first"
@@ -242,7 +265,6 @@ const dashboardApi = useDashboardApi()
 const routeKind = typeof route.query.kinds === 'string' && ['reservation', 'booking', 'session', 'post'].includes(route.query.kinds) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
-const agendaError = ref<unknown>(null)
 
 const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const timeZone = getLocalTimeZone()
@@ -310,13 +332,10 @@ const yearUi = {
   cellTrigger: 'm-0 flex h-7 w-full flex-col items-center justify-center rounded-md hover:bg-elevated data-[outside-view]:invisible data-[selected]:bg-transparent data-[today]:font-semibold',
 }
 
-interface MonthBlock {
-  key: string
-  first: CalendarDate
-  label: string
-  status: 'loading' | 'ready' | 'error'
-  items: AgendaItem[]
-}
+type MonthBlock = { key: string; first: CalendarDate; label: string; items: AgendaItem[] } & (
+  | { status: 'loading' | 'ready' }
+  | { status: 'error'; cause: unknown }
+)
 
 const monthKeys = ref<string[]>([])
 const monthData = shallowRef(new Map<string, MonthBlock>())
@@ -326,8 +345,9 @@ const locations = ref<AgendaLocation[]>([])
 // is no one answer, so nothing is struck.
 const isLocationHours = (value: unknown): value is { location: CalendarLocation } =>
   isRecord(value) && isRecord(value.location) && typeof value.location.id === 'string' && typeof value.location.status === 'string'
+  && 'opening_hours' in value.location && 'special_hours' in value.location
 const organizationId = await useDashboardOrganizationId()
-const { data: chosenLocation, refresh: refreshLocation } = await useAsyncData(
+const { data: chosenLocation, error: locationError, refresh: refreshLocation } = await useAsyncData(
   () => `calendar-location:${organizationId}:${filters.locationId}`,
   async () => filters.locationId === FILTER_ALL
     ? null
@@ -339,9 +359,9 @@ function isUnavailableKey(key: string): boolean {
   const record = chosenLocation.value
   if (!record) return false
   if (record.status !== 'active') return true
-  const special = parseSpecialHours(record.special_hours ?? null)
+  const special = parseSpecialHours(record.special_hours)
   if (closureOnDate(special, key)) return true
-  const intervals = getDateIntervals(parseOpeningHours(record.opening_hours ?? null), special, key)
+  const intervals = getDateIntervals(parseOpeningHours(record.opening_hours), special, key)
   return intervals !== null && intervals.length === 0
 }
 function isUnavailable(day: DateValue): boolean {
@@ -400,16 +420,15 @@ async function loadMonth(key: string): Promise<void> {
     locations.value = payload.locations
     availableKinds.value = payload.availableKinds
     putMonth({ key, first, label: monthLabelOf(first), status: 'ready', items: payload.items })
-    agendaError.value = null
-  } catch (error) {
+  } catch (cause) {
     if (requested !== generation.value) return
-    putMonth({ key, first, label: monthLabelOf(first), status: 'error', items: [] })
-    agendaError.value = error
+    putMonth({ key, first, label: monthLabelOf(first), status: 'error', cause, items: [] })
   }
 }
 
+// A month that is there and not failed is left alone; a failed one is asked for again.
 async function ensureLoaded(keys: string[]): Promise<void> {
-  await Promise.all(keys.filter(key => !monthData.value.has(key)).map(loadMonth))
+  await Promise.all(keys.filter(key => monthData.value.get(key)?.status !== 'ready' && monthData.value.get(key)?.status !== 'loading').map(loadMonth))
 }
 
 async function resetMonths(): Promise<void> {
@@ -554,7 +573,7 @@ async function writeSelection(action: 'block' | 'open'): Promise<void> {
   const record = chosenLocation.value
   const range = selectionRange.value
   if (!record || !range) return
-  const special = parseSpecialHours(record.special_hours ?? null)
+  const special = parseSpecialHours(record.special_hours)
   writing.value = action
   writeError.value = null
   try {
@@ -601,9 +620,11 @@ function scrollToToday(): void {
 onMounted(async () => {
   todayObserver = new IntersectionObserver(([entry]) => { todayInView.value = entry?.isIntersecting ?? true })
   sentinelObserver = new IntersectionObserver(([entry]) => { if (entry?.isIntersecting) loadNextMonth() })
+  // The sentinel is already mounted by now, and comes and goes with the view
+  // after; both are observed, or the first month after the third never loads.
+  if (sentinel.value) sentinelObserver.observe(sentinel.value)
   await resetMonths()
 })
-// The sentinel comes and goes with the view, so it is observed whenever it is there.
 watch(sentinel, (el, previous) => {
   if (previous) sentinelObserver?.unobserve(previous)
   if (el) sentinelObserver?.observe(el)

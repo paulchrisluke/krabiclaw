@@ -83,7 +83,7 @@ const errorMessage = computed(() => {
   return cause ? getErrorMessage(cause, 'The day could not be loaded') : ''
 })
 
-const specialHours = computed<SpecialHours>(() => location.value ? parseSpecialHours(location.value.special_hours ?? null) : null)
+const specialHours = computed<SpecialHours>(() => location.value ? parseSpecialHours(location.value.special_hours) : null)
 
 // Unavailable says why, the way Airbnb's sheet does: the reason is the
 // tenant's own closure and its note, an inactive location, or a weekday the
@@ -94,7 +94,7 @@ const availability = computed<{ open: boolean; reason: string; action: 'open' | 
   if (record.status !== 'active') return { open: false, reason: 'This location is not active.', action: null }
   const closure = closureOnDate(specialHours.value, day.value)
   if (closure) return { open: false, reason: closure.note || 'You blocked this date.', action: 'open' }
-  const intervals = getDateIntervals(parseOpeningHours(record.opening_hours ?? null), specialHours.value, day.value)
+  const intervals = getDateIntervals(parseOpeningHours(record.opening_hours), specialHours.value, day.value)
   if (intervals !== null && intervals.length === 0) {
     return { open: false, reason: `No hours on ${formatCalendarDate(day.value, 'en', { weekday: 'long' })}s.`, action: null }
   }
