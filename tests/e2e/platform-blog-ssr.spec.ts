@@ -108,6 +108,7 @@ test('docs collection, categories and articles publish connected canonical JSON-
       expect(entry.item['@id']).toBe(`${entry.item.url}#webpage`)
     })
   }
+  let howToCount = 0
   for (const post of posts) {
     const path = `/docs/${post.slug}`
     const result = await request.get(path)
@@ -130,11 +131,13 @@ test('docs collection, categories and articles publish connected canonical JSON-
     expect(nodes.some(node => node.aggregateRating || node.review)).toBe(false)
     const body = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     for (const node of nodes.filter(node => node['@type'] === 'HowTo')) {
+      howToCount++
       const steps = node.step as Array<{ text: string }>
       expect(steps.length).toBeGreaterThanOrEqual(2)
       for (const step of steps) expect(body).toContain(step.text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'))
     }
   }
+  expect(howToCount, 'the published docs must exercise HowTo semantics').toBeGreaterThan(0)
 })
 
 test('mobile docs retain full navigation and one accessible prompt copy action', async ({ page, context }) => {
@@ -172,7 +175,10 @@ test('docs reading header exposes one mobile search shortcut without a second co
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/docs')
   await expect(page.locator('h1')).toHaveText('Docs')
-  await expect(page.locator('.docs-task')).toHaveCount(19)
+  const inventory = await page.request.get('/api/public/blog?collection=docs')
+  expect(inventory.status()).toBe(200)
+  const { posts } = await inventory.json() as { posts: Array<{ category: { id: string } | null }> }
+  await expect(page.locator('.docs-task')).toHaveCount(posts.filter((post, index) => index > 0 && post.category !== null).length)
   await page.screenshot({ path: testInfo.outputPath('docs-index-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
   const search = page.locator('header').getByRole('button', { name: 'Search docs, blog, help...' }).filter({ visible: true })
@@ -269,3 +275,30 @@ test('mobile docs keep the signed-in account control visible beside search and n
   await expect(page.locator('a[href^="/signup"]')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
+
+for (const signedIn of [false, true]) {
+  test(`docs and blog global menu works on desktop and mobile ${signedIn ? 'signed in' : 'signed out'}`, async ({ page, baseURL }) => {
+    if (signedIn) await loginAs(page.request, baseURL!, 'user-e2e-oauth-private-cimd')
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 })
+      for (const path of ['/docs', '/blog']) {
+        await page.goto(path)
+        const header = page.locator('header').first()
+        const toggle = header.getByRole('button', { name: 'Open menu', exact: true })
+        await expect(toggle).toBeVisible()
+        await toggle.click()
+        const menu = header.getByRole('navigation', { name: 'Site', exact: true })
+        await expect(menu).toBeVisible()
+        await expect(header.getByRole('button', { name: 'Close menu', exact: true })).toHaveAttribute('aria-expanded', 'true')
+        await page.keyboard.press('Escape')
+        await expect(menu).toHaveCount(0)
+        await expect(toggle).toBeFocused()
+        await toggle.click()
+        await menu.getByRole('link', { name: 'Features', exact: true }).click()
+        await expect(page).toHaveURL(/\/features$/)
+        await expect(page.locator('#platform-mobile-nav')).toHaveCount(0)
+        expect(await page.evaluate(() => document.documentElement.style.overflow)).not.toBe('hidden')
+      }
+    }
+  })
+}

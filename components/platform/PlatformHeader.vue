@@ -70,7 +70,8 @@
         <button
           ref="toggleButton"
           type="button"
-          class="grid size-11 shrink-0 place-items-center rounded-lg border border-default text-default transition-colors hover:bg-muted nav:hidden"
+          class="grid size-11 shrink-0 place-items-center rounded-lg border border-default text-default transition-colors hover:bg-muted"
+          :class="section === 'platform' ? 'nav:hidden' : ''"
           :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
           :aria-expanded="mobileOpen"
           aria-controls="platform-mobile-nav"
@@ -85,7 +86,8 @@
     <div
       v-if="mobileOpen"
       id="platform-mobile-nav"
-      class="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-default bg-default py-4.5 nav:hidden"
+      class="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-default bg-default py-4.5"
+      :class="section === 'platform' ? 'nav:hidden' : ''"
     >
       <nav aria-label="Site" class="mx-auto px-6" :class="containerClass">
         <PlatformCommandSearchTrigger
@@ -97,7 +99,7 @@
         />
 
         <!-- On a blog or docs page, the collection's articles come first: this menu is the page's one navigation. -->
-        <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-4 border-b border-default pb-4" @navigate="close" />
+        <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-4 border-b border-default pb-4 nav:hidden" @navigate="close" />
 
         <div class="flex flex-col gap-0.5">
           <details class="group/dis">
