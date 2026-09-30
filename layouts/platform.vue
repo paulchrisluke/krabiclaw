@@ -29,7 +29,7 @@ const section = computed(() => route.meta.articleCollection === 'docs' ? 'docs' 
 // Krabiclaw's public pages have one theme: dark. It is rendered on the server
 // so a visitor never sees a light frame first.
 useHead({
-  htmlAttrs: { class: 'dark' },
+  htmlAttrs: { class: 'dark', 'data-theme': 'dark' },
   titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
 })
 </script>

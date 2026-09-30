@@ -104,7 +104,7 @@ export default defineNuxtConfig({
       script: [
         {
           key: 'platform-theme-init',
-          innerHTML: "try{const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch{}",
+          innerHTML: "if(document.documentElement.dataset.theme!=='dark'){const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}",
         },
       ],
       link: [

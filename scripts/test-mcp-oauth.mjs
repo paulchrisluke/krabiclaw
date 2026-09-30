@@ -227,6 +227,14 @@ async function main() {
       : { userId: process.env.MCP_E2E_USER_ID || "user-e2e-oauth-cimd" });
     pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
 
+    section("Signed-in homepage routing");
+    const signedInHome = await get(`${BASE_URL}/`, { cookie: sessionCookie });
+    if (signedInHome.status === 302 && signedInHome.headers.location === "/api/post-login") pass("Signed-in homepage redirects to post-login");
+    else fail("Signed-in homepage did not redirect to post-login", signedInHome.status);
+    const postLogin = await get(`${BASE_URL}/api/post-login`, { cookie: sessionCookie });
+    if (postLogin.status === 302 && postLogin.headers.location?.startsWith("/dashboard/")) pass("Post-login redirects to the dashboard");
+    else fail("Post-login did not redirect to the dashboard", postLogin.status);
+
     section("CIMD + PKCE auth flow");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
