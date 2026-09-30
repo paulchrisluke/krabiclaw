@@ -5,21 +5,19 @@
     v-if="visible"
     role="region"
     :aria-label="t('legal.analytics_notice_label')"
-    class="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4"
+    class="consent-notice"
   >
-    <div class="relative flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-4 rounded-2xl bg-elevated p-6 pr-14 text-sm text-default shadow-lg ring ring-default">
-      <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" square class="absolute right-3 top-3" aria-label="Close and accept cookies" @click="choose(true)" />
-      <p class="m-0 flex-1 basis-80 leading-6">
+    <div class="consent-banner">
+      <button type="button" class="consent-close" aria-label="Close and accept cookies" @click="choose(true)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+      </button>
+      <p class="consent-copy">
         {{ t('legal.analytics_notice') }}
-        <a :href="privacyUrl" class="underline underline-offset-2">{{ t('legal.analytics_notice_link') }}</a>.
+        <a :href="privacyUrl">{{ t('legal.analytics_notice_link') }}</a>.
       </p>
-      <div class="flex items-center gap-3">
-        <UButton color="primary" class="px-6 py-3" @click="choose(true)">
-          {{ t('legal.accept') }}
-        </UButton>
-        <UButton color="error" class="px-6 py-3" @click="choose(false)">
-          {{ t('legal.reject') }}
-        </UButton>
+      <div class="consent-actions">
+        <button type="button" class="consent-choice consent-accept" @click="choose(true)">{{ t('legal.accept') }}</button>
+        <button type="button" class="consent-choice consent-reject" @click="choose(false)">{{ t('legal.reject') }}</button>
       </div>
     </div>
   </div>
@@ -30,7 +28,8 @@ import { ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME } from '~/utils/z
 
 const { t } = useI18n()
 const privacyUrl = new URL('/privacy', useRuntimeConfig().public.platformUrl).href
-const visible = ref(false)
+// Local visual preview uses the real banner without a Cloudflare consent runtime.
+const visible = ref(import.meta.dev && useRoute().query.previewConsent === 'true')
 
 function showNotice() {
   const consent = window.zaraz?.consent
@@ -54,3 +53,22 @@ onMounted(() => {
 })
 onBeforeUnmount(() => document.removeEventListener('zarazConsentAPIReady', showNotice))
 </script>
+
+<style scoped>
+.consent-notice { position: fixed; inset: auto 0 0; z-index: 50; padding: 12px; display: flex; justify-content: center; }
+.consent-banner { position: relative; display: flex; align-items: center; gap: 16px; width: 100%; max-width: 1024px; padding: 16px 52px 16px 20px; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-bg-elevated); color: var(--ui-text); box-shadow: 0 8px 32px #0003; font-size: 14px; }
+.consent-copy { flex: 1; min-width: 0; margin: 0; line-height: 1.5; }
+.consent-copy a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.consent-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.consent-choice { padding: 8px 16px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; line-height: 1.5; cursor: pointer; }
+.consent-accept { background: var(--ui-primary); color: var(--primary-foreground, var(--ui-bg)); }
+.consent-reject { background: var(--ui-error); color: #fff; }
+.consent-close { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.consent-choice:hover, .consent-close:hover { filter: brightness(.9); }
+.consent-choice:focus-visible, .consent-close:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .consent-banner { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px; }
+  .consent-copy { padding-right: 28px; }
+  .consent-choice { flex: 1; }
+}
+</style>
