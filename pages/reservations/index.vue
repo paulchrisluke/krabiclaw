@@ -304,7 +304,6 @@ function openBookingModal(loc?: ApiRecord) {
   skipLocationStep.value = Boolean(loc)
   if (loc) reservationForm.value.location_id = String(loc.id ?? '')
   bookingStep.value = startStep.value
-  trackCheckoutStart(null, reservationForm.value.location_id, null)
 }
 
 function nextStep() {
@@ -368,6 +367,14 @@ watch(() => reservationForm.value.location_id, (id) => {
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
 const { mirrorSubmission, pageEventId, trackCheckoutStart } = useOrganizationConversionTracking()
+let checkoutStarted = false
+watch([isBookingModalOpen, () => reservationForm.value.location_id], ([open, locationId]) => {
+  if (!open) { checkoutStarted = false; return }
+  if (locationId && !checkoutStarted) {
+    checkoutStarted = true
+    trackCheckoutStart(null, locationId, null)
+  }
+}, { immediate: true })
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
   reservationForm.value.name = contactState.name
