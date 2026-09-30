@@ -7,7 +7,7 @@
       @click="open = true"
     >
       <img
-        :src="media[0]!.kind === 'video' ? media[0]!.thumbnail_url! : media[0]!.public_url"
+        :src="media[0]!.kind === 'video' ? (media[0]!.thumbnail_url ?? media[0]!.public_url) : media[0]!.public_url"
         :alt="media[0]!.alt_text ?? ''"
         :width="media[0]!.width ?? undefined"
         :height="media[0]!.height ?? undefined"

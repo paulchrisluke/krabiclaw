@@ -4,12 +4,16 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { H3 } from 'nitro/h3'
+import { HTTPError } from 'nitro'
+import { handlePostsTools } from '../../server/utils/mcp-executor/posts.ts'
+import type { McpExecutorContext } from '../../server/utils/mcp-executor/shared.ts'
+import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFingerprint, updatePost } from '../../server/utils/post-management.ts'
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { listChannelPosts, getChannelPost, deleteChannelPost } from '../../server/utils/social-channel-posts.ts'
 import { remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
-import { verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
+import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
 import deleteCallback from '../../server/api/integrations/meta/data-deletion.post.ts'
@@ -471,3 +475,62 @@ test('channel inventory and deletion stay separate from authored website content
     await runtime.dispose()
   }
 })
+
+
+test('channel MCP tools report invalid parameters while preserving connection and provider failures', async () => {
+  const { runtime, db, env, meta, restore } = await setUp()
+  try {
+    const organization = { env, db, organizationId: 'org-a', userId: 'owner' } as McpExecutorContext['organization']
+    const args = { channel: 'facebook', target_id: PAGE, connection_revision: 'fb-rev-org-a', provider_post_id: `${PAGE}_native` }
+    for (const toolName of ['list_channel_posts', 'get_channel_post', 'delete_channel_post']) {
+      for (const invalid of [{ channel: 'unknown' }, { target_id: '' }, { connection_revision: '' }]) {
+        await assert.rejects(handlePostsTools({ toolName, organization, args: { ...args, ...invalid } }),
+          (error: unknown) => error instanceof Error && 'mcp' in error && (error.mcp as { code: number }).code === MCP_ERROR.invalidParams)
+      }
+      await assert.rejects(handlePostsTools({ toolName, organization, args: { ...args, connection_revision: 'old' } }),
+        (error: unknown) => error instanceof HTTPError && error.statusCode === 409 && !('mcp' in error))
+      meta.fault('reject', request => request.path.endsWith(toolName === 'list_channel_posts' ? '/posts' : args.provider_post_id))
+      await assert.rejects(handlePostsTools({ toolName, organization, args }),
+        (error: unknown) => error instanceof MetaGraphError && !error.objectMissing && !('mcp' in error))
+    }
+    for (const limit of [0, 101, 1.5, '25', null]) {
+      await assert.rejects(handlePostsTools({ toolName: 'list_channel_posts', organization, args: { ...args, limit } }),
+        { message: 'limit must be an integer between 1 and 100', mcp: { code: MCP_ERROR.invalidParams, message: 'limit must be an integer between 1 and 100', data: undefined, kind: 'tool_execution' } })
+    }
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
+
+for (const method of ['GET', 'DELETE']) {
+  test(`channel deletion accepts a missing object during ${method} only with a published receipt`, async () => {
+    const { runtime, db, env, cardless, meta, restore } = await setUp()
+    try {
+      const target = { channel: 'facebook' as const, target_id: PAGE, connection_revision: 'fb-rev-org-a' }
+      const { post } = await createPost(db, cardless, 'org-a', { post: { body: 'Delete from Facebook' }, idempotencyKey: 'delete-missing' }, 'owner')
+      assert.equal((await publishPost(env, 'org-a', post.id, { expectedUpdatedAt: post.updated_at, targets: [target] }, 'owner')).ok, true)
+      const providerId = (await getPost(db, env, 'org-a', post.id))!.publications[0]!.provider_post_id!
+      const matches = (request: SeenRequest) => request.method === method && request.path.endsWith(`/${providerId}`)
+      meta.fault('reject', matches)
+      await assert.rejects(deleteChannelPost(env, 'org-a', target, providerId, 'owner'),
+        (error: unknown) => error instanceof MetaGraphError && !error.objectMissing)
+      assert.equal((await getPost(db, env, 'org-a', post.id))!.publications[0]!.state, 'published')
+
+      meta.fault('missing', matches)
+      assert.equal((await deleteChannelPost(env, 'org-a', target, providerId, 'owner')).deleted, true)
+      assert.equal((await getPost(db, env, 'org-a', post.id))!.publications[0]!.state, 'removed')
+      assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE event_name = 'post.channel_deleted' AND json_extract(payload_json, '$.entityId') = ?").bind(providerId).first('count'), 1)
+
+      const unknownId = `${PAGE}_untracked`
+      meta.fbPosts.set(unknownId, { published: true, attached: [] })
+      meta.fault('missing', request => request.method === method && request.path.endsWith(`/${unknownId}`))
+      await assert.rejects(deleteChannelPost(env, 'org-a', target, unknownId, 'owner'),
+        (error: unknown) => error instanceof MetaGraphError && error.objectMissing)
+      assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE event_name = 'post.channel_deleted' AND json_extract(payload_json, '$.entityId') = ?").bind(unknownId).first('count'), 0)
+    } finally {
+      restore()
+      await runtime.dispose()
+    }
+  })
+}

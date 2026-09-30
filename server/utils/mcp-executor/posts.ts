@@ -90,16 +90,24 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
     case 'reconcile_post_publication': {
       return await reconcilePostPublication(env, organization.organizationId, requiredString(args, 'publication_id'), optionalString(args, 'provider_post_id') ?? null)
     }
-    case 'list_channel_posts': {
-      return await listChannelPosts(env, organization.organizationId, parseChannelTarget(args), {
-        after: optionalString(args, 'after') ?? null, limit: args.limit === undefined ? 25 : args.limit as number,
-      })
-    }
-    case 'get_channel_post': {
-      return { post: await getChannelPost(env, organization.organizationId, parseChannelTarget(args), requiredString(args, 'provider_post_id')) }
-    }
+    case 'list_channel_posts':
+    case 'get_channel_post':
     case 'delete_channel_post': {
-      return await deleteChannelPost(env, organization.organizationId, parseChannelTarget(args), requiredString(args, 'provider_post_id'), organization.userId)
+      try {
+        const target = parseChannelTarget(args)
+        if (toolName === 'list_channel_posts') {
+          return await listChannelPosts(env, organization.organizationId, target, {
+            after: optionalString(args, 'after') ?? null, limit: args.limit === undefined ? 25 : args.limit as number,
+          })
+        }
+        if (toolName === 'get_channel_post') {
+          return { post: await getChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id')) }
+        }
+        return await deleteChannelPost(env, organization.organizationId, target, requiredString(args, 'provider_post_id'), organization.userId)
+      } catch (error) {
+        if (error instanceof HTTPError && error.statusCode === 400) throw mcpProtocolError(MCP_ERROR.invalidParams, error.message)
+        throw error
+      }
     }
     case 'delete_post': {
       const postId = requiredString(args, 'post_id')
