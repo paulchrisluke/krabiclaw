@@ -319,7 +319,7 @@ function fillForm(settings: OrganizationSettingsResponse) {
   loadedSettings.value = settings
   form.name = settings.name ?? ''
   form.brand_description = settings.brand_description ?? ''
-  form.announcementEnabled = settings.announcement?.enabled ?? true
+  form.announcementEnabled = settings.announcement?.enabled ?? false
   form.announcementAssetId = settings.media?.find(item => item.slot === 'announcement')?.asset_id ?? null
   form.announcementHeadline = settings.announcement?.headline ?? ''
   form.announcementDescription = settings.announcement?.description ?? ''

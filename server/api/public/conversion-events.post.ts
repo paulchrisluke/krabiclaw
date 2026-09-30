@@ -179,12 +179,17 @@ export default defineHandler(async (event) => {
     stage = 'external_handoff'
     pagePath = cleanString(body.page_path, 300) || null
     if (pagePath && (!pagePath.startsWith('/') || pagePath.includes('?') || pagePath.includes('#'))) return jsonResponse({ error: 'Invalid page_path' }, { status: 400 })
-    // The destination is this organization's currently configured announcement CTA, never
-    // whatever the client claims it followed.
-    const announcement = await queryFirst<{ cta_url: string | null }>(db, `SELECT json_extract(settings_json, '$.config.announcement.cta_url') AS cta_url FROM organization WHERE id = ? LIMIT 1`, [organizationId])
-    if (!announcement?.cta_url) return jsonResponse({ error: 'Announcement CTA is unavailable' }, { status: 404 })
+    // The destination is this organization's currently configured, currently enabled
+    // announcement CTA, never whatever the client claims it followed.
+    const announcement = await queryFirst<{ cta_url: string | null, enabled: number | null }>(db, `
+      SELECT json_extract(settings_json, '$.config.announcement.cta_url') AS cta_url,
+             json_extract(settings_json, '$.config.announcement.enabled') AS enabled
+        FROM organization WHERE id = ? LIMIT 1
+    `, [organizationId])
+    if (!announcement || announcement.enabled === 0 || !announcement.cta_url) return jsonResponse({ error: 'Announcement CTA is unavailable' }, { status: 404 })
     const host = destinationHost(announcement.cta_url)
-    ctaDestination = host ?? announcement.cta_url
+    if (!host) return jsonResponse({ error: 'Announcement CTA is unavailable' }, { status: 404 })
+    ctaDestination = host
     metadata = { destination_hostname: host }
   } else {
     return jsonResponse({ error: 'Submission conversions are server-produced' }, { status: 400 })

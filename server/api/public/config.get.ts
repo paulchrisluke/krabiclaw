@@ -32,8 +32,15 @@ export default defineHandler(async (event) => {
   if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   const parsedAnnouncement = organization.announcement_json ? JSON.parse(organization.announcement_json) : null
-  const announcement = parsedAnnouncement && parsedAnnouncement.enabled !== false
-    ? { ...parsedAnnouncement, image_url: organization.announcement_public_url }
+  const announcement = parsedAnnouncement && parsedAnnouncement.enabled === true
+    ? {
+        headline: parsedAnnouncement.headline ?? null,
+        description: parsedAnnouncement.description ?? null,
+        cta_label: parsedAnnouncement.cta_label ?? null,
+        cta_url: parsedAnnouncement.cta_url ?? null,
+        dismissible: parsedAnnouncement.dismissible ?? true,
+        image_url: organization.announcement_public_url,
+      }
     : null
 
   const config = { ...await getConfig(db, organization.id), default_currency: organization.default_currency }

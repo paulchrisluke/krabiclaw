@@ -99,25 +99,20 @@ const announcement = ref<PublicAnnouncement | null>(null)
 const isPublicSurface = !route.path.startsWith('/dashboard') && !route.path.startsWith('/api')
 
 if (organizationId && isPublicSurface) {
-  const nuxtApp = useNuxtApp()
-  try {
-    // Nuxt's own useFetch dispatches its SSR request through Nitro's internal self-fetch, which
-    // does not carry the tenant's Host header — applicationFetch is this codebase's established
-    // fix (see composables/dashboardFetch.ts): an explicit baseURL from the real request URL.
-    const { data } = await useAsyncData(
-      `public-announcement:${organizationId}`,
-      () => applicationFetch<{ announcement: unknown }>('/api/public/config', {
-        validate: (value): value is { announcement: unknown } => isRecord(value),
-      }),
-      { server: true },
-    )
-    announcement.value = isPublicAnnouncement(data.value?.announcement) ? data.value.announcement : null
-  } catch (error) {
-    // A decorative, dismissible modal is never worth failing the page over, but the failure is
-    // still reported through the application's error hook rather than silently dropped.
-    await nuxtApp.callHook('vue:error', error, null, 'announcement-modal-fetch')
-    announcement.value = null
-  }
+  // Nuxt's own useFetch dispatches its SSR request through Nitro's internal self-fetch, which
+  // does not carry the tenant's Host header — applicationFetch is this codebase's established
+  // fix (see composables/dashboardFetch.ts): an explicit baseURL from the real request URL.
+  // useAsyncData never throws to the caller; it captures a failed request into its own `error`
+  // ref instead, which is the state this reads rather than masking failure with a try/catch.
+  const { data, error } = await useAsyncData(
+    `public-announcement:${organizationId}`,
+    () => applicationFetch<{ announcement: unknown }>('/api/public/config', {
+      validate: (value): value is { announcement: unknown } => isRecord(value),
+    }),
+    { server: true },
+  )
+  if (error.value) console.error('[announcement-modal] failed to load public config', error.value)
+  announcement.value = isPublicAnnouncement(data.value?.announcement) ? data.value.announcement : null
 }
 
 const storageKey = computed(() => announcement.value
