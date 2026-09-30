@@ -34,7 +34,13 @@
           </li>
           <li v-if="!users.length" class="px-4 py-8 text-center text-sm text-muted">No accounts yet.</li>
         </ul>
-        <p v-if="total > users.length" class="text-xs text-muted">Showing {{ users.length }} of {{ total }}.</p>
+        <div v-if="total > pageSize" class="flex items-center justify-between gap-3">
+          <p class="text-xs text-muted">Showing {{ offset + 1 }}–{{ offset + users.length }} of {{ total }}.</p>
+          <div class="flex gap-2">
+            <UButton color="neutral" variant="soft" :disabled="loading || offset === 0" @click="changePage(-1)">Previous</UButton>
+            <UButton color="neutral" variant="soft" :disabled="loading || offset + users.length >= total" @click="changePage(1)">Next</UButton>
+          </div>
+        </div>
       </div>
     </div>
   </DashboardIndexPanel>
@@ -62,30 +68,37 @@ const currentUserId = computed(() => currentUser.value?.id ?? null)
 
 const users = ref<PlatformUser[]>([])
 const total = ref(0)
+const pageSize = 50
+const offset = ref(0)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const impersonatingUserId = ref<string | null>(null)
 
 // Only the latest search may write the list; a slow earlier response is ignored.
 let requestSequence = 0
-async function loadUsers() {
+async function loadUsers(nextOffset = offset.value) {
   const requestId = ++requestSequence
   loading.value = true
   loadError.value = null
   try {
     const result = await authClient.admin.listUsers({
-      query: { limit: 50, sortBy: 'createdAt', sortDirection: 'desc' },
+      query: { limit: pageSize, offset: nextOffset, sortBy: 'createdAt', sortDirection: 'desc' },
     })
     if (result.error) throw new Error(result.error.message)
     if (requestId !== requestSequence) return
     users.value = result.data.users.map((user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }) => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
     total.value = result.data.total
+    offset.value = nextOffset
   } catch (error) {
     if (requestId !== requestSequence) return
     loadError.value = error instanceof Error ? error.message : 'Failed to load accounts.'
   } finally {
     if (requestId === requestSequence) loading.value = false
   }
+}
+
+async function changePage(direction: number) {
+  await loadUsers(offset.value + direction * pageSize)
 }
 
 async function impersonate(userId: string) {

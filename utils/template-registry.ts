@@ -125,7 +125,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       exactPaths: ['/blog', '/docs', '/help', '/posts', '/privacy', '/signup', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
       dynamicPrefixes: ['/blog/', '/docs/', '/posts/'],
     },
-    nonIndexableExactPaths: [],
+    nonIndexableExactPaths: ['/login', '/forgot-password', '/reset-password', '/accept-invitation'],
     // Krabiclaw's own marketing pages are ordinary page documents on the
     // platform site, read by the same loader every customer site uses (#903).
     // The routes that are not editorial — /blog, /docs, /help, /templates,

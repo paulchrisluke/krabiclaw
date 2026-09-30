@@ -1,14 +1,21 @@
+import { z } from 'zod'
 import { defineHandler } from 'nitro'
 import { getQuery } from 'nitro/h3'
-import { jsonResponse } from '~/server/utils/api-response'
+import { apiErrorResponse, jsonResponse } from '~/server/utils/api-response'
 import { loadDashboardOrganizationAnalytics } from '~/server/utils/dashboard-org-analytics'
 
 export default defineHandler(async (event) => {
   const query = getQuery(event)
-  return jsonResponse(await loadDashboardOrganizationAnalytics(event, {
-    startDate: typeof query.startDate === 'string' ? query.startDate : undefined,
-    endDate: typeof query.endDate === 'string' ? query.endDate : undefined,
-    facebookCursor: typeof query.facebookCursor === 'string' ? query.facebookCursor : undefined,
-    instagramCursor: typeof query.instagramCursor === 'string' ? query.instagramCursor : undefined,
-  }))
+  try {
+    return jsonResponse(await loadDashboardOrganizationAnalytics(event, {
+      startDate: typeof query.startDate === 'string' ? query.startDate : undefined,
+      endDate: typeof query.endDate === 'string' ? query.endDate : undefined,
+    }))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return apiErrorResponse(event, 500, 'INVALID_ANALYTICS_RESPONSE',
+        `Analytics response is invalid: ${error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`)
+    }
+    throw error
+  }
 })

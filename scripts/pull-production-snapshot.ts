@@ -221,12 +221,15 @@ try {
       throw new Error(`${target} import did not return a successful D1 result`)
     }
     if (!deltaFrom) {
+      // The local payload deliberately leaves this environment's signing keys
+      // untouched. Verify only the tables the payload actually replaces.
+      const restoredTables = manifest.tables.filter(table => !(omitJwks && table.table === 'jwks'))
       // One row of scalar counts: D1 refuses a UNION ALL across every table
       // ("too many terms in compound SELECT").
-      const [loaded] = query<Record<string, number>>(`SELECT ${manifest.tables.map(table =>
+      const [loaded] = query<Record<string, number>>(`SELECT ${restoredTables.map(table =>
         `(SELECT count(*) FROM ${identifier(table.table)}) AS ${identifier(table.table)}`,
       ).join(', ')}`)
-      const mismatches = manifest.tables.filter(table => loaded?.[table.table] !== table.target_rows)
+      const mismatches = restoredTables.filter(table => loaded?.[table.table] !== table.target_rows)
       if (mismatches.length) throw new Error(`${target} import row counts differ: ${mismatches.map(table => table.table).join(', ')}`)
     }
     console.log(`Restored ${manifest.tables.length} tables (${rows} rows) from ${values.source} into ${target} D1${deltaFrom ? ' as a delta' : ''}.`)
