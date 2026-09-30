@@ -1,12 +1,14 @@
 <template>
   <DashboardIndexPanel id="organization-insights" title="Insights">
-    <div class="space-y-6">
+    <div class="mx-auto w-full max-w-5xl space-y-6 pb-10">
+      <p class="text-sm text-muted">Website traffic and business outcomes across all your sources.</p>
       <UAlert
         v-if="loadError"
         color="error"
         variant="soft"
         title="Analytics could not be loaded"
         :description="loadError"
+        :actions="[{ label: 'Try again', onClick: () => refresh() }]"
       />
       <UTabs
         v-model="tab"
@@ -15,54 +17,108 @@
         class="w-full"
       />
 
-      <UCard v-if="tab === 'views' || tab === 'social'" variant="soft">
-          <div class="grid gap-4 lg:grid-cols-[13rem_1fr]">
-            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <UButton
-                v-for="preset in presets"
-                :key="preset.key"
-                :label="preset.label"
-                :variant="activePreset === preset.key ? 'soft' : 'ghost'"
-                :color="activePreset === preset.key ? 'primary' : 'neutral'"
-                :disabled="loading || !analytics || !!loadError"
-                block
-                class="justify-start"
-                @click="applyPreset(preset.key)"
-              />
-            </div>
-            <div class="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-              <UFormField label="Start date">
-                <UInput v-model="range.startDate" type="date" class="w-full" @change="markCustomAndLoad" />
-              </UFormField>
-              <UFormField label="End date">
-                <UInput v-model="range.endDate" type="date" class="w-full" @change="markCustomAndLoad" />
-              </UFormField>
-              <UButton icon="i-lucide-check" :loading="loading" @click="markCustomAndLoad">
-                Apply
-              </UButton>
+      <div v-if="tab === 'views'" class="flex justify-end">
+        <div class="inline-flex gap-0.5 rounded-lg bg-elevated p-0.5" role="group" aria-label="Date range">
+          <button v-for="days in [7, 30]" :key="days" type="button"
+            :aria-pressed="activeDays === days" :disabled="loading || !analytics"
+            class="rounded-md px-3 py-1 text-sm transition-colors disabled:opacity-50"
+            :class="activeDays === days ? 'bg-accented text-highlighted' : 'text-muted hover:text-highlighted'"
+            @click="applyPreset(days)">{{ days }}d</button>
+        </div>
+      </div>
+      <div v-if="loading" class="space-y-4" role="status" aria-label="Loading insights">
+        <USkeleton class="h-28 w-full rounded-2xl" />
+        <USkeleton class="h-80 w-full rounded-2xl" />
+      </div>
+
+      <div v-if="tab === 'views' && analytics && !loading && !loadError" class="space-y-8">
+
+        <UCard variant="soft" class="rounded-2xl">
+          <div class="grid grid-cols-2 gap-x-6 gap-y-6">
+            <div v-for="metric in metricCards" :key="metric.label">
+              <p class="text-sm text-muted">{{ metric.label }}</p>
+              <p class="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-highlighted">{{ metric.value }}</p>
+              <p class="mt-2 text-xs leading-5 text-muted">{{ metric.detail }}</p>
             </div>
           </div>
-      </UCard>
+        </UCard>
 
-      <div v-if="tab === 'views'" class="space-y-6">
-
-        <div class="grid gap-4 xl:grid-cols-2">
-          <UCard variant="soft">
-            <template #header><h2 class="font-semibold text-highlighted">Attribution</h2></template>
-            <div class="space-y-3">
-              <DashboardAnalyticsRow
-                v-for="row in analytics?.attribution || []"
-                :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
-                :label="`${row.source} / ${row.medium}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
-                :value="`${formatCount(row.sessions)} sessions · ${formatCount(row.convertingSessions)} converting`"
-                :percent="row.sessionConversionRate ?? 0"
-              />
-              <p v-if="!loading && !(analytics?.attribution || []).length" class="text-sm text-muted">No attribution data yet.</p>
+        <UCard variant="soft" class="rounded-2xl">
+          <template #header>
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="font-semibold text-highlighted">Traffic trend</h2>
+              <UBadge color="neutral" variant="soft" class="rounded-2xl">{{ dailyData.length }} days</UBadge>
             </div>
+          </template>
+          <div v-if="dailyData.length === 0" class="py-12 text-center text-sm text-muted">No analytics data for this range.</div>
+          <div v-else>
+            <div class="mb-3 min-h-12 text-sm" aria-live="polite">
+              <template v-if="hoveredDay">
+                <p class="font-medium text-highlighted">{{ formatDate(hoveredDay.date) }}</p>
+                <p class="mt-1 text-muted">{{ formatCount(hoveredDay.pageViews) }} pageviews · {{ formatCount(hoveredDay.sessions) }} sessions</p>
+              </template>
+              <p v-else class="text-muted">Explore a day to see its traffic.</p>
+            </div>
+            <svg viewBox="0 0 800 260" class="w-full overflow-visible" role="group" aria-label="Daily pageviews and sessions" @mouseleave="hoveredIndex = null">
+              <g v-for="tick in chartTicks" :key="tick.value">
+                <line x1="48" :y1="tick.y" x2="780" :y2="tick.y" class="stroke-default" stroke-width="1" />
+                <text x="36" :y="tick.y + 4" text-anchor="end" class="fill-muted text-[20px]">{{ formatCount(tick.value) }}</text>
+              </g>
+              <polyline :points="pageviewPoints" fill="none" stroke="currentColor" stroke-width="3" class="text-primary" stroke-linecap="round" stroke-linejoin="round" />
+              <polyline :points="sessionPoints" fill="none" stroke="currentColor" stroke-width="2" class="text-info" stroke-linecap="round" stroke-linejoin="round" />
+              <g v-for="(point, index) in pageviewDots" :key="point.key" tabindex="0" role="button"
+                :aria-label="`${formatDate(dailyData[index]!.date)}: ${dailyData[index]!.pageViews} pageviews, ${dailyData[index]!.sessions} sessions`"
+                @focus="hoveredIndex = index" @blur="hoveredIndex = null" @mouseenter="hoveredIndex = index" @click="hoveredIndex = index" @keydown.enter="hoveredIndex = index" @keydown.space.prevent="hoveredIndex = index">
+                <rect :x="point.x - Math.max(4, 732 / dailyData.length / 2)" y="35" :width="Math.max(8, 732 / dailyData.length)" height="190" fill="transparent" />
+                <line v-if="hoveredIndex === index" :x1="point.x" y1="40" :x2="point.x" y2="218" class="stroke-muted" />
+                <circle :cx="point.x" :cy="point.y" :r="hoveredIndex === index ? 5 : dailyData.length <= 31 ? 2 : 0" class="fill-primary" />
+              </g>
+              <text x="48" y="248" class="fill-muted text-[20px]">{{ shortDate(dailyData[0]!.date) }}</text>
+              <text x="414" y="248" text-anchor="middle" class="fill-muted text-[20px]">{{ shortDate(dailyData[Math.floor((dailyData.length - 1) / 2)]!.date) }}</text>
+              <text x="780" y="248" text-anchor="end" class="fill-muted text-[20px]">{{ shortDate(dailyData[dailyData.length - 1]!.date) }}</text>
+            </svg>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-4 text-xs text-muted">
+            <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full bg-primary" /> Pageviews</span>
+            <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full bg-info" /> Sessions</span>
+          </div>
+        </UCard>
+
+        <UCard variant="soft" class="rounded-2xl">
+          <template #header><h2 class="font-semibold text-highlighted">Top pages</h2></template>
+          <table v-if="analytics.topPages.length" class="w-full table-fixed text-left text-sm">
+            <thead class="text-xs text-muted"><tr><th class="w-3/5 pb-3 font-medium">Page</th><th class="pb-3 text-right font-medium">Views</th><th class="pb-3 text-right font-medium">Share</th></tr></thead>
+            <tbody class="divide-y divide-default">
+              <tr v-for="page in analytics.topPages" :key="page.path">
+                <td class="break-words py-3 pr-4 font-medium text-highlighted">{{ page.path }}</td>
+                <td class="py-3 text-right tabular-nums">{{ formatCount(page.views) }}</td>
+                <td class="py-3 text-right tabular-nums text-muted">{{ page.percentOfTotal }}%</td>
+              </tr>
+            </tbody>
+          </table>
+          <p v-else class="text-sm text-muted">No page data yet.</p>
+        </UCard>
+
+        <div class="space-y-6">
+          <UCard variant="soft" class="rounded-2xl">
+            <template #header><h2 class="font-semibold text-highlighted">Traffic sources</h2></template>
+            <div v-if="analytics.attribution.length" class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead class="text-xs text-muted"><tr><th class="pb-3 font-medium">Source / campaign</th><th class="pb-3 text-right font-medium">Sessions</th><th class="pb-3 pl-4 text-right font-medium">Converting</th></tr></thead>
+                <tbody class="divide-y divide-default">
+                  <tr v-for="row in analytics.attribution" :key="JSON.stringify([row.source, row.medium, row.campaign, row.content])">
+                    <td class="py-3 pr-4"><p class="font-medium text-highlighted">{{ row.source }} <span class="font-normal text-muted">/ {{ row.medium }}</span></p><p v-if="row.campaign || row.content" class="mt-1 text-xs text-muted">{{ [row.campaign, row.content].filter(Boolean).join(' · ') }}</p></td>
+                    <td class="py-3 text-right tabular-nums">{{ formatCount(row.sessions) }}</td>
+                    <td class="py-3 pl-4 text-right tabular-nums">{{ formatCount(row.convertingSessions) }}<span v-if="row.sessionConversionRate !== null" class="ml-2 text-xs text-muted">{{ formatNumber(row.sessionConversionRate) }}%</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="text-sm text-muted">No attribution data yet.</p>
           </UCard>
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Conversions</h2></template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in analytics?.conversions || []"
                 :key="`${row.eventName}-${row.stage}`"
@@ -73,9 +129,9 @@
               <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
             </div>
           </UCard>
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Pageviews by language</h2></template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in nativeLanguages.rows"
                 :key="row.language ?? 'unknown'"
@@ -83,15 +139,16 @@
                 :value="`${formatCount(row.pageViews)} pageviews · ${formatCount(row.sessions)} sessions`"
                 :percent="nativeLanguages.totalPageViews ? Math.round(row.pageViews / nativeLanguages.totalPageViews * 100) : 0"
               />
-              <p v-if="!nativeLanguages.rows.length && !nativeLanguages.error" class="text-sm text-muted">No pageviews recorded in this range.</p>
+              <p v-if="!nativeLanguages.loading && !nativeLanguages.rows.length && !nativeLanguages.error" class="text-sm text-muted">No pageviews recorded in this range.</p>
+              <p v-if="nativeLanguages.loading" class="text-sm text-muted">Loading languages…</p>
               <p v-if="nativeLanguages.error" class="text-sm text-error">{{ nativeLanguages.error }}</p>
               <p v-if="nativeLanguages.rows.length" class="text-xs text-muted">{{ formatCount(nativeLanguages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
               <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
             </div>
           </UCard>
-          <UCard v-if="(analytics?.values || []).length || (analytics?.bookingValue || []).length" variant="soft">
+          <UCard v-if="(analytics?.values || []).length || (analytics?.bookingValue || []).length" variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Value</h2></template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in analytics?.values || []"
                 :key="`${row.eventName}-${row.basis}-${row.currency}`"
@@ -123,9 +180,9 @@
               <p class="text-xs text-muted">Quoted booking value is the price shown when a booking was made, not revenue. Currencies are never added together.</p>
             </div>
           </UCard>
-          <UCard v-if="analytics?.signupCohort.signups" variant="soft">
+          <UCard v-if="analytics?.signupCohort.signups" variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Signup cohort</h2></template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in analytics?.signupCohort.bySignupAttribution || []"
                 :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
@@ -138,50 +195,12 @@
           </UCard>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <UCard v-for="metric in metricCards" :key="metric.label" variant="soft">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <p class="text-sm text-muted">{{ metric.label }}</p>
-                <p class="mt-2 text-2xl font-semibold text-highlighted">{{ loading ? '...' : metric.value }}</p>
-              </div>
-              <UIcon :name="metric.icon" class="size-5 text-muted" />
-            </div>
-            <p class="mt-2 text-xs text-muted">{{ metric.detail }}</p>
-          </UCard>
-        </div>
-
-        <UCard variant="soft">
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <h2 class="font-semibold text-highlighted">Traffic trend</h2>
-              <UBadge color="neutral" variant="soft">{{ dailyData.length }} days</UBadge>
-            </div>
-          </template>
-          <div v-if="loading" class="h-64 animate-pulse rounded-lg bg-muted/50" />
-          <div v-else-if="dailyData.length === 0" class="py-12 text-center text-sm text-muted">No analytics data for this range.</div>
-          <div v-else class="h-64">
-            <svg viewBox="0 0 800 260" class="h-full w-full" role="img" aria-label="Pageviews and unique sessions over time">
-              <line x1="40" y1="218" x2="780" y2="218" class="stroke-muted" stroke-width="1" />
-              <polyline :points="pageviewPoints" fill="none" stroke="currentColor" stroke-width="3" class="text-primary" stroke-linecap="round" stroke-linejoin="round" />
-              <polyline :points="sessionPoints" fill="none" stroke="currentColor" stroke-width="2" class="text-muted" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 7" />
-              <g v-for="point in pageviewDots" :key="point.key">
-                <circle :cx="point.x" :cy="point.y" r="3" class="fill-primary" />
-              </g>
-            </svg>
-          </div>
-          <div class="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-            <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full bg-primary" /> Pageviews</span>
-            <span class="inline-flex items-center gap-2"><span class="h-px w-4 border-t border-dashed border-muted" /> Sessions</span>
-          </div>
-        </UCard>
-
-        <div class="grid gap-4 xl:grid-cols-2">
-          <UCard variant="soft">
+        <div class="space-y-6">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header>
               <h2 class="font-semibold text-highlighted">Countries</h2>
             </template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="country in analytics?.countries || []"
                 :key="country.countryCode"
@@ -194,11 +213,11 @@
             </div>
           </UCard>
 
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header>
               <h2 class="font-semibold text-highlighted">Referrers</h2>
             </template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="referrer in analytics?.referrers || []"
                 :key="referrer.source"
@@ -210,11 +229,11 @@
             </div>
           </UCard>
 
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header>
               <h2 class="font-semibold text-highlighted">Devices</h2>
             </template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="device in analytics?.devices || []"
                 :key="device.type"
@@ -227,11 +246,11 @@
             </div>
           </UCard>
 
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header>
               <h2 class="font-semibold text-highlighted">Cities</h2>
             </template>
-            <div class="space-y-3">
+            <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="city in analytics?.cities || []"
                 :key="`${city.city}-${city.region}-${city.countryCode}`"
@@ -245,80 +264,12 @@
           </UCard>
         </div>
 
-        <UCard variant="soft">
-          <template #header>
-            <h2 class="font-semibold text-highlighted">Top pages</h2>
-          </template>
-          <div class="space-y-3">
-            <DashboardAnalyticsRow
-              v-for="page in analytics?.topPages || []"
-              :key="page.path"
-              :label="page.path"
-              :value="formatCount(page.views)"
-              :percent="page.percentOfTotal"
-            />
-            <p v-if="!loading && !(analytics?.topPages || []).length" class="text-sm text-muted">No page data yet.</p>
-          </div>
-        </UCard>
+
       </div>
 
-      <div v-else-if="tab === 'social'" class="space-y-6">
-        <p class="text-sm text-muted">Facebook and Instagram report their own audiences and periods. Counts from different networks are shown separately.</p>
-        <UCard v-for="provider in socialProviders" :key="provider.source" variant="soft">
-          <template #header>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="font-semibold text-highlighted">{{ provider.source === 'facebook' ? 'Facebook Page' : 'Instagram' }} · {{ provider.targetName ?? 'Not connected' }}</h2>
-                <p v-if="provider.targetId" class="text-xs text-muted">{{ provider.targetId }} · Graph API {{ provider.apiVersion }} · {{ provider.fetchedAt ? `Read ${formatDateTime(provider.fetchedAt)}` : 'No current read' }}</p>
-              </div>
-              <UBadge :color="provider.status === 'connected' ? 'success' : provider.status === 'disconnected' ? 'neutral' : 'error'" variant="soft">{{ provider.status.replaceAll('_', ' ') }}</UBadge>
-            </div>
-          </template>
-          <UAlert v-if="provider.error" :color="provider.status === 'disconnected' ? 'neutral' : 'error'" variant="soft" :description="provider.error" />
-          <UAlert v-else-if="provider.metrics.some(metric => metric.status === 'permission_denied')" color="error" variant="soft" description="This connection cannot read some insight metrics. Reconnect it with insights permission." />
-          <UButton v-if="provider.status === 'disconnected' || provider.status === 'permission_denied' || provider.metrics.some(metric => metric.status === 'permission_denied')"
-            class="mt-3" variant="soft" :to="`/dashboard/${String(route.params.orgSlug)}/settings/integrations/${provider.source}`">Connect or review {{ provider.source === 'facebook' ? 'Facebook' : 'Instagram' }}</UButton>
-          <div v-if="provider.status === 'connected'" class="space-y-6">
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div v-for="metric in provider.metrics" :key="metric.name" class="rounded-lg border border-default p-3">
-                <p class="text-sm font-medium text-highlighted">{{ metricLabel(metric.name) }}</p>
-                <p class="mt-2 text-2xl tabular-nums">{{ metric.status === 'available' && metric.value !== null ? formatCount(metric.value) : '—' }}</p>
-                <p class="text-xs text-muted">{{ metric.period.replaceAll('_', ' ') }} · {{ metric.unit }} · {{ metric.status.replaceAll('_', ' ') }}</p>
-                <p v-if="metric.previousStatus === 'available' && metric.previousValue !== null" class="text-xs text-muted">Previous equal period: {{ formatCount(metric.previousValue) }}</p>
-                <p v-if="metric.status === 'available' && metric.value !== null && metric.previousStatus === 'available' && metric.previousValue !== null" class="text-xs text-muted">
-                  Change: {{ metric.value - metric.previousValue >= 0 ? '+' : '' }}{{ formatCount(metric.value - metric.previousValue) }} vs previous equal period
-                </p>
-                <p v-if="metric.reason" class="mt-1 text-xs text-muted">{{ metric.reason }}</p>
-              </div>
-            </div>
-            <div>
-              <h3 class="font-medium text-highlighted">Content published in this range · ranked by {{ provider.source === 'facebook' ? 'post media views' : 'media views' }}</h3>
-              <p v-if="provider.contentCoverageReason" class="mt-1 text-sm text-muted">{{ provider.contentCoverageReason }}</p>
-              <p v-if="provider.nextCursor" class="mt-1 text-xs text-muted">Ranked among loaded posts. Load every page to inspect all posts in this range.</p>
-              <p v-if="provider.contentCoverage === 'complete' && !provider.content.length" class="mt-2 text-sm text-muted">No native posts were published in this range.</p>
-              <div v-else class="mt-3 grid gap-3 lg:grid-cols-2">
-                <div v-for="item in sortedSocialContent(provider)" :key="item.id" class="rounded-lg border border-default p-4">
-                  <a v-if="item.permalink" :href="item.permalink" target="_blank" rel="noopener noreferrer" class="font-medium text-primary underline">{{ item.caption?.trim().slice(0, 95) || `${item.kind} post` }}</a>
-                  <p v-else class="font-medium text-highlighted">{{ item.caption?.trim().slice(0, 95) || `${item.kind} post` }}</p>
-                  <p class="mt-1 text-xs text-muted">{{ item.kind }} · {{ formatDateTime(item.publishedAt) }} · {{ item.id }}</p>
-                  <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
-                    <span v-for="metric in item.metrics" :key="metric.name" :title="metric.reason ?? ''">
-                      {{ metricLabel(metric.name) }}: {{ metric.status === 'available' && metric.value !== null ? formatCount(metric.value) : metric.status.replaceAll('_', ' ') }}
-                    </span>
-                  </div>
-                  <p class="mt-2 text-xs text-muted">Content metrics are lifetime counts; posts are selected by their publication date.</p>
-                </div>
-              </div>
-              <UAlert v-if="socialPageError[provider.source]" class="mt-3" color="error" variant="soft" :description="socialPageError[provider.source] ?? undefined" />
-              <UButton v-if="provider.nextCursor" class="mt-4" variant="soft" :loading="socialPageLoading[provider.source]" @click="loadMoreSocial(provider.source)">Load more {{ provider.source === 'facebook' ? 'Page posts' : 'Instagram media' }}</UButton>
-            </div>
-          </div>
-        </UCard>
-      </div>
-
-      <div v-else-if="tab === 'reviews'" class="space-y-6">
-        <div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
-          <UCard variant="soft">
+      <div v-else-if="tab === 'reviews' && reviews && !loading && !loadError" class="space-y-6">
+        <div class="space-y-6">
+          <UCard variant="soft" class="rounded-2xl">
             <div class="flex items-baseline gap-2">
               <UIcon name="i-lucide-star" class="size-6 text-primary" />
               <span class="text-4xl font-semibold tabular-nums text-highlighted">{{ reviews.average ?? '—' }}</span>
@@ -343,7 +294,7 @@
             </div>
           </UCard>
 
-          <UCard variant="soft">
+          <UCard variant="soft" class="rounded-2xl">
             <template #header>
               <h2 class="font-semibold text-highlighted">Recent reviews</h2>
             </template>
@@ -363,9 +314,9 @@
         </div>
       </div>
 
-      <div v-else-if="tab === 'opportunities'" class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <UCard v-if="setup" variant="soft">
+      <div v-else-if="tab === 'opportunities' && setup && !loading && !loadError" class="space-y-6">
+        <div class="space-y-6">
+          <UCard v-if="setup" variant="soft" class="rounded-2xl">
             <template #header>
               <div class="flex items-baseline justify-between gap-3">
                 <h2 class="min-w-0 truncate font-semibold text-highlighted">{{ setup.label }}</h2>
@@ -404,67 +355,16 @@ definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 import { localDateAt, addLocalDays, formatCalendarDate } from '~/utils/timezone'
-import type { ProviderInsights, ProviderContentInsight, ProviderMetric } from '~/server/utils/meta-insights'
-import type { AnalyticsReport } from '~/server/utils/analytics-report'
+import { organizationAnalyticsSchema, type AnalyticsReport, type OrganizationAnalyticsReport } from '~/shared/analytics-report'
 import { currencyFractionDigits, isCurrencyCode } from '~/shared/currencies'
 
-type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
-
-interface AnalyticsResponse {
-  social: { facebook: ProviderInsights; instagram: ProviderInsights }
-  metrics: {
-    pageViews: number
-    uniqueSessions: number
-    uniqueVisitors: number
-    avgSessionDuration: number
-    pagesPerSession: number
-    returningVisitors: number
-    changePercent: number | null
-  }
-  dailyData: Array<{ date: string; pageViews: number; sessions: number; avgDuration: number }>
-  topPages: Array<{ path: string; views: number; percentOfTotal: number }>
-  countries: Array<{ country: string; countryCode: string; views: number; percentOfTotal: number }>
-  cities: Array<{ city: string; region: string | null; countryCode: string; views: number }>
-  referrers: Array<{ source: string; views: number; percentOfTotal: number }>
-  devices: Array<{ type: string; views: number; percentOfTotal: number }>
-  attribution: AnalyticsReport['attribution']
-  outcomeAttribution: AnalyticsReport['outcomeAttribution']
-  attributedValue: AnalyticsReport['attributedValue']
-  conversions: AnalyticsReport['conversions']
-  values: AnalyticsReport['values']
-  bookingValue: AnalyticsReport['bookingValue']
-  net: AnalyticsReport['net']
-  signupCohort: AnalyticsReport['signupCohort']
-  coverage: AnalyticsReport['coverage']
-  period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
-}
-
 const route = useRoute()
-
-interface InsightsReviews {
-  total: number
-  average: number | null
-  distribution: Array<{ rating: number; count: number }>
-  recent: Array<{ id: string; author: string; rating: number; title: string | null; content: string | null; createdAt: string }>
-}
-interface InsightsSetup {
-  organizationId: string
-  label: string
-  completed: number
-  total: number
-  items: Array<{ id: string; label: string; done: boolean }>
-}
-interface InsightsResponse {
-  organizationId: string
-  report: AnalyticsResponse
-  reviews: InsightsReviews
-  setup: InsightsSetup
-}
+const scope = useDashboardRouteScope()
 
 // Reviews and Opportunities read what we actually hold. There is no Superhost
 // equivalent, and a review carries one overall rating rather than per-category
 // scores, so neither is invented here.
-const TAB_VALUES = ['views', 'social', 'reviews', 'opportunities', 'activity'] as const
+const TAB_VALUES = ['views', 'reviews', 'opportunities', 'activity'] as const
 type InsightsTab = typeof TAB_VALUES[number]
 const isTab = (value: unknown): value is InsightsTab => TAB_VALUES.some(candidate => candidate === value)
 const tab = ref<InsightsTab>(isTab(route.query.tab) ? route.query.tab : 'views')
@@ -479,7 +379,6 @@ watch(tab, (next) => {
 })
 const tabItems = [
   { label: 'Views', value: 'views' as const },
-  { label: 'Social', value: 'social' as const },
   { label: 'Reviews', value: 'reviews' as const },
   { label: 'Opportunities', value: 'opportunities' as const },
   // Activity is a report like the others, not a screen of its own: it reads
@@ -488,144 +387,32 @@ const tabItems = [
   { label: 'Activity', value: 'activity' as const },
 ]
 
-const reviews = ref<InsightsResponse['reviews']>({ total: 0, average: null, distribution: [], recent: [] })
-const setup = ref<InsightsSetup | null>(null)
-
-const presets: Array<{ key: PresetKey; label: string }> = [
-  { key: 'last_52_weeks', label: 'Last 52 weeks' },
-  { key: 'last_30_days', label: 'Last 30 days' },
-  { key: 'last_7_days', label: 'Last 7 days' },
-  { key: 'current_month', label: 'Current month' }
-]
-
-const activePreset = ref<PresetKey>('last_30_days')
-const loading = ref(true)
-const loadError = ref<string | null>(null)
-const analytics = ref<AnalyticsResponse | null>(null)
-const range = reactive({ startDate: '', endDate: '' })
+const activeDays = ref(30)
+const requestedRange = ref<{ startDate?: string; endDate?: string }>({})
 const isNumberField = (row: unknown, ...fields: string[]): boolean =>
   isRecord(row) && fields.every(field => typeof row[field] === 'number')
-const isLabelled = (row: unknown, label: string, ...numbers: string[]): boolean =>
-  isRecord(row) && typeof row[label] === 'string' && isNumberField(row, ...numbers)
-const isMetric = (value: unknown): value is ProviderMetric =>
-  isRecord(value) && typeof value.name === 'string' && (value.value === null || typeof value.value === 'number')
-  && typeof value.unit === 'string' && typeof value.period === 'string' && typeof value.status === 'string'
-  && (value.reason === null || typeof value.reason === 'string')
-  && (value.previousValue === null || typeof value.previousValue === 'number')
-  && (value.previousStatus === null || typeof value.previousStatus === 'string')
-const isProvider = (value: unknown): value is ProviderInsights =>
-  isRecord(value) && typeof value.source === 'string' && typeof value.apiVersion === 'string'
-  && typeof value.status === 'string' && (value.targetId === null || typeof value.targetId === 'string')
-  && (value.targetName === null || typeof value.targetName === 'string')
-  && (value.connectionRevision === null || typeof value.connectionRevision === 'string')
-  && (value.fetchedAt === null || typeof value.fetchedAt === 'string')
-  && (value.error === null || typeof value.error === 'string')
-  && typeof value.contentCoverage === 'string'
-  && (value.contentCoverageReason === null || typeof value.contentCoverageReason === 'string')
-  && (value.nextCursor === null || typeof value.nextCursor === 'string')
-  && Array.isArray(value.metrics) && value.metrics.every(isMetric)
-  && Array.isArray(value.content) && value.content.every(item => isRecord(item)
-    && typeof item.id === 'string' && typeof item.kind === 'string' && typeof item.publishedAt === 'string'
-    && (item.permalink === null || typeof item.permalink === 'string')
-    && (item.caption === null || typeof item.caption === 'string')
-    && Array.isArray(item.metrics) && item.metrics.every(isMetric))
 
-/**
- * Every field the page reads is checked, not just the containers around them.
- * Checking only that `conversions` was an array let `[{}]` through, and the row
- * then threw on `eventName.replaceAll` while rendering; a missing metric passed
- * too and rendered as a zero through `|| 0`, which reads as real traffic of
- * none rather than as a response we should have rejected.
- */
-const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
-  isRecord(value)
-  && isRecord(value.social) && isProvider(value.social.facebook) && isProvider(value.social.instagram)
-  && isNumberField(value.metrics, 'pageViews', 'uniqueSessions', 'uniqueVisitors', 'returningVisitors', 'avgSessionDuration', 'pagesPerSession')
-  && isRecord(value.metrics)
-  && (value.metrics.changePercent === null || typeof value.metrics.changePercent === 'number')
-  && isRecord(value.period)
-  && typeof value.period.startDate === 'string'
-  && typeof value.period.endDate === 'string'
-  && typeof value.period.timezone === 'string'
-  && (value.period.analyticsDataStartAt === null || typeof value.period.analyticsDataStartAt === 'string')
-  && Array.isArray(value.dailyData)
-  && value.dailyData.every(row => isLabelled(row, 'date', 'pageViews', 'sessions', 'avgDuration'))
-  && Array.isArray(value.topPages)
-  && value.topPages.every(row => isLabelled(row, 'path', 'views', 'percentOfTotal'))
-  && Array.isArray(value.countries)
-  && value.countries.every(row => isLabelled(row, 'countryCode', 'views', 'percentOfTotal'))
-  && Array.isArray(value.cities)
-  && value.cities.every(row => isLabelled(row, 'city', 'views') && typeof (row as Record<string, unknown>).countryCode === 'string')
-  && Array.isArray(value.referrers)
-  && value.referrers.every(row => isLabelled(row, 'source', 'views', 'percentOfTotal'))
-  && Array.isArray(value.devices)
-  && value.devices.every(row => isLabelled(row, 'type', 'views', 'percentOfTotal'))
-  && Array.isArray(value.attribution)
-  && value.attribution.every(row => isLabelled(row, 'source', 'sessions', 'outcomeEvents', 'convertingSessions') && typeof (row as Record<string, unknown>).medium === 'string'
-    && ((row as Record<string, unknown>).sessionConversionRate === null || typeof (row as Record<string, unknown>).sessionConversionRate === 'number'))
-  && Array.isArray(value.conversions)
-  && value.conversions.every(row => isLabelled(row, 'eventName', 'events', 'distinctEntities', 'convertingSessions', 'nonbrowserEvents') && typeof (row as Record<string, unknown>).stage === 'string'
-    && ((row as Record<string, unknown>).sessionConversionRate === null || typeof (row as Record<string, unknown>).sessionConversionRate === 'number'))
-  && Array.isArray(value.outcomeAttribution)
-  && value.outcomeAttribution.every(row => isLabelled(row, 'source', 'eventName', 'events', 'distinctEntities'))
-  && Array.isArray(value.attributedValue)
-  && value.attributedValue.every(row => isNumberField(row, 'purchases', 'collectedMinor', 'refundedMinor', 'netMinor') && isRecord(row) && isCurrencyCode(row.currency))
-  && Array.isArray(value.values)
-  && value.values.every(row => isLabelled(row, 'eventName', 'events', 'valueMinor') && isRecord(row) && isCurrencyCode(row.currency))
-  && Array.isArray(value.bookingValue)
-  && value.bookingValue.every(row => isNumberField(row, 'bookings', 'valuedBookings', 'quotedValueMinor') && isRecord(row) && (row.currency === null || isCurrencyCode(row.currency)))
-  && Array.isArray(value.net)
-  && value.net.every(row => isNumberField(row, 'collectedMinor', 'refundedMinor', 'netMinor') && isRecord(row) && isCurrencyCode(row.currency))
-  && isRecord(value.signupCohort) && isNumberField(value.signupCohort, 'signups', 'onboardedSignups', 'firstPaidSignups', 'onboardedBusinesses', 'firstPaidBusinesses')
-  && isRecord(value.coverage) && Array.isArray(value.coverage.ga4Delivery)
-
-const isInsightsResponse = (value: unknown): value is InsightsResponse =>
-  isRecord(value)
-  && typeof value.organizationId === 'string'
-  && isAnalyticsResponse(value.report)
-  && isRecord(value.reviews)
-  && typeof value.reviews.total === 'number'
-  && Array.isArray(value.reviews.distribution)
-  && Array.isArray(value.reviews.recent)
-  && isRecord(value.setup)
-  && typeof value.setup.label === 'string'
-  && typeof value.setup.completed === 'number'
-  && typeof value.setup.total === 'number'
-  && Array.isArray(value.setup.items)
-
-const initialRange = { ...range }
-let latestManualRequestId = 0
-
-async function fetchInsights(query: { startDate?: string; endDate?: string; facebookCursor?: string; instagramCursor?: string }) {
-  return await dashboardApi<InsightsResponse>('/api/dashboard/analytics', {
-    query,
-    validate: isInsightsResponse,
-  })
-}
-
-const { data: insightsResource, pending: analyticsPending, error: analyticsResourceError } =
-  await useAsyncData(
-    `dashboard-org-insights:${initialRange.startDate}:${initialRange.endDate}`,
-    () => fetchInsights({}),
-    { lazy: true },
-  )
-
-watch([insightsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {
-  if (latestManualRequestId !== 0) return
-  loading.value = pending
-  if (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load insights'
-    return
-  }
-  if (resource) {
-    analytics.value = resource.report
-    Object.assign(range, { startDate: resource.report.period.startDate, endDate: resource.report.period.endDate })
-    reviews.value = resource.reviews
-    setup.value = resource.setup
-    loadError.value = null
-  }
-}, { immediate: true })
-
+const { data: insightsResource, pending: loading, error: resourceError, refresh } = await useAsyncData(
+  () => `dashboard-org-insights:${scope.value?.orgSlug}:${requestedRange.value.startDate ?? ''}:${requestedRange.value.endDate ?? ''}`,
+  () => dashboardApi<OrganizationAnalyticsReport>('/api/dashboard/analytics', {
+    query: requestedRange.value,
+    validate: (value): value is OrganizationAnalyticsReport => {
+      const result = organizationAnalyticsSchema.safeParse(value)
+      if (!result.success) {
+        throw new ApiClientError(
+          `Invalid analytics response: ${result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`,
+          502, 'INVALID_ANALYTICS_RESPONSE', null,
+        )
+      }
+      return true
+    },
+  }),
+  { lazy: true },
+)
+const analytics = computed<AnalyticsReport | null>(() => insightsResource.value?.report ?? null)
+const reviews = computed(() => insightsResource.value?.reviews)
+const setup = computed(() => insightsResource.value?.setup)
+const loadError = computed(() => resourceError.value?.message ?? null)
 // The same native query MCP exposes (query_organization_analytics), asked for the pageviews of the
 // selected range grouped by language. Every group is reachable: "Show more" follows the cursor.
 const nativeLanguages = reactive({
@@ -637,6 +424,11 @@ let latestLanguageRequest = 0
 async function loadLanguages(more: boolean) {
   const requestId = ++latestLanguageRequest
   const period = analytics.value?.period
+  if (!more) {
+    nativeLanguages.rows = []
+    nativeLanguages.cursor = null
+    nativeLanguages.error = null
+  }
   if (!period) return
   nativeLanguages.loading = true
   nativeLanguages.error = null
@@ -652,8 +444,12 @@ async function loadLanguages(more: boolean) {
         dimensions: ['locale'], metrics: ['page_views', 'sessions'], limit: 20,
         ...(more && nativeLanguages.cursor ? { cursor: nativeLanguages.cursor } : {}),
       },
-      validate: (value): value is never => isRecord(value) && Array.isArray(value.rows) && isRecord(value.totals)
-        && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value'),
+      validate: (value): value is never => isRecord(value) && Array.isArray(value.rows)
+        && value.rows.every(row => isRecord(row) && isRecord(row.dimensions)
+          && (row.dimensions.locale === null || typeof row.dimensions.locale === 'string')
+          && isNumberField(row.metrics, 'page_views', 'sessions'))
+        && (value.next_cursor === null || typeof value.next_cursor === 'string')
+        && isRecord(value.totals) && isNumberField(value.totals.page_views, 'value') && isNumberField(value.totals.sessions, 'value'),
     })
     if (requestId !== latestLanguageRequest) return
     const rows = response.rows.map(row => ({ language: row.dimensions.locale, pageViews: row.metrics.page_views, sessions: row.metrics.sessions }))
@@ -667,119 +463,53 @@ async function loadLanguages(more: boolean) {
     if (requestId === latestLanguageRequest) nativeLanguages.loading = false
   }
 }
-watch(() => analytics.value ? `${analytics.value.period.startDate}:${analytics.value.period.endDate}` : null, (key) => { if (key) void loadLanguages(false) }, { immediate: true })
+watch(() => analytics.value ? `${scope.value?.orgSlug}:${analytics.value.period.startDate}:${analytics.value.period.endDate}` : null, (key) => { if (key) void loadLanguages(false) }, { immediate: true })
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
-const socialProviders = computed(() => analytics.value ? [analytics.value.social.facebook, analytics.value.social.instagram] : [])
-const socialPageLoading = reactive({ facebook: false, instagram: false })
-const socialPageError = reactive<{ facebook: string | null; instagram: string | null }>({ facebook: null, instagram: null })
-async function loadMoreSocial(source: 'facebook' | 'instagram') {
-  const current = analytics.value?.social[source]
-  if (!current?.nextCursor || socialPageLoading[source]) return
-  const requestedRange = { startDate: range.startDate, endDate: range.endDate }
-  socialPageLoading[source] = true
-  socialPageError[source] = null
-  try {
-    const response = await fetchInsights({ ...requestedRange,
-      ...(source === 'facebook' ? { facebookCursor: current.nextCursor } : { instagramCursor: current.nextCursor }) })
-    const next = response.report.social[source]
-    if (next.status !== 'connected') throw new Error(next.error ?? 'The social connection could not be read')
-    if (next.connectionRevision !== current.connectionRevision || next.targetId !== current.targetId) throw new Error('The social connection changed. Reload insights.')
-    if (!analytics.value || range.startDate !== requestedRange.startDate || range.endDate !== requestedRange.endDate
-      || analytics.value.social[source] !== current) return
-    analytics.value.social[source] = { ...next, content: [...current.content, ...next.content] }
-  } catch (error) {
-    socialPageError[source] = error instanceof Error ? error.message : 'Could not load more social posts'
-  } finally {
-    socialPageLoading[source] = false
-  }
-}
-function sortedSocialContent(provider: ProviderInsights): ProviderContentInsight[] {
-  return [...provider.content].sort((left, right) => {
-    const views = (item: ProviderContentInsight) => item.metrics.find(metric => metric.name === (provider.source === 'facebook' ? 'post_media_view' : 'views') && metric.status === 'available')?.value
-    return (views(right) ?? -1) - (views(left) ?? -1)
-  })
-}
-function metricLabel(name: string): string { return name.replace(/^(page|post)_/, '').replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase()) }
-function formatDateTime(value: string): string { return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) }
-const maxTrendValue = computed(() => Math.max(1, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))))
+const hoveredIndex = ref<number | null>(null)
+const hoveredDay = computed(() => hoveredIndex.value === null ? null : dailyData.value[hoveredIndex.value])
+const maxTrendValue = computed(() => Math.max(4, Math.ceil(Math.max(0, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))) / 4) * 4))
+const chartTicks = computed(() => [0, 1, 2, 3, 4].map(step => ({ value: maxTrendValue.value * step / 4, y: 218 - step * 178 / 4 })))
+function shortDate(value: string) { return formatCalendarDate(value, 'en', { month: 'short', day: 'numeric' }) }
 const pageviewPoints = computed(() => toPoints(dailyData.value.map(day => day.pageViews)))
 const sessionPoints = computed(() => toPoints(dailyData.value.map(day => day.sessions)))
 const pageviewDots = computed(() => toDots(dailyData.value.map(day => day.pageViews)))
 
 const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
+  if (!metrics) return []
   return [
-    { label: 'Pageviews', value: formatCount(metrics?.pageViews || 0), detail: metrics?.changePercent == null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
-    { label: 'Unique visitors', value: formatCount(metrics?.uniqueVisitors || 0), detail: `${formatCount(metrics?.returningVisitors || 0)} returning`, icon: 'i-lucide-users' },
-    { label: 'Sessions', value: formatCount(metrics?.uniqueSessions || 0), detail: `${formatNumber(metrics?.pagesPerSession || 0)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
-    { label: 'Avg. duration', value: formatDuration(metrics?.avgSessionDuration || 0), detail: 'Average session time', icon: 'i-lucide-clock' }
+    { label: 'Pageviews', value: formatCount(metrics.pageViews), detail: metrics?.changePercent == null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
+    { label: 'Unique visitors', value: formatCount(metrics.uniqueVisitors), detail: `${formatCount(metrics.returningVisitors)} returning`, icon: 'i-lucide-users' },
+    { label: 'Sessions', value: formatCount(metrics.uniqueSessions), detail: `${formatNumber(metrics.pagesPerSession)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
+    { label: 'Avg. duration', value: formatDuration(metrics.avgSessionDuration), detail: 'Average session time', icon: 'i-lucide-clock' }
   ]
 })
 
-function presetRange(key: PresetKey, timeZone: string): { startDate: string; endDate: string } {
-  const endDate = localDateAt(new Date(), timeZone)
-  let startDate = endDate
-  if (key === 'last_52_weeks') startDate = addLocalDays(endDate, -363)
-  if (key === 'last_30_days') startDate = addLocalDays(endDate, -29)
-  if (key === 'last_7_days') startDate = addLocalDays(endDate, -6)
-  if (key === 'current_month') startDate = `${endDate.slice(0, 8)}01`
-  return { startDate, endDate }
-}
-
-function currentTimeZone(): string {
-  if (!analytics.value) throw new Error('Load the selected analytics timezone before choosing dates')
-  return analytics.value.period.timezone
-}
-
-function applyPreset(key: PresetKey) {
-  activePreset.value = key
-  Object.assign(range, presetRange(key, currentTimeZone()))
-  loadAnalytics()
-}
-
-function markCustomAndLoad() {
-  activePreset.value = 'custom'
-  loadAnalytics()
-}
-
-async function loadAnalytics() {
-  const requestId = ++latestManualRequestId
-  loading.value = true
-  loadError.value = null
-  try {
-    const response = await fetchInsights({ startDate: range.startDate, endDate: range.endDate })
-    if (requestId !== latestManualRequestId) return
-    analytics.value = response.report
-    Object.assign(range, { startDate: response.report.period.startDate, endDate: response.report.period.endDate })
-    reviews.value = response.reviews
-    setup.value = response.setup
-  } catch (error) {
-    if (requestId !== latestManualRequestId) return
-    loadError.value = error instanceof Error ? error.message : 'Failed to load insights'
-  } finally {
-    if (requestId === latestManualRequestId) loading.value = false
-  }
+function applyPreset(days: number) {
+  if (!analytics.value || activeDays.value === days) return
+  activeDays.value = days
+  const endDate = localDateAt(new Date(), analytics.value.period.timezone)
+  requestedRange.value = { startDate: addLocalDays(endDate, 1 - days), endDate }
 }
 
 function toPoints(values: number[]): string {
   if (!values.length) return ''
-  const width = 740
+  const width = 732
   const step = values.length > 1 ? width / (values.length - 1) : 0
   return values.map((value, index) => {
-    const x = 40 + (index * step)
+    const x = 48 + (index * step)
     const y = 218 - ((value / maxTrendValue.value) * 178)
     return `${x.toFixed(2)},${y.toFixed(2)}`
   }).join(' ')
 }
 
 function toDots(values: number[]) {
-  if (values.length > 60) return []
-  const width = 740
+  const width = 732
   const step = values.length > 1 ? width / (values.length - 1) : 0
   return values.map((value, index) => ({
     key: `${index}-${value}`,
-    x: 40 + (index * step),
+    x: 48 + (index * step),
     y: 218 - ((value / maxTrendValue.value) * 178)
   }))
 }

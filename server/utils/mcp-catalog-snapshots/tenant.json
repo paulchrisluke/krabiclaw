@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7a4fc70fa98954ada5b7e0d22b1dd93dfadf99271dbf9a62c608c2aaad34bdb2",
+  "fingerprint": "sha256:a9c99ee1eb30970374562bcd8fc19b9a55eba1995df3f2a8a40da8492ef111f8",
   "tools": [
     {
       "name": "append_content_block",
@@ -4677,14 +4677,6 @@
             "description": "Inclusive local end date in YYYY-MM-DD format. Defaults to today.",
             "type": "string"
           },
-          "facebook_cursor": {
-            "description": "Opaque nextCursor from the previous Facebook result for this same selected date range and connection.",
-            "type": "string"
-          },
-          "instagram_cursor": {
-            "description": "Opaque nextCursor from the previous Instagram result for this same selected date range and connection.",
-            "type": "string"
-          },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
@@ -4698,9 +4690,12 @@
         "type": "object"
       },
       "outputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
         "properties": {
           "attributedValue": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "campaign": {
                   "type": [
@@ -4718,6 +4713,22 @@
                   ]
                 },
                 "currency": {
+                  "enum": [
+                    "THB",
+                    "USD",
+                    "EUR",
+                    "GBP",
+                    "JPY",
+                    "AUD",
+                    "CAD",
+                    "SGD",
+                    "HKD",
+                    "MYR",
+                    "IDR",
+                    "PHP",
+                    "VND",
+                    "INR"
+                  ],
                   "type": "string"
                 },
                 "medium": {
@@ -4730,7 +4741,9 @@
                   "type": "number"
                 },
                 "purchases": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "refundedMinor": {
                   "type": "number"
@@ -4748,10 +4761,10 @@
                 "campaign",
                 "content",
                 "currency",
-                "purchases",
                 "collectedMinor",
                 "refundedMinor",
-                "netMinor"
+                "netMinor",
+                "purchases"
               ],
               "type": "object"
             },
@@ -4759,6 +4772,7 @@
           },
           "attribution": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "campaign": {
                   "type": [
@@ -4773,13 +4787,17 @@
                   ]
                 },
                 "convertingSessions": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "medium": {
                   "type": "string"
                 },
                 "outcomeEvents": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "sessionConversionRate": {
                   "type": [
@@ -4788,7 +4806,9 @@
                   ]
                 },
                 "sessions": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "source": {
                   "type": "string"
@@ -4810,14 +4830,37 @@
           },
           "bookingValue": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "bookings": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "currency": {
-                  "type": [
-                    "string",
-                    "null"
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "THB",
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "AUD",
+                        "CAD",
+                        "SGD",
+                        "HKD",
+                        "MYR",
+                        "IDR",
+                        "PHP",
+                        "VND",
+                        "INR"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "locationId": {
@@ -4842,7 +4885,9 @@
                   "type": "number"
                 },
                 "valuedBookings": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -4860,6 +4905,7 @@
           },
           "cities": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "city": {
                   "type": "string"
@@ -4874,7 +4920,9 @@
                   ]
                 },
                 "views": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -4889,6 +4937,7 @@
           },
           "conversions": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "conversionType": {
                   "type": [
@@ -4897,19 +4946,27 @@
                   ]
                 },
                 "convertingSessions": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "distinctEntities": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "eventName": {
                   "type": "string"
                 },
                 "events": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "nonbrowserEvents": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "sessionConversionRate": {
                   "type": [
@@ -4937,6 +4994,7 @@
           },
           "countries": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "country": {
                   "type": "string"
@@ -4948,7 +5006,9 @@
                   "type": "number"
                 },
                 "views": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -4962,12 +5022,16 @@
             "type": "array"
           },
           "coverage": {
+            "additionalProperties": false,
             "properties": {
               "ga4Delivery": {
                 "items": {
+                  "additionalProperties": false,
                   "properties": {
                     "count": {
-                      "type": "number"
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
                     },
                     "eventName": {
                       "type": "string"
@@ -4992,7 +5056,9 @@
                 ]
               },
               "outcomeEventsWithoutAttribution": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -5004,18 +5070,24 @@
           },
           "dailyData": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "avgDuration": {
+                  "minimum": 0,
                   "type": "number"
                 },
                 "date": {
                   "type": "string"
                 },
                 "pageViews": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "sessions": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -5030,6 +5102,7 @@
           },
           "devices": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "percentOfTotal": {
                   "type": "number"
@@ -5038,7 +5111,9 @@
                   "type": "string"
                 },
                 "views": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -5051,8 +5126,10 @@
             "type": "array"
           },
           "metrics": {
+            "additionalProperties": false,
             "properties": {
               "avgSessionDuration": {
+                "minimum": 0,
                 "type": "number"
               },
               "changePercent": {
@@ -5062,19 +5139,28 @@
                 ]
               },
               "pageViews": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "pagesPerSession": {
+                "minimum": 0,
                 "type": "number"
               },
               "returningVisitors": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "uniqueSessions": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "uniqueVisitors": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -5090,11 +5176,28 @@
           },
           "net": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "collectedMinor": {
                   "type": "number"
                 },
                 "currency": {
+                  "enum": [
+                    "THB",
+                    "USD",
+                    "EUR",
+                    "GBP",
+                    "JPY",
+                    "AUD",
+                    "CAD",
+                    "SGD",
+                    "HKD",
+                    "MYR",
+                    "IDR",
+                    "PHP",
+                    "VND",
+                    "INR"
+                  ],
                   "type": "string"
                 },
                 "netMinor": {
@@ -5116,6 +5219,7 @@
           },
           "outcomeAttribution": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "campaign": {
                   "type": [
@@ -5130,13 +5234,17 @@
                   ]
                 },
                 "distinctEntities": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "eventName": {
                   "type": "string"
                 },
                 "events": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "medium": {
                   "type": "string"
@@ -5159,6 +5267,7 @@
             "type": "array"
           },
           "period": {
+            "additionalProperties": false,
             "properties": {
               "analyticsDataStartAt": {
                 "type": [
@@ -5186,6 +5295,7 @@
           },
           "referrers": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "percentOfTotal": {
                   "type": "number"
@@ -5194,7 +5304,9 @@
                   "type": "string"
                 },
                 "views": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -5207,9 +5319,11 @@
             "type": "array"
           },
           "signupCohort": {
+            "additionalProperties": false,
             "properties": {
               "bySignupAttribution": {
                 "items": {
+                  "additionalProperties": false,
                   "properties": {
                     "campaign": {
                       "type": [
@@ -5224,7 +5338,9 @@
                       ]
                     },
                     "firstPaidSignups": {
-                      "type": "number"
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
                     },
                     "medium": {
                       "type": [
@@ -5233,15 +5349,34 @@
                       ]
                     },
                     "onboardedSignups": {
-                      "type": "number"
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
                     },
                     "revenue": {
                       "items": {
+                        "additionalProperties": false,
                         "properties": {
                           "collectedMinor": {
                             "type": "number"
                           },
                           "currency": {
+                            "enum": [
+                              "THB",
+                              "USD",
+                              "EUR",
+                              "GBP",
+                              "JPY",
+                              "AUD",
+                              "CAD",
+                              "SGD",
+                              "HKD",
+                              "MYR",
+                              "IDR",
+                              "PHP",
+                              "VND",
+                              "INR"
+                            ],
                             "type": "string"
                           },
                           "netMinor": {
@@ -5262,7 +5397,9 @@
                       "type": "array"
                     },
                     "signups": {
-                      "type": "number"
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
                     },
                     "source": {
                       "type": [
@@ -5286,22 +5423,32 @@
                 "type": "array"
               },
               "firstPaidBusinesses": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "firstPaidSignups": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "observedThrough": {
                 "type": "string"
               },
               "onboardedBusinesses": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "onboardedSignups": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               },
               "signups": {
-                "type": "number"
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
               }
             },
             "required": [
@@ -5315,455 +5462,9 @@
             ],
             "type": "object"
           },
-          "social": {
-            "properties": {
-              "facebook": {
-                "properties": {
-                  "apiVersion": {
-                    "type": "string"
-                  },
-                  "connectionRevision": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "content": {
-                    "items": {
-                      "properties": {
-                        "caption": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "id": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string"
-                        },
-                        "metrics": {
-                          "items": {
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "period": {
-                                "type": "string"
-                              },
-                              "previousStatus": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "previousValue": {
-                                "type": [
-                                  "number",
-                                  "null"
-                                ]
-                              },
-                              "reason": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "status": {
-                                "type": "string"
-                              },
-                              "unit": {
-                                "type": "string"
-                              },
-                              "value": {
-                                "type": [
-                                  "number",
-                                  "null"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "name",
-                              "value",
-                              "unit",
-                              "period",
-                              "status",
-                              "reason",
-                              "previousValue",
-                              "previousStatus"
-                            ],
-                            "type": "object"
-                          },
-                          "type": "array"
-                        },
-                        "permalink": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "publishedAt": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "kind",
-                        "publishedAt",
-                        "permalink",
-                        "caption",
-                        "metrics"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "contentCoverage": {
-                    "type": "string"
-                  },
-                  "contentCoverageReason": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "error": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "fetchedAt": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "metrics": {
-                    "items": {
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "period": {
-                          "type": "string"
-                        },
-                        "previousStatus": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "previousValue": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "reason": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "status": {
-                          "type": "string"
-                        },
-                        "unit": {
-                          "type": "string"
-                        },
-                        "value": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "value",
-                        "unit",
-                        "period",
-                        "status",
-                        "reason",
-                        "previousValue",
-                        "previousStatus"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "nextCursor": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "source": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  },
-                  "targetId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "targetName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "source",
-                  "apiVersion",
-                  "status",
-                  "targetId",
-                  "targetName",
-                  "connectionRevision",
-                  "fetchedAt",
-                  "error",
-                  "metrics",
-                  "content",
-                  "contentCoverage",
-                  "contentCoverageReason",
-                  "nextCursor"
-                ],
-                "type": "object"
-              },
-              "instagram": {
-                "properties": {
-                  "apiVersion": {
-                    "type": "string"
-                  },
-                  "connectionRevision": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "content": {
-                    "items": {
-                      "properties": {
-                        "caption": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "id": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string"
-                        },
-                        "metrics": {
-                          "items": {
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "period": {
-                                "type": "string"
-                              },
-                              "previousStatus": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "previousValue": {
-                                "type": [
-                                  "number",
-                                  "null"
-                                ]
-                              },
-                              "reason": {
-                                "type": [
-                                  "string",
-                                  "null"
-                                ]
-                              },
-                              "status": {
-                                "type": "string"
-                              },
-                              "unit": {
-                                "type": "string"
-                              },
-                              "value": {
-                                "type": [
-                                  "number",
-                                  "null"
-                                ]
-                              }
-                            },
-                            "required": [
-                              "name",
-                              "value",
-                              "unit",
-                              "period",
-                              "status",
-                              "reason",
-                              "previousValue",
-                              "previousStatus"
-                            ],
-                            "type": "object"
-                          },
-                          "type": "array"
-                        },
-                        "permalink": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "publishedAt": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "kind",
-                        "publishedAt",
-                        "permalink",
-                        "caption",
-                        "metrics"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "contentCoverage": {
-                    "type": "string"
-                  },
-                  "contentCoverageReason": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "error": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "fetchedAt": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "metrics": {
-                    "items": {
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "period": {
-                          "type": "string"
-                        },
-                        "previousStatus": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "previousValue": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "reason": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "status": {
-                          "type": "string"
-                        },
-                        "unit": {
-                          "type": "string"
-                        },
-                        "value": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "name",
-                        "value",
-                        "unit",
-                        "period",
-                        "status",
-                        "reason",
-                        "previousValue",
-                        "previousStatus"
-                      ],
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "nextCursor": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "source": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  },
-                  "targetId": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "targetName": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "source",
-                  "apiVersion",
-                  "status",
-                  "targetId",
-                  "targetName",
-                  "connectionRevision",
-                  "fetchedAt",
-                  "error",
-                  "metrics",
-                  "content",
-                  "contentCoverage",
-                  "contentCoverageReason",
-                  "nextCursor"
-                ],
-                "type": "object"
-              }
-            },
-            "required": [
-              "facebook",
-              "instagram"
-            ],
-            "type": "object"
-          },
           "topPages": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "path": {
                   "type": "string"
@@ -5772,7 +5473,9 @@
                   "type": "number"
                 },
                 "views": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 }
               },
               "required": [
@@ -5786,6 +5489,7 @@
           },
           "values": {
             "items": {
+              "additionalProperties": false,
               "properties": {
                 "basis": {
                   "enum": [
@@ -5802,13 +5506,31 @@
                   ]
                 },
                 "currency": {
+                  "enum": [
+                    "THB",
+                    "USD",
+                    "EUR",
+                    "GBP",
+                    "JPY",
+                    "AUD",
+                    "CAD",
+                    "SGD",
+                    "HKD",
+                    "MYR",
+                    "IDR",
+                    "PHP",
+                    "VND",
+                    "INR"
+                  ],
                   "type": "string"
                 },
                 "eventName": {
                   "type": "string"
                 },
                 "events": {
-                  "type": "number"
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "valueMinor": {
                   "type": "number"
@@ -5844,8 +5566,7 @@
           "countries",
           "cities",
           "referrers",
-          "devices",
-          "social"
+          "devices"
         ],
         "type": "object"
       }

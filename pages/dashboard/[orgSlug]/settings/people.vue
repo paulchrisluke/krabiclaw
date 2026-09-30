@@ -34,7 +34,13 @@
           </li>
           <li v-if="!users.length" class="px-4 py-8 text-center text-sm text-muted">No accounts yet.</li>
         </ul>
-        <p v-if="total > users.length" class="text-xs text-muted">Showing {{ users.length }} of {{ total }}.</p>
+        <div v-if="total > pageSize" class="flex items-center justify-between gap-3">
+          <p class="text-xs text-muted">Showing {{ offset + 1 }}–{{ offset + users.length }} of {{ total }}.</p>
+          <div class="flex gap-2">
+            <UButton color="neutral" variant="soft" :disabled="loading || offset === 0" @click="changePage(-1)">Previous</UButton>
+            <UButton color="neutral" variant="soft" :disabled="loading || offset + users.length >= total" @click="changePage(1)">Next</UButton>
+          </div>
+        </div>
       </div>
     </div>
   </DashboardIndexPanel>
@@ -62,6 +68,8 @@ const currentUserId = computed(() => currentUser.value?.id ?? null)
 
 const users = ref<PlatformUser[]>([])
 const total = ref(0)
+const pageSize = 50
+const offset = ref(0)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const impersonatingUserId = ref<string | null>(null)
@@ -74,7 +82,7 @@ async function loadUsers() {
   loadError.value = null
   try {
     const result = await authClient.admin.listUsers({
-      query: { limit: 50, sortBy: 'createdAt', sortDirection: 'desc' },
+      query: { limit: pageSize, offset: offset.value, sortBy: 'createdAt', sortDirection: 'desc' },
     })
     if (result.error) throw new Error(result.error.message)
     if (requestId !== requestSequence) return
@@ -86,6 +94,11 @@ async function loadUsers() {
   } finally {
     if (requestId === requestSequence) loading.value = false
   }
+}
+
+async function changePage(direction: number) {
+  offset.value += direction * pageSize
+  await loadUsers()
 }
 
 async function impersonate(userId: string) {
