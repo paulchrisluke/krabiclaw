@@ -662,12 +662,16 @@ async function loadSessions() {
 }
 
 async function openBooking() {
-  // The option and its price are not chosen yet, so none is claimed here.
-  trackCheckoutStart(props.product.id, props.location.id, { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] }, selectedVariantId.value)
   bookingStep.value = 1
   bookingError.value = ''
   await loadSessions()
 }
+
+watch(bookingOpen, (open) => {
+  // Observe the modal's canonical state, including an opening before hydration.
+  // The option and its price are not chosen yet, so none is claimed here.
+  if (open) trackCheckoutStart(props.product.id, props.location.id, { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] }, selectedVariantId.value)
+})
 
 /** A guest pressing a time on the page arrives in the form with it chosen. */
 async function openBookingAt(session: PublicProductSession) {

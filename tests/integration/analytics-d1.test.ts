@@ -47,6 +47,8 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
     assert.equal(before.metrics.uniqueSessions, 2)
     assert.equal(before.countries[0]?.countryCode, 'TH')
     for (const date of ['2026-09-05', '2026-09-06']) await aggregateOrganizationAnalyticsDate(db, 'org-proof', date)
+    assert.equal(await db.prepare(`SELECT json_extract(payload_json, '$.returning_visitors') returning_count
+      FROM analytics_summaries WHERE organization_id = 'org-proof' AND kind = 'organization_day' AND date = '2026-09-06'`).first('returning_count'), 1)
     const after = await getAnalyticsReport(db, period)
     assert.deepEqual(after, before)
     await aggregateOrganizationAnalyticsDate(db, 'org-proof', '2026-09-05')

@@ -99,8 +99,9 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
   SELECT 'organization_day' kind, '' key, json_object(
     'page_views', page_views, 'unique_sessions', unique_sessions, 'unique_visitors', unique_visitors,
     'returning_visitors', (SELECT COUNT(DISTINCT current.visitor_id) FROM views current WHERE EXISTS (
-      SELECT 1 FROM sessions previous WHERE previous.visitor_id = current.visitor_id
-        AND previous.session_id <> current.session_id AND previous.started_at < (SELECT starts_at FROM input))),
+      SELECT 1 FROM analytics_events previous WHERE previous.organization_id = current.organization_id
+        AND previous.kind = 'pageview' AND previous.visitor_id = current.visitor_id
+        AND previous.session_id <> current.session_id AND previous.created_at < (SELECT starts_at FROM input))),
     'avg_session_duration', COALESCE((SELECT ROUND(AVG(duration_seconds)) FROM sessions
       WHERE started_at < (SELECT ends_at FROM input) AND last_seen_at >= (SELECT starts_at FROM input) AND duration_seconds > 0), 0),
     'pages_per_session', CASE WHEN unique_sessions = 0 THEN 0 ELSE ROUND(CAST(page_views AS REAL) / unique_sessions, 2) END
