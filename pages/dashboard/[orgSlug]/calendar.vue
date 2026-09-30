@@ -43,25 +43,18 @@
           :fixed-weeks="false"
           :week-starts-on="0"
           :ui="calendarUi"
+          :is-date-unavailable="isUnavailable"
           @update:model-value="selectDay"
         >
           <template #day="{ day }">
             <span
               class="flex size-7 items-center justify-center rounded-full text-sm font-medium"
-              :class="isToday(day) ? 'bg-primary text-inverted' : 'text-highlighted'"
+              :class="isToday(day) ? 'bg-primary text-inverted' : isUnavailable(day) ? 'text-muted line-through' : 'text-highlighted'"
             >{{ day.day }}</span>
             <span v-if="countFor(day)" class="mt-1 text-xs tabular-nums text-muted">{{ countFor(day) }}</span>
           </template>
         </UCalendar>
 
-        <!-- The chosen day's rows sit under the month that holds it. -->
-        <div v-if="selectedDayKey?.startsWith(month.key)" class="mt-6 space-y-2">
-          <h3 class="text-sm font-semibold text-highlighted">{{ dayLabel(selectedDayKey) }}</h3>
-          <div v-if="selectedDayItems.length" class="divide-y divide-default border-y border-default">
-            <AgendaRow v-for="item in selectedDayItems" :key="item.id" :item="item" />
-          </div>
-          <p v-else class="py-6 text-sm text-muted">Nothing scheduled.</p>
-        </div>
       </section>
 
       <div ref="sentinel" class="h-px" />
@@ -81,9 +74,25 @@
   </DashboardIndexPanel>
 </template>
 
+<script lang="ts">
+import type { ComponentPublicInstance, InjectionKey, Ref } from 'vue'
+
+/** The location the calendar is showing, owned by this level and read by the day leaf below it. */
+export interface CalendarLocation {
+  id: string
+  status: string
+  opening_hours: unknown
+  special_hours: unknown
+}
+export const calendarLocationKey = Symbol('calendar-location') as InjectionKey<{
+  location: Ref<CalendarLocation | null | undefined>
+  refresh: () => Promise<void>
+}>
+</script>
+
 <script setup lang="ts">
 import { CalendarDate, getLocalTimeZone, parseDate, today, type DateValue } from '@internationalized/date'
-import type { ComponentPublicInstance } from 'vue'
+import { closureOnDate, getDateIntervals, parseOpeningHours, parseSpecialHours } from '~/shared/reservation-hours'
 import { formatCalendarDate } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import type { AgendaItem, AgendaKind, AgendaLocation, AgendaPayload } from '~/server/utils/dashboard-agenda'
@@ -121,6 +130,7 @@ const calendarUi = {
     'data-[outside-view]:invisible',
     'data-[selected]:bg-elevated/70 data-[selected]:text-highlighted data-[selected]:ring-2 data-[selected]:ring-primary data-[selected]:ring-inset',
     'data-[today]:text-highlighted',
+    'data-[unavailable]:bg-elevated/30 data-[unavailable]:pointer-events-auto data-[unavailable]:no-underline',
   ].join(' '),
 }
 
@@ -135,6 +145,30 @@ interface MonthBlock {
 const monthKeys = ref<string[]>([])
 const monthData = shallowRef(new Map<string, MonthBlock>())
 const locations = ref<AgendaLocation[]>([])
+// With one location chosen the tiles say which days it cannot take — its own
+// closures and the weekdays its hours never open. Across every location there
+// is no one answer, so nothing is struck.
+const isLocationHours = (value: unknown): value is { location: CalendarLocation } =>
+  isRecord(value) && isRecord(value.location) && typeof value.location.id === 'string' && typeof value.location.status === 'string'
+const organizationId = await useDashboardOrganizationId()
+const { data: chosenLocation, refresh: refreshLocation } = await useAsyncData(
+  () => `calendar-location:${organizationId}:${filters.locationId}`,
+  async () => filters.locationId === FILTER_ALL
+    ? null
+    : (await dashboardApi<{ location: CalendarLocation }>(`/api/organizations/${organizationId}/locations/${filters.locationId}`, { validate: isLocationHours })).location,
+  { watch: [() => filters.locationId] },
+)
+provide(calendarLocationKey, { location: chosenLocation, refresh: async () => { await refreshLocation() } })
+function isUnavailable(day: DateValue): boolean {
+  const record = chosenLocation.value
+  if (!record) return false
+  if (record.status !== 'active') return true
+  const key = day.toString()
+  const special = parseSpecialHours(record.special_hours ?? null)
+  if (closureOnDate(special, key)) return true
+  const intervals = getDateIntervals(parseOpeningHours(record.opening_hours ?? null), special, key)
+  return intervals !== null && intervals.length === 0
+}
 const availableKinds = ref<AgendaKind[]>([])
 const generation = ref(0)
 
@@ -222,16 +256,15 @@ function isToday(day: DateValue): boolean {
   return day.toString() === todayKey
 }
 
-const selectedDate = shallowRef<CalendarDate | null>(null)
-const selectedDayKey = computed(() => selectedDate.value?.toString() ?? null)
-const selectedDayItems = computed(() => (selectedDayKey.value && itemsByDay.value.get(selectedDayKey.value)) || [])
+// The open day is the route below this level, so a reload and a deep link ring
+// the same tile, and Back from the leaf clears it.
+const level = useRouteLevel()
+const selectedDate = computed<CalendarDate | null>(() => typeof route.params.day === 'string' ? parseDate(route.params.day) : null)
 
 function selectDay(value: unknown): void {
-  selectedDate.value = value instanceof CalendarDate ? value : value ? parseDate(String(value)) : null
-}
-
-function dayLabel(dayKey: string) {
-  return formatCalendarDate(dayKey, 'en', { weekday: 'long', month: 'long', day: 'numeric' })
+  const chosen = value instanceof CalendarDate ? value : value ? parseDate(String(value)) : null
+  if (!chosen) return
+  void navigateTo({ path: `${level.path.value}/${chosen.toString()}`, query: route.query })
 }
 
 const locationOptions = computed(() => [{ label: 'All locations', value: FILTER_ALL }, ...locations.value.map(location => ({ label: location.title, value: location.id }))])
