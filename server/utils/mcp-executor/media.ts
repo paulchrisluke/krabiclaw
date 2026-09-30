@@ -14,7 +14,7 @@ import {
 } from '~/server/utils/media-placement'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { mcpPageInfo, mcpPageWindow } from '~/server/utils/mcp-pagination'
 import {
   NOT_HANDLED,
   mutationContextPayload,
@@ -99,13 +99,18 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       );
     }
     case "get_organization_media_assets": {
+      const kind = optionalString(args, "kind") ?? undefined;
+      const resource = { resource: `media-assets:${organization.organizationId}:${kind ?? ''}` };
+      const window = mcpPageWindow(args, resource);
       const assets = await listMediaAssets(organization.db, organization.organizationId, {
-          kind: optionalString(args, "kind") ?? undefined,
+          kind,
+          limit: window.limit + 1,
+          offset: window.offset,
         });
-      const page = paginateMcpCollection(assets, args, { resource: `media-assets:${organization.organizationId}:${optionalString(args, 'kind') ?? ''}` });
+      const page = assets.slice(0, window.limit);
       return {
-        assets: page.items.map(({ id, ...asset }) => ({ asset_id: id, ...asset })),
-        page_info: page.page_info,
+        assets: page.map(({ id, ...asset }) => ({ asset_id: id, ...asset })),
+        page_info: mcpPageInfo(window, page.length, assets.length > window.limit, resource),
       };
     }
     case "upload_user_media": {

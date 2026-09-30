@@ -348,6 +348,20 @@ test.describe('stateless MCP server', () => {
         args: { organization_id: organizationId },
       })
       expect(mediaList.status()).toBe(200)
+      const library = mcpData<{ assets: Array<{ asset_id: string }>; page_info: { has_more: boolean; next_cursor: string | null } }>(await mediaList.json())
+      expect(library.assets.length).toBeGreaterThan(1)
+      const firstMediaPage = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_organization_media_assets',
+        args: { organization_id: organizationId, limit: 1 },
+      })
+      const firstMedia = mcpData<typeof library>(await firstMediaPage.json())
+      expect(firstMedia.assets).toEqual([library.assets[0]])
+      expect(firstMedia.page_info.has_more).toBe(true)
+      const secondMediaPage = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_organization_media_assets',
+        args: { organization_id: organizationId, limit: 1, cursor: firstMedia.page_info.next_cursor },
+      })
+      expect(mcpData<typeof library>(await secondMediaPage.json()).assets).toEqual([library.assets[1]])
 
       // A bookable Product is created by the same tool as any other Product;
       // what a customer buys is a variant, and the price lives there.
