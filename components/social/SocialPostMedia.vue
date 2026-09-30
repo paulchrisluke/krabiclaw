@@ -4,7 +4,7 @@
       type="button"
       class="absolute inset-0 size-full cursor-zoom-in overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       :aria-label="media[0]!.kind === 'video' ? t('social_posts.play_video') : t('social_posts.media_label', { count: media.length })"
-      @click="index = galleryIndex; open = true"
+      @click="index = 0; open = true"
     >
       <video
         v-if="media[0]!.kind === 'video' && !media[0]!.thumbnail_url"
@@ -39,19 +39,17 @@
 import type { PublicPostMedia } from '~/server/utils/post-management'
 
 const props = withDefaults(defineProps<{
-  gallery?: { url: string; kind: 'image' | 'video'; alt?: string; poster?: string; description?: string }[]
-  galleryIndex?: number
   media: PublicPostMedia[]
   frameClass?: string
   fit?: 'cover' | 'contain'
   eager?: boolean
   title?: string
   description?: string
-}>(), { gallery: undefined, galleryIndex: 0, frameClass: 'aspect-square', fit: 'cover', eager: false, title: undefined, description: undefined })
+}>(), { frameClass: 'aspect-square', fit: 'cover', eager: false, title: undefined, description: undefined })
 const { t } = useI18n()
 const open = ref(false)
 const index = ref(0)
-const items = computed(() => props.gallery ?? props.media.map(item => ({
+const items = computed(() => props.media.map(item => ({
   url: item.public_url, kind: item.kind, alt: item.alt_text ?? '', poster: item.thumbnail_url ?? undefined, description: props.description,
 })))
 </script>

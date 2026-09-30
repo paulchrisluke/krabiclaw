@@ -1,5 +1,7 @@
 @import "tailwindcss" source(none);
 @source "../../utils/form-constants.ts";
+@source "../../.nuxt/ui/carousel.ts";
+@source "../../.nuxt/ui/button.ts";
 
 @plugin "@tailwindcss/typography";
 

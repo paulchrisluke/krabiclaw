@@ -5,17 +5,19 @@
       <div class="absolute inset-x-0 top-0 z-30 flex items-center gap-3 px-4 pt-4 pb-4 bg-linear-to-b from-black/70 to-transparent">
         <button
           ref="closeButton"
-          class="flex size-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-md"
+          class="order-last flex size-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-md"
           aria-label="Close"
           @click="openModel = false"
         >
-          <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M15.75 19.5 8.25 12l7.5-7.5"/></svg>
+          <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="m6 6 12 12M6 18 18 6"/></svg>
         </button>
 
         <div class="min-w-0 flex-1">
           <div v-if="title" class="truncate text-base font-semibold">{{ title }}</div>
           <div v-if="items.length > 1" class="text-xs text-white/70">{{ currentIndex + 1 }} / {{ items.length }}</div>
         </div>
+        <button v-if="items.length > 1" type="button" class="grid size-10 place-items-center rounded-full bg-black/40 disabled:opacity-30" aria-label="Previous media" :disabled="currentIndex === 0" @click="navigate(currentIndex - 1)"><UIcon name="i-lucide-chevron-up" class="size-5" /></button>
+        <button v-if="items.length > 1" type="button" class="grid size-10 place-items-center rounded-full bg-black/40 disabled:opacity-30" aria-label="Next media" :disabled="currentIndex === items.length - 1" @click="navigate(currentIndex + 1)"><UIcon name="i-lucide-chevron-down" class="size-5" /></button>
       </div>
 
       <!-- Vertical viewer -->
@@ -38,28 +40,14 @@
             class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
           >
 
-          <video
-            v-if="item.kind === 'video'"
-            :ref="el => setVideoRef(el, i)"
-            :src="item.url"
-            playsinline
-            controls
-            :poster="typeof item.poster === 'string' ? item.poster : undefined"
-            preload="metadata"
-            class="relative z-10 h-full w-full object-contain"
-          />
-          <img
-            v-else
-            :src="item.url"
-            :alt="item.alt || ''"
-            class="relative z-10 h-full w-full object-contain"
-          >
-
-          <!-- Bottom caption gradient -->
-          <div class="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-linear-to-t from-black/90 via-black/55 to-transparent px-5 pt-40" :class="item.kind === 'video' ? 'pb-20' : 'pb-8'">
-            <div class="pointer-events-auto">
+          <div :class="item.description || $slots.caption ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''" class="relative z-10 grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4 px-4 pb-5 pt-20 lg:grid-rows-1 lg:gap-8 lg:px-16">
+            <div class="min-h-0 min-w-0">
+              <video v-if="item.kind === 'video'" :ref="el => setVideoRef(el, i)" :src="item.url" playsinline controls :poster="typeof item.poster === 'string' ? item.poster : undefined" preload="metadata" class="h-full w-full object-contain" />
+              <img v-else :src="item.url" :alt="item.alt || ''" class="h-full w-full object-contain">
+            </div>
+            <div v-if="item.description || $slots.caption" class="max-h-[25dvh] min-h-0 overflow-y-auto overscroll-contain rounded-xl bg-black/70 p-5 lg:self-center lg:max-h-[80dvh]">
               <slot name="caption" :item="item" :index="i">
-                <p v-if="item.description" class="text-lg leading-snug">{{ item.description }}</p>
+                <p v-if="item.description" class="whitespace-pre-line break-words text-base leading-relaxed [overflow-wrap:anywhere]">{{ item.description }}</p>
               </slot>
             </div>
           </div>
@@ -242,18 +230,18 @@ function onScroll() {
   }
 }
 
-async function onKeydown(e: KeyboardEvent) {
+async function navigate(index: number) {
+  if (index < 0 || index >= items.value.length) return
+  indexModel.value = index
+  await nextTick()
+  scroller.value?.scrollTo({ top: index * getPageHeight(), behavior: 'smooth' })
+}
+function onKeydown(e: KeyboardEvent) {
   if (!props.open) return
   if (e.key === 'Escape') openModel.value = false
-  if (e.key === 'ArrowDown' && indexModel.value < items.value.length - 1) {
-    indexModel.value++
-    await nextTick()
-    scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
-  }
-  if (e.key === 'ArrowUp' && indexModel.value > 0) {
-    indexModel.value--
-    await nextTick()
-    scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    void navigate(currentIndex.value + (e.key === 'ArrowDown' ? 1 : -1))
   }
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))

@@ -5,10 +5,10 @@
     Meta did not return is a labelled mark, not a guessed URL. A website-only
     post has none.
   -->
-  <ul v-if="publications.length" class="flex flex-wrap items-center gap-2" :aria-label="t('social_posts.also_on')">
-    <li v-for="publication in publications" :key="publication.channel">
+  <component :is="linked ? 'ul' : 'span'" v-if="publications.length" class="flex flex-wrap items-center gap-2" :aria-label="t('social_posts.also_on')">
+    <component :is="linked ? 'li' : 'span'" v-for="publication in publications" :key="publication.channel">
       <a
-        v-if="publication.url"
+        v-if="linked && publication.url"
         :href="publication.url"
         target="_blank"
         rel="noopener"
@@ -22,18 +22,19 @@
         <UIcon :name="ICONS[publication.channel]" class="size-4 shrink-0" aria-hidden="true" />
         <span>{{ NAMES[publication.channel] }}</span>
       </span>
-    </li>
-  </ul>
+    </component>
+  </component>
 </template>
 
 <script setup lang="ts">
 import type { PublicSocialPost } from '~/server/utils/post-management'
 
 withDefaults(defineProps<{
+  linked?: boolean
   publications: PublicSocialPost['publications']
   /** How the template draws one mark. */
   itemClass?: string
-}>(), { itemClass: 'inline-flex items-center gap-1.5 text-xs font-medium' })
+}>(), { linked: true, itemClass: 'inline-flex items-center gap-1.5 text-xs font-medium' })
 
 const { t } = useI18n()
 // The locally bundled official marks (nuxt.config.ts customCollections).

@@ -9,42 +9,20 @@
         <NuxtLink v-if="view.callToAction" :to="route(view.callToAction.url)" class="inline-flex items-center gap-2 text-sm font-semibold text-highlighted no-underline hover:underline">{{ view.callToAction.label }}<span aria-hidden="true">→</span></NuxtLink>
       </div>
 
-      <ul :class="['m-0 list-none p-0', block ? 'flex snap-x snap-mandatory gap-6 overflow-x-auto overscroll-x-contain pb-6 sm:gap-8' : 'mx-auto flex max-w-2xl flex-col gap-10 sm:gap-12']">
-        <li v-for="(post, index) in view.posts" :key="post.id" :class="['min-w-0', block ? 'w-[85%] max-w-md shrink-0 snap-start sm:w-[26rem]' : 'w-full']">
-          <article class="overflow-hidden rounded-[calc(var(--ui-radius)*2)] border border-default bg-elevated">
-            <SocialPostMedia
-              v-if="post.media.length"
-              :media="post.media"
-              :description="post.body ?? undefined"
-              :gallery="gallery"
-              :gallery-index="galleryIndex(post.id)"
-              :eager="index === 0 && !block"
-              fit="contain"
-              frame-class="aspect-[4/5] overflow-hidden bg-elevated"
-            />
-            <div class="p-6 sm:p-8">
-              <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
-                <time v-if="post.published_at" :datetime="post.published_at">{{ formatDate(post.published_at) }}</time>
-                <span v-if="post.location">{{ post.location.title }}</span>
-                <SocialPostChannels :publications="post.publications" item-class="inline-flex items-center gap-1.5 text-xs text-muted no-underline hover:text-default" />
-              </div>
-              <h3 v-if="post.title" class="font-[family-name:var(--font-heading)] [font-weight:var(--font-heading-weight)] mb-3 text-xl leading-snug text-highlighted">{{ post.title }}</h3>
-              <p v-if="post.body" :class="['whitespace-pre-line break-words text-base leading-relaxed text-default [overflow-wrap:anywhere]', block ? 'line-clamp-4' : '']">{{ post.body }}</p>
-              <NuxtLink :to="localePath(`/posts/${post.slug}`)" class="relative mt-5 inline-flex items-center gap-2 text-sm font-semibold text-highlighted no-underline hover:underline">
-                {{ t('social_posts.view_update') }}<span class="sr-only">: {{ post.title || formatDate(post.published_at) }}</span><span aria-hidden="true">→</span>
-              </NuxtLink>
-            </div>
-          </article>
-        </li>
-      </ul>
+      <UCarousel v-if="block" :items="view.posts" arrows dots align="start" :ui="{ item: 'basis-[85%] ps-6 sm:basis-1/2 lg:basis-1/3', container: '-ms-6 items-start', prev: 'start-2 sm:start-2', next: 'end-2 sm:end-2' }">
+        <template #default="{ item }"><SocialPostCard :post="item" @open="openPost(item.id)" /></template>
+      </UCarousel>
+      <div v-else class="mx-auto flex max-w-2xl flex-col gap-10 sm:gap-12">
+        <SocialPostCard v-for="post in view.posts" :key="post.id" :post="post" @open="openPost(post.id)" />
+      </div>
+      <MediaLightbox v-model:open="viewerOpen" v-model:index="viewerIndex" :items="gallery" />
       <p v-if="!block && !view.posts.length" class="rounded-[calc(var(--ui-radius)*2)] border border-dashed border-default p-10 text-center text-muted">{{ t('social_posts.empty') }}</p>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import SocialPostMedia from '~/components/social/SocialPostMedia.vue'
-import SocialPostChannels from '~/components/social/SocialPostChannels.vue'
+import SocialPostCard from '~/components/social/SocialPostCard.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicSocialPost } from '~/server/utils/post-management'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
@@ -58,9 +36,20 @@ const props = defineProps<{
   posts?: PublicSocialPost[]
 }>()
 const { t, localePath } = useI18n()
-const { formatDate } = useLocaleDate()
 const view = computed(() => props.block ? socialPostsBlockView(props.block) : { title: null, description: null, callToAction: null, posts: props.posts ?? [] })
 const gallery = computed(() => view.value.posts.flatMap(post => post.media.map(media => ({ url: media.public_url, kind: media.kind, alt: media.alt_text ?? '', poster: media.thumbnail_url ?? undefined, description: post.body ?? undefined }))))
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
+function openPost(postId: string) {
+  const post = view.value.posts.find(item => item.id === postId)
+  if (!post) return
+  if (!post.media.length) {
+    void navigateTo(localePath(`/posts/${post.slug}`))
+    return
+  }
+  viewerIndex.value = galleryIndex(postId)
+  viewerOpen.value = true
+}
 function galleryIndex(postId: string) {
   let index = 0
   for (const post of view.value.posts) {
