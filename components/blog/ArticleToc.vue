@@ -1,7 +1,11 @@
 <template>
-  <nav v-if="headings.length" aria-label="On this page" class="sticky top-28 text-sm">
-    <p class="mb-3 font-semibold text-default">On this page</p>
-    <ul class="space-y-1">
+  <nav v-if="headings.length" aria-label="On this page" :class="collapsible ? 'rounded-xl border border-default p-4 text-sm' : 'sticky top-28 text-sm'">
+    <button v-if="collapsible" type="button" class="flex min-h-11 w-full items-center justify-between gap-3 text-left font-semibold text-default focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary" :aria-expanded="expanded" :aria-controls="listId" @click="expanded = !expanded">
+      On this page
+      <span aria-hidden="true">{{ expanded ? '−' : '+' }}</span>
+    </button>
+    <p v-else class="mb-3 font-semibold text-default">On this page</p>
+    <ul :id="listId" class="space-y-1" :class="collapsible && !expanded ? 'hidden' : ''">
       <li v-for="heading in headings" :key="heading.id">
         <a
           :href="`#${heading.id}`"
@@ -25,7 +29,9 @@
 // always matches the live article body instead of duplicating heading logic.
 import { decodeHtmlEntities } from '~/utils/markdown'
 
-const props = defineProps<{ html: string }>()
+const props = withDefaults(defineProps<{ html: string; collapsible?: boolean }>(), { collapsible: false })
+const expanded = ref(false)
+const listId = useId()
 
 interface Heading {
   id: string
@@ -58,19 +64,9 @@ let suppressObserverUntil = 0
 
 function selectHeading(id: string) {
   activeId.value = id
+  expanded.value = false
   suppressObserverUntil = Date.now() + 800
 }
-
-// Keeps the address bar in sync with scroll position. replaceState (not
-// pushState) so scrolling through a doc doesn't fill up browser history with
-// one entry per heading.
-watch(activeId, (id) => {
-  if (!id || !import.meta.client) return
-  const newHash = `#${id}`
-  if (window.location.hash !== newHash) {
-    history.replaceState(null, '', newHash)
-  }
-})
 
 function observeHeadings() {
   observer?.disconnect()

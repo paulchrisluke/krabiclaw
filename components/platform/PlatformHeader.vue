@@ -4,7 +4,7 @@
 
       <!-- Wordmark. Docs and blog carry their own contextual word; there is no
            leading dot before it. -->
-      <NuxtLink to="/" class="group flex shrink-0 items-center gap-2.5 no-underline">
+      <NuxtLink :to="section === 'docs' ? '/docs' : section === 'blog' ? '/blog' : '/'" class="group flex shrink-0 items-center gap-2.5 no-underline">
         <img src="/platform/krabiclaw-symbol.svg" alt="Krabiclaw" width="34" height="34" class="size-8.5 rounded-lg transition-transform duration-200 group-hover:rotate-12" />
         <span class="kc-wordmark text-[19px] leading-none">
           <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span v-if="sectionSuffix" class="kc-wordmark__suffix">{{ sectionSuffix }}</span><span v-else class="kc-wordmark__tld">.com</span>
@@ -12,7 +12,7 @@
       </NuxtLink>
 
       <!-- Desktop nav pill -->
-      <nav aria-label="Main" class="hidden items-center gap-0.5 rounded-full border border-muted bg-elevated/50 p-1 nav:flex">
+      <nav v-if="section === 'platform'" aria-label="Main" class="hidden items-center gap-0.5 rounded-full border border-muted bg-elevated/50 p-1 nav:flex">
         <div class="group relative">
           <button
             type="button"
@@ -49,13 +49,29 @@
         </NuxtLink>
       </nav>
 
+      <PlatformCommandSearchTrigger
+        v-if="section !== 'platform'"
+        :surface="searchSurface"
+        :label="searchLabel"
+        :aria-label="searchLabel"
+        class="hidden max-w-96 nav:flex"
+      />
+
       <!-- Account actions + the one shared hamburger -->
       <div class="flex shrink-0 items-center gap-2.5">
-        <PlatformAccountCta account />
+        <PlatformCommandSearchTrigger
+          v-if="section !== 'platform'"
+          :surface="searchSurface"
+          :aria-label="searchLabel"
+          compact
+          class="size-11 border-0 nav:hidden"
+        />
+        <PlatformAccountCta account :hide-signed-out-on-mobile="section !== 'platform'" />
         <button
           ref="toggleButton"
           type="button"
-          class="grid size-9.5 place-items-center rounded-lg border border-default text-default transition-colors hover:bg-muted nav:hidden"
+          class="grid size-11 shrink-0 place-items-center rounded-lg border border-default text-default transition-colors hover:bg-muted"
+          :class="section === 'platform' ? 'nav:hidden' : ''"
           :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
           :aria-expanded="mobileOpen"
           aria-controls="platform-mobile-nav"
@@ -70,7 +86,8 @@
     <div
       v-if="mobileOpen"
       id="platform-mobile-nav"
-      class="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-default bg-default py-4.5 nav:hidden"
+      class="max-h-[calc(100vh-4rem)] overflow-y-auto border-t border-default bg-default py-4.5"
+      :class="section === 'platform' ? 'nav:hidden' : ''"
     >
       <nav aria-label="Site" class="mx-auto px-6" :class="containerClass">
         <PlatformCommandSearchTrigger
@@ -82,7 +99,7 @@
         />
 
         <!-- On a blog or docs page, the collection's articles come first: this menu is the page's one navigation. -->
-        <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-4 border-b border-default pb-4" @navigate="close" />
+        <ArticleSidebar v-if="articleNav" :nav="articleNav" class="mb-4 border-b border-default pb-4 nav:hidden" @navigate="close" />
 
         <div class="flex flex-col gap-0.5">
           <details class="group/dis">

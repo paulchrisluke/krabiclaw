@@ -1,5 +1,5 @@
 <template>
-  <div class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
+  <div :class="{ 'platform-docs': section === 'docs' }" class="platform-layout platform-theme min-h-screen flex flex-col font-sans selection:bg-stone-900 selection:text-white">
     <PlatformHeader :section="section" />
     <main class="grow">
       <slot />
@@ -28,16 +28,19 @@ const section = computed(() => route.meta.articleCollection === 'docs' ? 'docs' 
 
 // Krabiclaw's public pages have one theme: dark. It is rendered on the server
 // so a visitor never sees a light frame first.
-useHead({
-  htmlAttrs: { class: 'dark', 'data-theme': 'dark' },
+useHead(() => ({
+  htmlAttrs: { class: section.value === 'docs' ? 'dark platform-documentation' : 'dark', 'data-theme': 'dark', style: 'color-scheme: dark' },
   titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
-})
+}))
 </script>
 
 <style>
+/* Keep native document scrollbars consistent with the platform theme. */
+html.platform-documentation { scrollbar-width: thin; scrollbar-color: var(--ui-text-dimmed) var(--ui-bg); }
 /* Platform-specific base styles */
 .platform-layout {
   background-color: var(--ui-bg);
   color: var(--ui-text);
 }
+.platform-docs h1, .platform-docs h2, .platform-docs h3 { font-family: inherit; }
 </style>

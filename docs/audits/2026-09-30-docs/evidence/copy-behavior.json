@@ -1,0 +1,31 @@
+{
+  "url": "https://krabiclaw.com/docs/make-your-first-site-edit",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "expected": "On my Harbor Studio site, read the English About page and show me its current opening paragraph. Replace only that paragraph with: “We offer small-group creative workshops for adults.” Keep the page URL, other text and media unchanged. Then read the page back and give me its public link.",
+  "firstExactMatch": false,
+  "repeatedExactMatch": true,
+  "accessibleName": "Copy code",
+  "button": {
+    "rect": {
+      "bottom": 438.03125,
+      "height": 31.671875,
+      "left": 114.484375,
+      "right": 146.15625,
+      "top": 406.359375,
+      "width": 31.671875,
+      "x": 114.484375,
+      "y": 406.359375
+    },
+    "style": {
+      "position": "absolute",
+      "right": "171.742px",
+      "top": "317.969px"
+    },
+    "svg": "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" class=\"h-4 w-4\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M4.5 12.75l6 6 9-13.5\"></path></svg>",
+    "text": ""
+  },
+  "keyboardExactMatchAfterScreenshot": true
+}

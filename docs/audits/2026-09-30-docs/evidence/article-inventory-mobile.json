@@ -1,0 +1,62 @@
+[
+  {
+    "h1Count": 1,
+    "heading": "Create and publish your first site",
+    "scrollWidth": 375,
+    "textWidth": 341.09375,
+    "tocVisible": false,
+    "url": "https://krabiclaw.com/docs/deploy-your-site",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  {
+    "h1Count": 1,
+    "heading": "Make your first site edit",
+    "scrollWidth": 375,
+    "textWidth": 341.09375,
+    "tocVisible": false,
+    "url": "https://krabiclaw.com/docs/make-your-first-site-edit",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  {
+    "h1Count": 1,
+    "heading": "Publish a post",
+    "scrollWidth": 375,
+    "textWidth": 341.09375,
+    "tocVisible": false,
+    "url": "https://krabiclaw.com/docs/publish-a-post",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  {
+    "h1Count": 1,
+    "heading": "Connect KrabiClaw to ChatGPT",
+    "scrollWidth": 375,
+    "textWidth": 341.09375,
+    "tocVisible": false,
+    "url": "https://krabiclaw.com/docs/mcp-setup",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  },
+  {
+    "h1Count": 1,
+    "heading": "Invite your team",
+    "scrollWidth": 375,
+    "textWidth": 341.09375,
+    "tocVisible": false,
+    "url": "https://krabiclaw.com/docs/invite-your-team",
+    "viewport": {
+      "height": 844,
+      "width": 390
+    }
+  }
+]

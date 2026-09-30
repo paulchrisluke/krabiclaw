@@ -1,0 +1,119 @@
+[
+  {
+    "url": "https://krabiclaw.com/docs/set-up-notifications",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "Notification categories and the Reservations and bookings delivery options, including Email and WhatsApp.",
+        "complete": true,
+        "height": 482.78125,
+        "naturalHeight": 768,
+        "naturalWidth": 1152,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/c720c1d9-9ebb-4e62-f48f-4fea0a8ecc00/public",
+        "width": 724.171875
+      },
+      {
+        "alt": "Personal profile WhatsApp controls showing the Verified state and the Verify and save action, with the phone number hidden.",
+        "complete": true,
+        "height": 482.78125,
+        "naturalHeight": 768,
+        "naturalWidth": 1152,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/589c81d4-82bd-4f89-c17e-3414fb705a00/public",
+        "width": 724.171875
+      }
+    ]
+  },
+  {
+    "url": "https://krabiclaw.com/docs/invite-your-team",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "Invite a team member form with a blank email field and the Admin and Owner role options.",
+        "complete": true,
+        "height": 482.78125,
+        "naturalHeight": 768,
+        "naturalWidth": 1152,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/dbafea03-a3e8-47f6-d895-c83792697400/public",
+        "width": 724.171875
+      }
+    ]
+  },
+  {
+    "url": "https://krabiclaw.com/docs/customize-brand-theme",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "Illustration of Brand settings and the Logo editor in KrabiClaw.",
+        "complete": true,
+        "height": 343.5234375,
+        "naturalHeight": 648,
+        "naturalWidth": 1366,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/a8ca1d32-15bd-4407-d1cc-e764ce1dd100/public",
+        "width": 724.171875
+      }
+    ]
+  },
+  {
+    "url": "https://krabiclaw.com/docs/add-photos-and-video",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "Select logo media picker with Add files and a drag-and-drop upload area.",
+        "complete": true,
+        "height": 263.4765625,
+        "naturalHeight": 497,
+        "naturalWidth": 1366,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1bbe327e-5a0e-485f-5b42-152b81887300/public",
+        "width": 724.171875
+      }
+    ]
+  },
+  {
+    "url": "https://krabiclaw.com/docs/make-your-first-site-edit",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "Three-step dashboard route from Pages to the About page and its Sections list.",
+        "complete": true,
+        "height": 269.3046875,
+        "naturalHeight": 508,
+        "naturalWidth": 1366,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/54eaec22-0bf2-4e60-0c71-6a05022e8b00/public",
+        "width": 724.171875
+      }
+    ]
+  },
+  {
+    "url": "https://krabiclaw.com/docs/deploy-your-site",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "images": [
+      {
+        "alt": "New organization introduction with Tell us about your business, Make it yours, Publish, and Get started.",
+        "complete": true,
+        "height": 630,
+        "naturalHeight": 768,
+        "naturalWidth": 863,
+        "src": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/c1bd5b0f-f722-42e4-abcb-b2ea1c334500/public",
+        "width": 724.171875
+      }
+    ]
+  }
+]
