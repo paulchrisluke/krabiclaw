@@ -49,10 +49,6 @@ onMounted(() => { hydrated.value = true })
 const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/'
   || (activeLocale.value !== 'en' && route.path === `/${activeLocale.value}`))
-const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
-const sayaStylesheetForRoute = computed(() => {
-  return sayaStylesheetHref
-})
 
 useHead(() => {
   return {
@@ -60,11 +56,13 @@ useHead(() => {
     link: [
       { rel: 'preconnect', href: 'https://imagedelivery.net' },
       { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
-      {
+      // The stable surface file is written by `nuxt build`; under `nuxt dev`
+      // Vite serves the imported entry itself.
+      ...(import.meta.dev ? [] : [{
         key: isHome.value ? 'saya-home-stylesheet' : 'saya-surface-stylesheet',
-        rel: 'stylesheet',
-        href: sayaStylesheetForRoute.value,
-      },
+        rel: 'stylesheet' as const,
+        href: '/_nuxt/surfaces/saya.css',
+      }]),
     ],
     style: isHome.value ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }

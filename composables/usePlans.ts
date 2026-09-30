@@ -3,17 +3,19 @@ import { NEW_SALE_PLAN_ID, STARTER_PLAN_ID } from '~/shared/billing-model'
 
 export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get'
 
-export const usePlans = () => {
+export const usePlans = async () => {
   const nuxtApp = useNuxtApp()
   const requestEvent = useRequestEvent()
-  const { data, status, error } = useAsyncData<Plan[]>('billing-plans', async () => {
+  // Taken before the read: after an await the Nuxt instance is gone.
+  const buildId = useRuntimeConfig().app.buildId
+  const { data, status, error } = await useAsyncData<Plan[]>('billing-plans', async () => {
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
       const [{ cloudflareEnv }, { getCachedPlans }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/billing-plans'),
       ])
-      return await getCachedPlans(cloudflareEnv(requestEvent))
+      return await getCachedPlans(cloudflareEnv(requestEvent), buildId)
     }
     return await applicationFetch<Plan[]>('/api/billing/plans', {
       validate: validateApiArrayItems<Plan>({
@@ -38,10 +40,11 @@ export const usePlans = () => {
   })
 
   if (error.value) throw error.value
+  if (!data.value) throw createError({ statusCode: 500, statusMessage: 'Billing plans were not loaded' })
 
-  const plans = computed(() => data.value)
-  const freePlan = computed(() => plans.value?.find(p => p.id === STARTER_PLAN_ID) ?? null)
-  const growthPlan = computed(() => plans.value?.find(p => p.id === NEW_SALE_PLAN_ID) ?? null)
+  const plans = computed(() => data.value!)
+  const freePlan = computed(() => plans.value.find(p => p.id === STARTER_PLAN_ID) ?? null)
+  const growthPlan = computed(() => plans.value.find(p => p.id === NEW_SALE_PLAN_ID) ?? null)
 
   function monthlyPrice(plan: Plan): number | null {
     return plan.prices.find(p => p.interval === 'month')?.amount ?? null

@@ -1,5 +1,4 @@
 import type Stripe from 'stripe'
-import { useRuntimeConfig } from 'nitro/runtime-config'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { getPlanEntitlements } from './billing-entitlements'
 import {
@@ -370,8 +369,10 @@ const PLANS_CACHE_TTL_SECONDS = 3600
 // keyed by the build id, as the HTML cache is, a deploy that changes the copy
 // is read at once rather than served stale for the hour the TTL allows, which
 // is how the home page kept the old product name after the rename shipped.
-function plansCacheKey(_env: EnvWithOrganizationCache): string {
-  const buildId = useRuntimeConfig().app?.buildId
+// The caller passes the build id from its own runtime config: during SSR this
+// module runs inside the app bundle, where Nitro's runtime-config import is a
+// stub under `nuxt dev`, and Nuxt's useRuntimeConfig() is the real one.
+function plansCacheKey(buildId: string | undefined): string {
   if (!buildId) throw new BillingPlansError('BILLING_PLANS_UNAVAILABLE', 'Billing plans cache has no build id to key on')
   return `stripe-plans:v5:${buildId}`
 }
@@ -385,10 +386,10 @@ function plansCacheKey(_env: EnvWithOrganizationCache): string {
 // lock).
 let _inflight: Promise<Plan[]> | null = null
 
-export async function getCachedPlans(env: EnvWithOrganizationCache): Promise<Plan[]> {
+export async function getCachedPlans(env: EnvWithOrganizationCache, buildId: string | undefined): Promise<Plan[]> {
   try {
     const kv = env.ORGANIZATION_CACHE
-    const cacheKey = plansCacheKey(env)
+    const cacheKey = plansCacheKey(buildId)
 
     if (kv) {
       const cached = await kv.get(cacheKey, 'text')

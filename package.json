@@ -161,9 +161,10 @@
     "nuxt-schema-org": "^6.0.4",
     "postal-mime": "3.0.0",
     "resend": "6.25.0",
-    "satori": "^0.33.4",
+    "satori": "^0.32.0",
     "slugify": "^1.6.9",
     "stripe": "^22.6.0",
-    "vue-i18n": "11.4.10"
+    "vue-i18n": "11.4.10",
+    "zod": "^4.5.4"
   }
 }

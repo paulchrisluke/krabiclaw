@@ -3,35 +3,15 @@ import type { H3Event } from 'nitro/h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { assertRoleAllows } from '~/server/utils/member-access'
-import { getAnalyticsReport, type AnalyticsReport } from '~/server/utils/analytics-report'
+import { getAnalyticsReport } from '~/server/utils/analytics-report'
 import { AnalyticsQueryError, queryOrganizationAnalytics, type AnalyticsQueryInput } from '~/server/utils/analytics-query'
 import { loadOnboardingChecklist } from '~/server/utils/onboarding-checklist'
 import { queryAll, type DbClient } from '~/server/db'
 
-export interface OrganizationReviewsSummary {
-  total: number
-  /** Mean of every approved rating, or null when there are none to average. */
-  average: number | null
-  /** Count per whole star, 1 through 5. */
-  distribution: Array<{ rating: number; count: number }>
-  recent: Array<{ id: string; author: string; rating: number; title: string | null; content: string | null; createdAt: string }>
-}
+import { organizationAnalyticsSchema, type OrganizationAnalyticsReport } from '~/shared/analytics-report'
 
-/** The tenant's setup progress. */
-export interface OrganizationSetupProgress {
-  organizationId: string
-  label: string
-  completed: number
-  total: number
-  items: Array<{ id: string; label: string; done: boolean }>
-}
-
-export interface OrganizationAnalyticsReport {
-  organizationId: string
-  report: AnalyticsReport
-  reviews: OrganizationReviewsSummary
-  setup: OrganizationSetupProgress
-}
+type OrganizationReviewsSummary = OrganizationAnalyticsReport['reviews']
+type OrganizationSetupProgress = OrganizationAnalyticsReport['setup']
 
 const SETUP_ITEM_LABELS: Record<string, string> = {
   business_info: 'Business details',
@@ -40,8 +20,6 @@ const SETUP_ITEM_LABELS: Record<string, string> = {
   story: 'Your story',
   post: 'A first post',
 }
-
-
 
 /**
  * Approved reviews across the sites in scope.
@@ -113,7 +91,7 @@ async function loadSetupProgress(
  */
 export async function loadDashboardOrganizationAnalytics(
   event: H3Event,
-  query: { startDate?: string; endDate?: string; facebookCursor?: string; instagramCursor?: string },
+  query: { startDate?: string; endDate?: string },
 ): Promise<OrganizationAnalyticsReport> {
   const env = cloudflareEnv(event)
   const db = env.DB
@@ -129,18 +107,15 @@ export async function loadDashboardOrganizationAnalytics(
 
   const [report, reviews, setup] = await Promise.all([
     getAnalyticsReport(db, {
-      env,
       organizationId: organization.id,
       startDate: query.startDate,
       endDate: query.endDate,
-      facebookCursor: query.facebookCursor,
-      instagramCursor: query.instagramCursor,
     }),
     loadReviewsSummary(db, [organization.id]),
     loadSetupProgress(event, { id: organization.id, label: organization.name }),
   ])
 
-  return { organizationId: organization.id, report, reviews, setup }
+  return organizationAnalyticsSchema.parse({ organizationId: organization.id, report, reviews, setup })
 }
 
 /**

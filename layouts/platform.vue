@@ -15,11 +15,11 @@ import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import '~/assets/css/platform-entry.css'
 
-const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
-
-useHead(() => ({
-  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
-}))
+// The stable surface file is written by `nuxt build`; under `nuxt dev` Vite serves
+// the imported entry itself, so the link exists only in built output.
+useHead({
+  link: import.meta.dev ? [] : [{ rel: 'stylesheet', href: '/_nuxt/surfaces/platform.css' }],
+})
 
 // Krabiclaw's blog and docs pages name their collection; the header says which.
 const route = useRoute()
