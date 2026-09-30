@@ -44,8 +44,7 @@ const title = computed(() => blockTextOrNull(props.block.data.title))
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
 const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
 const steps = computed(() => blockRecords(props.block.data.items)
-  .map(item => ({ title: blockText(item.title), url: blockTextOrNull(item.url) }))
-  .filter(step => step.title))
+  .map(item => ({ title: blockText(item.title), url: blockTextOrNull(item.url) })))
 
 /** Two frames, filled from the gallery in its order. */
 const pictures = computed(() => {

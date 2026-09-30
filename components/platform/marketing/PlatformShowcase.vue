@@ -97,8 +97,7 @@ const statements = computed(() => blockRecords(props.block.data.items)
       const media = props.block.media.find(asset => asset.slot === `items.${index}.${field.slot}`)
       return { slot: field.slot, label: field.label, url: mediaStillUrl(media), alt: media?.alt_text ?? '' }
     }),
-  }))
-  .filter(statement => statement.text))
+  })))
 
 const galleryId = `kc-showcase-${props.block.id}`
 const active = ref(0)

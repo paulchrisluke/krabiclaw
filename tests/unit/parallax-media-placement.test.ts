@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { isSingleMediaPlacement, isSupportedMediaPlacement } from '../../shared/media-placement-contract.ts'
+import { normalizeTenantPageBlocks } from '../../utils/tenant-page-blocks.ts'
 
 const heroSlots = [
   'parallax_sky',
@@ -23,6 +24,7 @@ test('homepage parallax hero slots are editable single-value content block media
       const responsiveSlot = `${slot}_${breakpoint}`
       assert.equal(isSupportedMediaPlacement({ owner_type: 'content_block', slot: responsiveSlot }), true)
       assert.equal(isSingleMediaPlacement({ owner_type: 'content_block', slot: responsiveSlot }), true)
+      assert.equal(normalizeTenantPageBlocks([{ id: 'hero', type: 'hero', data: {}, media: [{ asset_id: 'layer', slot: responsiveSlot }] }])[0]!.media[0]!.slot, responsiveSlot)
     }
   }
 })

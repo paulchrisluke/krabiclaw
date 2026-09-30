@@ -1,5 +1,6 @@
 import { FAQ_BLOCK_SOURCES } from '../shared/faq-block'
 import { videoUploadDate, youTubeVideoId } from '../shared/youtube-video'
+import { isSupportedMediaPlacement } from '../shared/media-placement-contract'
 
 export const TENANT_PAGE_SCHEMA_VERSION = 1 as const
 
@@ -654,6 +655,20 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
       throw new Error(`${type}.${key} must be an array of objects.`)
     }
   }
+  if (type === 'showcase' || type === 'language_reach' || type === 'steps') {
+    const fields = TENANT_PAGE_BLOCK_REGISTRY[type].fields.items!.of!
+    for (const [index, item] of (data.items as Record<string, unknown>[] | undefined ?? []).entries()) {
+      for (const [key, field] of Object.entries(fields)) {
+        const value = item[key]
+        if (field.required && (typeof value !== 'string' || !value.trim())) {
+          throw new Error(`${type}.items[${index}].${key} is required.`)
+        }
+        if (field.kind === 'enum' && !field.options?.some(option => option.value === value)) {
+          throw new Error(`${type}.items[${index}].${key} must be one of: ${field.options?.map(option => option.value).join(', ')}.`)
+        }
+      }
+    }
+  }
   // These blocks select canonical read-only records; they never store copies.
   // A testimonial grid has no source to choose — reviews are the site's reviews —
   // so it declares no `source` field. The editor used to offer "Items I write"
@@ -844,7 +859,7 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
       return { asset_id: assetId, slot, sort_order: mediaIndex }
     })
     const canonicalSlot = type === 'gallery' ? 'gallery' : type === 'hero' || type === 'image' ? 'media' : null
-    if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot)) {
+    if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot && !(type === 'hero' && item.slot.startsWith('parallax_') && isSupportedMediaPlacement({ owner_type: 'content_block', slot: item.slot })))) {
       throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
     }
     if (canonicalSlot) {

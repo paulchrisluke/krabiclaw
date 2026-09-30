@@ -95,12 +95,12 @@ const subtitle = computed(() => blockTextOrNull(props.block.data.subtitle))
 const description = computed(() => blockTextOrNull(props.block.data.description))
 const pinLabel = computed(() => blockTextOrNull(props.block.data.pin_label))
 
-const languages = computed(() => blockRecords(props.block.data.items).flatMap((item, index) => {
+const languages = computed(() => blockRecords(props.block.data.items).map((item, index) => {
   const locale = blockText(item.locale)
   const places = LANGUAGE_PLACES[locale]
-  if (!places) return []
+  if (!places) throw new Error(`language_reach.items[${index}].locale is unsupported.`)
   const media = blockMedia(props.block, `items.${index}.image`)[0]
-  return [{ locale, name: blockText(item.title) || locale, flag: places.flag, pins: places.pins, image: mediaStillUrl(media), alt: media?.alt_text ?? '' }]
+  return { locale, name: blockText(item.title), flag: places.flag, pins: places.pins, image: mediaStillUrl(media), alt: media?.alt_text ?? '' }
 }))
 
 const active = ref(0)
