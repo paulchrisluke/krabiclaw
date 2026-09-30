@@ -29,7 +29,9 @@ const organizationId = await useDashboardOrganizationId()
 const locationId = computed(() => typeof route.query.locationId === 'string' ? route.query.locationId : null)
 const editor = await useLocationEditor(organizationId, locationId, null)
 
-const to = (segment: string) => `${level.path.value}/${segment}?locationId=${encodeURIComponent(locationId.value ?? '')}`
+const router = useRouter()
+// Each leaf keeps the calendar's query — its location and view — so Close lands on the same calendar.
+const to = (segment: string) => router.resolve({ path: `${level.path.value}/${segment}`, query: route.query }).fullPath
 const groups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'availability',
