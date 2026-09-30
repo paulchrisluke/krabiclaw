@@ -53,7 +53,7 @@ export async function resolveOrganizationAnalyticsContext(db: DbClient, organiza
 
 // Events are the complete record, including visits collected before session
 // summaries existed. A summary contributes last-touch context, never eligibility.
-const sessionFactsSql = (organization: string) => `SELECT e.organization_id, e.session_id, e.visitor_id,
+const sessionFactsSql = (organization: string, candidates: string) => `SELECT e.organization_id, e.session_id, e.visitor_id,
   MIN(e.created_at) started_at, MAX(e.created_at) last_seen_at,
   SUM(e.duration_seconds) duration_seconds,
   COALESCE(s.payload_json ->> '$.attribution.source', 'Attribution not recorded') source,
@@ -62,7 +62,7 @@ const sessionFactsSql = (organization: string) => `SELECT e.organization_id, e.s
   (s.payload_json ->> '$.attribution.content') content
   FROM analytics_events e LEFT JOIN analytics_summaries s ON s.organization_id = e.organization_id
     AND s.kind = 'session' AND s.date = '' AND s.key = e.session_id
-  WHERE e.organization_id = ${organization} AND e.kind = 'pageview' AND e.session_id IS NOT NULL
+  WHERE e.organization_id = ${organization} AND e.kind = 'pageview' AND e.session_id IN (${candidates})
   GROUP BY e.organization_id, e.session_id`
 
 // `views` is materialized: inlined, the planner folded it into the
@@ -75,7 +75,12 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
       (payload_json ->> '$.user_agent') user_agent, (payload_json ->> '$.referrer') referrer
     FROM analytics_events e JOIN input i ON e.organization_id = i.organization_id
     WHERE e.kind = 'pageview' AND e.created_at >= i.starts_at AND e.created_at < i.ends_at
-  ), sessions AS (${sessionFactsSql('(SELECT organization_id FROM input)')}),
+  ), session_candidates AS MATERIALIZED (
+    SELECT DISTINCT candidate.session_id FROM analytics_events candidate JOIN input i ON candidate.organization_id = i.organization_id
+    WHERE candidate.kind = 'pageview' AND candidate.created_at >= i.starts_at
+      AND EXISTS (SELECT 1 FROM analytics_events previous WHERE previous.organization_id = candidate.organization_id
+        AND previous.kind = 'pageview' AND previous.session_id = candidate.session_id AND previous.created_at < i.ends_at)
+  ), sessions AS (${sessionFactsSql('(SELECT organization_id FROM input)', 'SELECT session_id FROM session_candidates')}),
   metrics AS (SELECT COUNT(*) page_views, COUNT(DISTINCT session_id) unique_sessions,
     COUNT(DISTINCT visitor_id) unique_visitors FROM views),
   dimensions AS (
@@ -322,10 +327,9 @@ export async function getAnalyticsReport(db: DbClient, input: {
           AND e.created_at >= ? AND e.created_at < ? AND (e.payload_json ->> '$.event_name') IN (${OUTCOME_EVENT_SQL_LIST}))) converting,
         COALESCE(SUM((SELECT COUNT(*) FROM analytics_events e WHERE e.kind = 'conversion' AND e.organization_id = facts.organization_id AND e.session_id = facts.session_id
           AND e.created_at >= ? AND e.created_at < ? AND (e.payload_json ->> '$.event_name') IN (${OUTCOME_EVENT_SQL_LIST}))), 0) outcome_events
-      FROM (${sessionFactsSql('?')}) facts WHERE EXISTS (
-        SELECT 1 FROM analytics_events eligible WHERE eligible.organization_id = facts.organization_id
-          AND eligible.session_id = facts.session_id AND eligible.kind = 'pageview'
-          AND eligible.created_at >= ? AND eligible.created_at < ?) GROUP BY 1,2,3,4`, [start, end, start, end, input.organizationId, start, end]),
+      FROM (${sessionFactsSql('?', `SELECT DISTINCT session_id FROM analytics_events
+        WHERE organization_id = ? AND kind = 'pageview' AND created_at >= ? AND created_at < ?`)}) facts
+      GROUP BY 1,2,3,4`, [start, end, start, end, input.organizationId, input.organizationId, start, end]),
   ])
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const uniqueSessions = n(sessionStats?.sessions)

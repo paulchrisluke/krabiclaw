@@ -14,6 +14,6 @@ test('reconciliation removes duplicate GA senders and gates pageviews without a 
   assert.equal(config.historyChange, false)
   assert.deepEqual(config.tools['ga-tenant-platform']!.actions.AllPageviews!.firingTriggers, ['krabiclaw-native-pageview'])
   assert.equal(config.triggers['krabiclaw-native-pageview']!.system, undefined)
-  assert.equal((config.triggers.AllTracks!.loadRules as unknown[]).length, 1)
+  assert.deepEqual(config.triggers.AllTracks!.loadRules, [{ id: 'kc-exclude-native-pageview', match: '{{ client.__zarazTrack }}', op: 'NOT_MATCH_REGEX', value: '^krabiclaw_native_pageview$' }])
   assert.equal(reconcileZarazAnalyticsConfig(config, input).updated, false)
 })

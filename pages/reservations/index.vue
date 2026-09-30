@@ -340,7 +340,6 @@ async function loadAvailability() {
   const requestId = ++availabilityRequestId
   const locationId = reservationForm.value.location_id
   availabilityLoading.value = true
-  submitError.value = null
   try {
     const today = new Date()
     const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
