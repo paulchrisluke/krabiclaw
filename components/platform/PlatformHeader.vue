@@ -66,7 +66,7 @@
           compact
           class="size-11 border-0 nav:hidden"
         />
-        <div :class="section === 'platform' ? '' : 'hidden nav:block'"><PlatformAccountCta account /></div>
+        <PlatformAccountCta account :hide-signed-out-on-mobile="section !== 'platform'" />
         <button
           ref="toggleButton"
           type="button"

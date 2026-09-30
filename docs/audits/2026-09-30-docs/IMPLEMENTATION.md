@@ -49,3 +49,22 @@ Rebuilt production Worker, repeated quality checks and five Chromium tests passe
 ### Proposed search follow-up across themes
 
 Use one collection-aware header contract for platform, Saya and Blawby blogs/docs: desktop search field, mobile 44px magnifier beside the menu, existing menu search as a secondary entry, and one shared dialog/state. Keep tenant searches scoped to their own organization and active collection; platform docs search can offer Docs/Blog/Help groups. Use short trigger labels (Search docs/Search blog) and explain the broader scope inside the dialog. Apply each theme's typography/colors to the dialog and results. Preserve keyboard shortcuts, autofocus, focus return, Escape and arrow-key navigation. Verify keyboard/mobile behavior, empty/error/results states and tenant isolation for each theme before rollout. This is a plan; tenant header/search changes have not been implemented in this revision.
+
+
+## Category landing revision and CI follow-up
+
+The category pages are now editorial starting points rather than bare link lists. Getting Started uses the published Start here excerpt for its introduction, features the existing account-creation guide beside the original onboarding illustration/caption, then presents all remaining category guides with their actual descriptions. Build & Edit, Run Your Business, AI Assistants and Account & Settings use the same feature/guides/next-step structure. Illustrations are taken from actual published image blocks when available; categories without one do not receive invented artwork. Related groups only render existing categories and their published tasks.
+
+The sidebar is 280px wide with smaller 13px text, less title wrapping, and a thin visible scrollbar. The document scrollbar uses the existing dark palette. Platform docs return to the existing dark theme; tenant theme tokens are preserved. Getting Started's restrained 32px title, account feature, descriptive guide cards and relevant Build & Edit/AI Assistants resources replace the sparse oversized landing. Mobile stacks the same content without overflow.
+
+The category feature reads use the existing published-article data owner with an explicit option to preserve the category's locale representations. Canonical ItemList positions now reflect the visible feature-first order. Existing schema identities, actual article content, seven illustrations, copy behavior and public slugs remain intact. No CMS write or deployment occurred.
+
+[Local baseline](category-revision/before-desktop.png), [Getting Started desktop](category-revision/category-getting-started-desktop.png), [mobile](category-revision/category-getting-started-mobile.png). [All five category desktop/mobile captures and manifest](category-revision/). The supplied Library references could not be materialized because their supported read/materialize actions were unavailable here; exact supplied pixels were not inspected. The Library skill's resolved-reference flow confirmed that preparation is required, so no alternate transfer path was attempted. Supplied IDs/filenames and the limitation are retained in references.json.
+
+### Validation and CI diagnosis
+
+Production Worker build and complete quality checks passed. Seven targeted docs/browser tests passed, including rendered JSON-LD across all 26 docs routes, all five category desktop/mobile landings, image loading, real published task titles/descriptions and URLs, feature-first schema order, Nuxt client category navigation, no overflow, mobile contents/copy/search and the signed-in account control.
+
+The CI account regression was caused by the earlier reading-header wrapper hiding the entire account area below the desktop breakpoint. The fix hides only signed-out conversion CTAs; the signed-in avatar/disclosure remains visible. A focused credential-based test verifies the same 390px docs account invariant reported by CI.
+
+The reported dashboard Archive failure was not reproduced: both desktop and mobile row-menu archive/unarchive/keyboard journeys passed against disposable local fixtures. No dashboard changes were made; these results do not establish why CI failed. The broader post-login auth journey was also attempted, but failed before its final mobile check when local /pricing returned 503. The focused signed-in docs test passes. Combined run: nine passed, one failed at /pricing. The complete production auth journey therefore remains for CI with its configured pricing environment.

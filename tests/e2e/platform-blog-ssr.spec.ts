@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { loginAs } from './helpers/auth'
 
 test('platform blog renders its public API posts in server HTML', async ({ request }) => {
   const api = await request.get('/api/public/blog')
@@ -190,4 +191,71 @@ test('docs reading header exposes one mobile search shortcut without a second co
   await page.screenshot({ path: testInfo.outputPath('docs-article-mobile.png') })
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.screenshot({ path: testInfo.outputPath('docs-article-desktop.png') })
+})
+
+
+test('docs category landings explain published tasks and preserve canonical guide identities', async ({ page, request, baseURL }, testInfo) => {
+  const response = await request.get('/api/public/blog?collection=docs')
+  const { posts, categories } = await response.json() as { posts: Array<{ slug: string; title: string; excerpt: string | null; category: { slug: string } }>; categories: Array<{ slug: string; name: string }> }
+  await page.setViewportSize({ width: 1440, height: 900 })
+  for (const category of categories) {
+    await page.goto(`/docs/category/${category.slug}`)
+    await expect(page.locator('h1')).toHaveText(category.name)
+    await expect(page.locator('.docs-category > header > p')).toBeVisible()
+    const own = posts.filter(post => post.category.slug === category.slug)
+    const feature = page.locator('[data-category-feature]')
+    await expect(feature).toBeVisible()
+    await expect(page.locator('[data-category-guides] article')).toHaveCount(own.length - 1)
+    for (const post of own) {
+      const link = page.locator(`[data-category-feature] a[href="/docs/${post.slug}"], [data-category-guides] a[href="/docs/${post.slug}"]`)
+      await expect(link).toHaveCount(1)
+      if (post.excerpt) await expect(page.locator('.docs-category')).toContainText(post.excerpt)
+    }
+    // Schema and visible primary guide order describe the same real articles.
+    const schema = await page.locator('script[type="application/ld+json"]').allTextContents()
+    const nodes = schema.flatMap(text => JSON.parse(text)['@graph']) as Array<Record<string, unknown>>
+    const list = requireNode(nodes, 'ItemList')
+    const entries = list.itemListElement as Array<{ item: { url: string } }>
+    const visiblePaths = await page.locator('[data-category-feature] a, [data-category-guides] a').evaluateAll(links => links.map(link => (link as HTMLAnchorElement).pathname))
+    expect(entries.map(entry => new URL(entry.item.url).pathname)).toEqual(visiblePaths)
+    const links = await page.locator('.docs-category a').evaluateAll(links => links.map(link => (link as HTMLAnchorElement).href))
+    links.forEach(link => {
+      const path = new URL(link).pathname
+      expect(new URL(link).origin).toBe(new URL(baseURL!).origin)
+      expect(posts.some(post => path === `/docs/${post.slug}`) || categories.some(item => path === `/docs/category/${item.slug}`) || path === '/docs').toBe(true)
+    })
+    if (category.slug === 'getting-started') {
+      await expect(feature.getByRole('heading')).toHaveText('Create your KrabiClaw account')
+      const image = page.locator('[data-category-illustration]')
+      await expect(image).toHaveAttribute('src', /c1bd5b0f-f722-42e4-abcb-b2ea1c334500/)
+      await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
+    }
+    for (const image of await page.locator('[data-category-illustration]').all()) {
+      await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)).toBe(true)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath(`category-${category.slug}-desktop.png`), fullPage: true })
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await expect(feature).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath(`category-${category.slug}-mobile.png`), fullPage: true })
+    await page.setViewportSize({ width: 1440, height: 900 })
+  }
+  // Exercise Nuxt client navigation, rather than proving only independent SSR loads.
+  await page.locator('aside a[href="/docs/category/getting-started"]').click()
+  await expect(page.locator('h1')).toHaveText('Getting Started')
+  await expect(page.locator('[data-category-feature] h2')).toHaveText('Create your KrabiClaw account')
+})
+
+
+test('mobile docs keep the signed-in account control visible beside search and navigation', async ({ page, baseURL }) => {
+  await loginAs(page.request, baseURL!, 'user-e2e-oauth-private-cimd')
+  const session = await (await page.request.get('/api/auth/get-session')).json()
+  await page.setViewportSize({ width: 390, height: 900 })
+  await page.goto('/docs')
+  const header = page.locator('header').first()
+  await expect(header.getByLabel(`Account: ${session.user.name}`)).toBeVisible()
+  await expect(header.getByRole('button', { name: 'Search docs, blog, help...' }).filter({ visible: true })).toBeVisible()
+  await expect(page.locator('a[href^="/signup"]')).toHaveCount(0)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

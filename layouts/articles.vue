@@ -47,8 +47,8 @@ const searchLabel = computed(() => t('saya.search.dialog_title', { surface: nav.
 // The sidebar shows exactly where the template's header stops collapsing:
 // Krabiclaw's header at `nav` (1080px), the tenant templates' at `lg`.
 const split = computed(() => template.value.slug === 'platform'
-  ? { grid: 'nav:grid nav:grid-cols-[220px_minmax(0,1fr)] nav:gap-12', aside: 'nav:sticky nav:top-28 nav:block nav:h-fit nav:max-h-[calc(100vh-8rem)] nav:overflow-y-auto' }
-  : { grid: 'lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10', aside: 'lg:sticky lg:top-28 lg:block lg:h-fit lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto' })
+  ? { grid: isDocs.value ? 'nav:grid nav:grid-cols-[280px_minmax(0,1fr)] nav:gap-10' : 'nav:grid nav:grid-cols-[220px_minmax(0,1fr)] nav:gap-12', aside: 'nav:sticky nav:top-28 nav:block nav:h-fit nav:max-h-[calc(100vh-8rem)] nav:overflow-y-auto' }
+  : { grid: isDocs.value ? 'lg:grid lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-10' : 'lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10', aside: 'lg:sticky lg:top-28 lg:block lg:h-fit lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto' })
 </script>
 
 <style>
@@ -56,7 +56,15 @@ const split = computed(() => template.value.slug === 'platform'
 .docs-shell h1, .docs-shell h2, .docs-shell h3 { font-family: inherit; }
 .docs-shell h1 { font-weight: 650; }
 .docs-shell section > h2 { font-weight: 650; }
-.docs-shell > aside { border-right: 1px solid var(--ui-border); padding-right: 1.5rem; }
+.docs-shell > aside { border-right: 1px solid var(--ui-border); padding-right: 1.25rem; scrollbar-width: thin; scrollbar-color: var(--ui-text-dimmed) transparent; scrollbar-gutter: stable; }
+.docs-shell > aside::-webkit-scrollbar { width: 6px; }
+.docs-shell > aside::-webkit-scrollbar-track { background: transparent; }
+.docs-shell > aside::-webkit-scrollbar-thumb { background: var(--ui-text-dimmed); border-radius: 6px; }
+.docs-shell > aside nav { font-size: 0.8125rem; line-height: 1.5; }
+.docs-shell > aside summary { margin-bottom: 0.25rem; }
+.docs-shell > aside details { margin-bottom: 1rem; }
+.docs-shell .docs-category h1 { font-size: 2rem; line-height: 1.2; }
+.docs-shell .docs-category section > h2 { font-weight: 600; }
 .docs-shell .docs-task a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .docs-shell .blog-article-header { margin-bottom: 2rem; }
 .docs-shell .blog-article-header > div { border: 0; padding: 0; margin-top: 1.25rem; }

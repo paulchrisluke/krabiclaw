@@ -1,0 +1,123 @@
+[
+  {
+    "file": "before-desktop.png",
+    "width": 1440,
+    "height": 900,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "viewport"
+  },
+  {
+    "file": "category-ai-assistants-desktop.png",
+    "width": 1440,
+    "height": 1371,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-ai-assistants-mobile.png",
+    "width": 390,
+    "height": 2042,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-build-and-edit-desktop.png",
+    "width": 1440,
+    "height": 1593,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-build-and-edit-mobile.png",
+    "width": 390,
+    "height": 2398,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-getting-started-desktop.png",
+    "width": 1440,
+    "height": 1759,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-getting-started-mobile.png",
+    "width": 390,
+    "height": 2820,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-integrations-desktop.png",
+    "width": 1440,
+    "height": 1558,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-integrations-mobile.png",
+    "width": 390,
+    "height": 2208,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-run-your-business-desktop.png",
+    "width": 1440,
+    "height": 1689,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "capture": "full page"
+  },
+  {
+    "file": "category-run-your-business-mobile.png",
+    "width": 390,
+    "height": 2834,
+    "surface": "local production Worker, public anonymous docs",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "capture": "full page"
+  }
+]
