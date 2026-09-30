@@ -42,7 +42,7 @@
 
           <div :class="item.description || $slots.caption ? 'lg:grid-cols-[minmax(0,1fr)_20rem]' : ''" class="relative z-10 grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4 px-4 pb-5 pt-20 lg:grid-rows-1 lg:gap-8 lg:px-16">
             <div class="min-h-0 min-w-0">
-              <video v-if="item.kind === 'video'" :ref="el => setVideoRef(el, i)" :src="item.url" playsinline controls :poster="typeof item.poster === 'string' ? item.poster : undefined" preload="metadata" class="h-full w-full object-contain" />
+              <video v-if="item.kind === 'video'" :ref="el => setVideoRef(el, i)" :src="item.url" playsinline controls tabindex="0" :poster="typeof item.poster === 'string' ? item.poster : undefined" preload="metadata" class="h-full w-full object-contain" />
               <img v-else :src="item.url" :alt="item.alt || ''" class="h-full w-full object-contain">
             </div>
             <div v-if="item.description || $slots.caption" class="max-h-[25dvh] min-h-0 overflow-y-auto overscroll-contain rounded-xl bg-black/70 p-5 lg:self-center lg:max-h-[80dvh]">
