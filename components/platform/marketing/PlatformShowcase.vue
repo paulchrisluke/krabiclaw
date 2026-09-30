@@ -7,14 +7,11 @@
   -->
   <section
     v-if="statements.length"
+    ref="carousel"
     class="kc-showcase"
     data-parity-section="showcase"
     aria-roledescription="carousel"
     :aria-label="statements.map(statement => statement.text).join(' ')"
-    @mouseenter="paused = true"
-    @mouseleave="paused = false"
-    @focusin="paused = true"
-    @focusout="paused = false"
   >
     <div class="kc-showcase__inner">
       <h2 class="kc-showcase__headline">
@@ -80,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+import { useElementHover, useFocusWithin } from '@vueuse/core'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { TENANT_PAGE_BLOCK_REGISTRY } from '~/utils/tenant-page-blocks'
@@ -104,7 +102,10 @@ const statements = computed(() => blockRecords(props.block.data.items)
 
 const galleryId = `kc-showcase-${props.block.id}`
 const active = ref(0)
-const paused = ref(false)
+const carousel = useTemplateRef('carousel')
+const hovered = useElementHover(carousel)
+const { focused } = useFocusWithin(carousel)
+const paused = computed(() => hovered.value || focused.value)
 
 const AUTOPLAY_INTERVAL_MS = 4500
 let timer: ReturnType<typeof setInterval> | null = null

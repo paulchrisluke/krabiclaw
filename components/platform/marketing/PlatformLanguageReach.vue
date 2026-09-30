@@ -7,12 +7,9 @@
   -->
   <section
     v-if="languages.length"
+    ref="carousel"
     class="kc-reach"
     data-parity-section="language-reach"
-    @mouseenter="paused = true"
-    @mouseleave="paused = false"
-    @focusin="paused = true"
-    @focusout="paused = false"
   >
     <div class="kc-reach__inner">
       <h2 v-if="title" class="kc-reach__heading">{{ title }}</h2>
@@ -20,10 +17,10 @@
       <div class="kc-reach__card">
         <div class="kc-reach__map" aria-hidden="true">
           <div class="kc-reach__dots" />
-          <template v-for="(language, index) in languages" :key="language.locale">
+          <template v-for="(language, index) in languages" :key="index">
             <span
               v-for="([x, y], pin) in language.pins"
-              :key="`${language.locale}-${pin}`"
+              :key="`${index}-${pin}`"
               class="kc-reach__pin"
               :class="{ 'kc-reach__pin--active': index === active }"
               :style="{ left: `${x}%`, top: `${y}%`, transitionDelay: index === active ? `${pin * 90}ms` : '0ms' }"
@@ -36,7 +33,7 @@
         </div>
 
         <ul class="kc-reach__flags" aria-label="Languages">
-          <li v-for="(language, index) in languages" :key="language.locale">
+          <li v-for="(language, index) in languages" :key="index">
             <button
               type="button"
               class="kc-reach__flag"
@@ -53,7 +50,7 @@
         <div class="kc-reach__stack">
           <figure
             v-for="(language, index) in languages"
-            :key="language.locale"
+            :key="index"
             class="kc-reach__site"
             :class="[`kc-reach__site--${place(index)}`, !language.image && 'kc-reach__site--empty']"
             :aria-hidden="index !== active"
@@ -73,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+import { useElementHover, useFocusWithin } from '@vueuse/core'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockMedia, blockRecords, blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
@@ -106,7 +104,10 @@ const languages = computed(() => blockRecords(props.block.data.items).flatMap((i
 }))
 
 const active = ref(0)
-const paused = ref(false)
+const carousel = useTemplateRef('carousel')
+const hovered = useElementHover(carousel)
+const { focused } = useFocusWithin(carousel)
+const paused = computed(() => hovered.value || focused.value)
 
 /** Front, the one before it behind on the left, the one after behind on the right. */
 function place(index: number): 'front' | 'before' | 'after' | 'away' {

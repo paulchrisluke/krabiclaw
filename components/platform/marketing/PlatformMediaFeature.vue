@@ -30,9 +30,10 @@
           v-if="media?.kind === 'video' && media.public_url"
           :src="media.public_url"
           :poster="media.thumbnail_url ?? undefined"
-          autoplay
+          :autoplay="reducedMotion !== 'reduce'"
           muted
-          loop
+          :loop="reducedMotion !== 'reduce'"
+          :controls="reducedMotion === 'reduce'"
           playsinline
           :aria-label="media.alt_text ?? undefined"
         />
@@ -51,12 +52,14 @@
 </template>
 
 <script setup lang="ts">
+import { usePreferredReducedMotion } from '@vueuse/core'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockMedia, blockTextOrNull, isInternalRoute } from '~/utils/tenant-page-block-data'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const reducedMotion = usePreferredReducedMotion()
 const { localePath } = useI18n()
 function route(url: string) { return isInternalRoute(url) ? localePath(url) : url }
 
