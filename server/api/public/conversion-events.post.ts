@@ -7,6 +7,7 @@ import { recordOrganizationConversionEvent, type ConversionEntityType, type Conv
 import { BROWSER_INTERACTION_EVENT_NAMES, CONVERSION_EVENT_CATALOG, type OrganizationConversionEventName } from '~/utils/organization-conversion-events'
 import { isCanonicalEventId } from '~/server/utils/pageview-tracking'
 import { normalizeVertical } from '~/utils/vertical-copy'
+import { getLocationReservationConfig } from '~/server/utils/reservations'
 import { defineHandler } from 'nitro'
 
 // Only public interactions arrive here; every outcome is produced by the server, and signed-in
@@ -97,6 +98,12 @@ export default defineHandler(async (event) => {
     if (!product || !destinationHost(product.order_url)) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     const destinationHostname = new URL(product.order_url).hostname.toLowerCase()
     entityType = 'product'; ctaDestination = destinationHostname; pageType = 'product'; metadata = { product_id: product.id, destination_hostname: destinationHostname }
+  } else if (eventName === 'checkout_start' && !body.product_id) {
+    stage = 'started'
+    locationId = cleanString(body.location_id, 120) || null
+    const location = locationId ? await getLocationReservationConfig(db, { organizationId, locationId }) : null
+    if (!location) return jsonResponse({ error: 'Reservation location not found' }, { status: 404 })
+    pageType = 'reservations'
   } else if (eventName === 'product_view' || eventName === 'checkout_start') {
     stage = eventName === 'product_view' ? 'viewed' : 'started'
     locationId = cleanString(body.location_id, 120) || null

@@ -304,6 +304,7 @@ function openBookingModal(loc?: ApiRecord) {
   skipLocationStep.value = Boolean(loc)
   if (loc) reservationForm.value.location_id = String(loc.id ?? '')
   bookingStep.value = startStep.value
+  trackCheckoutStart(null, reservationForm.value.location_id, null)
 }
 
 function nextStep() {
@@ -327,6 +328,7 @@ const timeSelection = ref<TimeSlotSelection | null>(null)
 // ── Availability (day-grouped, capacity-aware — server/utils/reservations.ts) ──
 const availabilityDates = ref<RawDateAvailability[]>([])
 const availabilityLoading = ref(false)
+const submitError = ref<string | null>(null)
 
 let availabilityRequestId = 0
 
@@ -346,10 +348,11 @@ async function loadAvailability() {
     })
     // Ignore stale responses from a location that was changed away from before this resolved
     if (requestId !== availabilityRequestId || locationId !== reservationForm.value.location_id) return
-    availabilityDates.value = res.dates ?? []
-  } catch {
+    availabilityDates.value = res.dates
+  } catch (error) {
     if (requestId !== availabilityRequestId || locationId !== reservationForm.value.location_id) return
     availabilityDates.value = []
+    submitError.value = error instanceof Error ? error.message : 'Failed to load availability'
   } finally {
     if (requestId === availabilityRequestId) availabilityLoading.value = false
   }
@@ -364,8 +367,7 @@ watch(() => reservationForm.value.location_id, (id) => {
 
 // ── Submission ────────────────────────────────────────────────────────────
 const submitting = ref(false)
-const { mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
-const submitError = ref<string | null>(null)
+const { mirrorSubmission, pageEventId, trackCheckoutStart } = useOrganizationConversionTracking()
 
 async function handleContactSubmit(contactState: { name: string, email: string, phone?: string, notes?: string }) {
   reservationForm.value.name = contactState.name

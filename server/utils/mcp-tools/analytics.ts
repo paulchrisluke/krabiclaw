@@ -39,6 +39,7 @@ export const ANALYTICS_TOOLS: McpToolDefinition[] = [
         properties: {
           ...Object.fromEntries(Object.entries(ANALYTICS_QUERY_FIELDS).map(([name, description]) => [name, { type: 'string', description }])),
           path_prefix: { type: 'string', description: 'A public path prefix such as /th/ or /locations/main' },
+          campaign_prefix: { type: 'string', description: 'Literal, case-sensitive campaign prefix under the selected attribution basis; % and _ are ordinary characters.' },
           summary_kind: { type: 'string', enum: ['organization_day', 'page_day', 'dimension_day'], description: 'daily_summaries only (required): the summary grain: one row per day, per day and public page path, or per day and country/city/device/referrer value.' },
           dimension: { type: 'string', enum: ['country', 'city', 'device', 'referrer'], description: 'daily_summaries with dimension_day: the dimension to read.' },
           value: { type: 'string', description: 'daily_summaries with dimension_day: one value of the dimension.' },

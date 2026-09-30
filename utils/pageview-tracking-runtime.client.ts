@@ -4,7 +4,7 @@ import { isTrackablePath } from '~/utils/pageview-path'
 import { NATIVE_PAGEVIEW_ZARAZ_EVENT } from '~/utils/zaraz-consent'
 
 interface ZarazPageviewApi {
-  track?: (name: string, properties?: Record<string, unknown>) => void
+  track?: (name: string, properties?: Record<string, unknown>) => Promise<void>
 }
 
 /**
@@ -81,7 +81,7 @@ export function registerPageviewTracking() {
   // an error for one it could not. Neither is a persisted event. A failure is reported through the
   // application's own error hook — the one the error tracker already listens to — and never breaks
   // the page the visitor is on.
-  const send = async (payload: Record<string, unknown>): Promise<boolean> => {
+  const send = async (payload: Record<string, unknown>) => {
     const response = await fetch('/api/analytics/track', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -90,22 +90,29 @@ export function registerPageviewTracking() {
       keepalive: true,
     })
     if (!response.ok) throw new Error(`Analytics collection was rejected (${response.status})`)
-    const result = await response.json() as { ignored?: boolean }
-    return result.ignored !== true
+    return await response.json() as { ignored?: boolean; ga4_delivery?: { claimId?: string } }
   }
   const report = (error: unknown) => {
     void nuxtApp.callHook('vue:error', error, null, 'analytics-collector')
-    return false
+    return false as const
   }
-  const deliver = (after: Promise<boolean>, payload: Record<string, unknown>) =>
-    after.then(() => send(payload)).catch(report)
   // Google Analytics is a destination of the native record: its page view is sent, manually, only
   // once the collector accepted this exact pageview, and names it by the native event id. An
   // ignored or failed pageview sends nothing.
   const deliverPageview = async (after: Promise<boolean>, page: TrackedPage): Promise<boolean> => {
-    const recorded = await deliver(after, page.pageview!)
-    if (recorded) win.zaraz?.track?.(NATIVE_PAGEVIEW_ZARAZ_EVENT, { event_id: page.eventId })
-    return recorded
+    await after
+    const result = await send(page.pageview!).catch(report)
+    if (!result || result.ignored) return false
+    const claimId = result.ga4_delivery?.claimId
+    if (claimId) {
+      let deliveryStatus = 'dispatched'
+      try {
+        if (!win.zaraz?.track) throw new Error('Zaraz is unavailable for the claimed pageview')
+        await win.zaraz.track(NATIVE_PAGEVIEW_ZARAZ_EVENT, { event_id: page.eventId, page_location: new URL(page.fullPath, window.location.origin).href })
+      } catch (error) { deliveryStatus = 'failed'; report(error) }
+      await send({ eventId: page.eventId, eventType: 'ga4_delivery', pagePath: page.path, claimId, deliveryStatus }).catch(report)
+    }
+    return true
   }
 
   // Observed at navigation time: the destination's own query parameters, its path, and the moment.

@@ -99,9 +99,13 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
       .then((eventId) => { if (eventId && ecommerce) window.zaraz?.ecommerce?.('Product Viewed', { ...ecommerce, event_id: eventId }) })
   }
 
-  function trackCheckoutStart(productId: string, locationId: string, ecommerce: Record<string, unknown>, variantId?: string | null) {
-    void recordNative({ event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: 'product' }, variantId)
-      .then((eventId) => { if (eventId) window.zaraz?.ecommerce?.('Checkout Started', { ...ecommerce, event_id: eventId }) })
+  function trackCheckoutStart(productId: string | null, locationId: string, ecommerce: Record<string, unknown> | null, variantId?: string | null) {
+    const payload: ConversionPayload = { event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: productId ? 'product' : 'reservations' }
+    void recordNative(payload, variantId)
+      .then((eventId) => { if (eventId) {
+        if (ecommerce) window.zaraz?.ecommerce?.('Checkout Started', { ...ecommerce, event_id: eventId })
+        else mirrorConversion(payload, eventId)
+      } })
   }
 
   function trackConsultationClick(pageType: string, pagePath: string, destination?: string | null, pageId?: string | null) {
