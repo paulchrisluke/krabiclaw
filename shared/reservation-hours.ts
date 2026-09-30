@@ -120,8 +120,10 @@ export function openDates(special: SpecialHours, from: string, to: string): Spec
   assertCalendarDate(to)
   if (to < from) throw new Error('A range ends on or after the day it starts')
   if (!special) return null
-  const next = special.flatMap((entry) => {
-    if (entry.kind !== 'closure' || entry.starts_on > to || (entry.ends_on !== null && entry.ends_on < from)) return [entry]
+  const next = special.flatMap((entry): NonNullable<SpecialHours> => {
+    // Dated hours with no periods close that date as surely as a closure does.
+    if (entry.kind === 'hours') return entry.periods.length === 0 && entry.date >= from && entry.date <= to ? [] : [entry]
+    if (entry.starts_on > to || (entry.ends_on !== null && entry.ends_on < from)) return [entry]
     const before = entry.starts_on < from ? [{ ...entry, ends_on: addLocalDays(from, -1) }] : []
     const after = entry.ends_on === null || entry.ends_on > to ? [{ ...entry, starts_on: addLocalDays(to, 1) }] : []
     return [...before, ...after]

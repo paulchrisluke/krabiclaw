@@ -61,7 +61,9 @@ test('closing dates adds one closure and opening them cuts every covering closur
   const indefinite = parseSpecialHours([{ kind: 'closure', starts_on: '2099-01-01', ends_on: null, note: null }])
   assert.deepEqual(openDates(indefinite, '2099-01-01', '2099-01-01'), [{ kind: 'closure', starts_on: '2099-01-02', ends_on: null, note: null }])
 
-  const untouched = parseSpecialHours([{ kind: 'hours', date: '2099-03-11', periods: [], note: null }, { kind: 'closure', starts_on: '2099-04-01', ends_on: '2099-04-02', note: null }])
+  const emptyDay = parseSpecialHours([{ kind: 'hours', date: '2099-03-11', periods: [], note: null }, { kind: 'hours', date: '2099-03-20', periods: [], note: null }, { kind: 'closure', starts_on: '2099-04-01', ends_on: '2099-04-02', note: null }])
+  assert.deepEqual(openDates(emptyDay, '2099-03-10', '2099-03-12'), emptyDay!.slice(1))
+  const untouched = parseSpecialHours([{ kind: 'hours', date: '2099-03-11', periods: [{ open_time: '18:00', close_time: '22:00', close_day_offset: 0 }], note: null }, { kind: 'closure', starts_on: '2099-04-01', ends_on: '2099-04-02', note: null }])
   assert.deepEqual(openDates(untouched, '2099-03-10', '2099-03-12'), untouched)
   assert.throws(() => closeDates(null, '2099-03-12', '2099-03-10'))
 })

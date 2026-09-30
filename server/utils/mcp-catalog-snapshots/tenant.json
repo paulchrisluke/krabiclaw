@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:cf9ea30f55e3c3be1c8e11460087174bc768fcc1532a69088354e559da50f626",
+  "fingerprint": "sha256:eb5eb279a2461f1a56db0c5fbc2b11e3f704a8f554c02188c74c4b1287b054a8",
   "tools": [
     {
       "name": "append_content_block",
@@ -1119,6 +1119,84 @@
         },
         "required": [
           "products"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "block_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First closed day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why, for the team; guests never see it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last closed day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }
@@ -4039,6 +4117,96 @@
         },
         "required": [
           "post"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_calendar",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "Limit to these kinds. Defaults to every kind the location offers.",
+            "items": {
+              "enum": [
+                "reservation",
+                "booking",
+                "session",
+                "post"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last day, YYYY-MM-DD, inclusive.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "available_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "unavailable_dates": {
+            "items": {
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "date",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "available_kinds",
+          "unavailable_dates"
         ],
         "type": "object"
       }
@@ -9456,6 +9624,77 @@
         "required": [
           "pages",
           "page_info"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "open_dates",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "First reopened day, YYYY-MM-DD.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Last reopened day, YYYY-MM-DD, inclusive. Same as from for one day.",
+            "format": "date",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "enum": [
+              "location"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "entity",
+          "id"
         ],
         "type": "object"
       }

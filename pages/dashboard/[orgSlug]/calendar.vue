@@ -1,5 +1,9 @@
 <template>
-  <DashboardIndexPanel id="org-calendar" title="Calendar">
+  <DashboardIndexPanel
+    id="org-calendar"
+    title="Calendar"
+    :navbar-ui="{ title: 'sr-only', root: 'h-(--ui-header-height) shrink-0 flex items-center justify-between px-4 sm:px-6 gap-1.5', center: 'flex min-w-0 flex-1 items-center' }"
+  >
     <!-- Which location the calendar is: Airbnb names the listing in its header, and tapping it switches. -->
     <template #center>
       <UDropdownMenu :items="locationItems" :content="{ align: 'start' }" :ui="{ content: 'w-64' }">

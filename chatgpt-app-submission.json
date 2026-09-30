@@ -44,6 +44,18 @@
         "destructive_justification": "Creates products from the supplied catalog entries and records product events. Existing content is not deleted or overwritten."
       }
     },
+    "block_dates": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website.",
+        "open_world_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "create_article_category": {
       "annotations": {
         "readOnlyHint": false,
@@ -258,6 +270,18 @@
         "read_only_justification": "Reads the selected tenant blog article and content for editing.",
         "open_world_justification": "Reads the selected tenant blog article and content for editing. It does not publish content or write to an external service.",
         "destructive_justification": "Reads the selected tenant blog article and content for editing. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_calendar": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written.",
+        "open_world_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads what is on one location's calendar between two dates and which dates it cannot take. Nothing is written. Existing content is not deleted or overwritten."
       }
     },
     "get_contact_inquiries": {
@@ -618,6 +642,18 @@
         "read_only_justification": "Lists tenant pages for the selected organization.",
         "open_world_justification": "Lists tenant pages for the selected organization. It does not publish content or write to an external service.",
         "destructive_justification": "Lists tenant pages for the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "open_dates": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again.",
+        "open_world_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "publish_blog_post": {
