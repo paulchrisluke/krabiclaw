@@ -147,16 +147,44 @@
             </div>
           </UCard>
           <UCard v-if="analytics.signupCohort.signups" variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Signup cohort</h2></template>
-            <div class="space-y-4">
-              <DashboardAnalyticsRow
-                v-for="row in analytics.signupCohort.bySignupAttribution"
-                :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
-                :label="`${row.source || 'unattributed'} / ${row.medium || 'unattributed'}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
-                :value="`${formatCount(row.signups)} signups · ${formatCount(row.onboardedSignups)} onboarded · ${formatCount(row.firstPaidSignups)} paid`"
-                :percent="row.signups ? Math.round(row.firstPaidSignups / row.signups * 100) : 0"
-              />
-              <p class="text-xs text-muted">Counted per signup, through the organizations that user owns, observed through {{ analytics.signupCohort.observedThrough }}.</p>
+            <template #header><h2 class="font-semibold text-highlighted">Signup funnel</h2></template>
+            <div class="space-y-6">
+              <div class="grid grid-cols-3 gap-4" aria-label="Signup conversion funnel">
+                <div v-for="stage in [
+                  { label: 'Signups', count: analytics.signupCohort.signups },
+                  { label: 'Onboarded', count: analytics.signupCohort.onboardedSignups },
+                  { label: 'Paid', count: analytics.signupCohort.firstPaidSignups },
+                ]" :key="stage.label" class="space-y-3">
+                  <p class="text-sm text-muted">{{ stage.label }}</p>
+                  <p class="text-3xl font-semibold tabular-nums text-highlighted">{{ formatCount(stage.count) }}</p>
+                  <div class="h-2 overflow-hidden rounded-full bg-accented" aria-hidden="true">
+                    <div class="h-full rounded-full bg-primary" :style="{ width: `${stage.count / analytics.signupCohort.signups * 100}%` }" />
+                  </div>
+                  <p class="text-xs tabular-nums text-muted">{{ Math.round(stage.count / analytics.signupCohort.signups * 100) }}%</p>
+                </div>
+              </div>
+              <p class="text-xs text-muted">Progress of people who signed up in this period, through the businesses they own.</p>
+              <details class="border-t border-default pt-4">
+                <summary class="cursor-pointer text-sm font-medium text-highlighted">By campaign</summary>
+                <div class="mt-4 overflow-x-auto">
+                  <table class="w-full text-sm">
+                    <thead class="text-xs text-muted"><tr>
+                      <th scope="col" class="pb-3 text-left font-medium">Source / campaign</th>
+                      <th v-for="label in ['Signups', 'Onboarded', 'Paid']" :key="label" scope="col" class="pb-3 pl-4 text-right font-medium">{{ label }}</th>
+                    </tr></thead>
+                    <tbody class="divide-y divide-default">
+                      <tr v-for="row in analytics.signupCohort.bySignupAttribution" :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`">
+                        <td class="py-3">
+                          <p class="text-highlighted">{{ row.source || 'Unattributed' }} / {{ row.medium || 'Unattributed' }}</p>
+                          <p v-if="row.campaign" class="mt-1 break-all text-xs text-muted">{{ row.campaign }}</p>
+                          <p v-if="row.content" class="mt-1 break-all text-xs text-muted">{{ row.content }}</p>
+                        </td>
+                        <td v-for="(count, index) in [row.signups, row.onboardedSignups, row.firstPaidSignups]" :key="index" class="py-3 pl-4 text-right tabular-nums">{{ formatCount(count) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           </UCard>
         </div>

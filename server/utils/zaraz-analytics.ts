@@ -167,18 +167,16 @@ function configureZarazConsentManagement(config: ZarazConfig) {
   // The site notice asks for a choice on first visit. Cookie preferences opens
   // Zaraz's own modal to change that answer later.
   config.consent.hideModal = true
-  // Consent is keyed to the cookie name. The previous zone setup was TCF-based
-  // and its cf_consent cookies name tcf-purposes-* only, so returning visitors
-  // were never asked about kc_analytics and never counted. A new name asks once.
   config.consent.cookieName = ZARAZ_CONSENT_COOKIE_NAME
   config.consent.defaultLanguage = 'en'
   config.consent.tcfCompliant = false
   config.consent.consentModalIntroHTML = ZARAZ_CONSENT_MODAL_INTRO_HTML
+  config.consent.consentModalIntroHTMLWithTranslations = { en: ZARAZ_CONSENT_MODAL_INTRO_HTML }
   config.consent.customCSS = ''
   config.consent.buttonTextTranslations = {
-    accept_all: { en: 'Accept all' },
+    accept_all: { en: 'Accept' },
     confirm_my_choices: { en: 'Confirm my choices' },
-    reject_all: { en: 'Reject all' },
+    reject_all: { en: 'Reject' },
   }
   config.consent.purposes ||= {}
   config.consent.purposes[ZARAZ_ANALYTICS_PURPOSE_ID] = ZARAZ_ANALYTICS_PURPOSE
