@@ -607,7 +607,13 @@ export async function updateOrganizationSettingsFields(
   }
 
   if (updates.announcement !== undefined && updates.announcement !== null) {
-    const { headline, description, cta_label, cta_url, enabled } = updates.announcement
+    const { headline, description, cta_label, cta_url, dismissible, enabled } = updates.announcement
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return { status: 400, data: { error: 'Announcement enabled must be a boolean' } }
+    }
+    if (dismissible !== undefined && typeof dismissible !== 'boolean') {
+      return { status: 400, data: { error: 'Announcement dismissible must be a boolean' } }
+    }
     // A disabled announcement may be saved with a blank headline — the owner is turning it off,
     // not necessarily deleting draft text they intend to re-enable later. It still has to be a
     // string within the length limit, whether or not it's currently shown.
@@ -617,8 +623,14 @@ export async function updateOrganizationSettingsFields(
     if (enabled !== false && (typeof headline !== 'string' || !headline.trim())) {
       return { status: 400, data: { error: 'Announcement headline is required' } }
     }
-    if (description !== undefined && description !== null && description.trim().length > 500) {
+    if (description !== undefined && description !== null && (typeof description !== 'string' || description.trim().length > 500)) {
       return { status: 400, data: { error: 'Announcement description must be 500 characters or fewer' } }
+    }
+    if (cta_label !== undefined && cta_label !== null && typeof cta_label !== 'string') {
+      return { status: 400, data: { error: 'Announcement CTA label must be a string' } }
+    }
+    if (cta_url !== undefined && cta_url !== null && typeof cta_url !== 'string') {
+      return { status: 400, data: { error: 'Announcement CTA URL must be a string' } }
     }
     if ((cta_label && !cta_url) || (!cta_label && cta_url)) {
       return { status: 400, data: { error: 'A call-to-action needs both a label and a URL' } }

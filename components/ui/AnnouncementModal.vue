@@ -116,7 +116,7 @@ if (organizationId && isPublicSurface) {
 }
 
 const storageKey = computed(() => announcement.value
-  ? `announcement-dismissed:${organizationId}:${announcement.value.headline}:${announcement.value.description ?? ''}`
+  ? `announcement-dismissed:${organizationId}:${JSON.stringify(announcement.value)}`
   : null)
 
 const visible = computed(() => !!announcement.value && !dismissed.value)
