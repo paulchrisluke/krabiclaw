@@ -1,16 +1,12 @@
 <template>
   <!--
-    The banner scrolls away and the nav sticks. The header is sticky rather than
-    fixed, so it takes its own height in the flow instead of a spacer guessing
-    it — the guess was one nav tall and the banner sat on top of the content.
+    The phone bar scrolls away and the nav sticks. The header is sticky rather
+    than fixed, so it takes its own height in the flow instead of a spacer
+    guessing it — the guess was one nav tall and the bar sat on top of the
+    content. Site-wide announcements are the universal AnnouncementModal,
+    mounted once for every theme in app.vue.
   -->
-  <BlawbyBanner
-    data-blawby-critical-banner
-    :content="organization.banner_content"
-    :phone="organization.phone"
-    :dismissible="organization.banner_dismissible"
-    :storage-key="`blawby-banner:${organization.name}:${organization.banner_content}`"
-  />
+  <BlawbyPhoneBar data-blawby-critical-banner :phone="organization.phone" />
   <header data-blawby-critical-header class="sticky top-0 z-50 border-b border-gray-200 bg-white">
     <div class="blawby-container">
       <nav class="relative z-50 flex items-center justify-between gap-4 py-2" :aria-label="t('blawby.navigation.main')">

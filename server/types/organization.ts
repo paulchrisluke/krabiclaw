@@ -6,6 +6,20 @@ import type { OrganizationFontPreset } from '~/shared/organization-fonts'
 
 export type { CurrencyCode }
 
+/**
+ * The one universal announcement modal, available to every theme. An image comes through `media`
+ * (slot `announcement`), never a URL stored here. `enabled: false` or a missing config both mean
+ * nothing shows; the CMS writes `null` to remove it entirely rather than leaving stale content off.
+ */
+export interface OrganizationAnnouncement {
+  headline: string
+  description: string | null
+  cta_label: string | null
+  cta_url: string | null
+  dismissible: boolean
+  enabled: boolean
+}
+
 export interface OrganizationSettings {
   id: string
   organization_id: string
@@ -16,8 +30,7 @@ export interface OrganizationSettings {
   custom_domain_status: DomainStatus | 'none'
   name: string
   brand_description: string | null
-  banner_content: string | null
-  banner_dismissible: boolean
+  announcement: OrganizationAnnouncement | null
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string }>
   contact_email: string | null
   brand_color: string
@@ -39,8 +52,9 @@ export interface UpdateOrganizationSettingsRequest {
    */
   status?: 'active' | 'inactive'
   brand_description?: string
-  banner_content?: string | null
-  banner_dismissible?: boolean
+  // A full replacement of the announcement, or null to remove it entirely. There is no partial
+  // patch: the CMS leaf edits every field together, the same way the old banner did.
+  announcement?: { headline: string; description?: string | null; cta_label?: string | null; cta_url?: string | null; dismissible?: boolean; enabled?: boolean } | null
   contact_email?: string
   brand_color?: string
   font_preset?: OrganizationFontPreset
@@ -56,7 +70,7 @@ export interface UpdateOrganizationSettingsRequest {
   social_facebook_url?: string | null
   social_instagram_url?: string | null
   social_tiktok_url?: string | null
-  media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' }>
+  media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' | 'announcement' }>
   // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
   // ProductFeature ids) — null clears the override back to defaults.
   feature_overrides?: { enabled?: string[]; disabled?: string[] } | null

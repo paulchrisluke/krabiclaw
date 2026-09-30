@@ -1,5 +1,5 @@
 export const MEDIA_PLACEMENT_SLOTS = {
-  organization: ['logo', 'favicon', 'social_share', 'social_card', 'compliance_document'],
+  organization: ['logo', 'favicon', 'social_share', 'social_card', 'compliance_document', 'announcement'],
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],

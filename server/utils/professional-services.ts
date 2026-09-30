@@ -239,8 +239,6 @@ export async function getPublicBlawbyIdentity(db: DbClient, organizationId: stri
     media: (socialMedia?.media ?? []).map(item => ({ asset_id: item.asset_id, slot: item.slot, public_url: item.public_url, thumbnail_url: item.thumbnail_url, kind: item.kind })),
     social_image: socialMedia?.social_image ?? null,
     phone: typeof row?.contact_phone === 'string' ? row.contact_phone : null,
-    banner_content: null,
-    banner_dismissible: false,
   }
 }
 
@@ -294,11 +292,6 @@ export async function getPublicBlawbyShellData(
           media: sourceCompliance.media.map(item => ({ ...item, alt_text: null, file_name: null })),
         }
       : null
-  }
-  const header = compliance?.metadata?.header
-  if (header && typeof header === 'object') {
-    identity.banner_content = typeof (header as ApiRecord).banner_content === 'string' ? String((header as ApiRecord).banner_content) : null
-    identity.banner_dismissible = asBoolean((header as ApiRecord).banner_dismissible)
   }
   return {
     identity,

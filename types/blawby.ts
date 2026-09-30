@@ -208,8 +208,6 @@ export interface PublicBlawbyIdentity {
   media: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string | null }>
   social_image: SocialImageSource | null
   phone: string | null
-  banner_content: string | null
-  banner_dismissible: boolean
 }
 
 export interface PublicBlawbyShellData {
