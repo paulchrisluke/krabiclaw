@@ -3,82 +3,10 @@ import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { localDateBounds, parseAnalyticsRange } from '~/server/utils/analytics-calendar'
 import { addLocalDays, localDateAt, isValidTimezone } from '~/utils/timezone'
-import type { CloudflareEnv } from '~/server/utils/auth'
 import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
-import { readMetaInsights, type ProviderInsights } from '~/server/utils/meta-insights'
 
-export interface AnalyticsReport {
-  social?: { facebook: ProviderInsights; instagram: ProviderInsights }
-  period: { startDate: string; endDate: string; timezone: string; analyticsDataStartAt: string | null }
-  metrics: {
-    pageViews: number
-    uniqueSessions: number
-    uniqueVisitors: number
-    returningVisitors: number
-    avgSessionDuration: number
-    pagesPerSession: number
-    changePercent: number | null
-  }
-  dailyData: Array<{ date: string; pageViews: number; sessions: number; avgDuration: number }>
-  topPages: Array<{ path: string; views: number; percentOfTotal: number }>
-  /**
-   * Sessions grouped by their current last-touch attribution, with the sessions in that same
-   * group that completed an outcome in the range. `sessionConversionRate` = converting sessions /
-   * these sessions (never above 100%); null when there are none.
-   */
-  attribution: Array<{ source: string; medium: string; campaign: string | null; content: string | null; sessions: number; outcomeEvents: number; convertingSessions: number; sessionConversionRate: number | null }>
-  /**
-   * Outcome events grouped by their own immutable attribution snapshot (the touch when the event
-   * happened, or the checkout's observed touch for a payment). A different population from
-   * `attribution`, so it carries counts only, never a rate against sessions.
-   */
-  outcomeAttribution: Array<{ source: string; medium: string; campaign: string | null; content: string | null; eventName: string; events: number; distinctEntities: number }>
-  /** Verified revenue by the campaign/creative snapshot of the purchase, per currency. Cash includes tax; `netMinor` is collected minus refunded. Payments with no observed attribution have null source/medium. */
-  attributedValue: Array<{ source: string | null; medium: string | null; campaign: string | null; content: string | null; currency: string; purchases: number; collectedMinor: number; refundedMinor: number; netMinor: number }>
-  /**
-   * `events` counts occurrences, `distinctEntities` counts the business subjects
-   * (request, user, organization, invoice, refund) and `convertingSessions` the
-   * browser sessions that completed the event. Nonbrowser events have no session.
-   * `sessionConversionRate` = convertingSessions / eligible sessions in the range,
-   * and is null when the range has no eligible sessions.
-   */
-  conversions: Array<{ eventName: string; stage: string; conversionType: string | null; events: number; distinctEntities: number; convertingSessions: number; nonbrowserEvents: number; sessionConversionRate: number | null }>
-  /** One row per event, value basis and currency. Currencies are never summed together. `valueMinor` is tax-exclusive; `collectedMinor` is the cash moved, tax included: collected for a purchase, returned for a refund. */
-  values: Array<{ eventName: string; basis: 'quoted' | 'purchase' | 'refund'; currency: string; events: number; valueMinor: number; collectedMinor: number | null }>
-  /** Quoted booking value per product and location. A booking with no known price counts in `bookings` but not `valuedBookings`. */
-  bookingValue: Array<{ productId: string | null; productName: string | null; locationId: string | null; currency: string | null; bookings: number; valuedBookings: number; quotedValueMinor: number }>
-  /** Amount collected from verified purchases minus verified refunds, per currency. Both include tax. */
-  net: Array<{ currency: string; collectedMinor: number; refundedMinor: number; netMinor: number }>
-  /**
-   * Signup-cohort attribution: signups created in the range, each linked through the
-   * organizations that user originated (the first owner, recorded on the onboarding and purchase
-   * events when they happened) to outcomes that occurred after the signup and by
-   * `observedThrough`. Counted per signup; `revenue` is that cohort's payments to date. It never
-   * rewrites those later events' own attribution.
-   */
-  signupCohort: {
-    observedThrough: string
-    signups: number
-    onboardedSignups: number
-    firstPaidSignups: number
-    bySignupAttribution: Array<{ source: string | null; medium: string | null; campaign: string | null; content: string | null; signups: number; onboardedSignups: number; firstPaidSignups: number; revenue: Array<{ currency: string; collectedMinor: number; refundedMinor: number; netMinor: number }> }>
-    /** Businesses (organizations) in the range, counted per organization and independent of signups: invitation and existing-user journeys are included. */
-    onboardedBusinesses: number
-    firstPaidBusinesses: number
-  }
-  coverage: {
-    /** First event written by the current measurement contract for this organization; earlier history has no values, creative or nonbrowser events. Null until one exists. */
-    measurementContractStartedAt: string | null
-    /** Outcome events with no browser attribution (nonbrowser or attribution unobserved). */
-    outcomeEventsWithoutAttribution: number
-    /** GA4 delivery outcome of server-delivered events; provider failure is distinct from disabled, disconnected or consent-rejected. */
-    ga4Delivery: Array<{ eventName: string; status: string; count: number }>
-  }
-  countries: Array<{ country: string; countryCode: string; views: number; percentOfTotal: number }>
-  cities: Array<{ city: string; region: string | null; countryCode: string; views: number }>
-  referrers: Array<{ source: string; views: number; percentOfTotal: number }>
-  devices: Array<{ type: string; views: number; percentOfTotal: number }>
-}
+import { analyticsReportSchema, type AnalyticsReport } from '~/shared/analytics-report'
+export type { AnalyticsReport } from '~/shared/analytics-report'
 
 interface OrganizationContext {
   organizationId: string
@@ -240,13 +168,15 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
   return result
 }
 
-interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number }
-type ConversionReport = Pick<AnalyticsReport, 'outcomeAttribution' | 'attributedValue' | 'conversions' | 'values' | 'bookingValue' | 'net' | 'signupCohort'> & { coverage: AnalyticsReport['coverage'] }
+interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number; dates: string[]; timezone: string }
 
-async function loadConversionReport(db: DbClient, organizationId: string, window: ConversionReportWindow): Promise<ConversionReport> {
+async function loadConversionReport(db: DbClient, organizationId: string, window: ConversionReportWindow) {
   const { start, end, observedEnd, uniqueSessions } = window
   const inRange = `kind IN ('conversion', 'interaction') AND organization_id = ? AND created_at >= ? AND created_at < ?`
   const eventName = `(payload_json ->> '$.event_name')`
+  // Calendar dates and their UTC boundaries are produced by the validated range
+  // and timezone helpers. Bucket in SQL without assuming a fixed UTC offset.
+  const localDay = `CASE ${window.dates.map(date => `WHEN created_at < '${localDateBounds(addLocalDays(date, 1), window.timezone).start}' THEN '${date}'`).join(' ')} END`
   const snapshot = `(payload_json ->> '$.attribution.source') source, (payload_json ->> '$.attribution.medium') medium,
     (payload_json ->> '$.attribution.campaign') campaign, (payload_json ->> '$.attribution.content') content`
   // Signups in the window; outcomes that follow them are linked through the originating owner
@@ -257,7 +187,9 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
       FROM analytics_events e WHERE e.kind = 'conversion' AND e.organization_id = ? AND (e.payload_json ->> '$.event_name') = 'sign_up' AND e.created_at >= ? AND e.created_at < ?)`
   const followedBy = (alias: string, eventFilter: string) => `EXISTS (SELECT 1 FROM analytics_events ${alias} WHERE ${alias}.kind = 'conversion' AND ${alias}.organization_id = ?
     AND ${eventFilter} AND (${alias}.payload_json ->> '$.metadata.originating_user_id') = signups.user_id AND ${alias}.created_at >= signups.signed_at AND ${alias}.created_at < ?)`
-  const [conversionRows, outcomeRows, valueRows, attributedRows, bookingValueRows, cohortRows, cohortRevenueRows, businessStats, coverageRows, deliveryRows] = await Promise.all([
+  const [dailyRows, conversionRows, outcomeRows, valueRows, attributedRows, bookingValueRows, cohortRows, cohortRevenueRows, businessStats, coverageRows, deliveryRows] = await Promise.all([
+    queryAll<{ date: string; events: number }>(db, `SELECT ${localDay} date, COUNT(*) events
+      FROM analytics_events WHERE ${inRange} AND ${eventName} IN (${OUTCOME_EVENT_SQL_LIST}) GROUP BY 1`, [organizationId, start, end]),
     queryAll<Record<string, unknown>>(db, `SELECT ${eventName} event_name, (payload_json ->> '$.stage') stage, (payload_json ->> '$.conversion_type') conversion_type,
         COUNT(*) events, COUNT(DISTINCT COALESCE(payload_json ->> '$.entity_id', id)) entities, COUNT(DISTINCT session_id) sessions, SUM(session_id IS NULL) nonbrowser
       FROM analytics_events WHERE ${inRange} GROUP BY 1,2,3 ORDER BY events DESC, event_name`, [organizationId, start, end]),
@@ -305,6 +237,7 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
     .filter(revenue => revenue.source === row.source && revenue.medium === row.medium && revenue.campaign === row.campaign && revenue.content === row.content)
     .map(revenue => ({ currency: String(revenue.currency), collectedMinor: n(revenue.collected), refundedMinor: n(revenue.refunded), netMinor: n(revenue.collected) - n(revenue.refunded) }))
   return {
+    dailyConversions: window.dates.map(date => ({ date, events: dailyRows.find(row => row.date === date)?.events ?? 0 })),
     outcomeAttribution: outcomeRows.map(row => ({ source: String(row.source), medium: String(row.medium), campaign: text(row.campaign), content: text(row.content), eventName: String(row.event_name), events: n(row.events), distinctEntities: n(row.entities) })),
     attributedValue: attributedRows.map(row => ({ source: text(row.source), medium: text(row.medium), campaign: text(row.campaign), content: text(row.content), currency: String(row.currency),
       purchases: n(row.purchases), collectedMinor: n(row.collected), refundedMinor: n(row.refunded), netMinor: n(row.collected) - n(row.refunded) })),
@@ -343,7 +276,7 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
   }
 }
 
-function netByCurrency(valueRows: Array<Record<string, unknown>>): AnalyticsReport['net'] {
+function netByCurrency(valueRows: Array<Record<string, unknown>>) {
   const byCurrency = new Map<string, { collectedMinor: number; refundedMinor: number }>()
   for (const row of valueRows) {
     if (row.basis !== 'purchase' && row.basis !== 'refund') continue
@@ -357,8 +290,7 @@ function netByCurrency(valueRows: Array<Record<string, unknown>>): AnalyticsRepo
 }
 
 export async function getAnalyticsReport(db: DbClient, input: {
-  organizationId: string; startDate?: string; endDate?: string; now?: Date; env?: CloudflareEnv
-  facebookCursor?: string; instagramCursor?: string
+  organizationId: string; startDate?: string; endDate?: string; now?: Date
 }): Promise<AnalyticsReport> {
   const now = input.now ?? new Date()
   const context = await resolveOrganizationAnalyticsContext(db, input.organizationId)
@@ -368,14 +300,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
   const nowIso = now.toISOString()
   const observedEnd = end < nowIso ? end : nowIso
   const cutoffDate = context.analyticsDataStartAt ? localDateAt(new Date(context.analyticsDataStartAt), context.timezone) : null
-  const [social, slices, sessionStats, returningStats, attributionRows] = await Promise.all([
-    input.env ? readMetaInsights(input.env, input.organizationId, {
-      start, end,
-      previous: {
-        start: localDateBounds(range.previousStartDate, context.timezone).start,
-        end: localDateBounds(addLocalDays(range.previousEndDate, 1), context.timezone).start,
-      },
-    }, now, { facebook: input.facebookCursor, instagram: input.instagramCursor }) : undefined,
+  const [slices, sessionStats, returningStats, attributionRows] = await Promise.all([
     loadSlices(db, input.organizationId, range.dates, context.timezone, now, cutoffDate),
     queryFirst<Record<string, unknown>>(db, `SELECT COUNT(*) sessions, COUNT(DISTINCT visitor_id) visitors,
       COALESCE(ROUND(AVG(CASE WHEN duration_seconds > 0 THEN duration_seconds END)), 0) avg_duration
@@ -396,7 +321,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
   ])
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const uniqueSessions = n(sessionStats?.sessions)
-  const conversionReport = await loadConversionReport(db, input.organizationId, { start, end, observedEnd, uniqueSessions })
+  const conversionReport = await loadConversionReport(db, input.organizationId, { start, end, observedEnd, uniqueSessions, dates: range.dates, timezone: context.timezone })
   const previousStart = localDateBounds(range.previousStartDate, context.timezone).start
   const previousAvailable = !context.analyticsDataStartAt || previousStart >= context.analyticsDataStartAt
   let changePercent: number | null = null
@@ -404,7 +329,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
     const previousDates = []
     for (let date = range.previousStartDate; date <= range.previousEndDate; date = addLocalDays(date, 1)) previousDates.push(date)
     const previousViews = (await loadSlices(db, input.organizationId, previousDates, context.timezone, now, cutoffDate)).reduce((sum, slice) => sum + slice.pageViews, 0)
-    changePercent = previousViews === 0 ? 0 : Math.round((pageViews - previousViews) / previousViews * 100)
+    changePercent = previousViews === 0 ? null : Math.round((pageViews - previousViews) / previousViews * 100)
   }
 
   const pageMap = new Map<string, number>()
@@ -424,8 +349,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
     return { value: value!, subvalue, views }
   }).sort((a, b) => b.views - a.views)
 
-  return {
-    ...(social ? { social } : {}),
+  return analyticsReportSchema.parse({
     period: { startDate: range.startDate, endDate: range.endDate, timezone: context.timezone, analyticsDataStartAt: context.analyticsDataStartAt },
     metrics: {
       pageViews,
@@ -451,7 +375,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
     }),
     referrers: dimensionRows('referrer').slice(0, 10).map(row => ({ source: row.value, views: row.views, percentOfTotal: percent(row.views) })),
     devices: dimensionRows('device').map(row => ({ type: row.value, views: row.views, percentOfTotal: percent(row.views) })),
-  }
+  })
 }
 
 export async function aggregatePreviousLocalDateForAllOrganizations(db: DbClient, now = new Date()): Promise<string[]> {

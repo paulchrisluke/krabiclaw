@@ -36,6 +36,7 @@ async function executeApiFetch<T>(
   const method = options.method ?? 'GET'
   const { validate, coalesceKey, method: _method, ...fetchOptions } = options
   const run = async () => {
+    let requestId: string | null = null
     try {
       const requestOptions: DashboardRequestOptions = {
         ...fetchOptions,
@@ -44,13 +45,17 @@ async function executeApiFetch<T>(
         retry: 0,
         timeout: fetchOptions.timeout ?? (method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS),
       }
-      const value = await $fetch<unknown>(request, requestOptions)
+      const response = await $fetch.raw<unknown>(request, requestOptions)
+      requestId = response.headers.get('x-request-id')
+      const value = response._data
       if (!validate(value)) {
-        throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+        throw new ApiClientError(`Invalid response from ${request}: API response did not match its contract`, 502, 'INVALID_API_RESPONSE', requestId)
       }
       return value as T
     } catch (error) {
-      throw normalizeApiError(error, 'Dashboard API request failed')
+      const failure = normalizeApiError(error, 'Dashboard API request failed')
+      console.error('[Dashboard API]', { request, method, statusCode: failure.statusCode, code: failure.code, requestId: failure.requestId ?? requestId, message: failure.message })
+      throw failure
     }
   }
 
