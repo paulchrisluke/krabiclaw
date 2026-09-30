@@ -145,7 +145,7 @@ onBeforeUnmount(stop)
 }
 
 .kc-showcase__headline {
-  max-width: 24ch;
+  max-width: 34ch;
   margin: 0 0 clamp(2.5rem, 5vw, 4rem);
   font-size: clamp(2.1rem, 5.2vw, 5rem);
   line-height: 1.18;
