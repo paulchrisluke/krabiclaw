@@ -31,6 +31,7 @@ export type TenantPageBlockType =
   | 'workflow_grid'
   | 'showcase'
   | 'language_reach'
+  | 'steps'
   | 'video_feature'
   | 'media_text'
   | 'contact_form'
@@ -310,6 +311,16 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
+    // How Krabiclaw's own pages draw written items: as icon cards, or as
+    // pictures with their words beneath.
+    layout: {
+      kind: 'enum', label: 'Layout', translatable: false, section: 'settings', default: 'cards',
+      availableWhen: { field: 'source', equals: ['manual'] },
+      options: [
+        { value: 'cards', label: 'Cards' },
+        { value: 'pictures', label: 'Pictures', platformOnly: true },
+      ],
+    },
     calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
     // The one button a practice area's feature list carries over its picture.
     // Declared here so the firm writes its words and its destination, the way
@@ -403,6 +414,19 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         image: { kind: 'media', label: 'Picture of the site in this language', translatable: false, section: 'image', slot: 'image' },
       },
     },
+  }),
+
+  // Numbered steps, each a link to where it is explained, beside two pictures
+  // and one button. The pictures are the block's ordered `gallery` placement.
+  steps: blockDefinitionWithMetadata('steps', 'Steps', 'Numbered steps that link to how each is done.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    gallery: { kind: 'media', label: 'Pictures', translatable: false, section: 'pictures', slot: 'gallery' },
+    items: {
+      kind: 'list', label: 'Steps', section: 'items',
+      of: { title: text('Step', { required: true }), url: link('Link', { section: 'copy' }) },
+    },
+    cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
+    cta_url: link('Button URL', { section: 'button', pairedWith: 'cta_label' }),
   }),
 
   // A video with the points it makes.

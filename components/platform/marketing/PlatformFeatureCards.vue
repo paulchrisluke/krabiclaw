@@ -8,6 +8,28 @@
   <PlatformPlansSection v-if="isPlans" :block="block" :page="page" />
 
   <!--
+    A grid whose cards carry pictures: a large headline, the cards as a
+    picture with its title and words beneath, and the grid's one button.
+  -->
+  <section v-else-if="variant === 'pictures'" class="kc-picture-cards" data-parity-section="picture-cards">
+    <div class="kc-picture-cards__inner">
+      <h2 v-if="title" class="kc-picture-cards__title">{{ title }}</h2>
+      <ul class="kc-picture-cards__grid" :style="{ '--kc-columns': String(Math.min(items.length, 3)) }">
+        <li v-for="item in items" :key="item.title">
+          <div class="kc-picture-cards__frame">
+            <img v-if="item.image" :src="item.image.url" :alt="item.image.alt" loading="lazy" decoding="async">
+          </div>
+          <h3 class="kc-picture-cards__card-title">{{ item.title }}</h3>
+          <p v-if="item.description" class="kc-picture-cards__card-body">{{ item.description }}</p>
+        </li>
+      </ul>
+      <div v-if="ctaLabel && ctaUrl" class="kc-picture-cards__actions">
+        <NuxtLink :to="ctaUrl" class="kc-picture-cards__cta">{{ ctaLabel }}</NuxtLink>
+      </div>
+    </div>
+  </section>
+
+  <!--
     The homepage feature band: a gradient wash and cards with navy gradient
     icon tiles that lift on hover.
   -->
@@ -110,6 +132,7 @@
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockRecords, blockStrings } from '~/utils/tenant-page-block-data'
+import { mediaStillUrl } from '~/shared/media-placement-contract'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformFeatureCard {
@@ -120,6 +143,8 @@ export interface PlatformFeatureCard {
   url?: string | null
   /** The link's words. A card that carries a route carries what to call it. */
   linkLabel?: string | null
+  /** The card's own picture, at `items.<index>.image`. */
+  image?: { url: string; alt: string } | null
 }
 
 /**
@@ -137,22 +162,120 @@ const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const titleMuted = computed(() => blockTextOrNull(props.block.data.title_muted))
 const description = computed(() => blockTextOrNull(props.block.data.description))
-const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.data.items).map(item => ({
+const items = computed<PlatformFeatureCard[]>(() => blockRecords(props.block.data.items).map((item, index) => ({
   title: blockText(item.title),
   description: blockText(item.description),
   icon: (blockTextOrNull(item.icon) ?? 'sparkles') as PlatformIconName,
   specs: blockStrings(item.specs),
   url: blockTextOrNull(item.url),
   linkLabel: blockTextOrNull(item.label),
+  image: itemImage(index),
 })).filter(item => item.title))
+const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
+const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
+
+function itemImage(index: number) {
+  const media = props.block.media.find(asset => asset.slot === `items.${index}.image`)
+  const url = mediaStillUrl(media)
+  return url ? { url, alt: media?.alt_text ?? '' } : null
+}
 
 /**
  * A card list with specifications reads as a detail page; one on a vertical
  * landing page reads as that vertical's. Both are this component's own reading
  * of its content and its page, which is what a template is for.
  */
-const variant = computed<'home' | 'detailed' | 'vertical'>(() => {
+const variant = computed<'home' | 'detailed' | 'vertical' | 'pictures'>(() => {
+  if (blockText(props.block.data.layout) === 'pictures') return 'pictures'
   if (items.value.some(item => (item.specs ?? []).length)) return 'detailed'
   return ['/restaurants', '/experiences', '/legal'].includes(props.page.path) ? 'vertical' : 'home'
 })
 </script>
+
+<style scoped>
+.kc-picture-cards {
+  padding: clamp(4rem, 9vw, 7rem) 0;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.kc-picture-cards__inner {
+  width: min(100% - clamp(2rem, 6vw, 6rem), 118rem);
+  margin: 0 auto;
+}
+
+.kc-picture-cards__title {
+  max-width: 22ch;
+  margin: 0 0 clamp(2.5rem, 5vw, 4.5rem);
+  color: var(--ui-text-highlighted);
+  font-size: clamp(2.4rem, 5.5vw, 5rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.kc-picture-cards__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--kc-columns), minmax(0, 1fr));
+  gap: clamp(1rem, 2vw, 1.75rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kc-picture-cards__frame {
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--ui-bg-elevated);
+}
+
+.kc-picture-cards__frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kc-picture-cards__card-title {
+  margin: 1.5rem 0 0;
+  color: var(--ui-text-highlighted);
+  font-size: clamp(1.25rem, 1.8vw, 1.6rem);
+  font-weight: 500;
+}
+
+.kc-picture-cards__card-body {
+  max-width: 40ch;
+  margin: 0.75rem 0 0;
+  color: var(--ui-text-muted);
+  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  line-height: 1.55;
+}
+
+.kc-picture-cards__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+}
+
+.kc-picture-cards__cta {
+  padding: 0.9rem 1.75rem;
+  border: 1.5px solid var(--ui-text-highlighted);
+  border-radius: 999px;
+  color: var(--ui-text-highlighted);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.kc-picture-cards__cta:hover {
+  background: var(--ui-text-highlighted);
+  color: var(--ui-bg);
+}
+
+@media (max-width: 767px) {
+  .kc-picture-cards__grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

@@ -81,6 +81,16 @@
       </UFormField>
     </template>
 
+    <!-- a step: its words and where it is explained -->
+    <template v-else-if="isStep">
+      <UFormField label="Step" required>
+        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+      </UFormField>
+      <UFormField label="Link">
+        <UInput :model-value="str('url')" size="xl" placeholder="/docs/getting-started" class="w-full" @update:model-value="set('url', $event)" />
+      </UFormField>
+    </template>
+
     <!-- a grid item -->
     <template v-else>
       <template v-if="field === 'copy'">
@@ -156,6 +166,7 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
   const isPerson = computed(() => block.value?.type === 'team_grid' && collectionRef.value === 'items')
   const isShowcase = computed(() => block.value?.type === 'showcase' && collectionRef.value === 'items')
   const isLanguage = computed(() => block.value?.type === 'language_reach' && collectionRef.value === 'items')
+  const isStep = computed(() => block.value?.type === 'steps' && collectionRef.value === 'items')
   const localeOptions = computed(() => [...(TENANT_PAGE_BLOCK_REGISTRY.language_reach.fields.items?.of?.locale?.options ?? [])])
   // The pictures a record holds, as its block's definition declares them.
   const recordPictures = computed(() => {
@@ -253,6 +264,7 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     if (isPerson.value) return { first_name: '', last_name: '', title: '', bio: '' }
     if (isShowcase.value) return { title: '' }
     if (isLanguage.value) return { title: '', locale: '' }
+    if (isStep.value) return { title: '', url: '' }
     return { title: '', description: '', value: '', label: '', url: '' }
   }
 
@@ -295,7 +307,7 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     remapMedia(order)
   }
 
-  return { block, records, record, recordTitle, noun, isPerson, isShowcase, isLanguage, localeOptions, recordPictures, recordSections, listItems, leafSummary, str, set, recordMedia, setRecordMedia, addRecord, removeRecord, move }
+  return { block, records, record, recordTitle, noun, isPerson, isShowcase, isLanguage, isStep, localeOptions, recordPictures, recordSections, listItems, leafSummary, str, set, recordMedia, setRecordMedia, addRecord, removeRecord, move }
 }
 </script>
 
@@ -312,7 +324,7 @@ const props = defineProps<{
   field: string | null
 }>()
 
-const { record, isPerson, isShowcase, isLanguage, localeOptions, recordPictures, str, set, recordMedia, setRecordMedia } = useTenantPageBlockRecords(
+const { record, isPerson, isShowcase, isLanguage, isStep, localeOptions, recordPictures, str, set, recordMedia, setRecordMedia } = useTenantPageBlockRecords(
   props.organizationId, props.pageId, props.blockId, props.collection, () => props.recordIndex,
 )
 </script>

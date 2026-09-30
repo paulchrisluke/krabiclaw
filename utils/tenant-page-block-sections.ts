@@ -141,6 +141,10 @@ const LANGUAGE_ITEM_SECTIONS: readonly TenantPageRecordSection[] = [
   { key: 'image', label: 'Picture' },
 ]
 
+const STEP_ITEM_SECTIONS: readonly TenantPageRecordSection[] = [
+  { key: 'copy', label: 'Step' },
+]
+
 const PERSON_SECTIONS: readonly TenantPageRecordSection[] = [
   { key: 'name', label: 'Name' },
   { key: 'role', label: 'Role' },
@@ -163,6 +167,7 @@ export function tenantPageRecordSections(
   if (blockType === 'feature_grid') return FEATURE_ITEM_SECTIONS
   if (blockType === 'showcase') return SHOWCASE_ITEM_SECTIONS
   if (blockType === 'language_reach') return LANGUAGE_ITEM_SECTIONS
+  if (blockType === 'steps') return STEP_ITEM_SECTIONS
   return GRID_ITEM_SECTIONS
 }
 
