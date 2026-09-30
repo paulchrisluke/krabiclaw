@@ -1,21 +1,45 @@
 <template>
   <DashboardIndexPanel id="org-calendar" title="Calendar">
+    <!-- Which location the calendar is: Airbnb names the listing in its header, and tapping it switches. -->
+    <template #center>
+      <UDropdownMenu :items="locationItems" :content="{ align: 'start' }" :ui="{ content: 'w-64' }">
+        <UButton
+          :label="chosenLocationTitle"
+          trailing-icon="i-lucide-chevron-down"
+          color="neutral"
+          variant="ghost"
+          class="max-w-[16rem] font-semibold"
+          :ui="{ label: 'truncate' }"
+          aria-label="Choose a location"
+        />
+      </UDropdownMenu>
+    </template>
     <template #right>
-      <div class="flex items-center gap-2">
-        <USelect v-model="filters.locationId" :items="locationOptions" size="sm" class="w-44" aria-label="Location" />
-        <USelect v-model="filters.kind" :items="kindOptions" size="sm" class="w-36" aria-label="Kind" />
+      <div class="flex items-center gap-1">
         <UButton
           v-if="chosenLocation && !selecting && view === 'month'"
           label="Select dates"
           color="neutral"
           variant="outline"
           size="sm"
+          class="mr-1"
           @click="startSelecting"
         />
-        <!-- List, Month, Year behind one icon, as Airbnb's view menu. -->
-        <UDropdownMenu :items="viewItems" :content="{ align: 'end' }" :ui="{ content: 'w-40' }">
+        <!-- List, Month, Year behind one icon, as Airbnb's view menu; what to show sits beneath them. -->
+        <UDropdownMenu :items="viewItems" :content="{ align: 'end' }" :ui="{ content: 'w-44' }">
           <UButton :icon="VIEWS[view].icon" color="neutral" variant="ghost" size="sm" square :aria-label="`View: ${VIEWS[view].label}`" />
         </UDropdownMenu>
+        <!-- The gear opens this location's reservation settings, as Airbnb's opens the listing's. -->
+        <UButton
+          v-if="chosenLocation"
+          icon="i-lucide-settings"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          aria-label="Reservation settings"
+          :to="{ path: `${level.path.value}/settings`, query: route.query }"
+        />
       </div>
     </template>
 
@@ -233,13 +257,28 @@ const VIEWS: Record<CalendarView, { label: string; icon: string }> = {
   year: { label: 'Year', icon: 'i-lucide-grid-3x3' },
 }
 const view = ref<CalendarView>(route.query.view === 'list' || route.query.view === 'year' ? route.query.view : 'month')
-const viewItems = computed(() => (Object.keys(VIEWS) as CalendarView[]).map(key => ({
-  label: VIEWS[key].label,
-  icon: VIEWS[key].icon,
+const viewItems = computed(() => [
+  (Object.keys(VIEWS) as CalendarView[]).map(key => ({
+    label: VIEWS[key].label,
+    icon: VIEWS[key].icon,
+    type: 'checkbox' as const,
+    checked: view.value === key,
+    onSelect: () => { view.value = key },
+  })),
+  kindOptions.value.map(option => ({
+    label: option.label,
+    type: 'checkbox' as const,
+    checked: filters.kind === option.value,
+    onSelect: () => { filters.kind = option.value },
+  })),
+])
+const locationItems = computed(() => [locationOptions.value.map(option => ({
+  label: option.label,
   type: 'checkbox' as const,
-  checked: view.value === key,
-  onSelect: () => { view.value = key },
-})))
+  checked: filters.locationId === option.value,
+  onSelect: () => { filters.locationId = option.value },
+}))])
+const chosenLocationTitle = computed(() => locations.value.find(location => location.id === filters.locationId)?.title ?? 'All locations')
 
 // Reka draws the outside-view days as cells; Airbnb leaves those blank, so
 // they are made invisible rather than removed, which keeps the grid aligned.
