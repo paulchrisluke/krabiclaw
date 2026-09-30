@@ -139,7 +139,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
       name: value.title,
       description: value.description || undefined,
       isPartOf: { '@id': websiteId },
-      breadcrumb: { '@id': breadcrumbId },
+      ...(breadcrumbItems.length ? { breadcrumb: { '@id': breadcrumbId } } : {}),
       mainEntity: { '@id': articleId },
     }
 
@@ -200,11 +200,11 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
       },
       webpageNode,
       articleNode,
-      {
+      ...(breadcrumbItems.length ? [{
         '@type': 'BreadcrumbList',
         '@id': breadcrumbId,
         itemListElement: breadcrumbItems,
-      },
+      }] : []),
     ]
 
     const hasPart: Array<{ '@id': string }> = []
@@ -230,7 +230,7 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
     }
 
     if (howTo?.data?.steps && howTo.data.steps.length >= 2) {
-      const validSteps = howTo.data.steps.filter(step => step.name?.trim() && step.text?.trim())
+      const validSteps = howTo.data.steps.filter(step => step.text?.trim() || step.name?.trim())
       if (validSteps.length >= 2) {
         const howToId = `${pageUrl}#howto`
         hasPart.push({ '@id': howToId })
@@ -242,8 +242,8 @@ export function useContentPageSchema(input: MaybeRefOrGetter<ContentPageSchemaIn
           step: validSteps.map((step, index) => ({
             '@type': 'HowToStep',
             position: index + 1,
-            name: step.name!.trim(),
-            text: markdownToPlainText(step.text!),
+            name: step.name?.trim() || undefined,
+            text: markdownToPlainText(step.text?.trim() || step.name!.trim()),
             url: step.url ? normalizeAbsoluteUrl(step.url, origin) : undefined,
           })),
           totalTime: howTo.data.estimated_time || undefined,

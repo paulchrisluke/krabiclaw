@@ -1,0 +1,47 @@
+{
+  "blocks": [
+    {
+      "button": [
+        {
+          "label": "Copy code",
+          "rect": {
+            "bottom": 438.03125,
+            "height": 31.671875,
+            "left": 114.484375,
+            "right": 146.15625,
+            "top": 406.359375,
+            "width": 31.671875,
+            "x": 114.484375,
+            "y": 406.359375
+          },
+          "style": {
+            "boxShadow": "none",
+            "outline": "rgb(0, 95, 204) auto 1px",
+            "padding": "6.36px",
+            "position": "absolute"
+          }
+        }
+      ],
+      "clientWidth": 261,
+      "padding": "12.72px",
+      "position": "relative",
+      "rect": {
+        "bottom": 444.515625,
+        "height": 356.125,
+        "left": 57.1015625,
+        "right": 317.8984375,
+        "top": 88.390625,
+        "width": 260.796875,
+        "x": 57.1015625,
+        "y": 88.390625
+      },
+      "scrollWidth": 261,
+      "text": "On my Harbor Studio site, read the English About page and show me its current opening paragraph. Replace only that paragraph with: “We offer small-group creative workshops for adults.” Keep the page URL, other text and media unchanged. Then read the page back and give me its public link."
+    }
+  ],
+  "focused": "Copy code",
+  "viewport": {
+    "height": 844,
+    "width": 390
+  }
+}

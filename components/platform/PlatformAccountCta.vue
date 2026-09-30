@@ -54,12 +54,12 @@
         </button>
       </div>
     </details>
-    <template v-else>
+    <div v-else class="items-center gap-2" :class="hideSignedOutOnMobile ? 'hidden nav:flex' : 'flex'">
       <!-- Below 620px only the signed-out text link gives way; `Start free`
            and the signed-in avatar stay at every width. -->
       <NuxtLink to="/login" class="text-[15px] font-medium no-underline [@media(max-width:620px)]:hidden">Sign in</NuxtLink>
       <PlatformButton :to="to" size="sm">{{ label }}</PlatformButton>
-    </template>
+    </div>
   </div>
   <PlatformButton v-else :to="user ? postLoginUrl : to" :external="Boolean(user)" v-bind="$attrs">
     {{ user && !selectedPlan ? 'Dashboard' : label }}
@@ -71,8 +71,9 @@ import { buildPostLoginUrl } from '~/shared/auth/return-target'
 import { authClient } from '~/lib/auth-client'
 
 defineOptions({ inheritAttrs: false })
-const props = withDefaults(defineProps<{ account?: boolean, to?: string, label?: string }>(), {
+const props = withDefaults(defineProps<{ account?: boolean, hideSignedOutOnMobile?: boolean, to?: string, label?: string }>(), {
   account: false,
+  hideSignedOutOnMobile: false,
   to: '/signup',
   label: 'Start free',
 })

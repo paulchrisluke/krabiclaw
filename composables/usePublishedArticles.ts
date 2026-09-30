@@ -3,7 +3,6 @@ import { collectionCategoryPath, type ArticleCollection } from '~/utils/article-
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import { validateApiShape } from '~/utils/api-validation'
 import { resolveSeoUrl } from '~/composables/useSeoUrls'
-import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import type { SocialImageSource } from '~/utils/social-metadata'
 import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
@@ -227,16 +226,26 @@ export function useArticleItemList(listPath: MaybeRefOrGetter<string>, name: May
   const { template } = usePublicTemplate()
   const requestURL = useRequestURL()
   const runtimeConfig = useRuntimeConfig()
-  useSchemaOrg(computed(() => {
+  return computed(() => {
     const origin = template.value.slug === 'platform' ? runtimeConfig.public.platformUrl : requestURL.origin
     return {
       '@context': 'https://schema.org',
       '@type': 'ItemList',
       '@id': `${resolveSeoUrl(toValue(listPath), origin)}#articles`,
+      url: resolveSeoUrl(toValue(listPath), origin),
       name: toValue(name),
+      numberOfItems: toValue(articles).length,
+      mainEntityOfPage: { '@id': `${resolveSeoUrl(toValue(listPath), origin)}#webpage` },
       itemListElement: toValue(articles).map((article, index) => ({
-        '@type': 'ListItem', position: index + 1, name: article.title, url: resolveSeoUrl(article.path, origin),
+        '@type': 'ListItem',
+        position: index + 1,
+        item: {
+          '@type': 'WebPage',
+          '@id': `${resolveSeoUrl(article.path, origin)}#webpage`,
+          name: article.title,
+          url: resolveSeoUrl(article.path, origin),
+        },
       })),
     }
-  }))
+  })
 }
