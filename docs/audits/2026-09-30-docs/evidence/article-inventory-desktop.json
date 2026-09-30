@@ -1,0 +1,300 @@
+[
+  {
+    "content": "Search Docs⌘KGetting StartedStart hereCreate your KrabiClaw accountCreate and publish your first sitePrepare your site with ChatGPT, then create it in KrabiClawBuild & EditMake your first site editCustomize your brand and themeAdd photos and videoUpdate locations and hoursRun Your BusinessHandle inquiries and reservation requestsSet up notificationsPublish a postConnect Facebook to KrabiClawConnect Instagram to KrabiClawRead your site analyticsConnect Google Analytics and Search ConsoleAI AssistantsConnect KrabiClaw to ChatGPTWhat AI assistants can and cannot doGet the latest KrabiClaw tools in ChatGPTAccount & SettingsInvite your teamConnect your accounts to KrabiClawDocsGetting StartedCreate and publish your first siteCreate a KrabiClaw site in the dashboard: enter business details, review a private preview, explicitly create the site, and check the public result.KUpdated Sep 30, 2026·5 min readUse the KrabiClaw dashboard to create your first business website. The setup has nine steps for restaurant and experience businesses, or eight for professional services, which skips the products step. ChatGPT is optional and connects after the site exists.\nBefore you startSign in to your KrabiClaw account, then open onboarding.\nHave your business name, street address, city, country, business contact number, currency, and homepage headline ready. You can also add opening hours, a logo, a brand color, and a real business photo.\nCompleted steps save your progress as a private draft. Use Save & exit to leave the flow, then return to onboarding to resume from your saved answers. Use Next to save the current step before leaving; do not assume an unfinished field has been saved. Saving a draft does not publish your site.\n1. Choose your business typeChoose Restaurant, café or bar; Experience or activity; or Professional services. This determines which setup steps and starting content apply to your business.\n2. Find your business or enter it manuallyType your business name in the Google Maps search picker and choose the correct listing. Selecting the listing brings available address, phone, and hours into the following screens, where you can check and change them.\nIf you cannot find the right listing, type your business name and choose Enter details manually. You do not need to paste a Google Maps URL or connect Google Analytics to use this step.\n3. Check the addressReview or enter the street address, city, and country. These are required to continue. Complete any other address fields that apply, and make sure customers will be directed to the right place.\n4. Add the business contact numberEnter the number customers should use to contact the business. A business contact number is required. Notification preferences are configured separately; this is not a manager alert-number setup screen.\n5. Add hours, or continue without themCheck the timezone and opening hours, including any exceptions you know about. When the country has one timezone, it may be proposed for you; verify it rather than assuming it is right.\nHours are an optional setup step. If you skip them, add accurate hours before relying on the site to tell customers when to visit.\n6. Choose your currencyConfirm the currency you charge in. The country may suggest a currency; choose another if needed. A currency is required before continuing, including for professional services.\n7. Add your first offerings, if applicableRestaurant and experience businesses can add initial menu items or offerings. This step is optional, so you can continue and add them later. Professional services skips this step entirely.\nOnly enter real names and prices. Adding an offering here does not by itself verify a complete customer booking or payment flow.\n8. Set the homepage headline and lookEnter the required Hero headline: a clear statement of what your business offers. You can also add a Hero description.\nBrand color, Logo, and Hero photo are optional. Choose a color swatch or custom color, upload a logo, and upload your own hero photo if you have them ready. Wait for uploads to finish and check the preview. Unlike the optional images and color, the headline cannot be left blank.\n9. Review, then choose Create my siteReview the site preview and your answers. Use Back to correct details before continuing. A private preview is for review; it is not proof that the public site is live.\nWhen you are ready, choose Create my site. This is the explicit activation step. Wait for it to succeed and for KrabiClaw to open the site dashboard. If an error appears, read it and correct the problem rather than assuming creation finished.\nCheck the public resultOpen the site's public address from the dashboard. Then check it in a private browser window without a preview token or signed-in preview session.\n\nThe site opens as a customer would see it\nThe business name, headline, address, phone, and hours are accurate\nAny displayed offerings and prices are correct\nThe main button leads to the intended page, phone number, or customer action\nPhotos and text look usable on a phone as well as a larger screen\n\nDo these checks before sharing the address. A working preview and a working public site are different checks.\nTroubleshootingThe Google Maps picker does not find my business. Try its business name and location, choose only the correct listing, or use Enter details manually.\nNext is disabled. Check the current required answer: business choice/name, street address/city/country, business contact number, currency, or Hero headline. Optional hours and offerings do not block the flow.\nI left before finishing. Return to onboarding with the same account. It restores saved progress and takes you to the first unanswered required step, or review if those answers are complete.\nCreation returned an error. Keep the saved draft and address the displayed error. Check the dashboard for an existing site before starting another setup.\nNext stepNext, make your first site edit and verify it on the public site. You can also customize your brand and theme, or connect ChatGPT if you prefer conversational edits.\nPreviousCreate your KrabiClaw accountNextPrepare your site with ChatGPT, then create it in KrabiClawOn this pageBefore you start1. Choose your business type2. Find your business or enter it manually3. Check the address4. Add the business contact number5. Add hours, or continue without them6. Choose your currency7. Add your first offerings, if applicable8. Set the homepage headline and look9. Review, then choose Create my siteCheck the public resultTroubleshootingNext step",
+    "copyCount": 0,
+    "h1Count": 1,
+    "heading": "Create and publish your first site",
+    "headings": [
+      {
+        "id": "before-you-start-1",
+        "text": "Before you start"
+      },
+      {
+        "id": "1-choose-your-business-type-3",
+        "text": "1. Choose your business type"
+      },
+      {
+        "id": "2-find-your-business-or-enter-it-manually-5",
+        "text": "2. Find your business or enter it manually"
+      },
+      {
+        "id": "3-check-the-address-7",
+        "text": "3. Check the address"
+      },
+      {
+        "id": "4-add-the-business-contact-number-9",
+        "text": "4. Add the business contact number"
+      },
+      {
+        "id": "5-add-hours-or-continue-without-them-11",
+        "text": "5. Add hours, or continue without them"
+      },
+      {
+        "id": "6-choose-your-currency-13",
+        "text": "6. Choose your currency"
+      },
+      {
+        "id": "7-add-your-first-offerings-if-applicable-15",
+        "text": "7. Add your first offerings, if applicable"
+      },
+      {
+        "id": "8-set-the-homepage-headline-and-look-17",
+        "text": "8. Set the homepage headline and look"
+      },
+      {
+        "id": "9-review-then-choose-create-my-site-19",
+        "text": "9. Review, then choose Create my site"
+      },
+      {
+        "id": "check-the-public-result-21",
+        "text": "Check the public result"
+      },
+      {
+        "id": "troubleshooting-23",
+        "text": "Troubleshooting"
+      },
+      {
+        "id": "next-step-25",
+        "text": "Next step"
+      }
+    ],
+    "images": [],
+    "preCount": 0,
+    "scrollWidth": 1425,
+    "url": "https://krabiclaw.com/docs/deploy-your-site",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  {
+    "content": "Search Docs⌘KGetting StartedStart hereCreate your KrabiClaw accountCreate and publish your first sitePrepare your site with ChatGPT, then create it in KrabiClawBuild & EditMake your first site editCustomize your brand and themeAdd photos and videoUpdate locations and hoursRun Your BusinessHandle inquiries and reservation requestsSet up notificationsPublish a postConnect Facebook to KrabiClawConnect Instagram to KrabiClawRead your site analyticsConnect Google Analytics and Search ConsoleAI AssistantsConnect KrabiClaw to ChatGPTWhat AI assistants can and cannot doGet the latest KrabiClaw tools in ChatGPTAccount & SettingsInvite your teamConnect your accounts to KrabiClawDocsBuild & EditMake your first site editChange one piece of content on an existing site, keep the rest intact, and verify the customer-facing result.Chris LukeSep 30, 2026·2 min readStart with a small, useful change: correct a sentence on an existing page. You need an existing KrabiClaw site and permission to edit its content. If you have not created a site yet, follow Create and publish your first site.\n1. Choose the exact destinationIn the dashboard, select your business and open the page you want to change. Check the page title, public path and language before editing. If the content belongs to a branch, confirm that location too.\nWith a connected assistant, first ask it to identify your business and read the current page. A business name or URL helps identify the site, but the assistant must resolve it to the accessible organization rather than guess an internal ID.\n2. Make one specific changeIn the page editor, change only the intended text and save. Treat changes to an existing live page as customer-facing; do not assume the draft-and-publish workflow for articles also applies to page edits.\nFor an assistant edit, provide the exact replacement and ask it to preserve the page path, language, other blocks and media. For a single paragraph, a targeted block edit avoids replacing the whole page. If the page changed since it was read, the assistant should read it again before saving.\nTry with your connected assistantReplace the example business, page and details with your own.Change one paragraphCopy promptOn my Harbor Studio site, read the English About page and show me its current opening paragraph. Replace only that paragraph with: “We offer small-group creative workshops for adults.” Keep the page URL, other text and media unchanged. Then read the page back and give me its public link.3. Check the resultOpen the public page, not just the editor. Check the new words on both a narrow and a wide screen. Follow any link you changed. Ask the assistant to read back the saved text as a second check; a successful save alone does not prove the public layout looks right.\nIf the old text remains, confirm the business, page and language, then reload the public page. If a save conflicts with another edit, inspect the latest version instead of repeatedly overwriting it. To undo your wording change, restore the original sentence after checking for newer edits.\nKeep the task smallCreating sites and locations, Google Places lookup and domain setup happen in the dashboard. Connected assistants manage existing-site content; they do not replace those setup flows.Next: Customize your brand and theme.\nPreviousPrepare your site with ChatGPT, then create it in KrabiClawNextCustomize your brand and themeOn this page1. Choose the exact destination2. Make one specific change3. Check the result",
+    "copyCount": 1,
+    "h1Count": 1,
+    "heading": "Make your first site edit",
+    "headings": [
+      {
+        "id": "1-choose-the-exact-destination-1",
+        "text": "1. Choose the exact destination"
+      },
+      {
+        "id": "2-make-one-specific-change-3",
+        "text": "2. Make one specific change"
+      },
+      {
+        "id": "",
+        "text": "Try with your connected assistant"
+      },
+      {
+        "id": "",
+        "text": "Change one paragraph"
+      },
+      {
+        "id": "3-check-the-result-6",
+        "text": "3. Check the result"
+      },
+      {
+        "id": "",
+        "text": "Keep the task small"
+      }
+    ],
+    "images": [
+      {
+        "alt": "Chris Luke",
+        "complete": true,
+        "naturalWidth": 96,
+        "width": 46.6328125
+      }
+    ],
+    "preCount": 1,
+    "scrollWidth": 1425,
+    "url": "https://krabiclaw.com/docs/make-your-first-site-edit",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  {
+    "content": "Search Docs⌘KGetting StartedStart hereCreate your KrabiClaw accountCreate and publish your first sitePrepare your site with ChatGPT, then create it in KrabiClawBuild & EditMake your first site editCustomize your brand and themeAdd photos and videoUpdate locations and hoursRun Your BusinessHandle inquiries and reservation requestsSet up notificationsPublish a postConnect Facebook to KrabiClawConnect Instagram to KrabiClawRead your site analyticsConnect Google Analytics and Search ConsoleAI AssistantsConnect KrabiClaw to ChatGPTWhat AI assistants can and cannot doGet the latest KrabiClaw tools in ChatGPTAccount & SettingsInvite your teamConnect your accounts to KrabiClawDocsRun Your BusinessPublish a postDraft a short update, approve exact website and social destinations, and check every publication outcome.Chris LukeSep 30, 2026·2 min readUse a short post for news, an announcement or a timely update. A post is different from a long-form blog article or a permanent site page. You can publish to your website, a connected Facebook Page, a connected Instagram professional account, or an explicit combination.\n1. Check the destinationsChoose the correct business and, if relevant, location. Check the exact connected Page or account name and any reported connection or plan problem. Connect or change social accounts in the dashboard using the Facebook or Instagram guide.\nImporting existing social posts is separate from publishing a new one. A working import is not evidence that this draft has been published.\n2. Draft and previewPrepare the caption, optional title, call-to-action link and media in order. Open the draft preview and check spelling, dates, link destinations and media. Uploaded media has a public delivery URL even while the post is a draft.\nFacebook accepts text, a link, photos or one video. Instagram accepts one JPEG image, a carousel of up to ten items, or one video as a Reel; its call to action appears as text. Check the current destination requirements before approving the post.\nTry with your connected assistantReplace the example business, page and details with your own.Prepare a website-only draftCopy promptCreate a draft post for Harbor Studio: “Our autumn workshop dates are now available.” Use no media or call to action. Show me the preview and the available publishing destinations. Do not publish yet.3. Approve exact targetsName each destination you want. For example: “Publish this draft to the Harbor Studio website and the connected Facebook Page named Harbor Studio, but not Instagram.” Website publication is a separate target; publishing to a social account does not mean you also chose the website.\nKrabiClaw does not provide native scheduled publication. A draft remains a draft until a publish action happens; a request to prepare something for later is not a scheduled job.\n4. Check every resultAsk for an outcome and public link for each target. Published or already published confirms that destination. Other outcomes need attention:\n\nProcessing: the provider is still preparing media. Continue the same post's publish operation rather than create another post.\nUnknown: reconcile the existing publication with the provider. Do not publish again or make a duplicate to resolve uncertainty.\nFailed or skipped: read the reason and fix that destination's issue before retrying. Keep successful destinations intact.\n\nOpen the returned public links to verify the content. If no link is available, report that limitation instead of treating a missing URL as proof of failure.\nChanges after publicationEditing a published post changes the website copy only. It does not edit the Facebook or Instagram copies. Deleting it from KrabiClaw removes the website post, not the external social posts.Next: Read your site analytics.\nPreviousSet up notificationsNextConnect Facebook to KrabiClawOn this page1. Check the destinations2. Draft and preview3. Approve exact targets4. Check every result",
+    "copyCount": 1,
+    "h1Count": 1,
+    "heading": "Publish a post",
+    "headings": [
+      {
+        "id": "1-check-the-destinations-1",
+        "text": "1. Check the destinations"
+      },
+      {
+        "id": "2-draft-and-preview-3",
+        "text": "2. Draft and preview"
+      },
+      {
+        "id": "",
+        "text": "Try with your connected assistant"
+      },
+      {
+        "id": "",
+        "text": "Prepare a website-only draft"
+      },
+      {
+        "id": "3-approve-exact-targets-6",
+        "text": "3. Approve exact targets"
+      },
+      {
+        "id": "4-check-every-result-8",
+        "text": "4. Check every result"
+      },
+      {
+        "id": "",
+        "text": "Changes after publication"
+      }
+    ],
+    "images": [
+      {
+        "alt": "Chris Luke",
+        "complete": true,
+        "naturalWidth": 96,
+        "width": 46.6328125
+      }
+    ],
+    "preCount": 1,
+    "scrollWidth": 1425,
+    "url": "https://krabiclaw.com/docs/publish-a-post",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  {
+    "content": "Search Docs⌘KGetting StartedStart hereCreate your KrabiClaw accountCreate and publish your first sitePrepare your site with ChatGPT, then create it in KrabiClawBuild & EditMake your first site editCustomize your brand and themeAdd photos and videoUpdate locations and hoursRun Your BusinessHandle inquiries and reservation requestsSet up notificationsPublish a postConnect Facebook to KrabiClawConnect Instagram to KrabiClawRead your site analyticsConnect Google Analytics and Search ConsoleAI AssistantsConnect KrabiClaw to ChatGPTWhat AI assistants can and cannot doGet the latest KrabiClaw tools in ChatGPTAccount & SettingsInvite your teamConnect your accounts to KrabiClawDocsAI AssistantsConnect KrabiClaw to ChatGPTChoose the setup route available to your ChatGPT account, connect KrabiClaw with OAuth, and verify access to your existing business.KUpdated Sep 30, 2026·4 min readConnect KrabiClaw to ChatGPT to read your business information and make supported updates to an existing site. Create your first site in the KrabiClaw dashboard before using the connection to edit it.\nChoose the setup route you have\nThere are two different flows. Follow the one available to your account:\n\nPersonal plugin during the approval period: use the KrabiClaw listing or installation route provided to you. If you already installed it and new tools are missing, follow Get the latest KrabiClaw tools in ChatGPT. That guide documents the Personal-plugin flow tested in September 2026, including its desktop/tablet browser reinstall step.\nCustom MCP app using Developer mode: follow the developer connection steps below when your account or workspace permits this route.\n\nThe Personal listing is not guaranteed to appear for every account. Creating a custom MCP app and installing a Personal plugin are different operations; do not assume their menus or mobile availability are the same.\nDeveloper connection\nUse ChatGPT in a web browser. Developer-mode access and app creation depend on your ChatGPT plan and workspace permissions. Check OpenAI's current developer-mode instructions if a control is missing.\n1. Open the custom-app controls\nOpen ChatGPT's Apps settings and find the custom-app creation controls. Depending on your workspace, Developer mode is enabled through Apps → Advanced Settings or workspace permissions. Your workspace administrator may need to grant access.\n2. Enter the KrabiClaw connection details\nUse:\n\nName: KrabiClaw\nDescription: Manage your KrabiClaw website\nMCP server URL / Connection: https://krabiclaw.com/api/mcp\nAuthentication: OAuth\n\nCopy the exact HTTPS server URL into the connection field. Do not substitute your business's public website domain.\n3. Authorize and finish creating the app\nFollow the displayed tool-scan and creation flow. When prompted, sign in to the KrabiClaw account that has access to your business and review the requested access before approving it.\nOnly connect a server you trust. The connection can make real changes to content your account is authorized to manage.\n4. Start a new chat and select KrabiClaw\nSelect the connected app from the available tools or mention it in a new chat. Custom MCP app support and available surfaces follow OpenAI's current requirements; do not assume a developer-created app will work in the mobile app.\nCheck the connection without changing anything\nAsk these separately:\n\n“Which KrabiClaw tools are available in this chat?”\n“Which businesses can I manage with KrabiClaw?”\n“Show me the current pages for [my business]. Do not change anything.”\n\nThe first checks the loaded tool catalog. The next two check access to your account and business. Seeing tools does not prove that the correct business is connected.\nIf you manage several businesses, choose one explicitly before making any edits.\nWhat the connection can do\nThe connection operates within your KrabiClaw membership and the tools available in the chat. Supported actions include editing existing-site content, products, media, existing locations, and manually authored language variants, plus drafting and publishing posts to selected destinations.\nReviews, Q&A, contact inquiries, and table-reservation inquiries are available for reading. The connection does not provide review replies, Q&A writing, inquiry replies/status changes, or managed-service work requests.\nSite/location creation, domain setup, billing, team management, personal notification settings, and account connections need the dashboard. See What AI assistants can and cannot do before planning a workflow.\nTroubleshooting\nThe MCP server address opens this help page\nThat is expected when the URL is opened as a normal browser page. Browser requests for HTML at https://krabiclaw.com/api/mcp redirect to this setup guide. Paste the endpoint into the MCP connection field; opening it in a browser does not install the connection.\nChatGPT cannot connect\nCheck the exact URL, HTTPS, and accidental spaces. Confirm that you completed the OAuth sign-in and that the KrabiClaw account is the one with access to your business.\nI cannot find Developer mode or Create app\nCheck the route, plan, and workspace permissions in OpenAI's linked guidance. Switching devices alone does not grant developer access. If you were given a Personal-plugin installation route, use that route instead of creating a custom app.\nNew KrabiClaw tools are missing\nStart a completely new chat with KrabiClaw selected. For the tested approval-period Personal-plugin flow, use the reinstall and tool-check guide. Confirm you have a way to reinstall before uninstalling. Refresh tools alone did not update the catalog in that tested flow.\nThe tools appear, but my business is missing\nCheck which KrabiClaw account authorized the connection and whether your team invitation has been accepted. Business access and tool availability are separate checks.\nNext step\nAsk KrabiClaw to read one existing page and suggest a small improvement. Review the wording, request the specific edit, and open the public page to verify it.\nUse the Personal-plugin installation route provided to you, or use developer-mode custom-app setup if your ChatGPT account and workspace permit it. These are separate flows.For developer setup, use ChatGPT Apps settings and the developer controls available to your account. Ask your workspace administrator if access is required.Use KrabiClaw as the name, https://krabiclaw.com/api/mcp as the MCP server URL, and OAuth for authentication.Follow the displayed scan and creation steps. Sign in to the intended KrabiClaw account, review access, and approve only if you trust the connection.Select KrabiClaw in a new chat on a supported surface.Ask which tools are available, which businesses you can manage, and to read the current pages of your intended business without editing them.PreviousConnect Google Analytics and Search ConsoleNextWhat AI assistants can and cannot doOn this pageChoose the setup route you haveDeveloper connection1. Open the custom-app controls2. Enter the KrabiClaw connection details3. Authorize and finish creating the app4. Start a new chat and select KrabiClawCheck the connection without changing anythingWhat the connection can doTroubleshootingThe MCP server address opens this help pageChatGPT cannot connectI cannot find Developer mode or Create appNew KrabiClaw tools are missingThe tools appear, but my business is missingNext step",
+    "copyCount": 0,
+    "h1Count": 1,
+    "heading": "Connect KrabiClaw to ChatGPT",
+    "headings": [
+      {
+        "id": "choose-the-setup-route-you-have-0",
+        "text": "Choose the setup route you have"
+      },
+      {
+        "id": "developer-connection-0",
+        "text": "Developer connection"
+      },
+      {
+        "id": "1-open-the-custom-app-controls-0",
+        "text": "1. Open the custom-app controls"
+      },
+      {
+        "id": "2-enter-the-krabiclaw-connection-details-0",
+        "text": "2. Enter the KrabiClaw connection details"
+      },
+      {
+        "id": "3-authorize-and-finish-creating-the-app-0",
+        "text": "3. Authorize and finish creating the app"
+      },
+      {
+        "id": "4-start-a-new-chat-and-select-krabiclaw-0",
+        "text": "4. Start a new chat and select KrabiClaw"
+      },
+      {
+        "id": "check-the-connection-without-changing-anything-0",
+        "text": "Check the connection without changing anything"
+      },
+      {
+        "id": "what-the-connection-can-do-0",
+        "text": "What the connection can do"
+      },
+      {
+        "id": "troubleshooting-0",
+        "text": "Troubleshooting"
+      },
+      {
+        "id": "the-mcp-server-address-opens-this-help-page-0",
+        "text": "The MCP server address opens this help page"
+      },
+      {
+        "id": "chatgpt-cannot-connect-0",
+        "text": "ChatGPT cannot connect"
+      },
+      {
+        "id": "i-cannot-find-developer-mode-or-create-app-0",
+        "text": "I cannot find Developer mode or Create app"
+      },
+      {
+        "id": "new-krabiclaw-tools-are-missing-0",
+        "text": "New KrabiClaw tools are missing"
+      },
+      {
+        "id": "the-tools-appear-but-my-business-is-missing-0",
+        "text": "The tools appear, but my business is missing"
+      },
+      {
+        "id": "next-step-0",
+        "text": "Next step"
+      }
+    ],
+    "images": [],
+    "preCount": 0,
+    "scrollWidth": 1425,
+    "url": "https://krabiclaw.com/docs/mcp-setup",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  {
+    "content": "Search Docs⌘KGetting StartedStart hereCreate your KrabiClaw accountCreate and publish your first sitePrepare your site with ChatGPT, then create it in KrabiClawBuild & EditMake your first site editCustomize your brand and themeAdd photos and videoUpdate locations and hoursRun Your BusinessHandle inquiries and reservation requestsSet up notificationsPublish a postConnect Facebook to KrabiClawConnect Instagram to KrabiClawRead your site analyticsConnect Google Analytics and Search ConsoleAI AssistantsConnect KrabiClaw to ChatGPTWhat AI assistants can and cannot doGet the latest KrabiClaw tools in ChatGPTAccount & SettingsInvite your teamConnect your accounts to KrabiClawDocsAccount & SettingsInvite your teamInvite an Admin or Owner, check pending invitations, and manage organization-wide team access in KrabiClaw.KUpdated Sep 30, 2026·3 min readInvite teammates from your organization's Team → Members page. Current invitations offer Admin and, when you are an Owner, Owner.\nBoth roles have organization-wide access. Review the recipient and role before sending an invitation.\n1. Open the correct organization's Members page\nIn the dashboard, select the business you want to share, then open Team → Members. The address follows /dashboard/{your-org}/settings/members.\nCheck the existing team before inviting someone. Use an account with Owner or Admin access.\n2. Choose the role\n\nAdmin: can manage content, locations, media, products, settings, integrations, and routine business operations across the organization. Admins can invite and manage non-owner teammates. They can read billing information but do not have permission to change billing.\nOwner: has organization-wide management access, including billing changes. Only an existing Owner can grant the Owner role or change another Owner's role.\n\nThe invitation form does not offer a Member role or a location-only role. Admin is a substantial access grant, not a content-only role.\n3. Send the invitation\nChoose Invite a team member, enter the person's email address, choose the role, and select Send invite.\nAsk the recipient to open the invitation and complete acceptance with the intended account. Sending an invite alone does not mean they have joined.\n4. Check acceptance\nReturn to Members:\n\nPending Invitations shows invites that have not been accepted, with their expiry dates.\nTeam shows people who have access and their current role.\n\nIf an invitation is no longer useful, cancel it from Pending Invitations. If it has expired, send a new invitation and ask the recipient to use the new one.\nChange or remove access\nAn Owner can use the role selector to change an Admin to Owner or an Owner to Admin. The system prevents the last Owner from demoting themselves, so keep an Owner in place.\nFor a non-owner teammate, use the remove action beside their name and check that they no longer appear in Team. The list does not offer that removal action for an Owner. An existing Owner must handle any necessary role change first.\nIf a change fails, read the error and refresh the list before trying again. Do not assume access changed until the updated membership is visible.\nCommon questions\nWhy can I only invite an Admin?\nOnly an existing Owner is offered the Owner invitation option. Ask an Owner if the person genuinely needs that level of access.\nCan I limit this person to one branch?\nThe current Owner and Admin roles apply across the organization. Do not use either role expecting location-only access.\nWill new teammates receive my notifications?\nEach person controls their own notification categories and channels. WhatsApp delivery uses their own verified phone, not yours.\nNext step\nAsk each teammate to set up their notification preferences.\nPreviousGet the latest KrabiClaw tools in ChatGPTNextConnect your accounts to KrabiClawOn this page1. Open the correct organization's Members page2. Choose the role3. Send the invitation4. Check acceptanceChange or remove accessCommon questionsWhy can I only invite an Admin?Can I limit this person to one branch?Will new teammates receive my notifications?Next step",
+    "copyCount": 0,
+    "h1Count": 1,
+    "heading": "Invite your team",
+    "headings": [
+      {
+        "id": "1-open-the-correct-organizations-members-page-0",
+        "text": "1. Open the correct organization's Members page"
+      },
+      {
+        "id": "2-choose-the-role-0",
+        "text": "2. Choose the role"
+      },
+      {
+        "id": "3-send-the-invitation-0",
+        "text": "3. Send the invitation"
+      },
+      {
+        "id": "4-check-acceptance-0",
+        "text": "4. Check acceptance"
+      },
+      {
+        "id": "change-or-remove-access-0",
+        "text": "Change or remove access"
+      },
+      {
+        "id": "common-questions-0",
+        "text": "Common questions"
+      },
+      {
+        "id": "why-can-i-only-invite-an-admin-0",
+        "text": "Why can I only invite an Admin?"
+      },
+      {
+        "id": "can-i-limit-this-person-to-one-branch-0",
+        "text": "Can I limit this person to one branch?"
+      },
+      {
+        "id": "will-new-teammates-receive-my-notifications-0",
+        "text": "Will new teammates receive my notifications?"
+      },
+      {
+        "id": "next-step-0",
+        "text": "Next step"
+      }
+    ],
+    "images": [],
+    "preCount": 0,
+    "scrollWidth": 1425,
+    "url": "https://krabiclaw.com/docs/invite-your-team",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  }
+]
