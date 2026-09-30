@@ -53,8 +53,8 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
     assert.deepEqual(await getAnalyticsReport(db, period), before)
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_summaries WHERE kind = 'session'").first('count(*)'), 2)
     const conversion = JSON.stringify({ event_name: 'contact_submit', stage: 'submitted', entity_type: 'request', entity_id: 'request-proof',
-      attributed_at: '2026-09-05T02:03:00.000Z', attribution: { source: 'google', medium: 'cpc', campaign: 'first' } })
-    const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'session-first', 'visitor', ?, '2026-09-05T02:03:00.000Z')"
+      attributed_at: '2026-09-05T18:03:00.000Z', attribution: { source: 'google', medium: 'cpc', campaign: 'first' } })
+    const insert = "INSERT OR IGNORE INTO analytics_events (id, kind, organization_id, session_id, visitor_id, payload_json, created_at) VALUES (?, 'conversion', 'org-proof', 'session-first', 'visitor', ?, '2026-09-05T18:03:00.000Z')"
     await Promise.all(['conversion-first', 'conversion-duplicate'].map(id => db.prepare(insert).bind(id, conversion).run()))
     assert.equal(await db.prepare("SELECT count(*) FROM analytics_events WHERE kind = 'conversion'").first('count(*)'), 1)
     assert.deepEqual((await getAnalyticsReport(db, period)).conversions, [{
@@ -62,8 +62,8 @@ test('analytics preserves duplicate, attribution, summary semantics on D1', { ti
       distinctEntities: 1, convertingSessions: 1, nonbrowserEvents: 0, sessionConversionRate: 50,
     }])
     assert.deepEqual((await getAnalyticsReport(db, period)).dailyConversions, [
-      { date: '2026-09-05', events: 1 },
-      { date: '2026-09-06', events: 0 },
+      { date: '2026-09-05', events: 0 },
+      { date: '2026-09-06', events: 1 },
     ])
     assert.equal((await getAnalyticsReport(db, { ...period, now: new Date('2029-01-06T12:00:00Z') })).metrics.pageViews, 4)
   } finally { await runtime.dispose() }
