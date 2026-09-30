@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:a9c99ee1eb30970374562bcd8fc19b9a55eba1995df3f2a8a40da8492ef111f8",
+  "fingerprint": "sha256:d4cfa94ba93a93c7058b1f284088be6c48bd241857c7680b9a2a346d2c127a1b",
   "tools": [
     {
       "name": "append_content_block",
@@ -5068,6 +5068,27 @@
             ],
             "type": "object"
           },
+          "dailyConversions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "events": {
+                  "maximum": 9007199254740991,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "events"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
           "dailyData": {
             "items": {
               "additionalProperties": false,
@@ -5553,6 +5574,7 @@
           "period",
           "metrics",
           "dailyData",
+          "dailyConversions",
           "topPages",
           "attribution",
           "outcomeAttribution",

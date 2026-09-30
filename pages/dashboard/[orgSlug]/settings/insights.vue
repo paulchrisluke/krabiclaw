@@ -1,7 +1,6 @@
 <template>
   <DashboardIndexPanel id="organization-insights" title="Insights">
     <div class="mx-auto w-full max-w-5xl space-y-6 pb-10">
-      <p class="text-sm text-muted">Website traffic and business outcomes across all your sources.</p>
       <UAlert
         v-if="loadError"
         color="error"
@@ -50,38 +49,7 @@
               <UBadge color="neutral" variant="soft" class="rounded-2xl">{{ dailyData.length }} days</UBadge>
             </div>
           </template>
-          <div v-if="dailyData.length === 0" class="py-12 text-center text-sm text-muted">No analytics data for this range.</div>
-          <div v-else>
-            <div class="mb-3 min-h-12 text-sm" aria-live="polite">
-              <template v-if="hoveredDay">
-                <p class="font-medium text-highlighted">{{ formatDate(hoveredDay.date) }}</p>
-                <p class="mt-1 text-muted">{{ formatCount(hoveredDay.pageViews) }} pageviews · {{ formatCount(hoveredDay.sessions) }} sessions</p>
-              </template>
-              <p v-else class="text-muted">Explore a day to see its traffic.</p>
-            </div>
-            <svg viewBox="0 0 800 260" class="w-full overflow-visible" role="group" aria-label="Daily pageviews and sessions" @mouseleave="hoveredIndex = null">
-              <g v-for="tick in chartTicks" :key="tick.value">
-                <line x1="48" :y1="tick.y" x2="780" :y2="tick.y" class="stroke-default" stroke-width="1" />
-                <text x="36" :y="tick.y + 4" text-anchor="end" class="fill-muted text-[20px]">{{ formatCount(tick.value) }}</text>
-              </g>
-              <polyline :points="pageviewPoints" fill="none" stroke="currentColor" stroke-width="3" class="text-primary" stroke-linecap="round" stroke-linejoin="round" />
-              <polyline :points="sessionPoints" fill="none" stroke="currentColor" stroke-width="2" class="text-info" stroke-linecap="round" stroke-linejoin="round" />
-              <g v-for="(point, index) in pageviewDots" :key="point.key" tabindex="0" role="button"
-                :aria-label="`${formatDate(dailyData[index]!.date)}: ${dailyData[index]!.pageViews} pageviews, ${dailyData[index]!.sessions} sessions`"
-                @focus="hoveredIndex = index" @blur="hoveredIndex = null" @mouseenter="hoveredIndex = index" @click="hoveredIndex = index" @keydown.enter="hoveredIndex = index" @keydown.space.prevent="hoveredIndex = index">
-                <rect :x="point.x - Math.max(4, 732 / dailyData.length / 2)" y="35" :width="Math.max(8, 732 / dailyData.length)" height="190" fill="transparent" />
-                <line v-if="hoveredIndex === index" :x1="point.x" y1="40" :x2="point.x" y2="218" class="stroke-muted" />
-                <circle :cx="point.x" :cy="point.y" :r="hoveredIndex === index ? 5 : dailyData.length <= 31 ? 2 : 0" class="fill-primary" />
-              </g>
-              <text x="48" y="248" class="fill-muted text-[20px]">{{ shortDate(dailyData[0]!.date) }}</text>
-              <text x="414" y="248" text-anchor="middle" class="fill-muted text-[20px]">{{ shortDate(dailyData[Math.floor((dailyData.length - 1) / 2)]!.date) }}</text>
-              <text x="780" y="248" text-anchor="end" class="fill-muted text-[20px]">{{ shortDate(dailyData[dailyData.length - 1]!.date) }}</text>
-            </svg>
-          </div>
-          <div class="mt-3 flex flex-wrap gap-4 text-xs text-muted">
-            <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full bg-primary" /> Pageviews</span>
-            <span class="inline-flex items-center gap-2"><span class="size-2 rounded-full bg-info" /> Sessions</span>
-          </div>
+          <AnalyticsTrendChart label="Daily pageviews and sessions" :dates="dailyData.map(day => day.date)" :series="trafficSeries" />
         </UCard>
 
         <UCard variant="soft" class="rounded-2xl">
@@ -118,15 +86,13 @@
           </UCard>
           <UCard variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Conversions</h2></template>
-            <div class="space-y-4">
-              <DashboardAnalyticsRow
-                v-for="row in analytics?.conversions || []"
-                :key="`${row.eventName}-${row.stage}`"
-                :label="`${row.eventName.replaceAll('_', ' ')} · ${row.stage.replaceAll('_', ' ')}`"
-                :value="`${formatCount(row.events)} events · ${formatCount(row.convertingSessions)} sessions${row.nonbrowserEvents ? ` · ${formatCount(row.nonbrowserEvents)} without a browser` : ''}`"
-                :percent="row.sessionConversionRate ?? 0"
-              />
-              <p v-if="!loading && !(analytics?.conversions || []).length" class="text-sm text-muted">No conversions yet.</p>
+            <p class="mb-4 text-3xl font-semibold tabular-nums text-highlighted">{{ formatCount(analytics.dailyConversions.reduce((total, day) => total + day.events, 0)) }}</p>
+            <AnalyticsTrendChart label="Daily conversions" :dates="analytics.dailyConversions.map(day => day.date)" :series="conversionSeries" />
+            <div v-if="outcomes.length" class="mt-5 divide-y divide-default text-sm">
+              <div v-for="row in outcomes" :key="`${row.eventName}-${row.stage}`" class="flex justify-between gap-4 py-3">
+                <span class="text-muted">{{ row.eventName.replaceAll('_', ' ') }}</span>
+                <span class="tabular-nums">{{ formatCount(row.events) }}</span>
+              </div>
             </div>
           </UCard>
           <UCard variant="soft" class="rounded-2xl">
@@ -350,6 +316,8 @@
 
 <script setup lang="ts">
 import ActivityFeed from '~/components/dashboard/ActivityFeed.vue'
+import AnalyticsTrendChart from '~/components/dashboard/AnalyticsTrendChart.vue'
+import { CONVERSION_EVENT_CATALOG, ORGANIZATION_CONVERSION_EVENT_NAMES } from '~/utils/organization-conversion-events'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
@@ -466,14 +434,15 @@ async function loadLanguages(more: boolean) {
 watch(() => analytics.value ? `${scope.value?.orgSlug}:${analytics.value.period.startDate}:${analytics.value.period.endDate}` : null, (key) => { if (key) void loadLanguages(false) }, { immediate: true })
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
-const hoveredIndex = ref<number | null>(null)
-const hoveredDay = computed(() => hoveredIndex.value === null ? null : dailyData.value[hoveredIndex.value])
-const maxTrendValue = computed(() => Math.max(4, Math.ceil(Math.max(0, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))) / 4) * 4))
-const chartTicks = computed(() => [0, 1, 2, 3, 4].map(step => ({ value: maxTrendValue.value * step / 4, y: 218 - step * 178 / 4 })))
-function shortDate(value: string) { return formatCalendarDate(value, 'en', { month: 'short', day: 'numeric' }) }
-const pageviewPoints = computed(() => toPoints(dailyData.value.map(day => day.pageViews)))
-const sessionPoints = computed(() => toPoints(dailyData.value.map(day => day.sessions)))
-const pageviewDots = computed(() => toDots(dailyData.value.map(day => day.pageViews)))
+const trafficSeries = computed(() => [
+  { label: 'Pageviews', values: dailyData.value.map(day => day.pageViews), color: 'var(--ui-primary)' },
+  { label: 'Sessions', values: dailyData.value.map(day => day.sessions), color: 'var(--ui-info)' },
+])
+const conversionSeries = computed(() => [
+  { label: 'Conversions', values: analytics.value?.dailyConversions.map(day => day.events) ?? [], color: 'var(--ui-primary)' },
+])
+const outcomeNames = new Set<string>(ORGANIZATION_CONVERSION_EVENT_NAMES.filter(name => CONVERSION_EVENT_CATALOG[name].outcome))
+const outcomes = computed(() => analytics.value?.conversions.filter(row => outcomeNames.has(row.eventName)) ?? [])
 
 const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
@@ -491,27 +460,6 @@ function applyPreset(days: number) {
   activeDays.value = days
   const endDate = localDateAt(new Date(), analytics.value.period.timezone)
   requestedRange.value = { startDate: addLocalDays(endDate, 1 - days), endDate }
-}
-
-function toPoints(values: number[]): string {
-  if (!values.length) return ''
-  const width = 732
-  const step = values.length > 1 ? width / (values.length - 1) : 0
-  return values.map((value, index) => {
-    const x = 48 + (index * step)
-    const y = 218 - ((value / maxTrendValue.value) * 178)
-    return `${x.toFixed(2)},${y.toFixed(2)}`
-  }).join(' ')
-}
-
-function toDots(values: number[]) {
-  const width = 732
-  const step = values.length > 1 ? width / (values.length - 1) : 0
-  return values.map((value, index) => ({
-    key: `${index}-${value}`,
-    x: 48 + (index * step),
-    y: 218 - ((value / maxTrendValue.value) * 178)
-  }))
 }
 
 function formatMoney(minor: number, currency: string): string {

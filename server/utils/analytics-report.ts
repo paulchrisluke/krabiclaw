@@ -168,12 +168,15 @@ async function loadSlices(db: DbClient, organizationId: string, dates: string[],
   return result
 }
 
-interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number }
+interface ConversionReportWindow { start: string; end: string; observedEnd: string; uniqueSessions: number; dates: string[]; timezone: string }
 
 async function loadConversionReport(db: DbClient, organizationId: string, window: ConversionReportWindow) {
   const { start, end, observedEnd, uniqueSessions } = window
   const inRange = `kind IN ('conversion', 'interaction') AND organization_id = ? AND created_at >= ? AND created_at < ?`
   const eventName = `(payload_json ->> '$.event_name')`
+  // Calendar dates and their UTC boundaries are produced by the validated range
+  // and timezone helpers. Bucket in SQL without assuming a fixed UTC offset.
+  const localDay = `CASE ${window.dates.map(date => `WHEN created_at < '${localDateBounds(addLocalDays(date, 1), window.timezone).start}' THEN '${date}'`).join(' ')} END`
   const snapshot = `(payload_json ->> '$.attribution.source') source, (payload_json ->> '$.attribution.medium') medium,
     (payload_json ->> '$.attribution.campaign') campaign, (payload_json ->> '$.attribution.content') content`
   // Signups in the window; outcomes that follow them are linked through the originating owner
@@ -184,7 +187,9 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
       FROM analytics_events e WHERE e.kind = 'conversion' AND e.organization_id = ? AND (e.payload_json ->> '$.event_name') = 'sign_up' AND e.created_at >= ? AND e.created_at < ?)`
   const followedBy = (alias: string, eventFilter: string) => `EXISTS (SELECT 1 FROM analytics_events ${alias} WHERE ${alias}.kind = 'conversion' AND ${alias}.organization_id = ?
     AND ${eventFilter} AND (${alias}.payload_json ->> '$.metadata.originating_user_id') = signups.user_id AND ${alias}.created_at >= signups.signed_at AND ${alias}.created_at < ?)`
-  const [conversionRows, outcomeRows, valueRows, attributedRows, bookingValueRows, cohortRows, cohortRevenueRows, businessStats, coverageRows, deliveryRows] = await Promise.all([
+  const [dailyRows, conversionRows, outcomeRows, valueRows, attributedRows, bookingValueRows, cohortRows, cohortRevenueRows, businessStats, coverageRows, deliveryRows] = await Promise.all([
+    queryAll<{ date: string; events: number }>(db, `SELECT ${localDay} date, COUNT(*) events
+      FROM analytics_events WHERE ${inRange} AND ${eventName} IN (${OUTCOME_EVENT_SQL_LIST}) GROUP BY 1`, [organizationId, start, end]),
     queryAll<Record<string, unknown>>(db, `SELECT ${eventName} event_name, (payload_json ->> '$.stage') stage, (payload_json ->> '$.conversion_type') conversion_type,
         COUNT(*) events, COUNT(DISTINCT COALESCE(payload_json ->> '$.entity_id', id)) entities, COUNT(DISTINCT session_id) sessions, SUM(session_id IS NULL) nonbrowser
       FROM analytics_events WHERE ${inRange} GROUP BY 1,2,3 ORDER BY events DESC, event_name`, [organizationId, start, end]),
@@ -232,6 +237,7 @@ async function loadConversionReport(db: DbClient, organizationId: string, window
     .filter(revenue => revenue.source === row.source && revenue.medium === row.medium && revenue.campaign === row.campaign && revenue.content === row.content)
     .map(revenue => ({ currency: String(revenue.currency), collectedMinor: n(revenue.collected), refundedMinor: n(revenue.refunded), netMinor: n(revenue.collected) - n(revenue.refunded) }))
   return {
+    dailyConversions: window.dates.map(date => ({ date, events: dailyRows.find(row => row.date === date)?.events ?? 0 })),
     outcomeAttribution: outcomeRows.map(row => ({ source: String(row.source), medium: String(row.medium), campaign: text(row.campaign), content: text(row.content), eventName: String(row.event_name), events: n(row.events), distinctEntities: n(row.entities) })),
     attributedValue: attributedRows.map(row => ({ source: text(row.source), medium: text(row.medium), campaign: text(row.campaign), content: text(row.content), currency: String(row.currency),
       purchases: n(row.purchases), collectedMinor: n(row.collected), refundedMinor: n(row.refunded), netMinor: n(row.collected) - n(row.refunded) })),
@@ -315,7 +321,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
   ])
   const pageViews = slices.reduce((sum, slice) => sum + slice.pageViews, 0)
   const uniqueSessions = n(sessionStats?.sessions)
-  const conversionReport = await loadConversionReport(db, input.organizationId, { start, end, observedEnd, uniqueSessions })
+  const conversionReport = await loadConversionReport(db, input.organizationId, { start, end, observedEnd, uniqueSessions, dates: range.dates, timezone: context.timezone })
   const previousStart = localDateBounds(range.previousStartDate, context.timezone).start
   const previousAvailable = !context.analyticsDataStartAt || previousStart >= context.analyticsDataStartAt
   let changePercent: number | null = null

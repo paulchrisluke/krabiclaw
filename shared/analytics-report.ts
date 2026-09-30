@@ -18,6 +18,7 @@ export const analyticsReportSchema = z.object({
     avgSessionDuration: z.number().nonnegative(), pagesPerSession: z.number().nonnegative(), changePercent: z.number().nullable(),
   }),
   dailyData: z.array(z.object({ date: text, pageViews: count, sessions: count, avgDuration: z.number().nonnegative() })),
+  dailyConversions: z.array(z.object({ date: text, events: count })),
   topPages: z.array(z.object({ path: text, views: count, percentOfTotal: z.number() })),
   // Sessions and converting sessions share the same population. Outcomes below instead
   // use their immutable attribution snapshot; their counts have no session denominator.
