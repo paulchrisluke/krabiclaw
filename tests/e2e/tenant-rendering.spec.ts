@@ -83,6 +83,25 @@ test('Krabiclaw pricing retains its billing plans after hydration', async ({ pag
   await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth')
 })
 
+test('Krabiclaw social viewer keyboard navigation changes the visible picture', async ({ page }) => {
+  const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
+  expect(response?.status()).toBe(200)
+  await waitForNuxtHydration(page)
+  await page.locator('.kc-social__open').first().click()
+  const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })
+  await expect(viewer).toBeVisible()
+  const pictures = viewer.locator('section')
+  expect(await pictures.count()).toBeGreaterThan(1)
+  const close = viewer.getByRole('button', { name: 'Close', exact: true })
+  await close.press('ArrowDown')
+  await expect.poll(() => pictures.nth(1).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
+  await expect.poll(() => pictures.nth(1).locator('img:not([aria-hidden])').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await close.press('ArrowUp')
+  await expect.poll(() => pictures.nth(0).evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
+  await close.click()
+  await expect(viewer).toHaveCount(0)
+})
+
 for (const tenant of tenants) {
   test(`${tenant.name} renders home and detail routes on desktop`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
