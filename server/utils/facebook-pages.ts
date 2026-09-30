@@ -1,4 +1,4 @@
-import type { FacebookIntegration, SocialSyncProgress } from '~/shared/organization-settings'
+import type { FacebookIntegration } from '~/shared/organization-settings'
 import { execute, queryFirst } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { formBody, metaGraphRequest } from './meta-graph'
@@ -6,7 +6,7 @@ import type { MetaDeadline } from './meta-graph'
 
 /**
  * A Facebook Page as an organization's integration, and the Page Graph calls
- * publication and sync make through it.
+ * post management makes through it.
  *
  * The Facebook identity and its user token are a Better Auth linked account;
  * the organization stores which of those accounts it acts through and which
@@ -25,7 +25,6 @@ const GRAPH_BASE = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`
 
 export interface FacebookPagesConnection extends FacebookIntegration {
   organization_id: string
-  sync: SocialSyncProgress | null
 }
 
 export interface FacebookPage {
@@ -54,8 +53,7 @@ export const storeFacebookPagesConnection = async (
   expected: { revision: string | null },
 ): Promise<void> => {
   const now = new Date().toISOString()
-  // A new selection is a new revision, and its sync starts from the head: the
-  // progress below belongs to the Page it was made for.
+  // A new selection invalidates callers holding the previous revision.
   const payload = JSON.stringify({
     revision: crypto.randomUUID(),
     account_id: connection.account_id,
@@ -79,7 +77,7 @@ export const getFacebookPagesConnection = async (
   env: CloudflareEnv,
   organizationId: string,
 ): Promise<FacebookPagesConnection | null> => {
-  const row = await queryFirst<Omit<FacebookPagesConnection, 'sync'> & { sync: string | null }>(env.DB, `
+  const row = await queryFirst<FacebookPagesConnection>(env.DB, `
     SELECT id AS organization_id,
            json_extract(integrations_json, '$.facebook.revision') AS revision,
            json_extract(integrations_json, '$.facebook.account_id') AS account_id,
@@ -87,13 +85,12 @@ export const getFacebookPagesConnection = async (
            json_extract(integrations_json, '$.facebook.page_name') AS page_name,
            json_extract(integrations_json, '$.facebook.status') AS status,
            json_extract(integrations_json, '$.facebook.created_at') AS created_at,
-           json_extract(integrations_json, '$.facebook.updated_at') AS updated_at,
-           json_extract(integrations_json, '$.facebook.sync') AS sync
+           json_extract(integrations_json, '$.facebook.updated_at') AS updated_at
       FROM organization WHERE id = ?
        AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'error')
      LIMIT 1
   `, [organizationId])
-  return row ? { ...row, sync: row.sync ? JSON.parse(row.sync) as SocialSyncProgress : null } : null
+  return row
 }
 
 /** The Pages a linked Facebook account manages, each with its Page token. */
@@ -184,13 +181,13 @@ export async function publishVideo(target: FacebookPageTarget, videoId: string, 
   if (result.success !== true) throw new Error('Facebook did not confirm the video was published')
 }
 
-/** Removes an unpublished object this app created and never published. */
-export async function deleteUnpublishedObject(target: FacebookPageTarget, objectId: string, deadline: MetaDeadline): Promise<void> {
+/** Deletes the explicitly addressed Page object and requires Meta's confirmation. */
+export async function deletePageObject(target: FacebookPageTarget, objectId: string, deadline: MetaDeadline): Promise<void> {
   const result = await metaGraphRequest<{ success?: boolean }>(`${GRAPH_BASE}/${objectId}`, authorized(target, { method: 'DELETE', deadline }))
   if (result.success !== true) throw new Error(`Facebook did not confirm ${objectId} was deleted`)
 }
 
-// ── Reading the Page for import ───────────────────────────────────────────
+// ── Reading the Page ───────────────────────────────────────────
 
 export interface FacebookAttachmentMedia { image?: { src?: string; width?: number; height?: number }; source?: string }
 export interface FacebookAttachment {
@@ -223,19 +220,13 @@ export async function listPagePosts(target: FacebookPageTarget, input: { after: 
   })
   const page = await metaGraphRequest<{ data?: FacebookPagePostRecord[]; paging?: { cursors?: { after?: string }; next?: string } }>(
     `${GRAPH_BASE}/${target.pageId}/posts?${params}`, authorized(target, { deadline }))
-  return { items: page.data ?? [], after: page.paging?.next ? page.paging.cursors?.after ?? null : null }
+  if (!Array.isArray(page.data)) throw new Error('Meta returned no post inventory')
+  if (page.paging?.next && !page.paging.cursors?.after) throw new Error('Meta returned another page without its cursor')
+  return { items: page.data, after: page.paging?.next ? page.paging.cursors!.after! : null }
 }
 
 /** One Page post by id, for reconciliation of an exact identity. */
 export async function readPagePostRecord(target: FacebookPageTarget, postId: string, deadline: MetaDeadline): Promise<FacebookPagePostRecord> {
   const params = new URLSearchParams({ fields: `id,message,created_time,permalink_url,attachments{${ATTACHMENT_FIELDS},subattachments.limit(100){${ATTACHMENT_FIELDS}}}` })
   return await metaGraphRequest<FacebookPagePostRecord>(`${GRAPH_BASE}/${postId}?${params}`, authorized(target, { deadline }))
-}
-
-/** A video's playable source, which a Page post's attachment does not always carry. */
-export async function readVideoSource(target: FacebookPageTarget, videoId: string, deadline: MetaDeadline): Promise<{ source: string; picture: string | null; length: number | null }> {
-  const result = await metaGraphRequest<{ source?: string; picture?: string; length?: number }>(
-    `${GRAPH_BASE}/${videoId}?fields=source,picture,length`, authorized(target, { deadline }))
-  if (!result.source) throw new Error(`Facebook returned no source for video ${videoId}`)
-  return { source: result.source, picture: result.picture ?? null, length: typeof result.length === 'number' ? result.length : null }
 }

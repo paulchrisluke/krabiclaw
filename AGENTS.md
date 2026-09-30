@@ -105,6 +105,11 @@ execution paths.
 
 ## Database and releases
 
+Every Cloudflare D1 database must use Western North America (`wnam`).
+Create databases, including epoch replacements, with `wrangler d1 create
+<name> --location wnam`. Never omit the location hint or create an APAC
+(`apac`) database. Verify Cloudflare reports WNAM before binding or loading it.
+
 Use the repository's canonical database, migration, deployment, rollback, and
 incident-recovery mechanisms.
 
