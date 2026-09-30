@@ -240,15 +240,17 @@ function onScroll() {
   }
 }
 
-function onKeydown(e: KeyboardEvent) {
+async function onKeydown(e: KeyboardEvent) {
   if (!props.open) return
   if (e.key === 'Escape') openModel.value = false
   if (e.key === 'ArrowDown' && indexModel.value < items.value.length - 1) {
     indexModel.value++
+    await nextTick()
     scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
   }
   if (e.key === 'ArrowUp' && indexModel.value > 0) {
     indexModel.value--
+    await nextTick()
     scroller.value?.scrollTo({ top: currentIndex.value * getPageHeight(), behavior: 'smooth' })
   }
 }
