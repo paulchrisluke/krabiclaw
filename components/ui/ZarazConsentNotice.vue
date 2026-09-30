@@ -7,18 +7,19 @@
     :aria-label="t('legal.analytics_notice_label')"
     class="fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4"
   >
-    <div class="flex max-w-full flex-wrap items-center gap-x-6 gap-y-3 rounded-lg bg-inverted px-5 py-3 text-sm text-inverted shadow-lg">
-      <p class="m-0">
+    <div class="relative flex w-full max-w-5xl flex-wrap items-center gap-x-6 gap-y-4 rounded-2xl bg-elevated p-6 pr-14 text-sm text-default shadow-lg ring ring-default">
+      <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" square class="absolute right-3 top-3" aria-label="Close and accept cookies" @click="choose(true)" />
+      <p class="m-0 flex-1 basis-80 leading-6">
         {{ t('legal.analytics_notice') }}
         <a :href="privacyUrl" class="underline underline-offset-2">{{ t('legal.analytics_notice_link') }}</a>.
       </p>
-      <div class="flex items-center gap-x-3">
-        <button type="button" class="cursor-pointer rounded border border-current px-4 py-1.5 font-medium hover:opacity-80" @click="accept">
+      <div class="flex items-center gap-3">
+        <UButton color="primary" class="px-6 py-3" @click="choose(true)">
           {{ t('legal.accept') }}
-        </button>
-        <button type="button" class="cursor-pointer rounded border border-current px-4 py-1.5 font-medium hover:opacity-80" @click="reject">
+        </UButton>
+        <UButton color="error" class="px-6 py-3" @click="choose(false)">
           {{ t('legal.reject') }}
-        </button>
+        </UButton>
       </div>
     </div>
   </div>
@@ -39,18 +40,11 @@ function showNotice() {
   visible.value = true
 }
 
-function accept() {
+function choose(accepted: boolean) {
   const consent = window.zaraz?.consent
   if (!consent?.APIReady) return
-  consent.set({ [ZARAZ_ANALYTICS_PURPOSE_ID]: true })
-  consent.sendQueuedEvents()
-  visible.value = false
-}
-
-function reject() {
-  const consent = window.zaraz?.consent
-  if (!consent?.APIReady) return
-  consent.set({ [ZARAZ_ANALYTICS_PURPOSE_ID]: false })
+  consent.set({ [ZARAZ_ANALYTICS_PURPOSE_ID]: accepted })
+  if (accepted) consent.sendQueuedEvents()
   visible.value = false
 }
 
