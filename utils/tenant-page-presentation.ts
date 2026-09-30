@@ -23,6 +23,7 @@ import PlatformMarketingHero from '~/components/platform/marketing/PlatformMarke
 import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatureCards.vue'
 import PlatformShowcase from '~/components/platform/marketing/PlatformShowcase.vue'
 import PlatformMediaFeature from '~/components/platform/marketing/PlatformMediaFeature.vue'
+import PlatformSocialPosts from '~/components/platform/marketing/PlatformSocialPosts.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
 import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
 import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
@@ -67,7 +68,7 @@ import SayaCTA from '~/components/saya/SayaCTA.vue'
 // fails `typecheck` rather than a customer's eye.
 type BlockPresentation = Component<{ block: TenantPageBlock, page: PublicTenantPage }>
 
-// Every template's social_posts block is the one shared component, themed by
+// Blawby's and Saya's social_posts block is the one shared component, themed by
 // the template's tokens. It also draws the /posts feed from a list of posts, so
 // it takes the block and the page as optional props; as a page block it always
 // receives both.
@@ -89,7 +90,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:markdown': PlatformProseCard,
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
-  'platform:social_posts': feedOrBlock(SocialPosts),
+  'platform:social_posts': PlatformSocialPosts,
 
   // The Blawby template, for professional-services sites.
   'blawby:hero': BlawbyPageHero,

@@ -101,8 +101,8 @@ const bodyParts = computed(() => {
   padding: clamp(2rem, 5vw, 5rem);
   border-radius: 2rem;
   background:
-    radial-gradient(120% 90% at 0% 0%, #0f4a3a 0%, transparent 60%),
-    linear-gradient(120deg, #0a2f27 0%, #061a17 45%, #030a09 100%);
+    radial-gradient(110% 90% at 0% 0%, color-mix(in srgb, var(--kc-navy-500) 55%, transparent) 0%, transparent 60%),
+    linear-gradient(120deg, var(--kc-navy) 0%, var(--kc-navy-700) 50%, #05060d 100%);
   color: #fff;
   overflow: hidden;
 }
@@ -153,14 +153,14 @@ const bodyParts = computed(() => {
 .kc-media-feature__body {
   max-width: 34ch;
   margin: clamp(1.5rem, 2.5vw, 2.25rem) 0 0;
-  color: rgb(214 232 225 / 68%);
+  color: rgb(255 255 255 / 64%);
   font-size: clamp(1.1rem, 1.6vw, 1.6rem);
   line-height: 1.5;
   white-space: pre-line;
 }
 
 .kc-media-feature__link {
-  color: rgb(214 232 225 / 90%);
+  color: rgb(255 255 255 / 88%);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
@@ -190,7 +190,7 @@ const bodyParts = computed(() => {
   border-radius: inherit;
   background:
     radial-gradient(60% 70% at 70% 35%, rgb(235 110 90 / 16%) 0%, transparent 70%),
-    radial-gradient(50% 60% at 25% 75%, rgb(40 180 150 / 14%) 0%, transparent 70%),
+    radial-gradient(50% 60% at 25% 75%, color-mix(in srgb, var(--kc-teal) 14%, transparent) 0%, transparent 70%),
     linear-gradient(160deg, rgb(255 255 255 / 5%) 0%, rgb(0 0 0 / 25%) 100%);
 }
 
