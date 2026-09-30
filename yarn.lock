@@ -10866,6 +10866,7 @@ __metadata:
     vue-router: "npm:^5.3.0"
     vue-tsc: "npm:^3.3.11"
     wrangler: "npm:4.129.1"
+    zod: "npm:^4.5.4"
   dependenciesMeta:
     better-sqlite3:
       built: true

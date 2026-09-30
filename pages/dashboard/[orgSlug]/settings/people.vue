@@ -76,18 +76,19 @@ const impersonatingUserId = ref<string | null>(null)
 
 // Only the latest search may write the list; a slow earlier response is ignored.
 let requestSequence = 0
-async function loadUsers() {
+async function loadUsers(nextOffset = offset.value) {
   const requestId = ++requestSequence
   loading.value = true
   loadError.value = null
   try {
     const result = await authClient.admin.listUsers({
-      query: { limit: pageSize, offset: offset.value, sortBy: 'createdAt', sortDirection: 'desc' },
+      query: { limit: pageSize, offset: nextOffset, sortBy: 'createdAt', sortDirection: 'desc' },
     })
     if (result.error) throw new Error(result.error.message)
     if (requestId !== requestSequence) return
     users.value = result.data.users.map((user: { id: string, name?: string | null, email: string, role?: string | null, banned?: boolean | null }) => ({ id: user.id, name: user.name ?? null, email: user.email, role: user.role ?? null, banned: user.banned ?? null }))
     total.value = result.data.total
+    offset.value = nextOffset
   } catch (error) {
     if (requestId !== requestSequence) return
     loadError.value = error instanceof Error ? error.message : 'Failed to load accounts.'
@@ -97,8 +98,7 @@ async function loadUsers() {
 }
 
 async function changePage(direction: number) {
-  offset.value += direction * pageSize
-  await loadUsers()
+  await loadUsers(offset.value + direction * pageSize)
 }
 
 async function impersonate(userId: string) {

@@ -112,32 +112,32 @@
               <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
             </div>
           </UCard>
-          <UCard v-if="(analytics?.values || []).length || (analytics?.bookingValue || []).length" variant="soft" class="rounded-2xl">
+          <UCard v-if="analytics.values.length || analytics.bookingValue.length" variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Value</h2></template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="row in analytics?.values || []"
+                v-for="row in analytics.values"
                 :key="`${row.eventName}-${row.basis}-${row.currency}`"
                 :label="`${row.eventName.replaceAll('_', ' ')} · ${row.basis}`"
                 :value="`${formatMoney(row.valueMinor, row.currency)}${row.collectedMinor !== null ? ` (${formatMoney(row.collectedMinor, row.currency)} collected)` : ''} · ${formatCount(row.events)} events`"
                 :percent="0"
               />
               <DashboardAnalyticsRow
-                v-for="row in analytics?.net || []"
+                v-for="row in analytics.net"
                 :key="`net-${row.currency}`"
                 :label="`Net collected · ${row.currency}`"
                 :value="`${formatMoney(row.netMinor, row.currency)} (${formatMoney(row.collectedMinor, row.currency)} − ${formatMoney(row.refundedMinor, row.currency)} refunded)`"
                 :percent="0"
               />
               <DashboardAnalyticsRow
-                v-for="row in analytics?.attributedValue || []"
+                v-for="row in analytics.attributedValue"
                 :key="`attributed-${row.source}-${row.medium}-${row.campaign}-${row.content}-${row.currency}`"
                 :label="`Revenue · ${row.source || 'unattributed'} / ${row.medium || 'unattributed'}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
                 :value="`${formatMoney(row.netMinor, row.currency)} net (${formatMoney(row.collectedMinor, row.currency)} collected − ${formatMoney(row.refundedMinor, row.currency)} refunded) · ${formatCount(row.purchases)} purchases`"
                 :percent="0"
               />
               <DashboardAnalyticsRow
-                v-for="row in analytics?.bookingValue || []"
+                v-for="row in analytics.bookingValue"
                 :key="`booking-${row.productId}-${row.locationId}-${row.currency}`"
                 :label="`Quoted booking value · ${row.productName || 'price unknown'}`"
                 :value="`${row.currency ? formatMoney(row.quotedValueMinor, row.currency) : 'value unknown'} · ${formatCount(row.valuedBookings)} of ${formatCount(row.bookings)} bookings valued`"
@@ -146,17 +146,17 @@
               <p class="text-xs text-muted">Quoted booking value is the price shown when a booking was made, not revenue. Currencies are never added together.</p>
             </div>
           </UCard>
-          <UCard v-if="analytics?.signupCohort.signups" variant="soft" class="rounded-2xl">
+          <UCard v-if="analytics.signupCohort.signups" variant="soft" class="rounded-2xl">
             <template #header><h2 class="font-semibold text-highlighted">Signup cohort</h2></template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="row in analytics?.signupCohort.bySignupAttribution || []"
+                v-for="row in analytics.signupCohort.bySignupAttribution"
                 :key="`${row.source}-${row.medium}-${row.campaign || ''}-${row.content || ''}`"
                 :label="`${row.source || 'unattributed'} / ${row.medium || 'unattributed'}${row.campaign ? ` · ${row.campaign}` : ''}${row.content ? ` · ${row.content}` : ''}`"
                 :value="`${formatCount(row.signups)} signups · ${formatCount(row.onboardedSignups)} onboarded · ${formatCount(row.firstPaidSignups)} paid`"
                 :percent="row.signups ? Math.round(row.firstPaidSignups / row.signups * 100) : 0"
               />
-              <p class="text-xs text-muted">Counted per signup, through the organizations that user owns, observed through {{ analytics?.signupCohort.observedThrough }}.</p>
+              <p class="text-xs text-muted">Counted per signup, through the organizations that user owns, observed through {{ analytics.signupCohort.observedThrough }}.</p>
             </div>
           </UCard>
         </div>
@@ -168,14 +168,14 @@
             </template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="country in analytics?.countries || []"
+                v-for="country in analytics.countries"
                 :key="country.countryCode"
                 :label="countryName(country.countryCode)"
                 :prefix="countryFlag(country.countryCode)"
                 :value="formatCount(country.views)"
                 :percent="country.percentOfTotal"
               />
-              <p v-if="!loading && !(analytics?.countries || []).length" class="text-sm text-muted">No country data yet.</p>
+              <p v-if="!analytics.countries.length" class="text-sm text-muted">No country data yet.</p>
             </div>
           </UCard>
 
@@ -185,13 +185,13 @@
             </template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="referrer in analytics?.referrers || []"
+                v-for="referrer in analytics.referrers"
                 :key="referrer.source"
                 :label="referrer.source"
                 :value="formatCount(referrer.views)"
                 :percent="referrer.percentOfTotal"
               />
-              <p v-if="!loading && !(analytics?.referrers || []).length" class="text-sm text-muted">No referrer data yet.</p>
+              <p v-if="!analytics.referrers.length" class="text-sm text-muted">No referrer data yet.</p>
             </div>
           </UCard>
 
@@ -201,14 +201,14 @@
             </template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="device in analytics?.devices || []"
+                v-for="device in analytics.devices"
                 :key="device.type"
                 :label="device.type"
                 :prefix="deviceIcon(device.type)"
                 :value="formatCount(device.views)"
                 :percent="device.percentOfTotal"
               />
-              <p v-if="!loading && !(analytics?.devices || []).length" class="text-sm text-muted">No device data yet.</p>
+              <p v-if="!analytics.devices.length" class="text-sm text-muted">No device data yet.</p>
             </div>
           </UCard>
 
@@ -218,14 +218,14 @@
             </template>
             <div class="space-y-4">
               <DashboardAnalyticsRow
-                v-for="city in analytics?.cities || []"
+                v-for="city in analytics.cities"
                 :key="`${city.city}-${city.region}-${city.countryCode}`"
                 :label="city.region ? `${city.city}, ${city.region}` : city.city"
                 :prefix="countryFlag(city.countryCode)"
                 :value="formatCount(city.views)"
                 :percent="percentOfViews(city.views)"
               />
-              <p v-if="!loading && !(analytics?.cities || []).length" class="text-sm text-muted">No city data yet.</p>
+              <p v-if="!analytics.cities.length" class="text-sm text-muted">No city data yet.</p>
             </div>
           </UCard>
         </div>
@@ -448,7 +448,7 @@ const metricCards = computed(() => {
   const metrics = analytics.value?.metrics
   if (!metrics) return []
   return [
-    { label: 'Pageviews', value: formatCount(metrics.pageViews), detail: metrics?.changePercent == null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
+    { label: 'Pageviews', value: formatCount(metrics.pageViews), detail: metrics.changePercent === null ? 'Not enough prior data' : `${formatSigned(metrics.changePercent)} vs previous period`, icon: 'i-lucide-chart-bar' },
     { label: 'Unique visitors', value: formatCount(metrics.uniqueVisitors), detail: `${formatCount(metrics.returningVisitors)} returning`, icon: 'i-lucide-users' },
     { label: 'Sessions', value: formatCount(metrics.uniqueSessions), detail: `${formatNumber(metrics.pagesPerSession)} pages per session`, icon: 'i-lucide-mouse-pointer-click' },
     { label: 'Avg. duration', value: formatDuration(metrics.avgSessionDuration), detail: 'Average session time', icon: 'i-lucide-clock' }
