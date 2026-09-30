@@ -25,8 +25,10 @@ export function createTenantPageEditorData(type: TenantPageBlockType): EditorDat
     if (field.store === 'level' || field.kind === 'media' || field.kind === 'calculator') continue
     if (field.kind === 'list') data[key] = []
     else if (field.kind === 'reference') data[key] = key.endsWith('_ids') ? [] : ''
-    else if (field.default !== undefined) data[key] = field.default
-    else if (field.kind === 'enum') continue
+    // A number is stored as one; its default is declared as text like every other.
+    else if (field.default !== undefined) data[key] = field.kind === 'number' ? Number(field.default) : field.default
+    // An enum without a default, or an optional record such as a button, is unset until chosen.
+    else if (field.kind === 'enum' || field.kind === 'record') continue
     else data[key] = ''
   }
   return data

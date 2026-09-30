@@ -13,6 +13,19 @@ const ORGANIZATION_MEDIA_ITEM_SCHEMA = {
   required: ['asset_id', 'slot', 'public_url', 'thumbnail_url', 'kind'],
 } as const
 
+const ANNOUNCEMENT_SCHEMA = {
+  type: ['object', 'null'],
+  description: 'The universal announcement modal shown to visitors on the public website, available to every theme. An image, when set, is a separate organization media placement (slot "announcement"), not a field here.',
+  properties: {
+    headline: { type: 'string', description: 'Required in every write, even an empty string when disabling without discarding it.' },
+    description: { type: ['string', 'null'] },
+    cta_label: { type: ['string', 'null'], description: 'Button label. Requires cta_url and vice versa.' },
+    cta_url: { type: ['string', 'null'], description: 'Button destination, http or https. Requires cta_label and vice versa.' },
+    dismissible: { type: 'boolean', description: 'Whether a visitor who closes it will not be shown it again on that device.' },
+    enabled: { type: 'boolean', description: 'Whether the announcement is currently shown. false keeps the saved content without showing it.' },
+  },
+} as const
+
 export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_organizations',
@@ -85,8 +98,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
               custom_domain_status: { type: ['string', 'null'] },
               name: { type: ['string', 'null'] },
               brand_description: { type: ['string', 'null'] },
-              banner_content: { type: ['string', 'null'] },
-              banner_dismissible: { type: 'boolean' },
+              announcement: ANNOUNCEMENT_SCHEMA,
               media: { type: 'array', items: ORGANIZATION_MEDIA_ITEM_SCHEMA },
               contact_email: { type: ['string', 'null'] },
               default_currency: { type: ['string', 'null'] },
@@ -109,15 +121,14 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: 'Update editable organization settings such as brand name, description, Blawby announcement banner, contact email, currency, and website status (Live or Draft). Pass null as banner_content to clear the banner. The logo is an organization media placement, set with set_media. For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      description: 'Update editable organization settings such as brand name, description, the announcement modal, contact email, currency, and website status (Live or Draft). announcement is a full replacement of the announcement (every field together); pass null to remove it entirely. The announcement image and the logo are each an organization media placement, set with set_media (slots "announcement" and "logo"). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
         name: { type: 'string' },
         brand_description: { type: 'string' },
-        banner_content: { type: ['string', 'null'], description: 'Blawby announcement text for source-language pages, up to 500 characters. Null clears it.' },
-        banner_dismissible: { type: 'boolean', description: 'Whether guests can dismiss the Blawby announcement on their device.' },
+        announcement: ANNOUNCEMENT_SCHEMA,
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
         status: { type: 'string', enum: ['active', 'inactive'], description: 'Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.' },

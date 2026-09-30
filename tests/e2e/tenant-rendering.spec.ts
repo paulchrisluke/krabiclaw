@@ -70,11 +70,14 @@ async function expectTenantDocument(page: Page, tenant: Tenant) {
   ))
 }
 
-test('Krabiclaw home retains its billing plans after hydration', async ({ page }) => {
+test('Krabiclaw pricing retains its billing plans after hydration', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.addInitScript(() => localStorage.setItem('krabiclaw-theme', 'light'))
   const baseURL = testBaseUrl()
-  const response = await openTenantPage(page, `${baseURL}/`, {})
+  const response = await openTenantPage(page, `${baseURL}/pricing`, {})
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
+  await expect(page.locator('html')).toHaveClass(/dark/)
   await expect(page.getByRole('heading', { name: 'Starter', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Get Growth', exact: true })).toHaveAttribute('href', '/signup?plan=growth')

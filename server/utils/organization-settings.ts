@@ -43,8 +43,11 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   custom_domain_status: string | null
   default_currency: string | null
   brand_description: string | null
-  banner_content: string | null
-  banner_dismissible: number | null
+  announcement_json: string | null
+  announcement_media_id: string | null
+  announcement_public_url: string | null
+  announcement_thumbnail_url: string | null
+  announcement_kind: 'image' | 'video' | null
   logo_media_id: string | null
   logo_public_url: string | null
   logo_thumbnail_url: string | null
@@ -91,8 +94,9 @@ export async function loadSettingsPayload(
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
-           json_extract(organization.settings_json, '$.compliance.metadata_json.header.banner_content') AS banner_content,
-           json_extract(organization.settings_json, '$.compliance.metadata_json.header.banner_dismissible') AS banner_dismissible,
+           json_extract(organization.settings_json, '$.config.announcement') AS announcement_json,
+           amp.asset_id AS announcement_media_id, ama.public_url AS announcement_public_url,
+           ama.thumbnail_url AS announcement_thumbnail_url, ama.kind AS announcement_kind,
            mp.asset_id AS logo_media_id, ma.public_url AS logo_public_url,
            ma.thumbnail_url AS logo_thumbnail_url, ma.kind AS logo_kind,
            fmp.asset_id AS favicon_media_id, fma.public_url AS favicon_public_url,
@@ -114,6 +118,9 @@ export async function loadSettingsPayload(
                       LEFT JOIN media_assets hma ON hma.id = hmp.asset_id AND hma.status = 'active'
                      WHERE bl.organization_id = organization.id AND bl.status = 'active' ORDER BY bl.title, bl.id)) AS locations_json
     FROM organization
+    LEFT JOIN media_placements amp ON amp.organization_id = organization.id AND amp.owner_type = 'organization'
+      AND amp.owner_id = organization.id AND amp.slot = 'announcement' AND amp.sort_order = 0 AND amp.status = 'active'
+    LEFT JOIN media_assets ama ON ama.id = amp.asset_id AND ama.status = 'active'
     LEFT JOIN media_placements mp ON mp.organization_id = organization.id AND mp.owner_type = 'organization'
       AND mp.owner_id = organization.id AND mp.slot = 'logo' AND mp.sort_order = 0 AND mp.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = mp.asset_id AND ma.status = 'active'
@@ -153,9 +160,15 @@ export async function loadSettingsPayload(
     custom_domain_status: updatedOrganization.custom_domain_status,
     name: updatedOrganization.name,
     brand_description: updatedOrganization.brand_description,
-    banner_content: updatedOrganization.banner_content,
-    banner_dismissible: updatedOrganization.banner_dismissible === 1,
+    announcement: updatedOrganization.announcement_json ? JSON.parse(updatedOrganization.announcement_json) : null,
     media: [
+      ...(updatedOrganization.announcement_media_id ? [{
+        asset_id: updatedOrganization.announcement_media_id,
+        slot: 'announcement',
+        public_url: updatedOrganization.announcement_public_url,
+        thumbnail_url: updatedOrganization.announcement_thumbnail_url,
+        kind: updatedOrganization.announcement_kind,
+      }] : []),
       ...(updatedOrganization.logo_media_id ? [{
         asset_id: updatedOrganization.logo_media_id,
         slot: 'logo',
@@ -309,11 +322,19 @@ async function attemptOrganizationUpdate(
     setParts.push('brand_description = ?')
     params.push(updates.brand_description ?? null)
   }
-  if (updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
-    const header: Record<string, string | boolean | null> = {}
-    if (updates.banner_content !== undefined) header.banner_content = updates.banner_content?.trim() || null
-    if (updates.banner_dismissible !== undefined) header.banner_dismissible = updates.banner_dismissible
-    settingsPatch.compliance = { metadata_json: { header } }
+  if (updates.announcement !== undefined) {
+    settingsPatch.config = {
+      ...(settingsPatch.config as Record<string, unknown> | undefined),
+      // json_patch removes the key entirely when the patch value is JSON null.
+      announcement: updates.announcement === null ? null : {
+        headline: updates.announcement.headline.trim(),
+        description: updates.announcement.description?.trim() || null,
+        cta_label: updates.announcement.cta_label?.trim() || null,
+        cta_url: updates.announcement.cta_url?.trim() || null,
+        dismissible: updates.announcement.dismissible ?? true,
+        enabled: updates.announcement.enabled ?? true,
+      },
+    }
   }
   if (Object.keys(settingsPatch).length > 0) {
     setParts.push('settings_json = json_patch(settings_json, json(?))')
@@ -505,7 +526,7 @@ async function attemptOrganizationUpdate(
   // and announcements affect only its public resource and HTML caches.
   if (updates.status !== undefined) {
     await purgePublicResourceCacheNow(env, organizationId)
-  } else if (updates.font_preset !== undefined || updates.banner_content !== undefined || updates.banner_dismissible !== undefined) {
+  } else if (updates.font_preset !== undefined || updates.announcement !== undefined) {
     if (!env.ORGANIZATION_CACHE) throw new Error('ORGANIZATION_CACHE is not bound; site caches cannot be purged')
     await purgeOrganizationCaches(db, env.ORGANIZATION_CACHE, organizationId, env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   }
@@ -585,22 +606,50 @@ export async function updateOrganizationSettingsFields(
     }
   }
 
-  if (updates.banner_content !== undefined && updates.banner_content !== null &&
-      (typeof updates.banner_content !== 'string' || updates.banner_content.trim().length > 500)) {
-    return { status: 400, data: { error: 'Banner content must be 500 characters or fewer' } }
-  }
-  if (updates.banner_dismissible !== undefined && typeof updates.banner_dismissible !== 'boolean') {
-    return { status: 400, data: { error: 'Banner dismissible must be true or false' } }
-  }
-  if ((updates.banner_content !== undefined || updates.banner_dismissible !== undefined) &&
-      resolvePublicTemplate({ themeId: organization.theme_id }).slug !== 'blawby') {
-    return { status: 400, data: { error: 'Announcement banner is available for Blawby sites only' } }
+  if (updates.announcement !== undefined && updates.announcement !== null) {
+    const { headline, description, cta_label, cta_url, dismissible, enabled } = updates.announcement
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return { status: 400, data: { error: 'Announcement enabled must be a boolean' } }
+    }
+    if (dismissible !== undefined && typeof dismissible !== 'boolean') {
+      return { status: 400, data: { error: 'Announcement dismissible must be a boolean' } }
+    }
+    // A disabled announcement may be saved with a blank headline — the owner is turning it off,
+    // not necessarily deleting draft text they intend to re-enable later. It still has to be a
+    // string within the length limit either way: attemptOrganizationUpdate trims it unconditionally,
+    // and a missing/null headline would throw there rather than fail this validation cleanly.
+    if (typeof headline !== 'string' || headline.trim().length > 120) {
+      return { status: 400, data: { error: 'Announcement headline must be a string of 120 characters or fewer' } }
+    }
+    if (enabled !== false && !headline.trim()) {
+      return { status: 400, data: { error: 'Announcement headline is required' } }
+    }
+    if (description !== undefined && description !== null && (typeof description !== 'string' || description.trim().length > 500)) {
+      return { status: 400, data: { error: 'Announcement description must be 500 characters or fewer' } }
+    }
+    if (cta_label !== undefined && cta_label !== null && typeof cta_label !== 'string') {
+      return { status: 400, data: { error: 'Announcement CTA label must be a string' } }
+    }
+    if (cta_url !== undefined && cta_url !== null && typeof cta_url !== 'string') {
+      return { status: 400, data: { error: 'Announcement CTA URL must be a string' } }
+    }
+    if ((cta_label && !cta_url) || (!cta_label && cta_url)) {
+      return { status: 400, data: { error: 'A call-to-action needs both a label and a URL' } }
+    }
+    if (cta_url) {
+      try {
+        const url = new URL(cta_url)
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol')
+      } catch {
+        return { status: 400, data: { error: 'Announcement CTA URL must be a valid http or https URL' } }
+      }
+    }
   }
 
   const organizationMedia = updates.media
   if (organizationMedia !== undefined) {
-    if (!Array.isArray(organizationMedia) || organizationMedia.some(item => !item || !['logo', 'favicon', 'social_share'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
-      return { status: 400, data: { error: 'media must contain an asset_id and a logo, favicon, or social_share slot' } }
+    if (!Array.isArray(organizationMedia) || organizationMedia.some(item => !item || !['logo', 'favicon', 'social_share', 'announcement'].includes(item.slot) || (item.asset_id !== null && typeof item.asset_id !== 'string'))) {
+      return { status: 400, data: { error: 'media must contain an asset_id and a logo, favicon, social_share, or announcement slot' } }
     }
     try {
       await hydrateMediaAssetRefs(db, {

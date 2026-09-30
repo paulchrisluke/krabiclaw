@@ -2,8 +2,9 @@
   <NuxtLoadingIndicator :color="loadingColor" :height="2" :throttle="150" />
   <NuxtLayout>
     <NuxtPage />
+    <AnnouncementModal />
+    <ZarazConsentNotice />
   </NuxtLayout>
-  <ZarazConsentNotice />
 </template>
 
 <script setup lang="ts">

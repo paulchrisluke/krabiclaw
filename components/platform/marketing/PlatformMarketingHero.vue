@@ -1,66 +1,94 @@
 <template>
   <!--
-    The homepage hero: two columns, the mascot card on the right, three ambient
-    orbs behind. Markup as PlatformHomePage.vue rendered it.
+    The artwork is the visual hero; the same CMS hero block supplies the
+    semantic intro immediately below it. Keeping the H1 and descriptive copy
+    out of the illustration restores the original scene's visual hierarchy
+    without giving up server-rendered homepage content.
   -->
-  <section v-if="variant === 'home'" class="relative overflow-hidden" data-parity-section="hero">
-    <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      <div class="absolute -top-40 -right-32 w-[700px] h-[700px] rounded-full opacity-25 blur-3xl" style="background: radial-gradient(circle, var(--kc-coral-200) 0%, transparent 70%)"></div>
-      <div class="absolute -bottom-20 -left-32 w-[600px] h-[600px] rounded-full opacity-20 blur-3xl" style="background: radial-gradient(circle, var(--kc-teal-100) 0%, transparent 70%)"></div>
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[400px] rounded-full opacity-10 blur-3xl" style="background: radial-gradient(ellipse, var(--kc-navy-300) 0%, transparent 70%)"></div>
-    </div>
+  <template v-if="variant === 'home'">
+    <section
+      ref="homeHero"
+      class="kc-parallax-hero"
+      data-parity-section="hero"
+      aria-label="Krabiclaw"
+    >
+      <div class="kc-parallax-hero__art" aria-hidden="true">
+        <picture
+          v-for="(layer, index) in parallaxLayers"
+          :key="layer.name"
+          class="kc-parallax-hero__layer"
+          :class="'kc-parallax-hero__layer--' + (index + 1)"
+          :style="{
+            '--kc-layer-compensation': String(layer.compensation),
+            '--kc-layer-top': layer.top + 'px',
+          }"
+        >
+          <source media="(min-width: 1264px)" :srcset="layer.sources.lg">
+          <source media="(min-width: 960px)" :srcset="layer.sources.md">
+          <source media="(min-width: 600px)" :srcset="layer.sources.sm">
+          <source media="(min-width: 376px)" :srcset="layer.sources.xs">
+          <img
+            :src="layer.sources.xxs"
+            alt=""
+            loading="eager"
+            :fetchpriority="index === 0 ? 'high' : 'auto'"
+            decoding="async"
+          >
+        </picture>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32 grid lg:grid-cols-2 gap-12 items-center">
-      <div class="flex flex-col gap-6">
-        <span v-if="eyebrow" class="self-start inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.3em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full border border-(--kc-teal)/20">
-          <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0 animate-pulse" />
+        <picture class="kc-parallax-hero__foreground">
+          <source media="(min-width: 1264px)" :srcset="parallaxForeground.lg">
+          <source media="(min-width: 960px)" :srcset="parallaxForeground.md">
+          <source media="(min-width: 600px)" :srcset="parallaxForeground.sm">
+          <source media="(min-width: 376px)" :srcset="parallaxForeground.xs">
+          <img :src="parallaxForeground.xxs" alt="" loading="eager" decoding="async">
+        </picture>
+      </div>
+
+      <div class="kc-parallax-hero__mark" aria-hidden="true">
+        <span class="kc-parallax-hero__mark-line">Ready when</span>
+        <span class="kc-parallax-hero__mark-line kc-parallax-hero__mark-line--strong">You are.</span>
+      </div>
+    </section>
+
+    <section class="kc-parallax-intro">
+      <div class="kc-parallax-intro__inner">
+        <span v-if="eyebrow" class="kc-parallax-intro__eyebrow">
+          <span class="size-1.5 rounded-full bg-(--kc-teal) shrink-0" />
           {{ eyebrow }}
         </span>
 
-        <h1 class="text-[clamp(40px,5vw,66px)] font-extrabold leading-[1.02] tracking-tight text-balance m-0">
+        <h1 class="kc-parallax-intro__title">
           <template v-for="(line, index) in titleLines" :key="index">
             <br v-if="index > 0">
-            <span
-              v-if="line.highlighted"
-              style="background: linear-gradient(135deg, var(--kc-coral) 0%, #e0524c 40%, var(--kc-coral-400) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"
-            >{{ line.text }}</span>
-            <span v-else class="text-default">{{ line.text }}</span>
+            <span v-if="line.highlighted" class="kc-parallax-intro__highlight">{{ line.text }}</span>
+            <span v-else>{{ line.text }}</span>
+          </template>
+          <template v-if="rotatingAccents.length">
+            <br>
+            <!-- Read once, whole; the turning phrase is for the eye. -->
+            <span class="sr-only">{{ rotatingAccents.join(', ') }}</span>
+            <span class="kc-parallax-intro__rotator" aria-hidden="true">
+              <Transition name="kc-rotate" mode="out-in">
+                <span
+                  :key="rotatingIndex"
+                  class="kc-parallax-intro__rotating"
+                  :class="'kc-parallax-intro__rotating--' + (rotatingIndex % 3)"
+                >{{ rotatingAccents[rotatingIndex] }}</span>
+              </Transition>
+            </span>
           </template>
         </h1>
 
-        <p v-if="subtitle" class="text-lg leading-relaxed text-muted m-0 max-w-lg">{{ subtitle }}</p>
+        <p v-if="subtitle" class="kc-parallax-intro__subtitle">{{ subtitle }}</p>
 
-        <div v-if="ctaLabel || secondaryLabel" class="flex flex-wrap gap-3">
-          <PlatformAccountCta v-if="ctaLabel" :label="ctaLabel" :to="ctaUrl || '/signup'" variant="gradient" size="xl" />
-          <PlatformButton v-if="secondaryLabel && secondaryUrl" :to="secondaryUrl" variant="outline" size="xl">
-            <PlatformIcon name="puzzle" class="size-4" />
-            {{ secondaryLabel }}
-          </PlatformButton>
+        <!-- One action: sign up when signed out, the dashboard when signed in. -->
+        <div v-if="ctaLabel && ctaUrl" class="kc-parallax-intro__actions">
+          <PlatformAccountCta :label="ctaLabel" :to="ctaUrl" variant="gradient" size="xl" />
         </div>
       </div>
-
-      <div class="hidden lg:flex justify-center">
-        <div class="relative max-w-lg w-full">
-          <div class="absolute inset-0 rounded-3xl blur-2xl opacity-30" style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"></div>
-          <div class="relative rounded-3xl p-7 shadow-2xl border border-default/50" style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);">
-            <picture>
-              <source media="(min-width: 992px)" srcset="/krabiclaw-login-mascot.webp">
-              <img
-                src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
-                alt="Krabiclaw mascot"
-                width="1200"
-                height="1200"
-                loading="eager"
-                fetchpriority="high"
-                decoding="async"
-                class="w-full block rounded-[20px] shadow-lg"
-              >
-            </picture>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+    </section>
+  </template>
 
   <!-- The About header: a pill, a headline, a lede. Nothing else. -->
   <div v-else-if="variant === 'about'" class="text-center space-y-4" data-parity-section="hero">
@@ -129,7 +157,7 @@
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
+import { blockStrings, blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
 
 /**
  * The hero of one of Krabiclaw's own marketing pages.
@@ -141,8 +169,9 @@ import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
  * chosen by `variant` the way BlawbyPageHero chooses its own.
  *
  * `title` may carry "\n" where the original forced a line break, and
- * `highlight` names the part of it rendered in the gradient. The vertical
- * accent decides which gradient that is.
+ * `accent` names the part of it rendered in the gradient. The vertical
+ * accent decides which gradient that is. On the home shape,
+ * `rotating_accents` closes the headline with one phrase at a time.
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
@@ -160,10 +189,174 @@ const variant = computed<Variant>(() => {
   return (VARIANTS as readonly string[]).includes(segment) ? segment as Variant : 'home'
 })
 
+type ParallaxBreakpoint = 'xxs' | 'xs' | 'sm' | 'md' | 'lg'
+
+type ParallaxImageSet = Record<ParallaxBreakpoint, string>
+
+type ParallaxLayer = {
+  name: string
+  slot: string
+  top: number
+  compensation: number
+  sources: ParallaxImageSet
+}
+
+/**
+ * The six artwork planes are CMS media placements on the homepage hero block.
+ *
+ * Each plane can have one generic slot (for example parallax_sky) plus
+ * breakpoint overrides (parallax_sky_xxs, _xs, _sm, _md, _lg). This keeps the
+ * original art-directed mobile/tablet/desktop compositions editable through
+ * Krabiclaw's normal media tools instead of baking image URLs into the frontend.
+ */
+const PARALLAX_BREAKPOINTS: ParallaxBreakpoint[] = ['xxs', 'xs', 'sm', 'md', 'lg']
+
+const LEGACY_PARALLAX: Record<string, ParallaxImageSet> = {
+  parallax_sky: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/1_-_376_Crop_f3kohe.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/1_-_600_Crop_exoo15.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452929/Home%20Page/1_-_960_Crop_oa7sit.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452735/Home%20Page/1_-_1264_Crop_etah3p.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578391761/Home%20Page/1_xblbcz.png',
+  },
+  parallax_clouds: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_376,c_scale,q_auto:low/v1578537679/Home%20Page/2_-_376_Crop_jurubz.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_600,c_scale,q_auto:low/v1578453086/Home%20Page/2_-_600_Crop_ljuk1q.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_960,c_scale,q_auto:low/v1578452931/Home%20Page/2_-_960_Crop_nmuzwk.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264,c_scale,q_auto:low/v1578452735/Home%20Page/2_-_1264_Crop_oemckj.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264,c_scale,q_auto:low/v1578304830/Home%20Page/2_sswfon.png',
+  },
+  parallax_mountains: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/3_-_376_Crop_hzx8pn.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/3_-_600_Crop_oi117l.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/3_-_960_Crop_u8unwb.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452735/Home%20Page/3_-_1264_Crop_rzmbf7.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578391697/Home%20Page/3_s78ihj.png',
+  },
+  parallax_far_trees: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537679/Home%20Page/4_-_376_Crop_ojxrls.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/4_-_600_Crop_lzo0qm.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/4_-_960_Crop_yjllbe.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452734/Home%20Page/4_-_1264_Crop_b2si7p.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578304829/Home%20Page/4_y2kccp.png',
+  },
+  parallax_building_trees: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_376/v1578537679/Home%20Page/5_-_376_Crop_kwd38n.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_600/v1578453084/Home%20Page/5_-_600_Crop_hv4pgh.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_960/v1578452928/Home%20Page/5_-_960_Crop_kxqi9o.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1264/v1578452735/Home%20Page/5_-_1264_Crop_j243x6.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/w_1920/v1578304830/Home%20Page/5_hqueja.png',
+  },
+  parallax_foreground: {
+    xxs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578537678/Home%20Page/6_-_376_Crop_idycl2.png',
+    xs: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578453084/Home%20Page/6_-_600_Crop_dld0qh.png',
+    sm: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452928/Home%20Page/6_-_960_Crop_yweblf.png',
+    md: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578452734/Home%20Page/6_-_1264_Crop_axf4bc.png',
+    lg: 'https://res.cloudinary.com/die9ji2vn/image/upload/f_auto/v1578304829/Home%20Page/6-_Black_nt3cjt.png',
+  },
+}
+
+function mediaUrl(slot: string): string | null {
+  const media = props.block.media.find(item => item.slot === slot && item.public_url)
+  return media?.public_url ?? null
+}
+
+function parallaxImageSet(slot: string): ParallaxImageSet {
+  const generic = mediaUrl(slot)
+  const legacy = LEGACY_PARALLAX[slot]
+  if (!legacy) throw new Error('Homepage hero has no parallax source definition for ' + slot)
+  return Object.fromEntries(PARALLAX_BREAKPOINTS.map((breakpoint) => [
+    breakpoint,
+    mediaUrl(slot + '_' + breakpoint) ?? generic ?? legacy[breakpoint],
+  ])) as ParallaxImageSet
+}
+
+const parallaxLayers = computed<ParallaxLayer[]>(() => [
+  {
+    name: 'sky',
+    slot: 'parallax_sky',
+    top: 0,
+    compensation: 1,
+    sources: parallaxImageSet('parallax_sky'),
+  },
+  {
+    name: 'clouds',
+    slot: 'parallax_clouds',
+    top: 0,
+    compensation: 0.8,
+    sources: parallaxImageSet('parallax_clouds'),
+  },
+  {
+    name: 'mountains',
+    slot: 'parallax_mountains',
+    top: 120,
+    compensation: 0.6,
+    sources: parallaxImageSet('parallax_mountains'),
+  },
+  {
+    name: 'far-trees',
+    slot: 'parallax_far_trees',
+    top: 440,
+    compensation: 0.4,
+    sources: parallaxImageSet('parallax_far_trees'),
+  },
+  {
+    name: 'building-and-dark-trees',
+    slot: 'parallax_building_trees',
+    top: 580,
+    compensation: 0.2,
+    sources: parallaxImageSet('parallax_building_trees'),
+  },
+])
+
+const parallaxForeground = computed<ParallaxImageSet>(() => parallaxImageSet('parallax_foreground'))
+
+const homeHero = ref<HTMLElement | null>(null)
+let homeHeroFrame: number | null = null
+let homeHeroScrollListener: (() => void) | null = null
+
+function renderHomeParallax() {
+  if (!homeHero.value) return
+  homeHero.value.style.setProperty('--kc-parallax-offset', String(Math.max(0, window.scrollY)) + 'px')
+}
+
+function scheduleHomeParallax() {
+  if (homeHeroFrame !== null) return
+  homeHeroFrame = window.requestAnimationFrame(() => {
+    homeHeroFrame = null
+    renderHomeParallax()
+  })
+}
+
+onMounted(() => {
+  if (variant.value !== 'home' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  renderHomeParallax()
+  homeHeroScrollListener = scheduleHomeParallax
+  window.addEventListener('scroll', homeHeroScrollListener, { passive: true })
+})
+
+const ROTATION_INTERVAL_MS = 2600
+const rotatingIndex = ref(0)
+let rotationTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  if (rotatingAccents.value.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  rotationTimer = setInterval(() => {
+    rotatingIndex.value = (rotatingIndex.value + 1) % rotatingAccents.value.length
+  }, ROTATION_INTERVAL_MS)
+})
+
+onBeforeUnmount(() => {
+  if (rotationTimer !== null) clearInterval(rotationTimer)
+  if (homeHeroScrollListener) window.removeEventListener('scroll', homeHeroScrollListener)
+  if (homeHeroFrame !== null) window.cancelAnimationFrame(homeHeroFrame)
+})
+
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const eyebrowIcon = computed(() => blockTextOrNull(props.block.data.eyebrow_icon) as PlatformIconName | null)
 const title = computed(() => blockText(props.block.data.title))
-const highlight = computed(() => blockTextOrNull(props.block.data.highlight))
+const accent = computed(() => blockTextOrNull(props.block.data.accent))
+const rotatingAccents = computed(() => blockStrings(props.block.data.rotating_accents))
 const subtitle = computed(() => blockTextOrNull(props.block.data.subtitle))
 const ctaLabel = computed(() => blockTextOrNull(props.block.data.cta_label))
 const ctaUrl = computed(() => blockTextOrNull(props.block.data.cta_url))
@@ -172,15 +365,15 @@ const secondaryUrl = computed(() => blockTextOrNull(props.block.data.secondary_u
 
 interface TitlePart { text: string; highlighted: boolean }
 
-/** One entry per forced line; a line is highlighted when it is the highlight. */
+/** One entry per forced line; a line is highlighted when it is the accent. */
 const titleLines = computed<TitlePart[]>(() => title.value.split('\n').map(line => line.trim()).filter(Boolean).map(line => ({
   text: line,
-  highlighted: Boolean(highlight.value) && line === highlight.value!.trim(),
+  highlighted: Boolean(accent.value) && line === accent.value!.trim(),
 })))
 
-/** The title as one line with the highlight cut out of it, for the Pricing shape. */
+/** The title as one line with the accent cut out of it, for the Pricing shape. */
 const inlineParts = computed<TitlePart[]>(() => {
-  const marked = highlight.value?.trim()
+  const marked = accent.value?.trim()
   const oneLine = title.value.replace(/\n/g, ' ')
   if (!marked) return [{ text: oneLine, highlighted: false }]
   const index = oneLine.indexOf(marked)
@@ -209,3 +402,259 @@ const GRADIENT_CLASS: Record<string, string> = {
 }
 const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_CLASS.restaurants)
 </script>
+
+<style scoped>
+.kc-parallax-hero {
+  --kc-scene-ratio: 1.8;
+  --kc-parallax-offset: 0px;
+  position: relative;
+  isolation: isolate;
+  height: calc(1600px / var(--kc-scene-ratio));
+  overflow: hidden;
+  overflow: clip;
+  /* The artwork's own black, so no strip of another shade shows at its foot. */
+  background: #010000;
+}
+
+.kc-parallax-hero__art {
+  position: absolute;
+  inset: 0;
+}
+
+.kc-parallax-hero__layer {
+  position: absolute;
+  top: calc(var(--kc-layer-top) / var(--kc-scene-ratio));
+  right: 0;
+  left: 0;
+  height: 100%;
+  pointer-events: none;
+  transform: translate3d(0, calc(var(--kc-parallax-offset) * var(--kc-layer-compensation)), 0);
+  will-change: transform;
+}
+
+.kc-parallax-hero__layer--1 { z-index: 1; }
+.kc-parallax-hero__layer--2 { z-index: 3; }
+.kc-parallax-hero__layer--3 { z-index: 4; }
+.kc-parallax-hero__layer--4 { z-index: 5; }
+.kc-parallax-hero__layer--5 { z-index: 6; }
+
+.kc-parallax-hero__layer img,
+.kc-parallax-hero__foreground img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.kc-parallax-hero__layer img {
+  object-fit: contain;
+  object-position: top center;
+}
+
+.kc-parallax-hero__foreground {
+  position: absolute;
+  z-index: 20;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: calc(582px / var(--kc-scene-ratio));
+  pointer-events: none;
+}
+
+.kc-parallax-hero__foreground img {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.kc-parallax-hero__mark {
+  position: absolute;
+  z-index: 2;
+  top: calc(120px / var(--kc-scene-ratio));
+  left: 50%;
+  display: flex;
+  width: min(82vw, 34rem);
+  flex-direction: column;
+  align-items: center;
+  color: white;
+  font-family: var(--font-jost);
+  font-size: clamp(2.6rem, 6.5vw, 5.25rem);
+  letter-spacing: -0.02em;
+  line-height: 0.92;
+  text-align: center;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 32%);
+  transform: translate3d(-50%, var(--kc-parallax-offset), 0);
+  will-change: transform;
+}
+
+.kc-parallax-hero__mark-line {
+  display: block;
+  font-weight: 400;
+}
+
+.kc-parallax-hero__mark-line--strong {
+  font-weight: 600;
+}
+
+.kc-parallax-intro {
+  position: relative;
+  z-index: 30;
+  margin-top: -1px;
+  overflow: hidden;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+
+.kc-parallax-intro::before {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: clamp(9rem, 20vw, 16rem);
+  /* Starts on the artwork's own black so the scene has no bottom edge, then
+     spills down in soft, uneven lobes like the canopy above it. */
+  background: linear-gradient(to bottom, #010000 0%, #010000 22%, rgb(1 0 0 / 70%) 48%, transparent 100%);
+  /* The solid layer keeps the blur off the top edge, which meets the art. */
+  mask-image: linear-gradient(#000, #000), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 240' preserveAspectRatio='none'%3E%3Cfilter id='b'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3Cpath filter='url(%23b)' d='M0 0H1440V132C1392 168 1338 196 1276 178C1214 160 1180 118 1112 126C1044 134 1014 198 944 204C874 210 842 150 772 144C702 138 676 186 606 196C536 206 498 142 428 136C358 130 330 184 262 190C194 196 158 150 96 146C58 144 26 158 0 170Z'/%3E%3C/svg%3E");
+  mask-size: 100% 40%, 100% 100%;
+  mask-position: top;
+  mask-repeat: no-repeat;
+  content: "";
+  pointer-events: none;
+}
+
+.kc-parallax-intro__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(92vw, 860px);
+  margin: 0 auto;
+  padding: clamp(8rem, 15vw, 11rem) 0 clamp(5rem, 9vw, 7rem);
+  flex-direction: column;
+  align-items: center;
+  gap: 1.4rem;
+  text-align: center;
+}
+
+.kc-parallax-intro__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ui-text-dimmed);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.25rem;
+  text-transform: uppercase;
+}
+
+.kc-parallax-intro__title {
+  margin: 0;
+  max-width: 30ch;
+  color: var(--ui-text-highlighted);
+  font-size: clamp(2.4rem, 6vw, 4.75rem);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.kc-parallax-intro__highlight {
+  color: var(--kc-coral-400);
+}
+
+.kc-parallax-intro__rotator {
+  display: inline-block;
+}
+
+.kc-parallax-intro__rotating {
+  display: inline-block;
+}
+
+.kc-parallax-intro__rotating--0 { color: var(--kc-coral-400); }
+.kc-parallax-intro__rotating--1 { color: var(--kc-teal-400); }
+.kc-parallax-intro__rotating--2 { color: var(--kc-navy-300); }
+
+.kc-rotate-enter-active,
+.kc-rotate-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.kc-rotate-enter-from {
+  opacity: 0;
+  transform: translateY(0.35em);
+}
+
+.kc-rotate-leave-to {
+  opacity: 0;
+  transform: translateY(-0.35em);
+}
+
+.kc-parallax-intro__subtitle {
+  margin: 0;
+  max-width: 52rem;
+  color: var(--ui-text-muted);
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+
+.kc-parallax-intro__actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 376px) {
+  .kc-parallax-hero { --kc-scene-ratio: 2.3; }
+}
+
+@media (min-width: 600px) {
+  .kc-parallax-hero { --kc-scene-ratio: 2.1; }
+}
+
+@media (min-width: 960px) {
+  .kc-parallax-hero { --kc-scene-ratio: 1.5; }
+}
+
+@media (min-width: 1264px) {
+  .kc-parallax-hero { --kc-scene-ratio: 1.5; }
+}
+
+@media (min-width: 1904px) {
+  .kc-parallax-hero { --kc-scene-ratio: 1; }
+}
+
+@media (min-width: 2544px) {
+  .kc-parallax-hero { --kc-scene-ratio: 0.7; }
+}
+
+@media (max-width: 599px) {
+  .kc-parallax-intro__inner {
+    width: min(88vw, 34rem);
+    padding-top: 8rem;
+  }
+
+  .kc-parallax-intro__title {
+    max-width: 12ch;
+    font-size: clamp(2.15rem, 10vw, 3.15rem);
+  }
+
+  .kc-parallax-intro__subtitle {
+    font-size: 0.96rem;
+    line-height: 1.65;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kc-parallax-hero__layer {
+    transform: none;
+    will-change: auto;
+  }
+
+  .kc-parallax-hero__mark {
+    transform: translateX(-50%);
+    will-change: auto;
+  }
+}
+</style>
+

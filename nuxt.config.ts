@@ -104,7 +104,7 @@ export default defineNuxtConfig({
       script: [
         {
           key: 'platform-theme-init',
-          innerHTML: "try{const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch{}",
+          innerHTML: "if(document.documentElement.dataset.theme!=='dark'){const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}",
         },
       ],
       link: [
@@ -168,7 +168,7 @@ export default defineNuxtConfig({
       ],
     },
     customCollections: [
-      pickIcons('simple-icons', ['facebook', 'google', 'googlemaps', 'openai', 'whatsapp']),
+      pickIcons('simple-icons', ['claude', 'facebook', 'google', 'googlemaps', 'modelcontextprotocol', 'openai', 'whatsapp']),
       pickIcons('logos', ['facebook', 'google-analytics', 'google-icon', 'google-maps', 'google-search-console', 'whatsapp-icon']),
       pickIcons('skill-icons', ['instagram']),
     ],
