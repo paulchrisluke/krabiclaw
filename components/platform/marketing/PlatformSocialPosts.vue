@@ -37,12 +37,12 @@
       </ul>
     </div>
 
-    <SayaLightbox v-model:open="viewerOpen" v-model:index="viewerIndex" :items="viewerItems">
+    <MediaLightbox v-model:open="viewerOpen" v-model:index="viewerIndex" :items="viewerItems">
       <template #caption="{ item }">
         <p v-if="item.title" class="text-lg font-semibold leading-snug">{{ item.title }}</p>
         <p v-if="item.description" class="mt-1 line-clamp-4 whitespace-pre-line text-sm leading-relaxed text-white/80">{{ item.description }}</p>
       </template>
-    </SayaLightbox>
+    </MediaLightbox>
   </section>
 </template>
 
@@ -64,6 +64,7 @@ const viewerItems = computed(() => view.value.posts.flatMap(post => post.media.m
   url: (media.kind === 'video' ? media.public_url : mediaStillUrl(media)) ?? '',
   kind: media.kind === 'video' ? 'video' as const : 'image' as const,
   alt: media.alt_text ?? '',
+  poster: media.thumbnail_url ?? undefined,
   title: post.title ?? '',
   description: post.body ?? '',
 }))).filter(item => item.url))
