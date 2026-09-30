@@ -151,6 +151,7 @@
     "@vue-email/style": "0.0.3",
     "@vue-email/text": "0.0.3",
     "better-auth": "1.7.4",
+    "cookie-es": "^3.1.1",
     "drizzle-orm": "^0.45.2",
     "email-reply-parser": "2.3.9",
     "h3": "2.0.1-rc.29",

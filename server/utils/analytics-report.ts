@@ -99,7 +99,7 @@ const daySummariesSql = `WITH input AS (SELECT ? organization_id, ? starts_at, ?
   SELECT 'organization_day' kind, '' key, json_object(
     'page_views', page_views, 'unique_sessions', unique_sessions, 'unique_visitors', unique_visitors,
     'returning_visitors', (SELECT COUNT(DISTINCT current.visitor_id) FROM views current WHERE EXISTS (
-      SELECT 1 FROM analytics_events previous WHERE previous.organization_id = current.organization_id
+      SELECT 1 FROM analytics_events previous INDEXED BY analytics_events_org_visitor_idx WHERE previous.organization_id = current.organization_id
         AND previous.kind = 'pageview' AND previous.visitor_id = current.visitor_id
         AND previous.session_id <> current.session_id AND previous.created_at < (SELECT starts_at FROM input))),
     'avg_session_duration', COALESCE((SELECT ROUND(AVG(duration_seconds)) FROM sessions
@@ -318,7 +318,7 @@ export async function getAnalyticsReport(db: DbClient, input: {
         GROUP BY session_id, visitor_id)`, [input.organizationId, start, end]),
     queryFirst<{ count: number }>(db, `SELECT COUNT(DISTINCT current.visitor_id) count FROM analytics_events current
       WHERE current.organization_id = ? AND current.kind = 'pageview' AND current.created_at >= ? AND current.created_at < ?
-      AND EXISTS (SELECT 1 FROM analytics_events previous WHERE previous.organization_id = current.organization_id
+      AND EXISTS (SELECT 1 FROM analytics_events previous INDEXED BY analytics_events_org_visitor_idx WHERE previous.organization_id = current.organization_id
         AND previous.kind = 'pageview' AND previous.visitor_id = current.visitor_id
         AND previous.session_id <> current.session_id AND previous.created_at < ?)`, [input.organizationId, start, end, start]),
     // Sessions and their converting sessions are counted over the same population: each session
