@@ -88,7 +88,7 @@ test('Krabiclaw social viewer keyboard navigation changes the visible picture', 
   expect(response?.status()).toBe(200)
   await waitForNuxtHydration(page)
   const firstCard = page.locator('[data-social-posts=block] [data-social-post]').first()
-  await expect(firstCard.getByText('Facebook', { exact: true })).toBeVisible()
+  await expect(firstCard.getByText('KrabiClaw', { exact: true })).toBeVisible()
   await expect(firstCard.locator('time, a')).toHaveCount(0)
   await firstCard.click()
   const viewer = page.getByRole('dialog', { name: 'Media Lightbox' })

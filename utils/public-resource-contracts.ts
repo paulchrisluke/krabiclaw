@@ -188,5 +188,5 @@ export function isPublicSocialPost(value: unknown): value is PublicSocialPost {
   return isRecord(value) && typeof value.id === 'string' && typeof value.slug === 'string' && typeof value.path === 'string'
     && (value.title === null || typeof value.title === 'string') && (value.body === null || typeof value.body === 'string')
     && Array.isArray(value.media) && Array.isArray(value.publications)
-    && value.publications.every(item => isRecord(item) && (item.channel === 'facebook' || item.channel === 'instagram') && (item.url === null || typeof item.url === 'string'))
+    && value.publications.every(item => isRecord(item) && (item.channel === 'facebook' || item.channel === 'instagram') && (item.url === null || typeof item.url === 'string') && (item.account_name === null || typeof item.account_name === 'string'))
 }

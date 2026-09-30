@@ -260,7 +260,7 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal(await db.prepare("SELECT count(*) FROM activity_entries WHERE event_name = 'post.published'").first('count(*)'), 1)
     // The public projection carries only confirmed publications, with Meta's own links.
     const feedPage = await listPublicSocialPosts(env, db, 'org-a', { locale: 'en', window: { limit: 12, offset: 0 }, resource: 'r' })
-    assert.deepEqual(feedPage.posts[0]!.publications, [{ channel: 'facebook', url: `https://www.facebook.com/${PAGE}_3` }, { channel: 'instagram', url: `https://www.instagram.com/p/${[...meta.igMedia.keys()][0]}/` }])
+    assert.deepEqual(feedPage.posts[0]!.publications, [{ channel: 'facebook', url: `https://www.facebook.com/${PAGE}_3`, account_name: 'Krabi Claw' }, { channel: 'instagram', url: `https://www.instagram.com/p/${[...meta.igMedia.keys()][0]}/`, account_name: 'krabiclaw' }])
     assert.deepEqual(feedPage.posts[0]!.media.map(item => item.asset_id), ['a1', 'a2'])
     // A post is published once per channel: another Page is a conflict.
     const elsewhere = await publishPost(env, 'org-a', first.post.id, { expectedUpdatedAt: published!.updated_at, targets: [{ channel: 'facebook', target_id: 'another-page', connection_revision: 'fb-rev-org-a' }] }, 'owner')

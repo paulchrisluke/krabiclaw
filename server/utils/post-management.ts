@@ -1,3 +1,5 @@
+import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
+import { readInstagramConnection } from '~/server/utils/instagram'
 import { HTTPError } from 'nitro'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, PostValidationError, type PostCallToAction, type PostMediaRef, type PostMutation } from '~/shared/posts'
@@ -484,7 +486,7 @@ export interface PublicSocialPost {
   published_at: string | null
   location: { id: string; title: string; slug: string } | null
   /** Only confirmed external publications; a link only when the provider returned one. */
-  publications: Array<{ channel: 'facebook' | 'instagram'; url: string | null }>
+  publications: Array<{ channel: 'facebook' | 'instagram'; url: string | null; account_name: string | null }>
   social_image: SocialImageSource | null
   status: 'draft' | 'published'
   /** Whether the post is in feeds; an unlisted one answers at its own address only. */
@@ -510,14 +512,16 @@ interface PublicPostRow {
 async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organizationId: string, rows: PublicPostRow[], locale: string): Promise<PublicSocialPost[]> {
   if (!rows.length) return []
   const rootIds = rows.map(row => row.id)
-  const [origin, media, social, publications, localizations] = await Promise.all([
+  const [origin, media, social, publications, localizations, facebook, instagram] = await Promise.all([
     resolveOrganizationPublicOrigin(db, organizationId),
     loadPostMedia(db, organizationId, rootIds),
     loadPublicSocialMedia(db, organizationId, 'content_document', rows.map(row => row.representation_id)),
-    queryAll<{ post_id: string; channel: 'facebook' | 'instagram'; provider_permalink: string | null }>(db, `SELECT post_id, channel, provider_permalink
+    queryAll<{ post_id: string; channel: 'facebook' | 'instagram'; provider_permalink: string | null; provider_target_id: string }>(db, `SELECT post_id, channel, provider_permalink, provider_target_id
       FROM post_publications WHERE organization_id = ? AND state = 'published' AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
     [organizationId, d1JsonStringSet(rootIds)]),
     locale === 'en' ? Promise.resolve([]) : loadExactPublicLocalizations(env, db, organizationId, locale),
+    getFacebookPagesConnection(env, organizationId),
+    readInstagramConnection(env, organizationId),
   ])
   return rows.map((row) => {
     const rootAction = callToActionOf(row.root_metadata_json)
@@ -537,7 +541,7 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
       })), localizations),
       published_at: row.published_at,
       location: row.location_id && row.location_title && row.location_slug ? { id: row.location_id, title: row.location_title, slug: row.location_slug } : null,
-      publications: publications.filter(item => item.post_id === row.id).map(item => ({ channel: item.channel, url: item.provider_permalink })),
+      publications: publications.filter(item => item.post_id === row.id).map(item => ({ channel: item.channel, url: item.provider_permalink, account_name: item.channel === 'facebook' ? (facebook?.page_id === item.provider_target_id ? facebook.page_name : null) : (instagram?.instagram_user_id === item.provider_target_id ? instagram.username : null) })),
       social_image: social.get(row.representation_id)?.social_image ?? null,
       status: row.status,
       visibility: row.visibility,

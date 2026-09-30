@@ -16,11 +16,11 @@
         :aria-label="t(`social_posts.view_on_${publication.channel}`)"
       >
         <UIcon :name="ICONS[publication.channel]" class="size-4 shrink-0" aria-hidden="true" />
-        <span>{{ NAMES[publication.channel] }}</span>
+        <span v-if="linked || publication.account_name">{{ linked ? NAMES[publication.channel] : publication.account_name }}</span>
       </a>
       <span v-else :class="itemClass" :aria-label="t(`social_posts.posted_on_${publication.channel}`)">
         <UIcon :name="ICONS[publication.channel]" class="size-4 shrink-0" aria-hidden="true" />
-        <span>{{ NAMES[publication.channel] }}</span>
+        <span v-if="linked || publication.account_name">{{ linked ? NAMES[publication.channel] : publication.account_name }}</span>
       </span>
     </component>
   </component>

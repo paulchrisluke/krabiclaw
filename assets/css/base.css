@@ -410,3 +410,25 @@
 .prose td {
   word-break: break-word;
 }
+
+.gallery-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ui-border-accented);
+  cursor: pointer;
+  transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.gallery-dot--active,
+.gallery-dot[data-state="active"] {
+  width: 1.75rem;
+  background: var(--ui-text-highlighted);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-dot { transition: none; }
+}

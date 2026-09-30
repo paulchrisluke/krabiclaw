@@ -9,7 +9,7 @@ import { isNonProductionHost, normalizeHost } from '~/server/utils/tenant-hosts'
 // params instead of host + pathname — public resources are looked up by organizationId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<organizationId>~v4~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<organizationId>~v5~<contract>~<page>~<location>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
@@ -189,7 +189,7 @@ export function buildPublicBlawbyDocumentCacheKey(
   return [
     'public',
     encodeKeyField(organizationId),
-    'v4',
+    'v5',
     'blawby-document',
     encodeKeyField(recipe),
     encodeKeyField(slug),
@@ -201,7 +201,7 @@ export function buildPublicResourceCacheKey(organizationId: string, params: Publ
   return [
     'public',
     encodeKeyField(organizationId),
-    'v4',
+    'v5',
     params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),
