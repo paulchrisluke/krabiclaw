@@ -94,6 +94,8 @@ export const LOCAL_DEVELOPER_AUTH_FIXTURE: E2eAuthFixture = {
     { organizationId: 'org-user-pottery-house', role: 'owner' },
     { organizationId: 'org-bVY8SxxUuG6Ctk2CQnfCk8T2cPsj4jJX', role: 'owner' },
     { organizationId: 'org-ncls-blawby', role: 'owner' },
+    // Krabiclaw's own site is an ordinary organization, edited the same way.
+    { organizationId: 'platform', role: 'owner' },
   ],
 }
 export const LOCAL_DEVELOPER_LOGIN_URL = `http://localhost:3000/login?email=${encodeURIComponent(LOCAL_DEVELOPER_AUTH_FIXTURE.email)}`
