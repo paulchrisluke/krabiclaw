@@ -26,9 +26,10 @@ const route = useRoute()
 const section = computed(() => route.meta.articleCollection === 'docs' ? 'docs' as const
   : route.meta.articleCollection === 'blog' ? 'blog' as const : 'platform' as const)
 
-usePlatformTheme().bootstrap()
-
+// Krabiclaw's public pages have one theme: dark. It is rendered on the server
+// so a visitor never sees a light frame first.
 useHead({
+  htmlAttrs: { class: 'dark' },
   titleTemplate: (title) => title ? `${title} | Krabiclaw` : 'Krabiclaw | AI Website Platform'
 })
 </script>

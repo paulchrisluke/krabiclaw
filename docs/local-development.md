@@ -123,7 +123,8 @@ is recorded in the repository.
 
 The account exists only in local D1. It is a Better Auth admin (it can
 impersonate) and an owner in each curated tenant organization, so it is the
-single manual sign-in for demo, Pottery House, Kikuzuki, and NCLS work. Better Auth handles the normal
+single manual sign-in for demo, Pottery House, Kikuzuki, NCLS, and Krabiclaw's
+own site. Better Auth handles the normal
 email/password request and stores only the password hash; there is no auth
 bypass, magic header, or cookie to paste.
 

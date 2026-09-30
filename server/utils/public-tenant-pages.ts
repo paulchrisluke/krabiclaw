@@ -5,7 +5,7 @@ import { faqBlockSource, faqItems, listFaqBlockQa } from '~/server/utils/locatio
 import type { FaqBlockSource } from '~/shared/faq-block'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/content/pages'
-import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import { validateContentBlockData, type TenantPageBlock } from '~/utils/tenant-page-blocks'
 import type { MediaPlacementItem } from '~/server/utils/media-placement'
 import { COVER_SELECT, attachCoverMedia, coverJoinSql } from '~/server/utils/content/cover'
 import { loadPublicSocialMedia } from '~/server/utils/public-social-image'
@@ -327,6 +327,7 @@ async function hydrateBlocks(
     }
   })
   return blocks.map(block => {
+    if (block.type === 'showcase' || block.type === 'language_reach' || block.type === 'steps') validateContentBlockData(block.type, block.data)
     const data = { ...block.data }
     if (block.type === 'page_grid' && Array.isArray(data.page_ids)) {
       data.items = data.page_ids.map((id) => {

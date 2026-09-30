@@ -21,6 +21,11 @@ import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import PlatformMarketingHero from '~/components/platform/marketing/PlatformMarketingHero.vue'
 import PlatformFeatureCards from '~/components/platform/marketing/PlatformFeatureCards.vue'
+import PlatformShowcase from '~/components/platform/marketing/PlatformShowcase.vue'
+import PlatformMediaFeature from '~/components/platform/marketing/PlatformMediaFeature.vue'
+import PlatformSocialPosts from '~/components/platform/marketing/PlatformSocialPosts.vue'
+import PlatformLanguageReach from '~/components/platform/marketing/PlatformLanguageReach.vue'
+import PlatformSteps from '~/components/platform/marketing/PlatformSteps.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
 import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
 import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
@@ -65,7 +70,7 @@ import SayaCTA from '~/components/saya/SayaCTA.vue'
 // fails `typecheck` rather than a customer's eye.
 type BlockPresentation = Component<{ block: TenantPageBlock, page: PublicTenantPage }>
 
-// Every template's social_posts block is the one shared component, themed by
+// Blawby's and Saya's social_posts block is the one shared component, themed by
 // the template's tokens. It also draws the /posts feed from a list of posts, so
 // it takes the block and the page as optional props; as a page block it always
 // receives both.
@@ -80,12 +85,16 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   'platform:comparison': PlatformComparison,
   'platform:stat_grid': PlatformProofBand,
   'platform:workflow_grid': PlatformWorkflows,
+  'platform:showcase': PlatformShowcase,
+  'platform:media_text': PlatformMediaFeature,
   'platform:callout': PlatformSeoBand,
   'platform:how_to': PlatformPluginSections,
   'platform:markdown': PlatformProseCard,
   'platform:faq': PlatformFaqAccordion,
   'platform:cta': PlatformBottomCta,
-  'platform:social_posts': feedOrBlock(SocialPosts),
+  'platform:social_posts': PlatformSocialPosts,
+  'platform:language_reach': PlatformLanguageReach,
+  'platform:steps': PlatformSteps,
 
   // The Blawby template, for professional-services sites.
   'blawby:hero': BlawbyPageHero,

@@ -55,7 +55,39 @@
         <UTextarea :model-value="str('bio')" :rows="8" autoresize autofocus class="w-full" @update:model-value="set('bio', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'photo'" label="Photo">
-        <MediaPicker :organization-id="organizationId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
+        <MediaPicker :organization-id="organizationId" :model-value="recordMedia('image')?.asset_id" :selected-summary="recordMedia('image')" accept="image" @update:model-value="setRecordMedia('image', $event)" />
+      </UFormField>
+    </template>
+
+    <!-- a showcase statement: its words, and the three pictures that show it -->
+    <template v-else-if="isShowcase">
+      <UFormField v-if="field === 'copy'" label="Statement" required>
+        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+      </UFormField>
+      <template v-else-if="field === 'pictures'">
+        <UFormField v-for="picture in recordPictures" :key="picture.slot" :label="picture.label">
+          <MediaPicker :organization-id="organizationId" :model-value="recordMedia(picture.slot)?.asset_id" :selected-summary="recordMedia(picture.slot)" accept="image" @update:model-value="setRecordMedia(picture.slot, $event)" />
+        </UFormField>
+      </template>
+    </template>
+
+    <!-- a language: its name, which language it is, and its picture (below) -->
+    <template v-else-if="isLanguage && field === 'copy'">
+      <UFormField label="Language name" required>
+        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+      </UFormField>
+      <UFormField label="Language" required>
+        <USelect :model-value="str('locale') || undefined" :items="localeOptions" value-key="value" label-key="label" size="xl" class="w-full" @update:model-value="set('locale', $event)" />
+      </UFormField>
+    </template>
+
+    <!-- a step: its words and where it is explained -->
+    <template v-else-if="isStep">
+      <UFormField label="Step" required>
+        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+      </UFormField>
+      <UFormField label="Link">
+        <UInput :model-value="str('url')" size="xl" placeholder="/docs/getting-started" class="w-full" @update:model-value="set('url', $event)" />
       </UFormField>
     </template>
 
@@ -76,7 +108,7 @@
         <UInput :model-value="str('icon')" size="xl" autofocus class="w-full" @update:model-value="set('icon', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'image'" label="Image">
-        <MediaPicker :organization-id="organizationId" :model-value="recordImage" :selected-summary="recordImageMedia" accept="image" @update:model-value="setRecordImage($event)" />
+        <MediaPicker :organization-id="organizationId" :model-value="recordMedia('image')?.asset_id" :selected-summary="recordMedia('image')" accept="image" @update:model-value="setRecordMedia('image', $event)" />
       </UFormField>
       <template v-else-if="field === 'link'">
         <UFormField label="Link label">
@@ -98,6 +130,7 @@ import {
   tenantPageRecordTitle,
   type TenantPageBlockCollection,
 } from '~/utils/tenant-page-block-sections'
+import { TENANT_PAGE_BLOCK_REGISTRY } from '~/utils/tenant-page-blocks'
 
 /**
  * One nested collection of one block: its records, and whatever a record holds.
@@ -131,6 +164,15 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
       : []
   })
   const isPerson = computed(() => block.value?.type === 'team_grid' && collectionRef.value === 'items')
+  const isShowcase = computed(() => block.value?.type === 'showcase' && collectionRef.value === 'items')
+  const isLanguage = computed(() => block.value?.type === 'language_reach' && collectionRef.value === 'items')
+  const isStep = computed(() => block.value?.type === 'steps' && collectionRef.value === 'items')
+  const localeOptions = computed(() => [...(TENANT_PAGE_BLOCK_REGISTRY.language_reach.fields.items?.of?.locale?.options ?? [])])
+  // The pictures a record holds, as its block's definition declares them.
+  const recordPictures = computed(() => {
+    const definition = block.value ? TENANT_PAGE_BLOCK_REGISTRY[block.value.type].fields[collectionRef.value] : undefined
+    return Object.values(definition?.of ?? {}).flatMap(field => (field.kind === 'media' && field.slot ? [{ slot: field.slot, label: field.label }] : []))
+  })
   const noun = computed(() => {
     const entry = TENANT_PAGE_RECORD_NOUNS[collectionRef.value]
     const plural = isPerson.value ? 'People' : `${entry.one}s`
@@ -166,7 +208,8 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     if (key === 'name') return [text(item.first_name), text(item.last_name)].filter(Boolean).join(' ')
     if (key === 'role') return text(item.title)
     if (key === 'bio') return text(item.bio)
-    if (key === 'photo' || key === 'image') return recordImage.value ? 'Chosen' : ''
+    if (key === 'photo' || key === 'image') return recordMedia('image') ? 'Chosen' : ''
+    if (key === 'pictures') return `${recordPictures.value.filter(picture => recordMedia(picture.slot)).length} of ${recordPictures.value.length} chosen`
     if (key === 'copy') return text(item.title) || text(item.name) || text(item.description)
     if (key === 'icon') return text(item.icon)
     if (key === 'link') return text(item.url) || text(item.cta_url)
@@ -195,18 +238,22 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     writeRecords(next)
   }
 
-  // ── A record's own picture ──────────────────────────────
-  // Stored as a placement on the block at `items.<index>.image`, which is what the
-  // public renderer reads for both grid items and people.
-  const imageSlot = computed(() => `items.${index.value}.image`)
-  const recordImageMedia = computed(() => block.value?.media.find(item => item.slot === imageSlot.value) ?? null)
-  const recordImage = computed(() => recordImageMedia.value?.asset_id ?? null)
+  // ── A record's own pictures ─────────────────────────────
+  // Stored as placements on the block at `items.<index>.<slot>`, which is what the
+  // public renderer reads: `image` for grid items and people, `left`, `center`
+  // and `right` for a showcase statement.
+  const recordSlot = (name: string) => `items.${index.value}.${name}`
 
-  function setRecordImage(assetId: string | null | undefined) {
+  function recordMedia(name: string) {
+    return block.value?.media.find(item => item.slot === recordSlot(name)) ?? null
+  }
+
+  function setRecordMedia(name: string, assetId: string | null | undefined) {
     const current = block.value
     if (!current) return
-    const rest = current.media.filter(item => item.slot !== imageSlot.value)
-    current.media = assetId ? [...rest, { asset_id: assetId, slot: imageSlot.value, sort_order: 0 }] : rest
+    const slot = recordSlot(name)
+    const rest = current.media.filter(item => item.slot !== slot)
+    current.media = assetId ? [...rest, { asset_id: assetId, slot, sort_order: 0 }] : rest
   }
 
   // ── Adding, removing, reordering ────────────────────────
@@ -215,6 +262,9 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     if (collectionRef.value === 'steps') return { name: '', text: '' }
     if (collectionRef.value === 'tiers') return { amount: '', title: '', description: '' }
     if (isPerson.value) return { first_name: '', last_name: '', title: '', bio: '' }
+    if (isShowcase.value) return { title: '' }
+    if (isLanguage.value) return { title: '', locale: '' }
+    if (isStep.value) return { title: '', url: '' }
     return { title: '', description: '', value: '', label: '', url: '' }
   }
 
@@ -224,17 +274,17 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     return records.value.length - 1
   }
 
-  // A record's picture is addressed by the record's position, so any change to
+  // A record's pictures are addressed by the record's position, so any change to
   // the order has to carry the placements with it. Remapping the whole slot set
   // from the new order is one rule for removing and reordering alike.
   function remapMedia(order: number[]) {
     const current = block.value
     if (!current || collectionRef.value !== 'items') return
     current.media = current.media.flatMap((item) => {
-      const match = /^items\.(\d+)\.image$/.exec(item.slot)
+      const match = /^items\.(\d+)\.([a-z]+)$/.exec(item.slot)
       if (!match) return [item]
       const position = order.indexOf(Number(match[1]))
-      return position < 0 ? [] : [{ ...item, slot: `items.${position}.image` }]
+      return position < 0 ? [] : [{ ...item, slot: `items.${position}.${match[2]}` }]
     })
   }
 
@@ -257,7 +307,7 @@ export function useTenantPageBlockRecords(organizationId: string, pageId: string
     remapMedia(order)
   }
 
-  return { block, records, record, recordTitle, noun, isPerson, recordSections, listItems, leafSummary, str, set, recordImage, recordImageMedia, setRecordImage, addRecord, removeRecord, move }
+  return { block, records, record, recordTitle, noun, isPerson, isShowcase, isLanguage, isStep, localeOptions, recordPictures, recordSections, listItems, leafSummary, str, set, recordMedia, setRecordMedia, addRecord, removeRecord, move }
 }
 </script>
 
@@ -274,7 +324,7 @@ const props = defineProps<{
   field: string | null
 }>()
 
-const { record, isPerson, str, set, recordImage, recordImageMedia, setRecordImage } = useTenantPageBlockRecords(
+const { record, isPerson, isShowcase, isLanguage, isStep, localeOptions, recordPictures, str, set, recordMedia, setRecordMedia } = useTenantPageBlockRecords(
   props.organizationId, props.pageId, props.blockId, props.collection, () => props.recordIndex,
 )
 </script>

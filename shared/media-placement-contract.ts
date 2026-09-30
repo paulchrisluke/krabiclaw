@@ -3,7 +3,15 @@ export const MEDIA_PLACEMENT_SLOTS = {
   business_location: ['hero', 'gallery', 'social_card'],
   product: ['image', 'gallery', 'social_card'],
   content_document: ['cover', 'gallery', 'social_card'],
-  content_block: ['media', 'gallery', 'background', 'featured', 'decoration'],
+  content_block: [
+    'media', 'gallery', 'background', 'featured', 'decoration',
+    'parallax_sky', 'parallax_sky_xxs', 'parallax_sky_xs', 'parallax_sky_sm', 'parallax_sky_md', 'parallax_sky_lg',
+    'parallax_clouds', 'parallax_clouds_xxs', 'parallax_clouds_xs', 'parallax_clouds_sm', 'parallax_clouds_md', 'parallax_clouds_lg',
+    'parallax_mountains', 'parallax_mountains_xxs', 'parallax_mountains_xs', 'parallax_mountains_sm', 'parallax_mountains_md', 'parallax_mountains_lg',
+    'parallax_far_trees', 'parallax_far_trees_xxs', 'parallax_far_trees_xs', 'parallax_far_trees_sm', 'parallax_far_trees_md', 'parallax_far_trees_lg',
+    'parallax_building_trees', 'parallax_building_trees_xxs', 'parallax_building_trees_xs', 'parallax_building_trees_sm', 'parallax_building_trees_md', 'parallax_building_trees_lg',
+    'parallax_foreground', 'parallax_foreground_xxs', 'parallax_foreground_xs', 'parallax_foreground_sm', 'parallax_foreground_md', 'parallax_foreground_lg',
+  ],
   review: ['portrait', 'gallery', 'social_card'],
   review_request: ['gallery'],
 } as const
@@ -27,6 +35,10 @@ export function isEditableMediaPlacementOwnerType(value: string): value is Edita
 
 const INDEXED_SLOTS = [
   { ownerType: 'content_block', runtime: /^items\.\d+\.image$/, sqlGlob: 'items.[0-9]*.image' },
+  // A showcase statement's three pictures.
+  { ownerType: 'content_block', runtime: /^items\.\d+\.left$/, sqlGlob: 'items.[0-9]*.left' },
+  { ownerType: 'content_block', runtime: /^items\.\d+\.center$/, sqlGlob: 'items.[0-9]*.center' },
+  { ownerType: 'content_block', runtime: /^items\.\d+\.right$/, sqlGlob: 'items.[0-9]*.right' },
   { ownerType: 'content_block', runtime: /^images\.\d+$/, sqlGlob: 'images.[0-9]*' },
   { ownerType: 'content_block', runtime: /^features\.\d+\.icon$/, sqlGlob: 'features.[0-9]*.icon' },
   { ownerType: 'content_block', runtime: /^people\.\d+\.image$/, sqlGlob: 'people.[0-9]*.image' },

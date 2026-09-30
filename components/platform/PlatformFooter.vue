@@ -39,16 +39,6 @@
         <p class="max-w-[60ch]">&copy; {{ new Date().getFullYear() }} Krabiclaw. All rights reserved. Built for independent businesses globally.</p>
         <div class="flex items-center gap-4">
           <ZarazConsentButton />
-          <!-- The only visible public theme control. It sets an explicit
-               preference, so a visitor who never clicks it stays on `system`. -->
-          <button
-            type="button"
-            class="grid size-8.5 place-items-center rounded-lg border border-default text-muted transition-colors hover:bg-muted hover:text-default"
-            :aria-label="resolvedTheme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
-            @click="setPreference(resolvedTheme === 'dark' ? 'light' : 'dark')"
-          >
-            <PlatformIcon :name="resolvedTheme === 'dark' ? 'sun' : 'moon'" class="size-4" />
-          </button>
         </div>
       </div>
     </div>
@@ -95,5 +85,4 @@ const COLUMNS = [
   },
 ] as const
 
-const { value: resolvedTheme, setPreference } = usePlatformTheme()
 </script>

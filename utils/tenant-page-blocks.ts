@@ -1,5 +1,6 @@
 import { FAQ_BLOCK_SOURCES } from '../shared/faq-block'
 import { videoUploadDate, youTubeVideoId } from '../shared/youtube-video'
+import { isSupportedMediaPlacement } from '../shared/media-placement-contract'
 
 export const TENANT_PAGE_SCHEMA_VERSION = 1 as const
 
@@ -29,6 +30,9 @@ export type TenantPageBlockType =
   | 'comparison'
   | 'stat_grid'
   | 'workflow_grid'
+  | 'showcase'
+  | 'language_reach'
+  | 'steps'
   | 'video_feature'
   | 'media_text'
   | 'contact_form'
@@ -278,6 +282,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     // leaf (DESIGN.md).
     title: text('Headline', { required: true, section: 'headline' }),
     accent: text('Emphasised phrase', { section: 'headline' }),
+    // Phrases that take turns as the headline's closing line, one at a time.
+    rotating_accents: { kind: 'list', label: 'Rotating closing phrases', section: 'headline' },
     eyebrow: text('Eyebrow'),
     subtitle: prose('Subheading'),
     media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
@@ -294,8 +300,8 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   }),
 
   feature_grid: blockDefinitionWithMetadata('feature_grid', 'Features', 'A grid you write, or rows read from your site.', ALL_RECIPES, {
-    title: text('Section title', { section: 'settings' }),
-    description: prose('Description', { section: 'settings' }),
+    title: text('Section title', { section: 'copy' }),
+    description: prose('Description', { section: 'copy' }),
     source: {
       kind: 'enum', label: 'Rows', translatable: false, section: 'settings', default: 'manual',
       options: [
@@ -306,6 +312,16 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },
+    // How Krabiclaw's own pages draw written items: as icon cards, or as
+    // pictures with their words beneath.
+    layout: {
+      kind: 'enum', label: 'Layout', translatable: false, section: 'settings', default: 'cards',
+      availableWhen: { field: 'source', equals: ['manual'] },
+      options: [
+        { value: 'cards', label: 'Cards' },
+        { value: 'pictures', label: 'Pictures', platformOnly: true },
+      ],
+    },
     calculator: { kind: 'calculator', label: 'Calculator', translatable: false, section: 'calculator', availableWhen: { field: 'source', equals: ['calculator'] } },
     // The one button a practice area's feature list carries over its picture.
     // Declared here so the firm writes its words and its destination, the way
@@ -363,6 +379,55 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         icon: { kind: 'enum', label: 'Icon', translatable: false, section: 'icon' },
       },
     },
+  }),
+
+  // Statements that take turns, each shown by its own three pictures: a wide
+  // one, a tall one and a wide one. The pictures are the block's placements at
+  // `items.<index>.left`, `.center` and `.right`.
+  showcase: blockDefinitionWithMetadata('showcase', 'Showcase', 'Statements that take turns, each with three pictures.', ALL_RECIPES, {
+    items: {
+      kind: 'list', label: 'Statements', section: 'items',
+      of: {
+        title: text('Statement', { required: true }),
+        left: { kind: 'media', label: 'Left picture (wide)', translatable: false, section: 'pictures', slot: 'left' },
+        center: { kind: 'media', label: 'Middle picture (tall)', translatable: false, section: 'pictures', slot: 'center' },
+        right: { kind: 'media', label: 'Right picture (wide)', translatable: false, section: 'pictures', slot: 'right' },
+      },
+    },
+  }),
+
+  // The languages a site is read in, each with a picture of the site in it and
+  // the places its readers find it. A language's picture is the block's
+  // placement at `items.<index>.image`.
+  language_reach: blockDefinitionWithMetadata('language_reach', 'Languages', 'The languages your site speaks, and where each is found.', ALL_RECIPES, {
+    title: text('Section title', { section: 'copy' }),
+    subtitle: text('Card title', { section: 'copy' }),
+    description: prose('Description', { section: 'copy' }),
+    pin_label: text('Map marker label', { section: 'settings' }),
+    items: {
+      kind: 'list', label: 'Languages', section: 'items',
+      of: {
+        title: text('Language name', { required: true }),
+        locale: {
+          kind: 'enum', label: 'Language', translatable: false, required: true,
+          options: [{ value: 'en', label: 'English' }, { value: 'ja', label: 'Japanese' }, { value: 'th', label: 'Thai' }],
+        },
+        image: { kind: 'media', label: 'Picture of the site in this language', translatable: false, section: 'image', slot: 'image' },
+      },
+    },
+  }),
+
+  // Numbered steps, each a link to where it is explained, beside two pictures
+  // and one button. The pictures are the block's ordered `gallery` placement.
+  steps: blockDefinitionWithMetadata('steps', 'Steps', 'Numbered steps that link to how each is done.', ALL_RECIPES, {
+    title: text('Section title', { section: 'settings' }),
+    gallery: { kind: 'media', label: 'Pictures', translatable: false, section: 'pictures', slot: 'gallery' },
+    items: {
+      kind: 'list', label: 'Steps', section: 'items',
+      of: { title: text('Step', { required: true }), url: link('Link', { section: 'copy' }) },
+    },
+    cta_label: text('Button label', { section: 'button', pairedWith: 'cta_url' }),
+    cta_url: link('Button URL', { section: 'button', pairedWith: 'cta_label' }),
   }),
 
   // A video with the points it makes.
@@ -590,6 +655,20 @@ export function validateContentBlockData(type: string, data: Record<string, unkn
       throw new Error(`${type}.${key} must be an array of objects.`)
     }
   }
+  if (type === 'showcase' || type === 'language_reach' || type === 'steps') {
+    const fields = TENANT_PAGE_BLOCK_REGISTRY[type].fields.items!.of!
+    for (const [index, item] of (data.items as Record<string, unknown>[] | undefined ?? []).entries()) {
+      for (const [key, field] of Object.entries(fields)) {
+        const value = item[key]
+        if (field.required && (typeof value !== 'string' || !value.trim())) {
+          throw new Error(`${type}.items[${index}].${key} is required.`)
+        }
+        if (field.kind === 'enum' && !field.options?.some(option => option.value === value)) {
+          throw new Error(`${type}.items[${index}].${key} must be one of: ${field.options?.map(option => option.value).join(', ')}.`)
+        }
+      }
+    }
+  }
   // These blocks select canonical read-only records; they never store copies.
   // A testimonial grid has no source to choose — reviews are the site's reviews —
   // so it declares no `source` field. The editor used to offer "Items I write"
@@ -780,7 +859,7 @@ export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
       return { asset_id: assetId, slot, sort_order: mediaIndex }
     })
     const canonicalSlot = type === 'gallery' ? 'gallery' : type === 'hero' || type === 'image' ? 'media' : null
-    if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot)) {
+    if (canonicalSlot && normalizedMedia.some(item => item.slot !== canonicalSlot && !(type === 'hero' && item.slot.startsWith('parallax_') && isSupportedMediaPlacement({ owner_type: 'content_block', slot: item.slot })))) {
       throw new Error(`blocks[${index}].media must use the ${canonicalSlot} slot for ${type} blocks.`)
     }
     if (canonicalSlot) {
