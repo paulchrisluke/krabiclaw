@@ -1,4 +1,4 @@
-import { test, type Page, type Request, type Response } from '@playwright/test'
+import { expect, test, type Page, type Request, type Response } from '@playwright/test'
 import { blawbyTestBaseUrl, blawbyTestExtraHeaders, tenantTestBaseUrl, potteryHouseTestBaseUrl, tenantTestExtraHeaders, potteryHouseTestExtraHeaders } from './test-env'
 
 export const tenantBaseURL = tenantTestBaseUrl()
@@ -70,6 +70,17 @@ export async function openTenantPage(page: Page, url: string, headers: Record<st
         const consent = (window as Window & { zaraz?: { consent?: ZarazConsentApi } }).zaraz?.consent
         return consent?.APIReady === true
       })
+    }
+
+    // Initial tenant announcements are visitor UI; acknowledge them through
+    // their real Close button before testing the site's navigation.
+    const announcement = page.getByRole('dialog').filter({
+      has: page.getByRole('button', { name: 'Close', exact: true }),
+    })
+    if (await announcement.isVisible()) {
+      await waitForNuxtHydration(page)
+      await announcement.getByRole('button', { name: 'Close', exact: true }).click()
+      await expect(announcement).toBeHidden()
     }
 
     report('finished')

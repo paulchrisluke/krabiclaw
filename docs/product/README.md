@@ -100,3 +100,18 @@ An offline validator cannot assert this snapshot is the current live catalog.
 Refresh it only after a new authorized read, preserve its timestamp, and review
 changed bullets against feature evidence. Never generate or push Stripe bullets
 from reference labels automatically.
+
+## Pricing parity in this page change
+
+Every feature records an explicit `pricingComparison` decision. Reviewed
+comparison rows use stable feature IDs; CI rejects unknown IDs, unsupported or
+unverified rows, entitlement references absent from the feature mapping, duplicate
+labels and missing rows for features marked included. New features require an
+explicit pricing decision. This maps evidence to the application comparison;
+Stripe still owns paid bullets and prices, and no marketing text is generated
+from feature labels or MCP names.
+
+The pricing page's decorative photo fronts are CMS block media, separate from
+the Stripe Product image. The existing `billing_plans` block uses `items.0.image`
+for Free and `items.1.image` for Growth. Names, billing Product images, descriptions,
+bullets and prices retain their original canonical ownership.

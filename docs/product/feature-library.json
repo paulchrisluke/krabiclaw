@@ -47,7 +47,8 @@
           "server/utils/mcp-tools/context.ts": "49abd2dd8c1a37aa3867597bdcbc862bebac2d1127e8baedbea00c9d0837dd6d"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "content.standard",
@@ -90,7 +91,8 @@
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "content.custom-pages",
@@ -125,7 +127,8 @@
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "locations.management",
@@ -164,7 +167,8 @@
           "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "catalog.products",
@@ -217,7 +221,8 @@
           "server/utils/mcp-tools/products.ts": "945146f3fc067d6900992adce1fbf143b5d8bcda8e0fc2e84c225cdc55b9d25f"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "bookings.requests",
@@ -247,7 +252,8 @@
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "content.articles",
@@ -290,7 +296,8 @@
           "server/utils/mcp-tools/blog.ts": "e8759620be48a29056a567f4a9fc52439d86629ed8543840b5837e326ead24a1"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "not-shown"
     },
     {
       "id": "media.management",
@@ -335,7 +342,8 @@
           "server/utils/mcp-tools/onboarding.ts": "94cb8dd4aee5f14b3fd32902853a23e6e398b7ee6f02599f1b8d8675b60d3906"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "content.locales",
@@ -374,7 +382,8 @@
           "server/utils/mcp-tools/locales.ts": "80564d8cba747e815e39fe36767e281570aaeff4151673a281cbee8bef5605c3"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "content.qa",
@@ -404,7 +413,8 @@
           "server/utils/mcp-tools/qa.ts": "2e2ef3a0bcec60cc77008e09e933c044cddbdac8610c1cec2e4565c6a9cf4799"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "not-shown"
     },
     {
       "id": "reviews.read",
@@ -434,7 +444,8 @@
           "server/utils/mcp-tools/reviews.ts": "5d9e9baec26daa24f8157df0484bc08424792d1d03b069ddbe8c1a6efa32e631"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "inbox.submissions",
@@ -467,7 +478,8 @@
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "analytics.reports",
@@ -500,7 +512,8 @@
           "server/utils/mcp-tools/analytics.ts": "ff1c62f4f516446047e7afb11879eaf5e6e11072beba235cfe21fc932e7eb2cd"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "posts.website",
@@ -540,7 +553,8 @@
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "social.external-channels",
@@ -580,7 +594,8 @@
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "social.automatic-sync",
@@ -607,7 +622,8 @@
           "server/utils/mcp-executor/posts.ts": "ced3916d5ed4f9eeb2d67fb9942e25b4c49b9316ee8b7e1ee712de6a88653d75"
         }
       },
-      "pendingOwnerDecision": "Do not restore automatic-sync claims from historical import code without a supported runtime path."
+      "pendingOwnerDecision": "Do not restore automatic-sync claims from historical import code without a supported runtime path.",
+      "pricingComparison": "not-shown"
     },
     {
       "id": "places.onboarding",
@@ -637,7 +653,8 @@
           "tests/e2e/onboarding.spec.ts": "a8cd4a3b7bcc92a6624b63e865e2c77a0adde356ac445f205acb7343e2809d0d"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "places.refresh",
@@ -671,7 +688,8 @@
           "tests/unit/google-places.test.ts": "39cdbe8a5a3992dadcbd3ed36d05a8ddab245118f719d65bb07d3b47d57c6daf"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "domains.custom",
@@ -701,7 +719,8 @@
           "tests/integration/domain-lifecycle-d1.test.ts": "a5836ff7036aa24df2a13e5aaf00bd7d07a78b84ba08312dc22640796a997138"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "notifications.email-dashboard",
@@ -733,7 +752,8 @@
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "notifications.whatsapp",
@@ -769,7 +789,8 @@
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "notifications.whatsapp-content",
@@ -794,7 +815,8 @@
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "not-shown"
     },
     {
       "id": "reviews.requests",
@@ -828,7 +850,8 @@
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
       },
-      "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question."
+      "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question.",
+      "pricingComparison": "included"
     },
     {
       "id": "themes.public",
@@ -855,7 +878,8 @@
           "server/utils/organization-provisioning.ts": "15b896cd96c3d8f4b1deaaf1f265fff27c7d4e90ed95eb526e25245feb292e79"
         }
       },
-      "pendingOwnerDecision": "Owner says two free themes. Blawby marketing says Included on Growth. Reconcile wording with runtime before publishing pricing claims."
+      "pendingOwnerDecision": "Owner says two free themes. Blawby marketing says Included on Growth. Reconcile wording with runtime before publishing pricing claims.",
+      "pricingComparison": "included"
     },
     {
       "id": "support.docs-help",
@@ -870,7 +894,7 @@
       "mcpOperations": [],
       "verification": {
         "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "baseline": "c1d8c99f531bec525e702cc516aee3a0abe2dd09",
         "sources": [
           "utils/article-collections.ts",
           "utils/template-registry.ts",
@@ -881,10 +905,11 @@
         "evidenceSha256": {
           "utils/article-collections.ts": "337f87b4bafa14a00d73017ce37601ceab394161339d199117d52362a3372c03",
           "utils/template-registry.ts": "90faec4516c4e839e1af763566bb67473092e96503cc5297818d3688becbbcd8",
-          "server/utils/billing-plans.ts": "476c8ea83052ebd46f1d12270f6c410d7d844463278a642ba99ea43c5851c768"
+          "server/utils/billing-plans.ts": "523e5e4b7b7e9ba61963dcb843b52810d15aafd761a5d6631c92e132ce41f420"
         }
       },
-      "pendingOwnerDecision": "Community/Priority limit strings conflict with evidenced support. Owner must approve any support commitment before publication."
+      "pendingOwnerDecision": "Community/Priority limit strings conflict with evidenced support. Owner must approve any support commitment before publication.",
+      "pricingComparison": "included"
     },
     {
       "id": "content.additional-locales",
@@ -917,7 +942,8 @@
           "tests/e2e/kikuzuki-localization.spec.ts": "02570caa6f86def0949c534ca44acbb144c7e6c88cb8c3804d5c92bf0123cc48"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     },
     {
       "id": "social.connection-discovery",
@@ -949,7 +975,8 @@
           "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "not-shown"
     },
     {
       "id": "site.seo",
@@ -979,7 +1006,8 @@
           "tests/unit/product-seo.test.ts": "28ab3dbb00e32fef593e241c414f1fae608d039eaf123c675dfb33ab77701745"
         }
       },
-      "pendingOwnerDecision": null
+      "pendingOwnerDecision": null,
+      "pricingComparison": "included"
     }
   ]
 }

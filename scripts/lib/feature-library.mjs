@@ -15,6 +15,7 @@ const schema = z.object({
   features: z.array(z.object({
     id: z.string().regex(/^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$/),
     referenceLabel: z.string().min(1),
+    pricingComparison: z.enum(['included', 'not-shown', 'pending-owner']),
     labelStatus: z.enum(['existing-vocabulary-review-before-publication', 'owner-approved']),
     availability: z.object({ free: availability, growth: availability }).strict(),
     currentBehavior: z.string().min(1),
@@ -80,6 +81,28 @@ export function validateFeatureLibrary(input, { root, entitlementKeys, mcpOperat
   }
   for (const operation of knownOperations) {
     if (!mappedOperations.has(operation)) errors.push(`Unmapped public MCP operation: ${operation}; add/review a feature entry`)
+  }
+  return errors
+}
+
+/** Verify the reviewed comparison mapping without generating paid copy. */
+export function validatePricingComparison(library, groups) {
+  const features = new Map(library.features.map(feature => [feature.id, feature]))
+  const mapped = new Set()
+  const labels = new Set()
+  const errors = []
+  for (const group of groups) for (const row of group.rows) {
+    const feature = features.get(row.id)
+    if (!feature) { errors.push(`Unknown comparison feature: ${row.id}`); continue }
+    mapped.add(row.id)
+    if (labels.has(row.label)) errors.push(`Duplicate comparison label: ${row.label}`)
+    labels.add(row.label)
+    if (feature.pricingComparison !== 'included') errors.push(`${row.id}: comparison publication decision required`)
+    if (row.entitlement && !feature.entitlementKeys.includes(row.entitlement)) errors.push(`${row.id}: comparison entitlement ${row.entitlement} has no feature mapping`)
+    if (feature.availability.growth === 'unsupported' || feature.verification.status === 'pending-verification') errors.push(`${row.id}: unverified/unsupported comparison claim`)
+  }
+  for (const feature of library.features) {
+    if (feature.pricingComparison === 'included' && !mapped.has(feature.id)) errors.push(`${feature.id}: reviewed comparison row is missing`)
   }
   return errors
 }

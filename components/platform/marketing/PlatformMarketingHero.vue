@@ -132,20 +132,11 @@
     <p v-if="subtitle" class="text-lg sm:text-xl text-muted leading-relaxed max-w-2xl mx-auto m-0">{{ subtitle }}</p>
   </div>
 
-  <!-- The Pricing header: the pinging pill and one gradient word. -->
-  <div v-else-if="variant === 'pricing'" class="text-center max-w-3xl mx-auto mb-16 flex flex-col items-center gap-4" data-parity-section="hero">
-    <span v-if="eyebrow" class="inline-flex items-center gap-2 text-[11px] font-bold tracking-[0.2em] uppercase text-(--kc-teal-600) bg-(--kc-teal-100) px-3.5 py-1.5 rounded-full border border-(--kc-teal)/25">
-      <span class="w-1.5 h-1.5 rounded-full bg-(--kc-teal) shrink-0 animate-ping" />
-      {{ eyebrow }}
-    </span>
-    <h1 class="text-[clamp(36px,5vw,56px)] font-extrabold leading-[1.05] tracking-tight text-default text-balance m-0 mt-2">
-      <template v-for="(part, index) in inlineParts" :key="index">
-        <span v-if="part.highlighted" class="bg-gradient-to-r from-primary via-(--kc-coral) to-(--kc-teal) bg-clip-text text-transparent">{{ part.text }}</span>
-        <template v-else>{{ part.text }}</template>
-      </template>
-    </h1>
-    <p v-if="subtitle" class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">{{ subtitle }}</p>
-  </div>
+  <!-- Pricing preserves the CMS headline and wording. -->
+  <section v-else-if="variant === 'pricing'" class="kc-pricing-hero" data-parity-section="hero">
+    <h1>{{ title }}</h1>
+    <p v-if="subtitle">{{ subtitle }}</p>
+  </section>
 
   <!-- The plugin header: the app icon beside the title, the account CTA at the end of the row. -->
   <div v-else-if="variant === 'plugin'" class="flex flex-col gap-6 md:flex-row md:items-center md:justify-between" data-parity-section="hero">
@@ -445,19 +436,6 @@ const titleLines = computed<TitlePart[]>(() => title.value.split('\n').map(line 
   highlighted: Boolean(accent.value) && line === accent.value!.trim(),
 })))
 
-/** The title as one line with the accent cut out of it, for the Pricing shape. */
-const inlineParts = computed<TitlePart[]>(() => {
-  const marked = accent.value?.trim()
-  const oneLine = title.value.replace(/\n/g, ' ')
-  if (!marked) return [{ text: oneLine, highlighted: false }]
-  const index = oneLine.indexOf(marked)
-  if (index < 0) return [{ text: oneLine, highlighted: false }]
-  return [
-    { text: oneLine.slice(0, index), highlighted: false },
-    { text: marked, highlighted: true },
-    { text: oneLine.slice(index + marked.length), highlighted: false },
-  ].filter(part => part.text)
-})
 
 const PILL_CLASS: Record<string, string> = {
   features: 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20',
@@ -807,4 +785,10 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
     mask-image: none;
   }
 }
+</style>
+
+<style scoped>
+.kc-pricing-hero { background: #171b31; color: white; text-align: center; padding: 5rem 1.5rem 3rem; }
+.kc-pricing-hero h1 { font-size: clamp(2.3rem, 5vw, 4rem); line-height: 1.1; letter-spacing: -.04em; margin: 0; font-weight: 400; }
+.kc-pricing-hero p { max-width: 42rem; margin: 1.5rem auto 0; color: #bbc0cf; line-height: 1.6; }
 </style>

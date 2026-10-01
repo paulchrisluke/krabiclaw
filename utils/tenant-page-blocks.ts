@@ -314,6 +314,7 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
         { value: 'organization_posts', label: 'Published articles' },
         { value: 'calculator', label: 'Pricing calculator' },
         { value: 'billing_plans', label: 'Krabiclaw plans', platformOnly: true },
+        { value: 'billing_features', label: 'Krabiclaw plan capabilities', platformOnly: true },
       ],
     },
     items: { kind: 'list', label: 'Items', section: 'items', of: GRID_ITEM_FIELDS, availableWhen: { field: 'source', equals: ['manual'] } },

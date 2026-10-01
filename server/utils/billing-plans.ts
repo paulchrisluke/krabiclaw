@@ -1,4 +1,5 @@
 import type Stripe from 'stripe'
+import { buildPostLoginUrl } from '~/shared/auth/return-target'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { getPlanEntitlements } from './billing-entitlements'
 import {
@@ -65,7 +66,7 @@ interface MarketingFeature {
 // Starter has no Stripe product — it is genuinely free with no subscription.
 const STARTER_PLAN: Plan = {
   id: STARTER_PLAN_ID,
-  name: 'Starter',
+  name: 'Basic',
   tagline: 'Get your business online for free',
   highlighted: false,
   prices: [],
@@ -76,13 +77,13 @@ const STARTER_PLAN: Plan = {
     'Structured SEO schema for restaurants, experiences & legal practices',
   ],
   limits: publicPlanLimits(STARTER_PLAN_ID),
-  image: '/krabi-claw-free.png',
+  image: '/pricing/plan-basic-photo.png',
   cta: { label: 'Start Free', href: '/signup' },
 }
 
 // CTA labels and hrefs are app config — not Stripe data.
 const PLAN_CTA: Record<string, { label: string; href: string }> = {
-  [NEW_SALE_PLAN_ID]: { label: 'Get Growth', href: `/signup?plan=${NEW_SALE_PLAN_ID}` },
+  [NEW_SALE_PLAN_ID]: { label: 'Get Grow', href: `/signup?plan=${NEW_SALE_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: NEW_SALE_PLAN_ID }))}` },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
