@@ -2,7 +2,7 @@ import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/g
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
+import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts, listOrganizationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { EXPERIENCE_PRESENTATION, isExperience, productSurfaceOf, resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
@@ -91,7 +91,7 @@ export interface PublicProductSession {
 }
 
 export interface PublicProductDetail extends PublicProductCollection {
-  location: PublicProductLocation
+  location: PublicProductLocation | null
   product: Product
   /**
    * Present exactly when the Product takes bookings.
@@ -197,7 +197,7 @@ export async function loadPublicProductDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   if (locale === 'en') {
     const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
@@ -304,6 +304,17 @@ export async function loadPublicExperienceDetail(
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
+  if (found.active && found.booking?.online_timezone && offeredAt.size === 0) {
+    if (locale !== 'en') return null
+    const [product] = await hydrateProductMedia(db, organizationId, [found])
+    if (!product) return null
+    const collections = await listCollections(db, { organizationId, locationId: null })
+    const products = await listOrganizationProducts(db, { organizationId, publishedOnly: true })
+    const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
+      organizationId, sourcePath: `/experiences/${product.slug}`, resource: { type: 'product', id: product.id },
+    })
+    return { ...resolved, locations: [], location: null, products, collections, product, booking: product.booking, localeRepresentations }
+  }
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
@@ -345,7 +356,7 @@ export async function loadPublicProductApiDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   const organization = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!organization || !presentation) return null
@@ -376,6 +387,10 @@ export async function loadPublicProductSessions(
   if (!detail.booking) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
+  if (!detail.location) {
+    const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions
+  }
   if (!detail.location.timezone) return []
   const window = bookingWindow(detail.location.timezone)
   const sessions = await listSessions(db, {
@@ -415,12 +430,12 @@ export async function loadPublicProductReviews(
            original_review_date, created_at
      FROM reviews
      WHERE organization_id = ? AND status = 'approved'
-       AND location_id = ?
+       AND location_id IS ?
        AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.organization.id, detail.location.id, detail.product.id])
+  `, [detail.organization.id, detail.location?.id ?? null, detail.product.id])
   return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

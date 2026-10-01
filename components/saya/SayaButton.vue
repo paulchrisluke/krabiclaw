@@ -9,7 +9,7 @@
     <slot v-else name="leading" />
     <slot />
   </a>
-  <label v-else-if="controlId" :for="controlId" role="button" :tabindex="disabled || loading ? -1 : 0" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" @click="handleClick">
+  <label v-else-if="controlId" :for="controlId" @keydown.enter.prevent="activateControl" @keydown.space.prevent="activateControl" role="button" :tabindex="disabled || loading ? -1 : 0" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
     <slot />
@@ -50,6 +50,10 @@ const props = withDefaults(defineProps<{
   block: false,
   type: 'button',
 })
+
+function activateControl(event: KeyboardEvent) {
+  if (!props.disabled && !props.loading) (event.currentTarget as HTMLElement).click()
+}
 
 const sizeClasses = {
   md: 'px-6 py-3 text-sm',

@@ -26,10 +26,10 @@ export default defineHandler(async (event) => {
     // order. One documented rule, applied here and in the SSR path alike.
     const membership = new Set(result.product.collections.map(entry => entry.collection_id))
     const siblingCollection = result.collections.find(collection => membership.has(collection.id)) ?? null
-    const priceSelection = { currency: result.currency, location_id: result.location.id, at: new Date().toISOString() }
+    const priceSelection = { currency: result.currency, location_id: result.location?.id ?? null, at: new Date().toISOString() }
     return jsonResponse({
       product: result.product,
-      location: publicLocationPayload(result.location),
+      location: result.location ? publicLocationPayload(result.location) : null,
       currency: result.currency,
       vertical: result.organization.vertical,
       brandName: result.organization.name,

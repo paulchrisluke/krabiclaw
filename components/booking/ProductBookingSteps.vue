@@ -24,8 +24,14 @@
           <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
             {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
           </p>
+          <template v-else>
+          <label v-if="allowTimezoneSelection && bookingTimezone" class="mb-3 block shrink-0 text-sm text-muted">
+            Timezone
+            <select v-model="guestTimezone" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 text-default">
+              <option v-for="zone in timezoneOptions" :key="zone" :value="zone">{{ timezoneLabel(zone) }} ({{ zone }})</option>
+            </select>
+          </label>
           <BookingTimeStep
-            v-else
             v-model="timeSelection"
             :dates="availabilityDates"
             :reference-date="referenceDate"
@@ -37,6 +43,7 @@
             @update:guests="partySize = $event"
             @next="bookingStep = 2"
           />
+          </template>
           <p v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
             {{ bookingError }}
           </p>
@@ -46,7 +53,7 @@
           <BookingRecap
             v-if="timeSelection"
             :main-line="timeSelection.label"
-            :meta-line="showPartySize ? `${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}` : ''"
+            :meta-line="allowTimezoneSelection ? (bookingTimezone ?? '') : showPartySize ? `${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}` : ''"
             :edit-label="t('saya.experience_detail.change')"
             @edit="bookingStep = 1"
           />
@@ -65,10 +72,11 @@ import BookingRecap from '~/components/booking/BookingRecap.vue'
 import BookingContactForm from '~/components/booking/BookingContactForm.vue'
 import BookingTimeStep from '~/components/booking/BookingTimeStep.vue'
 import type { SessionBookingController } from '~/composables/useSessionBooking'
+import { timezoneLabel } from '~/utils/timezone'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 const props = defineProps<{ controller: SessionBookingController; confirmationMode: 'instant' | 'review' }>()
 const { bookingStep, sellableVariants, selectedVariantId, variantPriceLabel, sessionsPending,
-  availabilityDates, referenceDate, timeSelection, partySize, showPartySize, guestsMax, bookingError, submitting, submitBooking } = props.controller
+  availabilityDates, referenceDate, timeSelection, partySize, showPartySize, allowTimezoneSelection, guestTimezone, bookingTimezone, timezoneOptions, guestsMax, bookingError, submitting, submitBooking } = props.controller
 const { t } = useI18n()
 const variantGroup = useId()
 </script>

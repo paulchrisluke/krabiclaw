@@ -129,6 +129,14 @@ export async function resolvePublicPageIdentity(env: CloudflareEnv, db: AppDb, i
   const page = await resolveCanonicalTenantPageIdentity(db, organizationId, routing.sourcePath, sourceLocale)
   if (page) return { ...base, locale: sourceLocale, pageId: page.page_id, pageType: page.page_type, recipe: page.recipe, documentId: null, productId: null }
 
+  const experienceSlug = /^\/experiences\/([^/]+)$/.exec(routing.sourcePath)?.[1]
+  if (experienceSlug) {
+    const { loadPublicExperienceDetail } = await import('~/server/utils/public-products')
+    const detail = await loadPublicExperienceDetail(env, db, organizationId, false, decodeURIComponent(experienceSlug), sourceLocale)
+    if (!detail) return null
+    return { ...base, locale: sourceLocale, locationId: detail.location?.id ?? null, pageId: null, pageType: 'product', recipe: null, documentId: null, productId: detail.product.id }
+  }
+
   const productRoute = parseProductRouteSegments(routing.sourcePath, input.vertical ?? await getOrganizationVertical(db, organizationId))
   const product = productRoute ? await findPublishedProductAtRoute(db, organizationId, productRoute) : null
   if (product) return { ...base, locale: sourceLocale, locationId: product.location_id, pageId: null, pageType: 'product', recipe: null, documentId: null, productId: product.id }
