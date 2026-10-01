@@ -141,7 +141,7 @@ async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRec
           AND d.path = '/' AND d.locale = 'en' AND cb.type = 'hero' AND cb.parent_block_id IS NULL
         ORDER BY cb.position LIMIT 1`, [owner.owner_id])
       const copy = hero ? platformHomeSocialCardCopy(JSON.parse(hero.data_json)) : null
-      return copy ? { ...record, ...copy } : record
+      return copy ? { ...record, title: copy.title, description: copy.description ?? record.description } : record
     }
     case 'business_location':
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id,

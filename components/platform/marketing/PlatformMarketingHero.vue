@@ -330,7 +330,8 @@ async function loadHeroAlphaMasks() {
       bitmap.close()
     }
     catch {
-      heroAlphaMasks.set(source, null)
+      // Unknown pixels keep the CTA inert; a later resize can reload them.
+      heroAlphaMasks.delete(source)
     }
   }))
   updateHeroActionCoverage()
