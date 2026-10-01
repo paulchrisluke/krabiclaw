@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f9916b1887192240fd6626b174219500a661d1bec134b3545cbf3a0410f8df6c",
+  "fingerprint": "sha256:2351c65beca217868b3dd59e49f8da79416fb44084bfc533a5e570b836f118cf",
   "tools": [
     {
       "name": "append_content_block",
@@ -1198,6 +1198,96 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "cancel_product_booking",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "cancel_table_reservation",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_reservation_id": {
+            "description": "Operational reservations.id, never a request/thread ID.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_reservation_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "confirm_product_booking",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -3174,6 +3264,81 @@
         "required": [
           "product"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_product_booking",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "external_reference": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "guest_acknowledgement": {
+            "description": "Explicit choice to send the guest creation email. Owner alerts, inbox, and audit always remain.",
+            "type": "boolean"
+          },
+          "guest_email": {
+            "type": "string"
+          },
+          "guest_name": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "guest_phone": {
+            "description": "Optional guest phone in international format.",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "notes": {
+            "maxLength": 1000,
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "product_slug": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "source": {
+            "description": "Explicit provenance, such as operator or external scheduler.",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_slug",
+          "session_id",
+          "party_size",
+          "guest_name",
+          "guest_email",
+          "idempotency_key",
+          "source",
+          "guest_acknowledgement"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -7110,6 +7275,29 @@
         "required": [
           "product"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_product_booking",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -11954,6 +12142,36 @@
       }
     },
     {
+      "name": "reject_product_booking",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "remove_media",
       "inputSchema": {
         "additionalProperties": false,
@@ -13499,6 +13717,102 @@
           "resource_type",
           "updated_resource_ids"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_product_booking_change",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "session_id",
+          "party_size",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_table_reservation_change",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "location_id": {
+            "type": "string"
+          },
+          "operational_reservation_id": {
+            "description": "Operational reservations.id, never a request/thread ID.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "party_size": {
+            "maximum": 99,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "time": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_reservation_id",
+          "location_id",
+          "date",
+          "time",
+          "party_size",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },

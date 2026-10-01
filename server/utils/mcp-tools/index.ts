@@ -13,6 +13,7 @@ import { POSTS_TOOLS } from './posts'
 import { QA_TOOLS } from './qa'
 import { REVIEWS_TOOLS } from './reviews'
 import { ORGANIZATIONS_TOOLS } from './organizations'
+import { BOOKINGS_TOOLS } from './bookings'
 import { SUBMISSIONS_TOOLS } from './submissions'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
@@ -30,6 +31,7 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...REVIEWS_TOOLS,
   ...ORGANIZATIONS_TOOLS,
   ...SUBMISSIONS_TOOLS,
+  ...BOOKINGS_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = []
