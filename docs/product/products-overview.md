@@ -35,3 +35,22 @@ and the actual reference pixels inspected before implementation.
 Canonical metadata, JSON-LD, localization, sitemap discovery, and public resource
 cache invalidation remain in the existing page-document pipeline. No preview
 environment switch or external media publication is required.
+
+## Approved artwork revision
+
+On 2026-10-01 the owner approved two distinct replacement scenes: an elevated
+archipelago for `products-hero` / `media`, and a moonlit shore for
+`products-closing` / `media`. Both masters are 1672×941. Files are preserved
+without redrawing or resizing. Hero and closing use separate asset identities.
+Desktop uses centered bottom cropping; mobile uses 58% for the hero and 92% for
+the closing image to retain its moon and lantern path. Both use `object-fit: cover`.
+Keep text regions quiet in the upper center; mobile crops most of the sides.
+
+Updated transfer package SHA-256:
+`90624c8c40c9697577da7fba8c5f22a1f98385605e7939b760b44f2a79a78358`.
+
+Product detail routes have a reusable renderer, but no authored detail documents
+are published. Section links use existing published destinations. Inbox,
+publishing and analytics links point to their relevant guides; the local-presence
+link explicitly identifies the guide to business locations and hours. They do
+not imply unpublished product-detail content or a new reviews guide.

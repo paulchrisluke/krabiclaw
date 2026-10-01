@@ -27,7 +27,9 @@ const url = computed(() => text(props.closing ? props.block.data.url : props.blo
 .kc-product-scene__copy { padding: clamp(4rem, 7vw, 7rem) 1.5rem; }
 .kc-product-scene h1, .kc-product-scene h2 { max-width: 64rem; margin: auto; font-size: clamp(2.9rem, 5.5vw, 5.5rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.02; white-space: pre-line; text-wrap: balance; }
 .kc-product-scene p { color: #e4e4ec; font-size: clamp(1.05rem, 1.6vw, 1.55rem); line-height: 1.45; margin: 1.8rem auto; max-width: 40rem; white-space: pre-line; }
+.kc-product-scene--closing .kc-product-scene__art { object-position: 50% bottom; }
 .kc-product-scene--closing { min-height: clamp(25rem, 40vw, 40rem); }
 .kc-product-scene--closing .kc-product-scene__copy { padding-top: clamp(5rem, 8vw, 8rem); }
-@media (max-width: 767px) { .kc-product-scene__art { object-position: 50% bottom; } .kc-product-scene { min-height: 37rem; } .kc-product-scene--closing { min-height: 30rem; } }
+@media (max-width: 767px) { .kc-product-scene__art { object-position: 58% bottom; } .kc-product-scene--closing .kc-product-scene__art { object-position: 92% bottom; } .kc-product-scene { min-height: 37rem; }
+.kc-product-scene--closing { min-height: 30rem; } }
 </style>
