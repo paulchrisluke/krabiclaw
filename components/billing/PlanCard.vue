@@ -1,23 +1,35 @@
 <template>
   <div
+    ref="card"
+    :data-photo-state="animating ? 'flipping' : 'details'"
+    @focusin="reveal"
+    @pointerdown="reveal"
+    @animationend.self="reveal"
+    @animationcancel.self="reveal"
     class="relative rounded-[28px] flex flex-col p-8 transition-all duration-300 overflow-hidden"
     :class="[
+      photo ? 'kc-photo-plan' : undefined,
+      animating ? 'kc-photo-plan--flipping' : undefined,
       isHighlighted
         ? 'bg-gradient-to-b from-zinc-900 to-zinc-950 text-white shadow-2xl border border-primary/55 ring-1 ring-primary/20 scale-[1.02] md:scale-105 z-10'
         : 'bg-elevated/70 backdrop-blur-md border border-default/70 hover:border-primary/35 hover:-translate-y-1 hover:shadow-xl shadow-sm text-default',
     ]"
   >
+    <div v-if="photo && (frontImage || plan.image)" class="kc-photo-plan__front" aria-hidden="true">
+      <img ref="photoImage" :src="frontImage || plan.image" alt="" loading="eager" decoding="async">
+    </div>
+    <div class="kc-plan-details">
     <!-- Highlight Gradient Light for Premium Card -->
     <div v-if="isHighlighted" class="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl opacity-60"></div>
     <div v-if="isHighlighted" class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/20 rounded-full blur-3xl opacity-40"></div>
 
     <!-- Plan image -->
-    <div v-if="plan.image" class="mb-5 rounded-2xl overflow-hidden w-20 h-20 border border-default/50 bg-elevated/50 shadow-sm">
+    <div v-if="!photo && plan.image" class="mb-5 rounded-2xl overflow-hidden w-20 h-20 border border-default/50 bg-elevated/50 shadow-sm">
       <img :src="plan.image" :alt="plan.name" loading="lazy" decoding="async" class="w-full h-full object-cover" />
     </div>
 
     <!-- Header -->
-    <div class="mb-6 flex items-start justify-between gap-3 relative z-10">
+    <div class="kc-plan-header mb-6 flex items-start justify-between gap-3 relative z-10">
       <div>
         <h3 class="text-2xl font-black tracking-tight mb-1.5" :class="isHighlighted ? 'text-white' : 'text-default'">
           {{ plan.name }}
@@ -43,7 +55,7 @@
       -->
       <template v-if="currentPrice !== null">
         <div class="flex items-baseline gap-1">
-          <span class="text-5xl font-black tracking-tight" :class="isHighlighted ? 'text-white' : 'text-default'">
+          <span class="kc-plan-price text-5xl font-black tracking-tight" :class="isHighlighted ? 'text-white' : 'text-default'">
             {{ currentPrice }}
           </span>
           <span class="text-sm font-semibold" :class="isHighlighted ? 'text-white/50' : 'text-muted'">
@@ -95,17 +107,38 @@
         />
       </slot>
     </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import type { Plan } from '~/composables/usePlans'
 
 const props = defineProps<{
   plan: Plan
   annual?: boolean
   highlighted?: boolean
+  photo?: boolean
+  frontImage?: string
+  sequence?: number
 }>()
+
+const card = useTemplateRef<HTMLElement>('card')
+const photoImage = useTemplateRef<HTMLImageElement>('photoImage')
+const animating = ref(false)
+let revealed = false
+function reveal() { revealed = true; animating.value = false }
+onMounted(async () => {
+  if (!props.photo || !photoImage.value || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const image = photoImage.value
+  const start = performance.now()
+  await image.decode().catch(() => reveal())
+  if (revealed || performance.now() - start > 800 || !image.naturalWidth || document.hidden || card.value?.contains(document.activeElement)) return
+  card.value?.style.setProperty('--flip-delay', `${(props.sequence ?? 0) * 1100}ms`)
+  animating.value = true
+})
+useEventListener(computed(() => import.meta.client ? document : undefined), 'visibilitychange', () => { if (document.hidden) reveal() })
 
 const { displayPrice, annualPrice, monthlyPrice } = await usePlans()
 
@@ -113,7 +146,7 @@ const isHighlighted = computed(() => props.highlighted ?? props.plan.highlighted
 
 const currentPrice = computed(() => displayPrice(props.plan, props.annual ?? false))
 
-const billingPeriodLabel = computed(() => (props.annual ?? false) ? '/year' : '/mo')
+const billingPeriodLabel = computed(() => props.photo && props.plan.id === 'free' ? 'No subscription' : (props.annual ?? false) ? '/year' : '/mo')
 
 const savingsNote = computed(() => {
   if (!props.annual) return null
@@ -127,3 +160,37 @@ const savingsNote = computed(() => {
   return null
 })
 </script>
+
+<style scoped>
+.kc-photo-plan { aspect-ratio: 2 / 3; min-height: 0; border-radius: 14px; padding: clamp(1.5rem, 3vw, 2.5rem); transform: none; background: #fff; color: #222840; box-shadow: none; border: 0; perspective: 1600px; transform-style: preserve-3d; overflow: visible; backdrop-filter: none; }
+.kc-photo-plan :deep(h3), .kc-photo-plan :deep(.text-default), .kc-photo-plan :deep(.text-white) { color: #222840; }
+.kc-photo-plan :deep(.text-white\/60), .kc-photo-plan :deep(.text-white\/50), .kc-photo-plan :deep(.text-white\/80), .kc-photo-plan :deep(.text-muted) { color: #5a6072; }
+.kc-photo-plan__front { display: none; position: absolute; inset: 0; z-index: 20; border-radius: inherit; overflow: hidden; pointer-events: none; backface-visibility: hidden; }
+.kc-photo-plan__front img { width: 100%; height: 100%; object-fit: cover; }
+.kc-photo-plan .kc-plan-details { min-height: 0; }
+.kc-photo-plan .kc-plan-header { display: block; margin-bottom: 1.25rem; }
+.kc-photo-plan .kc-plan-header > span { position: absolute; top: 0; right: 0; }
+.kc-photo-plan h3 { font-size: 1.9rem; padding-right: 6rem; }
+.kc-photo-plan .kc-plan-price { font-size: 3rem; line-height: 1.1; font-weight: 600; }
+.kc-photo-plan ul { min-height: 0; overflow-y: auto; margin: 1rem 0; padding-right: .4rem; }
+.kc-photo-plan ul > li + li { margin-top: .7rem; }
+.kc-photo-plan :deep(a.text-default), .kc-photo-plan :deep(a.text-white) { background: #ec7968; color: #171b31; border: 1px solid #ec7968; }
+.kc-photo-plan :deep(a:focus-visible) { outline: 3px solid #171b31; outline-offset: 3px; }
+
+.kc-photo-plan--flipping { animation: kc-plan-right 1050ms ease-in-out both; animation-delay: var(--flip-delay); }
+.kc-plan-details { display: flex; flex-direction: column; flex: 1; }
+.kc-photo-plan--flipping .kc-photo-plan__front { display: block; }
+.kc-photo-plan--flipping .kc-plan-details { transform: rotateY(180deg); backface-visibility: hidden; }
+@keyframes kc-plan-right { 0%, 40% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
+@media (prefers-reduced-motion: reduce) { .kc-photo-plan .kc-plan-details { min-height: 0; }
+.kc-photo-plan .kc-plan-header { display: block; margin-bottom: 1.25rem; }
+.kc-photo-plan .kc-plan-header > span { position: absolute; top: 0; right: 0; }
+.kc-photo-plan h3 { font-size: 1.9rem; padding-right: 6rem; }
+.kc-photo-plan .kc-plan-price { font-size: 3rem; line-height: 1.1; font-weight: 600; }
+.kc-photo-plan ul { min-height: 0; overflow-y: auto; margin: 1rem 0; padding-right: .4rem; }
+.kc-photo-plan ul > li + li { margin-top: .7rem; }
+.kc-photo-plan :deep(a.text-default), .kc-photo-plan :deep(a.text-white) { background: #ec7968; color: #171b31; border: 1px solid #ec7968; }
+.kc-photo-plan :deep(a:focus-visible) { outline: 3px solid #171b31; outline-offset: 3px; }
+
+.kc-photo-plan--flipping { animation: none; transform: none; } .kc-photo-plan--flipping .kc-plan-details { transform: none; } .kc-photo-plan--flipping .kc-photo-plan__front { display: none; } }
+</style>

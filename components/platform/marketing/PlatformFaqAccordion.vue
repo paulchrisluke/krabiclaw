@@ -1,5 +1,10 @@
 <template>
-  <div v-if="items.length" class="max-w-3xl mx-auto mt-28" data-parity-section="faq">
+  <section v-if="page.path === '/pricing' && items.length" class="kc-pricing-faq" data-parity-section="faq">
+    <div><h2>{{ title || 'Questions, answered.' }}</h2>
+      <details v-for="item in items" :key="item.question"><summary>{{ item.question }}</summary><p>{{ item.answer }}</p></details>
+    </div>
+  </section>
+  <div v-else-if="items.length" class="max-w-3xl mx-auto mt-28" data-parity-section="faq">
     <div class="text-center mb-12 flex flex-col items-center gap-2">
       <span v-if="eyebrow" class="text-xs font-bold tracking-widest uppercase text-primary">{{ eyebrow }}</span>
       <h2 class="text-3xl font-extrabold tracking-tight text-default mt-1">{{ title }}</h2>
@@ -51,3 +56,12 @@ const items = computed(() => blockRecords(props.block.data.items)
 // the same question opened together and closed each other.
 const open = ref<number | null>(null)
 </script>
+
+<style scoped>
+.kc-pricing-faq { background: #f9f8f4; padding: 4rem 1.5rem 6rem; color: #252b43; }
+.kc-pricing-faq > div { max-width: 62rem; margin: auto; }
+.kc-pricing-faq h2 { font-size: clamp(2.4rem, 4vw, 3.5rem); font-weight: 400; letter-spacing: -.04em; }
+.kc-pricing-faq details { border-bottom: 1px solid #d6d8de; padding: 1.5rem 0; }
+.kc-pricing-faq summary { cursor: pointer; font-weight: 600; }
+.kc-pricing-faq p { color: #646878; line-height: 1.7; max-width: 65ch; }
+</style>

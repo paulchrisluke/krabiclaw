@@ -5,7 +5,8 @@
     Saya grid reads its own: the map keys presentation on the template and the
     block type, and what the block says about its own rows stays the block's.
   -->
-  <PlatformPlansSection v-if="isPlans" :block="block" :page="page" />
+  <PlatformPricingComparison v-if="isComparison" :block="block" :page="page" />
+  <PlatformPlansSection v-else-if="isPlans" :block="block" :page="page" />
 
   <!--
     A grid whose cards carry pictures: a large headline, the cards as a
@@ -157,6 +158,7 @@ const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 import PlatformPlansSection from '~/components/platform/marketing/PlatformPlansSection.vue'
 
 /** Krabiclaw's own plans, read from billing rather than written into a page. */
+const isComparison = computed(() => blockText(props.block.data.source) === 'billing_features')
 const isPlans = computed(() => blockText(props.block.data.source) === 'billing_plans')
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))

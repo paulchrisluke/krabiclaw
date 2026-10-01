@@ -1,0 +1,59 @@
+{
+  "readBackVerifiedAt": "2026-10-01",
+  "uploads": [
+    {
+      "file": "benefit-online-home.png",
+      "assetId": "010c3651-b474-478b-a2ca-fd3bbf8b2956",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/129b5f66-d051-4c3b-4b3d-e74c75728600/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/129b5f66-d051-4c3b-4b3d-e74c75728600/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    },
+    {
+      "file": "benefit-keep-current.png",
+      "assetId": "d953791e-fcfd-4341-86c4-d09a7a5bf8c2",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/30c03b12-ea63-4c87-bf18-d8caedbf7500/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/30c03b12-ea63-4c87-bf18-d8caedbf7500/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    },
+    {
+      "file": "benefit-grow.png",
+      "assetId": "e855c285-be08-4d76-91a5-a6840a17374d",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bac21a0b-369e-4630-b537-816f2a5a7000/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bac21a0b-369e-4630-b537-816f2a5a7000/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    },
+    {
+      "file": "cta-coastal.png",
+      "assetId": "dfabfc38-749a-4f90-8ef8-5374e5703b27",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/77b3796a-df45-43d4-f000-59579311b000/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/77b3796a-df45-43d4-f000-59579311b000/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    },
+    {
+      "file": "plan-basic-photo.png",
+      "assetId": "733902d3-6ab6-424c-91f1-12af64d9a9c4",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9cf232bb-a79f-4faa-7890-abf3ffdf8100/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9cf232bb-a79f-4faa-7890-abf3ffdf8100/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    },
+    {
+      "file": "plan-grow-photo.png",
+      "assetId": "dd288cb3-e1bc-47b8-9e73-7c6db9e95ccb",
+      "status": "active",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/d4b6f5a3-f9a0-4bb6-f18a-408dcd6f1000/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/d4b6f5a3-f9a0-4bb6-f18a-408dcd6f1000/thumbnail",
+      "organizationId": "platform",
+      "verifiedBy": "get_organization_media_assets read-back"
+    }
+  ]
+}

@@ -4,7 +4,13 @@
     shows them on the right, in one dark card. The badges name the assistants
     a Krabiclaw site is edited from.
   -->
-  <section class="kc-media-feature" data-parity-section="media-feature">
+  <section v-if="page.path === '/pricing'" class="kc-pricing-benefit" :class="{ 'kc-pricing-benefit--reverse': benefitIndex % 2 === 1 }" data-parity-section="media-feature">
+    <div class="kc-pricing-benefit__inner">
+      <div><h2>{{ title }}</h2><p v-if="body">{{ body }}</p></div>
+      <img v-if="mediaStillUrl(media)" :src="mediaStillUrl(media)!" :alt="media?.alt_text ?? ''" loading="lazy" decoding="async">
+    </div>
+  </section>
+  <section v-else class="kc-media-feature" data-parity-section="media-feature">
     <div class="kc-media-feature__card">
       <div class="kc-media-feature__copy">
         <ul class="kc-media-feature__badges" aria-label="Works with">
@@ -59,6 +65,7 @@ import { blockMedia, blockTextOrNull, isInternalRoute } from '~/utils/tenant-pag
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
+const benefitIndex = computed(() => props.page.blocks.filter(block => block.type === 'media_text').findIndex(block => block.id === props.block.id))
 const reducedMotion = usePreferredReducedMotion()
 const { localePath } = useI18n()
 function route(url: string) { return isInternalRoute(url) ? localePath(url) : url }
@@ -211,4 +218,14 @@ const bodyParts = computed(() => {
     font-size: clamp(2.6rem, 10vw, 3.1rem);
   }
 }
+</style>
+
+<style scoped>
+.kc-pricing-benefit { background: #f9f8f4; color: #252b43; padding: 3rem 1.5rem; }
+.kc-pricing-benefit__inner { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; max-width: 66rem; margin: auto; }
+.kc-pricing-benefit h2 { font-size: clamp(2.2rem, 4vw, 3.8rem); font-weight: 400; line-height: 1.05; letter-spacing: -.04em; max-width: 10ch; }
+.kc-pricing-benefit p { color: #646878; max-width: 30ch; line-height: 1.7; }
+.kc-pricing-benefit img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; }
+.kc-pricing-benefit--reverse .kc-pricing-benefit__inner > div { order: 2; }
+@media (max-width: 700px) { .kc-pricing-benefit__inner { grid-template-columns: 1fr; gap: 1rem; } .kc-pricing-benefit--reverse .kc-pricing-benefit__inner > div { order: 0; } .kc-pricing-benefit h2 { max-width: 15ch; margin: 0; } }
 </style>

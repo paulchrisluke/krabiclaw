@@ -1,0 +1,86 @@
+{
+  "name": "Krabiclaw pricing page production assets",
+  "version": "1.0",
+  "assets": [
+    {
+      "file": "plan-basic-photo.png",
+      "role": "plan_front_basic",
+      "width": 1200,
+      "height": 1800,
+      "format": "PNG",
+      "mode": "RGB",
+      "has_transparency": false,
+      "suggested_alt": "A ceramic maker holds a handmade bowl in a pottery workshop.",
+      "bytes": 2473345,
+      "sha256": "cde2bacf8f96e4ca643ba649850d0efe8820574fb6f13e387e32c82bd9af2ab9"
+    },
+    {
+      "file": "plan-grow-photo.png",
+      "role": "plan_front_grow",
+      "width": 1200,
+      "height": 1800,
+      "format": "PNG",
+      "mode": "RGB",
+      "has_transparency": false,
+      "suggested_alt": "Two professionals review documents together at an office desk.",
+      "bytes": 2269201,
+      "sha256": "2c2ce02489c0de618c414def2b219cd40a26c9988b52155c8cf2b6a7417c67be"
+    },
+    {
+      "file": "benefit-online-home.png",
+      "role": "benefit_online_home",
+      "width": 1200,
+      "height": 800,
+      "format": "PNG",
+      "mode": "RGBA",
+      "has_transparency": true,
+      "suggested_alt": "An editorial collage of ceramic product photographs and colored paper.",
+      "bytes": 826475,
+      "sha256": "6a6a7bb730ad98a243670c6dd244ef3bbd609ca8f13e2949235a850f2c644ced"
+    },
+    {
+      "file": "benefit-keep-current.png",
+      "role": "benefit_keep_current",
+      "width": 1200,
+      "height": 800,
+      "format": "PNG",
+      "mode": "RGBA",
+      "has_transparency": true,
+      "suggested_alt": "Blank paper, conversation bubbles, a pencil and a small plant.",
+      "bytes": 807908,
+      "sha256": "8db46edd860f5183034a2ded437fe503448d896a46b92d4bbe6feb0787157e14"
+    },
+    {
+      "file": "benefit-grow.png",
+      "role": "benefit_grow",
+      "width": 1200,
+      "height": 800,
+      "format": "PNG",
+      "mode": "RGBA",
+      "has_transparency": true,
+      "suggested_alt": "An illustrated globe with location markers and ceramic product photographs.",
+      "bytes": 756057,
+      "sha256": "75a998799f3a22c6b0787b18406b62d85b7e736c33230ba652529cc821d6bbef"
+    },
+    {
+      "file": "cta-coastal.png",
+      "role": "closing_cta_background",
+      "width": 1672,
+      "height": 941,
+      "format": "PNG",
+      "mode": "RGB",
+      "has_transparency": false,
+      "suggested_alt": "Warmly lit pavilions beside a coastal bay at dusk.",
+      "bytes": 2463695,
+      "sha256": "bb94489dba750c5621e94cf7ce568fb826b856d81e7244dd4c5f0c99ef70d8b8"
+    }
+  ],
+  "notes": [
+    "Photographic plan fronts use matching 2:3 dimensions.",
+    "Benefit illustrations are editorial metaphors, not product UI screenshots.",
+    "Use decorative empty alt attributes where adjacent text communicates the same meaning.",
+    "New photographs were generated at 1024x1536 and resized to 1200x1800.",
+    "Benefit illustrations were generated at 1536x1024, resized to 1080x720, and centered on 1200x800 transparent canvases.",
+    "No pricing or feature copy is baked into production image assets."
+  ]
+}
