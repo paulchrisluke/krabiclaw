@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:2351c65beca217868b3dd59e49f8da79416fb44084bfc533a5e570b836f118cf",
+  "fingerprint": "sha256:4d0b84ded4c95bdd674f9fe0c447a3408c3376c31865779dbe967e13d2273ec8",
   "tools": [
     {
       "name": "append_content_block",
@@ -9955,6 +9955,75 @@
           "posts",
           "page_info"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_product_booking_sessions",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "from": {
+            "description": "Inclusive ISO UTC instant.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive ISO UTC instant, at most 93 days after from.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_product_bookings",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "description": "Opaque next_cursor from the previous page.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Page size. Defaults to 50; maximum 100.",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "number"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },

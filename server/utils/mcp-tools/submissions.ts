@@ -16,7 +16,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_reservation_inquiries',
-      description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Results include the guest\'s name, contact details, and reservation details. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. Seats booked on a bookable Product are answered in the dashboard inbox, not on this connection.',
+      description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Results include the guest\'s name, contact details, and reservation details. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. Use list_product_bookings for Product bookings and consultations; these table Reservation inquiries remain separate.',
       domain: 'submissions',
       minimumRole: 'admin',
       confirmRequired: false,

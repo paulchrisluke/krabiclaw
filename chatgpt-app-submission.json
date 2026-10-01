@@ -4,7 +4,7 @@
   "app_info": {
     "display_name": "KrabiClaw",
     "subtitle": "Manage your business website",
-    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and reservation inquiries from your connected workspace. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
+    "description": "Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and table reservation inquiries, create and manage Product bookings and consultations, and propose guest-approved changes from your connected workspace. Booking writes reserve real capacity and may email guests; required online payment returns a payment-required result before unpaid allocation. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.",
     "category": "BUSINESS"
   },
   "tools": {
@@ -714,6 +714,30 @@
         "read_only_justification": "Lists short posts for the selected organization.",
         "open_world_justification": "Lists short posts for the selected organization. It does not publish content or write to an external service.",
         "destructive_justification": "Lists short posts for the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_product_booking_sessions": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion.",
+        "open_world_justification": "Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_product_bookings": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads operational Product bookings and guest snapshots within the selected tenant.",
+        "open_world_justification": "Reads operational Product bookings and guest snapshots within the selected tenant. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads operational Product bookings and guest snapshots within the selected tenant. Existing content is not deleted or overwritten."
       }
     },
     "list_products": {

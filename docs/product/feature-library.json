@@ -162,8 +162,8 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "8064a5659c2b39cb185b2c8ba75fca3c624eb3d670d37b3da70d742f4f629e99",
-          "tests/integration/availability-d1.test.ts": "ae01ed18228875d804958a28a5780c34d98ebc5d0fe3e00f1f4acbe73cc23725",
+          "server/utils/availability.ts": "830b40db361a238111bd500522d1e6aafe708ca8371f56e023b65d4813591167",
+          "tests/integration/availability-d1.test.ts": "2039f94f5663232b0b22f3bf87d30b1bceffaad2a2a9037e957bf33423372048",
           "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
         }
       },
@@ -216,7 +216,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/products.ts": "642e71fa754e4f60027716fc9d15300a458efb3e76c850d70229c806b6019df2",
-          "server/utils/product-management.ts": "e741a34cce66b6de8e04ca0775af5c3bf6fea76ead20e7032aa636e422eb6662",
+          "server/utils/product-management.ts": "15df0d1ef1e07a8cf1cacd8e0528e3fdfd9dcbf0859a2fdece903c49e89aebce",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
           "server/utils/mcp-tools/products.ts": "945146f3fc067d6900992adce1fbf143b5d8bcda8e0fc2e84c225cdc55b9d25f"
         }
@@ -232,24 +232,47 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "Configured products/locations accept guest requests. Confirmation and thank-you emails are distinct from the gated explicit review-request sender.",
+      "currentBehavior": "Configured Products accept capacity-safe pending/instant bookings through one public/MCP creation service. MCP guest identity is independent from the operator; durable replay, provenance and explicit guest acknowledgement are recorded. Review/cancel operations and guest-approved changes reuse inbox services. Restaurant table Reservations keep their distinct canonical operations. Required online collection gates unpaid allocation; positive pay-later is supported.",
       "entitlementKeys": [],
-      "mcpOperations": [],
+      "mcpOperations": [
+        "cancel_product_booking",
+        "cancel_table_reservation",
+        "confirm_product_booking",
+        "create_product_booking",
+        "get_product_booking",
+        "list_product_booking_sessions",
+        "list_product_bookings",
+        "reject_product_booking",
+        "request_product_booking_change",
+        "request_table_reservation_change"
+      ],
       "verification": {
         "status": "source-reviewed",
         "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
         "sources": [
           "server/domain/requests.ts",
-          "server/utils/reservations.ts"
+          "server/utils/reservations.ts",
+          "server/domain/product-bookings.ts",
+          "server/utils/mcp-tools/bookings.ts",
+          "server/utils/mcp-executor/bookings.ts"
         ],
         "tests": [
-          "tests/integration/guest-delivery-d1.test.ts"
+          "tests/integration/guest-delivery-d1.test.ts",
+          "tests/e2e/mcp-bookings.spec.ts",
+          "tests/integration/availability-d1.test.ts",
+          "tests/integration/request-consolidation-d1.test.ts"
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/domain/requests.ts": "f94697d18fd915b5efa4b4ce609b979385e6c719adb460f1764b3401f33c927d",
+          "server/domain/requests.ts": "3e4100dc439f6e37015011b7c8f069629fbed2f470a4a9a938d4198bafc498ed",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807",
+          "server/domain/product-bookings.ts": "b0f49ff9def9ad3e7395f98943e3d8008724987180a5e0b37ececb7710477af1",
+          "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
+          "server/utils/mcp-executor/bookings.ts": "752a526ab52b0af73972230d2a5edf27737549fd1270633f058d8b00d968d30d",
+          "tests/e2e/mcp-bookings.spec.ts": "60b5de02d00152b1398692eb3467acf02f62d8ac0f6eff8232d7e9d117c1e6ec",
+          "tests/integration/availability-d1.test.ts": "2039f94f5663232b0b22f3bf87d30b1bceffaad2a2a9037e957bf33423372048",
+          "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
       "pendingOwnerDecision": null,
@@ -746,7 +769,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
+          "server/utils/notifications.ts": "ea3f3daf17f9e4ffc2931c5815e52962ebf0e0460aaaf96a2b8b8fcff2f002bd",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
@@ -783,7 +806,7 @@
         "coverageNote": "Real D1 tests mock only the Meta provider boundary and prove zero provider calls for Free/ineligible, active/trialing success, downgrade, multi-org membership, preferences, domain/contact/guest-message paths and settled skipped receipts.",
         "evidenceSha256": {
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
-          "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
+          "server/utils/notifications.ts": "ea3f3daf17f9e4ffc2931c5815e52962ebf0e0460aaaf96a2b8b8fcff2f002bd",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
