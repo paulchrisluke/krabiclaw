@@ -1,26 +1,7 @@
 // POST /api/editor/organizations/[organizationId]/locations/[locationId]/qa/reorder
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { reorderLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
-
-interface ReorderUpdate {
-  id: string
-  sort_order: number
-}
-
-function parseUpdates(value: unknown): ReorderUpdate[] | null {
-  if (!Array.isArray(value) || value.length !== 2) return null
-  const updates = value.map((item) => {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) return null
-    const record = item as { id?: unknown; sort_order?: unknown }
-    if (typeof record.id !== 'string' || !record.id.trim()) return null
-    const sortOrder = Number(record.sort_order)
-    if (!Number.isInteger(sortOrder)) return null
-    return { id: record.id, sort_order: sortOrder }
-  })
-  if (updates.some(item => item === null)) return null
-  return updates as ReorderUpdate[]
-}
 
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
@@ -34,15 +15,12 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const updates = parseUpdates((body as { updates?: unknown }).updates)
-  if (!updates || updates[0]!.id === updates[1]!.id) {
-    return jsonResponse({ error: 'Two distinct Q&A reorder updates are required' }, { status: 400 })
-  }
-
+  const updates = (body as { updates?: Array<{ id: string; sort_order: number }> }).updates
   try {
-    const result = await reorderLocationQa(db, organization.id, locationId, updates)
+    const result = await reorderLocationQa(db, organization.id, locationId, updates as Array<{ id: string; sort_order: number }>)
     return jsonResponse(result)
   } catch (error) {
+    rethrowHttpError(error)
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }

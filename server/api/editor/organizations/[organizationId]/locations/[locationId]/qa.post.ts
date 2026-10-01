@@ -12,12 +12,13 @@ export default defineHandler(async (event) => {
     answer?: string | null
     question_author?: string | null
     is_owner_answer?: boolean
+    status?: 'published' | 'hidden'
     sort_order?: number
   }>(event)
 
   const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
   const result = await createLocationQa(db, organization.id, locationId, {
-    question: body?.question ?? '', answer: body?.answer ?? null, question_author: body?.question_author ?? null, is_owner_answer: body?.is_owner_answer !== false, sort_order: body?.sort_order ?? 0, })
+    question: body?.question ?? '', answer: body?.answer ?? null, question_author: body?.question_author ?? null, is_owner_answer: body?.is_owner_answer, sort_order: body?.sort_order, status: body?.status, })
 
   return jsonResponse(result.data, { status: result.status })
 })

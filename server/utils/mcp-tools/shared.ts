@@ -859,6 +859,13 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
+  create_qa: W,
+  update_qa: D,
+  delete_qa: D,
+  reorder_qa: D,
+  set_product_booking_config: D,
+  delete_product_booking_config: D,
+  replace_product_weekly_schedule: D,
   append_content_block: W,
   attach_media: W,
   batch_create_products: W,

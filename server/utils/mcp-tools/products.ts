@@ -142,6 +142,12 @@ const metafieldDefinitionObject = {
   required: ['id', 'namespace', 'key', 'name', 'value_type', 'validations', 'localizable'],
 } as const
 
+const bookingConfigObject = {
+  type: ['object', 'null'],
+  properties: { product_id: { type: 'string' }, organization_id: { type: 'string' }, duration_minutes: { type: ['integer', 'null'], minimum: 1 }, default_capacity: { type: ['integer', 'null'], minimum: 0 } },
+  required: ['duration_minutes', 'default_capacity'],
+} as const
+
 const productObject = {
   type: 'object',
   properties: {
@@ -151,6 +157,7 @@ const productObject = {
     marketing_features: { type: 'array', items: { type: 'string' } },
     tags: { type: 'array', items: { type: 'string' } },
     metadata: { type: 'object', additionalProperties: { type: 'string' } },
+    booking: bookingConfigObject,
     tax_code: { type: ['string', 'null'] },
     options: { type: 'array', items: optionObject },
     variants: { type: 'array', items: variantObject },
@@ -195,6 +202,9 @@ const productWrite = {
 const productResult = { type: 'object', properties: { product: productObject }, required: ['product'] } as const
 
 export const PRODUCTS_TOOLS: McpToolDefinition[] = [
+  organizationTool({ name: 'set_product_booking_config', description: 'Set existing booking duration and default capacity. Omitted fields retain their values; null clears a default and capacity 0 is retained. Read back with get_product.booking.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, duration_minutes: { type: ['integer', 'null'], minimum: 1 }, default_capacity: { type: ['integer', 'null'], minimum: 0 } }, required: ['product_id'], outputSchema: { type: 'object', properties: { config: bookingConfigObject }, required: ['config'] } }),
+  organizationTool({ name: 'delete_product_booking_config', description: 'Disable booking for a carried product. Refused whenever any booking history exists, including cancelled bookings.', domain: 'products', minimumRole: 'admin', confirmRequired: true, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: { type: 'object', properties: { deleted: { type: 'boolean' } }, required: ['deleted'] } }),
+  organizationTool({ name: 'replace_product_weekly_schedule', description: 'Replace the entire weekly schedule for one product and location using the location’s saved timezone. An empty slots array clears that scope. Retained occurrences and booked sessions keep their identities; removed future unbooked sessions are cancelled.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' }, location_id: { type: 'string' }, slots: { type: 'array', items: { type: 'object', properties: { weekday: { type: 'integer', minimum: 0, maximum: 6 }, start_time: { type: 'string', description: 'Local HH:mm time.' }, capacity: { type: ['integer', 'null'], minimum: 0 } }, required: ['weekday', 'start_time'], additionalProperties: false } } }, required: ['product_id', 'location_id', 'slots'], outputSchema: { type: 'object', properties: { rules: { type: 'array', items: { type: 'object' } }, sessions: { type: 'object', properties: { created: { type: 'integer' }, existing: { type: 'integer' }, skipped: { type: 'array', items: { type: 'object' } } }, required: ['created', 'existing', 'skipped'] }, cancelled: { type: 'integer' } }, required: ['rules', 'sessions', 'cancelled'] } }),
   organizationTool({ name: 'list_products', description: 'List the products this organization carries, published or withheld. The catalog belongs to the organization; a organization carries a product through an explicit publication row.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { published_only: { type: 'boolean' }, ...paginationInputSchema }, required: [], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
   organizationTool({ name: 'list_location_products', description: 'List the products offered at one explicit location.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { location_id: { type: 'string' }, published_only: { type: 'boolean' }, ...paginationInputSchema }, required: ['location_id'], outputSchema: { type: 'object', properties: { products: { type: 'array', items: productListItemObject }, page_info: pageInfoObject }, required: ['products', 'page_info'] } }),
   organizationTool({ name: 'get_product', description: 'Get a product with its options, variants, prices, publication, locations, collection membership and metafields.', domain: 'products', minimumRole: 'admin', confirmRequired: false, inputSchema: { product_id: { type: 'string' } }, required: ['product_id'], outputSchema: productResult }),

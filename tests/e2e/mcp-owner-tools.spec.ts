@@ -431,7 +431,7 @@ test.describe('stateless MCP server', () => {
     expect(mcpData<{ items: unknown[] }>(await qaList.json()).items).toEqual(expect.any(Array))
   })
 
-  test('Q&A and reviews are read-only through tenant MCP, and a review\'s words are not writable through the CMS', async ({ request, baseURL }) => {
+  test('authored Q&A has MCP writers while reviews remain read-only', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
@@ -443,9 +443,10 @@ test.describe('stateless MCP server', () => {
     }
     const catalog = await mcpRequest(request, baseURL!, { method: 'tools/list', organizationId })
     const tools = (await catalog.json()).result.tools as Array<{ name: string; annotations: { readOnlyHint: boolean } }>
-    const reviewTools = tools.filter(tool => /(?:_qa|_review|_reviews)$/.test(tool.name))
-    expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_qa', 'list_location_reviews', 'list_organization_qa', 'list_organization_reviews'])
+    const reviewTools = tools.filter(tool => /(?:_review|_reviews)$/.test(tool.name))
+    expect(reviewTools.map(tool => tool.name).sort()).toEqual(['list_location_reviews', 'list_organization_reviews'])
     expect(reviewTools.every(tool => tool.annotations.readOnlyHint)).toBe(true)
+    for (const name of ['create_qa', 'update_qa', 'delete_qa', 'reorder_qa']) expect(tools.find(tool => tool.name === name)?.annotations.readOnlyHint).toBe(false)
     // #1001 gave a site the ability to edit the Q&A it wrote, so the CMS does
     // have a Q&A write route — it validates its body like any other, and a 404
     // here would mean that feature had been lost. A review is a guest's words,
@@ -466,6 +467,82 @@ test.describe('stateless MCP server', () => {
     })
     test.afterEach(async () => {
       await releaseTenantMutationLock?.()
+    })
+
+    test('HTTP and MCP share booking defaults, weekly replacement and authored Q&A', async ({ request, baseURL }) => {
+      test.setTimeout(120_000)
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const locationId = 'loc-demo'
+      const call = async (toolName: string, args: Record<string, unknown>) => {
+        const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args: { organization_id: organizationId, ...args } })
+        expect(response.status()).toBe(200)
+        return await response.json()
+      }
+      const created = mcpData<{ product: { id: string } }>(await call('create_product', { name: 'Shared writer parity' })).product
+      const productId = created.id
+      const productUrl = `${baseURL}/api/editor/organizations/${organizationId}/products/${productId}`
+      const qaUrl = `${baseURL}/api/editor/organizations/${organizationId}/qa`
+      const qaIds: string[] = []
+      try {
+        const enabled = await request.put(`${productUrl}/booking`, { data: { duration_minutes: 60, default_capacity: 9 } })
+        expect(enabled.status(), await enabled.text()).toBe(200)
+        let product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: 9 })
+        expect((await call('set_product_booking_config', { product_id: productId, default_capacity: 0 })).result.isError).not.toBe(true)
+        const httpProduct = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/products`)
+        expect(httpProduct.status(), await httpProduct.text()).toBe(200)
+        expect((await httpProduct.json()).products.find((row: { id: string }) => row.id === productId).booking).toEqual({ duration_minutes: 60, default_capacity: 0 })
+        expect((await call('set_product_booking_config', { product_id: productId, default_capacity: null })).result.isError).not.toBe(true)
+        product = mcpData<{ product: { booking: unknown } }>(await call('get_product', { product_id: productId })).product
+        expect(product.booking).toEqual({ duration_minutes: 60, default_capacity: null })
+        expect((await request.put(`${productUrl}/booking`, { data: { duration_minutes: 0 } })).status()).toBe(400)
+        expect((await call('set_product_booking_config', { product_id: productId, duration_minutes: 0 })).result.isError).toBe(true)
+        const schedule = { location_id: locationId, slots: [{ weekday: 2, start_time: '10:00', capacity: 0 }] }
+        expect((await request.put(`${productUrl}/availability`, { data: schedule })).status()).toBe(200)
+        const repeated = mcpData<{ rules: Array<{ id: string; timezone: string; capacity: number }>; sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...schedule }))
+        expect(repeated.sessions.created).toBe(0)
+        const rules = await request.get(`${productUrl}/availability?location_id=${locationId}`)
+        expect((await rules.json()).rules).toEqual(repeated.rules)
+        expect(repeated.rules[0]?.capacity).toBe(0)
+        const foreign = { product_id: productId, location_id: 'loc-ncls-main', slots: [] }
+        expect((await call('replace_product_weekly_schedule', foreign)).result.isError).toBe(true)
+        expect((await request.put(`${productUrl}/availability`, { data: { location_id: foreign.location_id, slots: foreign.slots } })).status()).toBe(404)
+        expect(mcpData<{ rules: unknown[] }>(await call('replace_product_weekly_schedule', { product_id: productId, location_id: locationId, slots: [] })).rules).toEqual([])
+        expect((await (await request.get(`${productUrl}/availability?location_id=${locationId}`)).json()).rules).toEqual([])
+
+        const viaHttp = await request.post(qaUrl, { data: { question: '  Shared HTTP question  ', answer: 'HTTP answer', page_path: '/parity-check' } })
+        expect(viaHttp.status(), await viaHttp.text()).toBe(201)
+        const first = await viaHttp.json() as { id: string }
+        qaIds.push(first.id)
+        const viaMcp = mcpData<{ id: string }>(await call('create_qa', { question: 'Shared MCP question', page_path: '/parity-check' }))
+        qaIds.push(viaMcp.id)
+        expect((await call('update_qa', { qa_id: first.id, page_path: '/parity-check', answer: 'MCP answer', is_owner_answer: false })).result.isError).not.toBe(true)
+        const read = await request.get(`${qaUrl}?page_path=%2Fparity-check`)
+        const qa = (await read.json()).qa as Array<{ id: string; question: string; answer: string; is_owner_answer: number }>
+        expect(qa.find(row => row.id === first.id)).toMatchObject({ question: 'Shared HTTP question', answer: 'MCP answer', is_owner_answer: 0 })
+        expect((await request.patch(`${qaUrl}/${viaMcp.id}`, { data: { page_path: '/parity-check', answer: 'CMS answer' } })).status()).toBe(200)
+        const list = mcpData<{ items: Array<{ id: string; answer: string }> }>(await call('list_organization_qa', { page_path: '/parity-check' }))
+        expect(list.items.find(row => row.id === viaMcp.id)?.answer).toBe('CMS answer')
+        const updates = [{ id: first.id, sort_order: 6 }, { id: viaMcp.id, sort_order: 2 }]
+        expect(mcpData<{ updated: number }>(await call('reorder_qa', { page_path: '/parity-check', updates })).updated).toBe(2)
+        expect((await (await request.get(`${qaUrl}?page_path=%2Fparity-check`)).json()).qa.map((row: { id: string }) => row.id)).toEqual([viaMcp.id, first.id])
+        expect((await request.post(qaUrl, { data: { question: 'Invalid scope', page_path: 42 } })).status()).toBe(400)
+        for (const scope of [{ page_path: 42 }, { location_id: 42 }]) {
+          expect((await call('create_qa', { question: 'Invalid scope', ...scope })).result.isError).toBe(true)
+        }
+        const invalid = { question: 'q'.repeat(501), page_path: '/parity-check' }
+        expect((await request.post(qaUrl, { data: invalid })).status()).toBe(400)
+        expect((await call('create_qa', invalid)).result.isError).toBe(true)
+        expect((await call('update_qa', { qa_id: first.id, page_path: '/different-scope', answer: 'Wrong scope' })).result.isError).toBe(true)
+        expect((await request.patch(`${qaUrl}/${first.id}`, { data: { page_path: '/different-scope', answer: 'Wrong scope' } })).status()).toBe(404)
+        expect((await call('delete_qa', { qa_id: first.id, page_path: '/parity-check' })).result.isError).not.toBe(true)
+        expect((await (await request.get(`${qaUrl}?page_path=%2Fparity-check`)).json()).qa.map((row: { id: string }) => row.id)).toEqual([viaMcp.id])
+      } finally {
+        for (const id of qaIds) await request.delete(`${qaUrl}/${id}?page_path=%2Fparity-check`)
+        await call('delete_product_booking_config', { product_id: productId })
+        await call('delete_product', { product_id: productId })
+      }
     })
 
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {

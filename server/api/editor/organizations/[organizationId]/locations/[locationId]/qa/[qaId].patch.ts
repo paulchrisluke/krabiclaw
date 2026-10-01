@@ -1,5 +1,5 @@
 // PATCH /api/editor/organizations/[organizationId]/locations/[locationId]/qa/[qaId]
-import { cleanString, jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { updateLocationQa } from '~/server/utils/mcp-workflows'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
@@ -25,10 +25,10 @@ export default defineHandler(async (event) => {
   }
 
   try {
-    const result = await updateLocationQa(db, organization.id, locationId, qaId, {
-      question: body.question !== undefined ? cleanString(body.question, 500) : undefined, answer: body.answer !== undefined ? cleanString(body.answer, 2000) : undefined, question_author: body.question_author !== undefined ? cleanString(body.question_author, 120) : undefined, is_owner_answer: body.is_owner_answer, status: body.status !== undefined ? cleanString(body.status, 20) : undefined, sort_order: body.sort_order, })
+    const result = await updateLocationQa(db, organization.id, locationId, qaId, body)
     return jsonResponse(result)
   } catch (error) {
+    rethrowHttpError(error)
     const message = error instanceof Error ? error.message : 'Q&A update failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
