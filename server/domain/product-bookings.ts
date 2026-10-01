@@ -283,7 +283,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
 
   return creationResult({
-    success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: replayState.booking?.status ?? bookingStatus, replayed: Boolean(replayState.booking), starts_at: session.starts_at, ends_at: session.ends_at, timezone: session.timezone, presentation, ...(operator ? {} : { cancellation_token: cancellation.token }), quoted_value: quotedValueOf(followUps[1]!), measurement,
+    success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: replayState.booking?.status ?? bookingStatus, replayed: Boolean(replayState.booking), starts_at: session.starts_at, ends_at: session.ends_at, timezone: session.timezone, presentation, ...(operator ? {} : { cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement }),
     message: bookingStatus === 'pending' ? `Your request for ${product.name} on ${whenLabel} is awaiting review.` : `Your ${presentation.noun} for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })
