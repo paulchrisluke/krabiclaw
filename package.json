@@ -21,7 +21,7 @@
     "chatgpt:submission:check": "node --experimental-strip-types scripts/generate-chatgpt-app-submission.mjs --check",
     "chatgpt:submission:write": "node --experimental-strip-types scripts/generate-chatgpt-app-submission.mjs --write",
     "platform-locales:check": "node --experimental-strip-types scripts/check-platform-locale-catalog.ts",
-    "quality": "yarn lint:data-loading && yarn lint:email-previews && yarn lint:notification-parity && yarn lint:vue-sfc && yarn platform-locales:check --locale th && yarn platform-locales:check --locale ja && yarn typecheck && yarn lint",
+    "quality": "yarn feature-library:check && yarn lint:data-loading && yarn lint:email-previews && yarn lint:notification-parity && yarn lint:vue-sfc && yarn platform-locales:check --locale th && yarn platform-locales:check --locale ja && yarn typecheck && yarn lint",
     "lint:data-loading": "node scripts/check-data-loading-guardrails.mjs",
     "test": "yarn test:unit && yarn test:d1 && yarn test:e2e",
     "test:unit": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs --test tests/unit/**/*.test.ts",
@@ -79,7 +79,8 @@
     "db:pull:local": "node --experimental-strip-types scripts/pull-production-snapshot.ts --local",
     "db:pull:staging": "node --experimental-strip-types scripts/pull-production-snapshot.ts --staging",
     "lint:email-previews": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-email-previews.ts",
-    "lint:notification-parity": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-notification-parity.ts"
+    "lint:notification-parity": "node --experimental-strip-types --import ./tests/unit/support/register-aliases.mjs scripts/check-notification-parity.ts",
+    "feature-library:check": "node --experimental-strip-types scripts/check-feature-library.mjs"
   },
   "//resolutions": "kysely pinned to 0.28.17: @better-auth/kysely-adapter (bundled transitively by better-auth even though this app only uses drizzleAdapter) imports DEFAULT_MIGRATION_TABLE from the top-level kysely package, which kysely 0.29.x stopped re-exporting from its main barrel. That breaks yarn build's Nitro/Rollup bundling pass. Remove this pin once better-auth's kysely-adapter fixes its import path or drops the kysely dependency.",
   "resolutions": {
