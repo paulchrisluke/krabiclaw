@@ -1076,7 +1076,7 @@
           "tests/unit/session-booking-payments.test.ts",
           "tests/unit/metronome-payments-response.test.ts"
         ],
-        "coverageNote": "Real local D1 concurrency/replay/financial boundaries; native sandbox account, zero-fee principal capture/full refund, hosted hold conversion and approved rejection, signed payment replay and thin Connect SDK refresh, and Metronome draft rating verified. Actual delayed costs and operating Stripe collection remain outstanding.",
+        "coverageNote": "Real local D1 concurrency/replay/financial boundaries; native sandbox account, zero-fee principal capture/full refund, hosted hold conversion and approved rejection, signed payment replay and thin Connect SDK refresh, and Metronome draft rating verified. Native operating-customer test invoice collection and paid-invoice credit settlement/replay also passed. Actual fee report APIs require live data; Metronome-synchronized collection is paused before the unapproved sandbox OAuth grant.",
         "evidenceSha256": {
           "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
           "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
@@ -1084,7 +1084,7 @@
           "server/domain/payments/checkout.ts": "a1e2ec8ed2872234b73e333ec5d1d16b701da01aaf034f684995551f6ff84777",
           "server/domain/payments/usage.ts": "b7c955a030b4649ebb59d4791edca166de5fa01f9db98b31dd325f06b3f2e67c",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "930dea468467e700a8af74834d19531b002bb4c8274f294c984c50ff9355a033",
+          "tests/integration/payments-d1.test.ts": "df7ace4482a3d3c91dea2a139c87ba0737a9a30e775a5b8ec9fc4bf61f0d0a44",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
           "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",

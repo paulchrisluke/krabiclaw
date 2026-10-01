@@ -10,7 +10,7 @@ import {requestInsertQueries,threadPayloadForGuest} from '../../server/domain/re
 import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAuthorization,refundPayment,reconcileRefundState} from '../../server/domain/payments/index.ts'
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
-import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage} from '../../server/domain/payments/usage.ts'
+import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage,reconcileNativeBillingCredit} from '../../server/domain/payments/usage.ts'
 import {createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
 import {mcpFinancialApprovalErrorResult} from '../../server/utils/mcp-financial-handoff.ts'
 const ORG='payments-org',NOW='2026-10-01T00:00:00.000Z'
@@ -271,4 +271,29 @@ test('native contract end preserves accrued usage and late costs reopen historic
   assert.equal(await db.prepare('SELECT status FROM payment_billing_accounts').first('status'),'servicing')
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_usage_events WHERE delivery_at IS NULL').first('n'),0)
  }finally{globalThis.fetch=original;await runtime.dispose()}
+})
+
+
+test('final native operating credits enforce tenant, amount, state and single-use settlement', {timeout:120000},async()=>{
+ const {db,runtime}=await boot();try{
+  await db.prepare("INSERT INTO payment_billing_accounts(organization_id,stripe_billing_customer_id,contract_start_at,currency,status,updated_at) VALUES(?,'cus_operating',?,'USD','servicing',?)").bind(ORG,NOW,NOW).run()
+  for(const id of ['credit','other-credit'])await db.prepare("INSERT INTO payment_usage_events(id,organization_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES(?,?,'stripe_cost_adjustment','USD',-100,?,?,?)").bind(id,ORG,id,NOW,NOW).run()
+  const note={id:'cn_native',invoice:'in_operating',status:'issued',currency:'usd',total:100,livemode:false},invoice={id:'in_operating',customer:'cus_operating',livemode:false}
+  const stripe={creditNotes:{retrieve:async()=>note},invoices:{retrieve:async()=>invoice}} as unknown as Stripe,principal={organizationId:ORG,userId:'verified',role:'owner'}
+  await assert.rejects(()=>reconcileNativeBillingCredit(db,stripe,{...principal,role:'member'},'credit',note.id))
+  for(const invalid of [{customer:'cus_buyer'},{livemode:true}]){
+   const previous={...invoice};Object.assign(invoice,invalid)
+   await assert.rejects(()=>reconcileNativeBillingCredit(db,stripe,principal,'credit',note.id),/does not match/u);Object.assign(invoice,previous)
+  }
+  for(const invalid of [{total:99},{status:'void'},{currency:'thb'}]){
+   const previous={...note};Object.assign(note,invalid)
+   await assert.rejects(()=>reconcileNativeBillingCredit(db,stripe,principal,'credit',note.id),/does not match/u);Object.assign(note,previous)
+  }
+  assert.equal(await db.prepare("SELECT delivery_at FROM payment_usage_events WHERE id='credit'").first('delivery_at'),null)
+  assert.equal((await reconcileNativeBillingCredit(db,stripe,principal,'credit',note.id)).settled,true)
+  assert.equal((await reconcileNativeBillingCredit(db,stripe,principal,'credit',note.id)).settled,true)
+  await assert.rejects(()=>reconcileNativeBillingCredit(db,stripe,principal,'other-credit',note.id))
+  assert.equal(await db.prepare("SELECT COUNT(*) n FROM payment_usage_events WHERE credit_note_id='cn_native'").first('n'),1)
+  assert.equal(await db.prepare("SELECT delivery_at FROM payment_usage_events WHERE id='other-credit'").first('delivery_at'),null)
+ }finally{await runtime.dispose()}
 })
