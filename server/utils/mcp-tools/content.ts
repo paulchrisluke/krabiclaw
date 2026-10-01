@@ -207,7 +207,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and the guest-facing rules. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -215,7 +215,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
-        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.' },
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.' },
       },
       required: ['location_id'],
       outputSchema: {

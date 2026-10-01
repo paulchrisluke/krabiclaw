@@ -155,7 +155,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'set_default_currency',
-      description: 'Set the default currency for this organization. Affects how Product and experience prices are displayed.',
+      description: 'Set the default currency for this organization. Existing clients may continue using this tool; prefer update_organization_settings.default_currency for new integrations. Both use the same settings writer. Affects how Product and experience prices are displayed.',
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,

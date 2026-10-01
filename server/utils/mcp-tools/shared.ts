@@ -103,7 +103,7 @@ export const locationObject = {
     short_description: { type: ['string', 'null'] },
     status: { type: 'string' },
     timezone: { ...timezoneSchema, type: ['string', 'null'] },
-    max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
+    max_capacity: { type: ['number', 'null'], description: 'Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.' },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },

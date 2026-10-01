@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:196ec4787841c33a162c4d848ecabb39ddae3ba49de116bcb9cfab9e68044351",
+  "fingerprint": "sha256:ad4ffa56687c35bfe38c7c77748f96ad63920fe550e39697ecf5b9fda166e08e",
   "tools": [
     {
       "name": "append_content_block",
@@ -4570,7 +4570,7 @@
                 ]
               },
               "max_capacity": {
-                "description": "Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).",
+                "description": "Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.",
                 "type": [
                   "number",
                   "null"
@@ -15936,7 +15936,7 @@
             "type": "string"
           },
           "max_capacity": {
-            "description": "Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.",
+            "description": "Stored location capacity metadata; does not limit reservation availability. Reservation seats per start time are controlled by update_reservation_policy.slot_capacity. Pass null to clear the metadata.",
             "type": [
               "number",
               "null"
@@ -17642,7 +17642,7 @@
             ]
           },
           "cancellation_policy": {
-            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "description": "Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.",
             "enum": [
               "flexible",
               "moderate",
