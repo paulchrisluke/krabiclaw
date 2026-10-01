@@ -65,3 +65,26 @@ this change.
   reconcile it with the owner's two-free-theme intention.
 - Docs and the platform help form are evidenced. Community/Priority strings in
   billing limits are not evidence of an active community or support SLA.
+
+## Read-only provider audit
+
+[stripe-catalog-verification.json](stripe-catalog-verification.json) records an
+authorized read of the active Krabiclaw live Product/Prices and the public billing
+projection on 2026-10-01. Growth is USD 49 per month or USD 588 per year; annual is
+not a discounted monthly equivalent. Product and price IDs are recorded separately
+from `plan_id: growth`. No credentials or private image URLs are stored.
+
+The public projection matched the provider's seven marketing bullets. The
+`Auto-sync from Facebook & Instagram` bullet conflicts with the audited
+`social.automatic-sync` entry: current explicit provider operations do not prove
+automatic imports. Broad Google Places wording must distinguish the free initial
+onboarding snapshot from paid manual import and weekly review refresh. Paid
+notification claims depend on the separately reviewed WhatsApp enforcement fix.
+Community/Priority strings come from application limits, not Stripe bullets, and
+remain unsupported service promises. None of these findings authorizes a catalog
+write or resolves the open review-request Free policy.
+
+An offline validator cannot assert this snapshot is the current live catalog.
+Refresh it only after a new authorized read, preserve its timestamp, and review
+changed bullets against feature evidence. Never generate or push Stripe bullets
+from reference labels automatically.

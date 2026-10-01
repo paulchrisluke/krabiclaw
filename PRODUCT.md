@@ -48,8 +48,10 @@ marketing currently describes Growth inclusion. Documentation and the help form
 exist; Community/Priority support wording does not establish a service promise.
 These discrepancies must be resolved before publishing comparison claims.
 
-This change does not verify the live Stripe marketing catalog, change paid
-bullets or prices, edit the pricing page, or synchronize marketing automatically.
+A [read-only Stripe catalog snapshot](docs/product/stripe-catalog-verification.json)
+records the verified provider catalog and discrepancies at its stated timestamp.
+It is audit evidence, not a replacement catalog. Paid bullets and prices remain
+provider-owned; this foundation does not edit pricing or synchronize marketing.
 
 ## Implementation context
 
