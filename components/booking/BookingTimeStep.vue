@@ -1,7 +1,7 @@
 <template>
   <div class="booking-time-step flex h-full flex-col">
     <!-- Party size — pinned above the scroll -->
-    <div class="flex shrink-0 items-center justify-between gap-4 border-y border-default px-1 py-3">
+    <div v-if="showPartySize" class="flex shrink-0 items-center justify-between gap-4 border-y border-default px-1 py-3">
       <div>
         <div class="text-[11px] font-medium uppercase tracking-[0.2em] text-default">{{ resolvedGuestsLabel }}</div>
         <div v-if="guestsHint" class="mt-0.5 text-xs text-muted">{{ guestsHint }}</div>
@@ -109,7 +109,7 @@
       <div class="min-w-0">
         <template v-if="modelValue">
           <div class="saya-display saya-italic truncate text-lg">{{ selectedSummary }}</div>
-          <div class="mt-0.5 text-xs text-muted">{{ showMinimumAtLimit && guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? resolvedGuestSingular : resolvedGuestPlural }}</div>
+          <div v-if="showPartySize" class="mt-0.5 text-xs text-muted">{{ showMinimumAtLimit && guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? resolvedGuestSingular : resolvedGuestPlural }}</div>
         </template>
         <div v-else class="text-sm text-muted">{{ resolvedChooseSeatingLabel }}</div>
       </div>
@@ -148,6 +148,7 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   modelValue?: TimeSlotSelection | null
   guests: number
+  showPartySize?: boolean
   guestsMin?: number
   showMinimumAtLimit?: boolean
   guestsMax?: number
@@ -158,6 +159,7 @@ const props = withDefaults(defineProps<{
   continueLabel?: string
   chooseSeatingLabel?: string
 }>(), {
+  showPartySize: true,
   loading: false,
   modelValue: null,
   showMinimumAtLimit: true,

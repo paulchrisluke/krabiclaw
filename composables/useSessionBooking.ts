@@ -20,6 +20,7 @@ export interface SessionBookingContext {
   currency: CurrencyCode
   location: PublicProductLocationPayload | null
   sessions: PublicProductSession[]
+  showPartySize?: boolean
 }
 
 /** The public Product booking flow, shared by location pages and online consultations. */
@@ -30,7 +31,12 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   const sellableVariants = computed(() => context.value.product.variants.filter(variant => variant.active))
   const bookingOpen = ref(false)
   const bookingStep = ref(1)
-  const partySize = ref(1)
+  const showPartySize = computed(() => context.value.showPartySize !== false)
+  const selectedPartySize = ref(1)
+  const partySize = computed({
+    get: () => showPartySize.value ? selectedPartySize.value : 1,
+    set: (value: number) => { selectedPartySize.value = showPartySize.value ? value : 1 },
+  })
   /** The options a customer can actually choose — what is priced, and what is booked. */
   const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
   function variantPriceLabel(variant: Product['variants'][number]) {
@@ -244,7 +250,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     }
   }
 
-    return { bookingOpen, bookingStep, partySize, selectedVariantId, sellableVariants, variantPriceLabel,
+    return { bookingOpen, bookingStep, partySize, showPartySize, selectedVariantId, sellableVariants, variantPriceLabel,
       timeSelection, submitting, bookingError, sessions, sessionsPending, availabilityDates, referenceDate, guestsMax,
       selectedSession, loadSessions, openBooking, openBookingAt, upcomingSessions, nextSession,
       sessionDayLabel, sessionTimeLabel, submitBooking }

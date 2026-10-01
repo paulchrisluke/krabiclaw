@@ -31,6 +31,7 @@
             :reference-date="referenceDate"
             :loading="sessionsPending"
             :guests="partySize"
+            :show-party-size="showPartySize"
             :guests-max="guestsMax"
             :show-minimum-at-limit="false"
             @update:guests="partySize = $event"
@@ -45,7 +46,7 @@
           <BookingRecap
             v-if="timeSelection"
             :main-line="timeSelection.label"
-            :meta-line="`${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}`"
+            :meta-line="showPartySize ? `${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}` : ''"
             :edit-label="t('saya.experience_detail.change')"
             @edit="bookingStep = 1"
           />
@@ -67,7 +68,7 @@ import type { SessionBookingController } from '~/composables/useSessionBooking'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 const props = defineProps<{ controller: SessionBookingController; confirmationMode: 'instant' | 'review' }>()
 const { bookingStep, sellableVariants, selectedVariantId, variantPriceLabel, sessionsPending,
-  availabilityDates, referenceDate, timeSelection, partySize, guestsMax, bookingError, submitting, submitBooking } = props.controller
+  availabilityDates, referenceDate, timeSelection, partySize, showPartySize, guestsMax, bookingError, submitting, submitBooking } = props.controller
 const { t } = useI18n()
 const variantGroup = useId()
 </script>

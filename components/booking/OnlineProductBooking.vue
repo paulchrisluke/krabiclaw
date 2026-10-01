@@ -32,7 +32,7 @@ const { data, error } = await useAsyncData(`online-product-sessions:${props.orga
 })
 })
 if (error.value) throw error.value
-const controller = useSessionBooking(() => ({ ...props, location: null, sessions: data.value?.sessions ?? [] }))
+const controller = useSessionBooking(() => ({ ...props, showPartySize: false, location: null, sessions: data.value?.sessions ?? [] }))
 const { bookingOpen, bookingStep, submitting } = controller
 function openOnlineBooking() {
   controller.openBooking()
