@@ -119,12 +119,11 @@ Primary contracts: [Stripe fees reports](https://docs.stripe.com/reports/all-fee
 
 Use the safe blank `.env.example` entries. Required provider setup: intended sandbox
 test key, dedicated thin Connect and connected snapshot Payments secrets, synchronous
-parent payment-method configuration, Metronome test workspace/API key/USD rate card,
+parent or dedicated seller payment-method configuration, Metronome test workspace/API key/USD rate card,
 and HTTPS platform return origin. Keep the subscription secret separate. Complete
 merchant-hosted onboarding and Radar before claiming native card readiness.
 No deployment, live webhook change, OAuth grant change or production activation is
-part of this draft. Full native Checkout/no-application-fee proof and Metronome rating/
-collection proof remain pending merchant readiness and provider configuration.
+part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Hosted Checkout capture/local native-event conversion, actual delayed cost attribution and operating-customer Stripe collection remain pending configuration. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
 
 ## Local verification
 
