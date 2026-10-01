@@ -55,7 +55,11 @@
       "Bash(gh run *)",
       "Skill(fewer-permission-prompts)",
       "Skill(fewer-permission-prompts:*)",
-      "Bash(git fetch *)"
+      "Bash(git fetch *)",
+      "mcp__krabiclaw__get_workspace_context",
+      "mcp__krabiclaw__query_organization_analytics",
+      "mcp__krabiclaw__list_organization_locales",
+      "mcp__krabiclaw__list_blog_posts"
     ],
     "deny": [
       "Bash(rm -rf / *)",

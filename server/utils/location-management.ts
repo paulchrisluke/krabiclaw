@@ -35,6 +35,8 @@ export interface CreateLocationInput {
   address?: unknown;
   opening_hours?: OpeningHours;
   special_hours?: SpecialHours;
+  /** The updated_at the caller read; the write is refused if the row moved since. */
+  expected_updated_at?: string;
   price_level?: string | null;
   rating?: number | null;
   review_count?: number | null;
@@ -650,15 +652,20 @@ export async function updateLocation(
     params.push(normalizedEnabledFeatures ?? null);
   }
 
-  const runUpdate = async (boundParams: Array<string | number | null>) => {
+  // A read-modify-write on a JSON column — hours, special hours — must land on
+  // the row it read. With the caller's updated_at in the WHERE, a row that
+  // moved since matches nothing and the write is refused rather than applied
+  // over someone else's.
+  const guarded = typeof input.expected_updated_at === "string";
+  const runUpdate = async (boundParams: Array<string | number | null>): Promise<boolean> => {
     const statements: BatchQuery[] = [];
     statements.push({
       query: `
         UPDATE business_locations
         SET ${sets.join(", ")}
-        WHERE id = ? AND organization_id = ?
+        WHERE id = ? AND organization_id = ?${guarded ? " AND updated_at = ?" : ""}
       `,
-      params: boundParams,
+      params: guarded ? [...boundParams, input.expected_updated_at!] : boundParams,
     });
     statements.push(organizationEventQuery({
       organizationId,
@@ -673,7 +680,12 @@ export async function updateLocation(
       onlyIfPreviousChangedOneRow: true,
     }));
 
-    await executeBatch(db, statements);
+    const results = await executeBatch(db, statements);
+    return (results[0]?.meta?.changes ?? 0) === 1;
+  };
+  const stale = {
+    status: 409,
+    data: { error: "The location changed since it was read. Reload it and try again." },
   };
 
   if (slugBase && slugParamIndex !== null) {
@@ -684,7 +696,7 @@ export async function updateLocation(
       boundParams[slugParamIndex] = slug;
       boundParams.push(locationId, organizationId);
       try {
-        await runUpdate(boundParams);
+        if (!(await runUpdate(boundParams))) return stale;
         const location = await loadLocation(
           db,
           organizationId,
@@ -715,7 +727,7 @@ export async function updateLocation(
   }
 
   params.push(locationId, organizationId);
-  await runUpdate(params);
+  if (!(await runUpdate(params))) return stale;
   const location = await loadLocation(db, organizationId, locationId);
   if (env && cardInputChanged) await refreshSocialCard({ db, env, owner: { owner_type: 'business_location', owner_id: locationId }, actorId: userId })
   return { status: 200, data: { success: true, location } };

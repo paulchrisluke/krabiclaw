@@ -116,7 +116,12 @@ export function useRouteLevel() {
     return index.value === -1 || !record ? null : urlOf(record).split('/').filter(Boolean).at(-1) ?? null
   })
 
-  /** Where Back goes, or `null` at a tab root, which has nothing above it. */
+  /**
+   * Where Back goes, or `null` at a tab root, which has nothing above it.
+   * The query rides along, as it does through `close()`: the calendar's
+   * location and view are in it, and a leaf's Close must land on the same
+   * calendar it came from.
+   */
   const to = computed<string | null>(() => {
     if (index.value === -1) return null
     const own = levels.value[index.value]!
@@ -125,8 +130,8 @@ export function useRouteLevel() {
     if (parent && declared !== undefined) {
       throw new Error(`Route "${own.path}" declares meta.back but is nested under "${parent.path}"; its route parent is its Back`)
     }
-    if (parent) return urlOf(parent)
-    return typeof declared === 'string' ? resolveNamed(declared) : null
+    const path = parent ? urlOf(parent) : typeof declared === 'string' ? resolveNamed(declared) : null
+    return path === null ? null : router.resolve({ path, query: route.query }).fullPath
   })
 
   /** A root's declared destination, which may sit in another workspace. */

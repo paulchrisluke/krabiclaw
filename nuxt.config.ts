@@ -6,6 +6,7 @@ import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { ROBOTS_DISABLED_DIRECTIVE, ROBOTS_ENABLED_DIRECTIVE } from './shared/robots-directive'
 import { localizedPublicRouteAliases } from './build/localized-public-routes'
+import { mountBookingRoutes } from './build/booking-routes'
 // One source for the entry -> public path map; patch.cjs rewrites the built
 // manifest from the same file, so a surface cannot be registered in one place
 // and missed in the other.
@@ -217,6 +218,7 @@ export default defineNuxtConfig({
     },
     'pages:extend'(pages) {
       pages.push(...localizedPublicRouteAliases(pages))
+      mountBookingRoutes(pages)
       // Captured here because this is where the resolved route tree exists. The
       // Worker needs it to answer "does anything already claim this path?" — see
       // build/claimed-public-routes.ts.

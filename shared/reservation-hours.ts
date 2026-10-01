@@ -100,6 +100,36 @@ export function parseSpecialHours(value: unknown): SpecialHours {
     return { kind: 'hours', date: item.date, periods, note: item.note }
   })
 }
+/**
+ * The tenant's special hours with the dates from `from` to `to` closed: one
+ * closure for the range, beside whatever was there.
+ */
+export function closeDates(special: SpecialHours, from: string, to: string): SpecialHours {
+  assertCalendarDate(from)
+  assertCalendarDate(to)
+  if (to < from) throw new Error('A closure ends on or after the day it starts')
+  return [...(special ?? []), { kind: 'closure', starts_on: from, ends_on: to, note: null }]
+}
+/**
+ * The tenant's special hours with the dates from `from` to `to` open again:
+ * every closure covering any of them is cut around the range, so the days
+ * outside it stay closed with their note.
+ */
+export function openDates(special: SpecialHours, from: string, to: string): SpecialHours {
+  assertCalendarDate(from)
+  assertCalendarDate(to)
+  if (to < from) throw new Error('A range ends on or after the day it starts')
+  if (!special) return null
+  const next = special.flatMap((entry): NonNullable<SpecialHours> => {
+    // Dated hours with no periods close that date as surely as a closure does.
+    if (entry.kind === 'hours') return entry.periods.length === 0 && entry.date >= from && entry.date <= to ? [] : [entry]
+    if (entry.starts_on > to || (entry.ends_on !== null && entry.ends_on < from)) return [entry]
+    const before = entry.starts_on < from ? [{ ...entry, ends_on: addLocalDays(from, -1) }] : []
+    const after = entry.ends_on === null || entry.ends_on > to ? [{ ...entry, starts_on: addLocalDays(to, 1) }] : []
+    return [...before, ...after]
+  })
+  return next.length ? next : null
+}
 export function closureOnDate(special: SpecialHours, date: string): Closure | undefined {
   return special?.find((p): p is Closure => p.kind === 'closure' && p.starts_on <= date && (p.ends_on === null || p.ends_on >= date))
 }

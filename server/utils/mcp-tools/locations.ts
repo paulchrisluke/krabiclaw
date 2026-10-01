@@ -1,4 +1,5 @@
 import type { McpToolDefinition } from './shared'
+import { calendarDateSchema } from '~/utils/timezone'
 import { locationListItemObject, locationMutationSummaryObject, locationObject, openingHoursInputSchema, pageInfoObject, paginationInputSchema, postalAddressSchema, seoOverrideFieldsSchema, organizationTool, specialHoursInputSchema } from './shared'
 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
@@ -53,6 +54,59 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         ...seoOverrideFieldsSchema(),
       },
       required: ['location_id'],
+      outputSchema: locationMutationSummaryObject,
+    }),
+  organizationTool({
+      name: 'get_calendar',
+      description: 'What is on one location\'s calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking and published post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location\'s local calendar days. At most 62 days per call.',
+      domain: 'locations',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Location id or slug.' },
+        from: { ...calendarDateSchema, description: 'First day, YYYY-MM-DD.' },
+        to: { ...calendarDateSchema, description: 'Last day, YYYY-MM-DD, inclusive.' },
+        kinds: { type: 'array', items: { type: 'string', enum: ['reservation', 'booking', 'post'] }, description: 'Limit to these kinds. Defaults to every kind the location offers.' },
+      },
+      required: ['location_id', 'from', 'to'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          items: { type: 'array', items: { type: 'object' } },
+          available_kinds: { type: 'array', items: { type: 'string' } },
+          unavailable_dates: { type: 'array', items: { type: 'object', properties: { date: { type: 'string' }, reason: { type: 'string' } }, required: ['date', 'reason'] } },
+          context: { type: 'object' },
+        },
+        required: ['items', 'available_kinds', 'unavailable_dates'],
+      },
+    }),
+  organizationTool({
+      name: 'block_dates',
+      description: 'Close a location for every day from one date to another, inclusive, so guests cannot book those days — the same closure the calendar\'s Block writes to the location\'s special hours. Whole days only. Existing closures and dated hours are kept.',
+      domain: 'locations',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Location id or slug.' },
+        from: { ...calendarDateSchema, description: 'First closed day, YYYY-MM-DD.' },
+        to: { ...calendarDateSchema, description: 'Last closed day, YYYY-MM-DD, inclusive. Same as from for one day.' },
+        note: { type: ['string', 'null'], description: 'Why, for the team; guests never see it.' },
+      },
+      required: ['location_id', 'from', 'to'],
+      outputSchema: locationMutationSummaryObject,
+    }),
+  organizationTool({
+      name: 'open_dates',
+      description: 'Reopen a location for every day from one date to another, inclusive — the same as the calendar\'s Open. Every closure covering any of those days is cut around the range so the days outside it stay closed with their note; dated hours with no periods on those days are removed. Weekdays the regular hours never open stay closed: change opening_hours for that.',
+      domain: 'locations',
+      minimumRole: 'admin',
+      confirmRequired: false,
+      inputSchema: {
+        location_id: { type: 'string', description: 'Location id or slug.' },
+        from: { ...calendarDateSchema, description: 'First reopened day, YYYY-MM-DD.' },
+        to: { ...calendarDateSchema, description: 'Last reopened day, YYYY-MM-DD, inclusive. Same as from for one day.' },
+      },
+      required: ['location_id', 'from', 'to'],
       outputSchema: locationMutationSummaryObject,
     }),
 ]

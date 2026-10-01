@@ -130,6 +130,11 @@ unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
+All Cloudflare D1 databases, including replacements, must be created with
+`--location wnam` (Western North America). Do not omit the location hint or
+create an APAC database. Confirm the creation result reports WNAM before
+adding the binding or loading any data.
+
 Change `server/db/schema.ts` first, then use `yarn db:generate` to add a forward
 migration under `migrations/`. Keep every migration already applied to a live D1
 immutable. A normal staging or production deployment runs `wrangler d1
@@ -156,27 +161,32 @@ keys before retiring the old database; carry important edits explicitly,
 without overwriting new-database writes. There is no write freeze or
 maintenance response in the application.
 
-For the v5-to-v6 WNAM replacement, create empty v6 databases with location hint
-`wnam` and apply `migrations/0000_baseline.sql` using `wrangler d1 migrations
-apply`. Never execute the SQL file directly: the migration ledger must record
-it. Run preflight and initial load against each environment's own named v5
-source. Remote loads carry `jwks` along with account, session and OAuth rows;
-local development omits production's encrypted signing keys. Example commands:
+For the v6-to-v7 social cleanup, create empty v7 databases with location hint
+`wnam` and apply the generated baseline with `wrangler d1 migrations apply`.
+Never execute the SQL file directly: its migration ledger must record it.
+The transfer recognizes the immutable v6 migration chain, retains existing
+category IDs, and copies account, session, OAuth and `jwks` rows from each
+environment's own source. Local development omits encrypted production keys.
+
+The replacement changes `content_documents_social_source_check` on the parent of
+content blocks and publication receipts. Imports are retired only after the
+owner-approved imported website posts and unused media have been deleted.
+Transfer rejects any remaining imported post, attached import receipt or live
+imported asset; it removes erased import receipts, media provenance and retired
+connection sync state. Outbound publication receipts and authored content remain.
 
 ```sh
-node --experimental-strip-types scripts/pull-production-snapshot.ts --source krabiclaw-staging-v5 --out staging-preflight.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v5 --out staging-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v5 --out production-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v5 --out staging-final.sqlite --delta-from staging-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v5 --out production-final.sqlite --delta-from production-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --source krabiclaw-staging-v6 --out staging-preflight.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v6 --out staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v6 --out production-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v6 --out staging-final.sqlite --delta-from staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v6 --out production-final.sqlite --delta-from production-initial.sqlite
 ```
 
-Load just before the binding repoint. After deployment, check schema drift,
-foreign keys and customer journeys on the new binding; inspect the read-only
-delta preview before applying the final delta. After v6 is verified, article
-categories land as `0001_article_categories.sql` through the normal forward
-migration path. That migration runs once on populated v6 data; no category IDs
-are regenerated during v6 initial and final loads.
+Prepare the load before the binding repoint. Inspect changes and deletions since
+the initial load immediately before deployment; carry important edits explicitly
+and preserve writes to the new database. After each deployment, verify schema,
+foreign keys and customer journeys on the new binding before promoting further.
 
 Before dropping or retiring a legacy table or writer:
 

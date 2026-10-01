@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import {
-  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders,
+  openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders, waitForNuxtHydration,
 } from './helpers'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, E2E_POTTERY_ORGANIZATION_ID, devLoginHeaders, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 import { loginAs } from './helpers/auth'
@@ -79,6 +79,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     })
     expect(generated.status(), await generated.text()).toBe(200)
     await openTenantPage(page, `${potteryHouseBaseURL}/locations/krabi/products/pottery-wheel-class`, potteryHouseExtraHeaders)
+    await waitForNuxtHydration(page)
     // What a guest presses is the labelled control; the checkbox behind it is
     // screen-reader-only and has no clickable box of its own.
     await page.getByRole('button', { name: 'Book now' }).first().click()
@@ -107,7 +108,8 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     const since = new Date().toISOString()
     const email = `kikuzuki-reservation-${Date.now()}@playwright.example`
     await openTenantPage(page, `${baseURL}/reservations`, kikuzukiTestExtraHeaders())
-    await page.locator('label[for="reservation-booking-toggle"]').first().click()
+    await waitForNuxtHydration(page)
+    await page.locator('article').filter({ has: page.getByRole('heading', { name: 'Kikuzuki Japanese Robatayaki & Izakaya', exact: true }) }).getByRole('button', { name: 'Request Reservation', exact: true }).click()
     await chooseFirstAvailableTime(page)
     await page.getByLabel('Full name').fill('Kikuzuki Journey Test')
     await page.getByLabel('Email address').fill(email)

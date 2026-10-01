@@ -2435,21 +2435,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@internationalized/date@npm:^3.12.3":
+"@internationalized/date@npm:^3.12.3, @internationalized/date@npm:^3.5.0":
   version: 3.12.3
   resolution: "@internationalized/date@npm:3.12.3"
   dependencies:
     "@swc/helpers": "npm:^0.5.0"
   checksum: 10c0/d99ef774b45326ecc3e96642b234de4e92440e4cc929f11141f91403515f1cdb321e66c40f4f71cc4140069776b78a8231c3a72966f3024018ee88da3c4a2726
-  languageName: node
-  linkType: hard
-
-"@internationalized/date@npm:^3.5.0":
-  version: 3.12.1
-  resolution: "@internationalized/date@npm:3.12.1"
-  dependencies:
-    "@swc/helpers": "npm:^0.5.0"
-  checksum: 10c0/e06efa10bab7fcd88cdac1268d21f2e0fcdd6a4b5c2c9a6fdf381c94a166f3188ebb7a92b3405f3b689577bc18f98447433bedddc8885aab6a169bf0943b3875
   languageName: node
   linkType: hard
 
