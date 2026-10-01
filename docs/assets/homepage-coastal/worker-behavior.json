@@ -1,0 +1,13 @@
+{
+  "rotations": [
+    "ChatGPT",
+    "Claude",
+    "MCP"
+  ],
+  "tab": true,
+  "entered": "http://localhost:3119/signup",
+  "reducedAccent": {
+    "before": "ChatGPT",
+    "after": "ChatGPT"
+  }
+}
