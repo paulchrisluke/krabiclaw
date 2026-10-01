@@ -1,0 +1,100 @@
+import { expect, test } from '@playwright/test'
+import { loginAs } from './helpers/auth'
+import { mcpData, mcpRequest } from './helpers/mcp'
+import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
+import { devLoginHeaders, E2E_POTTERY_ORGANIZATION_ID as org, potteryHouseTestExtraHeaders } from './test-env'
+
+type Created = { success: boolean; operational_booking_id: string; request_id: string; status: string; replayed: boolean; code?: string }
+
+test('MCP Product booking uses public capacity, durable replay, guest identity and canonical inbox transitions', async ({ request, baseURL }) => {
+  test.setTimeout(180_000)
+  test.skip(!['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Writes and log-only delivery require isolated local D1')
+  const release = await acquireTenantMutationLock(org)
+  await loginAs(request, baseURL!, 'user-e2e-pottery-owner')
+  const product = 'exp-ph-wheel'
+  const editor = `${baseURL}/api/editor/organizations/${org}/products/${product}`
+  const call = async <T>(name: string, args: Record<string, unknown>): Promise<T> => {
+    const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: name, args: { organization_id: org, ...args } })
+    expect(response.status()).toBe(200)
+    return mcpData<T>(await response.json())
+  }
+  const read = (id: string) => call<{ guest_user_id: string | null; guest: { email: string; phone: string | null }; provenance: { source: string; external_reference: string; guest_acknowledgement: boolean }; record: { id: string; status: string; party_size: number }; updated_at: string }>('get_product_booking', { operational_booking_id: id })
+  const configure = async (confirmation_mode: 'review' | 'instant', online_payment_required = false) => {
+    const res = await request.put(`${editor}/booking`, { data: { confirmation_mode, online_payment_required } })
+    expect(res.status(), await res.text()).toBe(200)
+  }
+  const ids: string[] = []
+  try {
+    const from = new Date(Date.now() + 86400000).toISOString()
+    const to = new Date(Date.now() + 28 * 86400000).toISOString()
+    const generated = await request.post(`${editor}/sessions/generate`, { data: { through: to.slice(0, 10) } })
+    expect(generated.status(), await generated.text()).toBe(200)
+    const listed = await call<{ sessions: Array<{ id: string; starts_at: string; remaining: number | null; is_full: boolean }> }>('list_product_booking_sessions', { product_id: product, from, to })
+    const available = listed.sessions.filter(s => !s.is_full && (s.remaining === null || s.remaining >= 2))
+    expect(available.length).toBeGreaterThanOrEqual(3)
+    await configure('review')
+    const since = new Date().toISOString()
+    const key = crypto.randomUUID()
+    const args = { product_slug: 'pottery-wheel-class', session_id: available[0]!.id, party_size: 1, guest_name: 'MCP Guest', guest_email: 'pottery-owner@playwright.example', idempotency_key: key, source: 'operator', external_reference: `external-${key}`, guest_acknowledgement: false }
+    const concurrent = await Promise.all([call<Created>('create_product_booking', args), call<Created>('create_product_booking', args)])
+    expect(concurrent.every(row => row.success)).toBe(true)
+    expect(new Set(concurrent.map(row => row.operational_booking_id)).size).toBe(1)
+    const created = concurrent[0]!
+    ids.push(created.operational_booking_id)
+    expect(created.status).toBe('pending')
+    const replay = await call<Created>('create_product_booking', args)
+    expect(replay.replayed).toBe(true)
+    expect(replay.operational_booking_id).toBe(created.operational_booking_id)
+    const conflicting = await call<Created>('create_product_booking', { ...args, guest_name: 'Different Guest' })
+    expect(conflicting.success).toBe(false)
+    expect(conflicting.code).toBe('idempotency_conflict')
+    const stored = await read(created.operational_booking_id)
+    expect(stored.guest_user_id).toBeNull()
+    expect(stored.guest.email).toBe(args.guest_email)
+    expect(stored.guest.phone).toBeNull()
+    expect(stored.provenance).toMatchObject({ source: 'operator', external_reference: args.external_reference, guest_acknowledgement: false })
+    const dashboard = await request.get(`${baseURL}/api/dashboard/bookings/booking/${created.operational_booking_id}`)
+    expect(dashboard.status(), await dashboard.text()).toBe(200)
+    expect((await dashboard.json()).booking).toMatchObject({ id: created.operational_booking_id, status: 'pending', threadId: created.request_id })
+    const notifications = await request.get(`${baseURL}/api/dev/notifications?organization_id=${org}&since=${encodeURIComponent(since)}`, { headers: devLoginHeaders() })
+    expect(notifications.status()).toBe(200)
+    const state = await notifications.json()
+    const deliveries = state.deliveries.filter((row: { request_id: string }) => row.request_id === created.request_id)
+    expect(deliveries.some((row: { purpose: string; status: string }) => row.purpose === 'owner_alert' && row.status === 'sent')).toBe(true)
+    expect(deliveries.filter((row: { purpose: string }) => row.purpose === 'guest_acknowledgement')).toHaveLength(0)
+    const proposals = { operational_booking_id: created.operational_booking_id, session_id: available[1]!.id, party_size: 2, expected_updated_at: stored.updated_at, idempotency_key: crypto.randomUUID() }
+    const proposed = await call<{ change_status: string }>('request_product_booking_change', proposals)
+    expect(proposed.change_status).toBe('awaiting_guest_acceptance')
+    await call('request_product_booking_change', proposals)
+    expect((await read(created.operational_booking_id)).record.party_size).toBe(1)
+    const confirmation = { operational_booking_id: created.operational_booking_id, idempotency_key: crypto.randomUUID() }
+    expect((await call<{ ok: boolean }>('confirm_product_booking', confirmation)).ok).toBe(true)
+    expect((await call<{ ok: boolean }>('confirm_product_booking', confirmation)).ok).toBe(true)
+    expect((await read(created.operational_booking_id)).record.status).toBe('confirmed')
+    const cancellation = { operational_booking_id: created.operational_booking_id, idempotency_key: crypto.randomUUID() }
+    expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
+    expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
+    expect((await read(created.operational_booking_id)).record.status).toBe('cancelled')
+    await configure('instant', true)
+    const blocked = await call<Created>('create_product_booking', { ...args, session_id: available[2]!.id, idempotency_key: crypto.randomUUID() })
+    expect(blocked.success).toBe(false)
+    expect(blocked.code).toBe('payment_required')
+    const publicBlocked = await request.post(`${baseURL}/api/public/products/pottery-wheel-class/book`, { headers: potteryHouseTestExtraHeaders(), data: { guest_name: 'Public Guest', guest_email: 'public-booking@playwright.example', session_id: available[2]!.id, party_size: 1 } })
+    expect(publicBlocked.status()).toBe(409)
+    expect((await publicBlocked.json()).code).toBe('payment_required')
+    await configure('instant', false)
+    const instant = await call<Created>('create_product_booking', { ...args, session_id: available[2]!.id, guest_acknowledgement: true, idempotency_key: crypto.randomUUID() })
+    ids.push(instant.operational_booking_id)
+    expect(instant.success).toBe(true)
+    expect(instant.status).toBe('confirmed')
+    const foreign = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_product_booking', args: { organization_id: 'org-demo', operational_booking_id: instant.operational_booking_id } })
+    expect(foreign.status()).toBe(200)
+    expect((await foreign.json()).result.isError).toBe(true)
+  } finally {
+    for (const id of ids) {
+      if ((await read(id)).record.status !== 'cancelled') await call('cancel_product_booking', { operational_booking_id: id, idempotency_key: crypto.randomUUID() })
+    }
+    await configure('instant', false)
+    await release()
+  }
+})

@@ -859,6 +859,16 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
+  create_product_booking: { ...W, idempotentHint: true },
+  get_product_booking: R,
+  list_product_bookings: R,
+  list_product_booking_sessions: R,
+  confirm_product_booking: { ...W, idempotentHint: true },
+  reject_product_booking: { ...D, idempotentHint: true },
+  cancel_product_booking: { ...D, idempotentHint: true },
+  request_product_booking_change: { ...W, idempotentHint: true },
+  cancel_table_reservation: { ...D, idempotentHint: true },
+  request_table_reservation_change: { ...W, idempotentHint: true },
   append_content_block: W,
   attach_media: W,
   batch_create_products: W,

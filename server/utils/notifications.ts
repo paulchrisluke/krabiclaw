@@ -99,6 +99,8 @@ interface ContactNotificationInput extends OrganizationContext {
 }
 
 interface BookingNotificationInput extends OrganizationContext {
+  /** Suppress only the guest acknowledgement; owner alerts and inbox audit remain. */
+  guestAcknowledgement?: boolean
   status?: 'pending' | 'confirmed'
   /** So the email can lead with the experience's own photo. */
   productId?: string | null
@@ -1012,7 +1014,7 @@ export async function notifyBookingCreated(
       message: ownerMessage,
       whatsappTemplate: 'new_reservation',
     }),
-    sendEmailNotification(env, db, {
+    ...(opts.guestAcknowledgement === false ? [] : [sendEmailNotification(env, db, {
       ...opts,
       to: opts.email,
       replyTo,
@@ -1021,7 +1023,7 @@ export async function notifyBookingCreated(
       payload,
       email: { subject: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
-    }),
+    })]),
   ])
 
   raiseSettledFailures('notifyBookingCreated', `bookingId ${opts.bookingId}`, results)

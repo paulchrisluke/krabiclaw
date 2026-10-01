@@ -22,6 +22,7 @@ import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
 import { handleReviewsTools } from './reviews'
 import { handleOrganizationsTools } from './organizations'
+import { handleBookingsTools } from './bookings'
 import { handleSubmissionsTools } from './submissions'
 import {
   NOT_HANDLED,
@@ -52,6 +53,7 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   reviews: handleReviewsTools,
   organizations: handleOrganizationsTools,
   submissions: handleSubmissionsTools,
+  bookings: handleBookingsTools,
 }
 
 export async function executeMcpToolCall(

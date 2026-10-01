@@ -12,6 +12,16 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  list_product_bookings: 'Reads operational Product bookings and guest snapshots within the selected tenant.',
+  list_product_booking_sessions: 'Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion.',
+  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.',
+  get_product_booking: 'Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.',
+  confirm_product_booking: 'Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.',
+  reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.',
+  cancel_product_booking: 'Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message.',
+  request_product_booking_change: 'Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.',
+  cancel_table_reservation: 'Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message.',
+  request_table_reservation_change: 'Records an audited immutable restaurant table location/date/time/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.',
   append_content_block: 'Inserts one block into the selected blog article or tenant page after a named block, leaving every other block as it is.',
   attach_media: 'Adds an existing asset to a public content collection without replacing its existing placements.',
   batch_create_products: 'Creates products from the supplied catalog entries and records product events.',

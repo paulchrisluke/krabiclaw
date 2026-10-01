@@ -28,6 +28,7 @@ const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().
  * `bookings.completed_at` and the `review_requests` record.
  */
 const threadPayload = z.object({
+  provenance: z.object({ source: z.string(), external_reference: z.string().nullable(), actor_user_id: z.string(), idempotency_key: z.string(), fingerprint: z.string(), guest_acknowledgement: z.boolean(), creation_kind: z.literal('ordinary'), creation_status: z.enum(['pending', 'confirmed']), followups_completed: z.boolean() }).optional(),
   guest,
   party_size_is_minimum: z.boolean(),
   notes: z.string().nullable(),
