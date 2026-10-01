@@ -201,10 +201,10 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
   },
   {
     id: 'features-page',
-    title: 'Platform Features',
-    path: '/features',
+    title: 'Products',
+    path: '/products',
     snippet: 'Learn how Krabiclaw handles content, analytics, SEO, speed, and AI-assisted workflows.',
-    body: 'Features cover AI editing, Google Places imports, analytics, performance, site management, and tools for local businesses to own their direct traffic.',
+    body: 'Products cover website building, ChatGPT and Claude management through MCP, inbox and messaging, bookings, content, reviews, local presence and analytics.',
     icon: 'star',
     section: 'Platform',
     keywords: ['features', 'seo', 'analytics', 'performance', 'google places'],

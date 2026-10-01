@@ -12,16 +12,18 @@
     </div>
   </section>
 
-  <!-- The Pricing page's glass shell around the same table. -->
-  <div v-else class="relative bg-elevated/20 backdrop-blur-md border border-default/50 rounded-[32px] p-6 sm:p-10 shadow-2xl transition-all duration-500 hover:shadow-primary/5" data-parity-section="plans">
-    <BillingPricingTable :plans="plans" />
-  </div>
+  <section v-else class="kc-pricing-plans" aria-label="Plans" data-parity-section="plans">
+    <div class="kc-pricing-plans__rail">
+      <BillingPlanCard v-for="(plan, index) in plans" :key="plan.id" :plan="plan" photo :front-image="frontImage(plan.id)" :sequence="index" />
+    </div>
+    <p class="kc-pricing-plans__hint">Prices in USD. Paid subscription billed monthly. Swipe to compare plans on mobile.</p>
+  </section>
 </template>
 
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockTextOrNull } from '~/utils/tenant-page-block-data'
+import { blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { Plan } from '~/composables/usePlans'
 
@@ -39,6 +41,14 @@ import type { Plan } from '~/composables/usePlans'
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
+// Decorative photo fronts belong to this CMS page, not the Stripe Product.
+// Stable plan identity selects the existing indexed image placement; provider
+// wording, price identities and Product image remain untouched.
+function frontImage(planId: string): string | undefined {
+  const slot = planId === 'free' ? 'items.0.image' : planId === 'growth' ? 'items.1.image' : null
+  return slot ? blockMedia(props.block, slot)[0]?.public_url ?? undefined : undefined
+}
+
 const eyebrow = computed(() => blockTextOrNull(props.block.data.eyebrow))
 const title = computed(() => blockTextOrNull(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.description))
@@ -49,13 +59,8 @@ const { plans, monthlyPrice } = await usePlans()
 const config = useRuntimeConfig()
 const pageUrl = resolveSeoUrl('/pricing', config.public.platformUrl)
 
-const OFFER_DESCRIPTIONS: Record<string, string> = {
-  free: 'Free business website with offerings and basic SEO',
-  growth: 'Custom domain, messaging notifications, and Google Places imports',
-}
-
 function offerFor(plan: Plan) {
-  const description = OFFER_DESCRIPTIONS[plan.id] ?? plan.tagline
+  const description = plan.tagline
   if (plan.prices.length === 0) {
     return { '@type': 'Offer', name: plan.name, priceCurrency: 'USD', price: '0', description }
   }
@@ -85,3 +90,10 @@ useSchemaOrg(() => {
   }
 })
 </script>
+
+<style scoped>
+.kc-pricing-plans { background: #171b31; padding: 0 0 5rem; }
+.kc-pricing-plans__rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; max-width: 62rem; margin: 0 auto; padding: 0 2rem; }
+.kc-pricing-plans__hint { text-align: center; color: #bbc0cf; font-size: .8rem; margin: 2rem 1.5rem 0; }
+@media (max-width: 700px) { .kc-pricing-plans__rail { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 1.25rem 1rem; gap: 1rem; } .kc-pricing-plans__rail > * { flex: 0 0 86%; min-width: 0; scroll-snap-align: center; } }
+</style>

@@ -25,6 +25,7 @@ import PlatformShowcase from '~/components/platform/marketing/PlatformShowcase.v
 import PlatformMediaFeature from '~/components/platform/marketing/PlatformMediaFeature.vue'
 import PlatformLanguageReach from '~/components/platform/marketing/PlatformLanguageReach.vue'
 import PlatformSteps from '~/components/platform/marketing/PlatformSteps.vue'
+import PlatformProductNavigation from '~/components/platform/marketing/PlatformProductNavigation.vue'
 import PlatformComparison from '~/components/platform/marketing/PlatformComparison.vue'
 import PlatformProofBand from '~/components/platform/marketing/PlatformProofBand.vue'
 import PlatformWorkflows from '~/components/platform/marketing/PlatformWorkflows.vue'
@@ -80,6 +81,7 @@ const PRESENTATIONS: Readonly<Record<string, BlockPresentation>> = {
   // component reads its block — no dispatcher, and nothing in the document
   // choosing between them.
   'platform:hero': PlatformMarketingHero,
+  'platform:button_group': PlatformProductNavigation,
   'platform:feature_grid': PlatformFeatureCards,
   'platform:comparison': PlatformComparison,
   'platform:stat_grid': PlatformProofBand,

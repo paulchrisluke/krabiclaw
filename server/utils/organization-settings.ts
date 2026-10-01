@@ -102,7 +102,7 @@ export async function loadSettingsPayload(
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
            seo_title, seo_description, canonical_url,
-           feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
+           feature_overrides, strftime('%Y-%m-%dT%H:%M:%fZ', organization."createdAt", 'unixepoch') AS created_at, organization.updated_at,
            vertical, theme_id, integrations_json,
            (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
                      'phone', phone, 'website_url', website_url, 'image', image,

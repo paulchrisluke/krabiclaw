@@ -121,7 +121,7 @@ test('invitation account switching updates the reactive session without reloadin
 test('signed-in Growth CTA retains its plan through the canonical billing redirect', async ({ page, baseURL }) => {
   await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
   await page.goto('/pricing')
-  const growth = page.getByRole('link', { name: 'Get Growth', exact: true })
+  const growth = page.getByRole('link', { name: 'Get Grow', exact: true })
   await expect(growth).toHaveAttribute('href', '/api/post-login?plan=growth')
   const destination = await page.request.get('/api/post-login?plan=growth', { maxRedirects: 0 })
   expect(destination.status()).toBe(302)

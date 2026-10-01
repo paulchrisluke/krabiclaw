@@ -181,7 +181,7 @@ const SOLUTION_ITEMS = [
 ] as const
 
 const PRIMARY_ITEMS = [
-  { label: 'Features', to: '/features' },
+  { label: 'Products', to: '/products' },
   { label: 'Pricing', to: '/pricing' },
   { label: 'Templates', to: '/templates' },
   { label: 'Docs', to: '/docs' },

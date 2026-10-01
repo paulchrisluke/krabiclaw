@@ -3,7 +3,7 @@
     data-tenant-page
     :data-template="template"
     class="text-default"
-    :class="[readingColumn ? 'py-16' : undefined, localHomepagePilot ? 'kc-homepage-pilot' : undefined]"
+    :class="[readingColumn ? 'py-16' : undefined, localHomepagePilot ? 'kc-homepage-pilot' : undefined, template === 'platform' && page.recipe === 'products' ? 'kc-products-page' : undefined, template === 'platform' && page.path === '/pricing' ? 'kc-pricing-editorial' : undefined]"
   >
     <!--
       A template's own component names its band; the wrapper only names one for
@@ -427,4 +427,9 @@ function calculatorNote(block: TenantPageBlock): string | undefined {
 .kc-homepage-pilot :deep(.kc-media-feature__card) {
   width: 100%;
 }
+</style>
+
+<style scoped>
+.kc-pricing-editorial > [data-block-type="heading"] { background: #f9f8f4; max-width: none; padding: 4rem 1.5rem 1rem; }
+.kc-pricing-editorial > [data-block-type="heading"] :deep(h2) { max-width: 62rem; margin: auto; color: #252b43; font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 600; }
 </style>
