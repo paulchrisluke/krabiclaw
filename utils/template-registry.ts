@@ -83,7 +83,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       articleDetailPrefix: '/article',
     },
     sitemap: {
-      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/policies/privacy', '/policies/terms', '/third-party-notices'],
+      exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
       dynamicPrefixes: ['/services/', '/article/', '/blog/category/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: ['/contact/confirmed'],
@@ -122,16 +122,15 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       // page documents now, and the platform sitemap reads them from
       // content_documents (see server/plugins/sitemap.ts). What remains is the
       // set of code-owned platform routes that hold no document.
-      exactPaths: ['/blog', '/docs', '/help', '/posts', '/privacy', '/signup', '/templates', '/templates/blawby', '/templates/saya', '/terms'],
+      exactPaths: ['/blog', '/docs', '/help', '/posts', '/signup', '/templates', '/templates/blawby', '/templates/saya'],
       dynamicPrefixes: ['/blog/', '/docs/', '/posts/'],
     },
     nonIndexableExactPaths: ['/login', '/forgot-password', '/reset-password', '/accept-invitation'],
     // Krabiclaw's own marketing pages are ordinary page documents on the
     // platform site, read by the same loader every customer site uses (#903).
-    // The routes that are not editorial — /blog, /docs, /help, /templates,
-    // /privacy, /terms — are absent on purpose: they render their own data or
-    // their own policy surface, and a document stored at one of them would
-    // never be shown.
+    // The routes that are not editorial — /blog, /docs, /help, /templates —
+    // are absent on purpose: they render their own data, and a document stored
+    // at one of them would never be shown.
     pageDocuments: {
       recipes: { home: '/', about: '/about', pricing: '/pricing' },
       // Only a path a route file still claims needs naming here. /experiences is

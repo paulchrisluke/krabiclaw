@@ -48,9 +48,6 @@ export interface OrganizationSettingsForm {
   font_preset: OrganizationFontPreset
   default_currency: CurrencyCode | null
   status: OrganizationStatus
-  social_facebook_url: string
-  social_instagram_url: string
-  social_tiktok_url: string
 }
 
 /** Live and Draft are the tenant's; Suspended is Krabiclaw's hold. */
@@ -67,9 +64,6 @@ export interface OrganizationSettingsResponse {
   brand_color?: string | null
   font_preset?: OrganizationFontPreset
   default_currency?: string | null
-  social_facebook_url?: string | null
-  social_instagram_url?: string | null
-  social_tiktok_url?: string | null
 }
 
 export interface LocalizationLanguageRow { locale: string; label: string | null; is_source: number | boolean; status: string }
@@ -200,7 +194,6 @@ const form = reactive<OrganizationSettingsForm>({
   announcementEnabled: true, announcementAssetId: null, announcementHeadline: '', announcementDescription: '', announcementCtaLabel: '', announcementCtaUrl: '', announcementDismissible: true,
   logoAssetId: null, faviconAssetId: null, socialShareAssetId: null, contact_email: '', brand_color: '', font_preset: 'default',
   default_currency: null, status: 'inactive',
-  social_facebook_url: '', social_instagram_url: '', social_tiktok_url: '',
 })
 // Only the specimen uses Mali. Never change the dashboard's typography.
 useHead(() => ({
@@ -219,10 +212,6 @@ const nameCharactersRemaining = computed(() => 50 - form.name.length)
 const descriptionCharactersRemaining = computed(() => 500 - form.brand_description.length)
 
 function explicitSummary(value: string | null | undefined, empty = 'Not set') { return value?.trim() || empty }
-const socialSummary = computed(() => {
-  const count = [loadedSettings.value?.social_facebook_url, loadedSettings.value?.social_instagram_url, loadedSettings.value?.social_tiktok_url].filter(Boolean).length
-  return count ? `${count} ${count === 1 ? 'profile' : 'profiles'} connected` : 'Not configured'
-})
 const STATUS_LABELS: Record<OrganizationStatus, string> = { active: 'Live', inactive: 'Draft', suspended: 'Suspended' }
 const domainSummary = computed(() => dashboard.organization.value?.custom_domain || dashboard.organization.value?.public_url || 'Not connected')
 const brandItems = computed<EditorNavigationItem[]>(() => [
@@ -235,7 +224,6 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
   ...(supportsOrganizationFonts.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
-  { id: 'social', label: 'Social profiles', summary: socialSummary.value, icon: 'i-lucide-share-2', to: `${brandPath.value}/social` },
   { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
 ])
 const localizeOpen = ref(false)
@@ -278,7 +266,6 @@ function editorSignature(key: string | null) {
     case 'color': return JSON.stringify(form.brand_color)
     case 'font': return JSON.stringify(form.font_preset)
     case 'contact': return JSON.stringify(form.contact_email)
-    case 'social': return JSON.stringify([form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url])
     case 'currency': return JSON.stringify(form.default_currency)
     case 'status': return JSON.stringify(form.status)
     case 'localization': return JSON.stringify(newLocale.value)
@@ -305,7 +292,6 @@ const validationMessage = computed(() => {
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
     case 'font': return supportsOrganizationFonts.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
-    case 'social': return [form.social_facebook_url, form.social_instagram_url, form.social_tiktok_url].every(isValidUrl) ? null : 'Enter complete http or https profile URLs.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
     default: return null
@@ -336,9 +322,6 @@ function fillForm(settings: OrganizationSettingsResponse) {
   // showing it as USD invited the owner to save that over whatever is really there.
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : null
   form.status = settings.status
-  form.social_facebook_url = settings.social_facebook_url ?? ''
-  form.social_instagram_url = settings.social_instagram_url ?? ''
-  form.social_tiktok_url = settings.social_tiktok_url ?? ''
 }
 function resetDraft() {
   editorError.value = null
@@ -402,7 +385,6 @@ async function saveCurrentEditor() {
       case 'color': await patchSettings({ brand_color: form.brand_color }); break
       case 'font': await patchSettings({ font_preset: form.font_preset }); break
       case 'contact': await patchSettings({ contact_email: form.contact_email.trim() }); break
-      case 'social': await patchSettings({ social_facebook_url: form.social_facebook_url.trim() || null, social_instagram_url: form.social_instagram_url.trim() || null, social_tiktok_url: form.social_tiktok_url.trim() || null }); break
       case 'currency': {
         if (!form.default_currency) throw new Error('Choose the currency this organization prices in.')
         await patchSettings({ default_currency: form.default_currency })

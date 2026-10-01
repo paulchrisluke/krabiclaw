@@ -16,6 +16,8 @@ interface TenantOrganizationInfo {
   media?: Array<{ asset_id: string; slot: string; public_url: string | null; thumbnail_url: string | null; kind: string; mime_type: string | null }>
   social_image?: SocialImageSource | null
   vertical?: string | null
+  social_profiles?: Array<{ network: 'facebook' | 'instagram'; url: string }>
+  policies?: Array<'privacy' | 'terms'>
   config?: {
     phone?: string | null
   } | null

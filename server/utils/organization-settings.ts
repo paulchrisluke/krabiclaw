@@ -64,9 +64,6 @@ interface FullOrganizationRow extends OrganizationSettingsRow {
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
-  social_facebook_url: string | null
-  social_instagram_url: string | null
-  social_tiktok_url: string | null
   feature_overrides: string | null
   created_at: string
   updated_at: string
@@ -105,7 +102,6 @@ export async function loadSettingsPayload(
            sma.thumbnail_url AS social_share_thumbnail_url, sma.kind AS social_share_kind,
            contact_email,
            seo_title, seo_description, canonical_url,
-           social_facebook_url, social_instagram_url, social_tiktok_url,
            feature_overrides, organization."createdAt" AS created_at, organization.updated_at,
            vertical, theme_id, integrations_json,
            (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
@@ -195,9 +191,6 @@ export async function loadSettingsPayload(
     seo_title: updatedOrganization.seo_title,
     seo_description: updatedOrganization.seo_description,
     canonical_url: updatedOrganization.canonical_url,
-    social_facebook_url: updatedOrganization.social_facebook_url,
-    social_instagram_url: updatedOrganization.social_instagram_url,
-    social_tiktok_url: updatedOrganization.social_tiktok_url,
     feature_overrides: parseCmsFeatureOverrideDelta(updatedOrganization.feature_overrides),
     toggleable_features: toggleableFeatures,
     effective_features: effectiveFeatures,
@@ -396,20 +389,6 @@ async function attemptOrganizationUpdate(
   if (updates.canonical_url !== undefined) {
     setParts.push('canonical_url = ?')
     params.push(updates.canonical_url ?? null)
-  }
-  for (const key of ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'] as const) {
-    if (updates[key] === undefined) continue
-    const trimmed = updates[key]?.trim() || null
-    if (trimmed) {
-      try {
-        const url = new URL(trimmed)
-        if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol')
-      } catch {
-        return { status: 400, data: { error: `Invalid URL for ${key.replace('social_', '').replace('_url', '')}` } }
-      }
-    }
-    setParts.push(`${key} = ?`)
-    params.push(trimmed)
   }
   if (updates.feature_overrides !== undefined) {
     let newDelta: CmsCapabilityOverrideDelta | null = null

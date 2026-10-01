@@ -84,7 +84,6 @@ export const useOrganizationShellState = () => {
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
   const shellOrganization = computed(() => data.value?.organization ?? null);
   const googleMaps = computed(() => data.value?.googleMaps ?? null);
-  const locales = computed(() => data.value?.locales ?? []);
   const hasProducts = computed(() => data.value?.hasProducts ?? false);
   const hasBookableProducts = computed(() => data.value?.hasBookableProducts ?? false);
   const platformMessages = useState<Record<string, string> | null>('platform-locale-messages', () => null)
@@ -98,7 +97,6 @@ export const useOrganizationShellState = () => {
     config,
     organization: shellOrganization,
     googleMaps,
-    locales,
     hasProducts,
     hasBookableProducts,
     data,

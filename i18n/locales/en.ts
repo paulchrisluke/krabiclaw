@@ -9,8 +9,12 @@ export default {
     "analytics_notice_link": "Privacy Policy",
     "analytics_notice_label": "Analytics notice",
     "cookie_preferences": "Cookie preferences",
+    "copyright": "Copyright © {year} {name}. All rights reserved.",
+    "language": "Language",
     "privacy": "Privacy",
     "reject": "Reject",
+    "switch_to_dark_mode": "Switch to dark mode",
+    "switch_to_light_mode": "Switch to light mode",
     "terms": "Terms"
   },
   "blawby": {
@@ -24,8 +28,7 @@ export default {
       "services": "Services",
       "support": "Support",
       "company": "Company",
-      "legal": "Legal",
-      "copyright": "Copyright © {year} {name}. All rights reserved."
+      "legal": "Legal"
     }
   },
   "social_posts": {
@@ -170,8 +173,6 @@ export default {
       "all_locations": "All Locations",
       "contact_us": "Contact Us",
       "temporarily_closed": "Temporarily closed",
-      "switch_to_light_mode": "Switch to light mode",
-      "switch_to_dark_mode": "Switch to dark mode",
       "powered_by": "Powered by krabiclaw.com"
     },
     "posts": {
@@ -378,7 +379,6 @@ export default {
       "press": "Press",
       "partnerships": "Partnerships",
       "careers": "Careers",
-      "follow_along": "Follow along",
       "by_location": "By location",
       "address": "Address",
       "phone": "Phone",
