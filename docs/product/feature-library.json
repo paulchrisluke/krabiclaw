@@ -85,7 +85,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "d4767a51efc0333453bdfecf4da410fc17e0240d75caaaf6beae47305e1b2c0f",
+          "server/utils/content/pages.ts": "e79eefa04d90104db81673c84fcaa7455d859d330ed5848d1eac53b6596cc5e2",
           "server/utils/mcp-executor/content.ts": "85557d0dced129da7b117aad51716ac99e9df4cbf035a22a9c3d4073ee073dcc",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
@@ -122,7 +122,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "d4767a51efc0333453bdfecf4da410fc17e0240d75caaaf6beae47305e1b2c0f",
+          "server/utils/content/pages.ts": "e79eefa04d90104db81673c84fcaa7455d859d330ed5848d1eac53b6596cc5e2",
           "tests/integration/tenant-page-delete-d1.test.ts": "36836afb68492570ab3ca63d90dea80e0cc8e2a2c986cbacdef6c42de6aa5119",
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
         }
@@ -874,7 +874,7 @@
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "utils/template-registry.ts": "90faec4516c4e839e1af763566bb67473092e96503cc5297818d3688becbbcd8",
           "server/utils/organization-provisioning.ts": "15b896cd96c3d8f4b1deaaf1f265fff27c7d4e90ed95eb526e25245feb292e79"
         }
       },
@@ -904,7 +904,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "utils/article-collections.ts": "337f87b4bafa14a00d73017ce37601ceab394161339d199117d52362a3372c03",
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "utils/template-registry.ts": "90faec4516c4e839e1af763566bb67473092e96503cc5297818d3688becbbcd8",
           "server/utils/billing-plans.ts": "523e5e4b7b7e9ba61963dcb843b52810d15aafd761a5d6631c92e132ce41f420"
         }
       },
@@ -1001,8 +1001,8 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/seo-policy.ts": "125511b679debfd02a108b4101701947eeb8e9c57b771420d76f3ea501e5e6af",
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
+          "utils/template-registry.ts": "90faec4516c4e839e1af763566bb67473092e96503cc5297818d3688becbbcd8",
           "tests/unit/product-seo.test.ts": "28ab3dbb00e32fef593e241c414f1fae608d039eaf123c675dfb33ab77701745"
         }
       },
