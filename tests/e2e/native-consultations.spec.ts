@@ -39,6 +39,8 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.locator('article').filter({ has: page.getByRole('heading', { name: products[0]!.name }) }).getByRole('button', { name: 'Choose a time', exact: true }).focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('dialog', { name: products[0]!.name })).toBeVisible()
+    await expect(page.getByRole('dialog').getByText('Party size', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('dialog').getByRole('button', { name: /more guests|fewer guests/i })).toHaveCount(0)
     await page.screenshot({ path: 'artifacts/consultations-dialog-desktop.png', fullPage: false })
     await page.setViewportSize({ width: 390, height: 844 })
     await page.screenshot({ path: 'artifacts/consultations-dialog-mobile.png', fullPage: false })

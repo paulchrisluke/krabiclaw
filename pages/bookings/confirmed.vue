@@ -92,7 +92,9 @@ const receiptRows = computed(() => {
   else if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
   rows.push({ label: 'Date', value: readableDate.value })
   rows.push({ label: 'Time', value: readableTime.value })
-  rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
+  if ((organization as { vertical?: string | null } | null)?.vertical !== 'service') {
+    rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
+  }
   if (confirmation.value.requests) rows.push({ label: 'Requests', value: confirmation.value.requests })
   return rows
 })

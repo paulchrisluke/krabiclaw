@@ -484,7 +484,7 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
 
 const bookingController = useSessionBooking(() => ({ organizationId: props.organizationId,
     organizationName: props.location.title, product: props.product, currency: props.currency,
-    location: props.location, sessions: props.sessions }))
+    location: props.location, sessions: props.sessions, showPartySize: props.vertical !== 'service' }))
 const { bookingOpen, bookingStep, submitting, sessions: bookingSessions, sessionsPending, loadSessions, openBooking, openBookingAt,
   upcomingSessions, nextSession, sessionDayLabel, sessionTimeLabel } = bookingController
 
