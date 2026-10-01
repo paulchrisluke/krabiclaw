@@ -122,6 +122,10 @@ export interface CloudflareEnv {
   GOOGLE_CLIENT_SECRET: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  STRIPE_PAYMENTS_WEBHOOK_SECRET?: string
+  METRONOME_API_KEY?: string
+  METRONOME_RATE_CARD_ID?: string
+  STRIPE_PAYMENTS_METHOD_CONFIGURATION?: string
   STRIPE_CONNECT_WEBHOOK_SECRET?: string
   GA4_API_SECRET?: string
   AI_SEARCH?: AiSearchNamespace
@@ -505,6 +509,10 @@ export function createAuth(env: CloudflareEnv) {
             // updated_at — the version booking changes compare against — stays.
             ...['requests', 'reservations', 'bookings', 'review_requests', 'reviews'].map(table => ({
               query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
+              params: [to, from],
+            })),
+            ...['payments', 'payment_orders', 'payment_checkout_holds'].map(table => ({
+              query: `UPDATE ${table} SET buyer_user_id = ? WHERE buyer_user_id = ?`,
               params: [to, from],
             })),
             { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },

@@ -402,8 +402,8 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
 }
 
 /** Explicit tenant-scoped online calendar enrollment; intervals are half open. */
-export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL'): string {
-  return `EXISTS (
+export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL', convertingPaymentSql = 'NULL'): string {
+  return `(EXISTS (
     SELECT 1 FROM product_booking_configs own
       JOIN product_booking_configs peer ON peer.organization_id = own.organization_id
         AND peer.calendar_group = own.calendar_group
@@ -414,7 +414,22 @@ export function onlineCalendarConflictSql(sessionAlias: string, replacingBooking
       AND own.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
       AND occupied.starts_at < ${sessionAlias}.ends_at AND occupied.ends_at > ${sessionAlias}.starts_at
       AND b.id IS NOT ${replacingBookingSql} AND occupied.id IS NOT ${excludingSessionSql} AND ${CAPACITY_CONSUMING_SQL}
-  )`
+  ) OR EXISTS (
+    SELECT 1 FROM payment_checkout_holds h JOIN product_booking_configs own
+      ON own.product_id = ${sessionAlias}.product_id AND own.organization_id = ${sessionAlias}.organization_id
+    WHERE h.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
+      AND h.calendar_group = own.calendar_group AND h.status = 'active'
+      AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      AND h.payment_id IS NOT ${convertingPaymentSql} AND h.session_id IS NOT ${excludingSessionSql}
+      AND h.starts_at < ${sessionAlias}.ends_at AND h.ends_at > ${sessionAlias}.starts_at
+  ))`
+}
+
+export function sessionHeldCapacitySql(sessionAlias: string, convertingPaymentSql = 'NULL'): string {
+  return `COALESCE((SELECT SUM(h.quantity) FROM payment_checkout_holds h
+    WHERE h.session_id = ${sessionAlias}.id AND h.organization_id = ${sessionAlias}.organization_id
+      AND h.status = 'active' AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      AND h.payment_id IS NOT ${convertingPaymentSql}), 0)`
 }
 
 export async function listSessions(db: DbClient, input: {
@@ -432,12 +447,12 @@ export async function listSessions(db: DbClient, input: {
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
-           ), 0) AS claimed,
-           CASE WHEN ${onlineCalendarConflictSql('s')} THEN 0 WHEN s.capacity IS NULL THEN NULL ELSE s.capacity - COALESCE((
+           ), 0) + ${sessionHeldCapacitySql('s')} AS claimed,
+           CASE WHEN ${onlineCalendarConflictSql('s')} THEN 0 WHEN s.capacity IS NULL THEN NULL ELSE s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
            ), 0) END AS remaining,
-           CASE WHEN ${onlineCalendarConflictSql('s')} THEN 1 WHEN s.capacity IS NULL THEN 0 WHEN s.capacity - COALESCE((
+           CASE WHEN ${onlineCalendarConflictSql('s')} THEN 1 WHEN s.capacity IS NULL THEN 0 WHEN s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
            ), 0) <= 0 THEN 1 ELSE 0 END AS is_full
@@ -487,11 +502,13 @@ export class CapacityUnavailableError extends Error {
 export interface SessionAllocationInput {
   organizationId: string; productId: string; sessionId: string; partySize: number; now: string
   replacingBookingId?: string | null
+  /** Only authenticated capture reconciliation supplies this; public callers cannot exclude holds. */
+  capturedPaymentId?: string
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
 }
 
 export function sessionAllocationPredicate(input: SessionAllocationInput): BatchQuery {
-  return { query: `${input.requireUndecided
+  return { query: `${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND h.status='active' AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
         : ''}EXISTS (
@@ -506,16 +523,17 @@ export function sessionAllocationPredicate(input: SessionAllocationInput): Batch
                AND pl.active = 1 AND pl.published = 1
           ))
           AND s.starts_at > ?
-          AND NOT ${onlineCalendarConflictSql('s', '?')}
-          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
+          AND NOT ${onlineCalendarConflictSql('s', '?', 'NULL', '?')}
+          AND (s.capacity IS NULL OR s.capacity >= ? + ${sessionHeldCapacitySql('s','?')} + COALESCE((
             SELECT SUM(b.party_size) FROM bookings b
             WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
           ), 0))
       )`, params: [
+      ...(input.capturedPaymentId ? [input.capturedPaymentId,input.organizationId,input.now,input.sessionId,input.partySize] : []),
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
-      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.partySize, input.replacingBookingId ?? null,
+      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.capturedPaymentId ?? null, input.partySize, input.capturedPaymentId ?? null, input.replacingBookingId ?? null,
   ] }
 }
 
@@ -558,6 +576,7 @@ export function sessionClaimQuery(input: {
    * anything.
    */
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
+  capturedPaymentId?: string
   now: string
 }): BatchQuery {
   return {
@@ -571,12 +590,13 @@ export function sessionClaimQuery(input: {
           (SELECT CASE WHEN confirmation_mode = 'review' THEN 'pending' ELSE 'confirmed' END
            FROM product_booking_configs WHERE product_id = ? AND organization_id = ?)), ?, ?
       WHERE ${sessionAllocationPredicate(input).query}
+        AND EXISTS(SELECT 1 FROM product_variants v WHERE v.id=? AND v.product_id=? AND v.organization_id=? AND v.active=1)
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
       input.bookingId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
       input.userId ?? null, input.requestId ?? null, input.partySize, input.replacingBookingId ?? null, input.productId, input.organizationId, input.now, input.now,
-      ...sessionAllocationPredicate(input).params!, 
+      ...sessionAllocationPredicate(input).params!, input.productVariantId,input.productId,input.organizationId,
     ],
   }
 }
@@ -700,8 +720,7 @@ export async function updateSession(db: DbClient, input: {
   // silently oversold. Refuse, and let the merchant cancel bookings first.
   if (input.capacity !== undefined && input.capacity !== null) {
     const claimed = await queryFirst<{ claimed: number }>(db, `
-      SELECT COALESCE(SUM(b.party_size), 0) AS claimed FROM bookings b
-      WHERE b.product_session_id = ? AND ${CAPACITY_CONSUMING_SQL}
+      SELECT COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id=s.id AND ${CAPACITY_CONSUMING_SQL}),0) + ${sessionHeldCapacitySql('s')} AS claimed FROM product_sessions s WHERE s.id=?
     `, [input.sessionId])
     if ((claimed?.claimed ?? 0) > input.capacity) {
       throw new HTTPError({

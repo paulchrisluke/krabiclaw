@@ -29,6 +29,13 @@
       "when": 1790834273934,
       "tag": "0003_google_calendar_projection",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790836454973,
+      "tag": "0004_payments",
+      "breakpoints": true
     }
   ]
 }

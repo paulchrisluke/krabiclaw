@@ -44,6 +44,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   }
   const timeSelection = ref<TimeSlotSelection | null>(null)
   const submitting = ref(false)
+  const checkoutRequestKey = ref<string | null>(null)
   const bookingError = ref('')
   /**
    * The occurrences, as the page was served with them.
@@ -203,11 +204,14 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     submitting.value = true
     bookingError.value = ''
     try {
-      const response = await publicApiMutation<{ success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
+      checkoutRequestKey.value ??= crypto.randomUUID()
+      type CheckoutResponse = { success: true; status: 'checkout'; payment_id: string; checkout_url: string; expires_at: string }
+      const response = await publicApiMutation<CheckoutResponse | { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
         `/api/public/products/${encodeURIComponent(context.value.product.slug)}/book`,
         {
           method: 'POST',
           body: {
+            idempotency_key: checkoutRequestKey.value,
             session_id: session.id,
             variant_id: selectedVariantId.value,
             party_size: partySize.value,
@@ -218,10 +222,17 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
             locale: locale.value,
             page_event_id: await pageEventId(),
           },
-          validate: (value): value is { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
-            isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string' && typeof value.operational_booking_id === 'string' && typeof value.request_id === 'string' && (value.status === 'pending' || value.status === 'confirmed'),
+          validate: (value): value is CheckoutResponse | { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
+            isRecord(value) && value.success === true && ((value.status === 'checkout' && typeof value.checkout_url === 'string' && typeof value.payment_id === 'string' && typeof value.expires_at === 'string') || (typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string' && typeof value.operational_booking_id === 'string' && typeof value.request_id === 'string' && (value.status === 'pending' || value.status === 'confirmed'))),
         },
       )
+      if (response.status === 'checkout') {
+        const target = new URL(response.checkout_url)
+        if (target.protocol !== 'https:' || target.hostname !== 'checkout.stripe.com') throw new Error('Invalid secure payment handoff')
+        await navigateTo(target.toString(), { external: true })
+        return
+      }
+      checkoutRequestKey.value = null
       mirrorSubmission('booking_submit', response.measurement, context.value.location?.id ?? null, response.quoted_value)
       setBookingConfirmation({
         type: 'booking', status: response.status, operationalBookingId: response.operational_booking_id, requestId: response.request_id,

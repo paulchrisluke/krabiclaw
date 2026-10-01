@@ -1,6 +1,6 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
 
-export type StripeWebhookProcessor = 'platform_billing' | 'connect_marketplace'
+export type StripeWebhookProcessor = 'platform_billing' | 'connect_marketplace' | 'tenant_payments'
 
 export interface StripeWebhookEventInput {
   id: string

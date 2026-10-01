@@ -21,6 +21,7 @@ export type ScheduledTaskName =
   | 'stripe-ga4-intent-retention'
   | 'stripe-webhook-retry'
   | 'article-broadcast-send'
+  | 'payments-reconcile'
 
 type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
@@ -31,7 +32,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation', 'zaraz-analytics-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily', 'stripe-ga4-intent-retention'],
   '0 0 * * SUN': ['google-places-sync'],
-  '0 * * * *': ['review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup'],
+  '0 * * * *': ['review-request-automation', 'stripe-webhook-retry', 'social-card-cleanup', 'payments-reconcile'],
 }
 
 const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
@@ -48,6 +49,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'google-places-sync': async () => import('./tasks/google-places-sync'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
   'stripe-webhook-retry': async () => import('./tasks/stripe-webhook-retry'),
+  'payments-reconcile': async () => import('./tasks/payments-reconcile'),
   'article-broadcast-send': async () => import('./tasks/article-broadcast-send'),
 }
 

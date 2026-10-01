@@ -162,7 +162,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "830b40db361a238111bd500522d1e6aafe708ca8371f56e023b65d4813591167",
+          "server/utils/availability.ts": "130403223a12065bc1e679179e369a9d27391f88c4de17d3a8b21de98e9236a0",
           "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
           "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
         }
@@ -267,7 +267,7 @@
           "server/domain/requests.ts": "f34f851d6a9ad4a7ab1c1390623d654d4c3a8d05216abd0418a77c6b0d978cd7",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
-          "server/domain/product-bookings.ts": "4899e0d82c75e18badc0a0f72f4d4ced04b557887f1f13514aadb1771be5229b",
+          "server/domain/product-bookings.ts": "9d936fd1835f972c36ccdc255193c22a9ce1af3a15ae4687dced75920d287621",
           "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
           "server/utils/mcp-executor/bookings.ts": "752a526ab52b0af73972230d2a5edf27737549fd1270633f058d8b00d968d30d",
           "tests/e2e/mcp-bookings.spec.ts": "cff4737b6ec558a356443fda5709a5d9ffba9a2297ff12e34a01d5c8b3d87c6f",
@@ -1031,6 +1031,65 @@
       },
       "pendingOwnerDecision": null,
       "pricingComparison": "included"
+    },
+    {
+      "id": "payments.servicing",
+      "referenceLabel": "Payments",
+      "pricingComparison": "pending-owner",
+      "labelStatus": "owner-approved",
+      "availability": {
+        "free": "unavailable",
+        "growth": "unavailable"
+      },
+      "currentBehavior": "New acceptance requires the separate Payments entitlement and ready native provider configuration. Authorized historical servicing survives downgrade. Agent financial writes require an actor-bound browser approval.",
+      "entitlementKeys": [
+        "payments"
+      ],
+      "mcpOperations": [
+        "create_payment_checkout",
+        "get_payment",
+        "get_payment_payouts",
+        "get_payment_summary",
+        "get_payments_usage",
+        "issue_payment_refund",
+        "list_payments",
+        "open_payments_onboarding",
+        "request_payment_refund"
+      ],
+      "verification": {
+        "status": "source-reviewed",
+        "baseline": "91521c49ba9e369f7738d3798f2ddb132de0db4e",
+        "sources": [
+          "server/utils/mcp-tools/payments.ts",
+          "server/utils/mcp-executor/payments.ts",
+          "server/domain/payments/index.ts",
+          "server/domain/payments/checkout.ts",
+          "server/domain/payments/usage.ts",
+          "server/utils/billing-entitlements.ts",
+          "server/domain/payments/events.ts",
+          "server/tasks/payments-reconcile.ts"
+        ],
+        "tests": [
+          "tests/integration/payments-d1.test.ts",
+          "tests/unit/payments-contract.test.ts",
+          "tests/unit/payments-rate-card.test.ts"
+        ],
+        "coverageNote": "Real local D1 concurrency, replay and financial boundaries; native account configuration proven in test mode. Native charges and Metronome collection remain configuration-blocked.",
+        "evidenceSha256": {
+          "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
+          "server/utils/mcp-executor/payments.ts": "4f08fbe2b4cfbd2de4d87340026d58a5dbd34d385e1b54d39e9ec0f9145cb9b3",
+          "server/domain/payments/index.ts": "cbb04ba53730293790eef6d5f4277475e8fceeda809adb2765ebbbde7b3d18a4",
+          "server/domain/payments/checkout.ts": "c2d3ecedc2e37cd3932a32863dd39a7998e5ec02b03697959b6bb9de1e7607ed",
+          "server/domain/payments/usage.ts": "5a8fd4d586f7a80cba6fe4009d2a6316afffdf62c10509751553151a910227b7",
+          "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
+          "tests/integration/payments-d1.test.ts": "3a9906c41b0bf4b5bc6f7e21abc6c77bfe1a8521b387e46b63e5b01133f8be0d",
+          "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
+          "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
+          "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",
+          "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392"
+        }
+      },
+      "pendingOwnerDecision": "Future higher-tier commercial name and price are separate; current tiers do not receive new Payments acceptance."
     }
   ]
 }

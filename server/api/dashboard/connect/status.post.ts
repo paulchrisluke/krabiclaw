@@ -9,14 +9,14 @@ export default defineHandler(async (event) => {
   const { env, db, organization } = await getDashboardContext(event, {})
   // Connecting the organization's Stripe account is an integration change:
   // owner and admin, per utils/organization-access.ts.
-  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { payments: ['integration'] } })
   if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect is not configured' })
   const connected = await getStripeConnectedAccount(db, organization.id)
   if (!connected?.stripeAccountId) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Stripe onboarding has not started' })
   }
   try {
-    const account = await refreshStripeConnectedAccount(db, createStripeClient(env.STRIPE_SECRET_KEY), connected)
+    const account = await refreshStripeConnectedAccount(db, createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), connected)
     return jsonResponse({ success: true, account })
   } catch (error) {
     console.error('stripe_connect_status_refresh_failed', {

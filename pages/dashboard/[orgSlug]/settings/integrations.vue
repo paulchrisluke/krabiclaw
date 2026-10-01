@@ -84,6 +84,7 @@ const items = computed<EditorNavigationItem[]>(() => {
   const maps = s?.google_maps ?? []
   const connected = maps.filter(location => location.google_place_id).length
   return [
+    { id: 'stripe', label: 'Stripe', lead: { icon: 'i-logos-stripe' }, to: `${base.value}/stripe`, summary: 'Payments onboarding and account management' },
     { id: 'google-maps', label: 'Google Maps', lead: { icon: 'i-logos-google-maps' }, to: `${base.value}/google-maps`,
       ...(maps.length
         ? { summary: `${connected} of ${maps.length} ${maps.length === 1 ? 'location' : 'locations'} connected`, status: connected ? 'success' as const : 'neutral' as const }

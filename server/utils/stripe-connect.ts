@@ -58,6 +58,7 @@ export interface StripeConnectProjection {
   cardPaymentsStatus: StripeCapabilityStatus | null
   requirements: StripeConnectRequirement[]
   stripeRefreshedAt: string
+  financialContractSupported?: boolean
 }
 
 function parseRequirements(value: string): StripeConnectRequirement[] {
@@ -123,10 +124,10 @@ export function buildStripeConnectOnboardingUrls(
   if (origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash) {
     throw new Error('Stripe Connect platform origin must be an origin without credentials, path, query, or fragment')
   }
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(organizationSlug)) {
+  if (!organizationSlug.trim() || /[\/\\]/u.test(organizationSlug) || Array.from(organizationSlug).some(character => character.codePointAt(0)! < 32)) {
     throw new Error('Stripe Connect organization slug is invalid')
   }
-  const returnUrl = new URL(`/dashboard/${organizationSlug}/settings/connect`, origin)
+  const returnUrl = new URL(`/dashboard/${encodeURIComponent(organizationSlug)}/settings/integrations/stripe`, origin)
   returnUrl.searchParams.set('stripe_connect', 'returned')
   const refreshUrl = new URL('/api/dashboard/connect/refresh', origin)
   refreshUrl.searchParams.set('org', organizationSlug)
@@ -233,7 +234,7 @@ export async function projectStripeConnectedAccount(
   db: DbClient,
   input: StripeConnectProjection,
 ): Promise<StripeConnectedAccount> {
-  const status = deriveStripeConnectStatus(input)
+  const status = input.financialContractSupported === false ? 'restricted' : deriveStripeConnectStatus(input)
   const country = normalizeStripeConnectCountry(input.country)
   const updated = await execute(db, `
     UPDATE stripe_connected_accounts
@@ -287,6 +288,7 @@ function accountProjection(
     country: normalizeStripeConnectCountry(country),
     livemode: account.livemode,
     cardPaymentsStatus: cardPaymentsStatus === undefined ? null : cardPaymentsStatus,
+    financialContractSupported: account.dashboard==='express' && account.defaults?.responsibilities?.fees_collector==='application' && account.defaults.responsibilities.losses_collector==='stripe',
     requirements: normalizeAccountRequirements(account),
     stripeRefreshedAt: refreshedAt,
   }
@@ -294,6 +296,7 @@ function accountProjection(
 
 const STRIPE_CONNECT_ACCOUNT_INCLUDE: Stripe.V2.Core.AccountRetrieveParams.Include[] = [
   'configuration.merchant',
+  'defaults',
   'identity',
   'requirements',
 ]
@@ -322,6 +325,7 @@ export async function ensureStripeConnectedAccount(
     livemode: boolean
   },
 ): Promise<StripeConnectedAccount> {
+  if (normalizeStripeConnectCountry(input.country) !== 'US') throw new HTTPError({ statusCode: 400, statusMessage: 'Payments onboarding currently supports US businesses' })
   const reservation = await reserveStripeConnectedAccount(db, input)
   if (reservation.stripeAccountId) return await refreshStripeConnectedAccount(db, stripe, reservation)
 
@@ -336,11 +340,11 @@ export async function ensureStripeConnectedAccount(
         merchant: { capabilities: { card_payments: { requested: true } } },
       },
       defaults: {
-        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+        responsibilities: { fees_collector: 'application', losses_collector: 'stripe' },
       },
       metadata: { krabiclaw_organization_id: input.organizationId },
       include: STRIPE_CONNECT_ACCOUNT_INCLUDE,
-    }, { idempotencyKey: `krabiclaw-connect-account:express:${input.organizationId}` })
+    }, { idempotencyKey: `krabiclaw-connect-account:express-managed-risk:${input.organizationId}` })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Stripe account creation failed'
     await markStripeConnectedAccountCreationFailed(db, reservation.id, message)

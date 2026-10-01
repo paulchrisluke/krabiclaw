@@ -518,7 +518,9 @@ async function runAction(action: string) {
     actionAttempt.value = null
     cancelOpen.value = false
   } catch (cause) {
-    actionError.value = getErrorMessage(cause, 'Booking could not be updated')
+    const approvalUrl=isRecord(cause)&&isRecord(cause.data)&&isRecord(cause.data.data)&&typeof cause.data.data.financial_approval_url==='string'?cause.data.data.financial_approval_url:null
+    if(approvalUrl) await navigateTo(approvalUrl)
+    else actionError.value = getErrorMessage(cause, 'Booking could not be updated')
   } finally {
     pendingAction.value = null
   }

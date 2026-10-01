@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4d0b84ded4c95bdd674f9fe0c447a3408c3376c31865779dbe967e13d2273ec8",
+  "fingerprint": "sha256:88c6467b3affa03bd33c00af702713d1a90777d3fd3dfbafc20862a339d82cb0",
   "tools": [
     {
       "name": "append_content_block",
@@ -2084,6 +2084,45 @@
         "required": [
           "definition"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create_payment_checkout",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id",
+          "variant_id",
+          "quantity",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -6462,6 +6501,90 @@
       }
     },
     {
+      "name": "get_payment",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payment_payouts",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payment_summary",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "description": "Inclusive UTC ISO instant",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive UTC ISO instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "get_payments_usage",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "get_post",
       "inputSchema": {
         "additionalProperties": false,
@@ -8142,6 +8265,28 @@
       }
     },
     {
+      "name": "issue_payment_refund",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "list_article_categories",
       "inputSchema": {
         "additionalProperties": false,
@@ -9607,6 +9752,37 @@
       }
     },
     {
+      "name": "list_payments",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "type": "string"
+          },
+          "from": {
+            "description": "Inclusive UTC ISO instant",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "to": {
+            "description": "Exclusive UTC ISO instant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "list_posts",
       "inputSchema": {
         "additionalProperties": false,
@@ -10288,6 +10464,23 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "open_payments_onboarding",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },
@@ -13786,6 +13979,34 @@
           "resource_type",
           "updated_resource_ids"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "request_payment_refund",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "description": "Refund principal in the Payment currency minor units",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "payment_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "amount"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
         "type": "object"
       }
     },

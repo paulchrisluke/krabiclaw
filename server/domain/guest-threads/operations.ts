@@ -1,3 +1,4 @@
+import { rejectedBookingRefundQueries } from '~/server/domain/payments/rejection'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
@@ -46,6 +47,7 @@ export type ExecuteOperationInput = {
   env: ReplyEmailEnv
   idempotencyKey?: string
   actorUserId: string
+  financialAuthorizationId?: string
 }
 
 interface ThreadContext {
@@ -148,6 +150,7 @@ function operationEntryQuery(
   dedupeKey: string,
   now: string,
   subject: string | null,
+  financialGuard: BatchQuery | null = null,
 ): BatchQuery {
   return {
     query: `
@@ -163,6 +166,7 @@ function operationEntryQuery(
         -- not both write an entry for the same transition.
         AND EXISTS (SELECT 1 FROM ${plan.kind === 'reservation' ? 'reservations' : 'bookings'} src
                      WHERE src.request_id = gt.id AND src.status = ? AND ${sourceStillRunningSql(plan, 'src')})
+        AND (${financialGuard?.query ?? '1=1'})
       ON CONFLICT(dedupe_key) DO NOTHING
     `,
     params: [
@@ -180,6 +184,7 @@ function operationEntryQuery(
       plan.kind,
       plan.beforeStatus,
       now,
+      ...(financialGuard?.params ?? []),
     ],
   }
 }
@@ -367,6 +372,10 @@ async function executeSourceMutation(
     return await successfulOutcome(db, context)
   }
 
+  if(input.action==='cancel' && context.thread.kind==='booking' && context.record?.status==='pending'){
+    const paid=await queryFirst(db,"SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>0",[input.organizationId,context.record.id])
+    if(paid) return conflict('Use Reject for a paid pending review request so the full-principal refund is authorized and committed')
+  }
   const plan = sourceMutationPlan(context, input.action)
   if (!plan) return conflict(`"${input.action}" is not a valid action for the current state`)
   const summary = await requestSummary(db, context.thread)
@@ -380,10 +389,13 @@ async function executeSourceMutation(
   const subject = plan.requiresNotification
     ? operationSubject(plan.action, await getOrganizationBrandName(db, context.thread.organization_id))
     : null
+  const refundPlan = plan.kind === 'booking' && plan.action === 'reject' && context.record
+    ? await rejectedBookingRefundQueries(db,{organizationId:input.organizationId,actorUserId:input.actorUserId,bookingId:context.record.id,authorizationId:input.financialAuthorizationId,entryId,now}) : {queries:[],guard:null}
   const queries = [
-    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
+    operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject,refundPlan.guard),
     sourceUpdateQuery(context, plan, input, entryId, now),
     ...(plan.afterStatus === 'cancelled' ? [resolveThreadQuery(context.thread.id, entryId, now)] : []),
+    ...refundPlan.queries,
   ]
   const revokeReview = revokeReviewRequestQuery(context, plan, entryId, now)
   if (revokeReview) queries.push(revokeReview)

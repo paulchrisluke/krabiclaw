@@ -8,7 +8,7 @@ export default defineHandler(async (event) => {
   const { db, organization } = await getDashboardContext(event, {})
   // Connecting the organization's Stripe account is an integration change:
   // owner and admin, per utils/organization-access.ts.
-  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { payments: ['integration'] } })
   return jsonResponse({
     success: true,
     account: await getStripeConnectedAccount(db, organization.id),

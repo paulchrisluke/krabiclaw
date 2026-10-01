@@ -18,6 +18,9 @@ import { requestInsertQueries, threadPayloadForGuest } from '~/server/domain/req
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveBookingPresentation } from '~/utils/booking-presentation'
 import type { H3Event } from 'nitro'
+import { createPaymentCheckout } from '~/server/domain/payments/checkout'
+import { createStripeClient } from '~/server/utils/stripe-client'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 
 export interface BookingCreationContext {
   organizationId: string
@@ -134,13 +137,14 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const full = await getProduct(db, organization.id, product.id)
   const presentation = resolveBookingPresentation('booking', organization.vertical)
   const config = await requireBookingConfig(db, organization.id, product.id)
+  let requiresPayment = false
   if (!replayState.booking && config.online_payment_required) {
     if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
     const variant = full.variants.find(candidate => candidate.id === productVariantId)
     if (!variant) throw new Error('The selected variant is missing')
     const price = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
     if (!price) return creationResult({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
-    if (price.unit_amount > 0) return creationResult({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
+    requiresPayment = price.unit_amount > 0
   }
   const bookingStatus = config.confirmation_mode === 'review' ? 'pending' : 'confirmed'
 
@@ -162,6 +166,8 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
 
   const cancellation = operator ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  if (requiresPayment && !await hasOrganizationEntitlement(env,organizationId,'payments')) return creationResult({error:'Payments entitlement is required to collect online payment',code:'payment_required'}, {status:409})
+  if (requiresPayment && (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN)) return creationResult({error:'Payments provider configuration is incomplete',code:'payments_unavailable'},{status:503})
   // The person is the Better Auth user; what they typed stays on the thread as
   // this booking's guest snapshot and is never copied onto that user.
   const userId = operator ? null : await ensureInteractionUser(event, env)
@@ -172,6 +178,25 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     payload.provenance = { source: operator.source, external_reference: operator.externalReference, actor_user_id: operator.userId, idempotency_key: operator.idempotencyKey, fingerprint: fingerprint!, guest_acknowledgement: operator.guestAcknowledgement, creation_kind: 'ordinary', creation_status: bookingStatus, followups_completed: false }
   }
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
+
+  if (requiresPayment) {
+    if (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN) return creationResult({ error: 'Payments provider configuration is incomplete', code: 'payments_unavailable' }, { status: 503 })
+    const checkoutKey = operator?.idempotencyKey ?? cleanString(body.idempotency_key, 128)
+    if (!checkoutKey || !/^[a-zA-Z0-9_-]{8,128}$/u.test(checkoutKey)) return creationResult({ error: 'A stable checkout request key is required' }, { status: 400 })
+    // Contact stays on the guest thread. A checkout thread waits on the guest;
+    // authenticated capture alone creates its operational Booking and activity.
+    const checkout = await createPaymentCheckout(db, createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), env, {
+      organizationId, buyerUserId: userId, productId: product.id, variantId: productVariantId,
+      sessionId: session.id, requestId: threadId, requestFingerprint: await hashIdentifier(JSON.stringify({ guestName, guestEmail, phone: normalizedGuestPhone, notes })), quantity: partySize, idempotencyKey: checkoutKey,
+      returnOrigin: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      following: paymentId => requestInsertQueries({
+        kind: 'booking', id: threadId, organization_id: organizationId, location_id: session.location_id,
+        user_id: userId, review_id: null, conversation_state: 'waiting_on_guest', resolved_at: null,
+        payload, created_at: now, updated_at: now,
+      }, { query: "SELECT 1 FROM payment_checkout_holds WHERE payment_id = ? AND status = 'active'", params: [paymentId] }),
+    })
+    return creationResult({ success: true, status: 'checkout', ...checkout }, { status: 201 })
+  }
 
   let operationalBookingId: string | undefined
   try {

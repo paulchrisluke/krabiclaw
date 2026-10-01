@@ -140,6 +140,18 @@
         "destructive_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Existing content is not deleted or overwritten."
       }
     },
+    "create_payment_checkout": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reserves an expiring canonical booking hold or immutable physical order before creating a scoped hosted Stripe Checkout. Only authenticated native capture creates the Booking; no model confirmation charges a customer.",
+        "open_world_justification": "The frozen canonical Price and purchase identity are sent to the seller-scoped Stripe Checkout; the buyer authorizes any payment in Stripe.",
+        "destructive_justification": "Reserves an expiring canonical booking hold or immutable physical order before creating a scoped hosted Stripe Checkout. Only authenticated native capture creates the Booking; no model confirmation charges a customer. Existing content is not deleted or overwritten."
+      }
+    },
     "create_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -171,9 +183,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.",
-        "open_world_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation. Existing content is not deleted or overwritten."
+        "read_only_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking.",
+        "open_world_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking. Existing content is not deleted or overwritten."
       }
     },
     "create_tenant_page": {
@@ -428,6 +440,54 @@
         "destructive_justification": "Reads the selected organization settings. Existing content is not deleted or overwritten."
       }
     },
+    "get_payment": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one authorized tenant payment, its native refund and dispute projections.",
+        "open_world_justification": "Reads one authorized tenant payment, its native refund and dispute projections. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads one authorized tenant payment, its native refund and dispute projections. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payment_payouts": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads native Stripe balance and payouts in the selected seller account; moves no funds.",
+        "open_world_justification": "The seller-scoped Stripe account is queried for native balance and payouts.",
+        "destructive_justification": "Reads native Stripe balance and payouts in the selected seller account; moves no funds. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payment_summary": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals.",
+        "open_world_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads UTC tenant financial and usage summaries, retaining separate currency totals. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_payments_usage": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads durable attributable usage delivery state and native Metronome invoices.",
+        "open_world_justification": "The separate operating Metronome customer is queried for native invoices.",
+        "destructive_justification": "Reads durable attributable usage delivery state and native Metronome invoices. Existing content is not deleted or overwritten."
+      }
+    },
     "get_post": {
       "annotations": {
         "readOnlyHint": true,
@@ -546,6 +606,18 @@
         "read_only_justification": "Reads the authenticated user workspace selection and available context.",
         "open_world_justification": "Reads the authenticated user workspace selection and available context. It does not publish content or write to an external service.",
         "destructive_justification": "Reads the authenticated user workspace selection and available context. Existing content is not deleted or overwritten."
+      }
+    },
+    "issue_payment_refund": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval.",
+        "open_world_justification": "The browser-approved amount and connected-account PaymentIntent are sent to Stripe for a native principal refund.",
+        "destructive_justification": "Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "list_article_categories": {
@@ -704,6 +776,18 @@
         "destructive_justification": "Lists organizations accessible to the authenticated user without provisioning one. Existing content is not deleted or overwritten."
       }
     },
+    "list_payments": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots.",
+        "open_world_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots. Existing content is not deleted or overwritten."
+      }
+    },
     "list_posts": {
       "annotations": {
         "readOnlyHint": true,
@@ -774,6 +858,18 @@
         "read_only_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again.",
         "open_world_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites the selected location's special hours with the given days reopened, so guests can book them on the public website again. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "open_payments_onboarding": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself.",
+        "open_world_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself. Existing content is not deleted or overwritten."
       }
     },
     "publish_blog_post": {
@@ -954,6 +1050,18 @@
         "read_only_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched.",
         "open_world_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "request_payment_refund": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund.",
+        "open_world_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Prepares an actor-bound expiring browser financial approval; creates no provider refund. Existing content is not deleted or overwritten."
       }
     },
     "request_product_booking_change": {

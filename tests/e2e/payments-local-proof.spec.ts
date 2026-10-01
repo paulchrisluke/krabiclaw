@@ -1,0 +1,62 @@
+import {expect,test} from '@playwright/test'
+import Stripe from 'stripe'
+import {authRequestHeaders} from './helpers/auth'
+const password='Payments-Local-Proof-2026!Aa'
+test('local Worker financial servicing, buyer ownership and signed payment ingress',async({page,request,baseURL,browser})=>{
+ test.skip(process.env.PAYMENTS_LOCAL_PROOF!=='true'||!['localhost','127.0.0.1'].includes(new URL(baseURL!).hostname),'Explicit synthetic fixtures in isolated checkout; never provider-payment proof')
+ const origin=new URL(baseURL!).origin,authHeaders=authRequestHeaders(baseURL!)
+ const signin=await page.request.post('/api/auth/sign-in/email',{headers:authHeaders,data:{email:'payments-proof-owner@playwright.example',password}})
+ expect(signin.status(),await signin.text()).toBe(200)
+ const api='/api/dashboard/payments?org=payments-local-proof'
+ const transactions=await page.request.get(api)
+ expect(transactions.status(),await transactions.text()).toBe(200)
+ expect((await transactions.json()).payments.some((p:{id:string})=>p.id==='payments-proof-order')).toBe(true)
+ await page.goto('/dashboard/payments-local-proof/payments/transactions/payments-proof-order')
+ await expect(page.getByRole('heading',{name:'Transaction',exact:true})).toBeVisible()
+ await expect(page.getByRole('heading',{name:'Immutable physical order',exact:true})).toBeVisible()
+ await page.screenshot({path:'artifacts/payments-desktop.png',fullPage:true})
+ await page.setViewportSize({width:390,height:844})
+ await page.screenshot({path:'artifacts/payments-mobile.png',fullPage:true})
+ const fulfill=page.getByRole('button',{name:'Mark fulfilled',exact:true})
+ if(await fulfill.count())await fulfill.click()
+ await expect(page.getByRole('heading',{name:'Order · fulfilled',exact:true})).toBeVisible()
+ // Fulfillment never changes captured/refunded principal.
+ const after=await (await page.request.get(`${api}&payment_id=payments-proof-order`)).json()
+ expect(after.payment).toMatchObject({captured_amount:10000,refunded_amount:0})
+ const newCheckout=await page.request.post('/api/dashboard/payments/checkout?org=payments-local-proof',{headers:{origin},data:{product_id:'archived-product',variant_id:'archived-variant',quantity:1,idempotency_key:crypto.randomUUID()}})
+ expect(newCheckout.status()).toBe(403)
+ const stillOwned=await (await page.request.get(api)).json()
+ expect(stillOwned.payments).toHaveLength(1)
+ const noOrigin=await page.request.post('/api/dashboard/payments/refund?org=payments-local-proof',{data:{action:'prepare',payment_id:'payments-proof-order',amount:100}})
+ expect(noOrigin.status()).toBe(403)
+ const prepared=await page.request.post('/api/dashboard/payments/refund?org=payments-local-proof',{headers:{origin},data:{action:'prepare',payment_id:'payments-proof-order',amount:100}})
+ expect(prepared.status(),await prepared.text()).toBe(200)
+ const authorization=await prepared.json()
+ await page.goto(`/dashboard/payments-local-proof/payments/refunds/approve?id=${authorization.authorization_id}`)
+ await expect(page.getByRole('button',{name:/Approve/})).toBeVisible()
+ await page.goto('/account')
+ await expect(page.getByText('Immutable physical order',{exact:true})).toBeVisible()
+ const buyer=await browser.newContext({baseURL})
+ try{
+ const login=await buyer.request.post('/api/auth/sign-in/email',{headers:authHeaders,data:{email:'payments-proof-buyer@playwright.example',password}})
+ expect(login.status(),await login.text()).toBe(200)
+ const blocked=await buyer.request.get(`${api}&payment_id=payments-proof-order`)
+ expect([403,404]).toContain(blocked.status())
+ const own=await (await buyer.request.get('/api/account')).json()
+ expect(own.payments).toEqual([])
+ }finally{await buyer.close()}
+ const stripe=new Stripe('sk_test_local_signature_only')
+ const payload=JSON.stringify({id:'evt_local_signature',object:'event',type:'customer.created',account:'acct_local_fixture',livemode:false,data:{object:{id:'cus_ignored'}}})
+ const secret='whsec_local_payments_boundary',signature=stripe.webhooks.generateTestHeaderString({payload,secret})
+ const unsigned=await request.post('/api/stripe/payments/webhook',{data:payload,headers:{'content-type':'application/json'}})
+ expect(unsigned.status()).toBe(400)
+ const tampered=await request.post('/api/stripe/payments/webhook',{data:payload+' ',headers:{'content-type':'application/json','stripe-signature':signature}})
+ expect(tampered.status()).toBe(400)
+ for(let replay=0;replay<2;replay++){
+ const signed=await request.post('/api/stripe/payments/webhook',{data:payload,headers:{'content-type':'application/json','stripe-signature':signature}})
+ expect(signed.status(),await signed.text()).toBe(200)
+ expect(await signed.json()).toMatchObject({received:true})
+ }
+ const forged=await request.post('/api/account/checkout-return',{data:{payment_id:'payments-proof-order',purchase_claim:'forged-return'}})
+ expect(forged.status()).toBe(400)
+})

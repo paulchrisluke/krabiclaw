@@ -12,9 +12,19 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  get_payment_summary: 'Reads UTC tenant financial and usage summaries, retaining separate currency totals.',
+  list_payments: 'Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots.',
+  get_payment: 'Reads one authorized tenant payment, its native refund and dispute projections.',
+  get_payment_payouts: 'Reads native Stripe balance and payouts in the selected seller account; moves no funds.',
+  get_payments_usage: 'Reads durable attributable usage delivery state and native Metronome invoices.',
+  request_payment_refund: 'Prepares an actor-bound expiring browser financial approval; creates no provider refund.',
+  issue_payment_refund: 'Issues an idempotent native connected-account refund only for an existing explicit authenticated browser approval.',
+  create_payment_checkout: 'Reserves an expiring canonical booking hold or immutable physical order before creating a scoped hosted Stripe Checkout. Only authenticated native capture creates the Booking; no model confirmation charges a customer.',
+  open_payments_onboarding: 'Returns the selected merchant authenticated integration URL for Stripe-hosted onboarding; creates no account itself.',
+
   list_product_bookings: 'Reads operational Product bookings and guest snapshots within the selected tenant.',
   list_product_booking_sessions: 'Reads existing tenant Product sessions and canonical capacity, including the shared online calendar exclusion.',
-  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.',
+  create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking.',
   get_product_booking: 'Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.',
   confirm_product_booking: 'Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.',
   reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.',
@@ -117,6 +127,10 @@ const effects = {
 }
 
 const externalProcessing = {
+  create_payment_checkout: 'The frozen canonical Price and purchase identity are sent to the seller-scoped Stripe Checkout; the buyer authorizes any payment in Stripe.',
+  issue_payment_refund: 'The browser-approved amount and connected-account PaymentIntent are sent to Stripe for a native principal refund.',
+  get_payment_payouts: 'The seller-scoped Stripe account is queried for native balance and payouts.',
+  get_payments_usage: 'The separate operating Metronome customer is queried for native invoices.',
   publish_post: 'The post, its caption and its media are sent to the named Facebook Page or Instagram account, where they become public.',
   reconcile_post_publication: 'Facebook or Instagram is read for the publication; the provider answers with its own state.',
   list_channel_posts: 'The connected provider is queried for its current posts and media URLs without copying them.',

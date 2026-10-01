@@ -9,12 +9,12 @@ export default defineHandler(async (event) => {
   const { env, organization } = await getDashboardContext(event, {})
   // Connecting the organization's Stripe account is an integration change:
   // owner and admin, per utils/organization-access.ts.
-  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { integrations: ['update'] } })
+  await assertRoleAllows({ organizationId: organization.id, role: organization.role, permissions: { payments: ['integration'] } })
   if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe Connect is not configured' })
   try {
     return jsonResponse({
       success: true,
-      countries: await listStripeConnectCountries(createStripeClient(env.STRIPE_SECRET_KEY)),
+      countries: await listStripeConnectCountries(createStripeClient(env.STRIPE_SECRET_KEY, 'payments')),
     })
   } catch (error) {
     console.error('stripe_connect_countries_failed', {

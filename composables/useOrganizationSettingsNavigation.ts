@@ -45,7 +45,6 @@ export function useOrganizationSettingsNavigation() {
         ? [{ id: 'people', label: 'Platform accounts', summary: 'Every account, and impersonation', to: `${settingsPath.value}/people` }]
         : []),
       { id: 'billing', label: 'Billing', summary: 'Plans and payments', to: `${settingsPath.value}/billing` },
-      { id: 'connect', label: 'Payouts', summary: 'Stripe business onboarding', to: `${settingsPath.value}/connect` },
       // The way to the account on a phone, where there is no header to carry an
       // avatar. Airbnb's mobile Menu lists "Account settings" in the same place,
       // second from last, above Log out (measured 2026-09-22).

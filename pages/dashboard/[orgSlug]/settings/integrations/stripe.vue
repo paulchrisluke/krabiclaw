@@ -1,6 +1,6 @@
 <template>
   <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
-  <DashboardLeafPanel id="organization-payouts" title="Payouts" :footer="false">
+  <DashboardLeafPanel id="organization-payouts" title="Stripe" :footer="false">
     <div class="space-y-4">
       <UAlert
         v-if="errorMessage"
@@ -85,6 +85,7 @@
             >
               {{ account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe onboarding' }}
             </UButton>
+            <UButton v-if="account.stripeAccountId" :loading="openingDashboard" icon="i-lucide-external-link" @click="openDashboard">Open Stripe Express Dashboard</UButton>
             <UButton v-if="account.stripeAccountId" color="neutral" variant="outline" :loading="refreshing" icon="i-lucide-refresh-cw" @click="refreshStatus">
               Refresh status
             </UButton>
@@ -174,6 +175,7 @@ const loading = ref(true)
 const countriesLoading = ref(false)
 const starting = ref(false)
 const refreshing = ref(false)
+const openingDashboard = ref(false)
 const errorMessage = ref<string | null>(null)
 
 const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
@@ -194,6 +196,15 @@ const statusPresentation = computed<{ label: string; description: string; color:
     default: return { label: 'Not started', description: 'Stripe onboarding has not started.', color: 'neutral' }
   }
 })
+
+async function openDashboard() {
+  openingDashboard.value = true
+  try {
+    const result = await dashboardApi<{url:string}>('/api/dashboard/connect/dashboard',{method:'POST',validate:(value):value is {url:string}=>isRecord(value)&&typeof value.url==='string'})
+    await navigateTo(result.url,{external:true})
+  } catch(error) {errorMessage.value=getErrorMessage(error,'Stripe Dashboard could not be opened')}
+  finally {openingDashboard.value=false}
+}
 
 async function loadCountries() {
   countriesLoading.value = true

@@ -10,6 +10,7 @@ import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
+import { handlePaymentsTools } from './payments'
 import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
@@ -40,6 +41,7 @@ import type { McpExecutorContext } from './shared'
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+  payments: handlePaymentsTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,

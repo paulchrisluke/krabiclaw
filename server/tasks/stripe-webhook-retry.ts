@@ -1,3 +1,5 @@
+import type Stripe from 'stripe'
+import { paymentEventKey, processPaymentEvent } from '~/server/domain/payments/events'
 import { execute, queryAll, type DbClient } from '~/server/db'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { processStripeConnectEvent } from '~/server/utils/stripe-connect-events'
@@ -10,6 +12,7 @@ interface StripeTaskContext {
 
 interface RetryableStripeEvent {
   stripe_event_id: string
+  processor: 'connect_marketplace' | 'tenant_payments'
   payload: string | null
 }
 
@@ -52,13 +55,13 @@ export default defineScheduledTask({
     if (!db) throw new Error('DB is required')
     if (!env.STRIPE_SECRET_KEY) return { result: { ...empty, skipped: 'STRIPE_SECRET_KEY is not configured' } }
 
-    const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
+    const stripe = createStripeClient(env.STRIPE_SECRET_KEY, 'payments')
     await clearExpiredStripeEventPayloads(db)
     const nowIso = new Date().toISOString()
     const events = await queryAll<RetryableStripeEvent>(db, `
-      SELECT stripe_event_id, payload
+      SELECT stripe_event_id, payload, processor
       FROM stripe_webhook_events
-      WHERE processor = 'connect_marketplace'
+      WHERE processor IN ('connect_marketplace', 'tenant_payments')
         AND attempt_count < ?
         AND status IN ('failed', 'pending')
         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
@@ -71,16 +74,22 @@ export default defineScheduledTask({
     let failed = 0
     for (const row of events) {
       if (!row.payload) {
-        await recordStripeWebhookEventFailure(db, 'connect_marketplace', row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
+        await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
         failed += 1
         continue
       }
       try {
-        const notification = stripe.parseEventNotificationWithoutVerification(row.payload)
-        if (await processStripeConnectEvent(db, stripe, notification, row.payload)) processed += 1
+        if (row.processor === 'tenant_payments') {
+          const event = JSON.parse(row.payload) as Stripe.Event
+          if (paymentEventKey(event) !== row.stripe_event_id) throw new Error('Queued Stripe event identity mismatch')
+          if (await processPaymentEvent(db, stripe, event, row.payload)) processed += 1
+        } else {
+          const notification = stripe.parseEventNotificationWithoutVerification(row.payload)
+          if (await processStripeConnectEvent(db, stripe, notification, row.payload)) processed += 1
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        await recordStripeWebhookEventFailure(db, 'connect_marketplace', row.stripe_event_id, message)
+        await recordStripeWebhookEventFailure(db, row.processor, row.stripe_event_id, message)
         failed += 1
         console.error('stripe_webhook_retry_event_failed', { stripeEventId: row.stripe_event_id, error: message })
       }

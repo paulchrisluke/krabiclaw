@@ -30,6 +30,7 @@
         the only surface the Better Auth Stripe plugin exposes for it.
       -->
       <EditorNavigationList v-else :groups="groups" @act="onRowAction" />
+      <UButton :to="`/dashboard/${route.params.orgSlug}/settings/payments-billing`" variant="outline">Payments usage charges and invoices</UButton>
     </div>
   </DashboardLeafPanel>
 </template>

@@ -47,7 +47,7 @@ test('connected account reservation is organization-scoped and retry-stable', as
   })
 })
 
-test('connected accounts use Express dashboard with platform fee and loss responsibility', async () => {
+test('connected accounts use Express dashboard with platform fees and Stripe-managed losses', async () => {
   await withD1(async (db) => {
     let createParams: unknown
     let createOptions: unknown
@@ -78,10 +78,10 @@ test('connected accounts use Express dashboard with platform fee and loss respon
         : null,
       {
         dashboard: 'express',
-        responsibilities: { fees_collector: 'application', losses_collector: 'application' },
+        responsibilities: { fees_collector: 'application', losses_collector: 'stripe' },
       },
     )
-    assert.deepEqual(createOptions, { idempotencyKey: 'krabiclaw-connect-account:express:org' })
+    assert.deepEqual(createOptions, { idempotencyKey: 'krabiclaw-connect-account:express-managed-risk:org' })
   })
 })
 
@@ -105,6 +105,8 @@ test('projection failures retain the created account for refresh on retry', asyn
           return {
             id: accountId,
             livemode: false,
+            dashboard: 'express',
+            defaults: { responsibilities: { fees_collector: 'application', losses_collector: 'stripe' } },
             configuration: { merchant: { capabilities: { card_payments: { status: 'active' } } } },
             identity: { country: 'us' },
             requirements: { entries: [] },
@@ -170,7 +172,7 @@ test('Connect callback URLs are built only from the configured platform origin a
   assert.deepEqual(
     buildStripeConnectOnboardingUrls('https://krabiclaw.com', 'sun-and-sea'),
     {
-      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/connect?stripe_connect=returned',
+      returnUrl: 'https://krabiclaw.com/dashboard/sun-and-sea/settings/integrations/stripe?stripe_connect=returned',
       refreshUrl: 'https://krabiclaw.com/api/dashboard/connect/refresh?org=sun-and-sea',
     },
   )
