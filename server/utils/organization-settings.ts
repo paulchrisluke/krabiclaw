@@ -232,12 +232,13 @@ interface IntegrationLocation {
 function integrationsSummary(integrations: OrganizationIntegrations, locations: IntegrationLocation[]) {
   // Choosing a property, Page or account writes a new record, so its
   // `created_at` is when this connection was made.
-  const { google_analytics: analytics, google_search_console: searchConsole, facebook, instagram } = integrations
+  const { google_calendar: calendar, google_analytics: analytics, google_search_console: searchConsole, facebook, instagram } = integrations
   return {
     google_maps: locations.map(location => ({ ...location, address: formatPostalAddress(parsePostalAddress(location.address)) || null })),
     google_analytics: analytics
       ? { account_id: analytics.account_id ?? null, property_name: analytics.property_name ?? null, measurement_id: analytics.measurement_id, status: analytics.status, connected_at: analytics.created_at }
       : null,
+    google_calendar: calendar ? { ...calendar, connected_at: calendar.created_at } : null,
     google_search_console: searchConsole
       ? { account_id: searchConsole.account_id, site_url: searchConsole.site_url, status: searchConsole.status, connected_at: searchConsole.created_at }
       : null,

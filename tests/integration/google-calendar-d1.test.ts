@@ -1,0 +1,102 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { Miniflare } from 'miniflare'
+import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
+import * as schema from '../../server/db/schema.ts'
+import { claimSessionCapacity, setBookingStatus } from '../../server/utils/availability.ts'
+import { calendarSubjects, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
+import { requireIntegrationAccount, type CloudflareEnv } from '../../server/utils/auth.ts'
+import { INTEGRATION_SCOPES } from '../../shared/organization-settings.ts'
+
+test('committed consultation projection is tenant scoped, private, idempotent and fenced during cancellation and cleanup', { timeout: 120_000 }, async (t) => {
+  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-proof', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  try {
+    const db = await mf.getD1Database('DB')
+    const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+    await db.batch(statements.map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO organization(id,name,slug,integrations_json) VALUES('org','Org','org','{\"google_analytics\":{\"revision\":\"a\",\"measurement_id\":\"G-123\",\"status\":\"active\"}}'),('other','Other','other','{}')").run()
+    await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by) VALUES('p','org','Consultation','consultation','actor','actor'),('class','org','Class','class','actor','actor')").run()
+    await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
+    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org','consultations','America/New_York','review','actor','actor'),('class','org',NULL,'America/New_York','instant','actor','actor')").run()
+    await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES('s','org','p','America/New_York','2099-11-01T14:00:00.000Z','2099-11-01T14:30:00.000Z',1,'actor','actor')").run()
+    await db.prepare(`INSERT INTO requests(id,kind,organization_id,conversation_state,payload_json) VALUES('thread','booking','org','needs_attention','{"guest":{"name":"Jane Doe","email":"private@example.test","phone":null},"notes":"PRIVATE MATTER"}')`).run()
+    const { bookingId } = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1, requestId: 'thread' })
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    const integration = (await readCalendarIntegration(db, 'org'))!
+    assert.equal((await calendarSubjects(db, 'other', integration)).length, 0)
+    const env = { DB: db, NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
+    await db.prepare("INSERT INTO user(id,name,email) VALUES('owner','Owner','owner@example.test'),('foreign','Foreign','foreign@example.test')").run()
+    await db.prepare("INSERT INTO account(id,accountId,providerId,userId,scope) VALUES('linked-account','google-subject','google','owner',?)").bind(INTEGRATION_SCOPES['google-calendar'].join(' ')).run()
+    await requireIntegrationAccount(env, 'linked-account', { userId: 'owner', currentAccountId: null, providerId: 'google', scopes: INTEGRATION_SCOPES['google-calendar'] })
+    await assert.rejects(requireIntegrationAccount(env, 'linked-account', { userId: 'foreign', currentAccountId: null, providerId: 'google', scopes: INTEGRATION_SCOPES['google-calendar'] }))
+    assert.ok(!JSON.stringify(integration).includes('token'))
+    const provider = { token: async (accountId: string) => { assert.equal(accountId, 'linked-account'); return 'token' } }
+    const events = new Map<string, Record<string, unknown>>()
+    let timeoutAfterInsert = true; let denyCalendar = false; let cancelDuringPut = false
+    t.mock.method(globalThis, 'fetch', async (input, init) => {
+      const url = new URL(String(input))
+      assert.equal(url.hostname, 'www.googleapis.com')
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer token')
+      if (url.pathname.includes('/calendarList/')) return denyCalendar ? new Response(null, { status: 404 }) : Response.json({ accessRole: 'writer' })
+      assert.equal(url.searchParams.get('sendUpdates'), 'none')
+      const payload = init?.body ? JSON.parse(String(init.body)) : null
+      const id = init?.method === 'POST' ? payload.id : url.pathname.split('/').at(-1)!
+      if (init?.method === 'DELETE') { events.delete(id); return new Response(null, { status: 204 }) }
+      if (init?.method === 'POST') {
+        if (events.has(id)) return new Response(null, { status: 409 })
+        events.set(id, payload)
+        if (timeoutAfterInsert) { timeoutAfterInsert = false; throw new Error('timeout after provider committed') }
+      } else {
+        events.set(id, payload)
+        if (cancelDuringPut) { cancelDuringPut = false; await setBookingStatus(db, { organizationId: 'org', bookingId, status: 'cancelled' }) }
+      }
+      return Response.json({ id })
+    })
+    assert.equal((await syncCalendarOrganization(env, 'org', 25, provider)).failed, 1)
+    assert.equal((await db.prepare('SELECT status FROM bookings WHERE id=?').bind(bookingId).first())?.status, 'pending')
+    assert.equal((await readCalendarIntegration(db, 'org'))?.status, 'error')
+    await db.prepare('UPDATE google_calendar_event_links SET next_attempt_at=NULL').run()
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    const link = await db.prepare('SELECT * FROM google_calendar_event_links').first()
+    assert.equal(link?.operational_id, bookingId)
+    assert.equal(link?.request_id, 'thread')
+    const event = events.get(String(link?.event_id))!
+    assert.equal(event.summary, 'Pending consultation — Jane Doe')
+    assert.deepEqual(event.start, { dateTime: '2099-11-01T14:00:00.000Z', timeZone: 'America/New_York' })
+    assert.equal(event.attendees, undefined)
+    assert.ok(!JSON.stringify(event).includes('PRIVATE MATTER'))
+    assert.ok(!JSON.stringify(event).includes('private@example.test'))
+    await setBookingStatus(db, { organizationId: 'org', bookingId, status: 'confirmed' })
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    assert.equal(events.get(String(link?.event_id))?.summary, 'Consultation — Jane Doe')
+    await db.prepare("UPDATE product_sessions SET starts_at='2099-11-01T15:00:00.000Z',ends_at='2099-11-01T15:30:00.000Z',updated_at='2026-10-02T00:00:00.000Z' WHERE id='s'").run()
+    cancelDuringPut = true
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 0, 'late update is compensated after committed cancellation')
+    assert.equal((await db.prepare('SELECT state FROM google_calendar_event_links').first())?.state, 'deleted')
+    // Failed cleanup is retained even when Google answers 404 for lost access.
+    await disconnectCalendar(db, 'org')
+    // Cancelled subject was already deleted; create another real committed claim.
+    const second = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1 })
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(await readCalendarIntegration(db, 'org'), null)
+    assert.equal((await db.prepare('SELECT integrations_json FROM organization WHERE id=\'org\'').first())?.integrations_json, '{"google_analytics":{"revision":"a","measurement_id":"G-123","status":"active"}}')
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    await disconnectCalendar(db, 'org')
+    denyCalendar = true
+    assert.equal((await syncCalendarOrganization(env, 'org', 25, provider)).failed, 1)
+    assert.equal(events.size, 1)
+    assert.equal((await readCalendarIntegration(db, 'org'))?.status, 'disabled')
+    assert.ok((await readCalendarIntegration(db, 'org'))?.last_error)
+    await assert.rejects(storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'new', calendar_name: 'New', calendar_group: 'consultations', include_reservations: false }))
+    denyCalendar = false
+    await db.prepare('UPDATE google_calendar_event_links SET next_attempt_at=NULL').run()
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 0)
+    assert.equal((await db.prepare('SELECT status FROM bookings WHERE id=?').bind(second.bookingId).first())?.status, 'pending')
+  } finally { await mf.dispose() }
+})
