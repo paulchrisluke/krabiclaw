@@ -1,0 +1,30 @@
+/* One editorial product recipe, used by overview and future detail documents. */
+.kc-products-page { background: #090b10; }
+.kc-products-page .tenant-page-block { scroll-margin-top: 5rem; }
+.kc-product-eyebrow { margin: 0 0 1.5rem; color: #db4f40; text-transform: uppercase; letter-spacing: .17em; font-size: .75rem; font-weight: 600; }
+.kc-product-link { display: inline-flex; align-items: center; gap: 1rem; color: #db4f40; border-bottom: 1px solid currentColor; padding: .4rem 0; margin-top: 1.5rem; font-size: clamp(.95rem, 1.4vw, 1.35rem); font-weight: 600; text-decoration: none; }
+.kc-product-link:hover { opacity: .85; }
+.kc-product-workflows, .kc-product-more { padding: clamp(4rem, 8.5vw, 8.5rem) 0; background: #111420; color: #f8f7f3; }
+.kc-product-workflows__inner, .kc-product-more__inner { width: min(86%, 86rem); margin: auto; }
+.kc-product-workflows__inner { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem 6rem; align-items: center; }
+.kc-product-workflows h2 { font-size: clamp(2.8rem, 5.7vw, 5.7rem); font-weight: 600; letter-spacing: -.045em; line-height: 1.02; margin: 0; white-space: pre-line; }
+.kc-product-workflows__body { max-width: 32rem; color: #b5b7c2; font-size: clamp(1rem, 1.6vw, 1.55rem); line-height: 1.55; margin-top: 2rem; }
+.kc-product-workflows .kc-product-link, .kc-product-more .kc-product-link { color: #ff7768; }
+.kc-product-workflows .kc-product-eyebrow { color: #ff7768; }
+.kc-product-workflows__clients { display: flex; list-style: none; padding: 0; gap: 1.5rem; margin: 2.5rem 0 0; color: #e8e6e9; }
+.kc-product-workflows__question { color: #979cab; text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; }
+.kc-product-workflows__prompts { list-style: none; padding: 0; margin: 0; }
+.kc-product-workflows__prompts li { padding: 1.5rem 0; border-bottom: 1px solid #ffffff1e; font-size: clamp(1.3rem, 3vw, 3rem); letter-spacing: -.04em; }
+.kc-product-workflows__prompts span, .kc-product-workflows__steps span { color: #ff7768; margin-right: 1rem; }
+.kc-product-workflows__steps { grid-column: 1 / -1; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; list-style: none; padding: 2rem 0 0; margin: 1rem 0 0; border-top: 1px solid #ffffff1b; color: #bbc0ce; }
+.kc-product-more { background: #171c25; }
+.kc-product-more h2 { font-size: clamp(1.1rem, 1.7vw, 1.6rem); font-weight: 400; color: #bfc2cd; margin: 0 0 4rem; }
+.kc-product-more__columns { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; }
+.kc-product-more__columns > div + div { border-left: 1px solid #ffffff26; padding-left: 4rem; }
+.kc-product-more h3 { font-size: clamp(2.3rem, 3.5vw, 3.5rem); letter-spacing: -.04em; font-weight: 600; line-height: 1.06; white-space: pre-line; margin: 0; }
+.kc-product-more p { font-size: clamp(1rem, 1.5vw, 1.5rem); line-height: 1.55; color: #b1b5c0; max-width: 32rem; margin-top: 1.8rem; }
+@media (max-width: 767px) {
+  .kc-product-workflows__inner, .kc-product-more__columns { grid-template-columns: 1fr; gap: 3rem; }
+  .kc-product-workflows__steps { flex-direction: column; }
+  .kc-product-more__columns > div + div { border-left: 0; border-top: 1px solid #ffffff26; padding: 3rem 0 0; }
+}

@@ -4,7 +4,8 @@
     shows them on the right, in one dark card. The badges name the assistants
     a Krabiclaw site is edited from.
   -->
-  <section class="kc-media-feature" data-parity-section="media-feature">
+  <PlatformProductStory v-if="page.recipe === 'products'" :block="block" :page="page" />
+  <section v-else class="kc-media-feature" data-parity-section="media-feature">
     <div class="kc-media-feature__card">
       <div class="kc-media-feature__copy">
         <ul class="kc-media-feature__badges" aria-label="Works with">
@@ -52,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformProductStory from '~/components/platform/marketing/PlatformProductStory.vue'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'

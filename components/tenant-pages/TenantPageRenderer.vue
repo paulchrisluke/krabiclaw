@@ -3,7 +3,7 @@
     data-tenant-page
     :data-template="template"
     class="text-default"
-    :class="[readingColumn ? 'py-16' : undefined, localHomepagePilot ? 'kc-homepage-pilot' : undefined]"
+    :class="[readingColumn ? 'py-16' : undefined, localHomepagePilot ? 'kc-homepage-pilot' : undefined, template === 'platform' && page.recipe === 'products' ? 'kc-products-page' : undefined]"
   >
     <!--
       A template's own component names its band; the wrapper only names one for

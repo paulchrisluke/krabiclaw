@@ -1,7 +1,8 @@
 <template>
   <!-- The preview moves the authored CMS copy into the scene's compensated
        text layer. The current CMS layout remains available with preview off. -->
-  <template v-if="variant === 'home'">
+  <PlatformCoastalScene v-if="page.recipe === 'products'" :block="block" :page="page" />
+  <template v-else-if="variant === 'home'">
     <section
       ref="homeHero"
       class="kc-parallax-hero"
@@ -186,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCoastalScene from '~/components/platform/marketing/PlatformCoastalScene.vue'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'

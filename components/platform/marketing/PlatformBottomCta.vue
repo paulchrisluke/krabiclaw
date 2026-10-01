@@ -1,5 +1,6 @@
 <template>
-  <div
+  <PlatformCoastalScene v-if="page.recipe === 'products'" :block="block" :page="page" closing />
+  <div v-else
     class="rounded-3xl border border-default bg-elevated text-center shadow-sm"
     :class="size === 'lg' ? 'p-10 sm:p-16 max-w-4xl mx-auto flex flex-col items-center gap-6' : 'p-8 sm:p-12 space-y-6'"
     data-parity-section="cta"
@@ -14,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCoastalScene from '~/components/platform/marketing/PlatformCoastalScene.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull } from '~/utils/tenant-page-block-data'
