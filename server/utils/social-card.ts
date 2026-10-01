@@ -19,6 +19,7 @@ import {
 } from '~/utils/social-metadata'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { mediaStillUrl, resolveOwnerPicture, type MediaPlacementOwnerType } from '~/shared/media-placement-contract'
+import { platformHomeSocialCardCopy } from '~/server/utils/platform-home-social-card'
 
 const SOCIAL_CARD_OWNERS = {
   organization: { table: 'organization', tenant: 'o.id', filter: "o.status = 'active'" },
@@ -126,11 +127,22 @@ function errorMessage(error: unknown): string {
 
 async function loadOwner(db: DbClient, owner: SocialCardOwner): Promise<OwnerRecord | null> {
   switch (owner.owner_type) {
-    case 'organization':
-      return await queryFirst<OwnerRecord>(db, `SELECT id AS organization_id,
+    case 'organization': {
+      const record = await queryFirst<OwnerRecord>(db, `SELECT id AS organization_id,
         COALESCE(NULLIF(trim(seo_title), ''), NULLIF(trim(name), '')) AS title,
         COALESCE(NULLIF(trim(seo_description), ''), NULLIF(trim(brand_description), '')) AS description,
         NULL AS label, NULL AS location FROM organization WHERE id = ? LIMIT 1`, [owner.owner_id]) ?? null
+      if (!record || owner.owner_id !== 'platform') return record
+      // Home shares the organization's generated card. Read its authored hero
+      // instead of producing a name-only card from empty organization SEO fields.
+      const hero = await queryFirst<{ data_json: string }>(db, `SELECT cb.data_json
+        FROM content_documents d JOIN content_blocks cb ON cb.document_id = d.id
+        WHERE d.organization_id = ? AND d.kind = 'page' AND d.row_role = 'root'
+          AND d.path = '/' AND d.locale = 'en' AND cb.type = 'hero' AND cb.parent_block_id IS NULL
+        ORDER BY cb.position LIMIT 1`, [owner.owner_id])
+      const copy = hero ? platformHomeSocialCardCopy(JSON.parse(hero.data_json)) : null
+      return copy ? { ...record, ...copy } : record
+    }
     case 'business_location':
       return await queryFirst<OwnerRecord>(db, `SELECT organization_id,
         COALESCE(NULLIF(trim(seo_title), ''), title) AS title,

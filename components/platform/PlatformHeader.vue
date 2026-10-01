@@ -1,5 +1,5 @@
 <template>
-  <header class="sticky top-0 z-50 bg-default/85 backdrop-blur-md border-b border-default">
+  <header class="sticky top-0 z-50 bg-default/85 backdrop-blur-md border-b border-default" :class="{ 'kc-homepage-pilot-header': homepagePreviewEnabled && section === 'platform' && route.path === '/' }">
     <div class="mx-auto flex h-16 items-center justify-between gap-6 px-6" :class="containerClass">
 
       <!-- Wordmark. Docs and blog carry their own contextual word; there is no
@@ -196,6 +196,7 @@ const MORE_ITEMS = [
 ] as const
 
 const route = useRoute()
+const homepagePreviewEnabled = import.meta.dev || useRuntimeConfig().public.homepageCoastalPreview
 // The same client-only session read as PlatformAccountCta, gated the same way
 // so the server and the hydrating client agree on the signed-out link.
 const session = authClient.useSession()
@@ -252,3 +253,11 @@ onBeforeUnmount(() => {
   releaseScrollLock()
 })
 </script>
+
+<style scoped>
+@media (max-width: 359px) {
+  .kc-homepage-pilot-header > div { gap: 4px; }
+  .kc-homepage-pilot-header > div > div { gap: 4px; }
+  .kc-homepage-pilot-header .kc-wordmark { font-size: 16px; }
+}
+</style>

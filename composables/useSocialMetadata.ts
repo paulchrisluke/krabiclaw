@@ -76,6 +76,7 @@ function requireMetadata<T>(resolved: T | null): T {
 export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInput | null>) {
   const config = useRuntimeConfig()
   const requestURL = useRequestURL()
+  const homepagePreviewEnabled = import.meta.dev || config.public.homepageCoastalPreview
   const tenant = useTenantOrganization()
   const publicLocale = useState<string>('public-locale', () => 'en')
   const localeRepresentations = useState<PublicLocaleRepresentation[]>('public-locale-representations', () => [])
@@ -109,8 +110,11 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       // page can be added that forgets to.
       discoverability: tenant.previewAuthorized ? 'private' : value.discoverability,
     }
-    const resolvedImage = value.socialImage
-      ? { ...value.socialImage, url: resolveSeoUrl(value.socialImage.url, origin), alt: value.socialImage.alt || value.title }
+    const image = homepagePreviewEnabled && template === 'platform' && value.path === '/'
+      ? { url: new URL('/homepage-pilot/social/home-social-card.png', requestURL.origin).href, width: 1200, height: 630, type: 'image/png' as const, alt: 'Automate your website using ChatGPT, Claude, MCP' }
+      : value.socialImage
+    const resolvedImage = image
+      ? { ...image, url: resolveSeoUrl(image.url, origin), alt: image.alt || value.title }
       : null
     return { value, origin, template, tags: composeSocialMetadata(socialInput, resolvedImage) }
   })
