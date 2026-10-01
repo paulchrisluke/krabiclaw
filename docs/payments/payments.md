@@ -123,7 +123,7 @@ parent or dedicated seller payment-method configuration, Metronome test workspac
 and HTTPS platform return origin. Keep the subscription secret separate. Complete
 merchant-hosted onboarding and Radar before claiming native card readiness.
 No deployment, live webhook change, OAuth grant change or production activation is
-part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Hosted Checkout capture/local native-event conversion, actual delayed cost attribution and operating-customer Stripe collection remain pending configuration. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
+part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Native hosted capture, actual Worker/D1 hold conversion, merchant-approved rejection/full refund, signed replay and thin Connect SDK refresh also pass. Actual delayed cost attribution and operating-customer Stripe collection remain pending configuration. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
 
 ## Local verification
 
