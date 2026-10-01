@@ -87,7 +87,8 @@ control and nothing about its size, radius or width.
 
 **A yes/no is never a checkbox.** A rule — something guests are held to — is a
 ✕/✓ pair (`RuleRow`). A setting is a switch (`SettingRow`). A one-of-N is a
-set of cards (`ChoiceCards`, `URadioGroup variant="card"`). A checkbox exists
+set of cards: `URadioGroup variant="card"`, which the theme draws as Airbnb's
+selectable cards, so it needs no wrapper of its own. A checkbox exists
 only in a list's *Select* mode, which `DashboardListEditor` already draws.
 
 **A box means "choose me" or "open me".** Rows are separated by a 1px

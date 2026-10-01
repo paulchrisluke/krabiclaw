@@ -68,8 +68,12 @@ export default defineAppConfig({
         }
       ]
     },
-    // A yes/no setting. Black when on, as Airbnb's toggle is.
-    switch: { defaultVariants: { size: 'lg', color: 'neutral' } },
+    // A yes/no setting. Black when on, as Airbnb's toggle is; off is the 3:1
+    // field edge, because Nuxt UI's off track vanishes on the cream page.
+    switch: {
+      slots: { base: 'data-[state=unchecked]:bg-(color:--kc-field-border)' },
+      defaultVariants: { size: 'lg', color: 'neutral' }
+    },
     // The one one-of-N control: a set of cards, the chosen one ringed in the
     // text colour (Airbnb's Listed / Unlisted, cancellation tiers).
     radioGroup: {

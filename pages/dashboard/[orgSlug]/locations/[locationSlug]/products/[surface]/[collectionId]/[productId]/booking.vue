@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-booking"
+    :ready="p.ready.value"
     :title="p.sectionLabels['booking']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
@@ -11,7 +12,7 @@
   >
     <!-- Adding booking makes this bookable; removing it takes its sessions and their bookings with it, so it asks first. -->
     <div class="space-y-4">
-      <UCheckbox v-model="p.form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
+      <SettingRow v-model="p.form.bookable" label="Takes bookings" description="Guests choose a session and reserve a place." />
       <UAlert v-if="!p.form.bookable && p.product.value?.booking" color="warning" variant="soft" icon="i-lucide-triangle-alert" description="Saving removes this product's schedule. It is refused while anything is booked." />
       <template v-if="p.form.bookable">
         <UFormField label="Session length (minutes)">
@@ -47,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })

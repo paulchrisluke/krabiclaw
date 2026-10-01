@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-photo"
+    :ready="p.ready.value"
     :title="p.sectionLabels['photo']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"

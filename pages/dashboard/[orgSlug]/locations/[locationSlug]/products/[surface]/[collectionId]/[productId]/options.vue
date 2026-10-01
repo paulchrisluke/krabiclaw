@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-options"
+    :ready="p.ready.value"
     :title="p.sectionLabels['options']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"

@@ -2,6 +2,7 @@
   <DashboardLeafPanel
     id="location-post-publishing"
     :title="post.sectionLabels.value.publishing"
+    lead="Choose exactly where this post goes. Each place shows what happened there."
     :saving="post.editor.publishing.value"
     :disabled="!selected.length"
     :save-label="selected.length > 1 ? `Publish to ${selected.length}` : 'Publish'"
@@ -10,20 +11,14 @@
     @save="publish"
   >
     <div class="space-y-5">
-      <p class="text-base text-muted">Choose exactly where this post goes. Each place shows what happened there.</p>
       <UAlert v-if="connectionsError" color="warning" variant="soft" icon="i-lucide-triangle-alert" title="Connections could not be read" :description="connectionsError" />
 
-      <ul class="divide-y divide-default rounded-lg border border-default">
-        <li v-for="row in rows" :key="row.channel" class="flex items-start gap-3 p-4">
-          <UCheckbox
-            v-if="row.selectable"
-            :model-value="selected.includes(row.channel)"
-            :aria-label="`Publish to ${row.name}`"
-            @update:model-value="toggle(row.channel, Boolean($event))"
-          />
+      <!-- One row per place, a switch for each one this publish can reach. -->
+      <ul>
+        <li v-for="row in rows" :key="row.channel" class="flex items-start gap-3 border-b border-default py-6 last:border-b-0">
           <UIcon :name="row.icon" class="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <div class="min-w-0 flex-1">
-            <p class="text-sm font-semibold text-highlighted">{{ row.name }}<span v-if="row.target" class="font-normal text-muted"> · {{ row.target }}</span></p>
+            <p class="text-base text-highlighted">{{ row.name }}<span v-if="row.target" class="font-normal text-muted"> · {{ row.target }}</span></p>
             <p class="mt-0.5 text-sm" :class="row.tone">{{ row.state }}</p>
             <p v-if="row.detail" class="mt-1 text-xs text-muted">{{ row.detail }}</p>
             <div class="mt-2 flex flex-wrap gap-2">
@@ -32,6 +27,13 @@
               <UButton v-if="row.connectUrl" :to="row.connectUrl" size="xs" color="neutral" variant="link">Connect</UButton>
             </div>
           </div>
+          <USwitch
+            v-if="row.selectable"
+            :model-value="selected.includes(row.channel)"
+            :aria-label="`Publish to ${row.name}`"
+            class="shrink-0"
+            @update:model-value="toggle(row.channel, $event)"
+          />
         </li>
       </ul>
     </div>

@@ -21,10 +21,10 @@
         >
           <div class="space-y-2">
             <p class="font-medium text-highlighted">{{ day.label }}</p>
-            <UCheckbox
-              :model-value="isClosed(day.value)"
-              label="Closed"
-              @update:model-value="setClosed(day.value, $event === true)"
+            <USwitch
+              :model-value="!isClosed(day.value)"
+              label="Open"
+              @update:model-value="setClosed(day.value, !$event)"
             />
           </div>
 
@@ -109,7 +109,7 @@
           <div v-for="(period, periodIndex) in entry.periods" :key="periodIndex" class="grid grid-cols-2 gap-3">
             <UFormField label="Open"><UInput v-model="period.open_time" type="time" /></UFormField>
             <UFormField label="Close"><UInput v-model="period.close_time" type="time" /></UFormField>
-            <UCheckbox :model-value="period.close_day_offset === 1" label="Closes next day" @update:model-value="period.close_day_offset = $event === true ? 1 : 0" />
+            <USwitch :model-value="period.close_day_offset === 1" label="Closes next day" @update:model-value="period.close_day_offset = $event ? 1 : 0" />
             <UButton color="neutral" variant="ghost" label="Remove period" @click="entry.periods.splice(periodIndex, 1)" />
           </div>
           <UButton color="neutral" variant="outline" label="Add period" @click="entry.periods.push({ open_time: '09:00', close_time: '17:00', close_day_offset: 0 })" />

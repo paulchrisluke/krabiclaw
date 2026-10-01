@@ -10,9 +10,7 @@
     @save="editor.save"
   >
     <div class="space-y-6">
-      <UFormField label="Show announcement" description="A dismissible popup shown to visitors on your website.">
-        <USwitch v-model="editor.form.announcementEnabled" />
-      </UFormField>
+      <SettingRow v-model="editor.form.announcementEnabled" label="Show announcement" description="A popup shown to visitors on your website." />
       <template v-if="editor.form.announcementEnabled">
         <UFormField label="Image (optional)">
           <MediaPicker v-model="editor.form.announcementAssetId" :organization-id="editor.organizationId" accept="image" title="Select announcement image" />
@@ -29,7 +27,7 @@
         <UFormField label="Button URL (optional)">
           <UInput v-model="editor.form.announcementCtaUrl" type="url" class="w-full" placeholder="https://..." />
         </UFormField>
-        <UCheckbox v-model="editor.form.announcementDismissible" label="Allow visitors to dismiss the announcement" />
+        <SettingRow v-model="editor.form.announcementDismissible" label="Visitors can dismiss it" />
       </template>
     </div>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
@@ -37,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 import { organizationSettingsEditorKey } from '~/lib/components/workspace/settings/OrganizationSettingsPage.vue'
 

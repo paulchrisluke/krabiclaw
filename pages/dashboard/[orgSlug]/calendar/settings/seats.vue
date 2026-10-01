@@ -11,16 +11,14 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-6">
-      <UCheckbox :model-value="limited" label="Limit seats" @update:model-value="setLimited($event === true)" />
-      <UFormField v-if="limited" label="Seats">
-        <UInputNumber :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" class="w-full" @update:model-value="setSeats" />
-      </UFormField>
-    </div>
+    <SettingRow :model-value="limited" label="Limit seats" @update:model-value="setLimited">
+      <UInputNumber v-if="limited" :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" aria-label="Seats" class="w-36" @update:model-value="setSeats" />
+    </SettingRow>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { useCalendarLocationEditor } from '~/composables/useCalendarLocationEditor'
 
 definePageMeta({ layout: 'dashboard' })

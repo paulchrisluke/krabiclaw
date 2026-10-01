@@ -17,7 +17,7 @@
         icon="i-lucide-calendar-off"
         description="This location does not take reservations yet. Saving a policy opens them."
       />
-      <ReservationPolicyForm v-model="editor.reservationForm.value" />
+      <ReservationPolicyForm v-model="editor.reservationForm.value" :pickers="pickers" />
       <UButton
         v-if="editor.reservationConfigExists.value"
         color="error"
@@ -43,4 +43,14 @@ definePageMeta({ layout: 'dashboard' })
 const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'reservations')
+
+// The numbers these rules carry are chosen on the calendar's settings leaves, for this location.
+const route = useRoute()
+const picker = (leaf: string) => ({ path: `/dashboard/${route.params.orgSlug}/calendar/settings/${leaf}`, query: { locationId: dashboardLocation.currentLocationId.value } })
+const router = useRouter()
+const pickers = computed(() => ({
+  seats: router.resolve(picker('seats')).fullPath,
+  notice: router.resolve(picker('notice')).fullPath,
+  cancellation: router.resolve(picker('cancellation')).fullPath,
+}))
 </script>

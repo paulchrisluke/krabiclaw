@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-attributes"
+    :ready="p.ready.value"
     :title="p.sectionLabels['attributes']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
@@ -14,7 +15,15 @@
       <p v-if="!p.definitions.value.length" class="text-base text-muted">
         No attributes are defined yet. Define one in your catalog settings and it becomes available on every {{ p.presentation.value.itemLabel.toLowerCase() }}.
       </p>
-      <UFormField v-for="definition in p.definitions.value" :key="definition.id" :label="definition.name" :description="definition.description ?? undefined">
+      <template v-for="definition in p.definitions.value" :key="definition.id">
+      <SettingRow
+        v-if="definition.value_type === 'boolean'"
+        :model-value="p.booleanValue(definition)"
+        :label="definition.name"
+        :description="definition.description ?? undefined"
+        @update:model-value="p.form.metafields[p.metafieldKey(definition)] = $event"
+      />
+      <UFormField v-else :label="definition.name" :description="definition.description ?? undefined">
         <UInputTags
           v-if="definition.value_type === 'list.single_line_text'"
           :model-value="p.listValue(definition)"
@@ -28,14 +37,15 @@
         <UTextarea v-else-if="definition.value_type === 'multi_line_text'" :model-value="p.textValue(definition)" :rows="4" class="w-full" @update:model-value="p.form.metafields[p.metafieldKey(definition)] = $event" />
         <!-- A typed attribute is edited in its own type: a number typed into a text box arrives as a string the validator refuses. -->
         <UInputNumber v-else-if="definition.value_type === 'integer'" :model-value="p.integerValue(definition)" class="w-full" @update:model-value="p.setIntegerMetafield(definition, $event)" />
-        <UCheckbox v-else-if="definition.value_type === 'boolean'" :model-value="p.booleanValue(definition)" :label="definition.name" @update:model-value="p.form.metafields[p.metafieldKey(definition)] = $event === true" />
         <UInput v-else :model-value="p.textValue(definition)" class="w-full" @update:model-value="p.form.metafields[p.metafieldKey(definition)] = $event" />
       </UFormField>
+      </template>
     </div>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })

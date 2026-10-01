@@ -10,23 +10,14 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-3">
-      <button
-        v-for="tier in CANCELLATION_TIERS"
-        :key="tier.id"
-        type="button"
-        class="block w-full rounded-xl border p-4 text-left transition-colors"
-        :class="chosen === tier.id ? 'border-highlighted bg-elevated/70 ring-1 ring-highlighted' : 'border-default hover:bg-elevated/50'"
-        :aria-pressed="chosen === tier.id"
-        @click="choose(tier.id)"
-      >
-        <span class="block text-lg font-semibold text-highlighted">{{ tier.label }}</span>
-        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-          <li v-for="point in tier.points" :key="point">{{ point }}</li>
+    <URadioGroup :model-value="chosen ?? undefined" :items="items" variant="card" class="w-full" @update:model-value="choose($event as CancellationTierId)">
+      <template #description="{ item }">
+        <ul class="mt-1 list-disc space-y-1 pl-5">
+          <li v-for="point in (item as typeof items[number]).points" :key="point">{{ point }}</li>
         </ul>
-      </button>
-      <p v-if="!chosen" class="text-sm text-muted">{{ current }}</p>
-    </div>
+      </template>
+    </URadioGroup>
+    <p v-if="!chosen" class="mt-4 text-sm text-muted">{{ current }}</p>
   </DashboardLeafPanel>
 </template>
 
@@ -37,6 +28,7 @@ import { useCalendarLocationEditor } from '~/composables/useCalendarLocationEdit
 definePageMeta({ layout: 'dashboard' })
 
 const editor = await useCalendarLocationEditor('reservations')
+const items = CANCELLATION_TIERS.map(tier => ({ value: tier.id, label: tier.label, points: tier.points, description: tier.points.join(' ') }))
 const chosen = computed(() => cancellationTierOf(editor.reservationForm.value))
 // A stored value no tier names — set through MCP or the older form — is said, not silently replaced.
 const current = computed(() => `Currently: ${cancellationSummary(editor.reservationForm.value)}. Choosing a policy replaces it.`)

@@ -8,10 +8,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-4">
-      <p class="text-base text-muted">A published review appears on your site. An archived review is hidden from it.</p>
-      <URadioGroup v-model="editor.form.status" :items="REVIEW_VISIBILITY_ITEMS" />
-    </div>
+    <URadioGroup v-model="editor.form.status" :items="REVIEW_VISIBILITY_ITEMS" variant="card" class="w-full" />
   </DashboardLeafPanel>
 </template>
 

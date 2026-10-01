@@ -92,11 +92,13 @@ export interface ProductEditor {
   locationId: ComputedRef<string | null>
   definitions: Ref<MetafieldDefinition[]>
   isNew: ComputedRef<boolean>
+  /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
+  ready: ComputedRef<boolean>
   sectionLabels: Record<SectionKey, string>
   saving: Ref<boolean>
   saveError: Ref<string | null>
   photoError: Ref<string | null>
-  saveLabel: Ref<string | undefined>
+  saveLabel: Ref<string>
   saveDisabled: Ref<boolean>
   setPrimaryImage: (assetId: string | null) => Promise<void>
   addOption: () => void
@@ -190,6 +192,7 @@ const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
 const isNew = computed(() => productId.value === 'new')
+const ready = computed(() => isNew.value || (product.value?.id === productId.value && !loadError.value))
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
@@ -640,7 +643,7 @@ function payload() {
   }
 }
 
-const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk({
+const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk({
   recordPath: itemPath,
   isNew,
   openKey: editorKey,
@@ -652,6 +655,10 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, sta
   existingBlocked: () => !sectionValid.value,
   commit,
 })
+
+// An existing product's commit writes straight to the live record MCP reads,
+// so it says what it does: Publish. Creating still walks its sections.
+const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
 
 async function commit() {
   const id = locationId.value
@@ -911,6 +918,7 @@ provide(productEditorKey, {
   locationId,
   definitions,
   isNew,
+  ready,
   sectionLabels,
   saving,
   saveError,

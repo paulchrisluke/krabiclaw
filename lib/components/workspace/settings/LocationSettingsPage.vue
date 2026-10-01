@@ -295,11 +295,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     detailsForm.status = loc.status
     }
 
-  const setDetailsActive = (v: boolean | 'indeterminate') => {
-    if (v === 'indeterminate') return
-    detailsForm.status = v ? 'active' : 'inactive'
-  }
-
   const slugSummary = computed(() => location.value?.slug?.trim() || 'Not set')
   const statusSummary = computed(() => location.value?.status === 'active' ? 'Active' : 'Hidden from the public site')
   const featureSummary = computed(() => {
@@ -545,7 +540,6 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     loading, error, location, saving, saveDisabled, validationMessage, editorError, dirty,
     detailsForm, hoursForm, reservationForm, reservationConfigExists, closingReservations,
     locationToggleableFeatures, locationEnabledFeatureSet, locationFeatureLabel,
-    setDetailsActive,
     navigationGroups, locationLocalizationFields, localizedLocationPath, organizationLocalizationSettingsPath,
     revert: resetDraft, save: saveCurrentEditor, closeReservations, loadLocationWorkspace,
   }
