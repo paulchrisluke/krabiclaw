@@ -47,6 +47,11 @@ const overnight = computed(() => periods.value.some(period => period.value.close
 // Unanswered hours (null) read as open, so the owner fills in times rather
 // than switching seven days on; answered hours with nothing today read closed.
 const closed = ref(form.value.hours !== null && !periods.value.length)
+// A new draft — loaded, saved and refreshed, or discarded — answers afresh.
+// Edits change the same hours object, so they keep an open day with no times open.
+watch(() => form.value.hours, (hours, previous) => {
+  if (hours !== previous) closed.value = hours !== null && !periods.value.length
+})
 
 function ensureHours() {
   form.value.hours ??= { periods: [] }
