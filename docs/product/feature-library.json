@@ -163,7 +163,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "0852171dc13d3fefa4236ebf85bb42e56a37c2e6568e184f1b9b90c8a61c3217",
-          "tests/integration/availability-d1.test.ts": "0e8cbf71f4d5a76170d7ce9eefea53fb9382eeb56dcca47fe1534e096175da3f",
+          "tests/integration/availability-d1.test.ts": "ca0b41d93ac52190a3f7a2c6ad789affe5528006135b4650b574aff41f43c1f8",
           "server/utils/mcp-tools/locations.ts": "939c976e55cf273e0e41feb3dd142440e5cb5a3ab6dca78d9df32e541a5c7946"
         }
       },

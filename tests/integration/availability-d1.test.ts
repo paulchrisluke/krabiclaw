@@ -328,7 +328,7 @@ test('unbooked re-add retains the existing cancellation and default-refresh beha
   const slots = [{ weekday: 0, start_time: '14:00', capacity: null }]
   try {
     await replaceWeeklySchedule(db, { ...scope, slots })
-    const first = await db.prepare('SELECT id, starts_at FROM product_sessions ORDER BY starts_at LIMIT 1').first<{ id: string; starts_at: string }>()
+    const first = await db.prepare('SELECT id, starts_at FROM product_sessions WHERE starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<{ id: string; starts_at: string }>()
     assert(first)
     await replaceWeeklySchedule(db, { ...scope, slots: [] })
     assert.equal(await db.prepare('SELECT status FROM product_sessions WHERE id = ?').bind(first.id).first('status'), 'cancelled')
