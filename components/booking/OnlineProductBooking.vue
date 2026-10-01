@@ -1,6 +1,6 @@
 <template>
   <article class="rounded-xl border border-default bg-default p-6 text-default">
-    <h3 class="text-xl font-semibold"><NuxtLink :to="`/experiences/${encodeURIComponent(product.slug)}`" class="text-primary hover:underline">{{ product.name }}</NuxtLink></h3>
+    <h2 class="text-xl font-semibold">Schedule an appointment</h2>
     <p class="mt-2 text-sm text-muted">Online · {{ product.booking?.duration_minutes }} minutes · {{ product.booking?.confirmation_mode === 'review' ? 'Staff review' : 'Instant confirmation' }}</p>
     <ul class="my-4 space-y-1 text-sm">
       <li v-for="variant in controller.sellableVariants.value" :key="variant.id"><template v-if="controller.sellableVariants.value.length > 1">{{ variant.name }} · </template>{{ controller.variantPriceLabel(variant) || 'Price unavailable' }}</li>

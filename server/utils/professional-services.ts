@@ -16,7 +16,6 @@ const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
-  type PublicTenantPageHydrationResources,
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
@@ -87,37 +86,6 @@ export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, or
     social_image: page.social_image,
     updated_at: page.updated_at,
   }))
-}
-
-export async function getPublicTenantPageByPath(
-  env: CloudflareEnv,
-  db: DbClient,
-  organizationId: string,
-  path: string,
-  options: {
-    locale?: string | null
-    hydrationResources?: PublicTenantPageHydrationResources
-    localizations?: readonly ExactPublicLocalization[] | null
-  } = {},
-): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(env, db, organizationId, path, options)
-  if (!page) return null
-  return {
-    id: page.id,
-    page_id: page.page_id,
-    path: page.path,
-    title: page.title,
-    page_type: page.page_type,
-    recipe: page.recipe,
-    sort_order: page.sort_order,
-    locale: page.locale,
-    summary: page.summary,
-    blocks: page.blocks,
-    media: page.media,
-    social_image: page.social_image,
-    localeRepresentations: page.localeRepresentations,
-    updated_at: page.updated_at,
-  }
 }
 
 /** Initialize through the same adapter; retain any read-only legacy object during rollout. */
@@ -426,7 +394,7 @@ export async function getPublicBlawbyRouteData(
 
   const [page, reviewRows] = await Promise.all([
     pagePath
-      ? getPublicTenantPageByPath(env, db, organizationId, pagePath, {
+      ? getPublicTenantPageForPath(env, db, organizationId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
         })

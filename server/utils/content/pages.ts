@@ -40,6 +40,7 @@ import { formatTenantLocalePath } from '~/utils/tenant-locale-path'
 export interface TenantPageEditorInput {
   id?: string
   pageId?: string
+  productId?: string | null
   locale?: string
   path: string
   title: string
@@ -60,6 +61,7 @@ export interface TenantPageDto {
   id: string
   page_id: string
   organization_id: string
+  product_id: string | null
   locale: string
   path: string
   title: string
@@ -76,6 +78,7 @@ interface PageRepresentationRow {
   id: string
   page_id: string
   organization_id: string
+  product_id: string | null
   locale: string
   path: string
   title: string
@@ -280,7 +283,7 @@ export interface TenantPageScope {
 async function getPageRepresentation(db: DbClient, variantId: string, scope?: TenantPageScope): Promise<PageRepresentationRow | null> {
   return await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary,',
+    '       v.title, v.summary, p.product_id,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.id = ? AND (? IS NULL OR v.organization_id = ?) LIMIT 1`,
@@ -429,6 +432,7 @@ function pageDto(row: PageRepresentationRow, document: TenantPageDocument, block
     id: row.id,
     page_id: row.page_id,
     organization_id: row.organization_id,
+    product_id: row.product_id,
     locale: row.locale,
     path: row.path,
     title: row.title,
@@ -446,7 +450,7 @@ export async function listTenantPages(db: DbClient, organizationId: string, opts
   const locale = await resolveLocale(db, organizationId, opts.locale)
   const rows = await queryAll<PageRepresentationRow>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary,',
+    '       v.title, v.summary, p.product_id,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     ` WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? ORDER BY p.sort_order ASC, v.title ASC`,
@@ -493,7 +497,7 @@ export async function getPublishedTenantPage(db: DbClient, organizationId: strin
   const normalizedPath = normalizeTenantPagePath(path)
   const selectPublished = async (candidateLocale: string) => await queryFirst<PageRepresentationRow | null>(db, [
     'SELECT v.id, COALESCE(v.root_id, v.id) AS page_id, v.organization_id, v.locale, v.path,',
-    '       v.title, v.summary,',
+    '       v.title, v.summary, p.product_id,',
     `       json_extract(p.metadata_json, '$.page_type') AS page_type, json_extract(p.metadata_json, '$.recipe') AS recipe, p.sort_order, v.updated_at`,
     `  FROM content_documents v JOIN content_documents p ON p.id = COALESCE(v.root_id, v.id) AND p.row_role = 'root' AND p.kind = 'page'`,
     " WHERE v.row_role IN ('root','representation') AND v.kind = 'page' AND v.organization_id = ? AND v.locale = ? AND v.path = ? LIMIT 1",
@@ -733,6 +737,7 @@ export async function applyOnboardingTenantPages(
 }
 
 export async function createTenantPage(db: DbClient, input: { organizationId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean; env: CloudflareEnv }) {
+  if (input.data.productId != null) badRequest('Create the source page before linking a Product')
   const locale = await resolveLocale(db, input.organizationId, input.data.locale)
   const existingPage = input.data.pageId
     ? await queryFirst<{ id: string; organization_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
@@ -941,6 +946,20 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   const metadata = metadataForInput(effectiveInput, row.locale, path)
   const blocks = normalizeTenantPageBlocks(preserveOmittedBlockMedia(input.data.blocks, currentBlocks))
   await assertTenantPageSupport(input.env, db, row.organization_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
+  const bindingQueries: BatchQuery[] = []
+  if (input.data.productId !== undefined && input.data.productId !== row.product_id) {
+    if (row.id !== row.page_id) badRequest('Change the Product binding on the source page, not a translation')
+    const productId = asString(input.data.productId, 'productId')
+    if (productId) {
+      if (!await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, row.organization_id])) {
+        badRequest('Product is not owned by this organization')
+      }
+      if (await queryFirst(db, "SELECT id FROM content_documents WHERE organization_id = ? AND product_id = ? AND row_role = 'root' AND id <> ?", [row.organization_id, productId, row.page_id])) {
+        conflict('Product already has a canonical page; unbind it there first')
+      }
+    }
+    bindingQueries.push({ query: "UPDATE content_documents SET product_id = ? WHERE id = ? AND organization_id = ? AND row_role = 'root'", params: [productId, row.page_id, row.organization_id] })
+  }
   const now = new Date().toISOString()
   const placementQueries = await tenantPagePlacementQueries(db, input.scope.organizationId, blocks, now)
   const pathChanged = path !== row.path
@@ -980,7 +999,7 @@ export async function updateTenantPage(db: DbClient, variantId: string, input: {
   }
   await updateContentDocument(db, variantId, {
     blocks: blocksAsInputs(blocks), expected_updated_at: input.data.expectedUpdatedAt,
-    additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.organizationId, 'tenant-page-update')],
+    additionalQueriesAfter: [...placementQueries, updateVariant, updatePage, ...bindingQueries, ...redirectQueries, publicResourceCacheInvalidationQuery(input.scope.organizationId, 'tenant-page-update')],
   })
   // The home page has no card of its own, and the organization's card draws
   // the share image rather than anything on the page.

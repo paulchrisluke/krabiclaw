@@ -2,7 +2,7 @@ import { parseGoogleReviewMetadata, type GoogleReviewMetadata } from '~/shared/g
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
-import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts, listOrganizationProducts } from '~/server/utils/product-management'
+import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { EXPERIENCE_PRESENTATION, isExperience, productSurfaceOf, resolveProductPresentation } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
@@ -304,17 +304,6 @@ export async function loadPublicExperienceDetail(
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
   const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
-  if (found.active && found.booking?.online_timezone && offeredAt.size === 0) {
-    if (locale !== 'en') return null
-    const [product] = await hydrateProductMedia(db, organizationId, [found])
-    if (!product) return null
-    const collections = await listCollections(db, { organizationId, locationId: null })
-    const products = await listOrganizationProducts(db, { organizationId, publishedOnly: true })
-    const localeRepresentations = await listPublicLocaleRepresentations(env, db, {
-      organizationId, sourcePath: `/experiences/${product.slug}`, resource: { type: 'product', id: product.id },
-    })
-    return { ...resolved, locations: [], location: null, products, collections, product, booking: product.booking, localeRepresentations }
-  }
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations
