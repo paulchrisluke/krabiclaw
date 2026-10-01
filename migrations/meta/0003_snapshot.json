@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ecb1a0e1-d97c-4752-80c7-d7d9a4089450",
+  "id": "534dd323-3d08-427f-88ef-dc94c47aee51",
   "prevId": "3eab074a-69ec-4c89-bbb0-94a9777a6710",
   "tables": {
     "account": {
@@ -5556,6 +5556,13 @@
         },
         "logo": {
           "name": "logo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "consultation_settings_json": {
+          "name": "consultation_settings_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

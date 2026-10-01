@@ -136,6 +136,16 @@ async function removeEvent(token: string, link: EventLink) {
     await requireWriter(token, link.calendar_id)
   }
 }
+async function currentSubject(db: DbClient, organizationId: string, link: EventLink) {
+  const integration = await readCalendarIntegration(db, organizationId)
+  if (integration?.revision !== link.integration_revision || integration.status === 'disabled') return null
+  return (await calendarSubjects(db, organizationId, integration)).find(subject => subject.operational_id === link.operational_id && subject.booking_kind === link.booking_kind) ?? null
+}
+async function ownsMutation(db: DbClient, link: EventLink, lease: string, revision: string) {
+  return Boolean(await queryFirst<{ id: string }>(db, `SELECT id FROM google_calendar_event_links WHERE id=?
+    AND lease_token=? AND lease_until>? AND booking_revision=? AND state IN ('pending','error')`,
+  [link.id, lease, new Date(Date.now() + 30_000).toISOString(), revision]))
+}
 export interface CalendarProvider {
   token(accountId: string): Promise<string>
 }
@@ -149,7 +159,7 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
   const now = new Date().toISOString()
   const links = await queryAll<EventLink>(db, `SELECT * FROM google_calendar_event_links WHERE organization_id = ?
     AND state IN ('pending', 'cleanup', 'error') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
-    AND (lease_until IS NULL OR lease_until <= ?) ORDER BY CASE state WHEN 'cleanup' THEN 0 ELSE 1 END, updated_at LIMIT ?`, [organizationId, now, now, limit])
+    AND (lease_until IS NULL OR lease_until <= ?) ORDER BY COALESCE(next_attempt_at, created_at), updated_at, id LIMIT ?`, [organizationId, now, now, limit])
   let checked = 0; let failed = 0
   for (const link of links) {
     const lease = crypto.randomUUID()
@@ -159,9 +169,7 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
     checked++
     try {
       const token = await provider.token(link.account_id)
-      const current = await readCalendarIntegration(db, organizationId)
-      const subject = current?.revision === link.integration_revision && current.status !== 'disabled'
-        ? (await calendarSubjects(db, organizationId, current)).find(item => item.operational_id === link.operational_id && item.booking_kind === link.booking_kind) : null
+      const subject = await currentSubject(db, organizationId, link)
       if (!subject || link.state === 'cleanup') {
         await removeEvent(token, link)
         await execute(db, "UPDATE google_calendar_event_links SET state='deleted', last_error=NULL, lease_token=NULL, lease_until=NULL, updated_at=? WHERE id=? AND lease_token=?", [new Date().toISOString(), link.id, lease])
@@ -178,16 +186,28 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
       const url = composeOwnerThreadInboxUrl(env, { orgSlug: org.slug, locationSlug: null }, subject.request_id ?? '')
       const payload = calendarEvent(subject, url)
       const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events`
+      if (!await ownsMutation(db, link, lease, revision)) {
+        await execute(db, 'UPDATE google_calendar_event_links SET lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?', [link.id, lease])
+        continue
+      }
       if (!link.synced_revision) {
         try { await google(token, `${path}?sendUpdates=none`, { method: 'POST', body: JSON.stringify({ id: link.event_id, ...payload }) }) }
         catch (error) { if (!(error instanceof CalendarError) || error.status !== 409) throw error }
       }
+      const beforeUpdate = await currentSubject(db, organizationId, link)
+      if (!beforeUpdate) {
+        await removeEvent(token, link)
+        await execute(db, "UPDATE google_calendar_event_links SET state='deleted', lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?", [link.id, lease])
+        continue
+      }
+      if (await projectionRevision(beforeUpdate) !== revision || !await ownsMutation(db, link, lease, revision)) {
+        await execute(db, "UPDATE google_calendar_event_links SET state=CASE WHEN state='cleanup' THEN state ELSE 'pending' END, lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?", [link.id, lease])
+        continue
+      }
       await google(token, `${path}/${link.event_id}?sendUpdates=none`, { method: 'PUT', body: JSON.stringify(payload) })
       // Fence late provider results against committed cancellation/disconnect.
       // Compensating deletion uses the same durable identity and retains errors.
-      const after = await readCalendarIntegration(db, organizationId)
-      const afterSubject = after?.revision === link.integration_revision && after.status !== 'disabled'
-        ? (await calendarSubjects(db, organizationId, after)).find(item => item.operational_id === link.operational_id && item.booking_kind === link.booking_kind) : null
+      const afterSubject = await currentSubject(db, organizationId, link)
       if (!afterSubject) {
         await removeEvent(token, link)
         await execute(db, "UPDATE google_calendar_event_links SET state='deleted', lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?", [link.id, lease])
