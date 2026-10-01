@@ -93,9 +93,19 @@
       ]
     },
     {
+      "id": "7d4f390f-9362-4a65-a5ce-8b1f9b42d618",
+      "type": "heading",
+      "level": 2,
+      "data": {
+        "text": "A place to build. Room to grow."
+      },
+      "media": [],
+      "position": 2
+    },
+    {
       "id": "8ae8617c-d30f-41eb-8478-b168fdb4c7e1",
       "type": "media_text",
-      "position": 2,
+      "position": 3,
       "data": {
         "title": "Build your online home",
         "body": "Bring your business together in one place. Publish your menus, services or experiences with photos, location details and a clear way for guests to book or get in touch."
@@ -111,7 +121,7 @@
     {
       "id": "38516eaf-abde-440e-bc65-bcf25ca38840",
       "type": "media_text",
-      "position": 3,
+      "position": 4,
       "data": {
         "title": "Keep it current",
         "body": "Keep your website’s story up to date. Use your dashboard or connected ChatGPT tools to update supported content, offerings and photos. Keep your latest offerings and website posts easy to find."
@@ -127,7 +137,7 @@
     {
       "id": "73e77624-9f28-4ff0-abc9-224bd75a2407",
       "type": "media_text",
-      "position": 4,
+      "position": 5,
       "data": {
         "title": "Grow when you’re ready",
         "body": "Explore the tools for your next stage. Connect your own domain, publish additional manually authored languages, and use supported Google Places refreshes with an eligible paid plan."
@@ -143,7 +153,7 @@
     {
       "id": "6c213295-e2a3-4cfe-b3eb-233b047baaff",
       "type": "feature_grid",
-      "position": 5,
+      "position": 6,
       "data": {
         "source": "billing_features",
         "title": "Compare the details."
@@ -153,7 +163,7 @@
     {
       "id": "a7d45254-a546-4a7f-9d2d-f60f1796f53d",
       "type": "faq",
-      "position": 6,
+      "position": 7,
       "data": {
         "title": "Frequently asked questions",
         "source": "page_qa"
@@ -163,7 +173,7 @@
     {
       "id": "f033c8d0-42dc-4651-bf1b-87e678ccbbe2",
       "type": "cta",
-      "position": 7,
+      "position": 8,
       "data": {
         "title": "Ready for your next chapter?",
         "description": "Build your business website, then grow at your own pace.",

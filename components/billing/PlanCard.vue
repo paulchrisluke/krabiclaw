@@ -100,7 +100,7 @@
           v-if="plan.cta"
           :to="plan.cta.href"
           :label="plan.cta.label"
-          :variant="isHighlighted ? 'solid' : 'outline'"
+          :variant="photo || isHighlighted ? 'solid' : 'outline'"
           size="xl"
           block
           class="font-bold shadow-sm transition-all duration-300 hover:shadow-md"
@@ -174,23 +174,15 @@ const savingsNote = computed(() => {
 .kc-photo-plan .kc-plan-price { font-size: 3rem; line-height: 1.1; font-weight: 600; }
 .kc-photo-plan ul { min-height: 0; overflow-y: auto; margin: 1rem 0; padding-right: .4rem; }
 .kc-photo-plan ul > li + li { margin-top: .7rem; }
-.kc-photo-plan :deep(a.text-default), .kc-photo-plan :deep(a.text-white) { background: #ec7968; color: #171b31; border: 1px solid #ec7968; }
-.kc-photo-plan :deep(a:focus-visible) { outline: 3px solid #171b31; outline-offset: 3px; }
 
 .kc-photo-plan--flipping { animation: kc-plan-right 1050ms ease-in-out both; animation-delay: var(--flip-delay); }
 .kc-plan-details { display: flex; flex-direction: column; flex: 1; }
 .kc-photo-plan--flipping .kc-photo-plan__front { display: block; }
 .kc-photo-plan--flipping .kc-plan-details { transform: rotateY(180deg); backface-visibility: hidden; }
 @keyframes kc-plan-right { 0%, 40% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
-@media (prefers-reduced-motion: reduce) { .kc-photo-plan .kc-plan-details { min-height: 0; }
-.kc-photo-plan .kc-plan-header { display: block; margin-bottom: 1.25rem; }
-.kc-photo-plan .kc-plan-header > span { position: absolute; top: 0; right: 0; }
-.kc-photo-plan h3 { font-size: 1.9rem; padding-right: 6rem; }
-.kc-photo-plan .kc-plan-price { font-size: 3rem; line-height: 1.1; font-weight: 600; }
-.kc-photo-plan ul { min-height: 0; overflow-y: auto; margin: 1rem 0; padding-right: .4rem; }
-.kc-photo-plan ul > li + li { margin-top: .7rem; }
-.kc-photo-plan :deep(a.text-default), .kc-photo-plan :deep(a.text-white) { background: #ec7968; color: #171b31; border: 1px solid #ec7968; }
-.kc-photo-plan :deep(a:focus-visible) { outline: 3px solid #171b31; outline-offset: 3px; }
-
-.kc-photo-plan--flipping { animation: none; transform: none; } .kc-photo-plan--flipping .kc-plan-details { transform: none; } .kc-photo-plan--flipping .kc-photo-plan__front { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .kc-photo-plan--flipping { animation: none; transform: none; }
+  .kc-photo-plan--flipping .kc-plan-details { transform: none; }
+  .kc-photo-plan--flipping .kc-photo-plan__front { display: none; }
+}
 </style>

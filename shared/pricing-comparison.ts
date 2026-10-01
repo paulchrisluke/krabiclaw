@@ -11,6 +11,7 @@ export interface PricingComparisonRow {
   entitlement?: string
   free?: string
   growth?: string
+  limits?: Readonly<Record<string, number>>
 }
 
 export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly PricingComparisonRow[] }> = [
@@ -45,7 +46,7 @@ export const PRICING_COMPARISON: ReadonlyArray<{ title: string; rows: readonly P
     { id: 'places.refresh', label: 'Google Places re-import', detail: 'Connect a selected Place and explicitly refresh its details.', entitlement: 'google_places' },
     { id: 'places.refresh', label: 'Weekly Google review refresh', detail: 'Scheduled review and rating refresh for connected Places; not continuous synchronization of all business details.', entitlement: 'google_places' },
     { id: 'content.locales', label: 'English source website', detail: 'Source content remains available while additional languages are authored.', included: 'Included' },
-    { id: 'content.additional-locales', label: 'Additional website languages', detail: 'Manually author and publish Japanese and Thai; up to two secondary languages. No automatic translation.', free: 'English only', growth: 'Up to 2 additional languages' },
+    { id: 'content.additional-locales', label: 'Additional website languages', detail: 'Manually author and publish Japanese and Thai; up to two secondary languages. No automatic translation.', free: 'English only', growth: 'Up to 2 additional languages', limits: { free: 0, growth: 2 } },
   ] },
   { title: 'Help', rows: [
     { id: 'support.docs-help', label: 'Documentation and help form', detail: 'Browse the docs or contact us through the platform help form.', included: 'Included' },

@@ -177,3 +177,35 @@ landed main change, so this branch carries its exact existing commit
 - MCP snapshot, ChatGPT submission, migration lint and schema drift checks passed.
 - Full E2E remains blocked by the specific Stripe test-customer cleanup approval above; no green full-suite claim is made.
 - Production page blocks/placements and Stripe paid presentation remain unapplied. Existing Q&A corrections and review-request Free policy remain owner decisions.
+
+## Owner visual revision
+
+The plan-card actions already used `PlatformAccountCta` → `PlatformButton`, but
+pricing's deep anchor CSS forced dark labels, and Basic selected outline. Pricing
+now selects the existing solid primary variant for both cards, with all local
+button color/border/focus overrides removed. Rendered colors match the shared
+header primary action; the closing CTA already uses that same default.
+
+The owner's earlier-middle reference restores a warm-white open editorial band,
+with a canonical heading block: “A place to build. Room to grow.” The packet is
+now nine blocks, still using the same six media placements. The illustration/text
+order is left/right/left, headings are restrained, rows remain expansive, and
+subtle dividers connect them. Copy and every page section remain present.
+The available approved exports are still watercolor metaphors: their imagery
+differs from the earlier site's browser/editor/settings compositions. Matching
+that imagery requires the earlier exports or separately approved replacement
+art; no fake product screenshots or substituted asset IDs were introduced.
+
+Comparison cells use the existing shared icon system's filled check, dash or
+numeric limit, with a short setup qualifier where required and hidden labels for
+screen readers. Each feature name opens a native keyboard/no-JS details disclosure
+containing its conditions. CSS paint containment prevents the comparison's native
+details content from leaking horizontal page overflow on mobile.
+
+Build, Vue SFC checks, typecheck and feature-library validation passed. The four
+pricing browser checks passed; only desktop/mobile were subsequently refreshed
+for decoded below-the-fold screenshot evidence. No broad suites, extra review,
+provider cleanup, production CMS/Stripe writes, merge or deployment occurred.
+Updated rendered evidence: `evidence/pricing-desktop-owner-revision.png` and
+`evidence/pricing-mobile-owner-revision.png` (local test Chromium; Chrome controls
+were not exposed for this follow-up).

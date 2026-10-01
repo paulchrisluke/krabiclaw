@@ -10,8 +10,21 @@
           <tbody v-for="group in PRICING_COMPARISON" :key="group.title">
             <tr class="kc-pricing-comparison__group"><th :colspan="plans.length + 1" scope="colgroup">{{ group.title }}</th></tr>
             <tr v-for="row in group.rows" :key="row.label" :data-feature-id="row.id">
-              <th scope="row"><span>{{ row.label }}</span><small>{{ row.detail }}</small></th>
-              <td v-for="plan in plans" :key="plan.id">{{ comparisonValue(row, plan.id) }}</td>
+              <th scope="row">
+                <details class="kc-pricing-comparison__detail">
+                  <summary>{{ row.label }}<PlatformIcon name="question-circle" class="size-4" aria-hidden="true" /></summary>
+                  <p>{{ row.detail }}</p>
+                </details>
+              </th>
+              <td v-for="plan in plans" :key="plan.id">
+                <span v-if="row.limits?.[plan.id] !== undefined"><span aria-hidden="true">{{ row.limits[plan.id] }}</span><span class="sr-only">{{ comparisonValue(row, plan.id) }}</span></span>
+                <span v-else-if="comparisonValue(row, plan.id).startsWith('Included')" class="kc-pricing-comparison__included">
+                  <PlatformIcon name="check-solid" class="size-6" aria-hidden="true" />
+                  <span v-if="row.entitlement" aria-hidden="true" class="kc-pricing-comparison__qualifier">Setup</span>
+                  <span class="sr-only">{{ comparisonValue(row, plan.id) }}</span>
+                </span>
+                <span v-else><span aria-hidden="true">—</span><span class="sr-only">{{ comparisonValue(row, plan.id) }}</span></span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -32,12 +45,17 @@ const { plans } = await usePlans()
 .kc-pricing-comparison__inner { max-width: 62rem; margin: auto; }
 h2 { font-size: clamp(2.4rem, 4vw, 3.8rem); font-weight: 400; letter-spacing: -.04em; }
 p { max-width: 65ch; color: #646878; line-height: 1.7; }
-.kc-pricing-comparison__scroll { overflow-x: auto; margin-top: 3rem; }
+.kc-pricing-comparison__scroll { overflow-x: auto; contain: paint; margin-top: 3rem; }
 table { border-collapse: collapse; width: 100%; min-width: 38rem; text-align: left; }
 thead th { font-size: 1.2rem; padding: 1.4rem 1rem; }
 th, td { border-bottom: 1px solid #d6d8de; padding: 1.4rem 1rem; vertical-align: top; }
 tbody th { width: 50%; font-weight: 600; }
 td { width: 25%; font-size: .9rem; }
-small { display: block; font-weight: 400; color: #646878; line-height: 1.5; margin-top: .4rem; font-size: .8rem; }
+.kc-pricing-comparison__detail p { display: block; font-weight: 400; color: #646878; line-height: 1.5; margin: .75rem 0 0; font-size: .85rem; }
+.kc-pricing-comparison__detail summary { cursor: pointer; display: flex; gap: .5rem; align-items: center; list-style: none; }
+.kc-pricing-comparison__detail summary::-webkit-details-marker { display: none; }
+.kc-pricing-comparison__detail summary svg { flex: none; color: #646878; }
+.kc-pricing-comparison__included { display: inline-flex; gap: .35rem; align-items: center; }
+.kc-pricing-comparison__qualifier { font-size: .75rem; color: #646878; }
 .kc-pricing-comparison__group th { padding-top: 2.5rem; background: #eeeee8; font-size: 1rem; letter-spacing: .03em; }
 </style>

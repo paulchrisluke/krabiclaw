@@ -221,11 +221,14 @@ const bodyParts = computed(() => {
 </style>
 
 <style scoped>
-.kc-pricing-benefit { background: #f9f8f4; color: #252b43; padding: 3rem 1.5rem; }
-.kc-pricing-benefit__inner { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; max-width: 66rem; margin: auto; }
-.kc-pricing-benefit h2 { font-size: clamp(2.2rem, 4vw, 3.8rem); font-weight: 400; line-height: 1.05; letter-spacing: -.04em; max-width: 10ch; }
-.kc-pricing-benefit p { color: #646878; max-width: 30ch; line-height: 1.7; }
-.kc-pricing-benefit img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; }
-.kc-pricing-benefit--reverse .kc-pricing-benefit__inner > div { order: 2; }
-@media (max-width: 700px) { .kc-pricing-benefit__inner { grid-template-columns: 1fr; gap: 1rem; } .kc-pricing-benefit--reverse .kc-pricing-benefit__inner > div { order: 0; } .kc-pricing-benefit h2 { max-width: 15ch; margin: 0; } }
+.kc-pricing-benefit { background: #f9f8f4; color: #252b43; padding: 0 1.5rem; }
+.kc-pricing-benefit__inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4.5rem; align-items: center; max-width: 62rem; margin: auto; padding: 3rem 0; border-bottom: 1px solid #e3e8ef; }
+.kc-pricing-benefit h2 { font-size: clamp(1.75rem, 2.5vw, 2.4rem); font-weight: 600; line-height: 1.2; letter-spacing: -.025em; margin: 0; }
+.kc-pricing-benefit p { color: #646878; max-width: 50ch; line-height: 1.6; margin: .65rem 0 0; }
+.kc-pricing-benefit img { order: -1; width: 100%; max-height: 19rem; aspect-ratio: 3 / 2; object-fit: contain; }
+.kc-pricing-benefit--reverse img { order: 1; }
+@media (max-width: 700px) {
+  .kc-pricing-benefit__inner { grid-template-columns: 1fr; gap: 1rem; padding: 2rem 0; }
+  .kc-pricing-benefit img, .kc-pricing-benefit--reverse img { order: 1; max-height: 16rem; }
+}
 </style>
