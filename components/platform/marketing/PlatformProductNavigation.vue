@@ -12,11 +12,15 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockRecords, blockText } from '~/utils/tenant-page-block-data'
+import { blockRecords, blockText, isInternalRoute } from '~/utils/tenant-page-block-data'
 import TenantPageButton from '~/components/tenant-pages/TenantPageButton.vue'
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
-const links = computed(() => blockRecords(props.block.data.buttons).map(item => ({ label: blockText(item.label), url: localePath(blockText(item.url)) })))
+const links = computed(() => blockRecords(props.block.data.buttons).flatMap(item => {
+  const label = blockText(item.label)
+  const url = blockText(item.url)
+  return label && url ? [{ label, url: isInternalRoute(url) ? localePath(url) : url }] : []
+}))
 </script>
 <style scoped>
 .kc-product-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; align-items: center; width: min(86%, 86rem); margin: auto; padding: 2rem 0; color: #a9aab4; }

@@ -1,7 +1,13 @@
 -- Owner-approved Products overview. Only Krabiclaw's page document changes.
 -- Static brand assets travel with the Worker; no remote upload or preview flag.
 -- Retain the Features document identity, and its existing share/index relationships.
-UPDATE content_documents SET path = '/products' WHERE organization_id = 'platform' AND kind = 'page' AND path = '/features';
+UPDATE content_documents AS legacy SET path = '/products'
+WHERE legacy.organization_id = 'platform' AND legacy.kind = 'page' AND legacy.path = '/features'
+AND NOT EXISTS (
+  SELECT 1 FROM content_documents AS existing
+  WHERE existing.organization_id = legacy.organization_id AND existing.kind = legacy.kind
+    AND existing.row_role = legacy.row_role AND existing.locale = legacy.locale AND existing.path = '/products'
+);
 --> statement-breakpoint
 INSERT INTO content_documents (id,organization_id,kind,row_role,locale,path,title,summary,source,metadata_json)
 SELECT 'platform-products','platform','page','root','en','/products','Products','Build your website, manage everyday updates with ChatGPT and Claude, and bring enquiries, bookings, content, reviews and analytics together.','pages','{}'

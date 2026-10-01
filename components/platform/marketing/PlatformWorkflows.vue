@@ -5,7 +5,7 @@
         <p class="kc-product-eyebrow">{{ eyebrow }}</p>
         <h2>{{ title }}</h2>
         <p class="kc-product-workflows__body">{{ description }}</p>
-        <NuxtLink v-if="block.data.cta_label && block.data.cta_url" :to="localePath(String(block.data.cta_url))" class="kc-product-link">{{ block.data.cta_label }} <span aria-hidden="true">↗</span></NuxtLink>
+        <NuxtLink v-if="block.data.cta_label && block.data.cta_url" :to="route(String(block.data.cta_url))" class="kc-product-link">{{ block.data.cta_label }} <span aria-hidden="true">↗</span></NuxtLink>
         <ul class="kc-product-workflows__clients" aria-label="Compatible assistants"><li>ChatGPT</li><li>Claude</li><li>MCP</li></ul>
       </div>
       <div>
@@ -46,7 +46,7 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
-import { blockText, blockTextOrNull, blockRecords } from '~/utils/tenant-page-block-data'
+import { blockText, blockTextOrNull, blockRecords, isInternalRoute } from '~/utils/tenant-page-block-data'
 import type { PlatformIconName } from '~/components/platform/PlatformIcon.vue'
 
 export interface PlatformWorkflow {
@@ -63,6 +63,7 @@ export interface PlatformWorkflow {
  */
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { localePath } = useI18n()
+function route(url: string) { return isInternalRoute(url) ? localePath(url) : url }
 
 /** Krabiclaw's verticals each carry their own accent; the page says which. */
 const accent = computed<'primary' | 'teal' | 'navy'>(() => (

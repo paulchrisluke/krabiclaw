@@ -22,6 +22,7 @@ test('Products retains its authored content, media and canonical identity after 
   }
   await page.getByRole('navigation', { name: 'Products', exact: true }).getByRole('link', { name: 'Connect', exact: true }).click()
   await expect(page).toHaveURL(/#products-inbox$/)
+  await expect(page.getByRole('heading', { name: 'Keep the conversation going.', exact: true })).toBeInViewport()
 })
 
 test('Products remains readable on a narrow mobile viewport', async ({ page }) => {
@@ -31,6 +32,6 @@ test('Products remains readable on a narrow mobile viewport', async ({ page }) =
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('navigation', { name: 'Products', exact: true }).getByRole('link', { name: 'Grow', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Show what’s happening.', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Show what’s happening.', exact: true })).toBeInViewport()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

@@ -4,7 +4,7 @@
     <div class="kc-product-scene__copy">
       <component :is="closing ? 'h2' : 'h1'">{{ text(block.data.title) }}</component>
       <p>{{ text(closing ? block.data.description : block.data.subtitle) }}</p>
-      <PlatformAccountCta v-if="label" :label="label" :to="url" size="xl" />
+      <PlatformAccountCta v-if="label && url" :label="label" :to="url" size="xl" />
     </div>
   </section>
 </template>
