@@ -24,6 +24,6 @@ CREATE TABLE `google_calendar_event_links` (
 	CONSTRAINT "google_calendar_state_check" CHECK(state IN ('pending', 'synced', 'cleanup', 'deleted', 'error'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `google_calendar_subject_unique` ON `google_calendar_event_links` (`organization_id`,`integration_revision`,`booking_kind`,`operational_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `google_calendar_subject_unique` ON `google_calendar_event_links` (`organization_id`,`integration_revision`,`booking_kind`,`operational_id`) WHERE state <> 'deleted';--> statement-breakpoint
 CREATE UNIQUE INDEX `google_calendar_provider_unique` ON `google_calendar_event_links` (`calendar_id`,`event_id`);--> statement-breakpoint
 CREATE INDEX `google_calendar_due_idx` ON `google_calendar_event_links` (`organization_id`,`state`,`next_attempt_at`);

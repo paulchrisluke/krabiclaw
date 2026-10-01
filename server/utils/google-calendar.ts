@@ -1,6 +1,7 @@
 import type { GoogleCalendarIntegration } from '~/shared/organization-settings'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
+import { composeOwnerThreadInboxUrl } from './dashboard-notification-links'
 
 export interface CalendarChoice { id: string; summary: string; accessRole: string }
 export interface CalendarSubject {
@@ -103,7 +104,7 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
     await execute(db, `INSERT INTO google_calendar_event_links
       (id, organization_id, integration_revision, account_id, calendar_id, event_id, booking_kind, operational_id, request_id, booking_revision, created_at, updated_at)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM organization WHERE id = ? AND json_extract(integrations_json, '$.google_calendar.revision') = ? AND json_extract(integrations_json, '$.google_calendar.status') <> 'disabled'
-      ON CONFLICT(organization_id, integration_revision, booking_kind, operational_id) DO UPDATE SET
+      ON CONFLICT(organization_id, integration_revision, booking_kind, operational_id) WHERE state <> 'deleted' DO UPDATE SET
       request_id = excluded.request_id, booking_revision = excluded.booking_revision,
       state = CASE WHEN google_calendar_event_links.booking_revision <> excluded.booking_revision THEN 'pending' ELSE google_calendar_event_links.state END,
       next_attempt_at = CASE WHEN google_calendar_event_links.booking_revision <> excluded.booking_revision THEN NULL ELSE google_calendar_event_links.next_attempt_at END,
@@ -121,7 +122,7 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
           ? 'SELECT b.status, s.ends_at FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id WHERE b.id=? AND b.organization_id=?'
           : 'SELECT status, ends_at FROM reservations WHERE id=? AND organization_id=?', [link.operational_id, organizationId]) : null
       if (historical?.status === 'confirmed' && historical.ends_at <= now && link.state === 'synced') continue
-      await execute(db, "UPDATE google_calendar_event_links SET state = 'cleanup' WHERE id = ? AND state <> 'deleted'", [link.id])
+      await execute(db, "UPDATE google_calendar_event_links SET next_attempt_at=CASE WHEN state='cleanup' THEN next_attempt_at ELSE NULL END, state = 'cleanup' WHERE id = ? AND state <> 'deleted'", [link.id])
     }
   }
 }
@@ -174,7 +175,7 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
       await requireWriter(token, link.calendar_id)
       const org = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id=?', [organizationId])
       if (!org) throw new Error('Organization disappeared')
-      const url = new URL(`/dashboard/${encodeURIComponent(org.slug)}/inbox${subject.request_id ? '/' + encodeURIComponent(subject.request_id) : ''}`, env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com').href
+      const url = composeOwnerThreadInboxUrl(env, { orgSlug: org.slug, locationSlug: null }, subject.request_id ?? '')
       const payload = calendarEvent(subject, url)
       const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events`
       if (!link.synced_revision) {
