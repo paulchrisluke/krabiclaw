@@ -11,6 +11,7 @@ import { composeProductSeoDescription, isOfferedProduct } from '~/utils/product-
 
 definePageMeta({ layout: false })
 const { isBlawby } = usePublicTemplate()
+if (isBlawby.value) throw createError({ statusCode: 404, statusMessage: 'Page not found' })
 // An experience is named by its own slug: this is the URL printed on the card
 // the guest is holding. The branch it runs at comes from the product, which is
 // offered at exactly one — several, and this URL names none of them.

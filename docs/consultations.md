@@ -111,12 +111,26 @@ production products, migrations, deployment or cutover activation are included.
 
 ## Owner visual review and provider direction
 
-The existing `/experiences/:slug` route and `ProductDetailPage` now render online
-services without fabricating a business location. `/schedule` remains the directory
-and links to those rich pages. Product descriptions, media, metafields, variants,
-Price selection and the canonical booking controller remain shared. Blawby retains
-its shell and theme tokens; physical experience pages retain their existing route.
+Blawby consultations use existing CMS `/services/{slug}` documents. Their text,
+images, SEO, locale representations and page IDs remain intact. The existing
+root-only `content_documents.product_id` is the explicit service → Product binding;
+the source page editor exposes it as Appointment booking. Translations inherit
+that binding, another tenant's Product is refused, and a Product has at most one
+canonical page. Omitted binding fields preserve the existing relationship.
 
+In native mode `/schedule` renders `/services`' existing ordered `page_grid`,
+including its covers and summaries, with configured duration, Price/Free and
+confirmation policy for linked published online Products. An unlinked service
+remains visible with Contact us to schedule. Missing Price says Price
+unavailable; it never means Free. Service pages add the shared booking widget
+without replacing their rich content. Blawby `/experiences/{slug}` is not a service
+route; physical Saya experience routes remain intact.
+
+No billing plans or entitlement policy changed. Existing external scheduling and
+contact behavior remains configured by the site's consultation settings. Growth
+currently grants messaging; there is no separate booking entitlement. Any new
+commercial gating must preserve existing class and restaurant booking behavior
+and requires the owner's separate decision.
 Online consultation times default to the browser's IANA timezone, shown in an
 editable selector. Configured scheduling zones still own rule input and UTC
 storage. Time choices carry canonical Session IDs, including repeated wall-clock
