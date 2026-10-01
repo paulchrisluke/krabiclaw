@@ -62,18 +62,10 @@ async function remove() {
   if (!p.isNew.value) {
     if (p.saveDisabled.value) {
       removeError.value = 'Every option needs a name and at least one value before this can be saved.'
-      p.revert()
-      removing.value = false
       return
     }
+    // A refused save stays here with its reason; Cancel puts the option back.
     await p.save(level.to.value ?? undefined)
-    // A refused save keeps the leaf open with its reason, on the restored option.
-    if (p.saveError.value) {
-      const reason = p.saveError.value
-      p.revert()
-      removeError.value = reason
-      removing.value = false
-    }
     return
   }
   await navigateTo(level.to.value ?? '/dashboard')
