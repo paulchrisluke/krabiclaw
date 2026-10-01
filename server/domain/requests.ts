@@ -217,6 +217,13 @@ export async function cancelBookingRequest(db: DbClient, input: {
             AND json_extract(payload_json, '$.cancellation.used_at') = ?)`,
       params: [input.now, input.now, record.id, record.status, input.id, input.organizationId, input.now],
     },
+    {
+      query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+        SELECT ?, ?, 'operation', 'request', 'guest', ?, ?, ?,
+          COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = ?), 0) + 1, ?, ?
+        WHERE changes() = 1`,
+      params: [crypto.randomUUID(), input.id, `${record.kind}.cancel`, JSON.stringify({ action: 'cancel', beforeStatus: record.status, afterStatus: 'cancelled', operational_booking_id: record.id, request_id: input.id }), `${record.kind}:${record.id}:guest-cancel`, input.id, input.now, input.now],
+    },
   ], { operation: 'Cancel booking request' })
 
   const row = (consumed?.results?.[0] ?? null) as Record<string, unknown> | null

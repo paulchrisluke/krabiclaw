@@ -402,7 +402,7 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
 }
 
 /** Explicit tenant-scoped online calendar enrollment; intervals are half open. */
-export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL'): string {
+export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL'): string {
   return `EXISTS (
     SELECT 1 FROM product_booking_configs own
       JOIN product_booking_configs peer ON peer.organization_id = own.organization_id
@@ -413,7 +413,7 @@ export function onlineCalendarConflictSql(sessionAlias: string, replacingBooking
     WHERE own.product_id = ${sessionAlias}.product_id
       AND own.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
       AND occupied.starts_at < ${sessionAlias}.ends_at AND occupied.ends_at > ${sessionAlias}.starts_at
-      AND b.id IS NOT ${replacingBookingSql} AND ${CAPACITY_CONSUMING_SQL}
+      AND b.id IS NOT ${replacingBookingSql} AND occupied.id IS NOT ${excludingSessionSql} AND ${CAPACITY_CONSUMING_SQL}
   )`
 }
 
@@ -484,6 +484,52 @@ export class CapacityUnavailableError extends Error {
  * atomically, so the release lands before this predicate counts seats, and a
  * failure anywhere leaves the guest's original seat untouched.
  */
+export interface SessionAllocationInput {
+  organizationId: string; productId: string; sessionId: string; partySize: number; now: string
+  replacingBookingId?: string | null
+  requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
+}
+
+export function sessionAllocationPredicate(input: SessionAllocationInput): BatchQuery {
+  return { query: `${input.requireUndecided
+        ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
+           AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
+        : ''}EXISTS (
+        SELECT 1 FROM product_sessions s
+        WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
+          AND s.status = 'scheduled'
+          -- The location's own sale switch is part of being bookable: a branch
+          -- that has stopped selling this does not take seats for it.
+          AND (s.location_id IS NULL OR EXISTS (
+            SELECT 1 FROM product_locations pl
+             WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
+               AND pl.active = 1 AND pl.published = 1
+          ))
+          AND s.starts_at > ?
+          AND NOT ${onlineCalendarConflictSql('s', '?')}
+          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
+            SELECT SUM(b.party_size) FROM bookings b
+            WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
+          ), 0))
+      )`, params: [
+      ...(input.requireUndecided
+        ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
+        : []),
+      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.partySize, input.replacingBookingId ?? null,
+  ] }
+}
+
+/** Move the same operational Booking ID, preserving its review and payment identity. */
+export function sessionMoveQuery(input: SessionAllocationInput & { bookingId: string }): BatchQuery {
+  const allocation = sessionAllocationPredicate({ ...input, replacingBookingId: input.bookingId })
+  return {
+    query: `UPDATE bookings SET product_session_id = ?, party_size = ?, updated_at = ?
+      WHERE id = ? AND organization_id = ? AND product_id = ? AND status IN ('pending', 'confirmed')
+        AND ${allocation.query}`,
+    params: [input.sessionId, input.partySize, input.now, input.bookingId, input.organizationId, input.productId, ...allocation.params!],
+  }
+}
+
 export function sessionClaimQuery(input: {
   bookingId: string
   organizationId: string
@@ -524,36 +570,13 @@ export function sessionClaimQuery(input: {
         COALESCE((SELECT status FROM bookings WHERE id = ?),
           (SELECT CASE WHEN confirmation_mode = 'review' THEN 'pending' ELSE 'confirmed' END
            FROM product_booking_configs WHERE product_id = ? AND organization_id = ?)), ?, ?
-      WHERE ${input.requireUndecided
-        ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
-           AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
-        : ''}EXISTS (
-        SELECT 1 FROM product_sessions s
-        WHERE s.id = ? AND s.organization_id = ? AND s.product_id = ?
-          AND s.status = 'scheduled'
-          -- The location's own sale switch is part of being bookable: a branch
-          -- that has stopped selling this does not take seats for it.
-          AND (s.location_id IS NULL OR EXISTS (
-            SELECT 1 FROM product_locations pl
-             WHERE pl.product_id = s.product_id AND pl.location_id = s.location_id
-               AND pl.active = 1 AND pl.published = 1
-          ))
-          AND s.starts_at > ?
-          AND NOT ${onlineCalendarConflictSql('s', '?')}
-          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
-            SELECT SUM(b.party_size) FROM bookings b
-            WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
-          ), 0))
-      )
+      WHERE ${sessionAllocationPredicate(input).query}
       ON CONFLICT (id) DO NOTHING
     `,
     params: [
       input.bookingId, input.organizationId, input.productId, input.sessionId, input.productVariantId,
       input.userId ?? null, input.requestId ?? null, input.partySize, input.replacingBookingId ?? null, input.productId, input.organizationId, input.now, input.now,
-      ...(input.requireUndecided
-        ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
-        : []),
-      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.partySize, input.replacingBookingId ?? null,
+      ...sessionAllocationPredicate(input).params!, 
     ],
   }
 }
@@ -592,10 +615,13 @@ export async function claimSessionCapacity(db: DbClient, input: {
   if (!Number.isSafeInteger(input.partySize) || input.partySize < 1) badRequest('party_size must be a positive integer')
 
   if (input.requestId) {
-    const existing = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM bookings WHERE organization_id = ?  AND request_id = ?
+    const existing = await queryFirst<{ id: string; product_id: string; product_session_id: string; product_variant_id: string; party_size: number }>(db, `
+      SELECT id, product_id, product_session_id, product_variant_id, party_size FROM bookings WHERE organization_id = ? AND request_id = ?
     `, [input.organizationId, input.requestId])
-    if (existing) return { bookingId: existing.id }
+    if (existing) {
+      if (existing.product_id !== input.productId || existing.product_session_id !== input.sessionId || existing.product_variant_id !== input.productVariantId || existing.party_size !== input.partySize) throw new HTTPError({ statusCode: 409, statusMessage: 'This request already holds a different booking' })
+      return { bookingId: existing.id }
+    }
   }
 
   const bookingId = crypto.randomUUID()
@@ -698,22 +724,22 @@ export async function updateSession(db: DbClient, input: {
       UPDATE product_sessions
       SET starts_at = ?, ends_at = ?, capacity = ?, status = ?, updated_at = ?, updated_by = ?
       WHERE organization_id = ? AND id = ? ${guard}
+        AND (? <> 'cancelled' OR NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}))
+        AND (NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})
+          OR NOT EXISTS (SELECT 1 FROM (SELECT product_sessions.organization_id AS organization_id, product_sessions.product_id AS product_id, ? AS starts_at, ? AS ends_at) proposed
+            WHERE ${onlineCalendarConflictSql('proposed', 'NULL', 'product_sessions.id')}))
     `,
     params: [
       startsAt, endsAt, capacity,
       input.status ?? session.status, now, input.actorId,
       input.organizationId, input.sessionId,
-      ...(capacity === null ? [] : [capacity]),
+      ...(capacity === null ? [] : [capacity]), input.status ?? session.status, startsAt, endsAt,
     ],
   }], { operation: 'Update product session' })
   if (written[0]?.meta?.changes === 0) {
     throw new HTTPError({
       statusCode: 409,
-      statusMessage: capacity === null
-        // No capacity predicate to fail, so the row itself is gone: it was
-        // deleted between the read above and this write.
-        ? 'This session is no longer there; reload the calendar'
-        : `This session took more seats while you were editing it; cancel bookings before reducing capacity to ${capacity}`,
+      statusMessage: 'This session changed, has live bookings, or overlaps an occupied online calendar; reload and resolve the conflict',
     })
   }
 }
