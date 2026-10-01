@@ -17,7 +17,11 @@ It never calls MCP and never participates in a guest booking transaction. A
 provider failure cannot roll back a booking or alter the guest response.
 The scheduled task runs on the existing five-minute cron; **Sync upcoming / retry
 cleanup** also reconciles immediately. It discovers all upcoming active subjects
-on every pass, so no in-memory notification or cursor gap can lose a booking.
+on every pass. At most 25 subject intents are written per invocation; missing
+identities are backfilled first, then persisted mapping `updated_at` timestamps
+rotate existing subjects oldest-first. Further cron/retry passes resume this work
+without an in-memory cursor. Cancellation/history reconciliation uses one
+set-based D1 statement, leaving a bounded query budget for provider processing.
 
 `google_calendar_event_links` is the durable projection intent and provider
 mapping. Its subject is `(organization_id, integration_revision, booking_kind,
@@ -54,7 +58,9 @@ visible with its original account/calendar/event identity and retry action.
 The selection is cleared only once all managed identities are deleted.
 A 404/410 event delete is accepted only after writer access to its calendar is
 verified again; a lost calendar grant is not treated as completed cleanup.
-Successful historical events remain during ordinary reconciliation; explicit
+Synced confirmed historical consultation events remain only while their
+Session is scheduled and ended; Reservation history behavior is unchanged.
+During ordinary reconciliation those successful events remain; explicit
 disconnect removes all locally managed event identities, including history.
 Unrelated Google events are never searched, changed or deleted.
 
@@ -106,3 +112,14 @@ are sent. Provider mutations use `sendUpdates=none`.
 5. Perform real consent/provider verification only against a separately
    authorized disposable Google calendar. Implementation tests intercept Google
    provider requests; they do not grant scopes or mutate real Google events.
+
+
+## Scoped local review
+
+One CodeRabbit CLI pass reviewed the Calendar-only diff against Foundation
+`829a38c03`. Both actionable findings were corrected: scheduled Session status
+now gates historical consultation retention, and intent reconciliation has a
+25-subject write budget with persisted oldest-first progress and set-based
+cleanup. Focused real D1/provider regressions cover 55-booking multi-pass
+backfill, revisiting changed existing subjects and cancelled historical Session
+event deletion. No extra review round was run solely to certify the fixed head.

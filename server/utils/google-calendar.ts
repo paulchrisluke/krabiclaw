@@ -1,4 +1,5 @@
 import type { GoogleCalendarIntegration } from '~/shared/organization-settings'
+import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { composeOwnerThreadInboxUrl } from './dashboard-notification-links'
@@ -19,7 +20,7 @@ interface EventLink {
   id: string; organization_id: string; integration_revision: string; account_id: string
   calendar_id: string; event_id: string; booking_kind: CalendarSubject['booking_kind']; operational_id: string
   request_id: string | null; booking_revision: string; synced_revision: string | null
-  state: string; attempts: number; lease_token: string | null
+  state: string; attempts: number; lease_token: string | null; updated_at: string
 }
 class CalendarError extends Error {
   readonly status: number
@@ -98,7 +99,16 @@ async function projectionRevision(subject: CalendarSubject) {
 async function reconcileIntents(db: DbClient, organizationId: string, integration: GoogleCalendarIntegration) {
   const subjects = integration.status === 'disabled' ? [] : await calendarSubjects(db, organizationId, integration)
   const now = new Date().toISOString()
-  for (const subject of subjects) {
+  const links = await queryAll<EventLink>(db, "SELECT * FROM google_calendar_event_links WHERE organization_id = ? AND state <> 'deleted'", [organizationId])
+  const bySubject = new Map(links.filter(link => link.integration_revision === integration.revision).map(link => [`${link.booking_kind}:${link.operational_id}`, link]))
+  // Persisted updated_at is the round-robin resume position. Missing identities
+  // are backfilled first; existing rows rotate oldest-first even when unchanged.
+  const page = subjects.sort((a, b) => {
+    const left = bySubject.get(`${a.booking_kind}:${a.operational_id}`)?.updated_at ?? ''
+    const right = bySubject.get(`${b.booking_kind}:${b.operational_id}`)?.updated_at ?? ''
+    return left.localeCompare(right) || `${a.booking_kind}:${a.operational_id}`.localeCompare(`${b.booking_kind}:${b.operational_id}`)
+  }).slice(0, 25)
+  for (const subject of page) {
     const revision = await projectionRevision(subject)
     const id = crypto.randomUUID()
     await execute(db, `INSERT INTO google_calendar_event_links
@@ -111,20 +121,20 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
       updated_at = excluded.updated_at`,
     [id, organizationId, integration.revision, integration.account_id, integration.calendar_id, 'kc' + id.replaceAll('-', ''), subject.booking_kind, subject.operational_id, subject.request_id, revision, now, now, organizationId, integration.revision])
   }
-  const active = new Set(subjects.map(subject => `${subject.booking_kind}:${subject.operational_id}`))
-  const links = await queryAll<EventLink>(db, "SELECT * FROM google_calendar_event_links WHERE organization_id = ? AND state <> 'deleted'", [organizationId])
-  for (const link of links) {
-    if (link.integration_revision !== integration.revision || !active.has(`${link.booking_kind}:${link.operational_id}`)) {
-      // Ended successful events remain useful historical records. Cancelled,
-      // disconnected, and unenrolled subjects must be removed instead.
-      const historical = integration.status !== 'disabled' && link.integration_revision === integration.revision
-        ? await queryFirst<{ status: string; ends_at: string }>(db, link.booking_kind === 'booking'
-          ? 'SELECT b.status, s.ends_at FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id WHERE b.id=? AND b.organization_id=?'
-          : 'SELECT status, ends_at FROM reservations WHERE id=? AND organization_id=?', [link.operational_id, organizationId]) : null
-      if (historical?.status === 'confirmed' && historical.ends_at <= now && link.state === 'synced') continue
-      await execute(db, "UPDATE google_calendar_event_links SET next_attempt_at=CASE WHEN state='cleanup' THEN next_attempt_at ELSE NULL END, state = 'cleanup' WHERE id = ? AND state <> 'deleted'", [link.id])
-    }
-  }
+  // A single set-based cleanup statement also bounds cancelled/history work.
+  // Only confirmed ended scheduled Sessions retain successful historical events.
+  await execute(db, `UPDATE google_calendar_event_links AS l SET
+    next_attempt_at=CASE WHEN state='cleanup' THEN next_attempt_at ELSE NULL END, state='cleanup'
+    WHERE organization_id=? AND state <> 'deleted'
+      AND (integration_revision <> ? OR booking_kind || ':' || operational_id NOT IN (SELECT value FROM json_each(?)))
+      AND NOT (? <> 'disabled' AND integration_revision=? AND state='synced' AND (
+        (booking_kind='booking' AND EXISTS (SELECT 1 FROM bookings b JOIN product_sessions s
+          ON s.id=b.product_session_id AND s.organization_id=b.organization_id
+          WHERE b.id=l.operational_id AND b.organization_id=l.organization_id
+          AND b.status='confirmed' AND s.status='scheduled' AND s.ends_at<=?))
+        OR (booking_kind='reservation' AND EXISTS (SELECT 1 FROM reservations b
+          WHERE b.id=l.operational_id AND b.organization_id=l.organization_id AND b.status='confirmed' AND b.ends_at<=?))))`,
+  [organizationId, integration.revision, d1JsonStringSet(subjects.map(subject => `${subject.booking_kind}:${subject.operational_id}`)), integration.status, integration.revision, now, now])
 }
 async function removeEvent(token: string, link: Pick<EventLink, 'calendar_id' | 'event_id'>) {
   const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events/${link.event_id}`

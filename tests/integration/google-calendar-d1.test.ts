@@ -146,3 +146,58 @@ test('committed consultation projection is tenant scoped, private, idempotent an
 
   } finally { await mf.dispose() }
 })
+
+
+test('bounded Calendar backfill resumes and cancelled historical Sessions are cleaned', { timeout: 120_000 }, async (t) => {
+  const mf = new Miniflare({ workers: [{ config: { name: 'calendar-budget-proof', type: 'worker', compatibilityDate: '2024-11-01', manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } }, env: { DB: { type: 'd1' } } } }] })
+  try {
+    const db = await mf.getD1Database('DB')
+    const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+    await db.batch(statements.map(statement => db.prepare(statement)))
+    await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org')").run()
+    await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by) VALUES('p','org','Consultation','consultation','actor','actor')").run()
+    await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org','consultations','UTC','review','actor','actor')").run()
+    await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
+    const bookings: string[] = []
+    for (let i = 0; i < 55; i++) {
+      const start = Date.parse('2099-11-01T00:00:00.000Z') + i * 3600_000
+      await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by) VALUES(?,'org','p','UTC',?,?,1,'actor','actor')").bind(`s${i.toString().padStart(2, '0')}`, new Date(start).toISOString(), new Date(start + 1800_000).toISOString()).run()
+      bookings.push((await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: `s${i.toString().padStart(2, '0')}`, productVariantId: 'v', partySize: 1 })).bookingId)
+    }
+    const env = { DB: db, NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    const provider = { token: async () => 'token' }
+    for (const expected of [25, 50, 55]) {
+      await syncCalendarOrganization(env, 'org', 0, provider)
+      assert.equal((await db.prepare('SELECT count(*) n FROM google_calendar_event_links').first())?.n, expected)
+    }
+    const oldest = await db.prepare('SELECT operational_id FROM google_calendar_event_links ORDER BY updated_at, operational_id LIMIT 1').first<{ operational_id: string }>()
+    await db.prepare("UPDATE bookings SET updated_at='2099-01-01T00:00:00.000Z' WHERE id=?").bind(oldest!.operational_id).run()
+    const previous = await db.prepare('SELECT booking_revision FROM google_calendar_event_links WHERE operational_id=?').bind(oldest!.operational_id).first()
+    await syncCalendarOrganization(env, 'org', 0, provider)
+    assert.notEqual((await db.prepare('SELECT booking_revision FROM google_calendar_event_links WHERE operational_id=?').bind(oldest!.operational_id).first())?.booking_revision, previous?.booking_revision, 'persisted oldest-first cursor also revisits existing subjects')
+    const events = new Map<string, unknown>()
+    t.mock.method(globalThis, 'fetch', async (input, init) => {
+      const url = new URL(String(input))
+      if (url.pathname.includes('/calendarList/')) return Response.json({ accessRole: 'writer' })
+      const payload = init?.body ? JSON.parse(String(init.body)) : null
+      const id = init?.method === 'POST' ? payload.id : url.pathname.split('/').at(-1)!
+      if (init?.method === 'DELETE') { events.delete(id); return new Response(null, { status: 204 }) }
+      events.set(id, payload)
+      return Response.json(payload)
+    })
+    // Drain the bounded queue through the provider boundary.
+    for (let i = 0; i < 3; i++) await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 55)
+    await setBookingStatus(db, { organizationId: 'org', bookingId: bookings[0]!, status: 'confirmed' })
+    for (let i = 0; i < 3; i++) await syncCalendarOrganization(env, 'org', 25, provider)
+    await updateSession(db, { organizationId: 'org', sessionId: 's00', actorId: 'actor', startsAt: '2020-01-01T10:00:00.000Z', endsAt: '2020-01-01T10:30:00.000Z' })
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 55, 'confirmed ended scheduled consultation retains its event')
+    // Legacy/imported state: a confirmed booking can reference a cancelled Session.
+    await db.prepare("UPDATE product_sessions SET status='cancelled' WHERE id='s00'").run()
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 54, 'cancelled historical Session does not retain the event')
+    assert.equal((await db.prepare('SELECT state FROM google_calendar_event_links WHERE operational_id=?').bind(bookings[0]).first())?.state, 'deleted')
+  } finally { await mf.dispose() }
+})
