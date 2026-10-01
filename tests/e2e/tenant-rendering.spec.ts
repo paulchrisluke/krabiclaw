@@ -192,8 +192,11 @@ test.describe('NCLS representative journeys', () => {
     await page.setViewportSize({ width: 390, height: 900 })
     await page.locator('header summary').click()
     await expect(page.locator('header details').getByRole('link', { name: 'Services', exact: true })).toBeVisible()
-    for (const label of ['Family law', 'Request a Legal Consultation', 'About', 'Privacy Policy'])
+    for (const label of ['Family law', 'Request a Legal Consultation', 'About'])
       await expect(page.locator('footer').getByRole('link', { name: label, exact: true })).toBeVisible()
+    // The bottom bar links the site's own published policies.
+    for (const [label, path] of [['Privacy', '/policies/privacy'], ['Terms', '/policies/terms']] as const)
+      await expect(page.locator('footer').getByRole('link', { name: label, exact: true })).toHaveAttribute('href', path)
   })
 
   // One reader walking the site. Each route is a different page recipe, so the

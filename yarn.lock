@@ -5548,6 +5548,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@vue-email/markdown@npm:0.0.7":
+  version: 0.0.7
+  resolution: "@vue-email/markdown@npm:0.0.7"
+  dependencies:
+    marked: "npm:7.0.4"
+  peerDependencies:
+    vue: ^3.4.27
+  checksum: 10c0/653e17ac5da3cb1a407abd213cd61a4ad33a87d24553c11a593bb3e81abfc0d431b334162e596edb55b8b8853a4ab7ad761f99d78c210b0091eb8b03af12e825
+  languageName: node
+  linkType: hard
+
 "@vue-email/preview@npm:0.0.3":
   version: 0.0.3
   resolution: "@vue-email/preview@npm:0.0.3"
@@ -10287,6 +10298,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"marked@npm:7.0.4":
+  version: 7.0.4
+  resolution: "marked@npm:7.0.4"
+  bin:
+    marked: bin/marked.js
+  checksum: 10c0/7f5993bfb2d260806ffada81051c45952857117cba0fd82790779dc696c7ebd35a96be47409b4bdabd75e7ede286f5f5142a75a47200e3fa54eaf8b0cd6f74f6
+  languageName: node
+  linkType: hard
+
 "marked@npm:^17.0.1":
   version: 17.0.6
   resolution: "marked@npm:17.0.6"
@@ -10816,6 +10836,7 @@ __metadata:
     "@vue-email/html": "npm:0.0.3"
     "@vue-email/img": "npm:0.0.3"
     "@vue-email/link": "npm:0.0.3"
+    "@vue-email/markdown": "npm:0.0.7"
     "@vue-email/preview": "npm:0.0.3"
     "@vue-email/render": "npm:0.0.9"
     "@vue-email/section": "npm:0.0.3"

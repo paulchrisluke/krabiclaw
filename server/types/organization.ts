@@ -67,9 +67,6 @@ export interface UpdateOrganizationSettingsRequest {
   seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
-  social_facebook_url?: string | null
-  social_instagram_url?: string | null
-  social_tiktok_url?: string | null
   media?: Array<{ asset_id: string | null; slot: 'logo' | 'favicon' | 'social_share' | 'announcement' }>
   // Additive/subtractive delta on top of the vertical's own module defaults (config/cms-registry.ts
   // ProductFeature ids) — null clears the override back to defaults.

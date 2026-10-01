@@ -32,12 +32,7 @@
         </div>
       </div>
 
-      <div class="mt-16 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-8 sm:mt-20 lg:mt-24">
-        <p class="text-xs leading-5 text-gray-400">
-          {{ t('blawby.footer.copyright', { year, name: compliance?.entity_name || brandName }) }}
-        </p>
-        <ZarazConsentButton />
-      </div>
+      <SiteFooterBar :name="compliance?.entity_name || brandName" class="mt-16 border-t border-white/10 pt-8 leading-5 text-gray-400 sm:mt-20 lg:mt-24" />
     </div>
   </footer>
 </template>
@@ -53,7 +48,6 @@ const props = defineProps<{
 
 const { localePath, t } = useI18n()
 
-const year = new Date().getFullYear()
 const brandName = computed(() => props.organization.name || props.compliance?.entity_name || '')
 const description = computed(() => props.compliance?.footer_disclaimer || props.organization.brand_description || '')
 const documents = computed(() => props.compliance?.media.filter(item => item.slot === 'document' && item.public_url) ?? [])
@@ -73,7 +67,7 @@ const footerGroups = computed(() => [
   { label: t('blawby.footer.services'), items: serviceLinks.value },
   { label: t('blawby.footer.support'), items: linksFor(['/schedule', '/contact', '/pricing']) },
   { label: t('blawby.footer.company'), items: linksFor(['/about', '/donate', '/blog']) },
-  { label: t('blawby.footer.legal'), items: linksFor(['/policies/privacy', '/policies/terms', '/third-party-notices']) },
+  { label: t('blawby.footer.legal'), items: linksFor(['/third-party-notices']) },
 ])
 </script>
 

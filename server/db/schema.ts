@@ -48,9 +48,6 @@ export const business_locations = sqliteTable("business_locations", {
 	special_hours: text(),
 	price_level: text(),
 	email: text(),
-	facebook_url: text(),
-	instagram_url: text(),
-	tiktok_url: text(),
 	google_place_id: text(),
 	google_review_url: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1407,11 +1404,6 @@ export const organization = sqliteTable("organization", {
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
-	// Brand-level social profiles, rendered in the site footer only. Distinct from a location's
-	// own facebook_url/instagram_url/tiktok_url on business_locations — the two never merge.
-	social_facebook_url: text(),
-	social_instagram_url: text(),
-	social_tiktok_url: text(),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
 	// "use vertical defaults as-is." Only real business modules (products/ordering/reservations/
