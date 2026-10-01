@@ -27,7 +27,7 @@
 import { ZARAZ_ANALYTICS_PURPOSE_ID, ZARAZ_CONSENT_COOKIE_NAME } from '~/utils/zaraz-consent'
 
 const { t } = useI18n()
-const privacyUrl = new URL('/privacy', useRuntimeConfig().public.platformUrl).href
+const privacyUrl = new URL('/policies/privacy', useRuntimeConfig().public.platformUrl).href
 // Local visual preview uses the real banner without a Cloudflare consent runtime.
 const visible = ref(import.meta.dev && useRoute().query.previewConsent === 'true')
 

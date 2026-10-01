@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:afef480d50ae51195261d5ad416c45e2e2e8ba4c2d27e7a96c32c911d5eb5950",
+  "fingerprint": "sha256:b3a5152661747bb7cec981b972d594cf3e85d4d854f4bfae91181e677e65324a",
   "tools": [
     {
       "name": "append_content_block",
@@ -4560,20 +4560,8 @@
                   "null"
                 ]
               },
-              "facebook_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "id": {
                 "type": "string"
-              },
-              "instagram_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "maps_url": {
                 "type": [
@@ -4898,12 +4886,6 @@
               },
               "status": {
                 "type": "string"
-              },
-              "tiktok_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
               },
               "timezone": {
                 "description": "Explicit IANA timezone identifier, such as Asia/Bangkok. Missing timezone is an error, never the browser timezone.",
@@ -15949,14 +15931,6 @@
               "null"
             ]
           },
-          "facebook_url": {
-            "description": "Full Facebook page URL for this location, e.g. https://facebook.com/yourpage. Include the https:// scheme.",
-            "type": "string"
-          },
-          "instagram_url": {
-            "description": "Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.",
-            "type": "string"
-          },
           "location_id": {
             "description": "Location id or slug.",
             "type": "string"
@@ -16218,10 +16192,6 @@
               }
             ],
             "description": "Explicit dated hours or closures. Closure starts_on is required; ends_on is inclusive and null means indefinite. Dated hours replace regular hours; periods [] closes the date."
-          },
-          "tiktok_url": {
-            "description": "Full TikTok profile URL for this location, e.g. https://tiktok.com/@yourhandle. Include the https:// scheme.",
-            "type": "string"
           },
           "timezone": {
             "description": "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",

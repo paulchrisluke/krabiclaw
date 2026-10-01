@@ -40,9 +40,6 @@ export interface CreateLocationInput {
   price_level?: string | null;
   rating?: number | null;
   review_count?: number | null;
-  facebook_url?: string | null;
-  instagram_url?: string | null;
-  tiktok_url?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
@@ -78,9 +75,6 @@ export interface LocationRecord {
   opening_hours?: string | null;
   special_hours?: string | null;
   price_level?: string | null;
-  facebook_url?: string | null;
-  instagram_url?: string | null;
-  tiktok_url?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
   seo_title?: string | null;
@@ -288,7 +282,6 @@ async function loadLocation(
   const columns = `id, slug, title, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status,
            address, opening_hours, special_hours, categories, price_level,
-           facebook_url, instagram_url, tiktok_url,
            timezone, max_capacity, seo_title, seo_description, canonical_url,
            feature_overrides, created_at, updated_at`;
   // Check id first so a slug that happens to collide with another row's id can
@@ -402,11 +395,11 @@ export async function createLocation(
           INSERT INTO business_locations (
             id, organization_id, title, slug, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
-            price_level, facebook_url, instagram_url, tiktok_url,
+            price_level,
             timezone, max_capacity, status,
             seo_title, seo_description, canonical_url, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -427,9 +420,6 @@ export async function createLocation(
           input.rating ?? null,
           input.review_count ?? null,
           input.price_level ?? null,
-          input.facebook_url ?? null,
-          input.instagram_url ?? null,
-          input.tiktok_url ?? null,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
           input.seo_title ?? null,
@@ -581,9 +571,6 @@ export async function updateLocation(
     "description",
     "short_description",
     "price_level",
-    "facebook_url",
-    "instagram_url",
-    "tiktok_url",
     "website_url",
     "maps_url",
     "google_review_url",

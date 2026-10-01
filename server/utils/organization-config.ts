@@ -6,9 +6,6 @@ import { isOrganizationFontPreset, resolveOrganizationFontPreset, type Organizat
 export interface OrganizationConfig {
   brand_color?: string
   font_preset?: OrganizationFontPreset
-  social_facebook?: string
-  social_instagram?: string
-  social_tiktok?: string
   press_email?: string
   partnerships_email?: string
   catering_email?: string
@@ -38,15 +35,12 @@ export const getConfig = async (
            json_extract(settings_json, '$.config.catering_email') AS catering_email,
            json_extract(settings_json, '$.config.careers_email') AS careers_email,
            CASE WHEN json_extract(integrations_json, '$.google_analytics.status') = 'active' THEN json_extract(integrations_json, '$.google_analytics.measurement_id') END AS google_analytics_measurement_id,
-           json_extract(settings_json, '$.config.default_timezone') AS default_timezone,
-           social_facebook_url AS social_facebook,
-           social_instagram_url AS social_instagram,
-           social_tiktok_url AS social_tiktok
+           json_extract(settings_json, '$.config.default_timezone') AS default_timezone
       FROM organization WHERE id = ?
   `, [organizationId])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
   const config: OrganizationConfig = {}
-  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","default_timezone","social_facebook","social_instagram","social_tiktok"] as const) {
+  for (const key of ["brand_color","press_email","partnerships_email","catering_email","careers_email","google_analytics_measurement_id","default_timezone"] as const) {
     const value = row[key]
     if (value == null) continue
     if (typeof value !== 'string') throw new Error('Invalid stored site setting: ' + key)
@@ -93,11 +87,6 @@ export const setConfig = async (
 ) => {
   if (key === 'font_preset' && !isOrganizationFontPreset(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'Unsupported organization font preset' })
   if (key === 'default_timezone' && !isValidTimezone(value)) throw new HTTPError({ statusCode: 422, statusMessage: 'A valid analytics timezone is required' })
-  if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') {
-    const result = await execute(db, `UPDATE organization SET ${key}_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`, [value || null, organizationId])
-    if (result.meta?.changes !== 1) throw new HTTPError({ statusCode: 409, statusMessage: 'Organization not found. Reload before saving.' })
-    return
-  }
   const result = await execute(
     db,
     `UPDATE organization SET settings_json = json_set(settings_json, ?, ?),
@@ -114,7 +103,6 @@ export const deleteConfig = async (
   key: WritableOrganizationConfigKey
 ) => {
   if (key === 'default_timezone') throw new HTTPError({ statusCode: 422, statusMessage: 'The analytics timezone cannot be removed' })
-  if (key === 'social_facebook' || key === 'social_instagram' || key === 'social_tiktok') return setConfig(db, organizationId, key, '')
   const result = await execute(
     db,
     `UPDATE organization SET settings_json = json_remove(settings_json, ?),

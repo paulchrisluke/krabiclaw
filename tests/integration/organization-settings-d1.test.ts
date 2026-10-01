@@ -3,7 +3,7 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
-import { deleteConfig, getConfig, setConfig } from '../../server/utils/organization-config.ts'
+import { getConfig, setConfig } from '../../server/utils/organization-config.ts'
 import { readAnalyticsIntegration, storeAnalyticsSelection } from '../../server/utils/google-analytics.ts'
 import { getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, getMcpWorkspacePreference, upsertMcpWorkspacePreference } from '../../server/utils/mcp-context.ts'
 
@@ -23,11 +23,6 @@ test('organization settings and workspace patches preserve independent owners an
     await Promise.all([setConfig(db, 'org', 'brand_color', '#123456'), setConfig(db, 'org', 'default_timezone', 'Asia/Bangkok')])
     assert.equal((await getConfig(db, 'org')).brand_color, '#123456')
     assert.equal((await getConfig(db, 'org')).default_timezone, 'Asia/Bangkok')
-    await setConfig(db, 'org', 'social_facebook', 'https://facebook.com/example')
-    assert.equal((await getConfig(db, 'org')).social_facebook, 'https://facebook.com/example')
-    assert.equal((await db.prepare("SELECT settings_json FROM organization WHERE id='org'").first<{ settings_json: string }>())?.settings_json.includes('social_facebook'), false)
-    await deleteConfig(db, 'org', 'social_facebook')
-    assert.equal((await getConfig(db, 'org')).social_facebook, undefined)
     // The measurement id is the Analytics integration's, and choosing a GA4
     // property is the only thing that writes it — so it is readable here and
     // there is no settings key that sets it.

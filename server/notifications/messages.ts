@@ -51,6 +51,8 @@ export interface NotificationMessage {
   hero: { imageUrl: string; alt: string } | null
   /** An optional sentence under the title, where one genuinely adds something. */
   intro?: string
+  /** Markdown read in full under the intro — an article's own text. Email only. */
+  body?: string
   facts: NotificationFact[]
   sections?: NotificationSection[]
   primaryAction?: NotificationAction

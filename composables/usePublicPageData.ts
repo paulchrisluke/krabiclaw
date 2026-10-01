@@ -119,7 +119,7 @@ export const usePublicPageData = async (options: {
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
-  const { locations, config, organization, locales } = shell;
+  const { locations, config, organization } = shell;
   const googleMaps = computed(() => ({
     ...(shell.googleMaps.value ?? {}),
     reviews: data.value?.globalReviews ?? [],
@@ -299,7 +299,6 @@ export const usePublicPageData = async (options: {
     qaList,
     blogPost,
     tenantPage,
-    locales,
     reservationPolicyByLocation,
     getField,
     getFieldStr,

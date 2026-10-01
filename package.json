@@ -145,6 +145,7 @@
     "@vue-email/html": "0.0.3",
     "@vue-email/img": "0.0.3",
     "@vue-email/link": "0.0.3",
+    "@vue-email/markdown": "0.0.7",
     "@vue-email/preview": "0.0.3",
     "@vue-email/render": "0.0.9",
     "@vue-email/section": "0.0.3",

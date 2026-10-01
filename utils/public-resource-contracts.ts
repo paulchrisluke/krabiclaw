@@ -27,7 +27,6 @@ export interface PublicShellPayload {
   locations: PublicShellLocation[]
   config: Record<string, string>
   googleMaps: ApiRecord
-  locales: { code: string; label: string; is_source: boolean }[]
   /** The site sells something that is not booked: a dish, a t-shirt. */
   hasProducts: boolean
   /** The site has something a guest books a seat on. */
@@ -61,12 +60,6 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
     || (value.googleMaps.business !== null && !isRecord(value.googleMaps.business))
     || !Array.isArray(value.googleMaps.reviews)
     || !Array.isArray(value.googleMaps.media)) return false
-  if (!Array.isArray(value.locales)
-    || !value.locales.every(locale =>
-      isRecord(locale)
-      && typeof locale.code === 'string'
-      && typeof locale.label === 'string'
-      && typeof locale.is_source === 'boolean')) return false
   if (value.platformMessages !== null && (!isRecord(value.platformMessages)
     || !Object.values(value.platformMessages).every(message => typeof message === 'string'))) return false
   return typeof value.hasProducts === 'boolean' && typeof value.hasBookableProducts === 'boolean'
