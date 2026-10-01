@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createHmac } from 'node:crypto'
+import { writeFile } from 'node:fs/promises'
 import { loginAs } from './helpers/auth'
 import { mcpData, mcpRequest } from './helpers/mcp'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
@@ -72,6 +73,7 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     expect(dashboard.status(), await dashboard.text()).toBe(200)
     expect((await dashboard.json()).booking).toMatchObject({ id: created.request_id, status: 'pending', threadId: created.request_id })
     await testInfo.attach('created-mcp-booking', { body: JSON.stringify({ created, stored }, null, 2), contentType: 'application/json' })
+    await writeFile(testInfo.outputPath('created-mcp-booking.json'), JSON.stringify({ created, stored }, null, 2) + '\n')
     await loginAs(page.request, baseURL!, 'user-e2e-pottery-owner')
     await page.goto(`${baseURL}/dashboard/${encodeURIComponent(orgSlug)}/bookings/booking/${created.request_id}`)
     await expect(page.getByText('MCP Guest', { exact: true }).first()).toBeVisible()
