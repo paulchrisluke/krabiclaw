@@ -85,7 +85,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "d4767a51efc0333453bdfecf4da410fc17e0240d75caaaf6beae47305e1b2c0f",
+          "server/utils/content/pages.ts": "6d06837919ec4024fb0c49b3f6328cb76ea2eece6a3e642bdae9d70d505ac782",
           "server/utils/mcp-executor/content.ts": "85557d0dced129da7b117aad51716ac99e9df4cbf035a22a9c3d4073ee073dcc",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
@@ -122,7 +122,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "d4767a51efc0333453bdfecf4da410fc17e0240d75caaaf6beae47305e1b2c0f",
+          "server/utils/content/pages.ts": "6d06837919ec4024fb0c49b3f6328cb76ea2eece6a3e642bdae9d70d505ac782",
           "tests/integration/tenant-page-delete-d1.test.ts": "36836afb68492570ab3ca63d90dea80e0cc8e2a2c986cbacdef6c42de6aa5119",
           "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
         }
@@ -1076,15 +1076,15 @@
           "tests/unit/session-booking-payments.test.ts",
           "tests/unit/metronome-payments-response.test.ts"
         ],
-        "coverageNote": "Real local D1 concurrency, replay and financial boundaries; native test account configuration and Metronome synthetic sandbox invoice rating verified. Native charge/refund and Stripe collection proof remain configuration-blocked.",
+        "coverageNote": "Real local D1 concurrency/replay/financial boundaries; native sandbox account, zero-fee principal capture/full refund, hosted hold conversion and approved rejection, signed payment replay and thin Connect SDK refresh, and Metronome draft rating verified. Actual delayed costs and operating Stripe collection remain outstanding.",
         "evidenceSha256": {
           "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
           "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
           "server/domain/payments/index.ts": "c91d39221156f3be0a038786c416ebb416e3b0a6e8571da4f729a1683f373239",
           "server/domain/payments/checkout.ts": "a1e2ec8ed2872234b73e333ec5d1d16b701da01aaf034f684995551f6ff84777",
-          "server/domain/payments/usage.ts": "2fb89664460ec4c6451df359b3888cc83c131731bb57254f8331f77d1f614708",
+          "server/domain/payments/usage.ts": "b7c955a030b4649ebb59d4791edca166de5fa01f9db98b31dd325f06b3f2e67c",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "9f674a232bbde20ed6ec443600ce2697963845930c229850624af04d44a1bfb9",
+          "tests/integration/payments-d1.test.ts": "930dea468467e700a8af74834d19531b002bb4c8274f294c984c50ff9355a033",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
           "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",

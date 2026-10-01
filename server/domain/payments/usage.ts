@@ -177,10 +177,12 @@ export async function finalizePaymentsBilling(db:DbClient,env:CloudflareEnv,prin
  if(!account?.metronome_customer_id||!account.metronome_contract_id)throw new HTTPError({statusCode:409,statusMessage:'Native Payments usage contract is not configured'})
  if(account.status==='closed')return {closed:true}
  if(!['servicing','closing'].includes(account.status))throw new HTTPError({statusCode:409,statusMessage:'Only a Payments contract in historical servicing can be ended'})
- const now=new Date().toISOString(),end=account.status==='closing'?account.updated_at:now
- const result=await execute(db,`UPDATE payment_billing_accounts SET status='closing',updated_at=? WHERE organization_id=? AND status IN ('servicing','closing') AND NOT EXISTS(SELECT 1 FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL) AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND status='active' AND expires_at>?) AND NOT EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE p.organization_id=? AND r.status IN ('queued','creating','pending','requires_action'))`,[end,principal.organizationId,principal.organizationId,principal.organizationId,now,principal.organizationId])
+ const now=new Date().toISOString(),requestedAt=account.status==='closing'?account.updated_at:now
+ // Native ends require an hour boundary; round up so accrued usage is never truncated.
+ const end=new Date(Math.ceil(Date.parse(requestedAt)/3600000)*3600000).toISOString()
+ const result=await execute(db,`UPDATE payment_billing_accounts SET status='closing',updated_at=? WHERE organization_id=? AND status IN ('servicing','closing') AND NOT EXISTS(SELECT 1 FROM payment_usage_events WHERE organization_id=? AND delivery_at IS NULL) AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds WHERE organization_id=? AND status='active' AND expires_at>?) AND NOT EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE p.organization_id=? AND r.status IN ('queued','creating','pending','requires_action'))`,[requestedAt,principal.organizationId,principal.organizationId,principal.organizationId,now,principal.organizationId])
  if(result.meta.changes!==1)throw new HTTPError({statusCode:409,statusMessage:'Deliver accrued usage and complete outstanding checkout/refund servicing before ending the contract'})
  await metronomeRequest(env,'/v1/contracts/updateEndDate',{customer_id:account.metronome_customer_id,contract_id:account.metronome_contract_id,ending_before:end,allow_ending_before_finalized_invoice:false},`payments-end:${account.metronome_contract_id}:${end}`)
- await execute(db,"UPDATE payment_billing_accounts SET status='closed' WHERE organization_id=? AND status='closing' AND updated_at=?",[principal.organizationId,end])
+ await execute(db,"UPDATE payment_billing_accounts SET status='closed' WHERE organization_id=? AND status='closing' AND updated_at=?",[principal.organizationId,requestedAt])
  return {closed:true,ended_at:end,source:'Metronome native contract end; finalized invoices remain collectible'}
 }

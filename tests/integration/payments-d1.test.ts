@@ -242,10 +242,12 @@ test('native dispute principal and deadline project once without reversing captu
  }finally{await runtime.dispose()}
 })
 
-test('native contract end preserves accrued usage and late costs reopen historical servicing without new acceptance', {timeout:120000},async()=>{
+test('native contract end preserves accrued usage and late costs reopen historical servicing without new acceptance', {timeout:120000},async(t)=>{
  const {db,runtime}=await boot(),original=globalThis.fetch,calls:{url:string;body:Record<string,unknown>|unknown[]}[]=[]
  const env={METRONOME_API_KEY:'local_provider_double'} as never
- globalThis.fetch=async(input,init)=>{const url=String(input),body=init?.body?JSON.parse(String(init.body)):{};calls.push({url,body});return new Response(url.endsWith('/v1/ingest')?'':JSON.stringify({data:url.includes('/invoices')?[]:{id:'native_contract'}}),{status:200})}
+ t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-01T10:28:25.236Z')})
+ let loseEndResponse=true
+ globalThis.fetch=async(input,init)=>{const url=String(input),body=init?.body?JSON.parse(String(init.body)):{};calls.push({url,body});if(url.endsWith('/updateEndDate')&&body.ending_before){assert.equal(Date.parse(body.ending_before)%3600000,0,'native contract end requires an hour boundary');if(loseEndResponse){loseEndResponse=false;throw new Error('Native end succeeded but its response was lost')}}return new Response(url.endsWith('/v1/ingest')?'':JSON.stringify({data:url.includes('/invoices')?[]:{id:'native_contract'}}),{status:200})}
  try{
   await db.prepare("INSERT INTO payment_billing_accounts(organization_id,stripe_billing_customer_id,metronome_customer_id,metronome_contract_id,contract_start_at,currency,status,updated_at) VALUES(?,'cus_operating','metro_customer','native_contract',?,'USD','servicing',?)").bind(ORG,NOW,NOW).run()
   await db.prepare("INSERT INTO payment_usage_events(id,organization_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES('cost',?,'stripe_cost','USD',100,'native-fee',?,?)").bind(ORG,NOW,NOW).run()
@@ -253,14 +255,19 @@ test('native contract end preserves accrued usage and late costs reopen historic
   await assert.rejects(finalizePaymentsBilling(db,env,principal),/Deliver accrued usage/)
   assert.equal(calls.length,0)
   await deliverPaymentsUsage(db,env,ORG)
+  await assert.rejects(finalizePaymentsBilling(db,env,principal),/response was lost/u)
+  assert.equal(await db.prepare('SELECT status FROM payment_billing_accounts').first('status'),'closing')
+  assert.equal(await db.prepare('SELECT updated_at FROM payment_billing_accounts').first('updated_at'),'2026-10-01T10:28:25.236Z','persist the actual request instant rather than a future hour')
+  t.mock.timers.tick(70*60*1000)
   await finalizePaymentsBilling(db,env,principal)
   assert.equal(await db.prepare('SELECT status FROM payment_billing_accounts').first('status'),'closed')
   const end=calls.find(call=>call.url.endsWith('/updateEndDate'))!.body as Record<string,unknown>
-  assert.equal(end.allow_ending_before_finalized_invoice,false);assert.equal(typeof end.ending_before,'string')
+  assert.equal(end.allow_ending_before_finalized_invoice,false);assert.equal(end.ending_before,'2026-10-01T11:00:00.000Z','round forward to preserve every accrued usage timestamp')
+  const endingCalls=calls.filter(call=>call.url.endsWith('/updateEndDate'));assert.deepEqual(endingCalls[0]!.body,endingCalls[1]!.body,'lost-response retry retains the same end across an hour boundary')
   await db.prepare("INSERT INTO payment_usage_events(id,organization_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES('late-cost',?,'stripe_cost','USD',50,'late-native-fee',?,?)").bind(ORG,NOW,NOW).run()
   await deliverPaymentsUsage(db,env,ORG)
   const updates=calls.filter(call=>call.url.endsWith('/updateEndDate'))
-  assert.equal(updates.length,2);assert.equal('ending_before' in (updates[1]!.body as Record<string,unknown>),false)
+  assert.equal(updates.length,3);assert.equal('ending_before' in (updates[2]!.body as Record<string,unknown>),false)
   assert.equal(await db.prepare('SELECT status FROM payment_billing_accounts').first('status'),'servicing')
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_usage_events WHERE delivery_at IS NULL').first('n'),0)
  }finally{globalThis.fetch=original;await runtime.dispose()}
