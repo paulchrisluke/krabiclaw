@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { createHmac } from 'node:crypto'
 import { loginAs } from './helpers/auth'
 import { mcpData, mcpRequest } from './helpers/mcp'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
@@ -86,6 +87,18 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     expect(proposed.change_status).toBe('awaiting_guest_acceptance')
     await call('request_product_booking_change', proposals)
     expect((await read(created.operational_booking_id)).record.party_size).toBe(1)
+    const detailResponse = await request.get(`${baseURL}/api/dashboard/organizations/${org}/guest-threads/${created.request_id}`)
+    expect(detailResponse.status()).toBe(200)
+    const detail = (await detailResponse.json()).thread
+    const changeEntries = detail.entries.filter((entry: { eventName: string }) => entry.eventName === 'booking_change.requested')
+    expect(changeEntries).toHaveLength(1)
+    const changeId = changeEntries[0].id
+    const token = createHmac('sha256', 'local-playwright-email-reply-secret').update(`booking-change:v1:${created.request_id}:${changeId}`).digest('hex')
+    const accepted = await request.post(`${baseURL}/api/public/booking-changes/${created.request_id}/${changeId}`, { headers: { authorization: `Bearer ${token}` }, data: { decision: 'accept' } })
+    expect(accepted.status(), await accepted.text()).toBe(200)
+    const changed = await read(created.operational_booking_id)
+    expect(changed.record).toMatchObject({ id: created.operational_booking_id, status: 'pending', party_size: 2 })
+
     const confirmation = { operational_booking_id: created.operational_booking_id, idempotency_key: crypto.randomUUID() }
     expect((await call<{ ok: boolean }>('confirm_product_booking', confirmation)).ok).toBe(true)
     expect((await call<{ ok: boolean }>('confirm_product_booking', confirmation)).ok).toBe(true)
