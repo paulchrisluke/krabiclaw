@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
@@ -242,7 +243,7 @@ test.describe('stateless MCP server', () => {
     expect(toolNames).toContain('get_reservation_inquiries')
   })
 
-  test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, baseURL }, testInfo) => {
+  test('owner reads the calendar, blocks and opens dates, and sets its policy through MCP, and guests see it', async ({ request, page, baseURL }, testInfo) => {
     test.setTimeout(90_000)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const locationId = 'loc-demo'
@@ -329,14 +330,27 @@ test.describe('stateless MCP server', () => {
       priorPolicy = (await policy()).policy
       const firm = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'update_reservation_policy',
-        args: { organization_id: organizationId, location_id: locationId, cancellation_policy: 'firm', advance_notice_minutes: (firstOffset + 2) * 1440 },
+        args: { organization_id: organizationId, location_id: locationId, cancellation_policy: 'firm', advance_notice_minutes: (firstOffset + 2) * 1440, deposit_required: true, deposit_trigger_party_size: 6, additional_notes_html: '<p>Please call for dietary requests.</p>' },
       })
       expect(firm.status(), await firm.text()).toBe(200)
       const dashboardConfig = await request.get(`${baseURL}/api/editor/organizations/${organizationId}/locations/${locationId}/reservation-config`)
       expect(dashboardConfig.status(), await dashboardConfig.text()).toBe(200)
-      expect((await dashboardConfig.json()).config).toMatchObject({ free_cancellation_until_minutes: 2880, reschedule_allowed: true, reschedule_cutoff_minutes: 2880 })
+      expect((await dashboardConfig.json()).config).toMatchObject({ free_cancellation_until_minutes: 2880, reschedule_allowed: true, reschedule_cutoff_minutes: 2880, deposit_required: true, deposit_trigger_party_size: 6, additional_notes_html: '<p>Please call for dietary requests.</p>' })
       expect((await policy()).cancellation_policy).toBe('firm')
       expect(await guestSlots(from)).toBe(0)
+      // Stored legacy flags survive a write, while the guest summary presents
+      // cancellation terms and authored notes without promising deposits or moves.
+      await dismissPreviewToolbar(page)
+      await page.setExtraHTTPHeaders(asTenant)
+      expect((await page.goto(`${baseURL}/reservations`))?.status()).toBe(200)
+      await waitForNuxtHydration(page)
+      await page.locator('label[for="reservation-booking-toggle"][role="button"]').first().click()
+      await page.getByRole('dialog').locator('label[role="button"]').click()
+      const terms = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Reservation policies', exact: true }) })
+      await expect(terms).toContainText('Cancel free up to 2 days before your booking.')
+      await expect(terms).toContainText('Please call for dietary requests.')
+      await expect(terms).not.toContainText(/deposit|reschedule|change or cancel/i)
+      await page.screenshot({ path: testInfo.outputPath('reservation-policy.png'), fullPage: true })
     } finally {
       // Whatever failed above, loc-demo is handed back open and on the policy
       // it had: a closure or a notice left behind would fail every later
@@ -351,6 +365,9 @@ test.describe('stateless MCP server', () => {
           method: 'tools/call', toolName: 'update_reservation_policy',
           args: {
             organization_id: organizationId, location_id: locationId,
+            deposit_required: priorPolicy.deposit_required ?? false,
+            deposit_trigger_party_size: priorPolicy.deposit_trigger_party_size ?? null,
+            additional_notes_html: priorPolicy.additional_notes_html ?? null,
             advance_notice_minutes: priorPolicy.advance_notice_minutes ?? null,
             free_cancellation_until_minutes: priorPolicy.free_cancellation_until_minutes ?? null,
             reschedule_allowed: priorPolicy.reschedule_allowed ?? true,
