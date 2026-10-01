@@ -119,6 +119,7 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * A new thread has not been archived by anyone, so it carries no archive state.
  */
 export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' | 'archived_by_user_id'>, claimedBy?: BatchQuery): BatchQuery[] {
+  const provenance = request.kind === 'booking' && 'provenance' in request.payload ? request.payload.provenance : undefined
   const values = [request.id, request.kind, request.organization_id, request.location_id, request.user_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
@@ -129,9 +130,9 @@ export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' |
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: claimedBy ? [...values, ...(claimedBy.params ?? [])] : values,
   }, {
-    query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
-      SELECT ?, id, 'submission', 'request', 'guest', 'web', json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
-    params: [crypto.randomUUID(), `request:${request.id}:submission`, request.id],
+    query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, id, 'submission', 'request', ?, ?, ?, json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
+    params: [crypto.randomUUID(), provenance ? 'member' : 'guest', provenance?.actor_user_id ?? null, provenance ? 'system' : 'web', `request:${request.id}:submission`, request.id],
   }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 

@@ -6,10 +6,10 @@ import { devLoginHeaders, E2E_POTTERY_ORGANIZATION_ID as org, potteryHouseTestEx
 
 type Created = { success: boolean; operational_booking_id: string; request_id: string; status: string; replayed: boolean; code?: string }
 
-test('MCP Product booking uses public capacity, durable replay, guest identity and canonical inbox transitions', async ({ request, baseURL }) => {
+test('MCP Product booking uses public capacity, durable replay, guest identity and canonical inbox transitions', async ({ page, request, baseURL }, testInfo) => {
   test.setTimeout(180_000)
   test.skip(!['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Writes and log-only delivery require isolated local D1')
-  const release = await acquireTenantMutationLock(org)
+  const release = await acquireTenantMutationLock(testInfo, org)
   await loginAs(request, baseURL!, 'user-e2e-pottery-owner')
   const product = 'exp-ph-wheel'
   const editor = `${baseURL}/api/editor/organizations/${org}/products/${product}`
@@ -18,15 +18,24 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     expect(response.status()).toBe(200)
     return mcpData<T>(await response.json())
   }
+  const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
+  expect(discovery.status()).toBe(200)
+  const tools = (await discovery.json()).result.tools as Array<{ name: string; annotations: { readOnlyHint: boolean; destructiveHint: boolean; openWorldHint: boolean } }>
+  expect(tools.find(t => t.name === 'create_product_booking')!.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true })
+  expect(tools.find(t => t.name === 'cancel_product_booking')!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true })
+  const context = await call<{ context: { organization_slug: string } }>('get_organization', {})
+  const orgSlug = context.context.organization_slug
+  expect(orgSlug).toBeTruthy()
   const read = (id: string) => call<{ guest_user_id: string | null; guest: { email: string; phone: string | null }; provenance: { source: string; external_reference: string; guest_acknowledgement: boolean }; record: { id: string; status: string; party_size: number }; updated_at: string }>('get_product_booking', { operational_booking_id: id })
   const configure = async (confirmation_mode: 'review' | 'instant', online_payment_required = false) => {
-    const res = await request.put(`${editor}/booking`, { data: { confirmation_mode, online_payment_required } })
+    const res = await request.put(`${editor}/booking`, { data: { duration_minutes: 120, default_capacity: 8, confirmation_mode, online_payment_required } })
     expect(res.status(), await res.text()).toBe(200)
   }
   const ids: string[] = []
   try {
     const from = new Date(Date.now() + 86400000).toISOString()
     const to = new Date(Date.now() + 28 * 86400000).toISOString()
+    await configure('instant')
     const generated = await request.post(`${editor}/sessions/generate`, { data: { through: to.slice(0, 10) } })
     expect(generated.status(), await generated.text()).toBe(200)
     const listed = await call<{ sessions: Array<{ id: string; starts_at: string; remaining: number | null; is_full: boolean }> }>('list_product_booking_sessions', { product_id: product, from, to })
@@ -36,6 +45,9 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     const since = new Date().toISOString()
     const key = crypto.randomUUID()
     const args = { product_slug: 'pottery-wheel-class', session_id: available[0]!.id, party_size: 1, guest_name: 'MCP Guest', guest_email: 'pottery-owner@playwright.example', idempotency_key: key, source: 'operator', external_reference: `external-${key}`, guest_acknowledgement: false }
+    const fakeConfirmation = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'create_product_booking', args: { organization_id: org, ...args, confirm: true } })
+    expect(fakeConfirmation.status()).toBe(200)
+    expect((await fakeConfirmation.json()).result.isError).toBe(true)
     const concurrent = await Promise.all([call<Created>('create_product_booking', args), call<Created>('create_product_booking', args)])
     expect(concurrent.every(row => row.success)).toBe(true)
     expect(new Set(concurrent.map(row => row.operational_booking_id)).size).toBe(1)
@@ -48,14 +60,21 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     const conflicting = await call<Created>('create_product_booking', { ...args, guest_name: 'Different Guest' })
     expect(conflicting.success).toBe(false)
     expect(conflicting.code).toBe('idempotency_conflict')
+    const afterClaim = await call<{ sessions: Array<{ id: string; remaining: number | null }> }>('list_product_booking_sessions', { product_id: product, from, to })
+    if (available[0]!.remaining !== null) expect(afterClaim.sessions.find(s => s.id === available[0]!.id)!.remaining).toBe(available[0]!.remaining - 1)
     const stored = await read(created.operational_booking_id)
     expect(stored.guest_user_id).toBeNull()
     expect(stored.guest.email).toBe(args.guest_email)
     expect(stored.guest.phone).toBeNull()
     expect(stored.provenance).toMatchObject({ source: 'operator', external_reference: args.external_reference, guest_acknowledgement: false })
-    const dashboard = await request.get(`${baseURL}/api/dashboard/bookings/booking/${created.operational_booking_id}`)
+    const dashboard = await request.get(`${baseURL}/api/dashboard/bookings/booking/${created.request_id}?org=${encodeURIComponent(orgSlug)}`)
     expect(dashboard.status(), await dashboard.text()).toBe(200)
-    expect((await dashboard.json()).booking).toMatchObject({ id: created.operational_booking_id, status: 'pending', threadId: created.request_id })
+    expect((await dashboard.json()).booking).toMatchObject({ id: created.request_id, status: 'pending', threadId: created.request_id })
+    await testInfo.attach('created-mcp-booking', { body: JSON.stringify({ created, stored }, null, 2), contentType: 'application/json' })
+    await loginAs(page.request, baseURL!, 'user-e2e-pottery-owner')
+    await page.goto(`${baseURL}/dashboard/${encodeURIComponent(orgSlug)}/bookings/booking/${created.request_id}`)
+    await expect(page.getByText('MCP Guest', { exact: true }).first()).toBeVisible()
+    await page.screenshot({ path: testInfo.outputPath('pending-mcp-booking.png'), fullPage: true })
     const notifications = await request.get(`${baseURL}/api/dev/notifications?organization_id=${org}&since=${encodeURIComponent(since)}`, { headers: devLoginHeaders() })
     expect(notifications.status()).toBe(200)
     const state = await notifications.json()
@@ -75,6 +94,18 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
     expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
     expect((await read(created.operational_booking_id)).record.status).toBe('cancelled')
+    const pending = await call<Created>('create_product_booking', { ...args, idempotency_key: crypto.randomUUID(), guest_acknowledgement: true })
+    ids.push(pending.operational_booking_id)
+    expect(pending.status).toBe('pending')
+    const rejection = { operational_booking_id: pending.operational_booking_id, idempotency_key: crypto.randomUUID() }
+    expect((await call<{ ok: boolean }>('reject_product_booking', rejection)).ok).toBe(true)
+    expect((await call<{ ok: boolean }>('reject_product_booking', rejection)).ok).toBe(true)
+    expect((await read(pending.operational_booking_id)).record.status).toBe('cancelled')
+    const pendingCancel = await call<Created>('create_product_booking', { ...args, idempotency_key: crypto.randomUUID() })
+    ids.push(pendingCancel.operational_booking_id)
+    expect(pendingCancel.status).toBe('pending')
+    expect((await call<{ ok: boolean }>('cancel_product_booking', { operational_booking_id: pendingCancel.operational_booking_id, idempotency_key: crypto.randomUUID() })).ok).toBe(true)
+    expect((await read(pendingCancel.operational_booking_id)).record.status).toBe('cancelled')
     await configure('instant', true)
     const blocked = await call<Created>('create_product_booking', { ...args, session_id: available[2]!.id, idempotency_key: crypto.randomUUID() })
     expect(blocked.success).toBe(false)

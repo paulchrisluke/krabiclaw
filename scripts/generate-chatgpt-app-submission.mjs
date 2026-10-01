@@ -158,7 +158,7 @@ const submission = {
   app_info: {
     display_name: 'KrabiClaw',
     subtitle: 'Manage your business website',
-    description: 'Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and reservation inquiries from your connected workspace. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.',
+    description: 'Manage your KrabiClaw business website from ChatGPT. Choose a site and location, edit products, variants and prices, publish announcements and blog articles, update page content and translations, and upload or assign media. Review contact and table reservation inquiries, create and manage Product bookings and consultations, and propose guest-approved changes from your connected workspace. Booking writes reserve real capacity and may email guests; required online payment returns a payment-required result before unpaid allocation. Publishing and content changes can appear on your public website. A KrabiClaw account with access to the selected business is required. Site and location setup and deletion are managed in the KrabiClaw CMS.',
     category: 'BUSINESS',
   },
   tools,

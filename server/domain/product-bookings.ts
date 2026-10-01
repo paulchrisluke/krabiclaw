@@ -12,7 +12,7 @@ import { getProduct, resolveVariantPrice } from '~/server/utils/product-manageme
 import { isCurrencyCode } from '~/shared/currencies'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
-import { createReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
+import { createReservationCancelToken, createReplayableReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
 import { ensureInteractionUser } from '~/server/utils/auth'
 import { requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
@@ -73,7 +73,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   if (shouldSendRealEmail(env) && isReservedTestDomain(guestEmail)) return creationResult({ error: 'Please enter a real email address.' }, { status: 422 })
   if (!sessionId) return creationResult({ error: 'A session is required' }, { status: 400 })
 
-  const threadId = operator ? `mcp-booking:${await hashIdentifier(`${organizationId}:${operator.idempotencyKey}`)}` : crypto.randomUUID()
+  const threadId = operator ? await hashIdentifier(JSON.stringify([organizationId, operator.idempotencyKey])) : crypto.randomUUID()
   const replayState: { booking: { id: string; status: string; creation_status: string | null } | null } = { booking: null }
   const fingerprint = operator ? await hashIdentifier(JSON.stringify({ slug, sessionId, requestedVariantId, partySize, guestName, guestEmail, phone: normalizedGuestPhone, notes, source: operator.source, externalReference: operator.externalReference, guestAcknowledgement: operator.guestAcknowledgement })) : null
   const replay = async () => {
@@ -87,7 +87,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   if (operator) {
     const existing = await replay()
     if (existing) return existing
-
   }
 
   const product = await queryFirst<{ id: string; name: string }>(db, `
@@ -97,7 +96,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
      WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1 LIMIT 1
   `, [organizationId, slug])
   if (!product) return creationResult({ error: 'Product not found' }, { status: 404 })
-
 
   const session = await queryFirst<{ id: string; location_id: string | null; starts_at: string; ends_at: string; timezone: string }>(db, `
     SELECT s.id, s.location_id, s.starts_at, s.ends_at, s.timezone
@@ -134,6 +132,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const productVariantId = requestedVariantId || variants[0]!.id
 
   const full = await getProduct(db, organization.id, product.id)
+  const presentation = resolveBookingPresentation('booking', organization.vertical)
   const config = await requireBookingConfig(db, organization.id, product.id)
   if (!replayState.booking && config.online_payment_required) {
     if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
@@ -161,7 +160,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     }
   }
 
-  const cancellation = createReservationCancelToken()
+  const cancellation = operator ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
   // The person is the Better Auth user; what they typed stays on the thread as
   // this booking's guest snapshot and is never copied onto that user.
@@ -231,7 +230,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     buildOwnerThreadInboxUrl(env, db, { organizationId: organization.id, locationId: session.location_id ?? undefined, threadId }),
   ])
   const organizationBaseUrl = organization.public_url?.replace(/\/$/, '')
-  const cancelUrl = !operator && organizationBaseUrl ? `${organizationBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
+  const cancelUrl = organizationBaseUrl ? `${organizationBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised: running the notification first
   // meant a failed dispatch silently cost the tenant the conversion record too.
@@ -284,8 +283,8 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
 
   return creationResult({
-    success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: replayState.booking?.status ?? bookingStatus, replayed: Boolean(replayState.booking), starts_at: session.starts_at, ends_at: session.ends_at, timezone: session.timezone, presentation: resolveBookingPresentation('booking', organization.vertical), ...(operator ? {} : { cancellation_token: cancellation.token }), quoted_value: quotedValueOf(followUps[1]!), measurement,
-    message: bookingStatus === 'pending' ? `Your request for ${product.name} on ${whenLabel} is awaiting review.` : `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
+    success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: replayState.booking?.status ?? bookingStatus, replayed: Boolean(replayState.booking), starts_at: session.starts_at, ends_at: session.ends_at, timezone: session.timezone, presentation, ...(operator ? {} : { cancellation_token: cancellation.token }), quoted_value: quotedValueOf(followUps[1]!), measurement,
+    message: bookingStatus === 'pending' ? `Your request for ${product.name} on ${whenLabel} is awaiting review.` : `Your ${presentation.noun} for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })
 }
