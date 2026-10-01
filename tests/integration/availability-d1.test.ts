@@ -174,9 +174,6 @@ test('concurrent claims cannot exceed capacity, and variants share one pool', { 
     await assert.rejects(
       claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-1', productVariantId: 'var-adult', partySize: 1 }),
       CapacityUnavailableError,
-  setProductBookingConfig,
-  deleteProductBookingConfig,
-  replaceWeeklySchedule,
       'a ticket tier does not get its own seat pool',
     )
 
@@ -218,18 +215,12 @@ test('capacity cannot be reduced below seats already claimed, and a past session
       .bind(ORG, PRODUCT, ACTOR, ACTOR).run()
     await assert.rejects(
       claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-past', productVariantId: 'var-adult', partySize: 1 }),
-      CapacityUnavailableError,
-  setProductBookingConfig,
-  deleteProductBookingConfig,
-  replaceWeeklySchedule, 'a session in the past takes no bookings')
+      CapacityUnavailableError, 'a session in the past takes no bookings')
 
     await db.prepare("UPDATE product_sessions SET status = 'cancelled' WHERE id = 'sess-cap'").run()
     await assert.rejects(
       claimSessionCapacity(db, { organizationId: ORG, productId: PRODUCT, sessionId: 'sess-cap', productVariantId: 'var-adult', partySize: 1 }),
-      CapacityUnavailableError,
-  setProductBookingConfig,
-  deleteProductBookingConfig,
-  replaceWeeklySchedule, 'a cancelled session takes no bookings')
+      CapacityUnavailableError, 'a cancelled session takes no bookings')
   } finally { await runtime.dispose() }
 })
 
