@@ -162,7 +162,7 @@ export interface GuestThreadEntryDelivery {
   id: string
   channel: 'email' | 'whatsapp'
   purpose: 'owner_alert' | 'guest_acknowledgement' | 'member_reply' | 'status_update'
-  status: 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown'
+  status: 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'unknown' | 'skipped'
 }
 
 export interface GuestThreadEntryMessage {

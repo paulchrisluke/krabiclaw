@@ -8,6 +8,7 @@ import { listOrganizationNotificationMembers } from '~/server/utils/member-acces
 import { wantsNotification } from '~/server/domain/notification-preferences'
 import { buildUnsubscribeUrls } from '~/server/utils/unsubscribe'
 import { createCanonicalNotification } from '~/server/utils/notification-center'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
 
 interface DomainNotificationEnv extends CloudflareEnv {
@@ -101,8 +102,9 @@ export async function notifyDomainLifecycle(
   // Same recipients, same preferences, the other channel. This used to send to
   // the organization's configured number, asking neither whose account it was
   // nor whether that person wanted site-and-billing messages.
+  const messagingEnabled = await hasOrganizationEntitlement(env, opts.organizationId, 'messaging')
   const whatsappResults = await Promise.all(members.map(async (member) => {
-    if (!member.phone) return null
+    if (!messagingEnabled || !member.phone) return null
     if (!await wantsNotification(db, member.userId, 'organization_and_billing', 'whatsapp')) return null
     return await sendWhatsAppNotification(env, {
       organizationId: opts.organizationId,
