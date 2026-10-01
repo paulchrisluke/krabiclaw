@@ -28,6 +28,10 @@ interface TenantRow {
   name: string;
   media_json: string;
   vertical: string | null;
+  facebook_page_id: string | null;
+  instagram_username: string | null;
+  privacy_policy: number;
+  terms_policy: number;
 }
 
 const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
@@ -42,7 +46,11 @@ const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
 ) ordered)`
 
 const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onboarding_status,
-             o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical`
+             o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical,
+             CASE WHEN json_extract(o.integrations_json, '$.facebook.status') IN ('active', 'error') THEN json_extract(o.integrations_json, '$.facebook.page_id') END AS facebook_page_id,
+             CASE WHEN json_extract(o.integrations_json, '$.instagram.status') IN ('active', 'error') THEN json_extract(o.integrations_json, '$.instagram.username') END AS instagram_username,
+             EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/privacy') AS privacy_policy,
+             EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/terms') AS terms_policy`
 
 // Krabiclaw's own tenant is the one active organization running the platform
 // template. Platform hosts differ per environment (localhost, staging, the
@@ -65,6 +73,14 @@ async function resolvePlatformTenant(db: DbClient): Promise<TenantRow | null> {
 
 function publicTenantMedia(tenant: Pick<TenantRow, 'media_json'>) {
   return organizationSocialMediaFromJson(tenant.media_json)
+}
+
+/** The profiles a site links to are the accounts connected in Integrations, and only those. */
+function connectedSocialProfiles(tenant: Pick<TenantRow, 'facebook_page_id' | 'instagram_username'>) {
+  return [
+    ...(tenant.facebook_page_id ? [{ network: 'facebook' as const, url: `https://www.facebook.com/${encodeURIComponent(tenant.facebook_page_id)}` }] : []),
+    ...(tenant.instagram_username ? [{ network: 'instagram' as const, url: `https://www.instagram.com/${encodeURIComponent(tenant.instagram_username)}/` }] : []),
+  ]
 }
 
 export interface SpentSubdomainResolution {
@@ -170,6 +186,12 @@ function setResolvedTenantContext(
     name: metadata.name,
     ...socialMedia,
     vertical: metadata.vertical,
+    social_profiles: connectedSocialProfiles(tenant),
+    // A site states a policy by publishing it; one that has not links to none.
+    policies: [
+      ...(tenant.privacy_policy ? ['privacy' as const] : []),
+      ...(tenant.terms_policy ? ['terms' as const] : []),
+    ],
   }
 }
 

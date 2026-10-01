@@ -14,9 +14,7 @@
           :organization="null"
           :is-platform="false"
           :locations="[]"
-          :locales="[]"
           :error="null"
-          :config="{}"
           :has-products="false"
           :has-bookable-products="false"
         />

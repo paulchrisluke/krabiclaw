@@ -27,7 +27,6 @@ export interface PublicShellPayload {
   locations: PublicShellLocation[]
   config: Record<string, string>
   googleMaps: ApiRecord
-  locales: { code: string; label: string; is_source: boolean }[]
   /** The site sells something that is not booked: a dish, a t-shirt. */
   hasProducts: boolean
   /** The site has something a guest books a seat on. */

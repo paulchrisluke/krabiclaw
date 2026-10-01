@@ -50,6 +50,10 @@ export default defineComponent({
               .email-body p, .email-body td, .email-body span { color: ${dark.textMuted} !important; }
               .email-body h1, .email-body h2, .email-body strong, .email-value { color: ${dark.text} !important; }
               .email-body hr, .email-divider { border-color: ${dark.border} !important; }
+              .email-markdown h3, .email-markdown h4, .email-markdown a { color: ${dark.text} !important; }
+              .email-markdown li, .email-markdown blockquote { color: ${dark.textMuted} !important; }
+              .email-markdown blockquote, .email-markdown td { border-color: ${dark.border} !important; }
+              .email-markdown code, .email-markdown pre { background-color: ${dark.bg} !important; color: ${dark.textMuted} !important; }
               .email-label, .email-footer { color: ${dark.textDimmed} !important; }
               .email-footer a { color: ${dark.textMuted} !important; }
               .email-body .email-header-name { color: ${dark.text} !important; }

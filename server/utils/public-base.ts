@@ -24,9 +24,6 @@ export interface PublicBase {
     canonical_url: string | null
     search_console_verification: string | null
     default_timezone: string | null
-    social_facebook_url: string | null
-    social_instagram_url: string | null
-    social_tiktok_url: string | null
   }
 }
 
@@ -64,7 +61,6 @@ export function loadPublicBase(
                 s.brand_description,
                 s.seo_title, s.seo_description, s.canonical_url,
                 json_extract(s.integrations_json, '$.google_search_console.verification_token') AS search_console_verification,
-                s.social_facebook_url, s.social_instagram_url, s.social_tiktok_url,
                 json_extract(s.settings_json, '$.config.default_timezone') AS default_timezone
            FROM organization s
           WHERE s.id = ? AND ${publicTenantVisibilitySql('s', options.previewAuthorized)}
