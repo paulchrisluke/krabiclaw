@@ -1,7 +1,11 @@
 # Deletion-first CMS/MCP cleanup: step one
 
 This draft stacks on PR [#1200](https://github.com/paulchrisluke/krabiclaw/pull/1200),
-`cms/parity-5-insights` at `30838a7ad70c312acfe4bc6d62ec646760c1bbf9`.
+`cms/parity-5-insights`, initially audited at `30838a7ad`. Its reconciled base
+`4dffeb6d5` normally merges current staging, preserving the deployed FAQ
+`query.id` lookup fix and the existing migration chain. No feature commits or
+migrations were selectively copied into this cleanup.
+
 Inspected main `5cd985baf` and staging `7430e7bd7`: their only tree difference
 is a Wrangler setting. PR1200 already deletes the duplicate reservation editor,
 so stacking retains that deletion without copying its 147-file feature diff.
@@ -41,7 +45,7 @@ instruction to delete data or migrate now.
 ## Verification
 
 - Node `24.18.1`; `yarn quality` passed.
-- All 227 unit tests passed, including localized reservation summaries, authored
+- Initial cleanup: all 227 unit tests passed, including localized reservation summaries, authored
   notes, experience terms and the existing cancellation tier mapping.
 - Focused real D1 tests: Q&A scoped edit/delete, media metadata, organization
   settings ownership: 3 passed. Migration chain/archived transfer: 2 passed.
@@ -52,9 +56,34 @@ instruction to delete data or migrate now.
 - One final diff review: only preset deletion, display/description changes,
   focused tests, generated catalog and documentation. Tool names, required
   fields and executor behavior are unchanged.
-- Worker/browser verification blocked during canonical local preparation:
-  `Source schema differs from every recorded migration chain; no rows were copied`.
-  The read-only production snapshot was fetched, but refused before target
-  transfer. No manual fixture or schema bypass was substituted. Full D1 in the
-  socket-restricted sandbox was interrupted; relevant D1 checks passed with
-  local socket access. No repeated full-suite or review rounds.
+- Reconciled Worker/browser proof passed: canonical preparation restored 67
+  tables / 71,332 rows into local D1, with no transform changes. Production
+  Nuxt/Nitro build and generated Worker checks passed. All 6 focused MCP owner
+  tests passed, including guest-browser policy rendering after a real MCP write
+  and independent dashboard readback of the retained deposit/reschedule fields.
+  The policy is restored after the test. [Screenshot](current/step-one-reservation-policy.png)
+  was visually inspected.
+- Reconciled focused unit/D1 run: 8 passed, including the deployed Q&A lookup
+  regression. Changed-file lint, catalog and submission checks passed. The
+  initial full D1 sandbox attempt was interrupted after local socket failures;
+  relevant real D1 checks passed with socket access. No new full review loop.
+
+## Snapshot diagnosis and base reconciliation
+
+Expected and source database epoch are both v7 (`krabiclaw-production-v7`,
+WNAM). A read-only source query reports zero rows written and a ledger of
+`0000_baseline.sql`, `0001_drop_typed_social_profiles.sql`, and
+`0002_products_overview.sql`. All 250 source schema objects exactly match this
+branch's schema. The original CMS base had only the first two migration files.
+`transfer-database-export.mjs` skips candidates when the source ledger is longer
+than the recorded chain, then raises its generic schema rejection at line 366.
+This was an ancestry/ledger mismatch, not a v7 schema or customer-row defect.
+
+Current main/staging contain the third, content-only forward migration. The
+schema, transfer scripts and local setup instructions are identical to the CMS
+base. A normal staging merge into that base is clean; rebase required only
+regenerating the catalog snapshot. Canonical local preparation on the reconciled
+branch passes preflight and the media audit with no transform changes. Source
+production data remains read-only; target writes are disposable local D1 only.
+The preliminary verification checkout was stopped once normal ancestry
+reconciliation was available. No preflight bypass or invented migration.
