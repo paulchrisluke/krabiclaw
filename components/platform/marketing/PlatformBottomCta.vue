@@ -1,5 +1,6 @@
 <template>
-  <section v-if="page.path === '/pricing'" class="kc-pricing-cta" data-parity-section="cta">
+  <PlatformCoastalScene v-if="page.recipe === 'products'" :block="block" :page="page" closing />
+  <section v-else-if="page.path === '/pricing'" class="kc-pricing-cta" data-parity-section="cta">
     <img v-if="mediaStillUrl(media)" :src="mediaStillUrl(media)!" :alt="media?.alt_text ?? ''" loading="lazy" decoding="async">
     <div><h2>{{ title }}</h2><p v-if="description">{{ description }}</p><PlatformAccountCta v-if="label" :label="label" :to="url || '/signup'" size="lg" /></div>
   </section>
@@ -18,6 +19,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformCoastalScene from '~/components/platform/marketing/PlatformCoastalScene.vue'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 import { blockText, blockTextOrNull, blockMedia } from '~/utils/tenant-page-block-data'

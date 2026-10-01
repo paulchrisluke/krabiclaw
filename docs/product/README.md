@@ -1,5 +1,14 @@
 # Feature library maintenance
 
+Products overview review (2026-10-01): the platform adds a page document at
+`/products` and reuses the `products` recipe for future detail documents.
+The template registry and SEO policy evidence were re-reviewed for this change:
+customer template provisioning, billing gates, docs and help access are unchanged.
+The platform's Products paths now use ordinary document metadata and sitemap
+inventory. The page-media projection also carries stored image dimensions to
+reserve space during lazy loading; standard/custom page write and entitlement
+checks were re-reviewed and are unchanged. This does not promise search rankings or broader plan access.
+
 `feature-library.json` is the canonical feature mapping and evidence inventory.
 It is deliberately not a new billing policy, paid marketing catalog or automatic
 pricing-page generator. Stripe owns paid `marketing_features`, product wording,

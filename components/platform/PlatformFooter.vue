@@ -49,7 +49,7 @@ const COLUMNS = [
     title: 'Product',
     links: [
       { label: 'MCP', to: '/plugin' },
-      { label: 'Features', to: '/features' },
+      { label: 'Products', to: '/products' },
       { label: 'Pricing', to: '/pricing' },
       { label: 'Templates', to: '/templates' },
     ],
