@@ -32,6 +32,7 @@ export interface IntegrationsSummary {
     review_count: number | null
     last_synced_at: string | null
   }>
+  google_calendar: { account_id: string; calendar_name: string; status: IntegrationStatus; connected_at: string } | null
   google_analytics: { account_id: string | null; property_name: string | null; measurement_id: string; status: IntegrationStatus; connected_at: string } | null
   google_search_console: { account_id: string; site_url: string; status: IntegrationStatus; connected_at: string } | null
   facebook: { account_id: string; page_name: string; status: IntegrationStatus; connected_at: string } | null
@@ -91,6 +92,8 @@ const items = computed<EditorNavigationItem[]>(() => {
       ...connection(s?.google_analytics ?? null, s?.google_analytics?.property_name ?? s?.google_analytics?.measurement_id ?? '') },
     { id: 'google-search-console', label: 'Google Search Console', lead: { icon: 'i-logos-google-search-console' }, to: `${base.value}/google-search-console`,
       ...connection(s?.google_search_console ?? null, s?.google_search_console?.site_url ?? '') },
+    { id: 'google-calendar', label: 'Google Calendar', lead: { icon: 'i-lucide-calendar' }, to: `${base.value}/google-calendar`,
+      ...connection(s?.google_calendar ?? null, s?.google_calendar?.calendar_name ?? '') },
     { id: 'facebook', label: 'Facebook', lead: { icon: 'i-logos-facebook' }, to: `${base.value}/facebook`,
       ...connection(s?.facebook ?? null, s?.facebook?.page_name ?? '') },
     { id: 'instagram', label: 'Instagram', lead: { icon: 'i-skill-icons-instagram' }, to: `${base.value}/instagram`,
