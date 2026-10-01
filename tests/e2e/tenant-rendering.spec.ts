@@ -79,7 +79,12 @@ test('Krabiclaw pricing retains its billing plans after hydration', async ({ pag
   await waitForNuxtHydration(page)
   await expect(page.locator('html')).toHaveClass(/dark/)
   await expect(page.getByRole('heading', { name: 'Basic', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Growth', exact: true })).toBeVisible()
+  const billing = await page.request.get(`${baseURL}/api/billing/plans`)
+  expect(billing.status()).toBe(200)
+  const plans = await billing.json() as Array<{ id: string; name: string }>
+  const paid = plans.find(plan => plan.id === 'growth')
+  expect(paid).toBeDefined()
+  await expect(page.getByRole('heading', { name: paid!.name, exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Get Grow', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
 })
 
