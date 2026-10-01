@@ -432,7 +432,7 @@ test('a booking move into a full session leaves the original booking exactly as 
 
     await assert.rejects(
       respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' }),
-      /filled up/,
+      (error: unknown) => error instanceof Error && error.message === 'This reservation changed or is no longer available',
       'a full destination refuses the move',
     )
     // Nothing about the original may have moved: not its session, not its
