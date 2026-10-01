@@ -393,7 +393,12 @@ function beginChange() {
 // and changing it is the link above.
 const availableActions = computed<Array<{ value: string; label: string; icon: string; color: ActionColor }>>(() => {
   if (!booking.value || !presentation.value || !booking.value.threadId) return []
-  if (booking.value.status !== 'confirmed' || booking.value.complete) return []
+  if (booking.value.complete) return []
+  if (booking.value.type === 'booking' && booking.value.status === 'pending') return [
+    { value: 'confirm', label: `Confirm ${presentation.value.noun}`, icon: 'i-lucide-calendar-check', color: 'success' as const },
+    { value: 'reject', label: `Decline ${presentation.value.noun}`, icon: 'i-lucide-calendar-x', color: 'error' as const },
+  ]
+  if (booking.value.status !== 'confirmed') return []
   return [{ value: 'cancel', label: `Cancel ${presentation.value.noun}`, icon: 'i-lucide-calendar-x', color: 'error' as const }]
 })
 

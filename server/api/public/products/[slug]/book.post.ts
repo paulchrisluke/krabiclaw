@@ -1,5 +1,5 @@
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { CapacityUnavailableError, claimSessionCapacity } from '~/server/utils/availability'
+import { CapacityUnavailableError, claimSessionCapacity, requireBookingConfig } from '~/server/utils/availability'
 import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notifications'
@@ -111,6 +111,17 @@ export default defineHandler(async (event) => {
   const productVariantId = requestedVariantId || variants[0]!.id
 
   const full = await getProduct(db, organization.id, product.id)
+  const config = await requireBookingConfig(db, organization.id, product.id)
+  if (config.online_payment_required) {
+    if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
+    const variant = full.variants.find(candidate => candidate.id === productVariantId)
+    if (!variant) throw new Error('The selected variant is missing')
+    const price = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
+    if (!price) return jsonResponse({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
+    if (price.unit_amount > 0) return jsonResponse({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
+  }
+  const bookingStatus = config.confirmation_mode === 'review' ? 'pending' : 'confirmed'
+
 
   const clientIp = getClientIp(event)
   const ipHash = await hashClientIp(clientIp)
@@ -138,12 +149,13 @@ export default defineHandler(async (event) => {
   const payload = threadPayloadForGuest({ name: guestName, email: guestEmail, phone: normalizedGuestPhone, notes, ipHash })
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
 
+  let operationalBookingId: string
   try {
     // The seat is claimed first, and the thread is written only where that
     // claim landed: a claim that finds the session full inserts nothing and
     // raises nothing, so a thread written ahead of it would commit on its own.
     // The booking takes its request id once the thread exists.
-    await claimSessionCapacity(db, {
+    const claim = await claimSessionCapacity(db, {
       organizationId: organization.id, productId: product.id, sessionId: session.id,
       productVariantId, partySize, userId, requestId: null,
       following: bookingId => [
@@ -158,8 +170,17 @@ export default defineHandler(async (event) => {
                    WHERE id = ? AND EXISTS (SELECT 1 FROM requests WHERE id = ?)`,
           params: [threadId, now, bookingId, threadId],
         },
+        {
+          query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+                  SELECT ?, request_id, 'operation', 'request', 'system', 'booking.created',
+                    json_object('operational_booking_id', id, 'request_id', request_id, 'afterStatus', status), ?,
+                    COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = bookings.request_id), 0) + 1, ?, ?
+                  FROM bookings WHERE id = ? AND request_id IS NOT NULL`,
+          params: [crypto.randomUUID(), `booking:${bookingId}:created`, now, now, bookingId],
+        },
       ],
     })
+    operationalBookingId = claim.bookingId
   } catch (error) {
     // Nothing to roll back: the batch either applied whole or not at all.
     if (!(error instanceof CapacityUnavailableError)) throw error
@@ -212,7 +233,7 @@ export default defineHandler(async (event) => {
     ...await Promise.allSettled([
       notifyBookingCreated(env, db, {
         organizationId: organization.id, organizationName: organization.name, locationId: session.location_id,
-        bookingId: threadId, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
+        bookingId: threadId, status: bookingStatus, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
         productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
         partySize, notes: notes || null,
         cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
@@ -228,8 +249,8 @@ export default defineHandler(async (event) => {
   const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
 
   return jsonResponse({
-    success: true, booking_id: threadId, cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement,
-    message: `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
+    success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: bookingStatus, cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement,
+    message: bookingStatus === 'pending' ? `Your request for ${product.name} on ${whenLabel} is awaiting review.` : `Your booking for ${product.name} on ${whenLabel} is confirmed.`,
     policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
   }, { status: 201 })
 })

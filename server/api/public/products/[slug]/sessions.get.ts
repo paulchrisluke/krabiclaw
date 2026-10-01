@@ -27,9 +27,10 @@ export default defineHandler(async (event) => {
 
   const product = await queryFirst<{ id: string; organization_id: string; name: string; timezone: string | null }>(db, `
     SELECT p.id, p.organization_id, p.name,
+           COALESCE(cfg.online_timezone,
            (SELECT l.timezone FROM business_locations l
               JOIN product_locations pl ON pl.location_id = l.id AND pl.product_id = p.id
-             WHERE pl.published = 1 AND pl.active = 1 AND l.status = 'active' LIMIT 1) AS timezone
+             WHERE pl.published = 1 AND pl.active = 1 AND l.status = 'active' LIMIT 1)) AS timezone
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id
@@ -37,7 +38,7 @@ export default defineHandler(async (event) => {
      LIMIT 1
   `, [organizationId, slug])
   if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
-  if (!product.timezone) return jsonResponse({ error: 'This product is not on sale at any location' }, { status: 409 })
+  if (!product.timezone) return jsonResponse({ error: 'Set the configured online or location timezone before offering sessions' }, { status: 409 })
 
   // A session belongs to a location, and a branch that has stopped selling
   // this product does not offer its occurrences either.

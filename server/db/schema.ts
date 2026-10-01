@@ -790,6 +790,10 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	duration_minutes: integer(),
 	default_capacity: integer(),
+	confirmation_mode: text().default("instant").notNull(),
+	online_payment_required: integer({ mode: "boolean" }).default(false).notNull(),
+	online_timezone: text(),
+	calendar_group: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -802,6 +806,9 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 	unique("product_booking_configs_org_product_unique").on(table.organization_id, table.product_id),
 	check("product_booking_configs_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
 	check("product_booking_configs_capacity_check", sql`default_capacity IS NULL OR default_capacity >= 0`),
+	check("product_booking_configs_confirmation_check", sql`confirmation_mode IN ('instant', 'review')`),
+	check("product_booking_configs_payment_check", sql`online_payment_required IN (0, 1)`),
+	check("product_booking_configs_calendar_check", sql`calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)`),
 ]);
 
 // Typed weekly recurrence. This replaces the `recurring_slots` JSON map; it is
@@ -982,7 +989,7 @@ export const bookings = sqliteTable("bookings", {
 	// The status set lives here now. It never did: `status` was plain text with
 	// a comment pointing somewhere else, which is how `pending` survived after
 	// nothing wrote it on purpose.
-	check("bookings_status_check", sql`status IN ('confirmed', 'cancelled')`),
+	check("bookings_status_check", sql`status IN ('pending', 'confirmed', 'cancelled')`),
 	check("bookings_instants_check", sql`(cancelled_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', cancelled_at, '+0 days') IS cancelled_at) AND (created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
 	// A booking pins what it holds. Deleting the session or the variant it
 	// names is refused while the booking exists — a guest's seat is not

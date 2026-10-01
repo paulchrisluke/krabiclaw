@@ -12,7 +12,7 @@
       :cta-to="browseHref"
     >
       <template #title>
-        You're booked, {{ confirmation.guestName }}!
+        {{ confirmation.status === 'pending' ? 'Request received' : "You’re booked" }}, {{ confirmation.guestName }}!
       </template>
       <template #subtitle>
         {{ confirmation.message }}

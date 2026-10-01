@@ -48,6 +48,7 @@ export async function useBookingDetails(bookingType: DashboardBookingType, booki
   const referenceDay = computed(() => booking.value ? localDateAt(new Date(), booking.value.timeZone) : '')
   const pageTitle = computed(() => {
     if (!booking.value) return 'Booking details'
+    if (booking.value.status === 'pending') return 'Awaiting review'
     if (booking.value.status === 'cancelled') return 'Cancelled'
     if (booking.value.bookingDate === referenceDay.value) return 'Currently hosting'
     if (booking.value.bookingDate > referenceDay.value) return 'Coming up'

@@ -759,7 +759,7 @@ async function submitBooking(contact: ContactFormState) {
   submitting.value = true
   bookingError.value = ''
   try {
-    const response = await publicApiMutation<{ success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
+    const response = await publicApiMutation<{ success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
       `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
       {
         method: 'POST',
@@ -774,13 +774,13 @@ async function submitBooking(contact: ContactFormState) {
           locale: locale.value,
           page_event_id: await pageEventId(),
         },
-        validate: (value): value is { success: true; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
+        validate: (value): value is { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
           isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
       },
     )
     mirrorSubmission('booking_submit', response.measurement, props.location.id, response.quoted_value)
     setBookingConfirmation({
-      type: 'booking',
+      type: 'booking', status: response.status, operationalBookingId: response.operational_booking_id, requestId: response.request_id,
       organizationId: props.organizationId,
       organizationName: props.location.title,
       guestName: contact.name,

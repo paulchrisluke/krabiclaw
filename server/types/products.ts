@@ -59,10 +59,7 @@ export interface Collection {
 }
 
 /** What generating this product's occurrences starts from. Sessions keep their own. */
-export interface ProductBookingConfig {
-  duration_minutes: number | null
-  default_capacity: number | null
-}
+export type ProductBookingConfig = Pick<import('~/server/utils/availability').ProductBookingConfig, 'duration_minutes' | 'default_capacity' | 'confirmation_mode' | 'online_payment_required' | 'online_timezone' | 'calendar_group'>
 
 /** Membership of one product in one collection, carrying its position there. */
 export interface CollectionMembership {
