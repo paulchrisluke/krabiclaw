@@ -22,6 +22,13 @@
       "when": 1790828089754,
       "tag": "0002_products_overview",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790859705994,
+      "tag": "0003_minimal_weekly_schedule",
+      "breakpoints": true
     }
   ]
 }

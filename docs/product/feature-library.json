@@ -162,8 +162,8 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "0852171dc13d3fefa4236ebf85bb42e56a37c2e6568e184f1b9b90c8a61c3217",
-          "tests/integration/availability-d1.test.ts": "ca0b41d93ac52190a3f7a2c6ad789affe5528006135b4650b574aff41f43c1f8",
+          "server/utils/availability.ts": "c2e78af7e98643b7f55046dbc2d77b648ee863a593f29b1c7617e6653e9ed4f4",
+          "tests/integration/availability-d1.test.ts": "6482f1adcdc5c85beed3e53688bf4d5bf19d81454649920927ed385c386a6e97",
           "server/utils/mcp-tools/locations.ts": "939c976e55cf273e0e41feb3dd142440e5cb5a3ab6dca78d9df32e541a5c7946"
         }
       },
@@ -178,7 +178,7 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration. CMS and MCP share booking-default and weekly-rule writers. New occurrences use defaults; saved Sessions own actual facts, and any booking history protects them when rules are cleared or re-added.",
+      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration. CMS and MCP share booking-default and weekly-rule writers. New occurrences use defaults; saved Sessions own actual facts, and any booking history protects them when rules are cleared or re-added. Weekly slots expose weekday/time only; Product owns duration and capacity. No per-rule overrides, recurrence windows or multiweek cadence remain.",
       "entitlementKeys": [],
       "mcpOperations": [
         "batch_create_products",
@@ -221,7 +221,7 @@
           "server/utils/mcp-executor/products.ts": "f5cc84ae41b7e93c7805ddf089b1c15530ae63ef5ec4323c3cb3ce3784a58f1c",
           "server/utils/product-management.ts": "e741a34cce66b6de8e04ca0775af5c3bf6fea76ead20e7032aa636e422eb6662",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
-          "server/utils/mcp-tools/products.ts": "c80f0561cc7e4579a3851b8c5561d5a34117b279cbcd924f175afe9c2885eccf"
+          "server/utils/mcp-tools/products.ts": "d8be1b925499fb43377bd283fc3557693451b9613d09a4760970daa672305a13"
         }
       },
       "pendingOwnerDecision": null,

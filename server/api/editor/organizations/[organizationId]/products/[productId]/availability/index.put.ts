@@ -8,7 +8,7 @@ import { getRouterParam } from 'nitro/h3'
  * Replace the weekly schedule a product runs at one location.
  *
  * The body is the whole schedule for that branch: every (weekday, time) the
- * merchant runs, each with its own places or null for the product's default.
+ * merchant runs, using the Product's duration and capacity.
  * Times are the branch's wall clock; the branch's timezone is what makes them
  * instants. See replaceWeeklySchedule for what a removed slot does to the
  * sessions already generated from it.

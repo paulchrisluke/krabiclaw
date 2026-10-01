@@ -388,6 +388,15 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       assert(digest(rows, targetColumns) === digest(stage.prepare(`SELECT * FROM ${qi(table)}`).all(), targetColumns), `${table}: copy differs`)
     }
     for (const name of sourceFiles.slice(appliedCount)) stage.exec(readFileSync(resolve(sourceDirectory, name), 'utf8'))
+    // Archived epochs reach their last recorded schema before current row
+    // projection. Apply this same guarded forward simplification there too;
+    // populated legacy recurrence fields must fail, never be silently omitted.
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
+      const sql = readFileSync(resolve(MIGRATIONS_DIRECTORY, '0003_minimal_weekly_schedule.sql'), 'utf8')
+      stage.exec(sql)
+      manifest.transforms.push({ name: 'archived_minimal_weekly_schedule', changes: stage.prepare('SELECT count(*) AS n FROM product_availability_rules').get().n, sql_sha256: hash(sql) })
+    }
+
     for (const transform of TRANSFORMS) {
       const result = stage.prepare(transform.sql).run()
       manifest.transforms.push({ name: transform.name, changes: result.changes, sql_sha256: hash(transform.sql) })

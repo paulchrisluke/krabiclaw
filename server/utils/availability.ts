@@ -61,11 +61,6 @@ export interface ProductAvailabilityRule {
   timezone: string
   weekday: number
   start_time: string
-  interval_weeks: number
-  effective_from_date: string | null
-  effective_until_date: string | null
-  duration_minutes: number | null
-  capacity: number | null
 }
 
 export interface ProductSession {
@@ -152,20 +147,19 @@ export async function listAvailabilityRules(
   productId: string,
 ): Promise<ProductAvailabilityRule[]> {
   return queryAll<ProductAvailabilityRule>(db, `
-    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time,
-           interval_weeks, effective_from_date, effective_until_date, duration_minutes, capacity
+    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time
     FROM product_availability_rules
     WHERE organization_id = ? AND product_id = ?
     ORDER BY weekday, start_time, id
   `, [organizationId, productId])
 }
 
-function resolvedDuration(rule: ProductAvailabilityRule, config: ProductBookingConfig): number {
-  const minutes = rule.duration_minutes ?? config.duration_minutes
+function resolvedDuration(config: ProductBookingConfig): number {
+  const minutes = config.duration_minutes
   if (minutes === null) {
     throw new HTTPError({
       statusCode: 409,
-      statusMessage: 'Set a session length on the product or the rule before generating sessions',
+      statusMessage: 'Set a session length on the product before generating sessions',
     })
   }
   return minutes
@@ -250,31 +244,20 @@ export async function materializeSessions(db: DbClient, input: {
     if (!isValidTimezone(rule.timezone)) {
       throw new HTTPError({ statusCode: 409, statusMessage: `Rule ${rule.id} has an invalid timezone` })
     }
-    const duration = resolvedDuration(rule, config)
-    const capacity = rule.capacity ?? config.default_capacity
+    const duration = resolvedDuration(config)
+    const capacity = config.default_capacity
 
     // The window is expressed in the rule's own local calendar: a weekly slot
     // is a wall-clock fact, so walking UTC days would drift across DST.
     const today = localNow(rule.timezone).date
-    const from = [input.fromDate ?? today, rule.effective_from_date ?? '0000-01-01', today]
+    const from = [input.fromDate ?? today, today]
       .reduce((latest, value) => (value > latest ? value : latest))
-    const through = [input.throughDate, rule.effective_until_date ?? '9999-12-31', addLocalDays(today, MAX_GENERATION_DAYS)]
+    const through = [input.throughDate, addLocalDays(today, MAX_GENERATION_DAYS)]
       .reduce((earliest, value) => (value < earliest ? value : earliest))
     if (from > through) continue
 
-    // A cadence longer than a week counts from the rule's own effective start,
-    // which the schema requires it to have. Counting from the generation
-    // window instead would move every other Saturday to the other Saturday
-    // whenever generation ran on a different day.
     for (let date = from; date <= through; date = addLocalDays(date, 1)) {
       if (new Date(`${date}T00:00:00Z`).getUTCDay() !== rule.weekday) continue
-      if (rule.interval_weeks > 1) {
-        if (!rule.effective_from_date) throw new HTTPError({ statusCode: 500, statusMessage: `Rule ${rule.id} repeats every ${rule.interval_weeks} weeks with no effective start` })
-        const weeksSinceAnchor = Math.floor(
-          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${rule.effective_from_date}T00:00:00Z`)) / (7 * 86_400_000),
-        )
-        if (weeksSinceAnchor % rule.interval_weeks !== 0) continue
-      }
       const resolved = instantsFor(rule, date, duration)
       if ('reason' in resolved) { skipped.push(resolved); continue }
       planned += 1
@@ -326,14 +309,13 @@ export async function materializeSessions(db: DbClient, input: {
 export interface WeeklySlotInput {
   weekday: number
   start_time: string
-  capacity: number | null
 }
 
 /**
  * Replace a product's weekly schedule at one location.
  *
- * The schedule is the set of (weekday, time) slots the merchant runs, each
- * with its own places or the product's default. A slot that stays keeps its
+ * The schedule is the set of (weekday, time) slots the merchant runs, using
+ * the Product's duration and capacity. A slot that stays keeps its
  * rule — and with it every session and booking already hanging off it; a slot
  * that goes cancels its future sessions that nobody has booked, leaves the
  * booked ones as the commitments they are, and then removes the rule. A slot
@@ -359,13 +341,13 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
   const slots: WeeklySlotInput[] = input.slots.map(entry => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) badRequest('each slot must be an object')
     if (typeof entry.weekday !== 'number' || typeof entry.start_time !== 'string') badRequest('each slot needs a weekday and a start_time')
-    return { weekday: entry.weekday, start_time: entry.start_time, capacity: entry.capacity === undefined ? null : entry.capacity }
+    if (Object.keys(entry).some(key => key !== 'weekday' && key !== 'start_time')) badRequest('slots support only weekday and start_time; set duration and capacity on the product')
+    return { weekday: entry.weekday, start_time: entry.start_time }
   })
   const seen = new Set<string>()
   for (const slot of slots) {
     if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) badRequest('weekday must be 0 (Sunday) to 6 (Saturday)')
     assertLocalStartTime(slot.start_time)
-    if (slot.capacity !== null && (!Number.isSafeInteger(slot.capacity) || slot.capacity < 0)) badRequest('capacity must be a non-negative integer or null')
     const key = `${slot.weekday}:${slot.start_time}`
     if (seen.has(key)) badRequest(`The schedule lists ${slot.start_time} twice on the same day`)
     seen.add(key)
@@ -385,31 +367,20 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
     const current = byKey.get(`${slot.weekday}:${slot.start_time}`)
     if (current) {
       kept.add(current.id)
-      // A kept slot is a weekly slot: the same defaults a new one is inserted
-      // with, so a rule that arrived with its own interval, dates or duration
-      // is brought back to the weekly shape rather than kept as an exception.
-      if (
-        current.capacity !== slot.capacity || current.timezone !== timezone
-        || current.interval_weeks !== 1 || current.effective_from_date !== null
-        || current.effective_until_date !== null || current.duration_minutes !== null
-      ) {
+      if (current.timezone !== timezone) {
         writes.push({
-          query: `UPDATE product_availability_rules
-                  SET capacity = ?, timezone = ?, interval_weeks = 1, effective_from_date = NULL,
-                      effective_until_date = NULL, duration_minutes = NULL, updated_at = ?, updated_by = ?
-                  WHERE organization_id = ? AND id = ?`,
-          params: [slot.capacity, timezone, now, input.actorId, input.organizationId, current.id],
+          query: `UPDATE product_availability_rules SET timezone = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?`,
+          params: [timezone, now, input.actorId, input.organizationId, current.id],
         })
       }
       continue
     }
     writes.push({
       query: `INSERT INTO product_availability_rules (
-                id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks,
-                effective_from_date, effective_until_date, duration_minutes, capacity, created_at, updated_at, created_by, updated_by
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
+                id, organization_id, product_id, location_id, timezone, weekday, start_time, created_at, updated_at, created_by, updated_by
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [crypto.randomUUID(), input.organizationId, input.productId, input.locationId, timezone,
-        slot.weekday, slot.start_time, slot.capacity, now, now, input.actorId, input.actorId],
+        slot.weekday, slot.start_time, now, now, input.actorId, input.actorId],
     })
   }
 

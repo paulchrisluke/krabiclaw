@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:e7d1982436561755b26a772ddb64d29377910902dbbb372c506ab97b9a152fe4",
+  "fingerprint": "sha256:0b8a4ab28b04089af44b8d94d4c201d2956e7a973de47ba4399b03aae52ad2e7",
   "tools": [
     {
       "name": "append_content_block",
@@ -13800,13 +13800,6 @@
             "items": {
               "additionalProperties": false,
               "properties": {
-                "capacity": {
-                  "minimum": 0,
-                  "type": [
-                    "integer",
-                    "null"
-                  ]
-                },
                 "start_time": {
                   "description": "Local HH:mm time.",
                   "type": "string"

@@ -34,7 +34,6 @@
               <div class="flex-1 space-y-2">
                 <div v-for="(slot, index) in p.slotsFor(day.value)" :key="`${day.value}-${index}`" class="flex items-center gap-2">
                   <UInput v-model="slot.start_time" type="time" step="300" class="w-32" />
-                  <UInput v-model="slot.capacity" inputmode="numeric" :placeholder="p.form.booking_capacity || 'Default'" class="w-28" aria-label="Places for this time" />
                   <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" aria-label="Remove this time" @click="p.removeSlot(slot)" />
                 </div>
                 <UButton icon="i-lucide-plus" color="neutral" variant="subtle" size="sm" label="Add a time" @click="p.addSlot(day.value)" />
