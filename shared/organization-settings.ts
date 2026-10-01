@@ -12,6 +12,7 @@
  * scopes are fixed by its provider configuration in server/utils/auth.ts.
  */
 export const INTEGRATION_SCOPES = {
+  'google-calendar': ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.events'],
   'google-analytics': ['https://www.googleapis.com/auth/analytics.readonly'],
   'google-search-console': [
     'https://www.googleapis.com/auth/webmasters',
@@ -72,7 +73,21 @@ export interface InstagramIntegration {
   updated_at: string
 }
 
+export interface GoogleCalendarIntegration {
+  revision: string
+  account_id: string
+  calendar_id: string
+  calendar_name: string
+  calendar_group: string | null
+  include_reservations: boolean
+  status: 'active' | 'disabled' | 'error'
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface OrganizationIntegrations {
+  google_calendar?: GoogleCalendarIntegration
   google_analytics?: GoogleAnalyticsIntegration
   google_search_console?: GoogleSearchConsoleIntegration
   facebook?: FacebookIntegration

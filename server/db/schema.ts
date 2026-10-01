@@ -2286,3 +2286,57 @@ export const broadcasts = sqliteTable("broadcasts", {
 	check("broadcasts_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
 	check("broadcasts_created_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at`),
 ]);
+
+// Provider identity is allocated before I/O. This table is also the durable
+// projection intent: unsynced revisions and cleanup survive Worker restarts.
+export const google_calendar_event_links = sqliteTable("google_calendar_event_links", {
+ id: text().primaryKey(),
+ organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+ integration_revision: text().notNull(),
+ account_id: text().notNull(),
+ calendar_id: text().notNull(),
+ event_id: text().notNull(),
+ booking_kind: text({ enum: ["booking", "reservation"] }).notNull(),
+ operational_id: text().notNull(),
+ request_id: text(),
+ booking_revision: text().notNull(),
+ synced_revision: text(),
+ state: text({ enum: ["pending", "synced", "cleanup", "deleted", "error"] }).default("pending").notNull(),
+ last_error: text(),
+ attempts: integer().default(0).notNull(),
+ next_attempt_at: text(),
+ lease_token: text(),
+ lease_until: text(),
+ last_synced_at: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, table => [
+ uniqueIndex("google_calendar_subject_unique").on(table.organization_id, table.integration_revision, table.booking_kind, table.operational_id).where(sql`state <> 'deleted'`),
+ uniqueIndex("google_calendar_provider_unique").on(table.calendar_id, table.event_id),
+ index("google_calendar_due_idx").on(table.organization_id, table.state, table.next_attempt_at),
+ check("google_calendar_kind_check", sql`booking_kind IN ('booking', 'reservation')`),
+ check("google_calendar_state_check", sql`state IN ('pending', 'synced', 'cleanup', 'deleted', 'error')`),
+]);
+
+// Minimal cleanup receipts survive physical organization deletion. They have
+// no guest/booking payload and can only remove an already-managed event.
+export const google_calendar_cleanup_jobs = sqliteTable("google_calendar_cleanup_jobs", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(), // original tenant identity, deliberately no cascading FK
+ account_id: text().notNull(),
+ calendar_id: text().notNull(),
+ event_id: text().notNull(),
+ state: text({ enum: ["pending", "error", "deleted"] }).default("pending").notNull(),
+ attempts: integer().default(0).notNull(),
+ last_error: text(),
+ next_attempt_at: text(),
+ lease_token: text(),
+ lease_until: text(),
+ completed_at: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, table => [
+ uniqueIndex("google_calendar_cleanup_provider_unique").on(table.calendar_id, table.event_id),
+ index("google_calendar_cleanup_due_idx").on(table.state, table.next_attempt_at),
+ check("google_calendar_cleanup_state_check", sql`state IN ('pending', 'error', 'deleted')`),
+]);
