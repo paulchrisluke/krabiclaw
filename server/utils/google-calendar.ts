@@ -126,7 +126,7 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
     }
   }
 }
-async function removeEvent(token: string, link: EventLink) {
+async function removeEvent(token: string, link: Pick<EventLink, 'calendar_id' | 'event_id'>) {
   const path = `/calendars/${encodeURIComponent(link.calendar_id)}/events/${link.event_id}`
   await requireWriter(token, link.calendar_id)
   try { await google(token, `${path}?sendUpdates=none`, { method: 'DELETE' }) }
@@ -244,4 +244,56 @@ export async function storeCalendarSelection(db: DbClient, organizationId: strin
   const payload: GoogleCalendarIntegration = { ...selection, revision: crypto.randomUUID(), status: 'active', last_error: null, created_at: now, updated_at: now }
   const result = await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar', json(?)) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision') IS ? AND NOT EXISTS (SELECT 1 FROM google_calendar_event_links WHERE organization_id=organization.id AND state <> 'deleted')", [JSON.stringify(payload), organizationId, existing?.revision ?? null])
   if (result.meta?.changes !== 1) throw new Error('Calendar selection changed. Reload and try again.')
+}
+
+interface CleanupJob {
+  id: string; organization_id: string; account_id: string; calendar_id: string; event_id: string; attempts: number
+}
+/** Common deletion hook: stage identities durably; no Google calls can block deletion. */
+export async function stageCalendarOrganizationCleanup(db: DbClient, organizationId: string) {
+  const now = new Date().toISOString()
+  await executeBatch(db, [
+    { query: `INSERT INTO google_calendar_cleanup_jobs
+      (id, organization_id, account_id, calendar_id, event_id, next_attempt_at, created_at, updated_at)
+      SELECT id, organization_id, account_id, calendar_id, event_id,
+        CASE WHEN lease_until > ? THEN strftime('%Y-%m-%dT%H:%M:%fZ', lease_until, '+30 seconds') ELSE ? END, ?, ?
+      FROM google_calendar_event_links WHERE organization_id=? AND state <> 'deleted'
+      ON CONFLICT(calendar_id, event_id) DO NOTHING`, params: [now, now, now, now, organizationId] },
+    { query: "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar.status', 'disabled', '$.google_calendar.updated_at', ?) WHERE id=? AND json_extract(integrations_json, '$.google_calendar') IS NOT NULL", params: [now, organizationId] },
+    { query: "UPDATE google_calendar_event_links SET state='cleanup', next_attempt_at=NULL WHERE organization_id=? AND state <> 'deleted'", params: [organizationId] },
+  ], { operation: 'retain Google Calendar organization cleanup identities' })
+}
+/** Delete-only outbox. Orphan jobs cannot enroll, recreate, update or expose a tenant. */
+export async function runCalendarCleanupJobs(env: CloudflareEnv, limit = 25, provider: CalendarProvider = {
+  token: async accountId => (await linkedAccountAccessToken(env, accountId)).accessToken,
+}) {
+  const db = env.DB
+  const now = new Date().toISOString()
+  const jobs = await queryAll<CleanupJob>(db, `SELECT id, organization_id, account_id, calendar_id, event_id, attempts
+    FROM google_calendar_cleanup_jobs WHERE state IN ('pending','error')
+    AND NOT EXISTS (SELECT 1 FROM organization WHERE organization.id=google_calendar_cleanup_jobs.organization_id)
+    AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND (lease_until IS NULL OR lease_until <= ?)
+    ORDER BY COALESCE(next_attempt_at, created_at), id LIMIT ?`, [now, now, limit])
+  let checked = 0; let failed = 0
+  for (const job of jobs) {
+    const lease = crypto.randomUUID()
+    const claimed = await execute(db, `UPDATE google_calendar_cleanup_jobs SET lease_token=?, lease_until=?
+      WHERE id=? AND state IN ('pending','error') AND (lease_until IS NULL OR lease_until <= ?)
+      AND NOT EXISTS (SELECT 1 FROM organization WHERE organization.id=google_calendar_cleanup_jobs.organization_id)`,
+    [lease, new Date(Date.now() + 120_000).toISOString(), job.id, now])
+    if (claimed.meta?.changes !== 1) continue
+    checked++
+    try {
+      await removeEvent(await provider.token(job.account_id), job)
+      await execute(db, `UPDATE google_calendar_cleanup_jobs SET state='deleted', last_error=NULL, next_attempt_at=NULL,
+        lease_token=NULL, lease_until=NULL, completed_at=?, updated_at=? WHERE id=? AND lease_token=?`,
+      [new Date().toISOString(), new Date().toISOString(), job.id, lease])
+    } catch (error) {
+      failed++
+      await execute(db, `UPDATE google_calendar_cleanup_jobs SET state='error', last_error=?, attempts=attempts+1,
+        next_attempt_at=?, lease_token=NULL, lease_until=NULL, updated_at=? WHERE id=? AND lease_token=?`,
+      [error instanceof Error ? error.message : String(error), new Date(Date.now() + Math.min(3600_000, 30_000 * 2 ** Math.min(job.attempts, 7))).toISOString(), new Date().toISOString(), job.id, lease])
+    }
+  }
+  return { checked, failed }
 }

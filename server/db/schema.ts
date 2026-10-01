@@ -2317,3 +2317,26 @@ export const google_calendar_event_links = sqliteTable("google_calendar_event_li
  check("google_calendar_kind_check", sql`booking_kind IN ('booking', 'reservation')`),
  check("google_calendar_state_check", sql`state IN ('pending', 'synced', 'cleanup', 'deleted', 'error')`),
 ]);
+
+// Minimal cleanup receipts survive physical organization deletion. They have
+// no guest/booking payload and can only remove an already-managed event.
+export const google_calendar_cleanup_jobs = sqliteTable("google_calendar_cleanup_jobs", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(), // original tenant identity, deliberately no cascading FK
+ account_id: text().notNull(),
+ calendar_id: text().notNull(),
+ event_id: text().notNull(),
+ state: text({ enum: ["pending", "error", "deleted"] }).default("pending").notNull(),
+ attempts: integer().default(0).notNull(),
+ last_error: text(),
+ next_attempt_at: text(),
+ lease_token: text(),
+ lease_until: text(),
+ completed_at: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, table => [
+ uniqueIndex("google_calendar_cleanup_provider_unique").on(table.calendar_id, table.event_id),
+ index("google_calendar_cleanup_due_idx").on(table.state, table.next_attempt_at),
+ check("google_calendar_cleanup_state_check", sql`state IN ('pending', 'error', 'deleted')`),
+]);

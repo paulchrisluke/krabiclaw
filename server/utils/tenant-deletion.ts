@@ -3,6 +3,7 @@ import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { deleteImage } from '~/server/utils/cloudflare-images'
 import { deleteOrganizationCustomDomains } from '~/server/utils/domains'
+import { stageCalendarOrganizationCleanup } from '~/server/utils/google-calendar'
 import { organizationAdapter, resolveOrganizationMembership } from '~/server/utils/member-access'
 
 /**
@@ -42,6 +43,7 @@ export async function cleanupOrganizationBeforeDelete(
   organizationId: string,
 ): Promise<void> {
   const db = env.DB
+  await stageCalendarOrganizationCleanup(db, organizationId)
   await deleteOrganizationCustomDomains(env, db, organizationId)
 
   for (const imageId of await ownedImageIds(db, organizationId)) {
