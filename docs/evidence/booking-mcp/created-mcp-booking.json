@@ -1,0 +1,61 @@
+{
+  "created": {
+    "success": true,
+    "booking_id": "721fe49a4d7aea70ea03189ab854d5b72245f28290eba0b9fcd239afa6e33ac5",
+    "request_id": "721fe49a4d7aea70ea03189ab854d5b72245f28290eba0b9fcd239afa6e33ac5",
+    "operational_booking_id": "ccc91b61-d45c-42cf-ba72-14afd75ccb6d",
+    "status": "pending",
+    "replayed": false,
+    "starts_at": "2026-10-02T07:00:00.000Z",
+    "ends_at": "2026-10-02T09:30:00.000Z",
+    "timezone": "Asia/Bangkok",
+    "presentation": {
+      "noun": "booking",
+      "nounPlural": "bookings",
+      "label": "Booking",
+      "labelPlural": "Bookings"
+    },
+    "message": "Your request for Pottery Wheel Class on Oct 2, 2026, 2:00 PM is awaiting review.",
+    "policy_summary": {
+      "heading": "Experience policies",
+      "items": [],
+      "additional_notes_html": null
+    },
+    "http_status": 201
+  },
+  "stored": {
+    "operational_booking_id": "ccc91b61-d45c-42cf-ba72-14afd75ccb6d",
+    "request_id": "721fe49a4d7aea70ea03189ab854d5b72245f28290eba0b9fcd239afa6e33ac5",
+    "updated_at": "2026-10-01T05:55:56.650Z",
+    "operational_updated_at": "2026-10-01T05:55:56.650Z",
+    "guest_user_id": null,
+    "guest": {
+      "name": "MCP Guest",
+      "email": "pottery-owner@playwright.example",
+      "phone": null
+    },
+    "provenance": {
+      "source": "operator",
+      "external_reference": "external-6833a971-45d8-4ca3-9fa8-08bac44d9e60",
+      "actor_user_id": "user-e2e-pottery-owner",
+      "idempotency_key": "6833a971-45d8-4ca3-9fa8-08bac44d9e60",
+      "fingerprint": "9fcaa93b5f007f6096253c176aa8c178d4b197126be7ae2709db9b0d406b9941",
+      "guest_acknowledgement": false,
+      "creation_kind": "ordinary",
+      "creation_status": "pending",
+      "followups_completed": true
+    },
+    "record": {
+      "kind": "booking",
+      "id": "ccc91b61-d45c-42cf-ba72-14afd75ccb6d",
+      "status": "pending",
+      "party_size": 1,
+      "starts_at": "2026-10-02T07:00:00.000Z",
+      "ends_at": "2026-10-02T09:30:00.000Z",
+      "timezone": "Asia/Bangkok",
+      "location_id": "loc-pottery-house",
+      "product_id": "exp-ph-wheel",
+      "product_name": "Pottery Wheel Class"
+    }
+  }
+}
