@@ -111,7 +111,7 @@ export async function seedNewOrganization(
   await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
-  // The Blawby shell reads settings_json.$.consultation on every route and
+  // The Blawby shell reads canonical consultation settings on every route and
   // refuses to render without it (getPublicConsultationSettings throws
   // CONSULTATION_SETTINGS_MISSING), so a professional-service tenant is not
   // renderable until this exists. Nothing here is customer-facing copy the
@@ -124,15 +124,15 @@ export async function seedNewOrganization(
   if (vertical === "service") {
     const configured = await queryFirst<{ present: number }>(
       db,
-      "SELECT json_type(settings_json, '$.consultation') IS NOT NULL AS present FROM organization WHERE id = ? LIMIT 1",
+      "SELECT consultation_settings_json IS NOT NULL AS present FROM organization WHERE id = ? LIMIT 1",
       [organizationId],
     );
     if (!configured?.present) {
-      // Consultation settings live on the organization, read back by
+      // Canonical consultation settings live on the organization, read back by
       // server/utils/professional-services.ts. The editor that used to wrap
       // this write went with the offerings model; the setting did not.
       await executeBatch(db, [{
-        query: `UPDATE organization SET settings_json = json_set(COALESCE(settings_json, '{}'), '$.consultation', json(?)), updated_at = ?
+        query: `UPDATE organization SET consultation_settings_json = json(?), updated_at = ?
                  WHERE id = ?`,
         params: [
           JSON.stringify({

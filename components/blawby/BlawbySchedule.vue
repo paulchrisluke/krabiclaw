@@ -18,6 +18,8 @@
       </div>
     </section>
 
+    <OnlineConsultationBooking v-if="consultation.mode === 'native'" />
+
     <section v-if="guidanceBlock" class="relative overflow-hidden bg-white pb-16 pt-16 sm:pb-20 sm:pt-16 lg:pb-24 lg:pt-20" data-parity-section="guidance">
       <div class="blawby-container relative z-20">
         <BlawbyRichText :content="guidanceMarkdown" class="mx-auto max-w-3xl text-lg sm:text-xl" />
@@ -44,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import OnlineConsultationBooking from '~/components/booking/OnlineConsultationBooking.vue'
 import type { PublicOrganizationQa } from '~/types/blawby'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
@@ -67,7 +70,7 @@ function mediaUrl(value: ApiRecord | null | undefined, slot: string) {
 }
 
 const scheduleHero = computed(() => findTenantPageBlock(page.value.blocks, 'hero'))
-const scheduleHeroDestination = computed(() => consultation.value.external_url || String(scheduleHero.value?.cta_url || consultation.value.schedule_path))
+const scheduleHeroDestination = computed(() => consultation.value.mode === 'native' ? '#consultations' : consultation.value.external_url || consultation.value.schedule_path)
 const scheduleTitle = computed(() => {
   const title = String(scheduleHero.value?.title ?? '')
   const accent = 'Legal Consultation'
@@ -78,7 +81,7 @@ const guidanceBlock = computed(() => findTenantPageBlock(page.value.blocks, 'mar
 const guidanceMarkdown = computed(() => optionalString(guidanceBlock.value?.markdown))
 const guidanceDecoration = computed(() => mediaUrl(guidanceBlock.value, 'decoration'))
 const scheduleCta = computed(() => findTenantPageBlock(page.value.blocks, 'booking_cta'))
-const scheduleCtaDestination = computed(() => consultation.value.external_url || String(scheduleCta.value?.url || consultation.value.schedule_path))
+const scheduleCtaDestination = computed(() => consultation.value.mode === 'native' ? '#consultations' : consultation.value.external_url || consultation.value.schedule_path)
 /**
  * What a consultation costs and what booking one does not create. Both belong
  * to the booking prompt, which is the block that declares them; they were read

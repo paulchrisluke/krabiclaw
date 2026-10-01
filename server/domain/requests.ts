@@ -152,7 +152,7 @@ export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
  * because the clock says so.
  */
 export function requestActions(record: ThreadOperationalRecord | null, now: string): string[] {
-  if (!record || record.status === 'cancelled' || isBookingComplete(record, now)) return []
+  if (!record || record.status === 'cancelled' || record.ends_at <= now) return []
   return record.kind === 'booking' && record.status === 'pending' ? ['confirm', 'reject', 'change', 'cancel'] : ['change', 'cancel']
 }
 
@@ -191,7 +191,7 @@ export async function cancelBookingRequest(db: DbClient, input: {
   const current = await getGuestRequest(db, input.id, input.organizationId, input.kind)
   if (!current || current.kind === 'contact') return null
   const record = await getThreadOperationalRecord(db, current.id)
-  if (!record || !['pending', 'confirmed'].includes(record.status) || isBookingComplete(record, input.now)) return null
+  if (!record || !['pending', 'confirmed'].includes(record.status) || record.ends_at <= input.now || isBookingComplete(record, input.now)) return null
 
   // Two writes, one batch, each carrying the other's condition: the token is
   // spent only while the record is still cancellable, and the record is

@@ -416,6 +416,7 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]
+  if (dashboard.organization.value?.vertical === 'service') items.splice(2, 0, { key: 'products', label: 'Products', icon: 'i-lucide-package', to: `${routeOrgBase}/products` })
   return items
 })
 

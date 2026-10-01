@@ -288,63 +288,7 @@
         :can-go-back="bookingStep > 1 && !submitting"
         @back="bookingStep = 1"
       >
-        <div v-if="bookingStep === 1" class="flex min-h-0 flex-1 flex-col">
-          <!-- What is being booked. One option is not a choice; several are,
-               and the guest makes it rather than the server picking an order. -->
-          <fieldset v-if="sellableVariants.length > 1" class="mb-5">
-            <legend class="mb-2 text-sm font-medium">{{ t('saya.product_detail.choose_option') }}</legend>
-            <div class="flex flex-col gap-2">
-              <label
-                v-for="variant in sellableVariants"
-                :key="variant.id"
-                class="flex cursor-pointer items-baseline justify-between gap-3 rounded-lg border border-default px-4 py-3 text-sm"
-                :class="selectedVariantId === variant.id ? 'border-primary bg-primary/5' : ''"
-              >
-                <span class="flex items-baseline gap-3">
-                  <input v-model="selectedVariantId" type="radio" :value="variant.id" name="booking-variant">
-                  <span>{{ variant.name }}</span>
-                </span>
-                <span v-if="variantPriceLabel(variant)" class="tabular-nums">{{ variantPriceLabel(variant) }}</span>
-              </label>
-            </div>
-          </fieldset>
-          <!-- A guest is choosing a time, so the empty state says what they
-               asked: nothing in the window they can book. -->
-          <p v-if="!sessionsPending && availabilityDates.length === 0" class="py-10 text-center text-sm text-muted">
-            {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
-          </p>
-          <BookingTimeStep
-            v-else
-            v-model="timeSelection"
-            :dates="availabilityDates"
-            :loading="sessionsPending"
-            :guests="partySize"
-            :guests-max="guestsMax"
-            @update:guests="partySize = $event"
-            @next="bookingStep = 2"
-          />
-          <p v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
-            {{ bookingError }}
-          </p>
-        </div>
-
-        <div v-else class="flex-1 overflow-y-auto">
-          <BookingRecap
-            v-if="timeSelection"
-            :main-line="timeSelection.label"
-            :meta-line="t('saya.experience_detail.guest_count', { count: partySize })"
-            :edit-label="t('saya.experience_detail.change')"
-            @edit="bookingStep = 1"
-          />
-          <p v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-error">
-            {{ bookingError }}
-          </p>
-          <BookingContactForm
-            :loading="submitting"
-            :submit-text="t('saya.experience_detail.confirm_booking')"
-            @submit="submitBooking"
-          />
-        </div>
+        <ProductBookingSteps :controller="bookingController" :confirmation-mode="booking.confirmation_mode" />
       </BookingModal>
 
       <section v-if="reviews.length" class="mt-16 border-t border-default pt-12">
@@ -363,14 +307,12 @@
 </template>
 
 <script setup lang="ts">
-import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { ga4Major } from '~/utils/ga4-projection'
-import type { ConversionValue } from '~/utils/organization-conversion-events'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
 import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
@@ -379,13 +321,8 @@ import type { PublicProductBooking, PublicProductLocationPayload, PublicProductR
 import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
-import BookingRecap from '~/components/booking/BookingRecap.vue'
-import BookingContactForm, { type ContactFormState } from '~/components/booking/BookingContactForm.vue'
-import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '~/components/booking/BookingTimeStep.vue'
-import { setBookingConfirmation } from '~/composables/useBookingHandoff'
-import { localPartsAt } from '~/utils/timezone'
+import ProductBookingSteps from '~/components/booking/ProductBookingSteps.vue'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
-import { getErrorMessage } from '~/utils/errors'
 
 const props = defineProps<{
   organizationId: string
@@ -409,8 +346,8 @@ const props = defineProps<{
   analyticsEnabled?: boolean
 }>()
 
-const { trackProductOrder, trackProductView, trackCheckoutStart, mirrorSubmission, pageEventId } = useOrganizationConversionTracking()
-const { locale, localePath, t } = useI18n()
+const { trackProductOrder, trackProductView } = useOrganizationConversionTracking()
+const { localePath, t } = useI18n()
 const collectionLabel = computed(() => {
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
   return props.presentation.locationCollectionSegment === 'experiences'
@@ -545,139 +482,11 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []
 }))
 
-const bookingOpen = ref(false)
-const bookingStep = ref(1)
-const partySize = ref(1)
-/** The options a customer can actually choose — what is priced, and what is booked. */
-const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
-function variantPriceLabel(variant: Product['variants'][number]) {
-  return formatProductMoney(selectPrice(variant.prices, { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }))
-}
-const timeSelection = ref<TimeSlotSelection | null>(null)
-const submitting = ref(false)
-const bookingError = ref('')
-/**
- * The occurrences, as the page was served with them.
- *
- * They arrive from the payload rather than from a fetch after hydration, so
- * the dates are in the HTML. The client refresh below replaces them; it does
- * not supply them, because the first reader may be a crawler that runs nothing.
- */
-const sessions = ref<PublicProductSession[]>([...props.sessions])
-const sessionsPending = ref(false)
-
-function localDateOf(session: PublicProductSession) {
-  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
-  return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
-}
-function localTimeOf(session: PublicProductSession) {
-  const parts = localPartsAt(new Date(session.starts_at), session.timezone)
-  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
-}
-
-// The calendar speaks in the session's own zone, so a 10:00 class is 10:00 for
-// every guest reading the page from anywhere.
-const availabilityDates = computed<RawDateAvailability[]>(() => {
-  const byDate = new Map<string, RawDateAvailability>()
-  for (const session of sessions.value) {
-    const date = localDateOf(session)
-    const entry = byDate.get(date) ?? { date, slots: [] }
-    entry.slots.push({
-      time_slot: localTimeOf(session),
-      capacity: session.remaining === null ? null : session.remaining,
-      booked: 0,
-      remaining: session.remaining,
-      is_closed: false,
-      is_full: session.is_full,
-    })
-    byDate.set(date, entry)
-  }
-  return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date))
-})
-
-/**
- * The largest party the calendar can take.
- *
- * Seats live on the session, not on the product: `default_capacity` is what
- * generating an occurrence starts from, and the sessions already on the
- * calendar keep whatever capacity they were given. Reading the product default
- * here capped a twelve-seat session at four, and a product with no default at
- * an unrelated eight.
- *
- * Once a time is chosen it is that session's remaining seats; before then it is
- * the most any session on the calendar has left. A session with no capacity at
- * all takes any party the endpoint accepts.
- */
-const MAX_PARTY_SIZE = 99
-const guestsMax = computed(() => {
-  const pool = selectedSession.value ? [selectedSession.value] : sessions.value
-  if (!pool.length) return 1
-  if (pool.some(session => session.remaining === null)) return MAX_PARTY_SIZE
-  return Math.max(1, ...pool.map(session => session.remaining ?? 0))
-})
-
-const selectedSession = computed<PublicProductSession | null>(() => {
-  const selection = timeSelection.value
-  if (!selection) return null
-  return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
-})
-
-/**
- * Load what the form needs. Opening is the checkbox's job.
- *
- * The control is a label for the modal's checkbox, so pressing it toggles that
- * checkbox and the modal reports the new state back through v-model. Setting
- * `bookingOpen` here as well raced the label's own activation: the state said
- * open, the checkbox had been flipped back, and the dialog stayed hidden with
- * its sessions loaded behind it.
- */
-/**
- * Re-read the occurrences, for a reader who has been on the page a while.
- *
- * This refreshes what the page was served with; it is not the only source of
- * it. A failure leaves the rendered sessions standing and says the load
- * failed — it does not claim there is nothing to book, which is a different
- * fact and the one this page used to state wrongly.
- */
-async function loadSessions() {
-  if (sessionsPending.value) return
-  sessionsPending.value = true
-  try {
-    const response = await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(
-      // This page is one branch's page, so it asks for that branch's
-      // occurrences. Two branches running the same class at the same hour
-      // would otherwise be indistinguishable by date and time alone.
-      `/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location.id)}`,
-      {
-        validate: (value): value is { success: true; sessions: PublicProductSession[] } =>
-          isRecord(value) && value.success === true && Array.isArray(value.sessions),
-      },
-    )
-    sessions.value = response.sessions.filter(session => !session.is_full)
-  } catch (error) {
-    bookingError.value = getErrorMessage(error, t('saya.experience_detail.booking_failed'))
-  } finally {
-    sessionsPending.value = false
-  }
-}
-
-async function openBooking() {
-  bookingStep.value = 1
-  bookingError.value = ''
-  await loadSessions()
-}
-
-watch(bookingOpen, (open) => {
-  // Observe the modal's canonical state, including an opening before hydration.
-  // The option and its price are not chosen yet, so none is claimed here.
-  if (open) trackCheckoutStart(props.product.id, props.location.id, { products: [{ product_id: props.product.id, name: props.product.name, quantity: 1 }] }, selectedVariantId.value)
-})
-
-/** A guest pressing a time on the page arrives in the form with it chosen. */
-async function openBookingAt(session: PublicProductSession) {
-  timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
-  await openBooking()
-}
+const bookingController = useSessionBooking(() => ({ organizationId: props.organizationId,
+    organizationName: props.location.title, product: props.product, currency: props.currency,
+    location: props.location, sessions: props.sessions }))
+const { bookingOpen, bookingStep, submitting, sessions: bookingSessions, sessionsPending, loadSessions, openBooking, openBookingAt,
+  upcomingSessions, nextSession, sessionDayLabel, sessionTimeLabel } = bookingController
 
 // The page is served with its sessions; this re-reads them once the browser
 // has it, so a tab left open does not offer a seat that has since gone. Only
@@ -689,23 +498,6 @@ onMounted(() => {
     : null)
   if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
 })
-
-const upcomingSessions = computed(() => {
-  const now = Date.now()
-  return sessions.value
-    .filter(session => Date.parse(session.starts_at) > now)
-    .sort((left, right) => left.starts_at.localeCompare(right.starts_at))
-    .slice(0, 4)
-})
-const nextSession = computed(() => upcomingSessions.value[0] ?? null)
-
-function sessionDayLabel(session: PublicProductSession): string {
-  return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: session.timezone }).format(new Date(session.starts_at))
-}
-function sessionTimeLabel(session: PublicProductSession): string {
-  const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
-  return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
-}
 
 /** What guests say, in one number: the mean rating to one decimal, or none. */
 const averageRating = computed(() => {
@@ -743,68 +535,6 @@ const mapEmbedUrl = computed(() => (props.location.latitude !== null && props.lo
   ? `https://www.google.com/maps?q=${props.location.latitude},${props.location.longitude}&output=embed`
   : null))
 
-async function submitBooking(contact: ContactFormState) {
-  const session = selectedSession.value
-  if (submitting.value) return
-  if (!session) {
-    bookingError.value = t('saya.experience_detail.choose_time')
-    bookingStep.value = 1
-    return
-  }
-  if (!selectedVariantId.value) {
-    bookingError.value = t('saya.product_detail.choose_option')
-    bookingStep.value = 1
-    return
-  }
-  submitting.value = true
-  bookingError.value = ''
-  try {
-    const response = await publicApiMutation<{ success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement; policy_summary?: ApiRecord | null }>(
-      `/api/public/products/${encodeURIComponent(props.product.slug)}/book`,
-      {
-        method: 'POST',
-        body: {
-          session_id: session.id,
-          variant_id: selectedVariantId.value,
-          party_size: partySize.value,
-          guest_name: contact.name,
-          guest_email: contact.email,
-          guest_phone: contact.phone || null,
-          notes: contact.notes || null,
-          locale: locale.value,
-          page_event_id: await pageEventId(),
-        },
-        validate: (value): value is { success: true; status: 'pending' | 'confirmed'; operational_booking_id: string; request_id: string; booking_id: string; cancellation_token: string; message: string; quoted_value?: ConversionValue | null; measurement?: SubmissionMeasurement } =>
-          isRecord(value) && value.success === true && typeof value.booking_id === 'string' && typeof value.cancellation_token === 'string',
-      },
-    )
-    mirrorSubmission('booking_submit', response.measurement, props.location.id, response.quoted_value)
-    setBookingConfirmation({
-      type: 'booking', status: response.status, operationalBookingId: response.operational_booking_id, requestId: response.request_id,
-      organizationId: props.organizationId,
-      organizationName: props.location.title,
-      guestName: contact.name,
-      startsAt: session.starts_at,
-      timezone: session.timezone,
-      guests: partySize.value,
-      productId: props.product.id,
-      title: props.product.name,
-      requests: contact.notes || null,
-      message: response.message,
-      cancelUrl: `/bookings/cancel?id=${response.booking_id}#${response.cancellation_token}`,
-      policySummary: response.policy_summary ?? null,
-      locationId: props.location.id,
-      locationName: props.location.title,
-      locationSlug: props.location.slug,
-    })
-    bookingOpen.value = false
-    await navigateTo('/bookings/confirmed')
-  } catch (error) {
-    bookingError.value = getErrorMessage(error, 'That booking could not be completed. Please try again.')
-  } finally {
-    submitting.value = false
-  }
-}
 
 function recordExternalOrderClick() {
   if (!import.meta.client || props.analyticsEnabled === false) return
@@ -828,7 +558,7 @@ function recordExternalOrderClick() {
  * date to state; it is still a Product on sale, so it says that rather than
  * claiming to be an Event that never happens.
  */
-const schemaSessions = computed(() => [...sessions.value].sort((left, right) => left.starts_at.localeCompare(right.starts_at)))
+const schemaSessions = computed(() => [...bookingSessions.value].sort((left, right) => left.starts_at.localeCompare(right.starts_at)))
 const structuredDataType = computed(() => {
   const declared = props.presentation.structuredDataType
   if (declared !== 'Event') return declared

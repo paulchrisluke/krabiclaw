@@ -115,12 +115,8 @@ async function successfulOutcome(
 function sourceMutationPlan(context: ThreadContext, action: string): SourceMutationPlan | null {
   if (context.thread.kind === 'contact' || !context.record) return null
   const { kind, status: beforeStatus } = context.record
-  // Cancelling is the only transition left. A booking arrives confirmed and
-  // becomes complete when its end passes, so there is nothing to approve and
-  // nothing to mark done.
-  // History is not cancellable. `requestActions` already offers nothing once a
-  // record is complete; the transition says the same, so the two cannot drift.
-  if (isBookingComplete(context.record, new Date().toISOString())) return null
+  // Pending review and confirmed appointments share the same temporal guard.
+  if (context.record.ends_at <= new Date().toISOString() || isBookingComplete(context.record, new Date().toISOString())) return null
   if (kind === 'booking' && beforeStatus === 'pending' && (action === 'confirm' || action === 'reject')) {
     return { kind, action, beforeStatus, afterStatus: action === 'confirm' ? 'confirmed' : 'cancelled', requiresNotification: true }
   }

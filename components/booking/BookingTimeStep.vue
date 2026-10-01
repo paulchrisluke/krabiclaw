@@ -16,7 +16,7 @@
         >
           <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
         </button>
-        <span class="saya-display min-w-8 text-center text-2xl">{{ guests >= guestsMax ? `${guestsMax}+` : guests }}</span>
+        <span class="saya-display min-w-8 text-center text-2xl">{{ showMinimumAtLimit && guests >= guestsMax ? `${guestsMax}+` : guests }}</span>
         <button
           type="button"
           class="flex size-9 items-center justify-center rounded-full border border-default text-default disabled:opacity-30"
@@ -109,7 +109,7 @@
       <div class="min-w-0">
         <template v-if="modelValue">
           <div class="saya-display saya-italic truncate text-lg">{{ selectedSummary }}</div>
-          <div class="mt-0.5 text-xs text-muted">{{ guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? resolvedGuestSingular : resolvedGuestPlural }}</div>
+          <div class="mt-0.5 text-xs text-muted">{{ showMinimumAtLimit && guests >= guestsMax ? `${guestsMax}+` : guests }} {{ guests === 1 ? resolvedGuestSingular : resolvedGuestPlural }}</div>
         </template>
         <div v-else class="text-sm text-muted">{{ resolvedChooseSeatingLabel }}</div>
       </div>
@@ -144,10 +144,12 @@ export interface TimeSlotSelection {
 
 const props = withDefaults(defineProps<{
   dates: RawDateAvailability[]
+  referenceDate?: string
   loading?: boolean
   modelValue?: TimeSlotSelection | null
   guests: number
   guestsMin?: number
+  showMinimumAtLimit?: boolean
   guestsMax?: number
   guestsLabel?: string
   guestsHint?: string
@@ -158,6 +160,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   loading: false,
   modelValue: null,
+  showMinimumAtLimit: true,
   guestsMin: 1,
   guestsMax: 8,
   guestsHint: '',
@@ -182,15 +185,17 @@ function setDayRef(el: unknown, key: string) {
   dayRefs[key] = el as HTMLElement | null
 }
 
-function dayLabelFor(dateStr: string, index: number): string {
+const referenceDate = computed(() => props.referenceDate ?? props.dates[0]?.date)
+
+function dayLabelFor(dateStr: string): string {
   const formatted = formatCalendarDate(dateStr, locale.value, { day: 'numeric', month: 'long' })
-  if (index === 0) return t('saya.experience_detail.today_date', { date: formatted })
-  if (index === 1) return t('saya.experience_detail.tomorrow_date', { date: formatted })
+  if (dateStr === referenceDate.value) return t('saya.experience_detail.today_date', { date: formatted })
+  if (referenceDate.value && dateStr === addLocalDays(referenceDate.value, 1)) return t('saya.experience_detail.tomorrow_date', { date: formatted })
   return formatCalendarDate(dateStr, locale.value, { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 const days = computed(() => {
-  return props.dates.map((d, i) => {
+  return props.dates.map((d) => {
     const slots = d.slots.map((s) => {
       const isClosedOrFull = s.is_closed || s.is_full
       const tooSmall = !isClosedOrFull && s.remaining !== null && s.remaining < props.guests
@@ -207,7 +212,7 @@ const days = computed(() => {
               : t('saya.experience_detail.available')
       return { time_slot: s.time_slot, disabled, isClosedOrFull, scarce, availabilityLabel }
     })
-    return { key: d.date, label: dayLabelFor(d.date, i), slots }
+    return { key: d.date, label: dayLabelFor(d.date), slots }
   }).filter((d) => d.slots.length > 0)
 })
 
@@ -253,7 +258,7 @@ const weekdayLabels = computed(() => Array.from({ length: 7 }, (_, index) =>
 const calendarDays = computed(() => {
   if (props.dates.length === 0) return []
   const byKey = Object.fromEntries(days.value.map((d) => [d.key, d]))
-  const todayKey = props.dates[0]!.date
+  const todayKey = referenceDate.value
   const first = props.dates[0]!.date
   const last = props.dates[props.dates.length - 1]!.date
   const out: Array<{ key: string; dayNum: number; hasSeats: boolean; isToday: boolean }> = []

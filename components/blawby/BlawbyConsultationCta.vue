@@ -43,7 +43,9 @@ const { localePath } = useI18n()
 const title = computed(() => blockText(props.block.data.title))
 const description = computed(() => blockTextOrNull(props.block.data.description))
 const label = computed(() => blockText(props.block.data.label))
+const consultation = inject<{ consultation?: import('vue').ComputedRef<import('~/types/blawby').PublicConsultationSettings> }>('blawby-schema-context', {})
 const destination = computed(() => {
+  if (consultation.consultation?.value.mode === 'native') return localePath(consultation.consultation.value.schedule_path)
   if (props.destinationOverride) return props.destinationOverride
   const url = blockText(props.block.data.url)
   return url ? (isInternalRoute(url) ? localePath(url) : url) : ''

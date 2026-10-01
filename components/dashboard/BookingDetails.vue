@@ -378,7 +378,7 @@ function resetChangeDraft() {
   changeDraft.value.bookingDate = booking.value.bookingDate
   changeDraft.value.bookingTime = booking.value.bookingTime.slice(0, 5)
   changeDraft.value.partySize = booking.value.partySize
-  changeDraft.value.locationId = booking.value.locationId
+  changeDraft.value.locationId = booking.value.locationId ?? ''
   changeDraft.value.sourceUpdatedAt = booking.value.updatedAt
   changeAttemptKey.value = null
   changeAttemptDraft.value = ''

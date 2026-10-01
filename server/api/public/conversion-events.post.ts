@@ -1,3 +1,4 @@
+import { getPublicConsultationSettings } from '~/server/utils/professional-services'
 import { boundedOccurrence } from '~/server/utils/pageview-tracking'
 import { getRouterParam, readBody } from 'nitro/h3'
 import { queryAll, queryFirst } from '~/server/db'
@@ -72,8 +73,8 @@ export default defineHandler(async (event) => {
       entityType = 'content_document'; entityId = page.id
     }
     if (stage === 'external_booking_handoff') {
-      const consultation = await queryFirst<{ external_url: string | null }>(db, `SELECT (settings_json ->> '$.consultation.external_url') AS external_url FROM organization WHERE id = ? AND (settings_json ->> '$.consultation.mode') = 'external_url' LIMIT 1`, [organizationId])
-      const host = consultation?.external_url ? destinationHost(consultation.external_url) : null
+      const consultation = await getPublicConsultationSettings(db, organizationId)
+      const host = consultation.mode === 'external_url' && consultation.external_url ? destinationHost(consultation.external_url) : null
       if (!host) return jsonResponse({ error: 'Consultation destination is unavailable' }, { status: 404 })
       ctaDestination = host
       metadata = { destination_hostname: host }

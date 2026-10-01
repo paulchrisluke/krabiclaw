@@ -17,7 +17,7 @@ export function isBookingDetailsResponse(value: unknown): value is { booking: Da
     && typeof value.booking.organizationId === 'string'
     && typeof value.booking.guestName === 'string'
     && Array.isArray(value.booking.notes)
-    && isRecord(value.booking.policy)
+    && (value.booking.policy === null || isRecord(value.booking.policy))
 }
 
 export async function useBookingDetails(bookingType: DashboardBookingType, bookingId: string) {

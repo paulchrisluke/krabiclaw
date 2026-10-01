@@ -42,3 +42,43 @@ Durations/prices remain configurable. Variants share their Product session
 length; different legitimate service/duration Products may use different configs.
 UTC storage/comparison and the configured timezone for input/display preserve DST.
 No historical price/duration or operating hours are hard-coded.
+
+## Native activation and shared UI
+
+`organization.consultation_settings_json` stores the same public consultation
+object with one canonical `mode`: `external_url`, `native_disabled`, or `native`.
+Migration 0002 adds the column and backfills the complete legacy object without
+rebuilding the referenced organization parent or changing other settings. Reads
+fall back to legacy JSON only during rollout; writers use only the new column.
+Native activation is an explicit operator setting, separate from publishing the
+configurable offerings. No production configuration is changed by this PR.
+
+`useSessionBooking` owns the shared public orchestration. `ProductBookingSteps`
+owns variant selection, the existing `BookingTimeStep`, `BookingRecap` and
+`BookingContactForm`; `BookingModal` owns dialog accessibility and scroll locking.
+Saya Product detail and Blawby `OnlineProductBooking` consume these exact pieces.
+The organization Product editor mounts the existing ProductEditorPage and leaves
+without a physical location, including booking policy, timezone and weekly slots.
+
+## Shared service entry points
+
+`server/utils/availability.ts` exports `SessionAllocationInput`,
+`sessionAllocationPredicate(input): BatchQuery`, `sessionClaimQuery` and
+`sessionMoveQuery`. The same predicate guards inserts and accepted moves; future
+checkout holds must participate here and exclude only their own authenticated
+hold during conversion. Do not add another overlap policy.
+
+`server/domain/guest-threads/operations.ts` exports
+`executeGuestThreadOperation(db, input): Promise<OperationOutcome>` and
+`ExecuteOperationInput`: `threadId`, `organizationId`, `action`, `actorUserId`,
+`env`, optional `body`, `deliveryId`, and `idempotencyKey` (required for mutations).
+`reject` is a distinct pending-only merchant transition with `host_rejected`;
+ordinary `cancel` remains distinct. Payments extends the existing mutation batch
+with refund permission and a full-principal refund intent, followed by durable
+provider retry. Foundation has no dependency on finance tables or provider state.
+
+Lifecycle activity events include `booking.created`, `booking.confirm`,
+`booking.reject`, `booking.cancel` and accepted change operations. Payloads carry
+`operational_booking_id` and `request_id`; downstream consumers dedupe the durable
+entry identity and read the canonical Booking after commit. Dashboard detail
+retains its legacy request `id` and exposes `operationalBookingId` separately.

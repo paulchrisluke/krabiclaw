@@ -20,11 +20,25 @@
         <UFormField label="Places per session" description="Leave empty for no limit. Zero means no places at all.">
           <UInput v-model="p.form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
         </UFormField>
+        <UFormField label="Confirmation">
+          <USelect v-model="p.form.confirmation_mode" :items="[{ label: 'Instant confirmation', value: 'instant' }, { label: 'Staff review', value: 'review' }]" class="w-full" />
+        </UFormField>
+        <UCheckbox v-model="p.form.online_payment_required" label="Collect online payment when requesting" description="This policy requires Payments for priced offerings. A zero Price is free." />
+        <UCheckbox v-if="!p.locationId.value" v-model="p.form.native_consultations" label="Enable native consultations on this website" description="Guests can book published online offerings through the shared booking flow." />
+        <UCheckbox v-model="p.form.online_schedule" label="Online sessions" description="Schedule without a physical location." />
+        <template v-if="p.form.online_schedule">
+          <UFormField label="Online timezone" description="IANA timezone used for input and display, including daylight saving time.">
+            <UInput v-model="p.form.online_timezone" placeholder="America/New_York" class="w-full" />
+          </UFormField>
+          <UFormField label="Single calendar group" description="Products with this same explicit group share one calendar and cannot have overlapping appointments. Leave empty for independent sessions.">
+            <UInput v-model="p.form.calendar_group" class="w-full" />
+          </UFormField>
+        </template>
         <!-- The weekly schedule at this branch: each time is a slot run every week; sessions a guest can book are generated from these. -->
         <div v-if="p.product.value?.booking" class="space-y-3 border-t border-default pt-4">
           <div>
             <p class="text-sm font-medium">Weekly schedule</p>
-            <p class="text-sm text-muted">Times this branch runs it, in the branch's own clock. Dropping a time cancels its future sessions that nobody has booked.</p>
+            <p class="text-sm text-muted">Times this service runs, in its configured timezone. Dropping a time cancels its future sessions that nobody has booked.</p>
           </div>
           <p v-if="p.scheduleLoading.value" class="text-sm text-muted">Loading the schedule…</p>
           <div v-else class="space-y-3">
