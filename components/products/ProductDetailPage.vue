@@ -27,14 +27,14 @@
            bookings has nothing to put in that column, so it keeps the single
            card. -->
       <div v-if="booking">
-        <SayaMediaGallery :items="galleryItems" :title="product.name" />
+        <SayaMediaGallery v-if="galleryItems.length" :items="galleryItems" :title="product.name" />
 
         <!-- What it is, in one glance: name, tagline, how guests rate it,
              where it runs, how long, how many. Centred under the photographs
              the way the rest of Saya introduces a place. -->
         <header class="mx-auto mt-10 max-w-3xl text-center">
           <p class="saya-kicker mb-3">{{ collectionName }}</p>
-          <h1 class="saya-display-md text-default">{{ product.name }}</h1>
+          <h1 class="saya-display-md text-3xl text-default sm:text-4xl lg:text-5xl">{{ product.name }}</h1>
           <p v-if="tagline" class="mx-auto mt-4 max-w-2xl text-base text-muted sm:text-lg">{{ tagline }}</p>
           <div class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm text-muted">
               <template v-if="averageRating">
@@ -45,7 +45,7 @@
                 <span>{{ reviewCountLabel }}</span>
                 <span aria-hidden="true">·</span>
               </template>
-            <span>{{ location.title }}</span>
+            <span>{{ location?.title ?? organizationName }}</span>
           </div>
           <div v-if="factChips.length" class="mt-5 flex flex-wrap justify-center gap-2">
             <span
@@ -85,7 +85,7 @@
                   <p class="font-medium text-default">{{ sessionDayLabel(session) }}</p>
                   <p class="text-sm text-muted">
                     {{ sessionTimeLabel(session) }}
-                    <template v-if="session.remaining !== null"> · {{ t('saya.experience_detail.left', { count: session.remaining }) }}</template>
+                    <template v-if="session.remaining !== null && vertical !== 'service'"> · {{ t('saya.experience_detail.left', { count: session.remaining }) }}</template>
                   </p>
                 </div>
                 <SayaButton control-id="product-booking-toggle" @click="openBookingAt(session)">
@@ -116,19 +116,19 @@
             </div>
           </section>
 
-          <section class="mt-10 border-t border-default pt-10">
+          <section v-if="location" class="mt-10 border-t border-default pt-10">
             <h2 class="saya-display text-2xl text-default sm:text-3xl">{{ t('saya.experience_detail.where_youll_meet') }}</h2>
             <div class="mt-5 overflow-hidden rounded-xl border border-default bg-elevated">
               <div class="flex items-start gap-4 p-6">
                 <SayaIcon name="map-pin" class="mt-0.5 size-5 shrink-0 text-primary" />
                 <div class="min-w-0">
-                  <p class="font-semibold text-default">{{ location.title }}</p>
+                  <p class="font-semibold text-default">{{ location?.title ?? organizationName }}</p>
                   <p v-if="addressLine" class="mt-1 text-sm text-muted">{{ addressLine }}</p>
-                  <p v-if="location.phone" class="mt-1 text-sm text-muted">{{ location.phone }}</p>
+                  <p v-if="location?.phone" class="mt-1 text-sm text-muted">{{ location.phone }}</p>
                   <p v-if="meetingPoint" class="mt-3 whitespace-pre-line text-sm leading-6 text-default">{{ meetingPoint }}</p>
                   <a
-                    v-if="location.maps_url"
-                    :href="location.maps_url"
+                    v-if="location?.maps_url"
+                    :href="location?.maps_url ?? undefined"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -141,7 +141,7 @@
               <iframe
                 v-if="mapEmbedUrl"
                 :src="mapEmbedUrl"
-                :title="location.title"
+                :title="location?.title ?? organizationName"
                 class="h-56 w-full border-t border-default"
                 style="border-width: 1px 0 0"
                 loading="lazy"
@@ -169,9 +169,9 @@
           <div class="space-y-5 rounded-xl border border-default bg-elevated p-6 shadow-sm">
             <div v-if="priceLabel">
               <p class="saya-display text-3xl tabular-nums text-default">
-                <span v-if="compareAtLabel" class="mr-2 text-lg text-muted line-through">{{ compareAtLabel }}</span>{{ enquiryOnly ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}
+                <span v-if="compareAtLabel" class="mr-2 text-lg text-muted line-through">{{ compareAtLabel }}</span>{{ enquiryOnly || (vertical === 'service' && sellableVariants.length === 1) ? priceLabel : t('saya.experience_detail.from_price', { price: priceLabel }) }}
               </p>
-              <p v-if="!enquiryOnly" class="mt-1 text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</p>
+              <p v-if="!enquiryOnly && vertical !== 'service'" class="mt-1 text-sm text-muted">{{ t('saya.experience_detail.per_person') }}</p>
             </div>
             <div v-if="factChips.length" class="flex flex-wrap gap-2">
               <span
@@ -215,7 +215,7 @@
           <div class="py-2">
             <p class="saya-kicker">{{ collectionName }}</p>
             <h1 class="saya-display saya-italic mt-3 text-3xl sm:text-4xl lg:text-5xl text-default leading-tight">{{ product.name }}</h1>
-            <p class="mt-2 text-sm sm:text-base text-muted">{{ location.title }}</p>
+            <p class="mt-2 text-sm sm:text-base text-muted">{{ location?.title ?? organizationName }}</p>
             <div v-if="priceLabel" class="mt-6 flex items-baseline gap-3 text-2xl font-semibold tabular-nums">
               <span v-if="compareAtLabel" class="text-base font-normal text-muted line-through">{{ compareAtLabel }}</span>
               <span>{{ priceLabel }}</span>
@@ -256,7 +256,7 @@
         <ul class="mt-6 grid gap-x-10 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
           <li v-for="sibling in collectionSiblings" :key="sibling.id">
             <NuxtLink
-              :to="localePath(presentation.productPath(location.slug, sibling.slug))"
+              :to="localePath(presentation.productPath(location?.slug ?? '', sibling.slug))"
               class="text-base text-default no-underline transition hover:opacity-60"
             >{{ sibling.name }}</NuxtLink>
           </li>
@@ -328,7 +328,8 @@ const props = defineProps<{
   organizationId: string
   vertical: string
   product: Product
-  location: PublicProductLocationPayload
+  location: PublicProductLocationPayload | null
+  organizationName?: string
   reviews: PublicProductReview[]
   /** Non-null exactly when this Product takes bookings. */
   booking: PublicProductBooking | null
@@ -349,6 +350,7 @@ const props = defineProps<{
 const { trackProductOrder, trackProductView } = useOrganizationConversionTracking()
 const { localePath, t } = useI18n()
 const collectionLabel = computed(() => {
+  if (!props.location && props.vertical === 'service') return 'Consultations'
   if (props.presentation.locationCollectionSegment === 'menu') return t('saya.footer.menu')
   return props.presentation.locationCollectionSegment === 'experiences'
     ? t('saya.footer.experiences')
@@ -357,10 +359,10 @@ const collectionLabel = computed(() => {
 const breadcrumbs = computed(() => [
   { to: localePath('/'), label: t('saya.experience_detail.home') },
   { to: localePath(props.presentation.collectionPath), label: collectionLabel.value },
-  { to: localePath(props.presentation.locationCollectionSegment === 'experiences'
+  ...(props.location ? [{ to: localePath(props.presentation.locationCollectionSegment === 'experiences'
     ? `/locations/${encodeURIComponent(props.location.slug)}/experiences`
-    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title },
-  { to: localePath(props.presentation.productPath(props.location.slug, props.product.slug)), label: props.product.name },
+    : productLocationCollectionPath(props.vertical, props.location.slug)), label: props.location.title }] : []),
+  { to: localePath(props.presentation.productPath(props.location?.slug ?? '', props.product.slug)), label: props.product.name },
 ])
 
 /**
@@ -369,7 +371,7 @@ const breadcrumbs = computed(() => [
  * each variant's own price is on this page under its option.
  */
 const offer = computed<Price | null>(() => {
-  const selection = { currency: props.currency, location_id: props.location.id, at: new Date().toISOString() }
+  const selection = { currency: props.currency, location_id: props.location?.id ?? null, at: new Date().toISOString() }
   // Only variants a customer can actually choose: a disabled variant's price
   // would otherwise headline an amount the selector never offers.
   const offers = sellableVariants.value.flatMap(variant => selectPrice(variant.prices, selection) ?? [])
@@ -381,6 +383,7 @@ const offer = computed<Price | null>(() => {
  * "Free", or a "Market price" nobody wrote.
  */
 const priceLabel = computed(() => {
+  if (props.vertical === 'service' && sellableVariants.value.length === 1 && offer.value?.unit_amount === 0) return 'Free'
   const amount = formatProductMoney(offer.value)
   if (amount) return amount
   const note = props.product.metafields[PRICING_NOTE_HANDLE]
@@ -414,7 +417,7 @@ const sellableVariants = computed(() => props.product.variants.filter(variant =>
 
 const isAvailable = computed(() =>
   props.product.active
-  && props.product.locations.some(entry => entry.location_id === props.location.id && entry.active)
+  && (props.location ? props.product.locations.some(entry => entry.location_id === props.location?.id && entry.active) : Boolean(props.booking?.online_timezone))
   // Every option retired is the merchant having nothing left to sell here. The
   // booking form otherwise asked for an option it had none to offer.
   && sellableVariants.value.length > 0)
@@ -461,7 +464,7 @@ const factChips = computed(() => {
           : t('saya.experience_detail.hours', { count: hours }),
     })
   }
-  if (config.default_capacity) {
+  if (config.default_capacity && props.vertical !== 'service') {
     chips.push({ icon: 'user-group', label: t('saya.experience_detail.capacity', { count: config.default_capacity }) })
   }
   return chips
@@ -483,7 +486,7 @@ const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((defini
 }))
 
 const bookingController = useSessionBooking(() => ({ organizationId: props.organizationId,
-    organizationName: props.location.title, product: props.product, currency: props.currency,
+    organizationName: props.location?.title ?? props.organizationName!, product: props.product, currency: props.currency,
     location: props.location, sessions: props.sessions, showPartySize: props.vertical !== 'service' }))
 const { bookingOpen, bookingStep, submitting, sessions: bookingSessions, sessionsPending, loadSessions, openBooking, openBookingAt,
   upcomingSessions, nextSession, sessionDayLabel, sessionTimeLabel } = bookingController
@@ -493,7 +496,7 @@ const { bookingOpen, bookingStep, submitting, sessions: bookingSessions, session
 // for a product a guest can book here; an enquiry has no calendar.
 onMounted(() => {
   // Every product view is a native interaction; only a priced, bookable product is an ecommerce item.
-  trackProductView(props.product.id, props.location.id, offer.value && !enquiryOnly.value
+  trackProductView(props.product.id, props.location?.id ?? null, offer.value && !enquiryOnly.value
     ? { product_id: props.product.id, name: props.product.name, currency: offer.value.currency, price: ga4Major(offer.value.unit_amount, offer.value.currency) }
     : null)
   if (props.booking && isAvailable.value && !enquiryOnly.value) void loadSessions()
@@ -529,19 +532,19 @@ const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
   return !definition || !PLACED_ATTRIBUTE_HANDLES.has(metafieldHandle(definition))
 }))
 
-const addressLine = computed(() => formatPostalAddress(props.location.address))
+const addressLine = computed(() => formatPostalAddress(props.location?.address ?? null))
 // A map from the coordinates the branch already has; no key, no second source.
-const mapEmbedUrl = computed(() => (props.location.latitude !== null && props.location.longitude !== null
+const mapEmbedUrl = computed(() => (props.location && props.location.latitude !== null && props.location.longitude !== null
   ? `https://www.google.com/maps?q=${props.location.latitude},${props.location.longitude}&output=embed`
   : null))
 
 
 function recordExternalOrderClick() {
-  if (!import.meta.client || props.analyticsEnabled === false) return
+  if (!import.meta.client || props.analyticsEnabled === false || !props.location) return
   trackProductOrder(
     props.location.id,
     props.product.id,
-    props.presentation.productPath(props.location.slug, props.product.slug),
+    props.presentation.productPath(props.location?.slug ?? '', props.product.slug),
   )
 }
 
@@ -571,19 +574,19 @@ const structuredDataType = computed(() => {
 // tenant's own domain.
 const requestURL = useRequestURL()
 const canonicalProductUrl = computed(() => new URL(
-  props.product.order_url || localePath(props.presentation.productPath(props.location.slug, props.product.slug)),
+  props.product.order_url || localePath(props.presentation.productPath(props.location?.slug ?? '', props.product.slug)),
   requestURL.origin,
 ).toString())
 
 /** Where it runs: the branch, as a place a guest can be sent to. */
-const schemaPlace = computed(() => ({
+const schemaPlace = computed(() => props.location ? ({
   '@type': 'Place',
   name: props.location.title,
   address: schemaPostalAddress(props.location.address),
-  ...(props.location.latitude !== null && props.location.longitude !== null
+  ...(props.location && props.location.latitude !== null && props.location.longitude !== null
     ? { geo: { '@type': 'GeoCoordinates', latitude: props.location.latitude, longitude: props.location.longitude } }
     : {}),
-}))
+}) : { '@type': 'VirtualLocation', url: canonicalProductUrl.value })
 
 /**
  * The seat on one occurrence, priced the way the page prices it.
@@ -617,7 +620,7 @@ function sessionEvent(session: PublicProductSession) {
     name: props.product.name,
     startDate: session.starts_at,
     endDate: session.ends_at,
-    eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+    eventAttendanceMode: props.location ? 'https://schema.org/OfflineEventAttendanceMode' : 'https://schema.org/OnlineEventAttendanceMode',
     eventStatus: 'https://schema.org/EventScheduled',
     location: schemaPlace.value,
     offers: sessionOffer(session),
@@ -641,7 +644,7 @@ useSchemaOrg(computed(() => {
           url: canonicalProductUrl.value,
           startDate: first.starts_at,
           endDate: last.ends_at,
-          eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+          eventAttendanceMode: props.location ? 'https://schema.org/OfflineEventAttendanceMode' : 'https://schema.org/OnlineEventAttendanceMode',
           eventStatus: 'https://schema.org/EventScheduled',
           location: schemaPlace.value,
           // One offer per occurrence, so the markup says when each seat is for.

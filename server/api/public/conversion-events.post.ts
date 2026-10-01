@@ -109,14 +109,17 @@ export default defineHandler(async (event) => {
     stage = eventName === 'product_view' ? 'viewed' : 'started'
     locationId = cleanString(body.location_id, 120) || null
     entityId = cleanString(body.product_id, 120) || null
-    if (!locationId || !entityId) return jsonResponse({ error: 'location_id and product_id are required' }, { status: 400 })
-    // A product this site publishes, offered and on sale at a location of this site.
+    if (!entityId) return jsonResponse({ error: 'product_id is required' }, { status: 400 })
+    // A public online service has no physical location; both contexts require
+    // this tenant's active, published Product and its actual offering scope.
     const product = await queryFirst<{ id: string }>(db, `
       SELECT p.id FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.organization_id = ? AND pub.published = 1
-      JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1
-      JOIN business_locations bl ON bl.organization_id = p.organization_id AND bl.id = pl.location_id AND bl.organization_id = ?
-      WHERE p.id = ? AND p.active = 1 LIMIT 1`, [organizationId, locationId, organizationId, entityId])
+      WHERE p.id = ? AND p.active = 1 AND ${locationId
+        ? `EXISTS (SELECT 1 FROM product_locations pl JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pl.organization_id
+             WHERE pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.location_id = ? AND pl.published = 1 AND pl.active = 1 AND bl.status = 'active')`
+        : `EXISTS (SELECT 1 FROM product_booking_configs cfg WHERE cfg.product_id = p.id AND cfg.organization_id = p.organization_id AND cfg.online_timezone IS NOT NULL)`}
+      LIMIT 1`, [organizationId, entityId, ...(locationId ? [locationId] : [])])
     if (!product) return jsonResponse({ error: 'Product not found' }, { status: 404 })
     entityType = 'product'; pageType = 'product'
     const requestedVariant = cleanString(body.variant_id, 120)

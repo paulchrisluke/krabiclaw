@@ -2,9 +2,13 @@
 
 Owner decisions of 2026-10-01 supersede reservation-only assumptions in #1201,
 #1202 and #1203. Consultations use Product → Variant → Price → Session → Booking.
-Restaurant reservations remain independent. NCLS is online, one operator and
-one configured calendar; no office, attorney/resource model, migration or live
-catalog provisioning is required.
+Restaurant reservations remain independent. NCLS is online; no physical office, Clio migration or live catalog provisioning
+is required. The initial implementation supports an explicitly configured single
+calendar. The owner's subsequent review supersedes the single-operator target:
+team members must have individual recurring availability and explicit service
+eligibility, with automatic assignment rather than a guest-facing provider choice.
+This provider allocation is not implemented by the current calendar-group guard;
+it remains a foundation integration requirement before enabling a multi-member team.
 
 ## Shared interfaces across the four feature PRs
 
@@ -104,3 +108,29 @@ Foundation deliberately returns `payment_required` for a required positive Price
 until #1169 supplies authenticated capture/hold conversion. It never fabricates
 payment success. No #1202 tools, #1203 OAuth/projection, financial provider calls,
 production products, migrations, deployment or cutover activation are included.
+
+## Owner visual review and provider direction
+
+The existing `/experiences/:slug` route and `ProductDetailPage` now render online
+services without fabricating a business location. `/schedule` remains the directory
+and links to those rich pages. Product descriptions, media, metafields, variants,
+Price selection and the canonical booking controller remain shared. Blawby retains
+its shell and theme tokens; physical experience pages retain their existing route.
+
+Online consultation times default to the browser's IANA timezone, shown in an
+editable selector. Configured scheduling zones still own rule input and UTC
+storage. Time choices carry canonical Session IDs, including repeated wall-clock
+times during DST. Changing the display timezone clears the selected time; receipts
+use the selected display zone. Existing physical class and restaurant behavior
+remains independent. Consultations submit one appointment without party-size input.
+
+Provider integration must use Better Auth organization membership as identity,
+explicit Product eligibility and individual recurring hours. Automatically allocate
+an eligible available member in the same atomic boundary as pending/confirmed
+capacity (and future checkout holds), preserve operational Booking ID on moves,
+and expose the actual assigned member to operator/guest projections and durable
+Calendar/Payments events. Removing eligibility must preserve booked commitments.
+Do not reinterpret a tenant calendar_group as a provider ID or silently remove its
+existing overlap protection. Payments and Calendar migrations/interfaces are being
+integrated separately; provider schema changes require coordination with those
+contracts rather than editing their worktrees or reserved migrations.

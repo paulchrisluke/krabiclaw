@@ -8,7 +8,7 @@ import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public
 
 export interface PublicProductDetailPayload {
   product: Product
-  location: PublicProductLocationPayload
+  location: PublicProductLocationPayload | null
   currency: CurrencyCode
   vertical: string
   brandName: string
@@ -32,7 +32,7 @@ export interface PublicProductDetailPayload {
 function isPublicProductDetailPayload(value: unknown): value is PublicProductDetailPayload {
   return isRecord(value)
     && isPublicProduct(value.product)
-    && isRecord(value.location)
+    && (value.location === null || (isRecord(value.location)
     && typeof value.location.id === 'string'
     && typeof value.location.slug === 'string'
     && typeof value.location.title === 'string'
@@ -40,7 +40,7 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
     && (value.location.phone === null || typeof value.location.phone === 'string')
     && (value.location.maps_url === null || typeof value.location.maps_url === 'string')
     && (value.location.latitude === null || typeof value.location.latitude === 'number')
-    && (value.location.longitude === null || typeof value.location.longitude === 'number')
+    && (value.location.longitude === null || typeof value.location.longitude === 'number')))
     && isCurrencyCode(value.currency)
     && typeof value.vertical === 'string'
     && typeof value.brandName === 'string'
@@ -131,7 +131,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
         const siblingCollection = detail.collections.find(collection => membership.has(collection.id)) ?? null
         return {
           product: detail.product,
-          location: publicLocationPayload(detail.location),
+          location: detail.location ? publicLocationPayload(detail.location) : null,
           currency: detail.currency,
           vertical: detail.organization.vertical,
           brandName: detail.organization.name,
@@ -146,7 +146,7 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
           collectionName: siblingCollection?.name ?? '',
           collectionSiblings: siblingCollection
             ? selectProductCollectionSiblings(detail.products, detail.product, siblingCollection.id, {
-                currency: detail.currency, location_id: detail.location.id, at: new Date().toISOString(),
+                currency: detail.currency, location_id: detail.location?.id ?? null, at: new Date().toISOString(),
               })
             : [],
           metafieldDefinitions: await listMetafieldDefinitions(db, detail.organization.id),

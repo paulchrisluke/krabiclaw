@@ -267,7 +267,7 @@
           "server/domain/requests.ts": "f34f851d6a9ad4a7ab1c1390623d654d4c3a8d05216abd0418a77c6b0d978cd7",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
-          "server/domain/product-bookings.ts": "9d936fd1835f972c36ccdc255193c22a9ce1af3a15ae4687dced75920d287621",
+          "server/domain/product-bookings.ts": "7815fb8d94fe19dc2b1289706c155c6a4cc94506287b055aea5c16959c7b831f",
           "server/utils/mcp-tools/bookings.ts": "c86da02c81b65c806f80f1a872bec3aa2a74f7831b77cde99c3e4f9742a824bf",
           "server/utils/mcp-executor/bookings.ts": "c7b4b8be63fc9d88b52971f8e2566520a0695f3ae0f3303231fdcfb8a5fdfab4",
           "tests/e2e/mcp-bookings.spec.ts": "5bdfd9461491a0644b93c27c4437486e9ceabaf65820593013f9dba26765b07e",
@@ -897,7 +897,7 @@
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
           "server/utils/organization-provisioning.ts": "15b896cd96c3d8f4b1deaaf1f265fff27c7d4e90ed95eb526e25245feb292e79"
         }
       },
@@ -927,7 +927,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "utils/article-collections.ts": "337f87b4bafa14a00d73017ce37601ceab394161339d199117d52362a3372c03",
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
           "server/utils/billing-plans.ts": "523e5e4b7b7e9ba61963dcb843b52810d15aafd761a5d6631c92e132ce41f420"
         }
       },
@@ -1025,7 +1025,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/seo-policy.ts": "125511b679debfd02a108b4101701947eeb8e9c57b771420d76f3ea501e5e6af",
-          "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
+          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
           "tests/unit/product-seo.test.ts": "28ab3dbb00e32fef593e241c414f1fae608d039eaf123c675dfb33ab77701745"
         }
       },
@@ -1089,7 +1089,7 @@
           "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
           "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",
           "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392",
-          "tests/unit/session-booking-payments.test.ts": "4cf4bb9904d567404ad7ae270dc4aee42b5e4c6524e5fa00d6e8e556dafe065c",
+          "tests/unit/session-booking-payments.test.ts": "e42c6eba595eaa3b6d8d4d0fae68504c003757014e2191ebd29edf0227a4bff0",
           "tests/unit/metronome-payments-response.test.ts": "96480d923f99ad4d934dcff7a86467b8df5a304c03de448773ecf95546f98a73"
         }
       },

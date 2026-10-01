@@ -202,10 +202,10 @@ export type ProductSurface = 'menu' | 'products' | 'experiences'
 
 export interface ProductPresentation {
   feature: 'products'
-  collectionPath: '/menu' | '/products' | '/experiences'
+  collectionPath: '/menu' | '/products' | '/experiences' | '/schedule'
   locationCollectionSegment: ProductSurface
   productPath: (_locationSlug: string, _productSlug: string) => string
-  collectionLabel: 'Menu' | 'Products' | 'Experiences'
+  collectionLabel: 'Menu' | 'Products' | 'Experiences' | 'Consultations'
   itemLabel: 'Dish' | 'Product' | 'Experience'
   // English plurals are irregular enough here ("Dish" -> "Dishes",
   // "Collection" -> "Collections") that appending an "s" produces visible typos.

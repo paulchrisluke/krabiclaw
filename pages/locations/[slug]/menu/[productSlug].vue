@@ -10,7 +10,11 @@ import { composeProductSeoDescription, isOfferedProduct } from '~/utils/product-
 definePageMeta({ layout: 'saya' })
 const resolved = await usePublicProductDetail('menu')
 const organizationId = resolved.organizationId
-const detail = computed(() => resolved.detail.value)
+const detail = computed(() => {
+  const value = resolved.detail.value
+  if (!value.location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  return { ...value, location: value.location }
+})
 const presentation = requireProductPresentation(detail.value.vertical)
 if (presentation.locationCollectionSegment !== 'menu') throw createError({ statusCode: 404 })
 const { localePath, t } = useI18n()

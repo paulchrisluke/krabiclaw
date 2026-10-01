@@ -19,8 +19,8 @@ export function resolveBlawbyRouteTarget(path: string): BlawbyRouteTarget {
   if (routePath === '/about') return { recipe: 'about', slug: null }
   if (routePath === '/pricing') return { recipe: 'pricing', slug: null }
   if (routePath === '/contact') return { recipe: 'contact', slug: null }
-  if (routePath === '/contact/confirmed') return { recipe: 'confirmation', slug: null }
-  if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
+  if (routePath === '/contact/confirmed' || routePath === '/bookings/confirmed' || routePath === '/bookings/cancel') return { recipe: 'confirmation', slug: null }
+  if (routePath === '/schedule' || /^\/experiences\/[^/]+$/.test(routePath)) return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
   if (routePath === '/posts' || /^\/posts\/[^/]+$/.test(routePath)) return { recipe: 'posts', slug: null }
   // Every article-collection route: an article, the docs index and a doc, and a category page.

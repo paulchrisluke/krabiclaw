@@ -4,7 +4,7 @@ import type { PublicProductLocationPayload, PublicProductSession } from '~/serve
 import type { CurrencyCode } from '~/shared/currencies'
 import { selectPrice } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
-import { localDateAt, localPartsAt } from '~/utils/timezone'
+import { localDateAt, localPartsAt, TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { getErrorMessage } from '~/utils/errors'
 import { isRecord, publicApiRequest, publicApiMutation } from '~/utils/api-clients'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
@@ -40,7 +40,8 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   /** The options a customer can actually choose — what is priced, and what is booked. */
   const selectedVariantId = ref<string | null>(sellableVariants.value.length === 1 ? sellableVariants.value[0]!.id : null)
   function variantPriceLabel(variant: Product['variants'][number]) {
-    return formatProductMoney(selectPrice(variant.prices, { currency: context.value.currency, location_id: context.value.location?.id ?? null, at: new Date().toISOString() }))
+    const price = selectPrice(variant.prices, { currency: context.value.currency, location_id: context.value.location?.id ?? null, at: new Date().toISOString() })
+    return !showPartySize.value && price?.unit_amount === 0 ? 'Free' : formatProductMoney(price)
   }
   const timeSelection = ref<TimeSlotSelection | null>(null)
   const submitting = ref(false)
@@ -56,14 +57,23 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
    */
   const sessions = ref<PublicProductSession[]>([...context.value.sessions])
   const sessionsPending = ref(false)
-  const referenceDate = computed(() => sessions.value[0] ? localDateAt(new Date(), sessions.value[0].timezone) : undefined)
+  const allowTimezoneSelection = computed(() => !showPartySize.value && context.value.location === null)
+  const guestTimezone = ref<string | null>(null)
+  const bookingTimezone = computed(() => allowTimezoneSelection.value && guestTimezone.value
+    ? guestTimezone.value : sessions.value[0]?.timezone ?? context.value.product.booking?.online_timezone ?? null)
+  const timezoneOptions = computed(() => [...new Set(['UTC', sessions.value[0]?.timezone, bookingTimezone.value, ...TIMEZONE_OPTIONS].filter((zone): zone is string => Boolean(zone)))].sort())
+  onMounted(() => {
+    if (allowTimezoneSelection.value) guestTimezone.value = new Intl.DateTimeFormat().resolvedOptions().timeZone
+  })
+  watch(bookingTimezone, () => { timeSelection.value = null })
+  const referenceDate = computed(() => bookingTimezone.value ? localDateAt(new Date(), bookingTimezone.value) : undefined)
 
   function localDateOf(session: PublicProductSession) {
-    const parts = localPartsAt(new Date(session.starts_at), session.timezone)
+    const parts = localPartsAt(new Date(session.starts_at), allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone)
     return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
   }
   function localTimeOf(session: PublicProductSession) {
-    const parts = localPartsAt(new Date(session.starts_at), session.timezone)
+    const parts = localPartsAt(new Date(session.starts_at), allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone)
     return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
   }
 
@@ -75,6 +85,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
       const date = localDateOf(session)
       const entry = byDate.get(date) ?? { date, slots: [] }
       entry.slots.push({
+        session_id: session.id,
         time_slot: localTimeOf(session),
         capacity: session.remaining === null ? null : session.remaining,
         booked: 0,
@@ -111,6 +122,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   const selectedSession = computed<PublicProductSession | null>(() => {
     const selection = timeSelection.value
     if (!selection) return null
+    if (selection.sessionId) return sessions.value.find(session => session.id === selection.sessionId) ?? null
     return sessions.value.find(session => localDateOf(session) === selection.day && localTimeOf(session) === selection.time) ?? null
   })
 
@@ -167,7 +179,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
 
   /** A guest pressing a time on the page arrives in the form with it chosen. */
   async function openBookingAt(session: PublicProductSession) {
-    timeSelection.value = { day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
+    timeSelection.value = { sessionId: session.id, day: localDateOf(session), time: localTimeOf(session), label: sessionDayLabel(session) }
     await openBooking()
   }
 
@@ -181,10 +193,10 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
   const nextSession = computed(() => upcomingSessions.value[0] ?? null)
 
   function sessionDayLabel(session: PublicProductSession): string {
-    return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: session.timezone }).format(new Date(session.starts_at))
+    return new Intl.DateTimeFormat(locale.value, { weekday: 'short', day: 'numeric', month: 'short', timeZone: allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone }).format(new Date(session.starts_at))
   }
   function sessionTimeLabel(session: PublicProductSession): string {
-    const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: session.timezone })
+    const format = new Intl.DateTimeFormat(locale.value, { hour: 'numeric', minute: '2-digit', timeZone: allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone })
     return `${format.format(new Date(session.starts_at))} – ${format.format(new Date(session.ends_at))}`
   }
 
@@ -252,7 +264,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
         organizationName: context.value.location?.title ?? context.value.organizationName,
         guestName: contact.name,
         startsAt: session.starts_at,
-        timezone: session.timezone,
+        timezone: allowTimezoneSelection.value ? bookingTimezone.value! : session.timezone,
         guests: partySize.value,
         productId: context.value.product.id,
         title: context.value.product.name,
@@ -280,7 +292,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
     }
   }
 
-    return { bookingOpen, bookingStep, partySize, showPartySize, selectedVariantId, sellableVariants, variantPriceLabel,
+    return { bookingOpen, bookingStep, partySize, showPartySize, allowTimezoneSelection, guestTimezone, bookingTimezone, timezoneOptions, selectedVariantId, sellableVariants, variantPriceLabel,
       timeSelection, submitting, bookingError, sessions, sessionsPending, availabilityDates, referenceDate, guestsMax,
       selectedSession, loadSessions, openBooking, openBookingAt, upcomingSessions, nextSession,
       sessionDayLabel, sessionTimeLabel, submitBooking }

@@ -1,5 +1,5 @@
 <template>
-  <div class="booking-time-step flex h-full flex-col">
+  <div class="booking-time-step flex min-h-0 flex-1 flex-col">
     <!-- Party size — pinned above the scroll -->
     <div v-if="showPartySize" class="flex shrink-0 items-center justify-between gap-4 border-y border-default px-1 py-3">
       <div>
@@ -72,21 +72,21 @@
     </div>
 
     <!-- Day-grouped scrollable slot list -->
-    <div v-else ref="scrollRef" class="flex-1 overflow-y-auto py-2">
+    <div v-else ref="scrollRef" class="min-h-0 flex-1 overflow-y-auto px-1 py-2">
       <p v-if="days.length === 0" class="py-6 text-sm text-muted">{{ t('saya.experience_detail.no_availability', { count: dates.length }) }}</p>
       <section v-for="day in days" :key="day.key" :ref="(el) => setDayRef(el, day.key)" class="pt-4 first:pt-0">
         <h3 class="saya-display mb-3 text-lg">{{ day.label }}</h3>
         <div class="flex flex-col gap-2">
           <button
             v-for="slot in day.slots"
-            :key="slot.time_slot"
+            :key="slot.session_id ?? slot.time_slot"
             type="button"
             :disabled="slot.disabled"
             :aria-label="`${formatTime(slot.time_slot, locale)} ${slot.availabilityLabel}`"
             class="flex w-full items-center justify-between gap-4 rounded-lg border border-default px-4 py-3.5 text-left transition-colors"
             :class="[
               slot.disabled ? 'cursor-default bg-muted' : 'cursor-pointer hover:border-inverted',
-              modelValue?.day === day.key && modelValue?.time === slot.time_slot ? 'border-inverted ring-1 ring-inverted' : '',
+              (slot.session_id ? modelValue?.sessionId === slot.session_id : modelValue?.day === day.key && modelValue?.time === slot.time_slot) ? 'border-primary ring-1 ring-inset ring-primary' : '',
             ]"
             @click="selectSlot(day, slot)"
           >
@@ -95,7 +95,7 @@
             </span>
             <span
               class="text-sm"
-              :class="slot.isClosedOrFull ? 'text-muted' : slot.scarce ? 'font-medium text-red-500' : 'text-muted'"
+              :class="slot.isClosedOrFull ? 'text-muted' : slot.scarce ? 'font-medium text-primary' : 'text-muted'"
             >
               {{ slot.availabilityLabel }}
             </span>
@@ -124,6 +124,7 @@
 import { formatCalendarDate, formatTime, addLocalDays } from '~/utils/timezone'
 export interface RawSlotAvailability {
   time_slot: string
+  session_id?: string
   capacity: number | null
   booked: number
   remaining: number | null
@@ -137,6 +138,7 @@ export interface RawDateAvailability {
 }
 
 export interface TimeSlotSelection {
+  sessionId?: string
   day: string
   label: string
   time: string
@@ -212,7 +214,7 @@ const days = computed(() => {
             : scarce
               ? t('saya.experience_detail.left', { count: s.remaining })
               : t('saya.experience_detail.available')
-      return { time_slot: s.time_slot, disabled, isClosedOrFull, scarce, availabilityLabel }
+      return { session_id: s.session_id, time_slot: s.time_slot, disabled, isClosedOrFull, scarce, availabilityLabel }
     })
     return { key: d.date, label: dayLabelFor(d.date), slots }
   }).filter((d) => d.slots.length > 0)
@@ -238,9 +240,9 @@ const selectedSummary = computed(() => {
   return `${dayPart} · ${formatTime(props.modelValue.time, locale.value)}`
 })
 
-function selectSlot(day: { key: string; label: string }, slot: { time_slot: string; disabled: boolean }) {
+function selectSlot(day: { key: string; label: string }, slot: { time_slot: string; session_id?: string; disabled: boolean }) {
   if (slot.disabled) return
-  emit('update:modelValue', { day: day.key, label: day.label, time: slot.time_slot })
+  emit('update:modelValue', { sessionId: slot.session_id, day: day.key, label: day.label, time: slot.time_slot })
 }
 
 function jumpToDay(key: string) {

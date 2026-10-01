@@ -27,6 +27,8 @@
   --blawby-border:        var(--blawby-token-border, #e5e7eb);
   --blawby-ink:           var(--blawby-token-ink, #162033);
 
+  --brand-color:          var(--blawby-primary);
+  --brand-color-foreground: var(--blawby-surface);
   --color-primary:        var(--blawby-primary);
   --primary-foreground:   var(--blawby-surface);
   --ui-primary:           var(--blawby-primary);
@@ -165,4 +167,10 @@ html.blawby-document {
 
 .blawby-footer-logo {
   filter: grayscale(1) brightness(1.2);
+}
+
+/* Shared Product and booking components inherit this theme's heading family. */
+.blawby-theme :is(.saya-display, .saya-display-md, .saya-display-sm, .saya-display-lg) {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
 }

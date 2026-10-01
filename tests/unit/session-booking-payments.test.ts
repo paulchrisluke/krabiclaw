@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { computed, effectScope, ref, toValue, watch } from 'vue'
+import { computed, effectScope, nextTick, ref, toValue, watch } from 'vue'
 import type { SessionBookingContext } from '../../composables/useSessionBooking'
 
 test('booking retries preserve uncertain payment identity and rotate changed or expired requests', async (t) => {
@@ -13,7 +13,7 @@ test('booking retries preserve uncertain payment identity and rotate changed or 
       status: expired ? 409 : 503, headers: { 'content-type': 'application/json' },
     })
   })
-  const globals = { computed, ref, toValue, watch,
+  const globals = { computed, ref, toValue, watch, onMounted: (_callback: () => void) => {},
     useI18n: () => ({ locale: ref('en'), t: (key: string) => key }),
     useOrganizationConversionTracking: () => ({ trackCheckoutStart() {}, mirrorSubmission() {}, pageEventId: async () => 'test-page' }),
     navigateTo: async (url: string) => { destinations.push(url) },
@@ -69,5 +69,11 @@ test('booking retries preserve uncertain payment identity and rotate changed or 
   controller.partySize.value = 5
   await controller.submitBooking(changed)
   assert.equal(bodies[8]!.idempotency_key, bodies[9]!.idempotency_key)
+  controller.guestTimezone.value = 'America/New_York'
+  await nextTick()
+  controller.timeSelection.value = { sessionId: 'session-two', day: '2027-01-01', time: '07:00' }
+  await controller.submitBooking(changed)
+  assert.equal(bodies[10]!.session_id, 'session-two', 'guest display timezone preserves canonical session identity')
+  assert.equal(bodies[9]!.idempotency_key, bodies[10]!.idempotency_key, 'display timezone does not create another payment')
   assert.deepEqual(destinations, [], 'failed financial handoffs never navigate')
 })
