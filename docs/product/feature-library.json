@@ -905,7 +905,7 @@
         "evidenceSha256": {
           "utils/article-collections.ts": "337f87b4bafa14a00d73017ce37601ceab394161339d199117d52362a3372c03",
           "utils/template-registry.ts": "374ff4dd0cba954cee9dc7bec77431ce412d4cf93d25656b534e50e343edb5a8",
-          "server/utils/billing-plans.ts": "62d0caf8a8cb34f37f343ae49fbd2ecbc3d3da2338b0b5f1b8982980c8992cdf"
+          "server/utils/billing-plans.ts": "523e5e4b7b7e9ba61963dcb843b52810d15aafd761a5d6631c92e132ce41f420"
         }
       },
       "pendingOwnerDecision": "Community/Priority limit strings conflict with evidenced support. Owner must approve any support commitment before publication.",

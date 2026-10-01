@@ -3,30 +3,33 @@
   "uploads": [
     {
       "file": "benefit-online-home.png",
-      "assetId": "010c3651-b474-478b-a2ca-fd3bbf8b2956",
+      "assetId": "60760d7e-46d6-4d6c-ac67-e0a9db7e0e20",
       "status": "active",
-      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/129b5f66-d051-4c3b-4b3d-e74c75728600/public",
-      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/129b5f66-d051-4c3b-4b3d-e74c75728600/thumbnail",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f6982527-d35b-42ed-1300-52d14164c800/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/f6982527-d35b-42ed-1300-52d14164c800/thumbnail",
       "organizationId": "platform",
-      "verifiedBy": "get_organization_media_assets read-back"
+      "verifiedBy": "get_organization_media_assets read-back",
+      "sha256": "bbf0544b599b83faa325cae2668bec3d7733d075ac5b2f099434e858dd678649"
     },
     {
       "file": "benefit-keep-current.png",
-      "assetId": "d953791e-fcfd-4341-86c4-d09a7a5bf8c2",
+      "assetId": "9fac4507-58af-437e-83ab-88e031fe56e9",
       "status": "active",
-      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/30c03b12-ea63-4c87-bf18-d8caedbf7500/public",
-      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/30c03b12-ea63-4c87-bf18-d8caedbf7500/thumbnail",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/74c18000-8fff-494e-8a24-577df101a400/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/74c18000-8fff-494e-8a24-577df101a400/thumbnail",
       "organizationId": "platform",
-      "verifiedBy": "get_organization_media_assets read-back"
+      "verifiedBy": "get_organization_media_assets read-back",
+      "sha256": "5be47450236b85bd649dadc638d5edc68e76726bcf3fe5560cfa40ea78ce310e"
     },
     {
       "file": "benefit-grow.png",
-      "assetId": "e855c285-be08-4d76-91a5-a6840a17374d",
+      "assetId": "22957d98-187c-4f0b-8d0f-a732962bc13e",
       "status": "active",
-      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bac21a0b-369e-4630-b537-816f2a5a7000/public",
-      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/bac21a0b-369e-4630-b537-816f2a5a7000/thumbnail",
+      "publicUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b528a1cc-ef23-4c3a-be72-b26863268300/public",
+      "thumbnailUrl": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b528a1cc-ef23-4c3a-be72-b26863268300/thumbnail",
       "organizationId": "platform",
-      "verifiedBy": "get_organization_media_assets read-back"
+      "verifiedBy": "get_organization_media_assets read-back",
+      "sha256": "0393c907977868ef55f4271503abd8cb3ad8d23998f31b3c64a47145da8ec202"
     },
     {
       "file": "cta-coastal.png",

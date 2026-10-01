@@ -83,7 +83,7 @@ const STARTER_PLAN: Plan = {
 
 // CTA labels and hrefs are app config — not Stripe data.
 const PLAN_CTA: Record<string, { label: string; href: string }> = {
-  [NEW_SALE_PLAN_ID]: { label: 'Get Growth', href: `/signup?plan=${NEW_SALE_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: NEW_SALE_PLAN_ID }))}` },
+  [NEW_SALE_PLAN_ID]: { label: 'Get Grow', href: `/signup?plan=${NEW_SALE_PLAN_ID}&redirect=${encodeURIComponent(buildPostLoginUrl({ plan: NEW_SALE_PLAN_ID }))}` },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -241,3 +241,7 @@ The rebased feature parity check and production Worker build passed. No new
 broad tests, review request, Stripe cleanup or production mutation was initiated
 for this visual handoff. Foundation staging Checks passed independently;
 automatic staging deployment/tenant validation is monitored separately.
+
+## Approved release
+
+Owner approved the corrected botanical page for review > staging > production on 2026-10-01 (Sentinel_abd9d57741108191aa0bb43e618c4a3c). The three replacement images have now been uploaded through canonical MCP media ingestion and independently read back active. The CMS packet and upload receipts reference their actual IDs. The earlier substituted-image screenshots are historical previews, not release proof. Final verification must use persisted content and provider images without interception. Paid presentation remains Stripe-owned; prices and internal IDs are preserved.
