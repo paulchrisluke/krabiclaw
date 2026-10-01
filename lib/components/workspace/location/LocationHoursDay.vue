@@ -1,11 +1,11 @@
 <template>
   <!--
-    One weekday: whether it opens, then its opening periods. A day with no
-    periods is closed; Open is an answer the owner gives, not something read
+    One weekday: whether it is closed, then its opening periods. A day with no
+    periods is closed; Closed is an answer the owner gives, not something read
     off an empty day, so a week that has never been answered shows its times.
   -->
   <div>
-    <SettingRow :model-value="!closed" label="Open" @update:model-value="setOpen" />
+    <SettingRow :model-value="closed" label="Closed" @update:model-value="setOpen(!$event)" />
     <div v-if="!closed" class="space-y-4 pt-6">
       <div v-for="period in periods" :key="period.index" class="flex items-end gap-3">
         <template v-if="!period.value.close">
@@ -19,7 +19,7 @@
           <UFormField label="Closes at" class="flex-1">
             <UInput :model-value="pointTime(period.value.close)" type="time" class="w-full" @update:model-value="setTime(period.value as EditablePeriod, 'close', String($event))" />
           </UFormField>
-          <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" square aria-label="Remove these hours" @click="removePeriod(period.index)" />
+          <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" square aria-label="Remove this opening period" @click="removePeriod(period.index)" />
         </template>
       </div>
       <p v-if="overnight" class="text-sm text-muted">Closes after midnight, the following day.</p>

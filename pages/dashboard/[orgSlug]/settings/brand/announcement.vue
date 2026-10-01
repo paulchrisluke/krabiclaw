@@ -1,8 +1,8 @@
 <template>
   <!--
     The announcement as an index: whether it shows, then its headline,
-    message, button and image, each previewing its value and opening its own
-    leaf. Seven controls in one pane was a form, not a leaf (DESIGN.md).
+    description, button and image, each previewing its value and opening its
+    own leaf. Seven controls in one pane was a form, not a leaf (DESIGN.md).
   -->
   <DashboardIndexPanel id="organization-announcement" title="Announcement" :auto-open="groups[0]?.items[0]?.to ?? null">
     <EditorNavigationList :groups="groups" :active-item="level.child.value" />
@@ -21,16 +21,16 @@ const to = (segment: string) => `${level.path.value}/${segment}`
 
 const groups = computed<EditorNavigationGroup[]>(() => {
   const form = editor.form
-  const button = form.announcementCtaLabel.trim() ? `${form.announcementCtaLabel} · ${form.announcementCtaUrl}` : ''
+  const button = [form.announcementCtaLabel, form.announcementCtaUrl].filter(value => value.trim()).join(' · ')
   return [
-    { id: 'visibility', items: [{ id: 'visibility', label: 'Show announcement', summary: form.announcementEnabled ? (form.announcementDismissible ? 'On · visitors can dismiss it' : 'On') : 'Off', to: to('visibility') }] },
+    { id: 'visibility', items: [{ id: 'visibility', label: 'Show announcement', summary: form.announcementEnabled ? 'On' : 'Off', to: to('visibility') }] },
     {
       id: 'content',
       items: [
-        { id: 'headline', label: 'Headline', summary: form.announcementHeadline || 'No headline', placeholder: !form.announcementHeadline, to: to('headline') },
-        { id: 'message', label: 'Message', summary: form.announcementDescription || 'No message', placeholder: !form.announcementDescription, to: to('message') },
-        { id: 'button', label: 'Button', summary: button || 'No button', placeholder: !button, to: to('button') },
-        { id: 'image', label: 'Image', summary: form.announcementAssetId ? 'Image chosen' : 'No image', placeholder: !form.announcementAssetId, to: to('image') },
+        { id: 'headline', label: 'Headline', summary: form.announcementHeadline || undefined, to: to('headline') },
+        { id: 'description', label: 'Description (optional)', summary: form.announcementDescription || undefined, to: to('description') },
+        { id: 'button', label: 'Button (optional)', summary: button || undefined, to: to('button') },
+        { id: 'image', label: 'Image (optional)', to: to('image') },
       ],
     },
   ]

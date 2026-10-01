@@ -11,7 +11,7 @@
   >
     <template v-if="entry">
       <LocationHoursException v-model:entry="editor.hoursForm.value.specialHours![index!]!" />
-      <UButton v-if="!creating" class="mt-8" color="error" variant="soft" icon="i-lucide-trash-2" label="Remove" :loading="editor.saving.value" @click="remove" />
+      <UButton v-if="!creating" class="mt-8" color="error" variant="soft" icon="i-lucide-trash-2" label="Remove exception" :loading="editor.saving.value" @click="remove" />
     </template>
   </DashboardLeafPanel>
 </template>

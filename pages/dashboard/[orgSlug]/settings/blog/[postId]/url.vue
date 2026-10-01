@@ -16,7 +16,7 @@
           <UButton v-if="editor.post.value?.slug_manually_overridden" size="xs" variant="link" @click="editor.resetSlugOverride">Use automatic slug</UButton>
         </div>
       </UFormField>
-      <SettingRow v-if="editor.post.value?.first_published_at && editor.form.slug !== editor.post.value.slug" v-model="editor.form.redirect_old_slug" label="Redirect old URL" description="Links to the old address keep working." />
+      <SettingRow v-if="editor.post.value?.first_published_at && editor.form.slug !== editor.post.value.slug" v-model="editor.form.redirect_old_slug" label="Redirect old URL" />
     </div>
   </DashboardLeafPanel>
 </template>

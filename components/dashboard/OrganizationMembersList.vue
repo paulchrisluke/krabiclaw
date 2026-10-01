@@ -59,7 +59,7 @@
     </section>
 
     <section>
-      <h2 class="px-1 text-sm font-semibold text-muted">Pending</h2>
+      <h2 class="px-1 text-sm font-semibold text-muted">Pending Invitations</h2>
       <div v-if="pending && !data" class="mt-3 space-y-3">
         <USkeleton v-for="i in 2" :key="i" class="h-14 rounded-lg" />
       </div>

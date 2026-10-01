@@ -12,11 +12,10 @@
     @save="p.save(level.to.value ?? undefined)"
   >
     <div v-if="option" class="space-y-6">
-      <UFormField label="Name">
+      <UFormField label="Option name">
         <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" autofocus class="w-full" />
       </UFormField>
-      <UFormField label="Values">
-        <UInputTags
+      <UInputTags
           :model-value="option.values.map(value => value.value)"
           placeholder="Add a value"
           :max="PRODUCT_LIMITS.optionValues"
@@ -25,10 +24,10 @@
           add-on-blur
           add-on-paste
           class="w-full"
+          aria-label="Option values"
           @update:model-value="p.setOptionValues(index, $event as string[])"
         />
-      </UFormField>
-      <UButton color="error" variant="soft" icon="i-lucide-trash-2" label="Remove option" :loading="p.saving.value" @click="remove" />
+      <UButton color="error" variant="soft" icon="i-lucide-trash-2" :label="`Remove ${option.name || 'option'}`" :loading="p.saving.value" @click="remove" />
     </div>
   </DashboardLeafPanel>
 </template>

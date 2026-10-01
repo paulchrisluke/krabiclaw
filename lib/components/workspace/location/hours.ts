@@ -18,22 +18,23 @@ const clock = (point: WeekPoint) => formatTime(toTimeString(point.hour * 60 + po
 
 /** "12:00 PM – 10:00 PM", "Open 24 hours" or "Closed", for one weekday. */
 export function dayHoursSummary(hours: OpeningHours, day: number): string {
-  if (!hours) return 'Not set'
+  if (!hours) return ''
   const periods = hours.periods.filter(period => period.open.day === day)
   if (!periods.length) return 'Closed'
   if (periods.some(period => !period.close)) return 'Open 24 hours'
   return periods.map(period => `${clock(period.open)} – ${clock(period.close!)}`).join(', ')
 }
 
-const date = (value: string) => value ? formatCalendarDate(value, 'en') : 'No date'
+const date = (value: string) => value ? formatCalendarDate(value, 'en') : ''
 
-/** "Dec 25, 2026 · Closed", the way a row names one exception. */
+/** The dates an exception covers, as its row names it. */
 export function exceptionLabel(entry: SpecialHoursEntry): string {
   if (entry.kind === 'closure') return entry.ends_on && entry.ends_on !== entry.starts_on ? `${date(entry.starts_on)} – ${date(entry.ends_on)}` : date(entry.starts_on)
   return date(entry.date)
 }
 
-export function exceptionSummary(entry: SpecialHoursEntry): string {
-  if (entry.kind === 'closure') return entry.ends_on ? 'Closed' : 'Closed until further notice'
-  return entry.periods.length ? entry.periods.map(period => `${formatTime(period.open_time, 'en')} – ${formatTime(period.close_time, 'en')}`).join(', ') : 'Closed'
+/** A dated exception's own hours; a closure has nothing to add to its dates. */
+export function exceptionSummary(entry: SpecialHoursEntry): string | undefined {
+  if (entry.kind === 'closure') return undefined
+  return entry.periods.map(period => `${formatTime(period.open_time, 'en')} – ${formatTime(period.close_time, 'en')}`).join(', ') || undefined
 }

@@ -9,7 +9,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <SettingRow v-model="editor.form.published" label="Shown on the site" description="On the page it is filed under." />
+    <SettingRow v-model="editor.form.published" label="Published" description="A published question appears on the page it is filed under." />
   </DashboardLeafPanel>
 </template>
 

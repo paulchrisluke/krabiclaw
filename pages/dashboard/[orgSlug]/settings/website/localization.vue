@@ -16,7 +16,7 @@
     </div>
     <UAlert v-else-if="editor.localizationError.value" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="editor.localizationError.value" />
     <template v-else-if="editor.localizationSettings.value">
-      <!-- One row per language: its name, then where it stands in one line. -->
+      <!-- One row per language: its name, then its state. -->
       <ul>
         <li v-for="language in editor.localizationSettings.value.languages" :key="language.locale" class="flex flex-wrap items-center justify-between gap-4 border-b border-default py-6 last:border-b-0">
           <div class="min-w-0">
@@ -32,7 +32,8 @@
       </ul>
       <!-- What is left to translate, as rows that open the field's own editor. -->
       <section v-for="progress in editor.localizationProgress.value" :key="progress.locale" class="mt-8">
-        <h2 class="text-sm font-semibold text-muted">Left to translate · {{ progress.locale }}</h2>
+        <h2 class="text-sm font-semibold text-muted">Let’s translate your site</h2>
+        <p class="mt-1 text-sm text-muted">{{ progress.completed }}/{{ progress.total }} fields translated in {{ progress.locale }}.</p>
         <ul v-if="progress.opportunities.length">
           <li v-for="item in progress.opportunities" :key="item.id" class="border-b border-default last:border-b-0">
             <NuxtLink :to="`${editor.organizationDashboardPath.value}/${item.path}`" class="flex items-center justify-between gap-4 py-6">
@@ -48,7 +49,7 @@
       </section>
       <UAlert v-if="editor.localizationProgressError.value" class="mt-6" color="error" variant="soft" :description="editor.localizationProgressError.value" />
       <p v-if="!editor.enableableCatalogOptions.value.length" class="mt-6 text-sm text-muted">No additional languages are available to enable right now.</p>
-      <UFormField v-else class="mt-8" label="Add a language">
+      <UFormField v-else class="mt-8" label="Available language">
         <USelect v-model="editor.newLocale.value" :items="editor.enableableCatalogOptions.value" placeholder="Select a language to enable" class="w-full" />
       </UFormField>
     </template>
@@ -64,11 +65,8 @@ definePageMeta({ layout: 'dashboard' })
 const editor = inject(organizationSettingsEditorKey)!
 
 type Language = NonNullable<typeof editor.localizationSettings.value>['languages'][number]
-// The language's state and, for a translation, how much of the site it covers.
 function languageSummary(language: Language): string {
   if (language.is_source) return 'Source · published'
-  const progress = editor.localizationProgress.value.find(entry => entry.locale === language.locale)
-  const state = language.status === 'published' ? 'Published' : 'Not published'
-  return progress ? `${state} · ${progress.completed}/${progress.total} translated` : state
+  return language.status === 'published' ? 'published' : 'Not published'
 }
 </script>

@@ -1,6 +1,6 @@
 <template>
-  <!-- Closures and one-off dates as rows, each opening its own leaf. -->
-  <DashboardIndexPanel id="location-hours-exceptions" title="Closures and exceptions">
+  <!-- Closures and date exceptions as rows, each opening its own leaf. -->
+  <DashboardIndexPanel id="location-hours-exceptions" title="Closures and date exceptions">
     <div v-if="editor.loading.value" class="space-y-4">
       <USkeleton v-for="index in 3" :key="index" class="h-16 rounded-lg" />
     </div>
@@ -34,8 +34,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
   {
     id: 'add',
     items: [
-      { id: 'new-closure', label: 'Add a closure', summary: 'Closed for a day or a stretch of days', to: `${level.path.value}/new-closure` },
-      { id: 'new-hours', label: 'Add hours for a date', summary: 'Different hours on one date', to: `${level.path.value}/new-hours` },
+      { id: 'new-closure', label: 'Add closure', to: `${level.path.value}/new-closure` },
+      { id: 'new-hours', label: 'Add date hours', to: `${level.path.value}/new-hours` },
     ],
   },
 ].filter(group => group.items.length))

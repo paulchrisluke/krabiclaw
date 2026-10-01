@@ -35,12 +35,11 @@ const to = (segment: string) => router.resolve({ path: `${level.path.value}/${se
 
 const groups = computed<EditorNavigationGroup[]>(() => {
   const form = props.editor.hoursForm.value
-  const count = form.specialHours?.length ?? 0
   return [
-    { id: 'timezone', items: [{ id: 'timezone', label: 'Timezone', summary: form.timezone ? timezoneLabel(form.timezone) : 'Not set', placeholder: !form.timezone, to: to('timezone') }] },
-    { id: 'week', label: 'Regular hours', items: WEEK_ROWS.map(day => ({ id: day.slug, label: day.label, summary: dayHoursSummary(form.hours, day.value), to: to(day.slug) })) },
+    { id: 'timezone', items: [{ id: 'timezone', label: 'Timezone', summary: form.timezone ? timezoneLabel(form.timezone) : undefined, to: to('timezone') }] },
+    { id: 'week', label: 'Regular opening hours', items: WEEK_ROWS.map(day => ({ id: day.slug, label: day.label, summary: dayHoursSummary(form.hours, day.value), to: to(day.slug) })) },
     ...(props.exceptions
-      ? [{ id: 'exceptions', items: [{ id: 'exceptions', label: 'Closures and exceptions', summary: count ? `${count} ${count === 1 ? 'date' : 'dates'}` : 'None', placeholder: !count, to: to('exceptions') }] }]
+      ? [{ id: 'exceptions', items: [{ id: 'exceptions', label: 'Closures and date exceptions', to: to('exceptions') }] }]
       : []),
   ]
 })

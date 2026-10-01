@@ -3,20 +3,18 @@
     <!--
       Every one of these renders as a sentence on the public page
       (server/utils/booking-policy-summary.ts), switched on by having a value.
-      So each rule is answered ✕ or ✓ and, once it applies, shows the sentence
-      guests will read. A number with a picker of its own — seats, notice,
+      So each rule is the sentence guests will read, answered ✕ or ✓. A number with a picker of its own — seats, notice,
       cancellation — is chosen there, not typed again here.
     -->
     <RuleRow
       v-for="rule in rules"
       :key="rule.id"
       :model-value="rule.on"
-      :label="rule.label"
+      :label="rule.sentence"
       @update:model-value="rule.toggle"
     >
-      <template v-if="rule.on" #description>
-        {{ rule.sentence }}
-        <NuxtLink v-if="rule.picker" :to="rule.picker" class="font-medium text-highlighted underline underline-offset-4">Change</NuxtLink>
+      <template v-if="rule.on && rule.picker" #description>
+        <NuxtLink :to="rule.picker" class="font-medium text-highlighted underline underline-offset-4">Change</NuxtLink>
       </template>
       <UInputNumber
         v-if="rule.on && rule.number"
@@ -67,7 +65,6 @@ function updateNotes(next: string | number) {
 /** Each rule owns the sentence it produces, so the two cannot drift apart. */
 interface PolicyRule {
   id: string
-  label: string
   on: boolean
   sentence: string
   /** The leaf that chooses this rule's number. */
@@ -81,15 +78,15 @@ interface PolicyRule {
 const rules = computed<PolicyRule[]>(() => [
   {
     id: 'slot_capacity',
-    label: 'Limit seats per time slot',
     on: value.value.slot_capacity !== null && value.value.slot_capacity !== undefined,
-    sentence: `Each time slot takes ${value.value.slot_capacity} guests.`,
+    sentence: value.value.slot_capacity === null || value.value.slot_capacity === undefined
+      ? 'Every time slot takes as many guests as ask for it.'
+      : `Each time slot takes ${value.value.slot_capacity} guests.`,
     picker: props.pickers.seats,
     toggle: (on: boolean) => patch({ slot_capacity: on ? (value.value.slot_capacity ?? 20) : null }),
   },
   {
     id: 'advance_notice',
-    label: 'Advance notice',
     on: Boolean(value.value.advance_notice_minutes),
     sentence: `Guests book at least ${(value.value.advance_notice_minutes ?? 120) / 60} hours ahead.`,
     picker: props.pickers.notice,
@@ -97,7 +94,6 @@ const rules = computed<PolicyRule[]>(() => [
   },
   {
     id: 'cancellation',
-    label: 'Free cancellation',
     on: Boolean(value.value.free_cancellation_until_minutes),
     sentence: `Change or cancel free up to ${(value.value.free_cancellation_until_minutes ?? 24 * 60) / 60} hours before the booking.`,
     picker: props.pickers.cancellation,
@@ -105,7 +101,6 @@ const rules = computed<PolicyRule[]>(() => [
   },
   {
     id: 'reschedule',
-    label: 'Guests can reschedule',
     on: Boolean(value.value.reschedule_allowed && value.value.reschedule_cutoff_minutes),
     sentence: `Guests can reschedule up to ${(value.value.reschedule_cutoff_minutes ?? 4 * 60) / 60} hours before the start time.`,
     picker: props.pickers.cancellation,
@@ -116,7 +111,6 @@ const rules = computed<PolicyRule[]>(() => [
   },
   {
     id: 'deposit',
-    label: 'Deposit for large parties',
     on: Boolean(value.value.deposit_required),
     sentence: value.value.deposit_trigger_party_size
       ? `Parties of ${value.value.deposit_trigger_party_size}+ guests may require a deposit.`
@@ -133,7 +127,6 @@ const rules = computed<PolicyRule[]>(() => [
   },
   {
     id: 'minimum_guest_age',
-    label: 'Minimum guest age',
     on: Boolean(value.value.minimum_guest_age),
     sentence: `The minimum guest age is ${value.value.minimum_guest_age ?? 18}.`,
     number: {
@@ -145,7 +138,6 @@ const rules = computed<PolicyRule[]>(() => [
   },
   {
     id: 'accessibility',
-    label: 'Accessibility arrangements',
     on: Boolean(value.value.accessibility_contact_required),
     sentence: 'Please contact us before booking if you need accessibility arrangements.',
     toggle: (on: boolean) => patch({ accessibility_contact_required: on }),

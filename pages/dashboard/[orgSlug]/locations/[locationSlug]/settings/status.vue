@@ -9,7 +9,6 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <!-- Airbnb's Listed / Unlisted: one of two, each saying what it means for guests. -->
     <URadioGroup v-model="editor.detailsForm.status" :items="STATUS_ITEMS" variant="card" class="w-full" />
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>
@@ -25,7 +24,7 @@ const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'status')
 
 const STATUS_ITEMS = [
-  { value: 'active', label: 'Active', description: 'This location appears on your site.' },
-  { value: 'inactive', label: 'Hidden', description: 'This location is hidden from your public site.' },
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
 ]
 </script>

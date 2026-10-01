@@ -26,9 +26,8 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     items: [
       ...p.form.options.map((option, index) => ({
         id: `option-${index}`,
-        label: option.name || 'Unnamed option',
-        summary: option.values.map(value => value.value).join(', ') || 'No values',
-        placeholder: !option.values.length,
+        label: option.name || 'Option',
+        summary: option.values.map(value => value.value).join(', ') || undefined,
         to: `${level.path.value}/${index}`,
       })),
       ...(p.form.options.length < PRODUCT_LIMITS.options ? [{ id: 'add', label: 'Add an option', action: {} }] : []),
@@ -41,8 +40,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
         items: p.form.variants.map(variant => ({
           id: `price-${variant.key}`,
           label: variant.name,
-          summary: variant.price_major ? `${variant.price_major} ${p.currency}` : 'No price',
-          placeholder: !variant.price_major,
+          summary: variant.price_major ? `${variant.price_major} ${p.currency}` : undefined,
           to: `${level.path.value}/prices/${encodeURIComponent(variant.key)}`,
         })),
       }]

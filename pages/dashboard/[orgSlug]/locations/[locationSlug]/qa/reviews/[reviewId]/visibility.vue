@@ -2,6 +2,7 @@
   <DashboardLeafPanel
     id="review-visibility"
     title="Visibility"
+    lead="A published review appears on your site. An archived review is hidden from it."
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.errorMessage.value"

@@ -10,10 +10,10 @@
     @save="editor.save"
   >
     <div class="space-y-6">
-      <UFormField label="Label">
+      <UFormField label="Button label (optional)">
         <UInput v-model="editor.form.announcementCtaLabel" placeholder="Learn more" autofocus class="w-full" />
       </UFormField>
-      <UFormField label="Link">
+      <UFormField label="Button URL (optional)">
         <UInput v-model="editor.form.announcementCtaUrl" type="url" placeholder="https://..." class="w-full" />
       </UFormField>
     </div>

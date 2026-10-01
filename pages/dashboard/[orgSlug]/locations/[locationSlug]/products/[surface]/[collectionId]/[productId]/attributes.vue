@@ -33,7 +33,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [{
   id: 'attributes',
   items: p.definitions.value.map((definition) => {
     const summary = valueSummary(definition)
-    return { id: definition.id, label: definition.name, summary: summary || 'Not set', placeholder: !summary, to: `${level.path.value}/${definition.id}` }
+    return { id: definition.id, label: definition.name, summary: summary || undefined, to: `${level.path.value}/${definition.id}` }
   }),
 }])
 </script>

@@ -1,7 +1,7 @@
 <template>
   <DashboardLeafPanel
-    id="organization-announcement-message"
-    title="Message"
+    id="organization-announcement-description"
+    title="Description"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
@@ -9,7 +9,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <UFormField label="Message" hint="Optional">
+    <UFormField label="Description (optional)">
       <UTextarea v-model="editor.form.announcementDescription" :rows="4" maxlength="500" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
