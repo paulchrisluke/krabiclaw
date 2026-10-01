@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <UFormField label="Name" required>
-      <UInput v-model="editor.detailsForm.title" size="xl" autofocus class="w-full" />
+      <UInput v-model="editor.detailsForm.title" autofocus class="w-full" />
     </UFormField>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>

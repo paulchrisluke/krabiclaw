@@ -18,16 +18,16 @@
           <MediaPicker v-model="editor.form.announcementAssetId" :organization-id="editor.organizationId" accept="image" title="Select announcement image" />
         </UFormField>
         <UFormField label="Headline">
-          <UInput v-model="editor.form.announcementHeadline" maxlength="120" size="xl" class="w-full" />
+          <UInput v-model="editor.form.announcementHeadline" maxlength="120" class="w-full" />
         </UFormField>
         <UFormField label="Description (optional)">
           <UTextarea v-model="editor.form.announcementDescription" :rows="4" maxlength="500" class="w-full" />
         </UFormField>
         <UFormField label="Button label (optional)">
-          <UInput v-model="editor.form.announcementCtaLabel" size="xl" class="w-full" placeholder="Learn more" />
+          <UInput v-model="editor.form.announcementCtaLabel" class="w-full" placeholder="Learn more" />
         </UFormField>
         <UFormField label="Button URL (optional)">
-          <UInput v-model="editor.form.announcementCtaUrl" type="url" size="xl" class="w-full" placeholder="https://..." />
+          <UInput v-model="editor.form.announcementCtaUrl" type="url" class="w-full" placeholder="https://..." />
         </UFormField>
         <UCheckbox v-model="editor.form.announcementDismissible" label="Allow visitors to dismiss the announcement" />
       </template>

@@ -10,7 +10,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="mx-auto w-full max-w-md space-y-3">
+    <div class="space-y-3">
       <button
         v-for="tier in CANCELLATION_TIERS"
         :key="tier.id"

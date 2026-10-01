@@ -10,7 +10,7 @@
     @save="p.save"
   >
     <UFormField label="Name" required>
-      <UInput v-model="p.form.name" size="xl" autofocus class="w-full" />
+      <UInput v-model="p.form.name" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

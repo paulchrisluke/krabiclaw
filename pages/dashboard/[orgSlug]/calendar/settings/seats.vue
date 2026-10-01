@@ -3,6 +3,7 @@
   <DashboardLeafPanel
     id="calendar-settings-seats"
     title="Seats per time slot"
+    lead="How many guests can start at the same time? Once a time slot is full, guests are offered the next one."
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
@@ -10,11 +11,10 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="mx-auto w-full max-w-md space-y-6">
-      <p class="text-base text-muted">How many guests can start at the same time? Once a time slot is full, guests are offered the next one.</p>
+    <div class="space-y-6">
       <UCheckbox :model-value="limited" label="Limit seats" @update:model-value="setLimited($event === true)" />
       <UFormField v-if="limited" label="Seats">
-        <UInputNumber :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" size="xl" class="w-full" @update:model-value="setSeats" />
+        <UInputNumber :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" class="w-full" @update:model-value="setSeats" />
       </UFormField>
     </div>
   </DashboardLeafPanel>

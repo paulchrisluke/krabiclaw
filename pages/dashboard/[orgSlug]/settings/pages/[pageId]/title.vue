@@ -11,7 +11,7 @@
     @save="editor.save"
   >
     <UFormField label="Title" required>
-      <UInput v-model="editor.draft.value.title" size="xl" maxlength="200" autofocus class="w-full" />
+      <UInput v-model="editor.draft.value.title" maxlength="200" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

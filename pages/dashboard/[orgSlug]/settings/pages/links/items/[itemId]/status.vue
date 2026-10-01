@@ -11,7 +11,7 @@
     @save="record.save"
   >
     <UFormField label="Status" description="A hidden link stays on the page's list and off the public page.">
-      <USelect v-model="record.itemForm.status" :items="LINK_STATUS_OPTIONS" size="xl" class="w-full" />
+      <USelect v-model="record.itemForm.status" :items="LINK_STATUS_OPTIONS" class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

@@ -66,6 +66,8 @@ controls. Airbnb's own leaves, at 1440px, are
 | Listing description | one textarea and a `482/500` counter |
 | House rules | four rows, each an ✕/✓ pair — no fields at all |
 | Pricing | one value row, one toggle, one link |
+| Hours by day | an index: one row per weekday previewing its hours; the day leaf is one switch and two time pickers |
+| Schedule | an index: one row per day previewing its start times; the day leaf is a list of times |
 
 **A pane that would need many fields becomes an index instead.** Airbnb's
 Description screen is not a form with five textareas; it is five rows —
@@ -75,6 +77,44 @@ opening its own leaf.
 
 So when a form grows, the answer is never a smaller control or a tighter
 column. It is another level.
+
+## Controls
+
+The inside of a leaf, measured against Airbnb's host tools (see
+`docs/design/cms-redesign-packet/airbnb-parity-audit.md`). The theme in
+`app.config.ts` and the two shells carry most of this; a page states the
+control and nothing about its size, radius or width.
+
+**A yes/no is never a checkbox.** A rule — something guests are held to — is a
+✕/✓ pair (`RuleRow`). A setting is a switch (`SettingRow`). A one-of-N is a
+set of cards (`ChoiceCards`, `URadioGroup variant="card"`). A checkbox exists
+only in a list's *Select* mode, which `DashboardListEditor` already draws.
+
+**A box means "choose me" or "open me".** Rows are separated by a 1px
+hairline with 24px of padding. A bordered card is a selectable choice or a
+value that opens a leaf. It is never a container for a control: a checkbox in
+a card, a switch in a card, a field in a card are each a row.
+
+**One explanation per leaf, under the title.** `DashboardLeafPanel` takes a
+single `lead` sentence and that is the only place a leaf explains itself. A
+field never carries a sentence: no `description`, no `help`, no paragraph
+above or below it. A row carries one line of sub-label. A counter
+(`44/50 available`) sits above the field in `text-sm`. `hint` exists only for
+`Optional`.
+
+**Leaf width is fixed.** The shell's content column is `max-w-xl`, and a
+field does not stretch to the pane. A leaf that needs more width is a grid
+editor and says so.
+
+**Short text is bare.** A name, title, headline, slug or link renders as a
+borderless 22–26px field with a counter, the way Airbnb's title and custom
+link do. Long text is one bordered textarea.
+
+**Sizes come from the theme.** Controls are `lg` — 16px text, 44px tall, 8px
+radius — and the commit bar's Save is the one `xl` (48px). Body text is 16px
+`text-highlighted`; sub-labels and counters are 14px `text-muted`. Focus is a
+2px `text-highlighted` ring, not the brand colour; coral is for Save and the
+lit tab. Switches are black, as Airbnb's are.
 
 ## Canvas
 
@@ -108,7 +148,7 @@ is a canvas. Describing it is a field, and fields decompose.
 
 | Width | Chrome | Detail |
 | --- | --- | --- |
-| `< md` (768) | Bottom nav | Full-screen sheet: ✕ top-left, centred title, commit bar pinned at the base |
+| `< md` (768) | Bottom nav | Full-screen sheet: ✕ top-left, the title in the body, commit bar pinned at the base |
 | `≥ md` | Top nav | — |
 | `≥ lg` (1024) | Top nav | Pane beside the index |
 
@@ -309,7 +349,8 @@ record, never in a plain `reactive`.
 ## Committing
 
 Cancel on the left, Save on the right, pinned to the base of the detail pane
-(the sheet below `lg`). Save is disabled until there is something to save.
+(the sheet below `lg`). Cancel is a text button; Save is the only filled
+control on screen. Save is disabled until there is something to save.
 Dismissing discards the draft.
 
 ## Editing states

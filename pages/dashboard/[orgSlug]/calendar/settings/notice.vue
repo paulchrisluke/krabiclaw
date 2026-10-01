@@ -3,6 +3,7 @@
   <DashboardLeafPanel
     id="calendar-settings-notice"
     title="Advance notice"
+    lead="How much notice do you need between a guest's booking and their arrival?"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
@@ -10,18 +11,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="mx-auto w-full max-w-md space-y-6">
-      <p class="text-base text-muted">How much notice do you need between a guest's booking and their arrival?</p>
-      <URadioGroup
-        :model-value="chosen"
-        :items="items"
-        variant="card"
-        size="lg"
-        class="w-full"
-        :ui="{ item: 'w-full' }"
-        @update:model-value="choose"
-      />
-    </div>
+    <URadioGroup :model-value="chosen" :items="items" variant="card" class="w-full" @update:model-value="choose" />
   </DashboardLeafPanel>
 </template>
 

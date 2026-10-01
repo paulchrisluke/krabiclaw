@@ -10,9 +10,9 @@
     @save="editor.save"
   >
     <div class="space-y-6">
-      <UFormField label="Facebook"><UInput v-model="editor.form.social_facebook_url" type="url" placeholder="https://facebook.com/..." size="xl" class="w-full" /></UFormField>
-      <UFormField label="Instagram"><UInput v-model="editor.form.social_instagram_url" type="url" placeholder="https://instagram.com/..." size="xl" class="w-full" /></UFormField>
-      <UFormField label="TikTok"><UInput v-model="editor.form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." size="xl" class="w-full" /></UFormField>
+      <UFormField label="Facebook"><UInput v-model="editor.form.social_facebook_url" type="url" placeholder="https://facebook.com/..." class="w-full" /></UFormField>
+      <UFormField label="Instagram"><UInput v-model="editor.form.social_instagram_url" type="url" placeholder="https://instagram.com/..." class="w-full" /></UFormField>
+      <UFormField label="TikTok"><UInput v-model="editor.form.social_tiktok_url" type="url" placeholder="https://tiktok.com/@..." class="w-full" /></UFormField>
     </div>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>

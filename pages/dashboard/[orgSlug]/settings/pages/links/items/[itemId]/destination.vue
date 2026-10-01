@@ -15,7 +15,6 @@
         v-model="record.itemForm.destination"
         placeholder="/reservations or https://example.com"
         maxlength="2048"
-        size="xl"
         autofocus
         class="w-full"
       />

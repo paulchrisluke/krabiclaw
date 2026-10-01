@@ -16,7 +16,6 @@
         autofocus
         placeholder="What's new? Write it the way you'd say it to a guest."
         :maxlength="5000"
-        size="xl"
         class="w-full"
       />
     </UFormField>

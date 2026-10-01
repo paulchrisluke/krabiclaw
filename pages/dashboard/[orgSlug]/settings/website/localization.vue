@@ -59,7 +59,7 @@
       <UAlert v-if="editor.localizationProgressError.value" class="mt-6" color="error" variant="soft" :description="editor.localizationProgressError.value" />
       <p v-if="!editor.enableableCatalogOptions.value.length" class="mt-6 text-sm text-muted">No additional languages are available to enable right now.</p>
       <UFormField v-else class="mt-6" label="Available language">
-        <USelect v-model="editor.newLocale.value" :items="editor.enableableCatalogOptions.value" placeholder="Select a language to enable" size="xl" class="w-full" />
+        <USelect v-model="editor.newLocale.value" :items="editor.enableableCatalogOptions.value" placeholder="Select a language to enable" class="w-full" />
       </UFormField>
     </template>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />

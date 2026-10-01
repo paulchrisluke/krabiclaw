@@ -10,7 +10,6 @@
       :disabled="selecting"
       :placeholder="placeholder ?? 'Search for your business on Google Maps'"
       trailing-icon="i-lucide-search"
-      size="xl"
       class="w-full"
       autofocus
     >

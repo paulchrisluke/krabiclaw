@@ -23,13 +23,13 @@
     >
       <template v-if="data">
         <UFormField v-if="accountOptions.length" label="Facebook account">
-          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Facebook account" size="xl" class="w-full" />
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Facebook account" class="w-full" />
         </UFormField>
         <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Facebook account</UButton>
         <UButton v-else icon="i-simple-icons-facebook" size="xl" block :loading="linking" @click="link">Connect Facebook</UButton>
 
         <p v-if="data.error" class="text-sm text-error">{{ data.error }}</p>
-        <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" size="xl" />
+        <URadioGroup v-if="choices.length" v-model="chosenPage" legend="Which Page is this business?" :items="choices" variant="card" />
       </template>
       <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
     </IntegrationConnection>

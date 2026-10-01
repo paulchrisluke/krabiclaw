@@ -11,7 +11,7 @@
     @save="record.save"
   >
     <UFormField label="Label" required>
-      <UInput v-model="record.itemForm.label" maxlength="120" size="xl" autofocus class="w-full" />
+      <UInput v-model="record.itemForm.label" maxlength="120" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

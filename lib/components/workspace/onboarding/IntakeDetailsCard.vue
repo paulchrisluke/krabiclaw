@@ -99,7 +99,6 @@
           <USelectMenu
             :model-value="form.currency ?? undefined"
             class="w-full"
-            size="xl"
             :items="currencyOptions"
             value-key="value"
             label-key="label"

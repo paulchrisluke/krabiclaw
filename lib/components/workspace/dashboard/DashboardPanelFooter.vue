@@ -1,7 +1,8 @@
 <template>
   <div class="flex shrink-0 items-center justify-between gap-4 border-t border-default px-4 py-3 sm:px-6">
-    <UButton color="neutral" variant="ghost" :label="cancelLabel" :class="leaf ? 'lg:invisible' : undefined" @click="$emit('cancel')" />
-    <UButton :label="saveLabel || 'Save'" :loading="loading" :disabled="disabled" @click="$emit('save')" />
+    <!-- Cancel reads as text; Save is the only filled control on screen. -->
+    <UButton color="neutral" variant="link" :label="cancelLabel" class="px-0 font-semibold text-highlighted underline-offset-4 hover:underline" :class="leaf ? 'lg:invisible' : undefined" @click="$emit('cancel')" />
+    <UButton :label="saveLabel || 'Save'" size="xl" :loading="loading" :disabled="disabled" @click="$emit('save')" />
   </div>
 </template>
 

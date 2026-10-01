@@ -22,13 +22,13 @@
     >
       <template v-if="data">
         <UFormField v-if="accountOptions.length" label="Google account">
-          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" class="w-full" />
         </UFormField>
         <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Google account</UButton>
         <UButton v-else icon="i-simple-icons-google" size="xl" block :loading="linking" @click="link">Connect Google Analytics</UButton>
 
         <UFormField v-if="data.account_id" label="Analytics property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" size="xl" class="w-full" />
+          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" class="w-full" />
           <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
         </UFormField>
       </template>
