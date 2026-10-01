@@ -11,7 +11,7 @@ export default defineHandler(async (event) => {
   if (!id) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
   const { env, session, organization } = await requireOrganizationAccess(event, id)
   const body = await readBody<{ account_id?: string; calendar_id?: string; calendar_group?: string | null; include_reservations?: boolean }>(event)
-  if (!body?.account_id || !body.calendar_id || (body.calendar_group != null && typeof body.calendar_group !== 'string') || typeof body.include_reservations !== 'boolean') return jsonResponse({ error: 'Choose an account, calendar and booking policy.' }, { status: 400 })
+  if (typeof body?.account_id !== 'string' || !body.account_id.trim() || typeof body.calendar_id !== 'string' || !body.calendar_id.trim() || (body.calendar_group != null && typeof body.calendar_group !== 'string') || typeof body.include_reservations !== 'boolean') return jsonResponse({ error: 'Choose an account, calendar and booking policy.' }, { status: 400 })
   const current = await readCalendarIntegration(env.DB, organization.id)
   await requireIntegrationAccount(env, body.account_id, { userId: session.user.id, currentAccountId: current?.account_id, providerId: 'google', scopes: INTEGRATION_SCOPES['google-calendar'] })
   if (body.calendar_group && !(await calendarGroups(env.DB, organization.id)).some(group => group.calendar_group === body.calendar_group)) return jsonResponse({ error: 'Choose an existing consultation calendar group.' }, { status: 400 })
