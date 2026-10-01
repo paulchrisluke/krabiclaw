@@ -481,7 +481,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
-          "server/utils/mcp-tools/submissions.ts": "87d56cf808b0a3ef5f3d5a31fcc4d28f39248e9181deef4750c14f09034f6b55",
+          "server/utils/mcp-tools/submissions.ts": "37c55ef8f1758b10a399f0f736c01ac9dfe49791424315619f4f60a1da7f75d6",
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
       },
