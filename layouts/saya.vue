@@ -29,9 +29,7 @@
       :organization="resolvedOrganization"
       :is-platform="isPlatform"
       :locations="footerLocations"
-      :locales="locales"
       :error="bootstrapError"
-      :config="config"
       :has-products="shell.hasProducts.value"
       :has-bookable-products="shell.hasBookableProducts.value"
     />
@@ -77,7 +75,7 @@ const shell = useOrganizationShellState()
 // Await the existing keyed shell on every SSR route, not only the homepage,
 // so a direct menu/contact visit cannot serialize Default and hydrate as Mali.
 if (import.meta.server) await shell.ready
-const { config, locations, locales, error: bootstrapError, organization: shellOrganization } = shell
+const { config, locations, error: bootstrapError, organization: shellOrganization } = shell
 const { isPlatform, organization } = useTenantOrganization()
 const resolvedOrganization = computed(() => shellOrganization.value || organization)
 const brandColor = computed(

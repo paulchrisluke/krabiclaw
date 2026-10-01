@@ -169,13 +169,14 @@ export default defineNuxtConfig({
       ],
     },
     customCollections: [
-      pickIcons('simple-icons', ['claude', 'facebook', 'google', 'googlemaps', 'modelcontextprotocol', 'openai', 'whatsapp']),
+      pickIcons('simple-icons', ['claude', 'facebook', 'google', 'googlemaps', 'instagram', 'modelcontextprotocol', 'openai', 'whatsapp']),
       pickIcons('logos', ['facebook', 'google-analytics', 'google-icon', 'google-maps', 'google-search-console', 'whatsapp-icon']),
       pickIcons('skill-icons', ['instagram']),
     ],
   },
   runtimeConfig: {
     public: {
+      homepageCoastalPreview: process.env.NUXT_PUBLIC_HOMEPAGE_COASTAL_PREVIEW === 'true',
       platformDomain: process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || '',
       freeOrganizationDomain: process.env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN || '',
       appName: process.env.NUXT_PUBLIC_APP_NAME || '',

@@ -6,8 +6,11 @@ import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
 
 const redirects: Record<string, string> = {
-  '/privacy-policy': '/privacy',
-  '/terms-and-conditions': '/terms',
+  // Every site's policies are its page documents under /policies.
+  '/privacy': '/policies/privacy',
+  '/terms': '/policies/terms',
+  '/privacy-policy': '/policies/privacy',
+  '/terms-and-conditions': '/policies/terms',
   // Preserve older guessed/short docs URLs while keeping the published article
   // slug as the canonical destination.
   '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started',

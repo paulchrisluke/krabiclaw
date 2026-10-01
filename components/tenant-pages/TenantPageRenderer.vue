@@ -3,7 +3,7 @@
     data-tenant-page
     :data-template="template"
     class="text-default"
-    :class="readingColumn ? 'py-16' : undefined"
+    :class="[readingColumn ? 'py-16' : undefined, localHomepagePilot ? 'kc-homepage-pilot' : undefined]"
   >
     <!--
       A template's own component names its band; the wrapper only names one for
@@ -237,6 +237,8 @@ const props = withDefaults(defineProps<{ page: PublicTenantPage; template?: Publ
  */
 const { template: resolvedTemplate } = usePublicTemplate()
 const template = computed<PublicTemplateSlug>(() => props.template ?? resolvedTemplate.value.slug)
+const homepagePreviewEnabled = import.meta.dev || useRuntimeConfig().public.homepageCoastalPreview
+const localHomepagePilot = computed(() => homepagePreviewEnabled && template.value === 'platform' && props.page.path === '/')
 
 function presentationOf(block: TenantPageBlock): Component | null {
   return tenantPageBlockPresentation(template.value, block.type)
@@ -405,3 +407,24 @@ function calculatorNote(block: TenantPageBlock): string | undefined {
   return typeof note === 'string' ? note : undefined
 }
 </script>
+
+<style scoped>
+@reference "../../assets/css/base.css";
+
+.kc-homepage-pilot :deep(.kc-showcase__inner),
+.kc-homepage-pilot :deep(.kc-steps__inner),
+.kc-homepage-pilot :deep(.kc-reach__inner),
+.kc-homepage-pilot :deep(.kc-social__inner),
+.kc-homepage-pilot :deep(.kc-picture-cards__inner),
+.kc-homepage-pilot :deep(.kc-parallax-intro__inner) {
+  @apply mx-auto w-full max-w-304 px-6;
+}
+
+.kc-homepage-pilot :deep(.kc-media-feature) {
+  @apply mx-auto max-w-304 px-6;
+}
+
+.kc-homepage-pilot :deep(.kc-media-feature__card) {
+  width: 100%;
+}
+</style>

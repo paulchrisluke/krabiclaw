@@ -384,6 +384,12 @@ test('an article is announced once as a native Broadcast whose id is stored befo
       "INSERT INTO organization_locales (id, organization_id, locale, is_source, status) VALUES ('locale-platform-en', 'org-platform', 'en', 1, 'published')",
       `INSERT INTO content_documents (id, organization_id, kind, row_role, locale, title, slug, summary, status, visibility, published_at, first_published_at, metadata_json)
        VALUES ('article-proof', 'org-platform', 'article', 'root', 'en', 'Proof article', 'proof-article', 'Why proof matters', 'published', 'listed', '${published}', '${published}', '{"collection":"blog"}')`,
+      // The body as authors write it: a title line repeated from the document,
+      // a heading, and prose with a link relative to the site.
+      `INSERT INTO content_blocks (id, document_id, type, position, level, data_json) VALUES
+       ('block-proof-intro', 'article-proof', 'markdown', 0, NULL, '{"markdown":"# Proof article\\n\\nShow the receipts before the pitch.","editor_mode":"rich"}'),
+       ('block-proof-heading', 'article-proof', 'heading', 1, 2, '{"text":"Where to start"}'),
+       ('block-proof-body', 'article-proof', 'markdown', 2, NULL, '{"markdown":"Compare the [plans](/pricing) first.","editor_mode":"rich"}')`,
     ]) await db.prepare(statement).run()
 
     // The send fails once: the tick throws, and the draft id is already stored.
@@ -396,6 +402,12 @@ test('an article is announced once as a native Broadcast whose id is stored befo
     const draft = creates[0]!.body as Record<string, string>
     assert.deepEqual([draft.segment_id, draft.topic_id, draft.subject, draft.from, draft.send], [SEGMENT, TOPIC, 'Proof article', 'Krabiclaw <hello@krabiclaw.com>', undefined])
     assert.ok(draft.html.includes('{{{RESEND_UNSUBSCRIBE_URL}}}'))
+    // The article's own text is the email, read in the order it was written,
+    // with the repeated title dropped and the site link made absolute.
+    const body = ['Show the receipts before the pitch.', 'Where to start', 'href="https://proof.example/pricing"'].map(fragment => draft.html.indexOf(fragment))
+    assert.ok(body.every((index, i) => index > 0 && (i === 0 || index > body[i - 1]!)), `article body missing or out of order: ${body.join(', ')}`)
+    assert.equal(draft.html.split('Proof article').length - 1, 1)
+    assert.ok(draft.text.includes('Show the receipts before the pitch.'))
     assert.ok(!draft.html.includes('/api/public/notifications/unsubscribe'))
     // The reconciliation ran before the draft was created.
     const firstCreate = resend.calls.findIndex(call => call.path === '/broadcasts')

@@ -22,9 +22,6 @@ interface LocationRow {
   short_description: string | null
   email: string | null
   price_level: string | null
-  facebook_url: string | null
-  instagram_url: string | null
-  tiktok_url: string | null
   google_place_id: string | null
   rating: number | null
   review_count: number | null
@@ -46,7 +43,7 @@ export default defineHandler(async (event) => {
     const { db, organization } = await requireLocationAccess(event, organizationId, locationId)
 
     const location = await queryFirst<LocationRow>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.google_place_id, bl.rating, bl.review_count, bl.status, bl.last_synced_at, bl.created_at, bl.updated_at
       FROM business_locations bl
       WHERE bl.id = ? AND bl.organization_id = ?
       LIMIT 1

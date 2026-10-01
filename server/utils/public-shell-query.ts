@@ -22,7 +22,6 @@ const requireLocationString = (value: unknown, field: string): string => {
 export interface PublicShellQueryIndexes {
   locations: number
   config: number
-  locales: number
   productLocations: number
   media: number
 }
@@ -53,11 +52,6 @@ export function appendPublicShellQueries(
                WHERE s.id = ?
                  AND setting.key IN ('brand_color', 'font_preset', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'default_timezone')
               `, [organizationId]),
-    locales: push(`SELECT locale, label, is_source, status
-                FROM organization_locales
-               WHERE organization_id = ? 
-                 AND (is_source = 1 OR status = 'published')
-               ORDER BY is_source DESC, locale ASC`, [organizationId]),
     // Where this site has something to show: the Product is published to the
     // site, offered and published at the location, and active itself. All three
     // are separate states (see product_publications / product_locations in
@@ -154,11 +148,6 @@ export function buildPublicShellPayload(
   if (organization.seo_description) config.seo_description = organization.seo_description
   if (organization.canonical_url) config.canonical_url = organization.canonical_url
   if (organization.search_console_verification) config.search_console_verification = organization.search_console_verification
-  // Real, writable site-scope columns — the single source for footer social icons. Never
-  // derived from organization_link_items (a link's destination and a footer profile are unrelated).
-  if (organization.social_facebook_url) config.social_facebook = organization.social_facebook_url
-  if (organization.social_instagram_url) config.social_instagram = organization.social_instagram_url
-  if (organization.social_tiktok_url) config.social_tiktok = organization.social_tiktok_url
 
   return {
     platformMessages: null,
@@ -178,13 +167,6 @@ export function buildPublicShellPayload(
       media: [],
       syncedAt: null,
     },
-    locales: ((results[indexes.locales]?.results ?? []) as Array<{
-      locale: string, label: string | null, is_source: number
-    }>).map(locale => ({
-      code: locale.locale,
-      label: locale.label ?? locale.locale,
-      is_source: Boolean(locale.is_source),
-    })),
     ...(() => {
       const rows = (results[indexes.productLocations]?.results ?? []) as Array<{ location_id: string; bookable: number; unbookable: number }>
       const byLocation = new Map(rows.map(row => [String(row.location_id), row]))

@@ -66,6 +66,18 @@ const tableNames = db => db.prepare("SELECT name FROM sqlite_schema WHERE type =
 const columns = (db, table) => db.prepare(`PRAGMA table_info(${qi(table)})`).all().map(row => row.name)
 const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(name => row[name]))).sort().join('\n'))
 
+/**
+ * Columns a current schema dropped on purpose, so an older export may still
+ * carry them. The typed social profile URLs are gone: a site links only the
+ * accounts it connected in Integrations.
+ */
+const RETIRED_COLUMNS = {
+  media_assets: ['origin_publication_id'],
+  post_publications: ['origin'],
+  business_locations: ['facebook_url', 'instagram_url', 'tiktok_url'],
+  organization: ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'],
+}
+
 /** Article tags are retired with the v6 content model, including any residual source rows. */
 export const TRANSFORMS = [{
   name: 'article_tags_removed',
@@ -407,7 +419,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       for (const table of names) {
         const targetColumns = columns(target, table)
         const retiredColumns = columns(stage, table).filter(name => !targetColumns.includes(name))
-        const allowedRetired = table === 'media_assets' ? ['origin_publication_id'] : table === 'post_publications' ? ['origin'] : []
+        const allowedRetired = RETIRED_COLUMNS[table] ?? []
         assert(retiredColumns.every(name => allowedRetired.includes(name)), `${table}: unmapped columns [${retiredColumns.join(', ')}]`)
         const rows = stage.prepare(`SELECT ${targetColumns.map(qi).join(',')} FROM ${qi(table)}`).all()
         const insert = target.prepare(`INSERT INTO ${qi(table)} (${targetColumns.map(qi).join(',')}) VALUES (${targetColumns.map(() => '?').join(',')})`)

@@ -8,6 +8,8 @@ import { getResendClient, resendData } from '~/server/utils/resend'
 import { reconcileProductNewsContacts, type ProductNewsEnv, type ProductNewsReconciliation } from '~/server/domain/product-news-contacts'
 import { collectionArticlePath } from '~/utils/article-collections'
 import { coverJoinSql } from '~/server/utils/content/cover'
+import { renderContentBlocksToMarkdown, type ContentBlockRow } from '~/server/utils/content/documents'
+import { stripLeadingTitleHeading } from '~/utils/markdown'
 
 export interface BroadcastEnv extends ProductNewsEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
@@ -108,6 +110,26 @@ export async function loadBroadcastArticle(db: DbClient, contentDocumentId: stri
       ${coverJoinSql('p')}
      WHERE p.id = ?
   `, [contentDocumentId])
+}
+
+/**
+ * The article's text, as the email reads it. Headings, prose and dividers are
+ * the parts mail can carry; the leading image is already the email's hero, and
+ * interactive blocks (FAQ, CTA, video) belong to the page the button opens.
+ */
+async function loadBroadcastBody(db: DbClient, article: AnnounceableArticle, siteOrigin: string): Promise<string> {
+  const blocks = await queryAll<Pick<ContentBlockRow, 'id' | 'type' | 'position' | 'level' | 'data_json'>>(db, `
+    SELECT id, type, position, level, data_json
+      FROM content_blocks
+     WHERE document_id = ? AND parent_block_id IS NULL AND type IN ('heading', 'markdown', 'divider')
+     ORDER BY position
+  `, [article.id])
+  // A site-relative link resolves against the page on the web and against nothing in a mail client.
+  const body = stripLeadingTitleHeading(renderContentBlocksToMarkdown(blocks), article.title)
+    .replace(/\]\(\/(?!\/)/g, `](${siteOrigin}/`)
+    .trim()
+  if (!body) throw new Error(`Article ${article.id} has no text to announce`)
+  return body
 }
 
 /**
@@ -228,6 +250,7 @@ export async function runArticleBroadcast(db: DbClient, env: BroadcastEnv, now =
     const rendered = await renderNotificationEmail(articleAnnouncementMessage({
       title: article.title,
       summary: article.summary,
+      bodyMarkdown: await loadBroadcastBody(db, article, `https://${platformDomain}`),
       coverImageUrl: article.cover_public_url,
       articleUrl: `https://${platformDomain}${collectionArticlePath('blog', article.slug)}`,
     }), {

@@ -3,8 +3,8 @@ import { TENANT_NON_INDEXABLE_EXACT_PATHS } from '../../utils/template-registry.
 import { isEnvironmentTenantAliasHost } from './tenant-hosts.ts'
 
 /**
- * The platform routes that hold no page document: each renders its own data or
- * its own policy surface. Krabiclaw's editorial marketing pages are not here —
+ * The platform routes that hold no page document: each renders its own data.
+ * Krabiclaw's editorial marketing pages are not here —
  * they are published page documents, and the sitemap reads them from
  * content_documents so there is one inventory rather than two (#903).
  */
@@ -12,11 +12,9 @@ export const PLATFORM_SITEMAP_ROUTES = [
   '/blog',
   '/docs',
   '/help',
-  '/privacy',
   '/templates',
   '/templates/blawby',
   '/templates/saya',
-  '/terms',
 ] as const
 
 export const PRIVATE_ROUTE_PREFIXES = [

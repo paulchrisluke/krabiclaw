@@ -8,6 +8,13 @@
       "when": 1790779755992,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790813829023,
+      "tag": "0001_drop_typed_social_profiles",
+      "breakpoints": true
     }
   ]
 }

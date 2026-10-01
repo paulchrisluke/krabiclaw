@@ -2,6 +2,7 @@
 @source "../../layouts/blawby.vue";
 @source "../../components/blawby/BlawbyHeader.vue";
 @source "../../components/blawby/BlawbyFooter.vue";
+@source "../../components/SiteFooterBar.vue";
 @source "../../components/blawby/BlawbyHome.vue";
 @source "../../components/blawby/BlawbyButton.vue";
 @source "../../components/blawby/BlawbyPhoneBar.vue";

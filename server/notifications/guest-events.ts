@@ -268,6 +268,7 @@ export function reviewRequestMessage(input: {
 export function articleAnnouncementMessage(input: {
   title: string
   summary: string | null
+  bodyMarkdown: string
   coverImageUrl: string | null
   articleUrl: string
 }): NotificationMessage {
@@ -276,6 +277,7 @@ export function articleAnnouncementMessage(input: {
     preheader: input.summary ?? input.title,
     hero: input.coverImageUrl ? { imageUrl: input.coverImageUrl, alt: '' } : null,
     intro: input.summary ?? undefined,
+    body: input.bodyMarkdown,
     facts: [],
     primaryAction: { url: input.articleUrl, label: 'Read the article' },
     category: 'product_news',
