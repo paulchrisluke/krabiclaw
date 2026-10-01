@@ -10,14 +10,14 @@
         <NuxtLink v-if="text(block.data.label) && text(block.data.url)" :to="route(text(block.data.url))" class="kc-product-link">{{ text(block.data.label) }} <span aria-hidden="true">↗</span></NuxtLink>
       </div>
       <div v-if="examples.length" class="kc-product-story__pictures">
-        <figure v-for="(example, index) in examples" :key="example.image.asset_id" :class="'kc-product-story__picture--' + (index + 1)">
+        <figure v-for="(example, index) in examples" :key="index" :class="'kc-product-story__picture--' + (index + 1)">
           <img :src="mediaStillUrl(example.image)!" :alt="example.image.alt_text || example.title" :width="example.image.width ?? undefined" :height="example.image.height ?? undefined" loading="lazy" decoding="async">
         </figure>
       </div>
       <div v-if="text(block.data.caption)" class="kc-product-story__caption">
         <p>{{ text(block.data.caption) }}</p>
         <ul v-if="examples.length > 1 && block.data.example_type !== 'posts'" aria-label="Featured businesses">
-          <li v-for="example in examples" :key="example.title">{{ example.title }}</li>
+          <li v-for="(example, index) in examples" :key="index">{{ example.title }}</li>
         </ul>
       </div>
     </div>
