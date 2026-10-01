@@ -12,6 +12,7 @@ import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
 import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage} from '../../server/domain/payments/usage.ts'
 import {createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
+import {mcpFinancialApprovalErrorResult} from '../../server/utils/mcp-financial-handoff.ts'
 const ORG='payments-org',NOW='2026-10-01T00:00:00.000Z'
 async function boot(){
  const runtime=new Miniflare({workers:[{config:{name:'payments-proof',type:'worker',compatibilityDate:'2024-11-01',manifest:{mainModule:'index.mjs',modules:{'index.mjs':{type:'esm',contents:'export default {fetch(){return new Response("ok")}}'}}},env:{DB:{type:'d1'}}}}]})
@@ -107,7 +108,16 @@ test('paid review rejection requires fresh browser approval and commits release 
   await db.prepare("UPDATE payment_checkout_holds SET request_id='request' WHERE payment_id='reject'").run()
   const p=provider('reject');await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'reject'),p.intent)
   const input={threadId:'request',organizationId:ORG,action:'reject',actorUserId:'verified',idempotencyKey:'reject-once',env:{NUXT_PUBLIC_PLATFORM_DOMAIN:'https://proof.example',EMAIL_REPLY_SECRET:'proof',EMAIL_DELIVERY_MODE:'log_only'}}
-  await assert.rejects(()=>executeGuestThreadOperation(db,input),/explicit approval/)
+  await assert.rejects(()=>executeGuestThreadOperation(db,input),error=>{
+   const result=mcpFinancialApprovalErrorResult(error,'https://proof.example','Paid rejection requires explicit approval')
+   assert(result?.isError)
+   assert.equal(result.structuredContent.success,false)
+   assert.equal(result.structuredContent.operation_completed,false)
+   assert.equal(result.structuredContent.confirmation_required,true)
+   assert.match(result.structuredContent.financial_approval_url,/^https:\/\/proof.example\/dashboard\/payments\/payments\/refunds\/approve\?id=/u)
+   return true
+  })
+  assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_refunds').first('n'),0)
   assert.equal(await db.prepare('SELECT status FROM bookings').first('status'),'pending')
   assert.equal((await executeGuestThreadOperation(db,{...input,action:'cancel'})).ok,false)
   const authorization=await db.prepare("SELECT id FROM payment_authorizations ORDER BY rowid DESC LIMIT 1").first<string>('id');assert(authorization)

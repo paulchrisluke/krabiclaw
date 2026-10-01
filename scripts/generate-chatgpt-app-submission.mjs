@@ -27,7 +27,7 @@ const effects = {
   create_product_booking: 'Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking.',
   get_product_booking: 'Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.',
   confirm_product_booking: 'Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.',
-  reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.',
+  reject_product_booking: 'Rejects a pending Product booking through the canonical inbox operation. Paid review rejection first returns an actor-bound browser financial approval handoff; approved rejection releases capacity and queues the remaining full-principal refund.',
   cancel_product_booking: 'Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message.',
   request_product_booking_change: 'Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.',
   cancel_table_reservation: 'Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message.',

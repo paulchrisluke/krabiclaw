@@ -30,6 +30,7 @@ import {
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry, errorChainForTelemetry } from "~/server/utils/error-telemetry";
 import { getRequestDataMetrics, recordRequestPhase } from "~/server/utils/request-metrics";
+import { mcpFinancialApprovalErrorResult } from "~/server/utils/mcp-financial-handoff";
 
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
@@ -314,7 +315,8 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       // to classifying as kind:'transport') must still resolve as a
       // graceful isError:true CallToolResult, not a JSON-RPC error — MCP
       // clients can't act on a transport-level error mid-tool-call.
-      return { isError: true, content: [{ type: "text", text: mcpErr.message }] };
+      return mcpFinancialApprovalErrorResult(toolError, cfEnv.NUXT_PUBLIC_PLATFORM_DOMAIN, mcpErr.message)
+        ?? { isError: true, content: [{ type: "text", text: mcpErr.message }] };
     }
 
     recordRequestPhase(event, "mcp_execute", executionStartedAt);

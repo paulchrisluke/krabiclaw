@@ -21,6 +21,7 @@ export async function metronomeRequest(env:CloudflareEnv,path:string,body?:unkno
  const raw=await response.text()
  if(path==='/v1/ingest'&&!raw.trim())return {}
  const result:unknown=JSON.parse(raw)
+ if(path==='/v1/ingest'&&result===null)return {}
  if(!result || typeof result!=='object' || Array.isArray(result)) throw new Error('Metronome response is invalid')
  return result as Record<string,unknown>
 }
@@ -43,7 +44,9 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  if(!billing.stripeCustomerId) throw new HTTPError({statusCode:409,statusMessage:'Tenant operating billing customer is required'})
  const customer=await stripe.customers.retrieve(billing.stripeCustomerId)
  if(customer.deleted || !customer.invoice_settings.default_payment_method) throw new HTTPError({statusCode:409,statusMessage:'Set an operating payment method as the Stripe Customer default'})
- const now=existing?.contract_start_at??new Date().toISOString()
+ // Metronome requires contract starts on a UTC hour boundary.
+ const start=new Date();start.setUTCMinutes(0,0,0)
+ const now=existing?.contract_start_at??start.toISOString()
  await execute(db,`INSERT INTO payment_billing_accounts(organization_id,stripe_billing_customer_id,currency,status,contract_start_at,updated_at) VALUES(?,?,'USD','provisioning',?,?) ON CONFLICT(organization_id) DO NOTHING`,[principal.organizationId,billing.stripeCustomerId,now,now])
  const reserved=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
  if(!reserved||reserved.stripe_billing_customer_id!==billing.stripeCustomerId)throw new Error('Operating customer changed during Payments billing setup; resolve native billing mapping')
@@ -65,14 +68,13 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  const billingConfigurationId=matchingConfigurations[0]!.id
  let contract:string|null=null,cursor:string|null=null
  for(let page=0;page<100;page++){
-  const listed=await metronomeRequest(env,'/v1/contracts/list',{customer_id:metronomeCustomer,include_archived:true,limit:20,...(cursor?{cursor}:{})})
+  const listed=await metronomeRequest(env,'/v2/contracts/list',{customer_id:metronomeCustomer,include_archived:true,limit:20,...(cursor?{cursor}:{})})
   if(!Array.isArray(listed.data))throw new Error('Native Metronome contract list is invalid')
   for(const value of listed.data){
    if(!value||typeof value!=='object')throw new Error('Native Metronome contract shape invalid')
    const row=value as Record<string,unknown>
    if(row.uniqueness_key!==`payments:${principal.organizationId}`)continue
-   const current=row.current as Record<string,unknown>|undefined
-   if(contract||row.archived_at||current?.rate_card_id!==env.METRONOME_RATE_CARD_ID||current.starting_at!==reserved.contract_start_at)throw new Error('Existing native Payments contract conflicts with immutable setup')
+   if(contract||row.archived_at||row.rate_card_id!==env.METRONOME_RATE_CARD_ID||typeof row.starting_at!=='string'||Date.parse(row.starting_at)!==Date.parse(reserved.contract_start_at))throw new Error('Existing native Payments contract conflicts with immutable setup')
    contract=providerId({data:row})
   }
   cursor=typeof listed.next_page==='string'?listed.next_page:typeof listed.cursor==='string'?listed.cursor:null

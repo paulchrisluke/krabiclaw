@@ -1,6 +1,7 @@
 import {expect,test} from '@playwright/test'
 import Stripe from 'stripe'
 import {authRequestHeaders} from './helpers/auth'
+import {mcpRequest} from './helpers/mcp'
 const password='Payments-Local-Proof-2026!Aa'
 test('local Worker financial servicing, buyer ownership and signed payment ingress',async({page,request,baseURL,browser})=>{
  test.skip(process.env.PAYMENTS_LOCAL_PROOF!=='true'||!['localhost','127.0.0.1'].includes(new URL(baseURL!).hostname),'Explicit synthetic fixtures in isolated checkout; never provider-payment proof')
@@ -28,7 +29,22 @@ test('local Worker financial servicing, buyer ownership and signed payment ingre
  const newCheckout=await page.request.post('/api/dashboard/payments/checkout?org=payments-local-proof',{headers:{origin},data:{product_id:'archived-product',variant_id:'archived-variant',quantity:1,idempotency_key:crypto.randomUUID()}})
  expect(newCheckout.status()).toBe(403)
  const stillOwned=await (await page.request.get(api)).json()
- expect(stillOwned.payments).toHaveLength(1)
+ expect(stillOwned.payments).toHaveLength(2)
+ const reject=await mcpRequest(page.request,baseURL!,{method:'tools/call',toolName:'reject_product_booking',args:{organization_id:'payments-proof-org',operational_booking_id:'payments-proof-review-booking',idempotency_key:crypto.randomUUID()}})
+ expect(reject.status(),await reject.text()).toBe(200)
+ const result=(await reject.json()).result
+ expect(result.isError).toBe(true)
+ expect(result.structuredContent).toMatchObject({success:false,operation_completed:false,confirmation_required:true,code:'financial_approval_required'})
+ const approvalUrl=new URL(result.structuredContent.financial_approval_url)
+ expect(approvalUrl.origin).toBe(origin)
+ expect(approvalUrl.pathname).toBe('/dashboard/payments-local-proof/payments/refunds/approve')
+ const pending=await page.request.get('/api/dashboard/bookings/booking/payments-proof-review-request?org=payments-local-proof')
+ expect(pending.status(),await pending.text()).toBe(200)
+ expect((await pending.json()).booking.status).toBe('pending')
+ const principal=await (await page.request.get(`${api}&payment_id=payments-proof-review`)).json()
+ expect(principal.payment).toMatchObject({captured_amount:10000,refunded_amount:0})
+ await page.goto(approvalUrl.toString())
+ await expect(page.getByRole('button',{name:/Approve/})).toBeVisible()
  const noOrigin=await page.request.post('/api/dashboard/payments/refund?org=payments-local-proof',{data:{action:'prepare',payment_id:'payments-proof-order',amount:100}})
  expect(noOrigin.status()).toBe(403)
  const prepared=await page.request.post('/api/dashboard/payments/refund?org=payments-local-proof',{headers:{origin},data:{action:'prepare',payment_id:'payments-proof-order',amount:100}})

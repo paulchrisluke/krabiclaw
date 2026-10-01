@@ -268,7 +268,7 @@
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
           "server/domain/product-bookings.ts": "9d936fd1835f972c36ccdc255193c22a9ce1af3a15ae4687dced75920d287621",
-          "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
+          "server/utils/mcp-tools/bookings.ts": "c86da02c81b65c806f80f1a872bec3aa2a74f7831b77cde99c3e4f9742a824bf",
           "server/utils/mcp-executor/bookings.ts": "c7b4b8be63fc9d88b52971f8e2566520a0695f3ae0f3303231fdcfb8a5fdfab4",
           "tests/e2e/mcp-bookings.spec.ts": "5bdfd9461491a0644b93c27c4437486e9ceabaf65820593013f9dba26765b07e",
           "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
@@ -1073,22 +1073,24 @@
           "tests/integration/payments-d1.test.ts",
           "tests/unit/payments-contract.test.ts",
           "tests/unit/payments-rate-card.test.ts",
-          "tests/unit/session-booking-payments.test.ts"
+          "tests/unit/session-booking-payments.test.ts",
+          "tests/unit/metronome-payments-response.test.ts"
         ],
-        "coverageNote": "Real local D1 concurrency, replay and financial boundaries; native account configuration proven in test mode. Native charges and Metronome collection remain configuration-blocked.",
+        "coverageNote": "Real local D1 concurrency, replay and financial boundaries; native test account configuration and Metronome synthetic sandbox invoice rating verified. Native charge/refund and Stripe collection proof remain configuration-blocked.",
         "evidenceSha256": {
           "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
           "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
           "server/domain/payments/index.ts": "c91d39221156f3be0a038786c416ebb416e3b0a6e8571da4f729a1683f373239",
           "server/domain/payments/checkout.ts": "a1e2ec8ed2872234b73e333ec5d1d16b701da01aaf034f684995551f6ff84777",
-          "server/domain/payments/usage.ts": "5a8fd4d586f7a80cba6fe4009d2a6316afffdf62c10509751553151a910227b7",
+          "server/domain/payments/usage.ts": "2fb89664460ec4c6451df359b3888cc83c131731bb57254f8331f77d1f614708",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "b79c727eb2d6f0ab5bcbd08b23317d31382d05e0f471316c7a78e69ece9ebc06",
+          "tests/integration/payments-d1.test.ts": "9f674a232bbde20ed6ec443600ce2697963845930c229850624af04d44a1bfb9",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
           "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",
           "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392",
-          "tests/unit/session-booking-payments.test.ts": "4cf4bb9904d567404ad7ae270dc4aee42b5e4c6524e5fa00d6e8e556dafe065c"
+          "tests/unit/session-booking-payments.test.ts": "4cf4bb9904d567404ad7ae270dc4aee42b5e4c6524e5fa00d6e8e556dafe065c",
+          "tests/unit/metronome-payments-response.test.ts": "96480d923f99ad4d934dcff7a86467b8df5a304c03de448773ecf95546f98a73"
         }
       },
       "pendingOwnerDecision": "Future higher-tier commercial name and price are separate; current tiers do not receive new Payments acceptance."

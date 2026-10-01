@@ -951,9 +951,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.",
-        "open_world_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Rejects a pending Product booking through the canonical inbox operation. Paid review rejection first returns an actor-bound browser financial approval handoff; approved rejection releases capacity and queues the remaining full-principal refund.",
+        "open_world_justification": "Rejects a pending Product booking through the canonical inbox operation. Paid review rejection first returns an actor-bound browser financial approval handoff; approved rejection releases capacity and queues the remaining full-principal refund. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Rejects a pending Product booking through the canonical inbox operation. Paid review rejection first returns an actor-bound browser financial approval handoff; approved rejection releases capacity and queues the remaining full-principal refund. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "remove_media": {
