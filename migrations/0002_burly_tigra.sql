@@ -42,3 +42,8 @@ ALTER TABLE product_booking_configs ADD COLUMN online_timezone text;
 --> statement-breakpoint
 ALTER TABLE product_booking_configs ADD COLUMN calendar_group text
   CONSTRAINT product_booking_configs_calendar_check CHECK (calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL));
+
+--> statement-breakpoint
+ALTER TABLE organization ADD COLUMN consultation_settings_json text;
+--> statement-breakpoint
+UPDATE organization SET consultation_settings_json = json_extract(settings_json, '$.consultation') WHERE json_type(settings_json, '$.consultation') = 'object';

@@ -1394,6 +1394,7 @@ export const organization = sqliteTable("organization", {
 	logo: text(),
 
 	// ── Formerly `organizations`. ────────────────────────────────────────────────────
+	consultation_settings_json: text({ mode: "json" }).$type<OrganizationSettings["consultation"]>(),
 	settings_json: text({ mode: "json" }).$type<OrganizationSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
 	integrations_json: text({ mode: "json" }).$type<OrganizationIntegrations>().default({}).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),
