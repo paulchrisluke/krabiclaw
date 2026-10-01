@@ -73,7 +73,7 @@ export async function requestRefundAuthorization(db: DbClient, principal: Financ
 export async function approveRefundAuthorization(db: DbClient, principal: FinancialPrincipal, id: string) {
   await authorizePayments(principal, 'refund')
   const now = new Date().toISOString()
-  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=? WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
+  const result = await execute(db, `UPDATE payment_authorizations SET approved_at=COALESCE(approved_at,?) WHERE id=? AND organization_id=? AND user_id=? AND action IN ('refund','reject_booking') AND expires_at>? AND consumed_at IS NULL`, [now,id,principal.organizationId,principal.userId,now])
   if (result.meta.changes !== 1) {
     const replay=await queryFirst(db,`SELECT a.id FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.approved_at IS NOT NULL AND a.consumed_at IS NOT NULL AND EXISTS(SELECT 1 FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.payment_id=a.payment_id AND (r.idempotency_key='approved:'||a.id OR (a.action='reject_booking' AND r.idempotency_key='rejected:'||p.subject_id)))`,[id,principal.organizationId,principal.userId])
     if(!replay)throw new HTTPError({statusCode:409,statusMessage:'Financial authorization expired or unavailable'})
@@ -81,7 +81,8 @@ export async function approveRefundAuthorization(db: DbClient, principal: Financ
 }
 export async function refundPayment(db: DbClient, stripe: Stripe, principal: FinancialPrincipal, authorizationId: string) {
   await authorizePayments(principal, 'refund')
-  const authorization = await queryFirst<{payment_id:string;amount:number}>(db, `SELECT payment_id,amount FROM payment_authorizations WHERE id=? AND organization_id=? AND user_id=? AND action='refund' AND approved_at IS NOT NULL AND (expires_at>? OR consumed_at IS NOT NULL)`, [authorizationId,principal.organizationId,principal.userId,new Date().toISOString()])
+  // Expiry prevents a new financial instruction; an already-authorized durable intent still needs recovery.
+  const authorization = await queryFirst<{payment_id:string;amount:number}>(db, `SELECT a.payment_id,a.amount FROM payment_authorizations a WHERE a.id=? AND a.organization_id=? AND a.user_id=? AND a.action='refund' AND a.approved_at IS NOT NULL AND (a.expires_at>? OR a.consumed_at IS NOT NULL OR EXISTS(SELECT 1 FROM payment_refunds r WHERE r.payment_id=a.payment_id AND r.idempotency_key='approved:'||a.id AND r.amount=a.amount AND r.created_by=a.user_id AND r.created_at>=a.approved_at AND r.created_at<=a.expires_at))`, [authorizationId,principal.organizationId,principal.userId,new Date().toISOString()])
   if (!authorization) throw new HTTPError({ statusCode: 403, statusMessage: 'Explicit browser financial approval is required' })
   return await executeRefund(db,stripe,await requirePayment(db,principal.organizationId,authorization.payment_id),authorization.amount,`approved:${authorizationId}`,'requested_by_customer',principal.userId)
 }
@@ -142,6 +143,7 @@ export async function reconcileRefundState(db:DbClient,stripe:Stripe,payment:Pay
   {query:`INSERT INTO payment_refunds(id,payment_id,idempotency_key,stripe_refund_id,amount,reason,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET stripe_refund_id=excluded.stripe_refund_id,status=excluded.status,error=NULL,updated_at=excluded.updated_at`,params:[id,payment.id,`provider:${payment.stripe_account_id}:${payment.livemode}:${refund.id}`,refund.id,refund.amount,refund.reason??'provider',refund.status,now,now]},
   {query:"UPDATE payments SET refunded_amount=(SELECT COALESCE(SUM(amount),0) FROM payment_refunds WHERE payment_id=? AND status='succeeded'),updated_at=? WHERE id=?",params:[payment.id,now,payment.id]},
   {query:"UPDATE payments SET state=CASE WHEN refunded_amount=captured_amount AND captured_amount>0 THEN 'refunded' ELSE state END WHERE id=?",params:[payment.id]},
+  {query:`UPDATE payment_authorizations SET consumed_at=COALESCE(consumed_at,?) WHERE payment_id=? AND approved_at IS NOT NULL AND action='refund' AND EXISTS(SELECT 1 FROM payment_refunds r WHERE r.id=? AND r.payment_id=payment_authorizations.payment_id AND r.idempotency_key='approved:'||payment_authorizations.id AND r.amount=payment_authorizations.amount AND r.created_by=payment_authorizations.user_id)`,params:[now,payment.id,id]},
  ])
  return {id,stripe_refund_id:refund.id,status:refund.status}
 }

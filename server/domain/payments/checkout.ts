@@ -79,7 +79,7 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   const returnToken=previous?.return_token ?? crypto.randomUUID()+crypto.randomUUID()
   const returnHash=await tokenHash(returnToken)
   const expiresAt = previous?.expires_at ?? new Date(Date.now()+60*60*1000).toISOString()
-  if (expiresAt<=now) throw new HTTPError({statusCode:409,statusMessage:'Checkout hold expired; start a new request'})
+  if (expiresAt<=now) throw new HTTPError({statusCode:409,statusMessage:'Checkout hold expired; start a new request',data:{code:'checkout_expired'}})
   if (previous?.checkout_url) return {payment_id:previous.payment_id,checkout_url:previous.checkout_url,expires_at:expiresAt}
   if (!previous) {
     try { await executeBatch(db,[

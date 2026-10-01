@@ -1072,21 +1072,23 @@
         "tests": [
           "tests/integration/payments-d1.test.ts",
           "tests/unit/payments-contract.test.ts",
-          "tests/unit/payments-rate-card.test.ts"
+          "tests/unit/payments-rate-card.test.ts",
+          "tests/unit/session-booking-payments.test.ts"
         ],
         "coverageNote": "Real local D1 concurrency, replay and financial boundaries; native account configuration proven in test mode. Native charges and Metronome collection remain configuration-blocked.",
         "evidenceSha256": {
           "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
-          "server/utils/mcp-executor/payments.ts": "4f08fbe2b4cfbd2de4d87340026d58a5dbd34d385e1b54d39e9ec0f9145cb9b3",
-          "server/domain/payments/index.ts": "cbb04ba53730293790eef6d5f4277475e8fceeda809adb2765ebbbde7b3d18a4",
-          "server/domain/payments/checkout.ts": "c2d3ecedc2e37cd3932a32863dd39a7998e5ec02b03697959b6bb9de1e7607ed",
+          "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
+          "server/domain/payments/index.ts": "c91d39221156f3be0a038786c416ebb416e3b0a6e8571da4f729a1683f373239",
+          "server/domain/payments/checkout.ts": "a1e2ec8ed2872234b73e333ec5d1d16b701da01aaf034f684995551f6ff84777",
           "server/domain/payments/usage.ts": "5a8fd4d586f7a80cba6fe4009d2a6316afffdf62c10509751553151a910227b7",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "3a9906c41b0bf4b5bc6f7e21abc6c77bfe1a8521b387e46b63e5b01133f8be0d",
+          "tests/integration/payments-d1.test.ts": "b79c727eb2d6f0ab5bcbd08b23317d31382d05e0f471316c7a78e69ece9ebc06",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
           "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",
-          "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392"
+          "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392",
+          "tests/unit/session-booking-payments.test.ts": "4cf4bb9904d567404ad7ae270dc4aee42b5e4c6524e5fa00d6e8e556dafe065c"
         }
       },
       "pendingOwnerDecision": "Future higher-tier commercial name and price are separate; current tiers do not receive new Payments acceptance."

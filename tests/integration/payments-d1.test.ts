@@ -7,7 +7,7 @@ import * as schema from '../../server/db/schema.ts'
 import {sessionAllocationPredicate,claimSessionCapacity} from '../../server/utils/availability.ts'
 import {executeGuestThreadOperation} from '../../server/domain/guest-threads/operations.ts'
 import {requestInsertQueries,threadPayloadForGuest} from '../../server/domain/requests.ts'
-import {approveRefundAuthorization,executeRefund,requirePayment} from '../../server/domain/payments/index.ts'
+import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAuthorization,refundPayment,reconcileRefundState} from '../../server/domain/payments/index.ts'
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
 import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage} from '../../server/domain/payments/usage.ts'
@@ -34,9 +34,9 @@ async function payable(db:D1Database,id:string,expires='2099-09-30T00:00:00.000Z
  await db.prepare("INSERT INTO payment_checkout_holds(id,organization_id,product_id,variant_id,price_id,session_id,buyer_user_id,payment_id,quantity,amount,currency,calendar_group,starts_at,ends_at,status,expires_at,created_at) VALUES(?,?,'product','variant','price','session','guest',?,1,10000,'USD','online','2099-10-01T13:00:00.000Z','2099-10-01T14:00:00.000Z','active',?,?)").bind(`h:${id}`,ORG,id,expires,NOW).run()
 }
 /** Deterministic provider boundary double. These tests do not claim Stripe sandbox success. */
-function provider(id:string){let refunds=0
+function provider(id:string, loseRefundResponse=false){let refunds=0;const nativeRefunds=new Map<string,Record<string,unknown>>()
  const intent={id:`pi:${id}`,livemode:false,currency:'usd',metadata:{krabiclaw_payment_id:id},amount:10000,amount_received:10000,status:'succeeded',application_fee_amount:0,created:1790812800,latest_charge:`ch:${id}`} as unknown as Stripe.PaymentIntent
- const stripe={checkout:{sessions:{retrieve:async()=>({id:`cs:${id}`,client_reference_id:id,payment_intent:`pi:${id}`,livemode:false,currency:'usd',amount_total:10000,total_details:{amount_tax:0},line_items:{data:[{quantity:1,price:{unit_amount:10000,currency:'usd'}}]}})}},charges:{retrieve:async()=>({id:`ch:${id}`,livemode:false,payment_intent:`pi:${id}`,amount:10000,created:1790812800,receipt_url:'https://pay.stripe.com/test-receipt'})},refunds:{retrieve:async()=>({id:`re:${id}`,payment_intent:`pi:${id}`,currency:'usd',amount:10000,status:'succeeded'}),create:async(input:{amount:number})=>{refunds++;return {id:`re:${id}`,currency:'usd',amount:input.amount,status:'succeeded'}}}} as unknown as Stripe
+ const stripe={checkout:{sessions:{retrieve:async()=>({id:`cs:${id}`,client_reference_id:id,payment_intent:`pi:${id}`,livemode:false,currency:'usd',amount_total:10000,total_details:{amount_tax:0},line_items:{data:[{quantity:1,price:{unit_amount:10000,currency:'usd'}}]}})}},charges:{retrieve:async()=>({id:`ch:${id}`,livemode:false,payment_intent:`pi:${id}`,amount:10000,created:1790812800,receipt_url:'https://pay.stripe.com/test-receipt'})},refunds:{list:async()=>({data:[...nativeRefunds.values()],has_more:false}),retrieve:async(refundId:string)=>{const refund=nativeRefunds.get(refundId);if(!refund)throw new Error('Native refund not found');return refund},create:async(input:{amount:number;metadata?:Record<string,string>})=>{refunds++;const refund={id:`re:${id}:${refunds}`,payment_intent:`pi:${id}`,currency:'usd',amount:input.amount,status:'succeeded',metadata:input.metadata};nativeRefunds.set(refund.id,refund);if(loseRefundResponse)throw new Error('Native refund succeeded but its response was lost');return refund}}} as unknown as Stripe
  return {stripe,intent,refunds:()=>refunds}
 }
 test('active checkout holds exclude ordinary claims; authenticated capture converts once into durable review', {timeout:120000},async()=>{
@@ -118,19 +118,22 @@ test('paid review rejection requires fresh browser approval and commits release 
   assert.equal(await db.prepare('SELECT status FROM bookings').first('status'),'pending')
   const fresh=await db.prepare("SELECT id FROM payment_authorizations ORDER BY rowid DESC LIMIT 1").first<string>('id');assert(fresh)
   await approveRefundAuthorization(db,principal,fresh)
-  await db.prepare("UPDATE payments SET refunded_amount=1000 WHERE id='reject'").run()
+  const partial=await requestRefundAuthorization(db,principal,'reject',1000)
+  await approveRefundAuthorization(db,principal,partial.authorization_id)
+  await refundPayment(db,p.stripe,principal,partial.authorization_id)
   await assert.rejects(()=>executeGuestThreadOperation(db,{...input,financialAuthorizationId:fresh}),/explicit approval/)
   assert.equal(await db.prepare('SELECT status FROM bookings').first('status'),'pending')
-  await db.prepare("UPDATE payments SET refunded_amount=0 WHERE id='reject'").run()
-  const accepted={...input,financialAuthorizationId:fresh}
+  const remaining=await db.prepare("SELECT id FROM payment_authorizations WHERE action='reject_booking' ORDER BY rowid DESC LIMIT 1").first<string>('id');assert(remaining)
+  await approveRefundAuthorization(db,principal,remaining)
+  const accepted={...input,financialAuthorizationId:remaining}
   assert.equal((await executeGuestThreadOperation(db,accepted)).ok,true)
   assert.equal((await executeGuestThreadOperation(db,accepted)).ok,true)
   assert.equal(await db.prepare('SELECT status FROM bookings').first('status'),'cancelled')
-  assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_refunds').first('n'),1)
-  assert.equal(await db.prepare('SELECT amount FROM payment_refunds').first('amount'),10000)
+  assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_refunds').first('n'),2)
+  assert.equal(await db.prepare('SELECT SUM(amount) n FROM payment_refunds').first('n'),10000)
   const bookingId=await db.prepare('SELECT id FROM bookings').first<string>('id');assert(bookingId)
-  await executeRefund(db,p.stripe,await requirePayment(db,ORG,'reject'),10000,`rejected:${bookingId}`,'requested_by_customer','verified')
-  assert.equal(p.refunds(),1)
+  await executeRefund(db,p.stripe,await requirePayment(db,ORG,'reject'),9000,`rejected:${bookingId}`,'requested_by_customer','verified')
+  assert.equal(p.refunds(),2)
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_usage_events').first('n'),1)
  }finally{await runtime.dispose()}
 })
@@ -161,6 +164,29 @@ test('concurrent merchant refunds reserve remaining principal atomically', {time
   assert.equal(p.refunds(),1)
   assert.equal(await db.prepare('SELECT refunded_amount FROM payments').first('refunded_amount'),6000)
   assert.equal(await db.prepare("SELECT SUM(amount) n FROM payment_refunds WHERE status='succeeded'").first('n'),6000)
+ }finally{await runtime.dispose()}
+})
+test('approved refund recovery survives expiry and webhook-first delivery without a second refund', {timeout:120000},async(t)=>{
+ const {db,runtime}=await boot();try{
+  await payable(db,'refund-recovery');const p=provider('refund-recovery',true)
+  await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'refund-recovery'),p.intent)
+  const principal={organizationId:ORG,userId:'verified',role:'owner'}
+  const authorization=await requestRefundAuthorization(db,principal,'refund-recovery',1000)
+  await approveRefundAuthorization(db,principal,authorization.authorization_id)
+  await assert.rejects(()=>refundPayment(db,p.stripe,principal,authorization.authorization_id),/response was lost/u)
+  assert.equal(await db.prepare('SELECT consumed_at FROM payment_authorizations WHERE id=?').bind(authorization.authorization_id).first('consumed_at'),null)
+  t.mock.timers.enable({apis:['Date']});t.mock.timers.setTime(Date.now()+11*60*1000)
+  await refundPayment(db,p.stripe,principal,authorization.authorization_id)
+  assert.equal(p.refunds(),1)
+  assert.ok(await db.prepare('SELECT consumed_at FROM payment_authorizations WHERE id=?').bind(authorization.authorization_id).first('consumed_at'))
+  const webhook=await requestRefundAuthorization(db,principal,'refund-recovery',1000)
+  await approveRefundAuthorization(db,principal,webhook.authorization_id)
+  await assert.rejects(()=>refundPayment(db,p.stripe,principal,webhook.authorization_id),/response was lost/u)
+  await reconcileRefundState(db,p.stripe,await requirePayment(db,ORG,'refund-recovery'),'re:refund-recovery:2')
+  assert.ok(await db.prepare('SELECT consumed_at FROM payment_authorizations WHERE id=?').bind(webhook.authorization_id).first('consumed_at'))
+  await refundPayment(db,p.stripe,principal,webhook.authorization_id)
+  assert.equal(p.refunds(),2)
+  assert.equal(await db.prepare('SELECT refunded_amount FROM payments').first('refunded_amount'),2000)
  }finally{await runtime.dispose()}
 })
 test('billing decisions respect native draft/finalized periods and retain negative final credits',async()=>{
