@@ -81,7 +81,9 @@ async function commit() {
       if (!createdId) throw new Error('The link was not created.')
       // The record it became, not the `new` form it was.
       await navigateTo(`${level.to.value}/${createdId}`, { replace: true })
+      return
     }
+    await navigateTo(level.to.value ?? '/dashboard')
   } catch (error) {
     editor.errorMessage.value = error instanceof ApiClientError
       ? error.message

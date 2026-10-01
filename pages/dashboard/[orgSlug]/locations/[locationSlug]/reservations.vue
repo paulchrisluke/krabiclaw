@@ -52,8 +52,9 @@ const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'reservations')
 
 
+// Kept as typed: trimming on every keystroke ate the space before the next word.
 function setNotes(next: string | number) {
-  const notes = typeof next === 'string' ? next.trim() : ''
-  editor.reservationForm.value = { ...editor.reservationForm.value, additional_notes_html: notes || null }
+  const notes = typeof next === 'string' ? next : ''
+  editor.reservationForm.value = { ...editor.reservationForm.value, additional_notes_html: notes.trim() ? notes : null }
 }
 </script>
