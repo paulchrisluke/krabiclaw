@@ -22,7 +22,8 @@ on every pass, so no in-memory notification or cursor gap can lose a booking.
 `google_calendar_event_links` is the durable projection intent and provider
 mapping. Its subject is `(organization_id, integration_revision, booking_kind,
 operational_id)`; `operational_id` means `bookings.id` or `reservations.id`.
-`request_id` is the thread identity, never the operational Booking ID (including
+A partial unique index permits one live intent per subject while retaining
+deleted provider identities as history. `request_id` is the thread identity, never the operational Booking ID (including
 legacy public responses named `booking_id`). Foundation reschedules keep the
 operational ID and therefore update the same mapped Google event.
 
