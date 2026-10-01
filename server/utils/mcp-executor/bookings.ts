@@ -25,8 +25,9 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     return { sessions: page.items, page_info: page.page_info }
   }
   if (toolName === 'list_product_bookings') {
-    const rows = await queryAll(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? ORDER BY s.starts_at, b.id`, [organizationId])
-    const page = paginateMcpCollection(rows, args, { resource: `product-bookings:${organizationId}` })
+    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? ORDER BY s.starts_at, b.id`, [organizationId])
+    const bookings = rows.map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
+    const page = paginateMcpCollection(bookings, args, { resource: `product-bookings:${organizationId}` })
     return { bookings: page.items, page_info: page.page_info }
   }
   if (toolName === 'create_product_booking') {
