@@ -1,5 +1,5 @@
 {
-  "status": "proposal-only-not-applied",
+  "status": "hold-pending-corrected-page-approval-and-media-upload",
   "pageId": "e762f109-692a-4641-b2f9-fb9624745145",
   "path": "/pricing",
   "existingBlockIdsPreserved": true,
@@ -208,5 +208,34 @@
     "Preserve remaining Q&A records and page ownership.",
     "Read back through the public page API and render the page after applying.",
     "All six uploaded asset IDs were independently read back active in platform; use those IDs for canonical placements. No page placement has been changed remotely."
+  ],
+  "pendingMediaReplacements": [
+    {
+      "blockId": "8ae8617c-d30f-41eb-8478-b168fdb4c7e1",
+      "slot": "media",
+      "priorAssetId": "010c3651-b474-478b-a2ca-fd3bbf8b2956",
+      "file": "benefit-online-home.png",
+      "sha256": "bbf0544b599b83faa325cae2668bec3d7733d075ac5b2f099434e858dd678649",
+      "altText": "Kikuzuki restaurant website displayed in a botanical frame.",
+      "status": "local-files-verified-production-upload-not-authorized"
+    },
+    {
+      "blockId": "38516eaf-abde-440e-bc65-bcf25ca38840",
+      "slot": "media",
+      "priorAssetId": "d953791e-fcfd-4341-86c4-d09a7a5bf8c2",
+      "file": "benefit-keep-current.png",
+      "sha256": "5be47450236b85bd649dadc638d5edc68e76726bcf3fe5560cfa40ea78ce310e",
+      "altText": "Kikuzuki Japanese story and reservation page displayed with botanical accents.",
+      "status": "local-files-verified-production-upload-not-authorized"
+    },
+    {
+      "blockId": "73e77624-9f28-4ff0-abc9-224bd75a2407",
+      "slot": "media",
+      "priorAssetId": "e855c285-be08-4d76-91a5-a6840a17374d",
+      "file": "benefit-grow.png",
+      "sha256": "0393c907977868ef55f4271503abd8cb3ad8d23998f31b3c64a47145da8ec202",
+      "altText": "North Carolina Legal Services desktop website and Pottery House Krabi mobile website with botanical accents.",
+      "status": "local-files-verified-production-upload-not-authorized"
+    }
   ]
 }

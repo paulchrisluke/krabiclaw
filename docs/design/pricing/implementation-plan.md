@@ -209,3 +209,35 @@ provider cleanup, production CMS/Stripe writes, merge or deployment occurred.
 Updated rendered evidence: `evidence/pricing-desktop-owner-revision.png` and
 `evidence/pricing-mobile-owner-revision.png` (local test Chromium; Chrome controls
 were not exposed for this follow-up).
+
+## Landed foundations and corrected botanical preview
+
+PR1190 merged into staging at `91fbaaa71d7cce0df02997b7fdec7a8602015363`;
+PR1191 merged at `48a6b1f5390d699a9ef454c1ae555385c47d2554`. Pricing was rebased
+onto them and Git dropped the duplicate foundation/footer commits. The feature
+library retains the landed gate evidence provenance; pricing adds only its
+reviewed comparison publication mapping/validation. Pricing remains held.
+
+The corrected v2 asset bundle replaces only the three benefit PNGs, all
+1200×800 with transparency. Six manifest hashes passed, and both plan photos and
+the coastal CTA are byte-identical to the prior approved files. Botanical
+browser mockups now show Kikuzuki's real homepage/story/reservation and NCLS with
+the supplied pottery mobile example. They are rendered locally in
+`evidence/pricing-desktop-botanical-middle.png` and its mobile counterpart;
+full-page preview files are also retained.
+
+Image ingestion is production-only by design (`server/utils/cloudflare-images.ts`).
+Because production writes are held, these screenshots are expressly an asset
+preview: `capture-corrected-art-preview.mjs` substitutes only the three exact
+external image-provider responses with the verified local PNG bytes. CMS,
+billing, layout and copy come from the actual local Worker, unchanged by the
+capture. This is not proof of persisted replacement media or production
+activation. The packet records pending replacement files, hashes, alt text and
+prior IDs; those prior IDs still identify the rejected artwork. No replacement
+IDs are invented or published. Owner approval and authorized media ingestion
+must precede final placement/publication.
+
+The rebased feature parity check and production Worker build passed. No new
+broad tests, review request, Stripe cleanup or production mutation was initiated
+for this visual handoff. Foundation staging Checks passed independently;
+automatic staging deployment/tenant validation is monitored separately.

@@ -1,6 +1,6 @@
 {
   "name": "Krabiclaw pricing page production assets",
-  "version": "1.0",
+  "version": "2.0",
   "assets": [
     {
       "file": "plan-basic-photo.png",
@@ -34,9 +34,12 @@
       "format": "PNG",
       "mode": "RGBA",
       "has_transparency": true,
-      "suggested_alt": "An editorial collage of ceramic product photographs and colored paper.",
-      "bytes": 826475,
-      "sha256": "6a6a7bb730ad98a243670c6dd244ef3bbd609ca8f13e2949235a850f2c644ced"
+      "suggested_alt": "Kikuzuki restaurant website displayed in a botanical frame.",
+      "bytes": 644487,
+      "sha256": "bbf0544b599b83faa325cae2668bec3d7733d075ac5b2f099434e858dd678649",
+      "sources": [
+        "kikuzuki_home"
+      ]
     },
     {
       "file": "benefit-keep-current.png",
@@ -46,9 +49,12 @@
       "format": "PNG",
       "mode": "RGBA",
       "has_transparency": true,
-      "suggested_alt": "Blank paper, conversation bubbles, a pencil and a small plant.",
-      "bytes": 807908,
-      "sha256": "8db46edd860f5183034a2ded437fe503448d896a46b92d4bbe6feb0787157e14"
+      "suggested_alt": "Kikuzuki Japanese story and reservation page displayed with botanical accents.",
+      "bytes": 501042,
+      "sha256": "5be47450236b85bd649dadc638d5edc68e76726bcf3fe5560cfa40ea78ce310e",
+      "sources": [
+        "kikuzuki_story"
+      ]
     },
     {
       "file": "benefit-grow.png",
@@ -58,9 +64,13 @@
       "format": "PNG",
       "mode": "RGBA",
       "has_transparency": true,
-      "suggested_alt": "An illustrated globe with location markers and ceramic product photographs.",
-      "bytes": 756057,
-      "sha256": "75a998799f3a22c6b0787b18406b62d85b7e736c33230ba652529cc821d6bbef"
+      "suggested_alt": "North Carolina Legal Services desktop website and Pottery House Krabi mobile website with botanical accents.",
+      "bytes": 726810,
+      "sha256": "0393c907977868ef55f4271503abd8cb3ad8d23998f31b3c64a47145da8ec202",
+      "sources": [
+        "ncls_home",
+        "pottery_mobile"
+      ]
     },
     {
       "file": "cta-coastal.png",
@@ -77,10 +87,11 @@
   ],
   "notes": [
     "Photographic plan fronts use matching 2:3 dimensions.",
-    "Benefit illustrations are editorial metaphors, not product UI screenshots.",
     "Use decorative empty alt attributes where adjacent text communicates the same meaning.",
     "New photographs were generated at 1024x1536 and resized to 1200x1800.",
-    "Benefit illustrations were generated at 1536x1024, resized to 1080x720, and centered on 1200x800 transparent canvases.",
-    "No pricing or feature copy is baked into production image assets."
+    "No pricing or feature copy is baked into production image assets.",
+    "Benefit images use owner-provided client screenshot pixels with generated botanical accents only.",
+    "Three benefit PNGs are 1200x800 RGBA, 3:2; use contain and height auto on warm white without cropping.",
+    "Website examples do not imply CMS/editor functionality or AI use by NCLS."
   ]
 }
