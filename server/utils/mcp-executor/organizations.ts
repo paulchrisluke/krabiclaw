@@ -1,3 +1,4 @@
+import { setPublicConsultationMode } from '~/server/utils/professional-services'
 import type { McpExecutorContext } from './shared'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getOrganizationForMcp } from '~/server/utils/mcp-workflows'
@@ -64,6 +65,8 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         { settings: settingsResult },
       );
     }
+    case "set_consultation_mode":
+      return { settings: await setPublicConsultationMode(organization.db, organization.organizationId, requiredString(args, 'mode') as 'native' | 'external_url' | 'native_disabled') }
     case "set_default_currency": {
       const { isCurrencyCode } = await import("~/shared/currencies");
       const currency = requiredString(args, "currency").toUpperCase().trim();

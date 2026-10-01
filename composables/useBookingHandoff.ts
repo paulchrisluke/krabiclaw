@@ -5,6 +5,9 @@
 
 export interface BookingConfirmation {
   type: 'reservation' | 'booking'
+  status?: 'pending' | 'confirmed'
+  operationalBookingId?: string
+  requestId?: string
   organizationId: string
   organizationName: string
   policySummary?: ApiRecord | null

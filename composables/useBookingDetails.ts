@@ -17,7 +17,7 @@ export function isBookingDetailsResponse(value: unknown): value is { booking: Da
     && typeof value.booking.organizationId === 'string'
     && typeof value.booking.guestName === 'string'
     && Array.isArray(value.booking.notes)
-    && isRecord(value.booking.policy)
+    && (value.booking.policy === null || isRecord(value.booking.policy))
 }
 
 export async function useBookingDetails(bookingType: DashboardBookingType, bookingId: string) {
@@ -48,6 +48,7 @@ export async function useBookingDetails(bookingType: DashboardBookingType, booki
   const referenceDay = computed(() => booking.value ? localDateAt(new Date(), booking.value.timeZone) : '')
   const pageTitle = computed(() => {
     if (!booking.value) return 'Booking details'
+    if (booking.value.status === 'pending') return 'Awaiting review'
     if (booking.value.status === 'cancelled') return 'Cancelled'
     if (booking.value.bookingDate === referenceDay.value) return 'Currently hosting'
     if (booking.value.bookingDate > referenceDay.value) return 'Coming up'

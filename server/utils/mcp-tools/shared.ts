@@ -920,6 +920,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   save_generated_image_file: W,
   set_brand_color: D,
   set_default_currency: D,
+  set_consultation_mode: D,
   set_media: D,
   set_workspace_context: BD,
   reconcile_products: D,

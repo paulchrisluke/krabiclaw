@@ -126,12 +126,12 @@ export function guestReservationCancelledMessage(input: GuestBookingInput & { wa
   }
 }
 
-export function guestBookingReceivedMessage(input: GuestBookingInput & { productTitle: string }): NotificationMessage {
+export function guestBookingReceivedMessage(input: GuestBookingInput & { productTitle: string; status?: 'pending' | 'confirmed' }): NotificationMessage {
   return {
-    title: `Your booking request was sent`,
+    title: input.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed',
     preheader: `${input.productTitle} · ${input.date} at ${input.time}`,
     hero: input.heroImageUrl ? { imageUrl: input.heroImageUrl, alt: input.productTitle ?? '' } : null,
-    intro: `Thanks, ${input.guestName}. ${input.organizationName} will confirm availability shortly.`,
+    intro: input.status === 'pending' ? `Thanks, ${input.guestName}. ${input.organizationName} will review your request shortly.` : `Thanks, ${input.guestName}. Your booking with ${input.organizationName} is confirmed.`,
     facts: guestVisitFacts(input),
     primaryAction: input.cancelUrl ? { url: input.cancelUrl, label: 'Manage your booking' } : undefined,
     sections: contactSection(input),

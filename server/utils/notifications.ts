@@ -99,6 +99,7 @@ interface ContactNotificationInput extends OrganizationContext {
 }
 
 interface BookingNotificationInput extends OrganizationContext {
+  status?: 'pending' | 'confirmed'
   /** So the email can lead with the experience's own photo. */
   productId?: string | null
   locationId?: string | null
@@ -991,7 +992,7 @@ export async function notifyBookingCreated(
     notes: opts.notes ?? null, heroImageUrl: hero?.imageUrl ?? null, replyUrl: inboxUrl,
   })
   const guestEmail = await renderNotificationEmail(guestBookingReceivedMessage({
-    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl,
+    guestName: opts.guestName, organizationName: studio, organizationLogoUrl: logoUrl, status: opts.status,
     productTitle: opts.productTitle, date: prettyDate, time: prettyTime, partySize: String(opts.partySize),
     notes: opts.notes, contactPhone: opts.contactPhone ?? null, contactEmail: opts.contactEmail ?? null,
     cancelUrl: opts.cancelUrl ?? null, heroImageUrl: hero?.imageUrl ?? null,
@@ -1016,9 +1017,9 @@ export async function notifyBookingCreated(
       to: opts.email,
       replyTo,
       template: 'booking_customer_received',
-      title: `Your booking request was sent — ${opts.productTitle}`,
+      title: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`,
       payload,
-      email: { subject: `Your booking request was sent — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
     }),
   ])

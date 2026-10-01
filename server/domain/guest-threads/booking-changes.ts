@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { HTTPError } from 'nitro'
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { listSessions, sessionClaimQuery } from '~/server/utils/availability'
+import { listSessions, sessionMoveQuery } from '~/server/utils/availability'
 import { localDateTimeToInstant } from '~/utils/timezone'
 import { RESERVATION_CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
@@ -126,7 +126,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   }
 }
 
-interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; claim?: (bookingId: string, now: string) => BatchQuery; sessionId?: string }
+interface Destination { locationId: string | null; title: string; label: string; date: string; time: string; startsAt: string; endsAt?: string; claim?: (bookingId: string, now: string) => BatchQuery; sessionId?: string }
 
 /**
  * Check that the proposed target can actually take this party, and return the
@@ -154,15 +154,13 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
       : null
     return {
       locationId: target.location_id, title: location?.title ?? '', sessionId: target.id,
-      startsAt: target.starts_at, ...localParts(target.starts_at, target.timezone),
-      // The replacement is claimed before the original is released, so a
-      // destination that is full leaves the guest's booking exactly as it was.
-      // It therefore cannot take request_id yet — the original still holds it —
-      // and the seat it is giving up is excluded from the capacity it must fit.
-      claim: (bookingId, now) => sessionClaimQuery({
+      startsAt: target.starts_at, endsAt: target.ends_at, ...localParts(target.starts_at, target.timezone),
+      // The same Booking moves under the shared allocation predicate. Exclude
+      // its existing allocation; a full destination leaves the record unchanged.
+      claim: (bookingId, now) => sessionMoveQuery({
         bookingId, organizationId: thread.organization_id, productId: before.productId!,
-        sessionId: target.id, productVariantId: booking.product_variant_id, partySize: after.partySize,
-        userId: booking.user_id, requestId: null, replacingBookingId: before.recordId,
+        sessionId: target.id, partySize: after.partySize,
+        replacingBookingId: before.recordId,
         requireUndecided: {
           requestId: thread.id, organizationId: thread.organization_id, updatedAt: before.updatedAt,
           decisionDedupeKey: decisionDedupeKey ?? '',
@@ -347,35 +345,21 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
         ON CONFLICT DO NOTHING`,
       params: [id, thread.id, `booking_change.${input.decision === 'accept' ? 'accepted' : 'declined'}`,
         `Guest ${input.decision === 'accept' ? 'accepted' : 'declined'} the requested changes.`,
-        JSON.stringify({ requestId: entry.id }), resultId, thread.id, now, now,
+        JSON.stringify({ requestId: entry.id, request_id: thread.id, operational_booking_id: current.recordId, beforeStatus: current.status, before: { starts_at: current.startsAt, ends_at: current.endsAt, party_size: current.partySize }, after: destination ? { starts_at: destination.startsAt, ends_at: destination.endsAt ?? new Date(Date.parse(destination.startsAt) + Date.parse(current.endsAt) - Date.parse(current.startsAt)).toISOString(), party_size: proposal.after.partySize } : null }), resultId, thread.id, now, now,
         thread.id, thread.organization_id, current.updatedAt],
     }
 
     const guard = `EXISTS (SELECT 1 FROM activity_entries WHERE id = ?)`
-    const movedBookingId = destination?.claim ? crypto.randomUUID() : null
-    const claimed = `EXISTS (SELECT 1 FROM bookings WHERE id = ?)`
+    const movedBookingId = destination?.claim ? current.recordId : null
+
     const queries: BatchQuery[] = []
     if (destination && current.recordKind === 'booking' && destination.claim && movedBookingId) {
-      // Take the new seat before giving up the old one, and record the decision
-      // only once the seat is taken. A destination that filled up inserts
-      // nothing, so the rest of the batch is a no-op and the guest keeps the
-      // booking they had — the batch cannot half-apply a move.
+      // Move the canonical record and append the decision in one batch. A
+      // failed allocation changes no row, so changes() cannot record acceptance.
       queries.push(destination.claim(movedBookingId, now))
       queries.push({
         ...entryInsert,
-        query: entryInsert.query.replace('AND source.updated_at = ?', `AND source.updated_at = ? AND ${claimed}`),
-        params: [...entryInsert.params as unknown[], movedBookingId],
-      })
-      queries.push({
-        query: `UPDATE bookings SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'changed', request_id = NULL, updated_at = ?
-                 WHERE id = ? AND ${guard}`,
-        params: [now, now, current.recordId, id],
-      })
-      // request_id is unique per booking, so the replacement takes it only
-      // once the original has released it above.
-      queries.push({
-        query: `UPDATE bookings SET request_id = ?, updated_at = ? WHERE id = ? AND ${guard}`,
-        params: [thread.id, now, movedBookingId, id],
+        query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1'),
       })
     } else {
       queries.push(entryInsert)
@@ -402,13 +386,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
     await executeBatch(db, queries, { operation: 'respond to booking change' })
     result = await findEntryByDedupeKey(db, resultId)
     if (!result) {
-      // The decision row is recorded only when the seat was taken, so its
-      // absence after a move means the destination filled up first. The
-      // original booking is untouched either way.
-      if (movedBookingId && !await queryFirst<{ id: string }>(db, 'SELECT id FROM bookings WHERE id = ?', [movedBookingId])) {
-        throw new HTTPError({ statusCode: 409, message: 'That session filled up before the change was accepted' })
-      }
-      throw new HTTPError({ statusCode: 409, message: 'This reservation changed or is no longer available' })
+      throw new HTTPError({ statusCode: 409, message: current.recordKind === 'booking' ? 'That session filled up or the booking changed; your original appointment is unchanged' : 'This reservation changed or is no longer available' })
     }
   }
 

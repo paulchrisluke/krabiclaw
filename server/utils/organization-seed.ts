@@ -111,7 +111,7 @@ export async function seedNewOrganization(
   await createTenantPagesBatch(db, { env, organizationId, pages: pagesToCreate })
 
   // ── Consultation settings (professional services only) ────────────────────
-  // The Blawby shell reads settings_json.$.consultation on every route and
+  // The Blawby shell reads canonical consultation settings on every route and
   // refuses to render without it (getPublicConsultationSettings throws
   // CONSULTATION_SETTINGS_MISSING), so a professional-service tenant is not
   // renderable until this exists. Nothing here is customer-facing copy the
@@ -122,34 +122,16 @@ export async function seedNewOrganization(
   // this button in the professional-service copy registry. The owner changes
   // any of it from the dashboard or ChatGPT, through the same writer used here.
   if (vertical === "service") {
-    const configured = await queryFirst<{ present: number }>(
-      db,
-      "SELECT json_type(settings_json, '$.consultation') IS NOT NULL AS present FROM organization WHERE id = ? LIMIT 1",
-      [organizationId],
-    );
-    if (!configured?.present) {
-      // Consultation settings live on the organization, read back by
-      // server/utils/professional-services.ts. The editor that used to wrap
-      // this write went with the offerings model; the setting did not.
-      await executeBatch(db, [{
-        query: `UPDATE organization SET settings_json = json_set(COALESCE(settings_json, '{}'), '$.consultation', json(?)), updated_at = ?
-                 WHERE id = ?`,
-        params: [
-          JSON.stringify({
-            mode: "native_disabled",
-            cta_label: getVerticalCopy(vertical).reservationRequestButton,
-            external_url: null,
-            schedule_path: "/schedule",
-            confirmation_path: "/contact/confirmed",
-            tracking_enabled: false,
-            contact_form_enabled: true,
-            metadata: {},
-          }),
-          new Date().toISOString(),
-          organizationId,
-        ],
-      }], { operation: 'Seed consultation settings' });
-    }
+    const { initializePublicConsultationSettings } = await import('~/server/utils/professional-services')
+    await initializePublicConsultationSettings(db, organizationId, {
+      mode: 'native_disabled',
+      cta_label: getVerticalCopy(vertical).reservationRequestButton,
+      external_url: null,
+      schedule_path: '/schedule',
+      confirmation_path: '/contact/confirmed',
+      tracking_enabled: false,
+      metadata_json: { contact_form_enabled: true },
+    })
   }
 
   return locationId

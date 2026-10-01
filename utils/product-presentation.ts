@@ -47,7 +47,7 @@ export const EXPERIENCE_PRESENTATION: ProductPresentation = {
 
 /** The surface this product is read on, and the paths and words that go with it. */
 export function presentationForProduct(vertical: string | null | undefined, product: Pick<Product, 'booking'>): ProductPresentation {
-  return isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+  return normalizeVertical(vertical) !== 'service' && isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }
 
 /** The words one surface owns: experiences read the same on every vertical. */
@@ -72,7 +72,7 @@ export function resolveProductPresentation(vertical: string | null | undefined):
       structuredDataType: 'MenuItem',
     }
   }
-  if (normalized === 'experience') {
+  if (normalized === 'experience' || normalized === 'service') {
     return {
       feature: 'products',
       collectionPath: '/products',

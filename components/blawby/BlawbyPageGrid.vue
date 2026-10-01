@@ -23,6 +23,7 @@
       <h3 v-if="item.description" class="mt-2 blawby-display text-xl font-bold text-[var(--blawby-primary)]">
         {{ item.description }}
       </h3>
+      <p v-if="item.schedulingSummary" class="mt-4 text-sm text-[var(--blawby-primary-dark)]">{{ item.schedulingSummary }}</p>
     </NuxtLink>
   </div>
 </template>
@@ -52,6 +53,7 @@ interface PageGridItem {
   id: string
   title: string
   description?: string
+  schedulingSummary?: string
   url: string
   media?: PageGridMedia[]
 }

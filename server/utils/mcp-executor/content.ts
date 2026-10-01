@@ -205,6 +205,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           userId: organization.userId,
           scope: { organizationId: organization.organizationId},
           data: {
+            productId: args.product_id === undefined ? undefined : requiredNullableString(args, "product_id"),
             path: requiredString(args, "path"),
             title: requiredString(args, "title"),
             summary: nullableStringArg(args, "summary", null),

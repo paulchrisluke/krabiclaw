@@ -597,7 +597,10 @@ export async function normalizeWorkspaceArguments(
       : {};
   const supportsOrganization = "organization_id" in properties;
   const supportsLocation = "location_id" in properties;
-  const needsLocation = toolRequiresArgument(schema, "location_id");
+  const locationSchema = properties.location_id as { type?: unknown } | undefined;
+  const explicitNeutralLocation = args.location_id === null
+    && Array.isArray(locationSchema?.type) && locationSchema.type.includes("null");
+  const needsLocation = toolRequiresArgument(schema, "location_id") && !explicitNeutralLocation;
   const hasOrganization = typeof args.organization_id === "string" && args.organization_id.trim();
   const hasLocation = typeof args.location_id === "string" && args.location_id.trim();
 

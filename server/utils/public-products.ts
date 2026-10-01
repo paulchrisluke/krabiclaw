@@ -91,7 +91,7 @@ export interface PublicProductSession {
 }
 
 export interface PublicProductDetail extends PublicProductCollection {
-  location: PublicProductLocation
+  location: PublicProductLocation | null
   product: Product
   /**
    * Present exactly when the Product takes bookings.
@@ -197,7 +197,7 @@ export async function loadPublicProductDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   if (locale === 'en') {
     const collection = await loadPublicProductCollection(db, organizationId, routeKind, previewAuthorized, locationSlug)
     const location = collection?.locations[0]
@@ -345,7 +345,7 @@ export async function loadPublicProductApiDetail(
   locationSlug: string,
   productSlug: string,
   locale = 'en',
-): Promise<PublicProductDetail | null> {
+): Promise<(PublicProductDetail & { location: PublicProductLocation }) | null> {
   const organization = await queryFirst<{ id: string; vertical: string }>(db, `SELECT id, vertical FROM organization WHERE id = ? AND ${publicTenantVisibilitySql('organization', previewAuthorized)} LIMIT 1`, [organizationId])
   const presentation = organization ? resolveProductPresentation(organization.vertical) : null
   if (!organization || !presentation) return null
@@ -376,6 +376,10 @@ export async function loadPublicProductSessions(
   if (!detail.booking) return []
   // A branch with no zone cannot state when anything starts, so it offers
   // nothing here rather than a time in a zone nobody chose.
+  if (!detail.location) {
+    const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions.filter(session => !session.is_full)
+  }
   if (!detail.location.timezone) return []
   const window = bookingWindow(detail.location.timezone)
   const sessions = await listSessions(db, {
@@ -415,12 +419,12 @@ export async function loadPublicProductReviews(
            original_review_date, created_at
      FROM reviews
      WHERE organization_id = ? AND status = 'approved'
-       AND location_id = ?
+       AND location_id IS ?
        AND (product_id = ? OR (product_id IS NULL AND source = 'google_places'))
        AND author_name IS NOT NULL AND trim(author_name) <> ''
        AND content IS NOT NULL AND trim(content) <> ''
      ORDER BY COALESCE(original_review_date, created_at) DESC, id DESC
      LIMIT 50
-  `, [detail.organization.id, detail.location.id, detail.product.id])
+  `, [detail.organization.id, detail.location?.id ?? null, detail.product.id])
   return rows.map(row => ({ ...row, google_review_metadata: parseGoogleReviewMetadata(row.google_review_metadata) }))
 }

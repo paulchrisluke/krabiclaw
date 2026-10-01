@@ -10,19 +10,19 @@ import { localPartsAt } from '~/utils/timezone'
 import { appendEntry, getEntryById, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
 import { requestBookingChange } from '~/server/domain/guest-threads/booking-changes'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
-import { resolveLocationTimezone } from '~/server/utils/organization-config'
 import { isBookingComplete, type BookingStatus } from '~/shared/bookings'
 
 export type DashboardBookingType = 'reservation' | 'booking'
 
 interface BookingRow {
   id: string
+  operational_id: string
   organization_id: string
   organization_name: string
   vertical: string
-  location_id: string
-  location_slug: string
-  location_title: string
+  location_id: string | null
+  location_slug: string | null
+  location_title: string | null
   guest_name: string
   guest_email: string
   guest_phone: string | null
@@ -51,12 +51,13 @@ export interface DashboardBookingNote {
 
 export interface DashboardBookingDetails {
   id: string
+  operationalBookingId: string
   type: DashboardBookingType
   organizationId: string
   organizationName: string
   vertical: string
-  locationId: string
-  locationSlug: string
+  locationId: string | null
+  locationSlug: string | null
   locationTitle: string
   resourceTitle: string
   resourceImageUrl: string | null
@@ -118,7 +119,7 @@ async function loadBookingRow(
   // When, for how many and against what all live on the record the thread
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
-  return queryFirst<BookingRow>(db, `SELECT r.id, r.organization_id, s.name AS organization_name, s.vertical,
+  return queryFirst<BookingRow>(db, `SELECT r.id, record.id AS operational_id, r.organization_id, s.name AS organization_name, s.vertical,
     record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
@@ -127,12 +128,12 @@ async function loadBookingRow(
     FROM requests r
     JOIN organization s ON s.id = r.organization_id
     JOIN (
-      SELECT b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
+      SELECT b.id, b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
         FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
       UNION ALL
-      SELECT res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
+      SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
     ) record ON record.request_id = r.id
-    JOIN business_locations l ON l.id = record.location_id
+    LEFT JOIN business_locations l ON l.id = record.location_id
     WHERE r.id = ? AND r.organization_id = ? AND r.kind = ?`, [bookingId, organizationId, type])
 }
 
@@ -158,6 +159,7 @@ async function loadResourceImage(db: DbClient, row: BookingRow, type: DashboardB
   const [ownerType, ownerId] = type === 'booking' && row.experience_id
     ? ['product' as const, row.experience_id]
     : ['business_location' as const, row.location_id]
+  if (!ownerId) return null
   return (await loadOwnerPictures(db, row.organization_id, ownerType, [ownerId])).get(ownerId)?.imageUrl ?? null
 }
 
@@ -182,6 +184,7 @@ export async function loadDashboardBookingDetails(
   const row = await loadBookingRow(context.db, context.organization.id, input.type, input.bookingId)
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
+  if (row.location_id !== null && !row.location_title) throw new HTTPError({ statusCode: 500, message: 'The booking location is missing its title' })
 
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
   const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
@@ -196,19 +199,20 @@ export async function loadDashboardBookingDetails(
       ? getLocationReservationConfig(context.db, { organizationId: row.organization_id, locationId: row.location_id })
       : Promise.resolve(null),
     listInternalNotes(context.db, row.request_id),
-    resolveLocationTimezone(context.db, row.organization_id, row.location_id),
+    Promise.resolve(row.timezone),
   ])
 
   return {
     id: row.id,
+    operationalBookingId: row.operational_id,
     type: input.type,
     organizationId: row.organization_id,
     organizationName: row.organization_name,
     vertical: row.vertical,
     locationId: row.location_id,
     locationSlug: row.location_slug,
-    locationTitle: row.location_title,
-    resourceTitle: row.experience_title || row.location_title,
+    locationTitle: row.location_id === null ? 'Online' : row.location_title!,
+    resourceTitle: row.experience_title || (row.location_id === null ? 'Online' : row.location_title!),
     resourceImageUrl,
     guestName: row.guest_name,
     guestEmail: row.guest_email,

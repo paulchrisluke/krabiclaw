@@ -86,7 +86,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       exactPaths: ['/', '/about', '/services', '/pricing', '/donate', '/schedule', '/contact', '/blog', '/docs', '/posts', '/third-party-notices'],
       dynamicPrefixes: ['/services/', '/article/', '/blog/category/', '/docs/', '/posts/'],
     },
-    nonIndexableExactPaths: ['/contact/confirmed'],
+    nonIndexableExactPaths: ['/contact/confirmed', '/bookings/cancel', '/bookings/confirmed'],
     // The Blawby route loader looks a recipe up here. 'links', 'confirmation',
     // 'article' and 'page' are absent because they hold no document of their
     // own: the first two render from shell data, an article is a blog post, and

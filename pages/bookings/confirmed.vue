@@ -1,4 +1,5 @@
 <template>
+  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
   <div class="min-h-screen bg-default text-default">
     <BookingConfirmation
       v-if="confirmation"
@@ -12,7 +13,7 @@
       :cta-to="browseHref"
     >
       <template #title>
-        You're booked, {{ confirmation.guestName }}!
+        {{ confirmation.status === 'pending' ? 'Request received' : "You’re booked" }}, {{ confirmation.guestName }}!
       </template>
       <template #subtitle>
         {{ confirmation.message }}
@@ -38,6 +39,7 @@
       <SayaButton :to="browseHref" variant="soft" class="mt-10">{{ browseLabel }}</SayaButton>
     </div>
   </div>
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
@@ -47,7 +49,8 @@ import { formatTimestamp } from '~/utils/timezone'
 import { resolveProductPresentation } from '~/utils/product-presentation'
 import type { RenderedBookingPolicySummaryItem } from '~/server/utils/reservations'
 
-definePageMeta({ layout: 'saya' })
+definePageMeta({ layout: false })
+const { isBlawby } = usePublicTemplate()
 
 const { locale } = useI18n()
 const justCopied = ref(false)
@@ -60,12 +63,13 @@ const presentation = computed(() => resolveProductPresentation((organization as 
 // booking names one, otherwise the site's.
 const browseHref = computed(() => {
   if (!presentation.value) return '/'
+  if (isBlawby.value && !confirmation.value?.locationId) return '/schedule'
   const locationSlug = confirmation.value?.locationSlug
   return locationSlug
     ? `/locations/${locationSlug}/${presentation.value.locationCollectionSegment}`
     : presentation.value.collectionPath
 })
-const browseLabel = computed(() => presentation.value?.locationCollectionSegment === 'menu'
+const browseLabel = computed(() => isBlawby.value && !confirmation.value?.locationId ? 'View consultations' : presentation.value?.locationCollectionSegment === 'menu'
   ? 'Browse the menu'
   : 'Browse everything on offer')
 
@@ -87,11 +91,15 @@ const readableTime = computed(() => confirmation.value
 const receiptRows = computed(() => {
   if (!confirmation.value) return []
   const rows: Array<{ label: string; value: string }> = []
-  if (confirmation.value.title) rows.push({ label: 'Booked', value: confirmation.value.title })
-  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
+  if (confirmation.value.title) rows.push({ label: confirmation.value.status === 'pending' ? 'Requested service' : 'Booked', value: confirmation.value.title })
+  if (!confirmation.value.locationId) rows.push({ label: 'Format', value: 'Online' })
+  else if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
   rows.push({ label: 'Date', value: readableDate.value })
   rows.push({ label: 'Time', value: readableTime.value })
-  rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
+  if (!confirmation.value.locationId) rows.push({ label: 'Timezone', value: confirmation.value.timezone })
+  if ((organization as { vertical?: string | null } | null)?.vertical !== 'service') {
+    rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
+  }
   if (confirmation.value.requests) rows.push({ label: 'Requests', value: confirmation.value.requests })
   return rows
 })
@@ -111,7 +119,7 @@ const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).ma
 
 async function share() {
   if (!confirmation.value) return
-  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
+  const text = `${confirmation.value.status === 'pending' ? 'I requested' : "I'm booked for"} ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })

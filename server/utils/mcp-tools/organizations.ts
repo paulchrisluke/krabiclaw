@@ -154,6 +154,14 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       },
     }),
   organizationTool({
+      name: 'set_consultation_mode',
+      description: 'Set the existing site consultation mode through the same writer as the CMS. Native uses published online Products and the existing service pages; external_url requires a configured external destination. This does not configure providers, pricing, payment capture or a commercial plan.',
+      domain: 'organizations', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
+      required: ['mode'],
+      outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
+    }),
+  organizationTool({
       name: 'set_default_currency',
       description: 'Set the default currency for this organization. Existing clients may continue using this tool; prefer update_organization_settings.default_currency for new integrations. Both use the same settings writer. Affects how Product and experience prices are displayed.',
       domain: 'organizations',

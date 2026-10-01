@@ -24,7 +24,7 @@ import type {
 // member to reach for. Archive and unarchive say where the conversation is
 // filed, not what state it is in, and touch neither the booking nor
 // conversation_state.
-export const GUEST_THREAD_ACTIONS = new Set(['cancel', 'reply', 'retry_delivery', 'archive', 'unarchive'])
+export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'reject', 'cancel', 'reply', 'retry_delivery', 'archive', 'unarchive'])
 
 type SuccessfulOperationOutcome = { ok: true; status: 200 | 202; thread: GuestThreadRow; availableActions: string[] }
 
@@ -61,9 +61,9 @@ interface ThreadContext {
 
 interface SourceMutationPlan {
   kind: 'reservation' | 'booking'
-  action: 'cancel'
+  action: 'confirm' | 'reject' | 'cancel'
   beforeStatus: string
-  afterStatus: 'cancelled'
+  afterStatus: 'confirmed' | 'cancelled'
   requiresNotification: boolean
 }
 
@@ -115,13 +115,12 @@ async function successfulOutcome(
 function sourceMutationPlan(context: ThreadContext, action: string): SourceMutationPlan | null {
   if (context.thread.kind === 'contact' || !context.record) return null
   const { kind, status: beforeStatus } = context.record
-  // Cancelling is the only transition left. A booking arrives confirmed and
-  // becomes complete when its end passes, so there is nothing to approve and
-  // nothing to mark done.
-  // History is not cancellable. `requestActions` already offers nothing once a
-  // record is complete; the transition says the same, so the two cannot drift.
-  if (isBookingComplete(context.record, new Date().toISOString())) return null
-  if (beforeStatus === 'confirmed' && action === 'cancel') {
+  // Pending review and confirmed appointments share the same temporal guard.
+  if (context.record.ends_at <= new Date().toISOString() || isBookingComplete(context.record, new Date().toISOString())) return null
+  if (kind === 'booking' && beforeStatus === 'pending' && (action === 'confirm' || action === 'reject')) {
+    return { kind, action, beforeStatus, afterStatus: action === 'confirm' ? 'confirmed' : 'cancelled', requiresNotification: true }
+  }
+  if ((beforeStatus === 'confirmed' || beforeStatus === 'pending') && action === 'cancel') {
     return { kind, action, beforeStatus, afterStatus: 'cancelled', requiresNotification: true }
   }
   return null
@@ -172,7 +171,7 @@ function operationEntryQuery(
       input.actorUserId,
       plan.requiresNotification ? operationBody(plan.action, context.thread, context.record) : null,
       `${plan.kind}.${plan.action}`,
-      JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus, subject }),
+      JSON.stringify({ action: plan.action, beforeStatus: plan.beforeStatus, afterStatus: plan.afterStatus, operational_booking_id: context.record!.id, request_id: context.thread.id, subject }),
       dedupeKey,
       now,
       now,
@@ -195,8 +194,8 @@ function operationEntryQuery(
  */
 function sourceUpdateQuery(context: ThreadContext, plan: SourceMutationPlan, input: ExecuteOperationInput, entryId: string, now: string): BatchQuery {
   const table = plan.kind === 'reservation' ? 'reservations' : 'bookings'
-  const stamps = ', cancelled_at = COALESCE(cancelled_at, ?), cancellation_reason = ?'
-  const stampParams = [now, 'host_cancelled']
+  const stamps = plan.afterStatus === 'cancelled' ? ', cancelled_at = COALESCE(cancelled_at, ?), cancellation_reason = ?' : ''
+  const stampParams = plan.afterStatus === 'cancelled' ? [now, plan.action === 'reject' ? 'host_rejected' : 'host_cancelled'] : []
   // The record's end carries the same refusal the caller already made, so a
   // visit that finishes between reading it and writing cannot be cancelled
   // afterwards. A reservation holds its own end; a booking's is on its session.
@@ -224,7 +223,7 @@ function resolveThreadQuery(threadId: string, entryId: string, now: string): Bat
 }
 
 function revokeReviewRequestQuery(context: ThreadContext, plan: SourceMutationPlan, entryId: string, now: string): BatchQuery | null {
-  if (plan.action !== 'cancel') return null
+  if (plan.afterStatus !== 'cancelled') return null
   return {
     query: `
       UPDATE review_requests
@@ -271,7 +270,8 @@ async function getOrganizationBrandName(db: DbClient, organizationId: string): P
 }
 
 function operationSubject(action: string, fromName: string): string {
-  if (action === 'confirm') return `Your reservation at ${fromName} is confirmed`
+  if (action === 'confirm') return `Your booking at ${fromName} is confirmed`
+  if (action === 'reject') return `Your booking request at ${fromName} was declined`
   if (action === 'cancel') return `Your booking at ${fromName} was cancelled`
   return `Update on your booking at ${fromName}`
 }
@@ -286,6 +286,7 @@ function operationBody(action: string, request: GuestRequest, record: ThreadOper
   const context = `${when} for ${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''} guests`
   const noun = request.kind === 'reservation' ? 'reservation' : 'booking'
   if (action === 'confirm') return `Your ${noun} is confirmed: ${context}.`
+  if (action === 'reject') return `Your ${noun} request for ${context} was declined.`
   if (action === 'cancel') return `Your ${noun} for ${context} has been cancelled.`
   return `Thanks for visiting us on ${when}.`
 }
@@ -382,7 +383,7 @@ async function executeSourceMutation(
   const queries = [
     operationEntryQuery(context, plan, input, entryId, dedupeKey, now, subject),
     sourceUpdateQuery(context, plan, input, entryId, now),
-    resolveThreadQuery(context.thread.id, entryId, now),
+    ...(plan.afterStatus === 'cancelled' ? [resolveThreadQuery(context.thread.id, entryId, now)] : []),
   ]
   const revokeReview = revokeReviewRequestQuery(context, plan, entryId, now)
   if (revokeReview) queries.push(revokeReview)

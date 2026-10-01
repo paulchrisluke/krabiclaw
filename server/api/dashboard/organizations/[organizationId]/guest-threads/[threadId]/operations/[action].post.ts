@@ -61,7 +61,7 @@ export default defineHandler(async (event) => {
         occurredAt: new Date().toISOString(),
       }),
     ]
-    if (['reply', 'confirm', 'cancel', 'complete', 'retry_delivery'].includes(action)) {
+    if (['reply', 'confirm', 'reject', 'cancel', 'complete', 'retry_delivery'].includes(action)) {
       invalidations.push(publishDashboardInvalidation(env, {
         eventId: crypto.randomUUID(),
         type: 'delivery.changed',

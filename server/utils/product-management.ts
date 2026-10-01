@@ -204,7 +204,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY location_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, collection_id, sort_order FROM collection_products
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
-    { query: `SELECT product_id, duration_minutes, default_capacity FROM product_booking_configs
+    { query: `SELECT product_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group FROM product_booking_configs
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
     { query: `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
         d.namespace, d.key, d.name, d.description, d.value_type, d.validations, d.localizable
@@ -233,6 +233,8 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
     product.booking = {
       duration_minutes: row.duration_minutes === null ? null : Number(row.duration_minutes),
       default_capacity: row.default_capacity === null ? null : Number(row.default_capacity),
+      confirmation_mode: row.confirmation_mode as 'instant' | 'review', online_payment_required: Number(row.online_payment_required) === 1,
+      online_timezone: row.online_timezone === null ? null : String(row.online_timezone), calendar_group: row.calendar_group === null ? null : String(row.calendar_group),
     }
   }
 

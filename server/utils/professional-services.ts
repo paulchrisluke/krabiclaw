@@ -1,5 +1,6 @@
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { parseGoogleReviewMetadata } from '~/shared/google-review'
-import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { HTTPError } from 'nitro';
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { listOrganizationReviews } from '~/server/utils/organization-reviews'
@@ -15,7 +16,6 @@ const BLAWBY_TEMPLATE = publicTemplateRegistry.blawby
 import {
   getPublicTenantPageForPath,
   listCanonicalTenantPages,
-  type PublicTenantPageHydrationResources,
 } from '~/server/utils/public-tenant-pages'
 import { listPublishedTenantPagePaths } from '~/server/utils/content/pages'
 import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
@@ -88,48 +88,38 @@ export async function listPublicTenantPages(env: CloudflareEnv, db: DbClient, or
   }))
 }
 
-export async function getPublicTenantPageByPath(
-  env: CloudflareEnv,
-  db: DbClient,
-  organizationId: string,
-  path: string,
-  options: {
-    locale?: string | null
-    hydrationResources?: PublicTenantPageHydrationResources
-    localizations?: readonly ExactPublicLocalization[] | null
-  } = {},
-): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(env, db, organizationId, path, options)
-  if (!page) return null
-  return {
-    id: page.id,
-    page_id: page.page_id,
-    path: page.path,
-    title: page.title,
-    page_type: page.page_type,
-    recipe: page.recipe,
-    sort_order: page.sort_order,
-    locale: page.locale,
-    summary: page.summary,
-    blocks: page.blocks,
-    media: page.media,
-    social_image: page.social_image,
-    localeRepresentations: page.localeRepresentations,
-    updated_at: page.updated_at,
-  }
+/** Initialize through the same adapter; retain any read-only legacy object during rollout. */
+export async function initializePublicConsultationSettings(db: DbClient, organizationId: string, settings: Omit<NonNullable<import('~/shared/organization-settings').OrganizationSettings['consultation']>, 'created_at' | 'updated_at' | 'updated_by'>) {
+  await executeBatch(db, [{
+    query: `UPDATE organization SET consultation_settings_json = COALESCE(json_extract(settings_json, '$.consultation'), json(?)), updated_at = ? WHERE id = ? AND consultation_settings_json IS NULL`,
+    params: [JSON.stringify({ ...settings, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), updated_by: null }), new Date().toISOString(), organizationId],
+  }, publicResourceCacheInvalidationQuery(organizationId, 'consultation_settings_initialized')], { operation: 'Initialize consultation settings' })
+}
+
+/** Only this adapter writes consultation settings. Legacy JSON is read-only during rollout. */
+export async function setPublicConsultationMode(db: DbClient, organizationId: string, mode: PublicConsultationSettings['mode']): Promise<PublicConsultationSettings> {
+  if (mode !== 'native' && mode !== 'external_url' && mode !== 'native_disabled') throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid consultation mode' })
+  const settings = await getPublicConsultationSettings(db, organizationId)
+  if (mode === 'external_url' && !settings.external_url) throw new HTTPError({ statusCode: 400, statusMessage: 'Configure an external destination before enabling it' })
+  await executeBatch(db, [{
+    query: `UPDATE organization SET consultation_settings_json = json_set(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.mode', ?), updated_at = ? WHERE id = ?`,
+    params: [mode, new Date().toISOString(), organizationId],
+  }, publicResourceCacheInvalidationQuery(organizationId, 'consultation_mode_changed')], { operation: 'Set consultation mode' })
+  return { ...settings, mode }
 }
 
 export async function getPublicConsultationSettings(db: DbClient, organizationId: string): Promise<PublicConsultationSettings> {
   const row = await queryFirst<ApiRecord>(db, `
-    SELECT json_extract(settings_json, '$.consultation.mode') AS mode,
-           json_extract(settings_json, '$.consultation.cta_label') AS cta_label,
-           json_extract(settings_json, '$.consultation.external_url') AS external_url,
-           json_extract(settings_json, '$.consultation.schedule_path') AS schedule_path,
-           json_extract(settings_json, '$.consultation.confirmation_path') AS confirmation_path,
-           json_extract(settings_json, '$.consultation.tracking_enabled') AS tracking_enabled,
-           json_extract(settings_json, '$.consultation.metadata_json') AS metadata_json
+    SELECT json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.mode') AS mode,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.cta_label') AS cta_label,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.external_url') AS external_url,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.schedule_path') AS schedule_path,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.confirmation_path') AS confirmation_path,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.tracking_enabled') AS tracking_enabled,
+           COALESCE(json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.metadata_json'), json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.metadata')) AS metadata_json,
+           json_extract(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation')), '$.contact_form_enabled') AS contact_form_enabled
       FROM organization
-     WHERE id = ? AND json_type(settings_json, '$.consultation') = 'object'
+     WHERE id = ? AND json_type(COALESCE(consultation_settings_json, json_extract(settings_json, '$.consultation'))) = 'object'
      LIMIT 1
   `, [organizationId])
 
@@ -138,7 +128,7 @@ export async function getPublicConsultationSettings(db: DbClient, organizationId
   const ctaLabel = requiredText(row.cta_label, 'consultation.cta_label')
   const schedulePath = requiredText(row.schedule_path, 'consultation.schedule_path')
   const confirmationPath = requiredText(row.confirmation_path, 'consultation.confirmation_path')
-  if (row.mode !== 'native_disabled' && row.mode !== 'external_url') {
+  if (row.mode !== 'native_disabled' && row.mode !== 'external_url' && row.mode !== 'native') {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation mode is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
   }
 
@@ -149,7 +139,7 @@ export async function getPublicConsultationSettings(db: DbClient, organizationId
     schedule_path: schedulePath,
     confirmation_path: confirmationPath,
     tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
-    contact_form_enabled: metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled),
+    contact_form_enabled: row.contact_form_enabled == null ? (metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled)) : asBoolean(row.contact_form_enabled),
     metadata,
   }
 }
@@ -405,7 +395,7 @@ export async function getPublicBlawbyRouteData(
 
   const [page, reviewRows] = await Promise.all([
     pagePath
-      ? getPublicTenantPageByPath(env, db, organizationId, pagePath, {
+      ? getPublicTenantPageForPath(env, db, organizationId, pagePath, {
           locale: options.locale,
           localizations: localized ? options.localizations ?? [] : null,
         })

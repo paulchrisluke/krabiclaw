@@ -413,6 +413,7 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
+    ...(dashboard.organization.value?.vertical === 'service' ? [{ key: 'products', label: 'Products', icon: 'i-lucide-package', to: `${routeOrgBase}/products` }] : []),
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]

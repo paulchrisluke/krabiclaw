@@ -7,11 +7,13 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <TenantPageRenderer :page="page" />
+    <TenantPageRenderer :page="renderedPage!" />
+    <OnlineServiceBooking v-if="isBlawby && blawbyDocument?.shell.consultation.mode === 'native' && page.product_id" :key="page.page_id" :product-id="page.product_id" @available="bookingAvailable = $event" />
   </template>
 </template>
 
 <script setup lang="ts">
+import OnlineServiceBooking from '~/components/booking/OnlineServiceBooking.vue'
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
@@ -110,6 +112,21 @@ if (!data.value?.page && status.value === 'success') {
 }
 
 const page = computed(() => data.value?.page ?? null)
+// A service document owns content and SEO; its explicit root binding owns the
+// Product supplying Price, Session and Booking. Never derive it from a slug.
+const bookingAvailable = ref(false)
+const renderedPage = computed(() => {
+  if (!page.value || !bookingAvailable.value || !blawbyDocument?.value) return page.value
+  const schedulePath = blawbyDocument.value.shell.consultation.schedule_path
+  return { ...page.value, blocks: page.value.blocks.map(block => {
+    const data = { ...block.data }
+    // Keep each authored label and all rich content. A service's existing
+    // scheduling CTA reaches its own linked booking widget in native mode.
+    if (block.type === 'hero' && data.cta_url === schedulePath) data.cta_url = '#consultations'
+    if ((block.type === 'booking_cta' || block.type === 'contact_cta' || block.type === 'cta') && data.url === schedulePath) data.url = '#consultations'
+    return { ...block, data }
+  }) }
+})
 
 // The locale representations of the page this instance is showing, written the
 // way every other public route writes them (pages/blog/[slug].vue,

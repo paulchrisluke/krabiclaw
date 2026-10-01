@@ -59,10 +59,7 @@ export interface Collection {
 }
 
 /** What generating this product's occurrences starts from. Sessions keep their own. */
-export interface ProductBookingConfig {
-  duration_minutes: number | null
-  default_capacity: number | null
-}
+export type ProductBookingConfig = Pick<import('~/server/utils/availability').ProductBookingConfig, 'duration_minutes' | 'default_capacity' | 'confirmation_mode' | 'online_payment_required' | 'online_timezone' | 'calendar_group'>
 
 /** Membership of one product in one collection, carrying its position there. */
 export interface CollectionMembership {
@@ -205,10 +202,10 @@ export type ProductSurface = 'menu' | 'products' | 'experiences'
 
 export interface ProductPresentation {
   feature: 'products'
-  collectionPath: '/menu' | '/products' | '/experiences'
+  collectionPath: '/menu' | '/products' | '/experiences' | '/schedule'
   locationCollectionSegment: ProductSurface
   productPath: (_locationSlug: string, _productSlug: string) => string
-  collectionLabel: 'Menu' | 'Products' | 'Experiences'
+  collectionLabel: 'Menu' | 'Products' | 'Experiences' | 'Consultations'
   itemLabel: 'Dish' | 'Product' | 'Experience'
   // English plurals are irregular enough here ("Dish" -> "Dishes",
   // "Collection" -> "Collections") that appending an "s" produces visible typos.

@@ -420,6 +420,11 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
         WHERE json_extract(integrations_json, '$.instagram.status') = 'error' AND json_extract(integrations_json, '$.instagram.sync.last_error') IS NOT NULL`).run()
       stage.prepare("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook.sync', '$.instagram.sync')").run()
     }
+    // Archived chains reach the current baseline, then need the current
+    // additive forward migrations before selecting the target's columns.
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
+      for (const name of files.slice(1).filter(name => name !== '0003_minimal_weekly_schedule.sql')) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
+    }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n
     target.exec(schemaSql)

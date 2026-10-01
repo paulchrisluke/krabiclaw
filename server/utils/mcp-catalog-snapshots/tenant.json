@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:0b8a4ab28b04089af44b8d94d4c201d2956e7a973de47ba4399b03aae52ad2e7",
+  "fingerprint": "sha256:2354fc7ceff325be2f492126b22be8e1fe435434ec6f5f18bb71990b17fda2a0",
   "tools": [
     {
       "name": "append_content_block",
@@ -646,6 +646,22 @@
                 },
                 "booking": {
                   "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
                     "default_capacity": {
                       "minimum": 0,
                       "type": [
@@ -660,6 +676,17 @@
                         "null"
                       ]
                     },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "organization_id": {
                       "type": "string"
                     },
@@ -669,7 +696,11 @@
                   },
                   "required": [
                     "duration_minutes",
-                    "default_capacity"
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
                   ],
                   "type": [
                     "object",
@@ -2734,6 +2765,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -2748,6 +2795,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -2757,7 +2815,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -6854,6 +6916,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -6868,6 +6946,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -6877,7 +6966,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -11724,6 +11817,22 @@
                 },
                 "booking": {
                   "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
                     "default_capacity": {
                       "minimum": 0,
                       "type": [
@@ -11738,6 +11847,17 @@
                         "null"
                       ]
                     },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "organization_id": {
                       "type": "string"
                     },
@@ -11747,7 +11867,11 @@
                   },
                   "required": [
                     "duration_minutes",
-                    "default_capacity"
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
                   ],
                   "type": [
                     "object",
@@ -12450,6 +12574,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -12464,6 +12604,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -12473,7 +12624,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -13787,7 +13942,11 @@
         "additionalProperties": false,
         "properties": {
           "location_id": {
-            "type": "string"
+            "description": "A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "organization_id": {
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
@@ -14218,6 +14377,54 @@
       }
     },
     {
+      "name": "set_consultation_mode",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "native",
+              "external_url",
+              "native_disabled"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "native",
+                  "external_url",
+                  "native_disabled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "set_default_currency",
       "inputSchema": {
         "additionalProperties": false,
@@ -14461,6 +14668,22 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "calendar_group": {
+            "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmation_mode": {
+            "enum": [
+              "instant",
+              "review"
+            ],
+            "type": "string"
+          },
           "default_capacity": {
             "minimum": 0,
             "type": [
@@ -14472,6 +14695,17 @@
             "minimum": 1,
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "online_payment_required": {
+            "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+            "type": "boolean"
+          },
+          "online_timezone": {
+            "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -14492,6 +14726,22 @@
         "properties": {
           "config": {
             "properties": {
+              "calendar_group": {
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confirmation_mode": {
+                "enum": [
+                  "instant",
+                  "review"
+                ],
+                "type": "string"
+              },
               "default_capacity": {
                 "minimum": 0,
                 "type": [
@@ -14506,6 +14756,17 @@
                   "null"
                 ]
               },
+              "online_payment_required": {
+                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "type": "boolean"
+              },
+              "online_timezone": {
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "organization_id": {
                 "type": "string"
               },
@@ -14515,7 +14776,11 @@
             },
             "required": [
               "duration_minutes",
-              "default_capacity"
+              "default_capacity",
+              "confirmation_mode",
+              "online_payment_required",
+              "online_timezone",
+              "calendar_group"
             ],
             "type": [
               "object",
@@ -14567,6 +14832,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -14581,6 +14862,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -14590,7 +14882,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -15106,6 +15402,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -15120,6 +15432,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -15129,7 +15452,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -17742,6 +18069,22 @@
               },
               "booking": {
                 "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
                   "default_capacity": {
                     "minimum": 0,
                     "type": [
@@ -17756,6 +18099,17 @@
                       "null"
                     ]
                   },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "organization_id": {
                     "type": "string"
                   },
@@ -17765,7 +18119,11 @@
                 },
                 "required": [
                   "duration_minutes",
-                  "default_capacity"
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
                 ],
                 "type": [
                   "object",
@@ -18632,6 +18990,13 @@
           "path": {
             "description": "The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.",
             "type": "string"
+          },
+          "product_id": {
+            "description": "Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "recipe": {
             "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",
