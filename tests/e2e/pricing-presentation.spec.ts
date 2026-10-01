@@ -11,6 +11,18 @@ test('pricing desktop exposes provider details after one reveal and does not rep
   await expect(cards).toHaveCount(2)
   await expect(cards.nth(0)).toHaveAttribute('data-photo-state', 'details')
   await expect(cards.nth(1)).toHaveAttribute('data-photo-state', 'details')
+  const authored = await page.request.get(`${testBaseUrl()}/api/public/pages?path=%2Fpricing`)
+  expect(authored.status()).toBe(200)
+  const document = await authored.json()
+  if (JSON.stringify(document).includes('billing_features')) {
+    const comparison = page.locator('[data-parity-section="comparison"]')
+    await expect(comparison).toBeVisible()
+    await expect(comparison.locator('tr[data-feature-id]')).toHaveCount(26)
+    await expect(page.getByRole('heading', { name: 'Build your online home', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Keep it current', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Grow when you’re ready', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Ready for your next chapter?', exact: true })).toBeVisible()
+  }
   const billing = await page.request.get(`${testBaseUrl()}/api/billing/plans`)
   expect(billing.status()).toBe(200)
   const plans = await billing.json() as Array<{ name: string; prices: Array<{ amount: number; interval: string }> }>

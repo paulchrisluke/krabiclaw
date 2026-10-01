@@ -130,8 +130,10 @@ monthly price and the existing billing screen owns interval choice.
 The initial Chrome screenshots in `evidence/` recorded the original three-block
 CMS page. They are baseline evidence, not the completed full-page proposal.
 Read-only presentation checks exercised the real configured local Worker.
-Full-page screenshots must be refreshed after the canonical local page update
-with uploaded asset IDs; no direct database rows or shadow page are substituted.
+Completed full-page screenshots are now in `evidence/pricing-desktop-complete.jpg`
+and `evidence/pricing-mobile-complete.jpg`. The canonical authenticated local
+editor API persisted eight blocks and six placements, and the public renderer
+showed all 26 comparison rows. No direct database rows or shadow page were used.
 
 The canonical image uploader is production-only, but the owner then explicitly
 authorized the six media-library uploads through MCP. These completed and were
@@ -143,7 +145,9 @@ Automatic approval review rejected the full E2E setup because its documented
 cleanup irreversibly deletes Stripe test customers. No workaround was used.
 Approval for that specific test cleanup is needed to run the full suite; the
 read-only pricing checks, unit/D1/migration checks and draft preparation proceed.
-The shared footer repair remains owned by #1193; do not duplicate it here.
+The shared footer repair remains owned by #1193. Current staging lacked that
+landed main change, so this branch carries its exact existing commit
+`4027048578ea5aa00ab35b48e1301064289d9e3b` via cherry-pick, rather than a second repair.
 
 ## Missing-content checklist (original preview → complete page)
 
@@ -164,3 +168,12 @@ The shared footer repair remains owned by #1193; do not duplicate it here.
   single sequential rightward reveal keeps one accessible copy of plan details.
 - No new rollout switch or partial-page activation dependency is added. The
   complete CMS packet and renderers are reviewed and delivered together.
+
+## Completed local validation
+
+- Quality (feature parity, guardrails, locales, typecheck, lint) and production Worker build passed.
+- Consolidated unit suite: 237 passed; D1 suite: 74 passed. Migration tests: 2 passed.
+- Four read-only pricing browser checks passed against the complete local CMS page: desktop/provider handoff and full comparison, mobile peek/reduced motion, keyboard, and JavaScript disabled.
+- MCP snapshot, ChatGPT submission, migration lint and schema drift checks passed.
+- Full E2E remains blocked by the specific Stripe test-customer cleanup approval above; no green full-suite claim is made.
+- Production page blocks/placements and Stripe paid presentation remain unapplied. Existing Q&A corrections and review-request Free policy remain owner decisions.

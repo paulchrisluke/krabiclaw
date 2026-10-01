@@ -156,6 +156,7 @@ export interface PlatformFeatureCard {
 const props = defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 
 import PlatformPlansSection from '~/components/platform/marketing/PlatformPlansSection.vue'
+import PlatformPricingComparison from '~/components/platform/marketing/PlatformPricingComparison.vue'
 
 /** Krabiclaw's own plans, read from billing rather than written into a page. */
 const isComparison = computed(() => blockText(props.block.data.source) === 'billing_features')
