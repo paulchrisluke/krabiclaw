@@ -3,6 +3,7 @@ import { getGuestRequest } from '~/server/domain/requests'
 import type { DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 import { getWhatsAppDeliveryMode } from '~/server/utils/whatsapp-delivery'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { listOrganizationNotificationMembers } from '~/server/utils/member-access'
@@ -266,11 +267,14 @@ async function resolveOwnerRecipients(
     category: NotificationCategory
   },
 ): Promise<OwnerRecipient[]> {
-  const members = await listOrganizationNotificationMembers(env, opts.organizationId)
+  const [members, messagingEnabled] = await Promise.all([
+    listOrganizationNotificationMembers(env, opts.organizationId),
+    hasOrganizationEntitlement(env, opts.organizationId, 'messaging'),
+  ])
   const recipients = await Promise.all(members.map(async (member) => {
     const [wantsEmail, wantsWhatsApp] = await Promise.all([
       wantsNotification(db, member.userId, opts.category, 'email'),
-      member.phone ? wantsNotification(db, member.userId, opts.category, 'whatsapp') : Promise.resolve(false),
+      messagingEnabled && member.phone ? wantsNotification(db, member.userId, opts.category, 'whatsapp') : Promise.resolve(false),
     ])
     if (!wantsEmail && !wantsWhatsApp) return null
     const unsubscribe = await buildUnsubscribeUrls(env, { userId: member.userId, category: opts.category })
@@ -396,7 +400,7 @@ async function sendWhatsAppThreadNotification(
   })
   const claim = await claimDelivery(db, delivery.id)
   if (!claim.claimed) {
-    return claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
+    return claim.delivery.status === 'skipped' || claim.delivery.status === 'sent' || claim.delivery.status === 'delivered' || claim.delivery.status === 'read'
   }
 
   let result: Awaited<ReturnType<typeof sendWhatsAppNotification>>
@@ -416,7 +420,7 @@ async function sendWhatsAppThreadNotification(
     claim,
     status: result.status,
     providerMessageId: result.status === 'sent' ? result.messageId ?? null : null,
-    error: result.success ? null : result.error,
+    error: result.status === 'skipped' ? result.reason : result.success ? null : result.error,
   })
   await publishGuestInboxThreadEvent(env, db, { threadId: opts.delivery.threadId, type: 'delivery.changed' })
   return result.success
