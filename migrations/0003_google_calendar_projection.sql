@@ -1,3 +1,23 @@
+CREATE TABLE `google_calendar_cleanup_jobs` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`account_id` text NOT NULL,
+	`calendar_id` text NOT NULL,
+	`event_id` text NOT NULL,
+	`state` text DEFAULT 'pending' NOT NULL,
+	`attempts` integer DEFAULT 0 NOT NULL,
+	`last_error` text,
+	`next_attempt_at` text,
+	`lease_token` text,
+	`lease_until` text,
+	`completed_at` text,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL,
+	CONSTRAINT "google_calendar_cleanup_state_check" CHECK(state IN ('pending', 'error', 'deleted'))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `google_calendar_cleanup_provider_unique` ON `google_calendar_cleanup_jobs` (`calendar_id`,`event_id`);--> statement-breakpoint
+CREATE INDEX `google_calendar_cleanup_due_idx` ON `google_calendar_cleanup_jobs` (`state`,`next_attempt_at`);--> statement-breakpoint
 CREATE TABLE `google_calendar_event_links` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,

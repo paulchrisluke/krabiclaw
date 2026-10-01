@@ -4,8 +4,10 @@ import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { claimSessionCapacity, setBookingStatus, updateSession } from '../../server/utils/availability.ts'
-import { calendarSubjects, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
+import { calendarSubjects, runCalendarCleanupJobs, disconnectCalendar, readCalendarIntegration, storeCalendarSelection, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
 import { requireIntegrationAccount, type CloudflareEnv } from '../../server/utils/auth.ts'
+import { cleanupOrganizationBeforeDelete } from '../../server/utils/tenant-deletion.ts'
+import { organizationAdapter } from '../../server/utils/member-access.ts'
 import { INTEGRATION_SCOPES } from '../../shared/organization-settings.ts'
 
 test('committed consultation projection is tenant scoped, private, idempotent and fenced during cancellation and cleanup', { timeout: 120_000 }, async (t) => {
@@ -114,5 +116,33 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 0)
     assert.equal((await db.prepare('SELECT status FROM bookings WHERE id=?').bind(second.bookingId).first())?.status, 'pending')
+    await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
+    await syncCalendarOrganization(env, 'org', 25, provider)
+    assert.equal(events.size, 1)
+    await cleanupOrganizationBeforeDelete(env, 'org')
+    await cleanupOrganizationBeforeDelete(env, 'org')
+    assert.equal((await runCalendarCleanupJobs(env, 25, provider)).checked, 0, 'staging cannot authorize orphan deletion while tenant still exists')
+    assert.equal(events.size, 1)
+    assert.equal((await db.prepare('SELECT count(*) n FROM google_calendar_cleanup_jobs').first())?.n, 1)
+    await (await organizationAdapter(env)).deleteOrganization('org')
+    assert.equal(await db.prepare("SELECT id FROM organization WHERE id='org'").first(), null)
+    assert.equal(await db.prepare('SELECT id FROM google_calendar_event_links').first(), null)
+    const orphan = await db.prepare('SELECT * FROM google_calendar_cleanup_jobs').first()
+    assert.equal(orphan?.organization_id, 'org')
+    assert.equal(orphan?.account_id, 'linked-account')
+    assert.ok(!JSON.stringify(orphan).includes('PRIVATE MATTER'))
+    assert.equal(orphan?.booking_id, undefined)
+    denyCalendar = true
+    assert.equal((await runCalendarCleanupJobs(env, 25, provider)).failed, 1)
+    assert.equal(events.size, 1)
+    assert.equal((await db.prepare('SELECT state FROM google_calendar_cleanup_jobs').first())?.state, 'error')
+    assert.equal((await syncCalendarOrganization(env, 'org', 25, provider)).checked, 0)
+    denyCalendar = false
+    await db.prepare('UPDATE google_calendar_cleanup_jobs SET next_attempt_at=NULL').run()
+    assert.equal((await runCalendarCleanupJobs(env, 25, provider)).failed, 0)
+    assert.equal(events.size, 0)
+    assert.ok((await db.prepare('SELECT completed_at FROM google_calendar_cleanup_jobs').first())?.completed_at)
+    assert.ok(await db.prepare("SELECT id FROM organization WHERE id='other'").first())
+
   } finally { await mf.dispose() }
 })

@@ -58,6 +58,30 @@ Successful historical events remain during ordinary reconciliation; explicit
 disconnect removes all locally managed event identities, including history.
 Unrelated Google events are never searched, changed or deleted.
 
+The existing `cleanupOrganizationBeforeDelete` hook stages minimal
+`google_calendar_cleanup_jobs` before Better Auth physically deletes an
+organization. The outbox retains only original tenant/account/calendar/event
+identities and retry/receipt state, without guest content, Booking IDs or tokens.
+It delays cleanup past any in-flight projection lease. No Google request blocks
+organization deletion. The orphan worker requires the organization to be absent
+both when selecting and claiming work; staging alone cannot authorize deletion
+if the subsequent Better Auth deletion aborts. These jobs can only delete their captured managed event;
+they cannot re-enroll or project a deleted tenant, and no normal tenant API reads
+them. Lost credentials retain `state=error` and `last_error`; the scheduled task
+reports unresolved jobs instead of claiming successful external deletion.
+
+Operator inspection after tenant removal uses the retained outbox:
+
+```sql
+SELECT organization_id, account_id, calendar_id, event_id, state, attempts,
+       last_error, next_attempt_at, completed_at
+FROM google_calendar_cleanup_jobs WHERE state <> 'deleted';
+```
+
+Restore the owning linked account grant or perform separately authorized manual
+cleanup when credentials are lost. No receipt is marked complete merely because
+a calendar becomes inaccessible.
+
 ## Privacy
 
 Payloads contain a minimal consultation/reservation title and guest name,
