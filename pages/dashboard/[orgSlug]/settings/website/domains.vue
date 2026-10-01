@@ -5,8 +5,8 @@
       <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
     </template>
 
-    <div class="mx-auto max-w-5xl space-y-4">
-      <UCard>
+    <div class="space-y-4">
+      <div>
         <UAlert
           v-if="actionError"
           color="error"
@@ -125,7 +125,7 @@
             </div>
           </div>
         </div>
-      </UCard>
+      </div>
     </div>
 
     <UModal v-model:open="addModalOpen" title="Add domain">

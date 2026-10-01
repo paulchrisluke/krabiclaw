@@ -116,7 +116,12 @@ export interface ProductEditor {
   addSlot: (weekday: number) => void
   removeSlot: (slot: ScheduleSlotDraft) => void
   revert: () => void
-  save: () => Promise<void>
+  /**
+   * Commit the draft, then close the open leaf. A leaf nested below a section
+   * (one option, one combination's price) names its own parent, so the save
+   * lands where its Close would rather than back on the product.
+   */
+  save: (closeTo?: string) => Promise<void>
 }
 
 export const productEditorKey = Symbol('product-editor') as InjectionKey<ProductEditor>
@@ -660,6 +665,12 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
 // so it says what it does: Publish. Creating still walks its sections.
 const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
 
+const closeTo = ref<string | null>(null)
+async function save(target?: string) {
+  closeTo.value = target ?? null
+  try { await saveCurrentEditor() } finally { closeTo.value = null }
+}
+
 async function commit() {
   const id = locationId.value
   if (!id) return
@@ -690,7 +701,7 @@ async function commit() {
     if (editorKey.value === 'publication') await savePublication(id)
     if (editorKey.value === 'booking') await saveBooking()
     await load({ force: true })
-    await level.close()
+    await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
   } finally {
@@ -941,6 +952,6 @@ provide(productEditorKey, {
   addSlot,
   removeSlot,
   revert,
-  save: saveCurrentEditor,
+  save,
 })
 </script>

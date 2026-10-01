@@ -1,6 +1,9 @@
 <template>
   <!-- The team. Inviting someone is a leaf below. -->
   <DashboardIndexPanel id="organization-members" title="Members">
+    <template #right>
+      <UButton icon="i-lucide-plus" color="neutral" variant="soft" square class="rounded-full" aria-label="Invite a team member" :to="`${level.path.value}/invite`" />
+    </template>
     <OrganizationMembersList />
   </DashboardIndexPanel>
 </template>
@@ -9,6 +12,8 @@
 import OrganizationMembersList from '~/components/dashboard/OrganizationMembersList.vue'
 
 definePageMeta({ layout: 'dashboard' })
+
+const level = useRouteLevel()
 
 useSeoMeta({ title: 'Members | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 </script>
