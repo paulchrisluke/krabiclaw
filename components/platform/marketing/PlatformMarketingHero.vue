@@ -241,7 +241,7 @@ type ParallaxLayer = {
  * original art-directed mobile/tablet/desktop compositions editable through
  * Krabiclaw's normal media tools instead of baking image URLs into the frontend.
  */
-// Issue #1185: isolated local lg pilot; production keeps exact CMS sources.
+// Issue #1185: approved coastal preview; production keeps exact CMS sources.
 const localHomepagePilot = import.meta.dev || useRuntimeConfig().public.homepageCoastalPreview
 
 const PARALLAX_BREAKPOINTS: ParallaxBreakpoint[] = ['xxs', 'xs', 'sm', 'md', 'lg']
@@ -310,10 +310,14 @@ async function loadHeroAlphaMasks() {
   if (!localHomepagePilot || !homeHero.value) return
   const images = Array.from(homeHero.value.querySelectorAll<HTMLImageElement>('picture img')).slice(1)
   await Promise.all(images.map(async (image) => {
-    await image.decode().catch(() => undefined)
-    const source = image.currentSrc
-    if (heroAlphaMasks.has(source)) return
+    let source = image.currentSrc
+    if (source && heroAlphaMasks.has(source)) return
     try {
+      await image.decode()
+      source = image.currentSrc
+      if (heroAlphaMasks.has(source)) return
+      // Reserve this source before fetching so resize cannot fetch it twice.
+      heroAlphaMasks.set(source, null)
       const response = await fetch(source)
       if (!response.ok) throw new Error('Artwork unavailable')
       const bitmap = await createImageBitmap(await response.blob())
@@ -369,7 +373,9 @@ let homeHeroScrollListener: (() => void) | null = null
 
 function renderHomeParallax() {
   if (!homeHero.value) return
-  homeHero.value.style.setProperty('--kc-parallax-offset', String(Math.max(0, window.scrollY)) + 'px')
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    homeHero.value.style.setProperty('--kc-parallax-offset', String(Math.max(0, window.scrollY)) + 'px')
+  }
   updateHeroActionCoverage()
 }
 
@@ -382,7 +388,8 @@ function scheduleHomeParallax() {
 }
 
 onMounted(() => {
-  if (variant.value !== 'home' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  if (variant.value !== 'home') return
+  if (!localHomepagePilot && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   renderHomeParallax()
   homeHeroScrollListener = scheduleHomeParallax
   window.addEventListener('scroll', homeHeroScrollListener, { passive: true })
@@ -392,7 +399,6 @@ onMounted(() => {
   if (!localHomepagePilot || variant.value !== 'home') return
   void loadHeroAlphaMasks()
   window.addEventListener('resize', refreshHeroActionCoverage)
-  window.addEventListener('scroll', updateHeroActionCoverage, { passive: true })
 })
 
 function refreshHeroActionCoverage() {
@@ -412,7 +418,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', refreshHeroActionCoverage)
-  window.removeEventListener('scroll', updateHeroActionCoverage)
   if (rotationTimer !== null) clearInterval(rotationTimer)
   if (homeHeroScrollListener) window.removeEventListener('scroll', homeHeroScrollListener)
   if (homeHeroFrame !== null) window.cancelAnimationFrame(homeHeroFrame)

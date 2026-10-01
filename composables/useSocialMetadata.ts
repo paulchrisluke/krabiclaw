@@ -111,7 +111,7 @@ export function useSocialMetadata(input: MaybeRefOrGetter<PageSocialMetadataInpu
       discoverability: tenant.previewAuthorized ? 'private' : value.discoverability,
     }
     const image = homepagePreviewEnabled && template === 'platform' && value.path === '/'
-      ? { url: new URL('/homepage-pilot/social/home-social-card.png', requestURL.origin).href, width: 1200, height: 630, type: 'image/png' as const, alt: 'Automate your website using ChatGPT, Claude, MCP' }
+      ? { url: '/homepage-pilot/social/home-social-card.png', width: 1200, height: 630, type: 'image/png' as const }
       : value.socialImage
     const resolvedImage = image
       ? { ...image, url: resolveSeoUrl(image.url, origin), alt: image.alt || value.title }

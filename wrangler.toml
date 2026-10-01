@@ -196,6 +196,7 @@ crons = []
 CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
 BETTER_AUTH_URL = "https://staging.krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
+NUXT_PUBLIC_HOMEPAGE_COASTAL_PREVIEW = "true"
 MEDIA_BASE_URL = "https://staging.krabiclaw.com/__media"
 NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "Krabiclaw Staging"
