@@ -11,7 +11,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
            COALESCE(cfg.online_timezone,
            (SELECT l.timezone FROM business_locations l
               JOIN product_locations pl ON pl.location_id = l.id AND pl.product_id = p.id
-             WHERE pl.published = 1 AND pl.active = 1 AND l.status = 'active' LIMIT 1)) AS timezone
+             WHERE l.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1 AND l.status = 'active' ORDER BY l.id LIMIT 1)) AS timezone
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       JOIN product_booking_configs cfg ON cfg.product_id = p.id

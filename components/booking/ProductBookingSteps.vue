@@ -45,7 +45,7 @@
           <BookingRecap
             v-if="timeSelection"
             :main-line="timeSelection.label"
-            :meta-line="t('saya.experience_detail.guest_count', { count: partySize })"
+            :meta-line="`${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}`"
             :edit-label="t('saya.experience_detail.change')"
             @edit="bookingStep = 1"
           />

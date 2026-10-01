@@ -120,6 +120,14 @@ export async function getPublicTenantPageByPath(
   }
 }
 
+/** Initialize through the same adapter; retain any read-only legacy object during rollout. */
+export async function initializePublicConsultationSettings(db: DbClient, organizationId: string, settings: Omit<NonNullable<import('~/shared/organization-settings').OrganizationSettings['consultation']>, 'created_at' | 'updated_at' | 'updated_by'>) {
+  await executeBatch(db, [{
+    query: `UPDATE organization SET consultation_settings_json = COALESCE(json_extract(settings_json, '$.consultation'), json(?)), updated_at = ? WHERE id = ? AND consultation_settings_json IS NULL`,
+    params: [JSON.stringify({ ...settings, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), updated_by: null }), new Date().toISOString(), organizationId],
+  }, publicResourceCacheInvalidationQuery(organizationId, 'consultation_settings_initialized')], { operation: 'Initialize consultation settings' })
+}
+
 /** Only this adapter writes consultation settings. Legacy JSON is read-only during rollout. */
 export async function setPublicConsultationMode(db: DbClient, organizationId: string, mode: PublicConsultationSettings['mode']): Promise<PublicConsultationSettings> {
   const settings = await getPublicConsultationSettings(db, organizationId)
@@ -162,7 +170,7 @@ export async function getPublicConsultationSettings(db: DbClient, organizationId
     schedule_path: schedulePath,
     confirmation_path: confirmationPath,
     tracking_enabled: row.tracking_enabled == null ? true : asBoolean(row.tracking_enabled),
-    contact_form_enabled: row.contact_form_enabled == null ? true : asBoolean(row.contact_form_enabled),
+    contact_form_enabled: row.contact_form_enabled == null ? (metadata.contact_form_enabled == null ? true : asBoolean(metadata.contact_form_enabled)) : asBoolean(row.contact_form_enabled),
     metadata,
   }
 }

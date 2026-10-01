@@ -5,7 +5,7 @@
     <ul class="my-4 space-y-1 text-sm">
       <li v-for="variant in controller.sellableVariants.value" :key="variant.id">{{ variant.name }} · {{ controller.variantPriceLabel(variant) || 'Price unavailable' }}</li>
     </ul>
-    <label role="button" tabindex="0" @keydown.enter.prevent="controller.openBooking" @keydown.space.prevent="controller.openBooking" :for="`consultation-${product.id}-toggle`" class="inline-flex cursor-pointer rounded-lg bg-primary px-5 py-3 font-medium text-(--brand-color-foreground)" @click="controller.openBooking">Choose a time</label>
+    <SayaButton @click="openOnlineBooking">Choose a time</SayaButton>
     <BookingModal v-model="bookingOpen" :target-id="`consultation-${product.id}`" :title="product.name" :can-go-back="bookingStep > 1 && !submitting" @back="bookingStep = 1">
       <ProductBookingSteps :controller="controller" :confirmation-mode="product.booking?.confirmation_mode ?? 'instant'" />
     </BookingModal>
@@ -16,6 +16,7 @@ import type { Product } from '~/server/types/products'
 import type { CurrencyCode } from '~/shared/currencies'
 import type { PublicProductSession } from '~/server/utils/public-products'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import SayaButton from '~/components/saya/SayaButton.vue'
 import BookingModal from '~/components/booking/BookingModal.vue'
 import ProductBookingSteps from '~/components/booking/ProductBookingSteps.vue'
 const props = defineProps<{ product: Product; currency: CurrencyCode; organizationId: string; organizationName: string }>()
@@ -33,4 +34,8 @@ const { data, error } = await useAsyncData(`online-product-sessions:${props.orga
 if (error.value) throw error.value
 const controller = useSessionBooking(() => ({ ...props, location: null, sessions: data.value?.sessions ?? [] }))
 const { bookingOpen, bookingStep, submitting } = controller
+function openOnlineBooking() {
+  controller.openBooking()
+  bookingOpen.value = true
+}
 </script>

@@ -82,3 +82,25 @@ Lifecycle activity events include `booking.created`, `booking.confirm`,
 `operational_booking_id` and `request_id`; downstream consumers dedupe the durable
 entry identity and read the canonical Booking after commit. Dashboard detail
 retains its legacy request `id` and exposes `operationalBookingId` separately.
+
+## Local proof and completed review
+
+The Worker/browser proof is explicitly opt-in in an isolated prepared checkout:
+`NATIVE_CONSULTATION_PROOF=true PLAYWRIGHT_PORT=<unused-port> PLAYWRIGHT_LOCAL_PREPARED=true yarn playwright test tests/e2e/native-consultations.spec.ts --workers=1`.
+It creates only local offerings, restores the prior website mode, unpublishes and
+deactivates them, removes their future schedule/calendar enrollment, and deletes
+unbooked offerings through the canonical API. Booked offerings preserve audit
+history: the existing Product deletion rule intentionally rejects their deletion.
+Normal shared-fixture suites skip this proof unless explicitly opted in.
+
+One complete CodeRabbit review against staging finished. Verified findings were
+addressed: keyboard opening, status-specific email subjects, deterministic tenant
+location lookup, precise online detail labels, concurrent settings loading, partial
+save wording, and stronger lifecycle/capacity replay assertions. The recommendation
+to erase booked test Products was replaced by the isolated opt-in and canonical
+archival cleanup above; deletion would violate the existing history contract.
+
+Foundation deliberately returns `payment_required` for a required positive Price
+until #1169 supplies authenticated capture/hold conversion. It never fabricates
+payment success. No #1202 tools, #1203 OAuth/projection, financial provider calls,
+production products, migrations, deployment or cutover activation are included.

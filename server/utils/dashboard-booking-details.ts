@@ -184,6 +184,7 @@ export async function loadDashboardBookingDetails(
   const row = await loadBookingRow(context.db, context.organization.id, input.type, input.bookingId)
   if (!row) throw new HTTPError({ statusCode: 404, message: 'Booking not found' })
   await assertBookingAccess(context, row)
+  if (row.location_id !== null && !row.location_title) throw new HTTPError({ statusCode: 500, message: 'The booking location is missing its title' })
 
   const locations = await queryAll<{ id: string; title: string }>(context.db, 'SELECT id, title FROM business_locations WHERE organization_id = ? ORDER BY title', [row.organization_id])
   const visibleLocations = locations.filter(location => input.type === 'reservation' || location.id === row.location_id)
@@ -210,8 +211,8 @@ export async function loadDashboardBookingDetails(
     vertical: row.vertical,
     locationId: row.location_id,
     locationSlug: row.location_slug,
-    locationTitle: row.location_title ?? 'Online',
-    resourceTitle: row.experience_title || row.location_title || 'Online',
+    locationTitle: row.location_id === null ? 'Online' : row.location_title!,
+    resourceTitle: row.experience_title || (row.location_id === null ? 'Online' : row.location_title!),
     resourceImageUrl,
     guestName: row.guest_name,
     guestEmail: row.guest_email,

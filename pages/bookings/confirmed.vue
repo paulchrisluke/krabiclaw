@@ -87,8 +87,9 @@ const readableTime = computed(() => confirmation.value
 const receiptRows = computed(() => {
   if (!confirmation.value) return []
   const rows: Array<{ label: string; value: string }> = []
-  if (confirmation.value.title) rows.push({ label: 'Booked', value: confirmation.value.title })
-  if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
+  if (confirmation.value.title) rows.push({ label: confirmation.value.status === 'pending' ? 'Requested service' : 'Booked', value: confirmation.value.title })
+  if (!confirmation.value.locationId) rows.push({ label: 'Format', value: 'Online' })
+  else if (confirmation.value.locationName) rows.push({ label: 'Location', value: confirmation.value.locationName })
   rows.push({ label: 'Date', value: readableDate.value })
   rows.push({ label: 'Time', value: readableTime.value })
   rows.push({ label: 'Guests', value: String(confirmation.value.guests) })
@@ -111,7 +112,7 @@ const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).ma
 
 async function share() {
   if (!confirmation.value) return
-  const text = `I'm booked for ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
+  const text = `${confirmation.value.status === 'pending' ? 'I requested' : "I'm booked for"} ${confirmation.value.title ?? confirmation.value.organizationName} on ${readableDate.value} at ${readableTime.value}.`
   if (import.meta.client && navigator.share) {
     try {
       await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })

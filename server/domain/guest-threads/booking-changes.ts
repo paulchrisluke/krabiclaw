@@ -155,10 +155,8 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     return {
       locationId: target.location_id, title: location?.title ?? '', sessionId: target.id,
       startsAt: target.starts_at, endsAt: target.ends_at, ...localParts(target.starts_at, target.timezone),
-      // The replacement is claimed before the original is released, so a
-      // destination that is full leaves the guest's booking exactly as it was.
-      // It therefore cannot take request_id yet — the original still holds it —
-      // and the seat it is giving up is excluded from the capacity it must fit.
+      // The same Booking moves under the shared allocation predicate. Exclude
+      // its existing allocation; a full destination leaves the record unchanged.
       claim: (bookingId, now) => sessionMoveQuery({
         bookingId, organizationId: thread.organization_id, productId: before.productId!,
         sessionId: target.id, partySize: after.partySize,
@@ -388,7 +386,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
     await executeBatch(db, queries, { operation: 'respond to booking change' })
     result = await findEntryByDedupeKey(db, resultId)
     if (!result) {
-      throw new HTTPError({ statusCode: 409, message: 'This reservation changed or is no longer available' })
+      throw new HTTPError({ statusCode: 409, message: current.recordKind === 'booking' ? 'That session filled up or the booking changed; your original appointment is unchanged' : 'This reservation changed or is no longer available' })
     }
   }
 

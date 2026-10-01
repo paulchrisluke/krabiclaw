@@ -3,7 +3,7 @@ import { loginAs } from './helpers/auth'
 import { blawbyTestExtraHeaders } from './test-env'
 
 test('native online review uses canonical Products, holds capacity, and releases it once', async ({ page, request, baseURL }) => {
-  test.skip(!['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Disposable local data only')
+  test.skip(process.env.NATIVE_CONSULTATION_PROOF !== 'true' || !['localhost', '127.0.0.1'].includes(new URL(baseURL!).hostname), 'Explicit opt-in in an isolated disposable checkout only; never mutate shared suite fixtures')
   test.setTimeout(120_000)
   await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
   const org = 'org-ncls-blawby'
@@ -13,6 +13,8 @@ test('native online review uses canonical Products, holds capacity, and releases
   const products: Array<{ id: string; name: string; slug: string; variants: Array<{ id: string }> }> = []
   const tomorrow = new Date(Date.now() + 86400000)
   const day = tomorrow.toISOString().slice(0, 10)
+  const headers = blawbyTestExtraHeaders()
+  try {
   for (let index = 0; index < 2; index++) {
     const create = await page.request.post(`${editor}/products`, { data: { name: `Local consultation ${stamp}-${index}`, variants: [{ name: 'Online', prices: [{ unit_amount: 0, currency: 'USD' }] }] } })
     expect(create.status(), await create.text()).toBe(201)
@@ -27,8 +29,6 @@ test('native online review uses canonical Products, holds capacity, and releases
   }
   const activate = await page.request.put(`${editor}/consultation`, { data: { mode: 'native' } })
   expect(activate.status(), await activate.text()).toBe(200)
-  const headers = blawbyTestExtraHeaders()
-  try {
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
     await expect(page.getByLabel('Online timezone', { exact: true })).toHaveValue('UTC')
     await page.screenshot({ path: 'artifacts/consultations-editor-desktop.png', fullPage: true })
@@ -36,7 +36,8 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.goto('/schedule')
     await expect(page.getByRole('heading', { name: products[0]!.name })).toBeVisible()
     await page.screenshot({ path: 'artifacts/consultations-desktop.png', fullPage: true })
-    await page.locator('article').filter({ has: page.getByRole('heading', { name: products[0]!.name }) }).getByText('Choose a time', { exact: true }).click()
+    await page.locator('article').filter({ has: page.getByRole('heading', { name: products[0]!.name }) }).getByRole('button', { name: 'Choose a time', exact: true }).focus()
+    await page.keyboard.press('Enter')
     await expect(page.getByRole('dialog', { name: products[0]!.name })).toBeVisible()
     await page.screenshot({ path: 'artifacts/consultations-dialog-desktop.png', fullPage: false })
     await page.setViewportSize({ width: 390, height: 844 })
@@ -85,6 +86,8 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect((await confirmedDetails.json()).booking).toMatchObject({ status: 'confirmed', operationalBookingId: browserBooking.operational_booking_id })
     const browserCancel = await request.post(`/api/public/booking-requests/${browserBooking.request_id}/cancel`, { headers: { ...headers, authorization: `Bearer ${browserBooking.cancellation_token}` } })
     expect(browserCancel.status(), await browserCancel.text()).toBe(200)
+    const cancelledBrowserDetails = await page.request.get(`/api/dashboard/bookings/booking/${browserBooking.request_id}?org=north-carolina-legal-services`)
+    expect((await cancelledBrowserDetails.json()).booking.status).toBe('cancelled')
     const paid = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { variants: [{ id: products[0]!.variants[0]!.id, name: 'Online', prices: [{ unit_amount: 7500, currency: 'USD' }] }] } })
     expect(paid.status(), await paid.text()).toBe(200)
     const blocked = await book(0)
@@ -99,10 +102,23 @@ test('native online review uses canonical Products, holds capacity, and releases
     for (let replay = 0; replay < 2; replay++) {
       const cancel = await request.post(`/api/public/booking-requests/${instant.request_id}/cancel`, { headers: { ...headers, authorization: `Bearer ${instant.cancellation_token}` } })
       expect(cancel.status(), await cancel.text()).toBe(replay === 0 ? 200 : 404)
+      const cancelledDetails = await page.request.get(`/api/dashboard/bookings/booking/${instant.request_id}?org=north-carolina-legal-services`)
+      expect((await cancelledDetails.json()).booking.status).toBe('cancelled')
+      const released = await request.get(`/api/public/products/${products[0]!.slug}/sessions?location_id=online`, { headers })
+      expect((await released.json()).sessions.find((session: { id: string }) => session.id === sessions[0].id).remaining).toBe(1)
     }
   } finally {
     await page.setExtraHTTPHeaders({})
     await page.request.put(`${editor}/consultation`, { data: { mode: previous.mode } })
-    for (const product of products) await page.request.put(`${editor}/products/${product.id}/publication`, { data: { published: false } })
+    for (const product of products) {
+      await page.request.put(`${editor}/products/${product.id}/publication`, { data: { published: false } })
+      const deleted = await page.request.delete(`${editor}/products/${product.id}`)
+      if (deleted.status() === 200) continue
+      // Canonical Product deletion preserves booked history, even when cancelled.
+      expect(deleted.status(), await deleted.text()).toBe(409)
+      await page.request.put(`${editor}/products/${product.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, calendar_group: null } })
+      await page.request.put(`${editor}/products/${product.id}/availability`, { data: { location_id: null, slots: [] } })
+      await page.request.patch(`${editor}/products/${product.id}`, { data: { active: false } })
+    }
   }
 })

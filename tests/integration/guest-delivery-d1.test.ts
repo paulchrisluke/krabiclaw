@@ -443,6 +443,14 @@ test('a booking move into a full session leaves the original booking exactly as 
       'no replacement seat was taken in the full session')
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('count'), 0,
       'the decision was not recorded for a move that did not happen')
+    await db.prepare("UPDATE bookings SET status='cancelled' WHERE id='booking-other'").run()
+    await respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' })
+    await respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' })
+    const moved = await db.prepare("SELECT id, product_session_id, status, request_id FROM bookings WHERE id='booking-move'").first()
+    assert.deepEqual(moved, { id: 'booking-move', product_session_id: 'session-to', status: 'confirmed', request_id: 'move-proof' })
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM bookings WHERE request_id='move-proof'").first('n'), 1)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('n'), 1)
+
   } finally { await runtime.dispose() }
 })
 

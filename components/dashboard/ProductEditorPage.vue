@@ -247,17 +247,18 @@ async function load(options: { force?: boolean } = {}) {
   loadedKey = key
   loadError.value = null
   try {
-    const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
+    const [collectionResponse, productResponse, definitionResponse, consultationSettings] = await Promise.all([
       dashboardApi(`/api/editor/organizations/${organizationId}/collections${id ? `?location_id=${encodeURIComponent(id)}` : ''}`, { validate: isCollectionList }),
       dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
       dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList }),
+      organizationOnly.value && vertical === 'service' ? dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord }) : Promise.resolve(null),
     ])
     collections.value = collectionResponse.collections
     definitions.value = definitionResponse.definitions
     product.value = productResponse.product
     loadForm(productResponse.product)
-    if (organizationOnly.value && vertical === 'service') {
-      const settings = await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord })
+    if (consultationSettings) {
+      const settings = consultationSettings
       form.native_consultations = settings.mode === 'native'
       if (settings.mode === 'native' || settings.mode === 'external_url' || settings.mode === 'native_disabled') form.consultation_mode = settings.mode
     }
@@ -775,7 +776,11 @@ async function saveBooking() {
   // has just become bookable has no schedule loaded yet, and none to save.
   await saveSchedule()
   if (organizationOnly.value && vertical === 'service') {
+    try {
     await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord })
+    } catch (error) {
+      throw new Error('The service and schedule were saved, but the website booking mode could not be saved. Try saving again.', { cause: error })
+    }
   }
 }
 

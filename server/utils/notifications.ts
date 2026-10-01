@@ -1017,9 +1017,9 @@ export async function notifyBookingCreated(
       to: opts.email,
       replyTo,
       template: 'booking_customer_received',
-      title: `Your booking request was sent — ${opts.productTitle}`,
+      title: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`,
       payload,
-      email: { subject: `Your booking request was sent — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
+      email: { subject: `${opts.status === 'pending' ? 'Your booking request was sent' : 'Your booking is confirmed'} — ${opts.productTitle}`, html: guestEmail.html, text: guestEmail.text },
       delivery: threadDelivery(threadContext, 'guest_acknowledgement', 'email', 'booking_customer_received', opts.email),
     }),
   ])

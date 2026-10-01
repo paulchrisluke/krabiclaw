@@ -279,6 +279,7 @@ test('one configured online calendar excludes overlapping pending requests and r
     const cancel = { ...confirm, action: 'cancel', idempotencyKey: 'cancel-once' }
     assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
     assert.equal((await executeGuestThreadOperation(db, cancel)).ok, true)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.cancel'").first('n'), 1)
     const loser = inputs[1 - index]!
     await claimSessionCapacity(db, loser)
     const reject = { ...confirm, threadId: loser.requestId, action: 'reject', idempotencyKey: 'reject-once' }
