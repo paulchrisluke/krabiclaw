@@ -2,7 +2,7 @@
   <section class="kc-pricing-comparison" data-parity-section="comparison">
     <div class="kc-pricing-comparison__inner">
       <h2>{{ blockText(block.data.title) || 'Compare the details.' }}</h2>
-      <p>Paid capabilities require an eligible active subscription. Some features also need setup, permissions or a connected provider.</p>
+      <p>Paid capabilities require an eligible subscription. Some features also need setup, permissions or a connected provider.</p>
       <div class="kc-pricing-comparison__scroll" tabindex="0" aria-label="Scrollable plan comparison">
         <table>
           <caption class="sr-only">Features and availability by plan</caption>

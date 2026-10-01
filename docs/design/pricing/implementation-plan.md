@@ -1,7 +1,8 @@
 # Pricing implementation contract
 
 Scope: [#1192](https://github.com/paulchrisluke/krabiclaw/issues/1192), a pricing-only
-slice of #939. No merge, deployment, Stripe write or live CMS mutation.
+slice of #939. No merge, deployment, Stripe write or published-page mutation. Six owner-approved
+MCP media uploads were completed and independently read back active in platform.
 
 ## Canonical rendering and ownership
 
@@ -61,10 +62,12 @@ Target existing Growth Product `prod_UcH8Sw98ABNwKL`:
   default price, monthly/annual price IDs, amounts, currencies, lookup keys,
   recurring cadence or subscription policy.
 
-Free `STARTER_PLAN.name` becomes `Basic` in its application-owned source. Its
-art reference changes only after verified art arrives. Paid Grow naming/art
-cannot be forked locally around the canonical provider fields. Catalog approval
-is a separate step from visual design approval.
+Free `STARTER_PLAN.name` becomes `Basic` in its application-owned source. Paid
+Grow naming and billing Product image changes remain provider-owned and await
+catalog approval. Decorative page photo fronts now use the existing plan block
+CMS placements (`items.0.image` / `items.1.image`), explicitly separate from
+the billing Product image. That page-media ownership follows the owner’s approved
+MCP media/content integration; it does not rewrite the Stripe billing projection.
 
 ## Verified comparison conditions and dependencies
 
@@ -78,9 +81,10 @@ is a separate step from visual design approval.
   gate. Current Blawby promotional Growth wording needs reconciliation.
 - Explicit review-request sending is currently paid. Ordinary booking emails and
   token reads are separate; no Free policy change is authorized.
-- #1190 and #1191 remain unmerged drafts at verification. Recheck their state and
-  rebase explicitly when they land. Do not copy their commits into this branch or
-  describe the proposed WhatsApp billing gate as live.
+- #1190 and #1191 remain open drafts. At the owner’s consolidation request their
+  approved narrow gate and evidence foundation are incorporated into this single
+  pricing branch. Neither draft was closed or merged. The gate is present in this
+  branch, not claimed as deployed production behavior.
 - No WhatsApp content editing, community-support service, guaranteed priority
   response or automatic Facebook sync is supported by this comparison.
 
@@ -93,20 +97,22 @@ plan cards and the homepage keeps the original billing table presentation.
 Comparison IDs reference the separately reviewed feature library; published
 comparison copy is reviewed manually, never generated from MCP tool names.
 
-The supplied free portrait and Basic name are changed only in the app-owned
-Starter source. The paid photo front reads `plan.image` from Stripe; this draft
-includes the approved Grow file for a subsequent provider upload but does not
-substitute a local paid image/name/bullet catalog. The existing paid portrait and
-Growth name therefore remain until the exact catalog proposal above is approved.
+The supplied free portrait and Basic name are changed in the app-owned Starter
+source. Both decorative page photo fronts read the plan block’s canonical CMS
+media placements, with the billing image used only when page art is absent.
+Stripe-owned Growth name, Product image and marketing bullets remain intact.
+All six art assets are uploaded through MCP, independently confirmed active,
+and recorded in uploaded-media.json; no rollout switch is introduced.
 
 `cms-proposal.json` preserves the current hero and plan block IDs, then places
 three image-with-text blocks, a capability comparison, the existing page Q&A,
-and the coastal CTA. Upload bindings are review notation, not fabricated asset
-IDs. No CMS write has been made. Q&A corrections are separately listed because
+and the coastal CTA. All bindings now carry real, independently read-back active asset IDs. No
+remote page/content assignment has been made. Q&A corrections are separately listed because
 FAQ records own those answers, not block.data.items.
 
-WhatsApp is omitted from the new comparison while #1190 enforcement is unmerged;
-the declared policy must not be sold as proven current runtime enforcement.
+The complete comparison includes WhatsApp business notifications, and the
+approved #1190 gate/tests are incorporated in this branch. Production activation
+must include that gate; current production is not described as already fixed.
 Review-request emails retain their current paid behavior without deciding the
 open Free policy. No community, support SLA, automatic social import, automatic
 translation or claimed provider credits are added.
@@ -121,27 +127,40 @@ monthly price and the existing billing screen owns interval choice.
 
 ## Verification limits and approval review
 
-Actual local Chrome screenshots in `evidence/` show the current CMS document,
-not an applied full-page proposal. The app-owned Basic portrait was observed
-on its photo front and plan back. The test Stripe projection currently supplies
-the existing Growth wording and no approved Grow portrait; current live Stripe
-art is separately recorded in billing-verification.json.
+The initial Chrome screenshots in `evidence/` recorded the original three-block
+CMS page. They are baseline evidence, not the completed full-page proposal.
+Read-only presentation checks exercised the real configured local Worker.
+Full-page screenshots must be refreshed after the canonical local page update
+with uploaded asset IDs; no direct database rows or shadow page are substituted.
 
-The production Worker was built with the existing configured v7 test environment
-loaded directly into the process; no secrets file was copied. Four read-only
-Playwright presentation checks passed against that Worker: desktop/provider
-projection and no replay, mobile peek/overflow with reduced motion, keyboard
-focus, and JavaScript-disabled SSR access. These checks exercise the current
-plan block; they do not prove the un-applied benefits/comparison/CTA packet.
-
-The canonical image uploader explicitly permits image storage only in production
-(`server/utils/cloudflare-images.ts`). The benefit/CTA media asset IDs therefore
-require a separately approved production upload before the CMS proposal can be
-materialized through its canonical media placements. No shadow local assets or
-media rows were manufactured to claim the whole-page boundary passed.
+The canonical image uploader is production-only, but the owner then explicitly
+authorized the six media-library uploads through MCP. These completed and were
+read back active. Existing `content_block` single-value media placements are used
+for plan art, benefits and CTA. The local snapshot can include those real rows
+for complete-page verification without writing the published page.
 
 Automatic approval review rejected the full E2E setup because its documented
 cleanup irreversibly deletes Stripe test customers. No workaround was used.
 Approval for that specific test cleanup is needed to run the full suite; the
 read-only pricing checks, unit/D1/migration checks and draft preparation proceed.
 The shared footer repair remains owned by #1193; do not duplicate it here.
+
+## Missing-content checklist (original preview → complete page)
+
+- Three sales/benefit rows were absent because the original CMS page contained
+  only hero/plans/FAQ. The complete packet adds the approved headings, meaningful
+  verified explanatory copy, and each uploaded watercolor illustration.
+- The generic ten-row comparison was removed from the pricing plan card renderer
+  to place sales rows before it. The complete packet restores a separate grouped
+  comparison: 26 rows across website, management, guests, presence/languages and
+  help. Invalid WhatsApp editing, automatic social sync and unsupported support
+  claims are replaced by actual capabilities and setup conditions.
+- All six existing Q&A records remain, rendered with native details for no-JS
+  access. Proposed name/Places wording corrections are listed for source-owner
+  review; Q&A is a canonical read-only source, not fabricated block.data.items.
+- The coastal closing invitation was absent. Its new CTA block reads the uploaded
+  image from `media`, with the approved heading and Start free action.
+- Both photo fronts use the original plans block’s indexed CMS image slots; a
+  single sequential rightward reveal keeps one accessible copy of plan details.
+- No new rollout switch or partial-page activation dependency is added. The
+  complete CMS packet and renderers are reviewed and delivered together.

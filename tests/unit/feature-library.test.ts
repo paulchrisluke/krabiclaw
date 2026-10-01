@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { validateFeatureLibrary } from '../../scripts/lib/feature-library.mjs'
+import { validateFeatureLibrary, validatePricingComparison } from '../../scripts/lib/feature-library.mjs'
 import { getPlanEntitlements } from '../../server/utils/billing-entitlements.ts'
+import { PRICING_COMPARISON } from '../../shared/pricing-comparison.ts'
 import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
 
 const library = JSON.parse(readFileSync(new URL('../../docs/product/feature-library.json', import.meta.url), 'utf8'))
@@ -45,4 +46,13 @@ test('changed or missing evidence cannot retain a verified appearance', () => {
   const errors = validateFeatureLibrary(invalid, options)
   assert(errors.some(error => error.includes(`stale evidence ${source}`)))
   assert(errors.some(error => error.includes('missing evidence file server/missing-source.ts')))
+})
+
+test('pricing rows reference reviewed features and stale or invented mappings fail', () => {
+  assert.deepEqual(validatePricingComparison(library, PRICING_COMPARISON), [])
+  assert(validatePricingComparison(library, [{ title: 'Invented', rows: [{ id: 'invented.feature', label: 'Invented' }] }]).some(error => error.includes('Unknown comparison feature')))
+  const changed = structuredClone(PRICING_COMPARISON)
+  changed[0].rows.find(row => row.id === 'domains.custom')!.entitlement = 'messaging'
+  assert(validatePricingComparison(library, changed).some(error => error.includes('has no feature mapping')))
+  assert(validatePricingComparison(library, []).some(error => error.includes('reviewed comparison row is missing')))
 })
