@@ -44,7 +44,7 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   if (!row?.request_id) throw new HTTPError({ statusCode: 404, message: 'Operational booking with an inbox thread not found in this organization' })
   const thread = await getGuestRequest(db, row.request_id, organizationId, reservation ? 'reservation' : 'booking')
   if (!thread) throw new HTTPError({ statusCode: 404, message: 'Booking thread not found' })
-  if (toolName === 'get_product_booking') return { operational_booking_id: id, request_id: thread.id, updated_at: row.updated_at, guest_user_id: thread.user_id, guest: thread.payload.guest, provenance: thread.kind === 'booking' ? thread.payload.provenance ?? null : null, record: await getThreadOperationalRecord(db, thread.id) }
+  if (toolName === 'get_product_booking') return { operational_booking_id: id, request_id: thread.id, updated_at: thread.updated_at, operational_updated_at: row.updated_at, guest_user_id: thread.user_id, guest: thread.payload.guest, provenance: thread.kind === 'booking' ? thread.payload.provenance ?? null : null, record: await getThreadOperationalRecord(db, thread.id) }
   const key = requiredString(args, 'idempotency_key')
   if (toolName.startsWith('request_')) {
     const fields = reservation ? { kind: 'reservation', locationId: requiredString(args, 'location_id'), bookingDate: requiredString(args, 'date'), bookingTime: requiredString(args, 'time'), partySize: args.party_size } : { kind: 'booking', sessionId: requiredString(args, 'session_id'), partySize: args.party_size }
