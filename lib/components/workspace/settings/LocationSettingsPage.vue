@@ -26,7 +26,7 @@
 </template>
 
 <script lang="ts">
-import type { LocationHoursForm } from '~/lib/components/workspace/location/LocationHoursCard.vue'
+import type { LocationHoursForm } from '~/lib/components/workspace/location/hours'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 
 import type { Ref } from 'vue'
@@ -187,15 +187,13 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !organizationSet.has(feature))
       const disabled = locationToggleableFeatures.value.filter(feature => organizationSet.has(feature) && !locationEnabledFeatureSet[feature])
       const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-      const response = await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
+      await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
         method: 'PATCH',
         body: { feature_overrides: featureOverrides },
         validate: isLocationResponse,
       })
       if (locationId.value !== requestedLocationId) return
-      location.value = response.location
-      fillLocationFeatures(response)
-      originalSignature.value = editorSignature(key)
+      await refreshLocationWorkspace()
       await dashboard.refresh()
     } catch (error) {
       editorError.value = getErrorMessage(error, 'Failed to save availability')
@@ -374,11 +372,10 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
       )
       if (locationId.value !== requestedLocationId) return
       const previousSlug = String(route.params.locationSlug)
-      location.value = response.location
-      fillLocationFeatures(response)
-      fillDetailsForm(response.location)
-      originalSignature.value = editorSignature(key)
-      // The index beside this editor draws the same location from its own read.
+      // Every editor of this location reads one shared resource; refreshing it
+      // refills them all, so the index beside this leaf shows what was saved.
+      await refreshLocationWorkspace()
+      // The location's own index draws the same location from its own read.
       await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
       if (response.location.slug !== previousSlug) {
         await dashboard.refresh()
@@ -397,14 +394,12 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
     reservationSaving.value = true
     editorError.value = null
     try {
-      const response = await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
+      await dashboardApi<{ success: true; config: LocationReservationConfig | null }>(
         `/api/editor/organizations/${organizationId}/locations/${requestedLocationId}/reservation-config`,
         { method: 'PUT', body: reservationForm.value, validate: isReservationConfigResponse },
       )
       if (locationId.value !== requestedLocationId) return
-      reservationConfig.value = response.config
-      reservationForm.value = reservationPatchFrom(response.config)
-      originalSignature.value = editorSignature(key)
+      await refreshLocationWorkspace()
       await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
     } catch (error) {
       editorError.value = getErrorMessage(error, 'Failed to save the reservation policy')
@@ -423,9 +418,7 @@ export async function useLocationEditor(organizationId: string, locationId: Ref<
         { method: 'DELETE', validate: (value: unknown): value is { success: true } => isRecord(value) && value.success === true },
       )
       if (locationId.value !== requestedLocationId) return
-      reservationConfig.value = null
-      reservationForm.value = {}
-      originalSignature.value = editorSignature(key)
+      await refreshLocationWorkspace()
       await refreshNuxtData(`dashboard-location-overview:${organizationId}:${requestedLocationId}`)
     } catch (error) {
       editorError.value = getErrorMessage(error, 'Failed to close reservations')
