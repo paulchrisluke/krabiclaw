@@ -1,13 +1,13 @@
 {
   "created": {
     "success": true,
-    "booking_id": "01cf0b8c90e19da9264a981bd5bd3552e760961282c7c2d8f3103025ad617f50",
-    "request_id": "01cf0b8c90e19da9264a981bd5bd3552e760961282c7c2d8f3103025ad617f50",
-    "operational_booking_id": "b8faa0ce-1f09-46e3-9d06-0611321ce5dc",
+    "booking_id": "a66dc227d5db9bbc105cfdaec62e7f1176635d6b65bb4f7048622185bb128e81",
+    "request_id": "a66dc227d5db9bbc105cfdaec62e7f1176635d6b65bb4f7048622185bb128e81",
+    "operational_booking_id": "15929e2d-afa3-4bd9-adc6-e4dd6a6b688b",
     "status": "pending",
     "replayed": false,
-    "starts_at": "2026-10-02T07:00:00.000Z",
-    "ends_at": "2026-10-02T09:30:00.000Z",
+    "starts_at": "2026-10-02T10:30:00.000Z",
+    "ends_at": "2026-10-02T13:00:00.000Z",
     "timezone": "Asia/Bangkok",
     "presentation": {
       "noun": "booking",
@@ -15,7 +15,7 @@
       "label": "Booking",
       "labelPlural": "Bookings"
     },
-    "message": "Your request for Pottery Wheel Class on Oct 2, 2026, 2:00 PM is awaiting review.",
+    "message": "Your request for Pottery Wheel Class on Oct 2, 2026, 5:30 PM is awaiting review.",
     "policy_summary": {
       "heading": "Experience policies",
       "items": [],
@@ -24,10 +24,10 @@
     "http_status": 201
   },
   "stored": {
-    "operational_booking_id": "b8faa0ce-1f09-46e3-9d06-0611321ce5dc",
-    "request_id": "01cf0b8c90e19da9264a981bd5bd3552e760961282c7c2d8f3103025ad617f50",
-    "updated_at": "2026-10-01T06:15:09.202Z",
-    "operational_updated_at": "2026-10-01T06:15:09.202Z",
+    "operational_booking_id": "15929e2d-afa3-4bd9-adc6-e4dd6a6b688b",
+    "request_id": "a66dc227d5db9bbc105cfdaec62e7f1176635d6b65bb4f7048622185bb128e81",
+    "updated_at": "2026-10-01T08:07:23.365Z",
+    "operational_updated_at": "2026-10-01T08:07:23.365Z",
     "guest_user_id": null,
     "guest": {
       "name": "MCP Guest",
@@ -36,10 +36,10 @@
     },
     "provenance": {
       "source": "operator",
-      "external_reference": "external-37524541-396d-483f-b900-ba281d4aa6ff",
+      "external_reference": "external-1644271d-f9e4-484c-ae74-23faa251e7b2",
       "actor_user_id": "user-e2e-pottery-owner",
-      "idempotency_key": "37524541-396d-483f-b900-ba281d4aa6ff",
-      "fingerprint": "a4b813b556187d6320940898b0bca8043b82b32f01cd21566a59d58c38bda2c1",
+      "idempotency_key": "1644271d-f9e4-484c-ae74-23faa251e7b2",
+      "fingerprint": "304911d4f89eaeef00f6c9c64be21267adedd87e94fed13f480224f7d98ff353",
       "guest_acknowledgement": false,
       "creation_kind": "ordinary",
       "creation_status": "pending",
@@ -47,15 +47,45 @@
     },
     "record": {
       "kind": "booking",
-      "id": "b8faa0ce-1f09-46e3-9d06-0611321ce5dc",
+      "id": "15929e2d-afa3-4bd9-adc6-e4dd6a6b688b",
       "status": "pending",
       "party_size": 1,
-      "starts_at": "2026-10-02T07:00:00.000Z",
-      "ends_at": "2026-10-02T09:30:00.000Z",
+      "starts_at": "2026-10-02T10:30:00.000Z",
+      "ends_at": "2026-10-02T13:00:00.000Z",
       "timezone": "Asia/Bangkok",
       "location_id": "loc-pottery-house",
       "product_id": "exp-ph-wheel",
       "product_name": "Pottery Wheel Class"
+    }
+  },
+  "listed": {
+    "operational_booking_id": "15929e2d-afa3-4bd9-adc6-e4dd6a6b688b",
+    "request_id": "a66dc227d5db9bbc105cfdaec62e7f1176635d6b65bb4f7048622185bb128e81",
+    "product_id": "exp-ph-wheel",
+    "product_variant_id": "exp-ph-wheel-default",
+    "product_session_id": "8a0b3b8e-967b-4f47-9490-8d216262dc6c",
+    "status": "pending",
+    "party_size": 1,
+    "user_id": null,
+    "updated_at": "2026-10-01T08:07:23.365Z",
+    "starts_at": "2026-10-02T10:30:00.000Z",
+    "ends_at": "2026-10-02T13:00:00.000Z",
+    "timezone": "Asia/Bangkok",
+    "guest": {
+      "name": "MCP Guest",
+      "email": "pottery-owner@playwright.example",
+      "phone": null
+    },
+    "provenance": {
+      "source": "operator",
+      "external_reference": "external-1644271d-f9e4-484c-ae74-23faa251e7b2",
+      "actor_user_id": "user-e2e-pottery-owner",
+      "idempotency_key": "1644271d-f9e4-484c-ae74-23faa251e7b2",
+      "fingerprint": "304911d4f89eaeef00f6c9c64be21267adedd87e94fed13f480224f7d98ff353",
+      "guest_acknowledgement": false,
+      "creation_kind": "ordinary",
+      "creation_status": "pending",
+      "followups_completed": true
     }
   }
 }
