@@ -43,7 +43,7 @@
           "server/utils/mcp-executor/organizations.ts": "1698e4abee77767d3671db7477531e1326539a6aa5dd46cb29c8f5c1f3967548",
           "server/utils/mcp-context.ts": "e80f577ec6fb81a5f15ca6b4b3fb0718ee706b5654312bc74e1737569c1d809f",
           "tests/unit/mcp-tool-annotations.test.ts": "e0d40edff8ace2d57063dd159992412b72f1bfa81508c71b6e988353ae173799",
-          "server/utils/mcp-tools/organizations.ts": "b7b7fd46a519f63a7848a5091d2dd5520af245728cc5408b3d69c821342cdf21",
+          "server/utils/mcp-tools/organizations.ts": "b2e67c8e38cc8cc8feb4be271d8abe96d1f61e82422cbfbdb17edb93129e16bd",
           "server/utils/mcp-tools/context.ts": "49abd2dd8c1a37aa3867597bdcbc862bebac2d1127e8baedbea00c9d0837dd6d"
         }
       },
@@ -88,7 +88,7 @@
           "server/utils/content/pages.ts": "e79eefa04d90104db81673c84fcaa7455d859d330ed5848d1eac53b6596cc5e2",
           "server/utils/mcp-executor/content.ts": "85557d0dced129da7b117aad51716ac99e9df4cbf035a22a9c3d4073ee073dcc",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
-          "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
+          "server/utils/mcp-tools/content.ts": "ec723e9adcfa4739d4e17842e1f43a4c5076b8179ff16e73602bc101be2aab26"
         }
       },
       "pendingOwnerDecision": null,
@@ -124,7 +124,7 @@
         "evidenceSha256": {
           "server/utils/content/pages.ts": "e79eefa04d90104db81673c84fcaa7455d859d330ed5848d1eac53b6596cc5e2",
           "tests/integration/tenant-page-delete-d1.test.ts": "36836afb68492570ab3ca63d90dea80e0cc8e2a2c986cbacdef6c42de6aa5119",
-          "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
+          "server/utils/mcp-tools/content.ts": "ec723e9adcfa4739d4e17842e1f43a4c5076b8179ff16e73602bc101be2aab26"
         }
       },
       "pendingOwnerDecision": null,
@@ -162,9 +162,9 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "8064a5659c2b39cb185b2c8ba75fca3c624eb3d670d37b3da70d742f4f629e99",
-          "tests/integration/availability-d1.test.ts": "ae01ed18228875d804958a28a5780c34d98ebc5d0fe3e00f1f4acbe73cc23725",
-          "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
+          "server/utils/availability.ts": "0852171dc13d3fefa4236ebf85bb42e56a37c2e6568e184f1b9b90c8a61c3217",
+          "tests/integration/availability-d1.test.ts": "0e8cbf71f4d5a76170d7ce9eefea53fb9382eeb56dcca47fe1534e096175da3f",
+          "server/utils/mcp-tools/locations.ts": "939c976e55cf273e0e41feb3dd142440e5cb5a3ab6dca78d9df32e541a5c7946"
         }
       },
       "pendingOwnerDecision": null,
@@ -178,7 +178,7 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration.",
+      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration. CMS and MCP share booking-default and weekly-rule writers. New occurrences use defaults; saved Sessions own actual facts, and any booking history protects them when rules are cleared or re-added.",
       "entitlementKeys": [],
       "mcpOperations": [
         "batch_create_products",
@@ -200,7 +200,10 @@
         "set_product_location",
         "set_product_publication",
         "update_collection",
-        "update_product"
+        "update_product",
+        "set_product_booking_config",
+        "delete_product_booking_config",
+        "replace_product_weekly_schedule"
       ],
       "verification": {
         "status": "source-reviewed",
@@ -215,10 +218,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/products.ts": "642e71fa754e4f60027716fc9d15300a458efb3e76c850d70229c806b6019df2",
+          "server/utils/mcp-executor/products.ts": "f5cc84ae41b7e93c7805ddf089b1c15530ae63ef5ec4323c3cb3ce3784a58f1c",
           "server/utils/product-management.ts": "e741a34cce66b6de8e04ca0775af5c3bf6fea76ead20e7032aa636e422eb6662",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
-          "server/utils/mcp-tools/products.ts": "945146f3fc067d6900992adce1fbf143b5d8bcda8e0fc2e84c225cdc55b9d25f"
+          "server/utils/mcp-tools/products.ts": "c80f0561cc7e4579a3851b8c5561d5a34117b279cbcd924f175afe9c2885eccf"
         }
       },
       "pendingOwnerDecision": null,
@@ -393,11 +396,15 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "Tenant Q&A management follows authorization and publication rules.",
+      "currentBehavior": "Tenant Q&A management follows authorization and publication rules. CMS and MCP share tenant-scoped authored Q&A writers; imported answers remain protected.",
       "entitlementKeys": [],
       "mcpOperations": [
         "list_location_qa",
-        "list_organization_qa"
+        "list_organization_qa",
+        "create_qa",
+        "update_qa",
+        "delete_qa",
+        "reorder_qa"
       ],
       "verification": {
         "status": "source-reviewed",
@@ -409,8 +416,8 @@
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/qa.ts": "7e94e818a6f8e145da9f0b5a239b39fb3d01092a67ea002950ccdf7e01270db4",
-          "server/utils/mcp-tools/qa.ts": "2e2ef3a0bcec60cc77008e09e933c044cddbdac8610c1cec2e4565c6a9cf4799"
+          "server/utils/mcp-executor/qa.ts": "43d277d152c02d754e414bc33b81aa6daabba113ad94c0da6d1ff7853c41146c",
+          "server/utils/mcp-tools/qa.ts": "b7b37dbc49f3d5a29573b77272a55d3c2761e4dc2cf0b1a97bba129c83ae5dea"
         }
       },
       "pendingOwnerDecision": null,

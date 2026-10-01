@@ -903,9 +903,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Replaces weekly availability for one product and location, cancelling removed unbooked future sessions.",
-        "open_world_justification": "Replaces weekly availability for one product and location, cancelling removed unbooked future sessions. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Replaces weekly availability for one product and location, cancelling removed unbooked future sessions. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history.",
+        "open_world_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "replace_resource_localizations": {
@@ -999,9 +999,9 @@
         "destructiveHint": true
       },
       "justifications": {
-        "read_only_justification": "Sets existing product booking defaults without changing omitted fields.",
-        "open_world_justification": "Sets existing product booking defaults without changing omitted fields. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Sets existing product booking defaults without changing omitted fields. Existing state is deleted, replaced or overwritten rather than only appended."
+        "read_only_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts.",
+        "open_world_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_product_location": {

@@ -281,10 +281,11 @@ export async function materializeSessions(db: DbClient, input: {
       // A slot that was removed and added back meets its own old sessions at
       // the same instant: the removal cancelled the unbooked ones and left the
       // booked ones scheduled, and cut every one of them loose from the rule.
-      // Those orphans are adopted by the new rule (a cancelled one is scheduled
-      // again) rather than tripping the instant-unique index and failing the
-      // whole batch. A session another live rule owns, or one a merchant made
-      // by hand (no occurrence key), is left alone.
+      // Detached generated sessions without booking history retain the existing
+      // re-adoption behavior. Any booking, including cancelled history, protects
+      // every actual fact and the occurrence identity. The predicate is inside
+      // the UPSERT, so a claim arriving during generation protects the row too.
+      // A live rule's session or a hand-made session is also left alone.
       writes.push({
         query: `
           INSERT INTO product_sessions (
@@ -298,12 +299,14 @@ export async function materializeSessions(db: DbClient, input: {
             ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
             updated_at = excluded.updated_at, updated_by = excluded.updated_by
             WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)
           ON CONFLICT (product_id, starts_at) WHERE location_id IS NULL DO UPDATE SET
             availability_rule_id = excluded.availability_rule_id, source_occurrence_key = excluded.source_occurrence_key,
             status = CASE WHEN product_sessions.status = 'cancelled' THEN 'scheduled' ELSE product_sessions.status END,
             ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
             updated_at = excluded.updated_at, updated_by = excluded.updated_by
             WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)
         `,
         params: [
           crypto.randomUUID(), input.organizationId, input.productId, rule.location_id, rule.id,
@@ -412,12 +415,12 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
 
   const removed = existing.filter(rule => !kept.has(rule.id))
   for (const rule of removed) {
-    // Future sessions nobody holds a seat on go with the slot. A session with
-    // a booking stays scheduled: the guest was promised it.
+    // Only sessions with no booking history go with the slot. Cancelled
+    // bookings still belong to that session's history and protect its facts.
     writes.push({
       query: `UPDATE product_sessions SET status = 'cancelled', updated_at = ?, updated_by = ?
               WHERE organization_id = ? AND availability_rule_id = ? AND status = 'scheduled' AND starts_at > ?
-                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})`,
+                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)`,
       params: [now, input.actorId, input.organizationId, rule.id, now],
     })
     // The rule is the session's provenance, and the schema refuses to delete a

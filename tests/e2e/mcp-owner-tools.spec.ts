@@ -3,6 +3,7 @@ import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { tenantTestExtraHeaders } from './test-env'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
@@ -543,6 +544,52 @@ test.describe('stateless MCP server', () => {
         await call('delete_product_booking_config', { product_id: productId })
         await call('delete_product', { product_id: productId })
       }
+    })
+
+    test('booked session authority survives CMS clear and MCP re-add', async ({ request, baseURL }) => {
+      test.setTimeout(120_000)
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const organizationId = MCP_GROWTH_ORGANIZATION_ID
+      const call = async (toolName: string, args: Record<string, unknown>) => {
+        const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args: { organization_id: organizationId, ...args } })
+        expect(response.status()).toBe(200)
+        const body = await response.json()
+        expect(body.result.isError, JSON.stringify(body)).not.toBe(true)
+        return body
+      }
+      const created = mcpData<{ product: { id: string; slug: string } }>(await call('create_product', {
+        name: 'MCP Session Authority Proof', variants: [{ name: 'Seat', prices: [{ unit_amount: 1000, currency: 'THB' }] }],
+      })).product
+      const url = `${baseURL}/api/editor/organizations/${organizationId}/products/${created.id}`
+      const slots = [{ weekday: 0, start_time: '14:00', capacity: null }]
+      await call('set_product_publication', { product_id: created.id, published: true })
+      await call('set_product_location', { product_id: created.id, location_id: 'loc-demo', active: true, published: true })
+      await call('set_product_booking_config', { product_id: created.id, duration_minutes: 120, default_capacity: 10 })
+      await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
+      const read = async () => {
+        const response = await request.get(`${url}/sessions`)
+        expect(response.status(), await response.text()).toBe(200)
+        return (await response.json()).sessions as Array<{ id: string; source_occurrence_key: string; timezone: string; starts_at: string; ends_at: string; capacity: number; status: string; claimed: number; remaining: number }>
+      }
+      const target = (await read()).find(row => row.starts_at > new Date().toISOString())
+      expect(target).toBeTruthy()
+      const booked = await request.post(`${baseURL}/api/public/products/${created.slug}/book`, {
+        headers: tenantTestExtraHeaders(),
+        data: { session_id: target!.id, guest_name: 'Session Authority Guest', guest_email: `session-authority-${Date.now()}@example.test`, party_size: 6 },
+      })
+      expect(booked.status(), await booked.text()).toBe(201)
+      const before = (await read()).find(row => row.id === target!.id)!
+      expect(before).toMatchObject({ capacity: 10, claimed: 6, remaining: 4 })
+      expect((await request.put(`${url}/availability`, { data: { location_id: 'loc-demo', slots: [] } })).status()).toBe(200)
+      await call('set_product_booking_config', { product_id: created.id, duration_minutes: 30, default_capacity: 2 })
+      await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
+      const after = (await read()).find(row => row.id === target!.id)!
+      for (const field of ['id', 'source_occurrence_key', 'timezone', 'starts_at', 'ends_at', 'capacity', 'status', 'claimed', 'remaining'] as const) expect(after[field]).toEqual(before[field])
+      const publicRead = await request.get(`${baseURL}/api/public/products/${created.slug}/sessions`, { headers: tenantTestExtraHeaders() })
+      expect(publicRead.status(), await publicRead.text()).toBe(200)
+      expect((await publicRead.json()).sessions.find((row: { id: string }) => row.id === target!.id)).toMatchObject({ remaining: 4, is_full: false, starts_at: target!.starts_at, ends_at: target!.ends_at, timezone: target!.timezone })
+      // Retain the local booking proof/history and withhold this disposable product.
+      await call('set_product_publication', { product_id: created.id, published: false })
     })
 
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
