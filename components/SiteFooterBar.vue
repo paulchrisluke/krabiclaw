@@ -22,15 +22,19 @@
       </div>
     </div>
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
-      <select
-        v-if="locales.length > 1"
-        :value="locale"
-        :aria-label="t('legal.language')"
-        class="cursor-pointer appearance-none bg-transparent p-0 transition hover:opacity-70"
-        @change="setLocale(($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="item in locales" :key="item.code" :value="item.code">{{ item.name }}</option>
-      </select>
+      <!-- Route-owned representations resolve after the footer's SSR render.
+           Mount the interactive selector after hydration; SEO alternates stay SSR. -->
+      <ClientOnly>
+        <select
+          v-if="locales.length > 1"
+          :value="locale"
+          :aria-label="t('legal.language')"
+          class="cursor-pointer appearance-none bg-transparent p-0 transition hover:opacity-70"
+          @change="setLocale(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="item in locales" :key="item.code" :value="item.code">{{ item.name }}</option>
+        </select>
+      </ClientOnly>
       <button
         v-if="colorMode"
         type="button"
