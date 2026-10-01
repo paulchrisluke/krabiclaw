@@ -3,6 +3,8 @@
 // Phone numbers stored and sent in E.164 format (+66946230215).
 
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
+import { hasOrganizationEntitlement } from './billing'
+import type { CloudflareEnv } from './auth'
 import { parsePhoneOrThrow } from '~/utils/phone'
 
 function maskPhone(phone: string): string {
@@ -297,10 +299,11 @@ export function buildWhatsAppTemplatePayload(template: WhatsAppTemplate, vars: R
 
 export type SendWhatsAppResult =
   | { success: true; status: 'sent'; messageId: string | undefined }
+  | { success: true; status: 'skipped'; reason: 'messaging_not_enabled' }
   | { success: false; status: 'failed' | 'unknown'; error: string }
 
 export async function sendWhatsAppNotification(
-  env: WhatsAppEnv,
+  env: CloudflareEnv & WhatsAppEnv,
   opts: {
     organizationId: string
     locationId?: string | null
@@ -309,6 +312,10 @@ export async function sendWhatsAppNotification(
     vars?: Record<string, string>
   }
 ): Promise<SendWhatsAppResult> {
+  // Recheck at the provider boundary, including downgrades after recipient selection.
+  if (!await hasOrganizationEntitlement(env, opts.organizationId, 'messaging')) {
+    return { success: true, status: 'skipped', reason: 'messaging_not_enabled' }
+  }
   const phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = env.WHATSAPP_ACCESS_TOKEN
 
