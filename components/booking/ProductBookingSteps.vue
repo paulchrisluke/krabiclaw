@@ -52,7 +52,7 @@
         <div v-else class="flex-1 overflow-y-auto">
           <BookingRecap
             v-if="timeSelection"
-            :main-line="timeSelection.label"
+            :main-line="`${timeSelection.label} · ${formatTime(timeSelection.time, locale)}`"
             :meta-line="allowTimezoneSelection ? (bookingTimezone ?? '') : showPartySize ? `${partySize} ${t(partySize === 1 ? 'saya.experience_detail.guest' : 'saya.experience_detail.guests')}` : ''"
             :edit-label="t('saya.experience_detail.change')"
             @edit="bookingStep = 1"
@@ -72,11 +72,11 @@ import BookingRecap from '~/components/booking/BookingRecap.vue'
 import BookingContactForm from '~/components/booking/BookingContactForm.vue'
 import BookingTimeStep from '~/components/booking/BookingTimeStep.vue'
 import type { SessionBookingController } from '~/composables/useSessionBooking'
-import { timezoneLabel } from '~/utils/timezone'
+import { formatTime, timezoneLabel } from '~/utils/timezone'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 const props = defineProps<{ controller: SessionBookingController; confirmationMode: 'instant' | 'review' }>()
 const { bookingStep, sellableVariants, selectedVariantId, variantPriceLabel, sessionsPending,
   availabilityDates, referenceDate, timeSelection, partySize, showPartySize, allowTimezoneSelection, guestTimezone, bookingTimezone, timezoneOptions, guestsMax, bookingError, submitting, submitBooking } = props.controller
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const variantGroup = useId()
 </script>

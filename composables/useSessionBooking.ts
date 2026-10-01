@@ -177,7 +177,7 @@ export function useSessionBooking(input: MaybeRefOrGetter<SessionBookingContext>
 
   /** A guest pressing a time on the page arrives in the form with it chosen. */
   async function openBookingAt(session: PublicProductSession) {
-    timeSelection.value = { sessionId: session.id, day: localDateOf(session), time: localTimeOf(session), label: `${sessionDayLabel(session)} · ${sessionTimeLabel(session)}` }
+    timeSelection.value = { sessionId: session.id, day: localDateOf(session), time: localTimeOf(session), label: sessionDayLabel(session) }
     await openBooking()
   }
 

@@ -94,6 +94,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     const dialog = page.getByRole('dialog', { name: products[0]!.name })
     await dialog.getByRole('button', { name: /2:00 PM/ }).first().click()
     await dialog.getByRole('button', { name: 'Continue', exact: true }).click()
+    await expect(dialog.getByText(/ · 2:00 PM$/, { exact: false })).toBeVisible()
     await dialog.getByLabel('Full name', { exact: true }).fill('Browser review guest')
     await dialog.getByLabel('Email address', { exact: true }).fill(`browser-consultation-${stamp}@playwright.example`)
     await page.screenshot({ path: 'artifacts/consultations-contact-mobile.png', fullPage: false })
