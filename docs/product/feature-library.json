@@ -267,10 +267,10 @@
           "server/domain/requests.ts": "3e4100dc439f6e37015011b7c8f069629fbed2f470a4a9a938d4198bafc498ed",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e",
-          "server/domain/product-bookings.ts": "b0f49ff9def9ad3e7395f98943e3d8008724987180a5e0b37ececb7710477af1",
+          "server/domain/product-bookings.ts": "4899e0d82c75e18badc0a0f72f4d4ced04b557887f1f13514aadb1771be5229b",
           "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
           "server/utils/mcp-executor/bookings.ts": "752a526ab52b0af73972230d2a5edf27737549fd1270633f058d8b00d968d30d",
-          "tests/e2e/mcp-bookings.spec.ts": "7b05f251669c80562bd3fbbfdb29c6ce4a27134b916a9bb9ad35aff6d9023601",
+          "tests/e2e/mcp-bookings.spec.ts": "cbb59693903468354802b4d4742cca76ab66602506ac7e5a4fb1adfed77f8e2b",
           "tests/integration/availability-d1.test.ts": "2039f94f5663232b0b22f3bf87d30b1bceffaad2a2a9037e957bf33423372048",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
