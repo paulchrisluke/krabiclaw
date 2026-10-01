@@ -269,8 +269,8 @@
           "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
           "server/domain/product-bookings.ts": "9d936fd1835f972c36ccdc255193c22a9ce1af3a15ae4687dced75920d287621",
           "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
-          "server/utils/mcp-executor/bookings.ts": "752a526ab52b0af73972230d2a5edf27737549fd1270633f058d8b00d968d30d",
-          "tests/e2e/mcp-bookings.spec.ts": "cff4737b6ec558a356443fda5709a5d9ffba9a2297ff12e34a01d5c8b3d87c6f",
+          "server/utils/mcp-executor/bookings.ts": "c7b4b8be63fc9d88b52971f8e2566520a0695f3ae0f3303231fdcfb8a5fdfab4",
+          "tests/e2e/mcp-bookings.spec.ts": "5bdfd9461491a0644b93c27c4437486e9ceabaf65820593013f9dba26765b07e",
           "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }

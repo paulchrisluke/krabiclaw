@@ -1,0 +1,70 @@
+{
+  "reviewed_head": "1d2f9fe85f905bab4fb996783d5ff62264065ab5",
+  "base_commit": "829a38c03172008ce5d292de6e7ad49e0758dd04",
+  "command": "coderabbit review --committed --base-commit 829a38c03172008ce5d292de6e7ad49e0758dd04 --agent",
+  "status": "review_completed",
+  "outcome": "completed",
+  "finding_count": 3,
+  "findings": [
+    {
+      "file": "server/utils/mcp-executor/bookings.ts",
+      "severity": "minor",
+      "finding": "Booking list guest/provenance fields were serialized JSON strings.",
+      "resolution": "Parse guest/provenance before pagination, preserve null, and verify list/detail parity through authenticated Worker calls."
+    },
+    {
+      "file": "tests/e2e/mcp-bookings.spec.ts",
+      "severity": "minor",
+      "finding": "Capacity assertion could skip when remaining was null.",
+      "resolution": "Require finite remaining capacity and always assert one decrement for concurrent replay."
+    },
+    {
+      "file": "tests/e2e/mcp-bookings.spec.ts",
+      "severity": "minor",
+      "finding": "Cleanup restored hard-coded policy defaults.",
+      "resolution": "Read original complete Product booking config, restore its exact values and independently read them back; always release the tenant mutation lock."
+    }
+  ],
+  "reviewed_files": [
+    "chatgpt-app-submission.json",
+    "docs/evidence/booking-mcp/README.md",
+    "docs/evidence/booking-mcp/created-mcp-booking.json",
+    "docs/mcp.md",
+    "docs/product/feature-library.json",
+    "scripts/generate-chatgpt-app-submission.mjs",
+    "server/api/public/products/[slug]/book.post.ts",
+    "server/domain/product-bookings.ts",
+    "server/domain/requests.ts",
+    "server/utils/mcp-catalog-snapshots/tenant.json",
+    "server/utils/mcp-executor/bookings.ts",
+    "server/utils/mcp-executor/index.ts",
+    "server/utils/mcp-tools/bookings.ts",
+    "server/utils/mcp-tools/index.ts",
+    "server/utils/mcp-tools/shared.ts",
+    "server/utils/mcp-tools/submissions.ts",
+    "server/utils/notifications.ts",
+    "server/utils/reservation-cancel-token.ts",
+    "tests/e2e/mcp-bookings.spec.ts",
+    "tests/unit/reservation-cancel-token.test.ts"
+  ],
+  "excluded_binary_files": [
+    "docs/evidence/booking-mcp/pending-mcp-booking.png"
+  ],
+  "additional_unchanged_review_runs": 0,
+  "payments_boundary": "Payments integration is reviewed separately. Required payment remains guarded here; no payment bridge edits were made.",
+  "validation": {
+    "quality": "passed",
+    "production_worker_build": "passed",
+    "authenticated_local_worker_browser": "passed, including list/detail parity, unconditional capacity assertion, and exact configuration restoration/readback"
+  },
+  "manual_payments_integration_note": {
+    "inspected_payments_head": "51988ae91",
+    "finding": "Paid rejection throws HTTP 409 with data.financial_approval_url; the generic MCP error path discards that data, preventing the browser handoff.",
+    "paths": [
+      "server/domain/payments/rejection.ts",
+      "server/utils/mcp-protocol.ts",
+      "server/api/mcp.post.ts"
+    ],
+    "boundary": "The browser refund approval endpoint already passes server-bound financialAuthorizationId to the canonical reject operation. Payments must preserve the MCP browser URL handoff; no competing bridge changes or model confirmation substitutes were added."
+  }
+}

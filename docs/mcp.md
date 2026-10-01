@@ -104,7 +104,9 @@ are managed with `list_product_booking_sessions`, `list_product_bookings`,
 `reject_product_booking`, `cancel_product_booking`, and
 `request_product_booking_change`. These require tenant admin/owner access. Select a
 real Session ID from the canonical session listing; it includes pending capacity
-and tenant-scoped cross-Product online calendar exclusion.
+and tenant-scoped cross-Product online calendar exclusion. Booking list results
+expose parsed `guest` and `provenance` objects (or null), matching booking detail
+readback.
 
 Creation uses `server/domain/product-bookings.ts#createProductBooking`, the same
 service as the public Product booking route. It derives pending/confirmed status
