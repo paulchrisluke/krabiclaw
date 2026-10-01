@@ -3,7 +3,7 @@
   <DashboardLeafPanel
     id="calendar-settings-seats"
     title="Seats per time slot"
-    lead="How many guests can start at the same time? Once a time slot is full, guests are offered the next one."
+    lead="How many guests can start at the same time?"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"

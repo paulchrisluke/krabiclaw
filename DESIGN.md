@@ -86,7 +86,7 @@ The inside of a leaf, measured against Airbnb's host tools (see
 control and nothing about its size, radius or width.
 
 **A yes/no is never a checkbox.** A rule — something guests are held to — is a
-✕/✓ pair (`RuleRow`). A setting is a switch (`SettingRow`). A one-of-N is a
+✕/✓ pair, as Airbnb's house rules are. A setting is a switch (`SettingRow`). A one-of-N is a
 set of cards: `URadioGroup variant="card"`, which the theme draws as Airbnb's
 selectable cards, so it needs no wrapper of its own. A checkbox exists
 only in a list's *Select* mode, which `DashboardListEditor` already draws.

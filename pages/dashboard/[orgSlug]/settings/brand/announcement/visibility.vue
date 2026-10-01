@@ -9,8 +9,8 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <SettingRow v-model="editor.form.announcementEnabled" label="Show announcement" description="A dismissible popup shown to visitors on your website." />
-    <SettingRow v-if="editor.form.announcementEnabled" v-model="editor.form.announcementDismissible" label="Allow visitors to dismiss the announcement" />
+    <SettingRow v-model="editor.form.announcementEnabled" label="Show announcement" description="A popup shown to visitors on your website." />
+    <SettingRow v-if="editor.form.announcementEnabled" v-model="editor.form.announcementDismissible" label="Stay closed once a visitor closes it" description="Whether a visitor who closes it will not be shown it again on that device." />
   </DashboardLeafPanel>
 </template>
 

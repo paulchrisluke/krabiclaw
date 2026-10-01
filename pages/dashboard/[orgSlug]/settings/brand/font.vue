@@ -6,11 +6,11 @@
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"
-    :footer="editor.supportsOrganizationFonts.value"
+    :footer="editor.sayaTheme.value"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <template v-if="editor.supportsOrganizationFonts.value">
+    <template v-if="editor.sayaTheme.value">
       <UFormField label="Website font">
         <USelect v-model="editor.form.font_preset" :items="ORGANIZATION_FONT_OPTIONS" value-key="value" label-key="label" class="w-full" />
       </UFormField>

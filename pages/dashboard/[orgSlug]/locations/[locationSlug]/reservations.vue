@@ -17,7 +17,15 @@
         icon="i-lucide-calendar-off"
         description="This location does not take reservations yet. Saving a policy opens them."
       />
-      <ReservationPolicyForm v-model="editor.reservationForm.value" :pickers="pickers" />
+      <!-- Notice, seats and cancellation are the calendar's settings; this page holds the guests' notes. -->
+      <UFormField label="Anything else" description="Shown at the end of the list on your public page.">
+        <UTextarea
+          :model-value="editor.reservationForm.value.additional_notes_html ?? ''"
+          :rows="4"
+          class="w-full"
+          @update:model-value="setNotes"
+        />
+      </UFormField>
       <UButton
         v-if="editor.reservationConfigExists.value"
         color="error"
@@ -35,7 +43,6 @@
 </template>
 
 <script setup lang="ts">
-import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
 import { useLocationEditor } from '~/lib/components/workspace/settings/LocationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -44,13 +51,9 @@ const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'reservations')
 
-// The numbers these rules carry are chosen on the calendar's settings leaves, for this location.
-const route = useRoute()
-const picker = (leaf: string) => ({ path: `/dashboard/${route.params.orgSlug}/calendar/settings/${leaf}`, query: { locationId: dashboardLocation.currentLocationId.value } })
-const router = useRouter()
-const pickers = computed(() => ({
-  seats: router.resolve(picker('seats')).fullPath,
-  notice: router.resolve(picker('notice')).fullPath,
-  cancellation: router.resolve(picker('cancellation')).fullPath,
-}))
+
+function setNotes(next: string | number) {
+  const notes = typeof next === 'string' ? next.trim() : ''
+  editor.reservationForm.value = { ...editor.reservationForm.value, additional_notes_html: notes || null }
+}
 </script>

@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Stripe Connect | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Payouts | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'
