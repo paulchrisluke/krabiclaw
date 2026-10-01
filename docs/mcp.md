@@ -95,3 +95,55 @@ Use `mcp_tool_call_events` to find unknown tools and repeated failures:
 Telemetry stores hashed session and client identifiers. Never log raw session
 ids, OAuth client ids, bearer tokens, authorization headers, full arguments,
 article bodies, or upload URLs.
+
+## Product bookings and restaurant table Reservations
+
+Consultations use Product → Variant → Price → Session → Booking. Product bookings
+are managed with `list_product_booking_sessions`, `list_product_bookings`,
+`get_product_booking`, `create_product_booking`, `confirm_product_booking`,
+`reject_product_booking`, `cancel_product_booking`, and
+`request_product_booking_change`. These require tenant admin/owner access. Select a
+real Session ID from the canonical session listing; it includes pending capacity
+and tenant-scoped cross-Product online calendar exclusion.
+
+Creation uses `server/domain/product-bookings.ts#createProductBooking`, the same
+service as the public Product booking route. It derives pending/confirmed status
+from Product confirmation policy. A positive Price supports pay-later when online
+collection is disabled. Required online collection returns `payment_required`
+before allocation until the canonical Payments checkout handoff is integrated;
+only a valid explicit zero Price skips required collection. MCP never asserts a
+Stripe payment, creates paid records, or performs a provider financial mutation.
+
+Every creation requires a caller `idempotency_key`, `source`, and explicit
+`guest_acknowledgement` boolean; `external_reference` and `guest_phone` are optional.
+The tenant/key-derived request ID and existing unique constraints protect the
+atomic claim/thread batch from concurrent duplicate creation. A durable
+normalized fingerprint rejects reuse with different details. Provenance is in
+`requests.payload_json.provenance`, including operator, source, external reference,
+acknowledgement choice and `creation_kind: ordinary`. Failed follow-up delivery
+remains incomplete and may be resumed with the same key using canonical delivery
+receipts. Successful replay does not send again. The canonical cancellation-token utility signs a stable per-request capability using the existing email signing secret so a failed guest acknowledgement can retry with the original cancellation link; only its hash is stored. Owner alerts, inbox and audit
+remain when guest acknowledgement is false. Guest `user_id` is null for MCP; the
+operator is recorded as the member actor, and a matching email never links identity.
+
+These tools create ordinary bookings. They do not offer audited appointment
+imports, source-owned calendar reconciliation, or existing-payment conversion.
+An existing appointment import must have a separately supported audited contract;
+it must never be represented as a new payment or fabricated paid Stripe record.
+
+`operational_booking_id` means `bookings.id`. `request_id` means the guest inbox
+thread ID; the legacy public `booking_id` continues to mean that request ID.
+Review confirmation/rejection and cancellation invoke the canonical guest-thread
+operation service with durable operation keys and guest status messages. Changes
+invoke the existing immutable guest proposal flow: they do not mutate the booking
+until guest acceptance, and acceptance retains review status and operational ID.
+
+Restaurant table Reservations remain separate. `cancel_table_reservation` takes
+`operational_reservation_id` (`reservations.id`);
+`request_table_reservation_change` proposes location/date/time/party changes through
+the same guest approval flow. Restaurant Reservations have no pending review
+confirmation/rejection tools. Existing `get_reservation_inquiries` remains valid.
+
+All writes carry explicit reviewed real-world annotations and `confirmRequired`.
+The client must obtain approval for the exact operation; no model-supplied
+`confirm: true` field is accepted as authorization.
