@@ -109,7 +109,12 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
     expect((await call<{ ok: boolean }>('cancel_product_booking', cancellation)).ok).toBe(true)
     expect((await read(created.operational_booking_id)).record.status).toBe('cancelled')
-    const pending = await call<Created>('create_product_booking', { ...args, idempotency_key: crypto.randomUUID(), guest_acknowledgement: true })
+    const acknowledgedArgs = { ...args, idempotency_key: crypto.randomUUID(), guest_acknowledgement: true }
+    const pending = await call<Created>('create_product_booking', acknowledgedArgs)
+    expect((await call<Created>('create_product_booking', acknowledgedArgs)).operational_booking_id).toBe(pending.operational_booking_id)
+    const acknowledgedDeliveries = await request.get(`${baseURL}/api/dev/notifications?organization_id=${org}&since=${encodeURIComponent(since)}`, { headers: devLoginHeaders() })
+    expect(acknowledgedDeliveries.status()).toBe(200)
+    expect((await acknowledgedDeliveries.json()).deliveries.filter((row: { request_id: string; purpose: string; status: string }) => row.request_id === pending.request_id && row.purpose === 'guest_acknowledgement' && row.status === 'sent')).toHaveLength(1)
     ids.push(pending.operational_booking_id)
     expect(pending.status).toBe('pending')
     const rejection = { operational_booking_id: pending.operational_booking_id, idempotency_key: crypto.randomUUID() }
@@ -133,6 +138,12 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
     ids.push(instant.operational_booking_id)
     expect(instant.success).toBe(true)
     expect(instant.status).toBe('confirmed')
+    const publicResponse = await request.post(`${baseURL}/api/public/products/pottery-wheel-class/book`, { headers: potteryHouseTestExtraHeaders(), data: { guest_name: 'Public Guest', guest_email: args.guest_email, session_id: available[2]!.id, party_size: 1 } })
+    expect(publicResponse.status(), await publicResponse.text()).toBe(201)
+    const publicCreated = await publicResponse.json() as Created
+    ids.push(publicCreated.operational_booking_id)
+    expect(publicCreated).toMatchObject({ success: true, status: instant.status, booking_id: publicCreated.request_id })
+    expect((await read(publicCreated.operational_booking_id)).guest_user_id).toBe('user-e2e-pottery-owner')
     const foreign = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_product_booking', args: { organization_id: 'org-demo', operational_booking_id: instant.operational_booking_id } })
     expect(foreign.status()).toBe(200)
     expect((await foreign.json()).result.isError).toBe(true)

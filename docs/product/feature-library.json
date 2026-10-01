@@ -163,7 +163,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "830b40db361a238111bd500522d1e6aafe708ca8371f56e023b65d4813591167",
-          "tests/integration/availability-d1.test.ts": "2039f94f5663232b0b22f3bf87d30b1bceffaad2a2a9037e957bf33423372048",
+          "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
           "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
         }
       },
@@ -264,14 +264,14 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/domain/requests.ts": "3e4100dc439f6e37015011b7c8f069629fbed2f470a4a9a938d4198bafc498ed",
+          "server/domain/requests.ts": "f34f851d6a9ad4a7ab1c1390623d654d4c3a8d05216abd0418a77c6b0d978cd7",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
-          "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e",
+          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
           "server/domain/product-bookings.ts": "4899e0d82c75e18badc0a0f72f4d4ced04b557887f1f13514aadb1771be5229b",
           "server/utils/mcp-tools/bookings.ts": "6a786bc66cd6350f4744fbfe131774df2805c868eedb2ae0de7a1af7fc739b6f",
           "server/utils/mcp-executor/bookings.ts": "752a526ab52b0af73972230d2a5edf27737549fd1270633f058d8b00d968d30d",
-          "tests/e2e/mcp-bookings.spec.ts": "cbb59693903468354802b4d4742cca76ab66602506ac7e5a4fb1adfed77f8e2b",
-          "tests/integration/availability-d1.test.ts": "2039f94f5663232b0b22f3bf87d30b1bceffaad2a2a9037e957bf33423372048",
+          "tests/e2e/mcp-bookings.spec.ts": "cff4737b6ec558a356443fda5709a5d9ffba9a2297ff12e34a01d5c8b3d87c6f",
+          "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
@@ -498,7 +498,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
           "server/utils/mcp-tools/submissions.ts": "37c55ef8f1758b10a399f0f736c01ac9dfe49791424315619f4f60a1da7f75d6",
-          "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e"
+          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
         }
       },
       "pendingOwnerDecision": null,
@@ -769,10 +769,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/notifications.ts": "ea3f3daf17f9e4ffc2931c5815e52962ebf0e0460aaaf96a2b8b8fcff2f002bd",
+          "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
-          "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e"
+          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
         }
       },
       "pendingOwnerDecision": null,
@@ -806,9 +806,9 @@
         "coverageNote": "Real D1 tests mock only the Meta provider boundary and prove zero provider calls for Free/ineligible, active/trialing success, downgrade, multi-org membership, preferences, domain/contact/guest-message paths and settled skipped receipts.",
         "evidenceSha256": {
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
-          "server/utils/notifications.ts": "ea3f3daf17f9e4ffc2931c5815e52962ebf0e0460aaaf96a2b8b8fcff2f002bd",
+          "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
-          "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e",
+          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
         }
       },
@@ -870,7 +870,7 @@
           "server/utils/review-requests.ts": "62c1d1119e0932684c413b74abd7dbe14440f8cd45573b139d0cc77960cf3e23",
           "server/utils/review-request-delivery.ts": "932422b5ff5576042d09c722808cbd8ba1228e79416a11786e7337edff2bce63",
           "server/tasks/review-request-automation.ts": "c317371d25d12653f986590c7164360d0b27c73e3fb904f1b352517af32513f9",
-          "tests/integration/guest-delivery-d1.test.ts": "1fbb1fe85bb915722f2ccf4d083dc52be58fa2ba1416c514819de5a9fcd9fb0e"
+          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
         }
       },
       "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question.",
