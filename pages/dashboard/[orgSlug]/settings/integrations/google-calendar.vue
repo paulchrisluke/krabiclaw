@@ -39,7 +39,7 @@
           <USelectMenu v-model="group" :items="(data.groups ?? []).map(item => ({ label: item.calendar_group, value: item.calendar_group }))" value-key="value" placeholder="Choose an existing single-calendar group" class="w-full" />
         </UFormField>
         <UCheckbox v-model="reservations" label="Also mirror Reservations" />
-        <p class="text-sm text-muted">Only Products enrolled in the selected allocation calendar group are mirrored. Other experience/class bookings are excluded. Changing calendars requires disconnecting and completing managed-event cleanup.</p>
+        <p class="text-sm text-muted">Only Products enrolled in the selected allocation calendar group are mirrored. Other experience/class bookings are excluded. Disconnect removes all Krabiclaw-managed events, including past events. Finish cleanup before changing calendars.</p>
       </template>
       <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
     </IntegrationConnection>
@@ -70,7 +70,7 @@ const calendar = computed(() => integrations.summary.value?.google_calendar ?? n
 
 const isLeaf = (value: unknown): value is CalendarLeaf =>
   isRecord(value) && (value.account_id === null || typeof value.account_id === 'string') && Array.isArray(value.calendars)
-  && (value.calendar === null || isRecord(value.calendar))
+  && Array.isArray(value.groups) && (value.calendar === null || isRecord(value.calendar))
 const isSuccess = (value: unknown): value is { success: true } => isRecord(value) && value.success === true
 
 // The account is the tenant's choice, never guessed: the one this site already
@@ -104,6 +104,8 @@ function keep() {
   changing.value = false
   accountId.value = data.value?.calendar?.account_id
   selected.value = data.value?.calendar?.calendar_id
+  group.value = data.value?.calendar?.calendar_group ?? undefined
+  reservations.value = data.value?.calendar?.include_reservations ?? false
 }
 const options = computed(() => (data.value?.calendars ?? []).map(property => ({ label: `${property.summary}`, value: property.id })))
 
@@ -129,16 +131,16 @@ async function link() {
 }
 
 async function select() {
-  const property = data.value?.calendars.find(candidate => candidate.id === selected.value)
-  if (!property || !accountId.value) return
+  const selection = data.value?.calendars.find(candidate => candidate.id === selected.value)
+  if (!selection || !accountId.value) return
   saving.value = true
   error.value = ''
   try {
-    await dashboardApi(`${api}/select`, { method: 'POST', body: { account_id: accountId.value, calendar_id: property.id, calendar_group: group.value ?? null, include_reservations: reservations.value }, validate: isSuccess })
+    await dashboardApi(`${api}/select`, { method: 'POST', body: { account_id: accountId.value, calendar_id: selection.id, calendar_group: group.value ?? null, include_reservations: reservations.value }, validate: isSuccess })
     await Promise.all([refresh(), integrations.refresh()])
     changing.value = false
   } catch (cause) {
-    error.value = getErrorMessage(cause, 'Could not choose that property.')
+    error.value = getErrorMessage(cause, 'Could not choose that calendar.')
   } finally {
     saving.value = false
   }

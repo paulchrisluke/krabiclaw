@@ -14,8 +14,8 @@ export default defineHandler(async (event) => {
   const groups = await calendarGroups(env.DB, organization.id)
   const accountId = event.url.searchParams.get('account_id') || calendar?.account_id || null
   if (!accountId) return jsonResponse({ account_id: null, calendar, groups, calendars: [], error: null })
-  await requireIntegrationAccount(env, accountId, { userId: session.user.id, currentAccountId: calendar?.account_id, providerId: 'google', scopes: INTEGRATION_SCOPES['google-calendar'] })
   try {
+    await requireIntegrationAccount(env, accountId, { userId: session.user.id, currentAccountId: calendar?.account_id, providerId: 'google', scopes: INTEGRATION_SCOPES['google-calendar'] })
     const calendars = await listWritableCalendars((await linkedAccountAccessToken(env, accountId)).accessToken)
     return jsonResponse({ account_id: accountId, calendar, groups, calendars, error: null })
   } catch (error) {

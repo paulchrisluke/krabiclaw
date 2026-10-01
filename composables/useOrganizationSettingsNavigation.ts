@@ -36,7 +36,7 @@ export function useOrganizationSettingsNavigation() {
             { id: 'qa', label: 'Reviews and Q&A', summary: 'What guests read before they visit', to: business.qa },
             { id: 'brand', label: 'Brand', summary: 'Name, logo, description, colour, font, contact', to: business.brand },
             { id: 'website', label: 'Website', summary: 'Status, domain, languages, currency', to: `${settingsPath.value}/website` },
-            { id: 'integrations', label: 'Integrations', summary: 'Google Maps, Google Analytics, Search Console, Facebook, Instagram', to: `${settingsPath.value}/integrations` },
+            { id: 'integrations', label: 'Integrations', summary: 'Google Maps, Google Analytics, Search Console, Google Calendar, Facebook, Instagram', to: `${settingsPath.value}/integrations` },
           ]
         : []),
       { id: 'members', label: 'Team', summary: 'People and access', to: `${settingsPath.value}/members` },

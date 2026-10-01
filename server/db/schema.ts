@@ -2285,7 +2285,7 @@ export const google_calendar_event_links = sqliteTable("google_calendar_event_li
  created_at: text().notNull(),
  updated_at: text().notNull(),
 }, table => [
- uniqueIndex("google_calendar_subject_unique").on(table.organization_id, table.integration_revision, table.booking_kind, table.operational_id),
+ uniqueIndex("google_calendar_subject_unique").on(table.organization_id, table.integration_revision, table.booking_kind, table.operational_id).where(sql`state <> 'deleted'`),
  uniqueIndex("google_calendar_provider_unique").on(table.calendar_id, table.event_id),
  index("google_calendar_due_idx").on(table.organization_id, table.state, table.next_attempt_at),
  check("google_calendar_kind_check", sql`booking_kind IN ('booking', 'reservation')`),
