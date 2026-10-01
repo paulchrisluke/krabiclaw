@@ -4,7 +4,7 @@
   "paidPresentationOwner": "Stripe products/prices including marketing_features; server/utils/billing-plans.ts reads them.",
   "freePresentationOwner": "server/utils/billing-plans.ts STARTER_PLAN",
   "runtimePolicyOwner": "server/utils/billing-entitlements.ts and actual runtime gates",
-  "liveStripeVerification": "Not performed: no authorized live catalog snapshot available. Provider marketing drift remains unverified.",
+  "liveStripeVerification": "Read-only provider/public billing audit: docs/product/stripe-catalog-verification.json. Timestamped evidence, not a replacement live catalog.",
   "features": [
     {
       "id": "site.management",
@@ -357,7 +357,7 @@
       ],
       "verification": {
         "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "baseline": "91fbaaa71d7cce0df02997b7fdec7a8602015363",
         "sources": [
           "server/utils/mcp-executor/locales.ts",
           "server/utils/localization.ts",
@@ -370,7 +370,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locales.ts": "55972539a25b5cab40ecea4098c92b835c2366142c21314d2450ed54ab3262df",
           "server/utils/localization.ts": "7ef339b5c4179f9ed1fe42fdb4b40e98f7d19286df6a866d1542e1f8bd9c7bf7",
-          "tests/e2e/kikuzuki-localization.spec.ts": "493ec3e7206ae0d21cd43f4117bbb63040c61460ea1d43b1d5e3aa0b28281e15",
+          "tests/e2e/kikuzuki-localization.spec.ts": "02570caa6f86def0949c534ca44acbb144c7e6c88cb8c3804d5c92bf0123cc48",
           "server/utils/mcp-tools/locales.ts": "80564d8cba747e815e39fe36767e281570aaeff4151673a281cbee8bef5605c3"
         }
       },
@@ -716,7 +716,7 @@
       "mcpOperations": [],
       "verification": {
         "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "baseline": "91fbaaa71d7cce0df02997b7fdec7a8602015363",
         "sources": [
           "server/utils/notifications.ts",
           "server/utils/domain-notifications.ts",
@@ -727,8 +727,8 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/notifications.ts": "43403e44b2e169fa2bbbb3fb8affb527f5a415dacd130bb78defe06fa13bcf5d",
-          "server/utils/domain-notifications.ts": "4ffda72315dc7c03087b3d3695a28317e7562474e785e7524f01b88cf786a865",
+          "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
+          "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
           "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
         }
@@ -740,34 +740,36 @@
       "referenceLabel": "WhatsApp business notifications",
       "labelStatus": "existing-vocabulary-review-before-publication",
       "availability": {
-        "free": "conditional",
+        "free": "unavailable",
         "growth": "conditional"
       },
-      "currentBehavior": "BASELINE DEFECT: verified phone, membership and preferences are checked, but messaging is not enforced in baseline notification sends. Separate cost-control fix is under review. OTP remains separate.",
+      "currentBehavior": "Business WhatsApp notifications require messaging at recipient selection and again at the defensive provider-send boundary. Verified phone, membership and notification preferences still apply. Domain and guest-thread alerts share the gate; email/dashboard fallbacks and persisted skipped outcomes remain independent. Authentication OTP and inbound replies are separate.",
       "entitlementKeys": [
         "messaging"
       ],
       "mcpOperations": [],
       "verification": {
-        "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "status": "runtime-tested",
+        "baseline": "91fbaaa71d7cce0df02997b7fdec7a8602015363",
         "sources": [
           "server/utils/whatsapp.ts",
           "server/utils/notifications.ts",
           "server/utils/domain-notifications.ts"
         ],
         "tests": [
-          "tests/integration/guest-delivery-d1.test.ts"
+          "tests/integration/guest-delivery-d1.test.ts",
+          "tests/integration/whatsapp-entitlement-d1.test.ts"
         ],
-        "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
+        "coverageNote": "Real D1 tests mock only the Meta provider boundary and prove zero provider calls for Free/ineligible, active/trialing success, downgrade, multi-org membership, preferences, domain/contact/guest-message paths and settled skipped receipts.",
         "evidenceSha256": {
-          "server/utils/whatsapp.ts": "a75e7d785a29690d2ce33e619587b316a2ea17d29c05de7c8507f436cfbc1048",
-          "server/utils/notifications.ts": "43403e44b2e169fa2bbbb3fb8affb527f5a415dacd130bb78defe06fa13bcf5d",
-          "server/utils/domain-notifications.ts": "4ffda72315dc7c03087b3d3695a28317e7562474e785e7524f01b88cf786a865",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
+          "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
+          "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
+          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807",
+          "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
         }
       },
-      "pendingOwnerDecision": "Owner requested messaging enforcement. Update evidence/Free availability after the isolated gate fix merges; do not gate OTP or unrelated inbound replies."
+      "pendingOwnerDecision": null
     },
     {
       "id": "notifications.whatsapp-content",
@@ -782,14 +784,14 @@
       "mcpOperations": [],
       "verification": {
         "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "baseline": "91fbaaa71d7cce0df02997b7fdec7a8602015363",
         "sources": [
           "server/utils/whatsapp.ts"
         ],
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/whatsapp.ts": "a75e7d785a29690d2ce33e619587b316a2ea17d29c05de7c8507f436cfbc1048"
+          "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df"
         }
       },
       "pendingOwnerDecision": null
@@ -900,7 +902,7 @@
       ],
       "verification": {
         "status": "source-reviewed",
-        "baseline": "1fd7f009f4e2057756ddd01d4c6b52b847e4d8d9",
+        "baseline": "91fbaaa71d7cce0df02997b7fdec7a8602015363",
         "sources": [
           "server/utils/localization.ts",
           "server/utils/mcp-executor/locales.ts"
@@ -912,7 +914,7 @@
         "evidenceSha256": {
           "server/utils/localization.ts": "7ef339b5c4179f9ed1fe42fdb4b40e98f7d19286df6a866d1542e1f8bd9c7bf7",
           "server/utils/mcp-executor/locales.ts": "55972539a25b5cab40ecea4098c92b835c2366142c21314d2450ed54ab3262df",
-          "tests/e2e/kikuzuki-localization.spec.ts": "493ec3e7206ae0d21cd43f4117bbb63040c61460ea1d43b1d5e3aa0b28281e15"
+          "tests/e2e/kikuzuki-localization.spec.ts": "02570caa6f86def0949c534ca44acbb144c7e6c88cb8c3804d5c92bf0123cc48"
         }
       },
       "pendingOwnerDecision": null

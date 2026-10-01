@@ -58,9 +58,11 @@ this change.
 
 - Review-request creation/sending currently checks `review_requests`; token reads
   and ordinary booking email are different paths. Free policy remains open.
-- Baseline WhatsApp business sends lack the `messaging` check. The separately
-  reviewed fix must land before changing this entry to paid-only. OTP and inbound
-  replies must not be silently included in that policy change.
+- WhatsApp business sends enforce `messaging` at recipient selection and the
+  defensive sender; Free and ineligible subscriptions skip provider calls. The
+  runtime D1 evidence covers downgrade, preference and multi-organization cases.
+  OTP and inbound replies remain separate. This is branch behavior, not a claim
+  that the fix has been deployed to production.
 - Saya/Blawby provisioning has no billing check. Blawby copy says Growth inclusion;
   reconcile it with the owner's two-free-theme intention.
 - Docs and the platform help form are evidenced. Community/Priority strings in
@@ -79,7 +81,8 @@ The public projection matched the provider's seven marketing bullets. The
 `social.automatic-sync` entry: current explicit provider operations do not prove
 automatic imports. Broad Google Places wording must distinguish the free initial
 onboarding snapshot from paid manual import and weekly review refresh. Paid
-notification claims depend on the separately reviewed WhatsApp enforcement fix.
+notification claims map to the separately reviewed WhatsApp enforcement fix and
+its runtime tests; deployment status must be checked before announcing it.
 Community/Priority strings come from application limits, not Stripe bullets, and
 remain unsupported service promises. None of these findings authorizes a catalog
 write or resolves the open review-request Free policy.
