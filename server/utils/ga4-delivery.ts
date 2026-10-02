@@ -14,10 +14,10 @@ import type { Ga4Projection } from '~/utils/ga4-projection'
  * host; there is no environment-level property and no synthetic client.
  *
  * The outcome of every attempt is written onto the native event
- * (`payload.ga4_delivery`), so reporting can tell a disabled, disconnected or
+ * (`payload.ga4_delivery`), so reporting can tell an unconfigured or
  * consent-rejected outcome from a provider failure without inventing zeros.
  */
-export type Ga4DeliveryStatus = 'sending' | 'sent' | 'dispatched' | 'not_configured' | 'disconnected' | 'no_consent_context' | 'consent_rejected' | 'failed'
+export type Ga4DeliveryStatus = 'sending' | 'sent' | 'dispatched' | 'not_configured' | 'no_consent_context' | 'consent_rejected' | 'failed'
 export interface Ga4Delivery {
   transport: 'measurement_protocol' | 'zaraz'
   status: Ga4DeliveryStatus
@@ -28,18 +28,15 @@ export interface Ga4Delivery {
 
 interface Ga4Destination { measurementId: string; host: string }
 
-type DestinationResult = { destination: Ga4Destination } | { status: 'not_configured' | 'disconnected'; detail: string }
+type DestinationResult = { destination: Ga4Destination } | { status: 'not_configured'; detail: string }
 
 async function resolveGa4Destination(db: DbClient, organizationId: string): Promise<DestinationResult> {
-  const row = await queryFirst<{ status: string | null; measurement_id: string | null; host: string | null }>(db, `
-    SELECT json_extract(o.integrations_json, '$.google_analytics.status') AS status,
-           json_extract(o.integrations_json, '$.google_analytics.measurement_id') AS measurement_id,
+  const row = await queryFirst<{ measurement_id: string | null; host: string | null }>(db, `
+    SELECT (SELECT i.measurement_id FROM organization_integrations i WHERE i.organization_id = o.id AND i.provider = 'google_analytics') AS measurement_id,
            (SELECT d.domain FROM organization_domains d WHERE d.organization_id = o.id AND d.role = 'canonical' AND d.status = 'active') AS host
       FROM organization o WHERE o.id = ? LIMIT 1`, [organizationId])
   if (!row) throw new Error(`Organization ${organizationId} not found`)
-  if (!row.status) return { status: 'not_configured', detail: 'no_google_analytics_integration' }
-  if (row.status !== 'active') return { status: 'disconnected', detail: `integration_${row.status}` }
-  if (!row.measurement_id) return { status: 'not_configured', detail: 'no_measurement_id' }
+  if (!row.measurement_id) return { status: 'not_configured', detail: 'no_google_analytics_integration' }
   if (!row.host) return { status: 'not_configured', detail: 'no_canonical_host' }
   return { destination: { measurementId: row.measurement_id, host: row.host } }
 }

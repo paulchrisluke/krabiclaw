@@ -92,11 +92,13 @@ export interface ProductEditor {
   locationId: ComputedRef<string | null>
   definitions: Ref<MetafieldDefinition[]>
   isNew: ComputedRef<boolean>
+  /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
+  ready: ComputedRef<boolean>
   sectionLabels: Record<SectionKey, string>
   saving: Ref<boolean>
   saveError: Ref<string | null>
   photoError: Ref<string | null>
-  saveLabel: Ref<string | undefined>
+  saveLabel: Ref<string>
   saveDisabled: Ref<boolean>
   setPrimaryImage: (assetId: string | null) => Promise<void>
   addOption: () => void
@@ -114,7 +116,12 @@ export interface ProductEditor {
   addSlot: (weekday: number) => void
   removeSlot: (slot: ScheduleSlotDraft) => void
   revert: () => void
-  save: () => Promise<void>
+  /**
+   * Commit the draft, then close the open leaf. A leaf nested below a section
+   * (one option, one combination's price) names its own parent, so the save
+   * lands where its Close would rather than back on the product.
+   */
+  save: (closeTo?: string) => Promise<void>
 }
 
 export const productEditorKey = Symbol('product-editor') as InjectionKey<ProductEditor>
@@ -190,6 +197,7 @@ const detailKey = computed(() => level.child.value)
 const editorKey = computed<SectionKey>(() => (detailKey.value ?? 'photo') as SectionKey)
 
 const isNew = computed(() => productId.value === 'new')
+const ready = computed(() => isNew.value || (product.value?.id === productId.value && !loadError.value))
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
@@ -640,7 +648,7 @@ function payload() {
   }
 }
 
-const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk({
+const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveCurrentEditor, startOrCreate } = useCreateWalk({
   recordPath: itemPath,
   isNew,
   openKey: editorKey,
@@ -652,6 +660,16 @@ const { createActionLabel, saveLabel, saveDisabled, save: saveCurrentEditor, sta
   existingBlocked: () => !sectionValid.value,
   commit,
 })
+
+// An existing product's commit writes straight to the live record MCP reads,
+// so it says what it does: Publish. Creating still walks its sections.
+const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
+
+const closeTo = ref<string | null>(null)
+async function save(target?: string) {
+  closeTo.value = target ?? null
+  try { await saveCurrentEditor() } finally { closeTo.value = null }
+}
 
 async function commit() {
   const id = locationId.value
@@ -683,7 +701,7 @@ async function commit() {
     if (editorKey.value === 'publication') await savePublication(id)
     if (editorKey.value === 'booking') await saveBooking()
     await load({ force: true })
-    await level.close()
+    await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
     saveError.value = getErrorMessage(error, `Failed to save ${presentation.value.itemLabel.toLowerCase()}`)
   } finally {
@@ -911,6 +929,7 @@ provide(productEditorKey, {
   locationId,
   definitions,
   isNew,
+  ready,
   sectionLabels,
   saving,
   saveError,
@@ -933,6 +952,6 @@ provide(productEditorKey, {
   addSlot,
   removeSlot,
   revert,
-  save: saveCurrentEditor,
+  save,
 })
 </script>

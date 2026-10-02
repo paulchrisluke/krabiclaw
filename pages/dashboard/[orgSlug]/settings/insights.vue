@@ -32,7 +32,7 @@
 
       <div v-if="tab === 'views' && analytics && !loading && !loadError" class="space-y-8">
 
-        <UCard variant="soft" class="rounded-2xl">
+        <section class="border-b border-default pb-8 last:border-b-0">
           <div class="grid grid-cols-2 gap-x-6 gap-y-6">
             <div v-for="metric in metricCards" :key="metric.label">
               <p class="text-sm text-muted">{{ metric.label }}</p>
@@ -40,20 +40,20 @@
               <p class="mt-2 text-xs leading-5 text-muted">{{ metric.detail }}</p>
             </div>
           </div>
-        </UCard>
+        </section>
 
-        <UCard variant="soft" class="rounded-2xl">
-          <template #header>
+        <section class="border-b border-default pb-8 last:border-b-0">
+          <header class="mb-4">
             <div class="flex items-center justify-between gap-3">
               <h2 class="font-semibold text-highlighted">Traffic trend</h2>
               <UBadge color="neutral" variant="soft" class="rounded-2xl">{{ dailyData.length }} days</UBadge>
             </div>
-          </template>
+          </header>
           <AnalyticsTrendChart label="Daily pageviews and sessions" :dates="dailyData.map(day => day.date)" :series="trafficSeries" />
-        </UCard>
+        </section>
 
-        <UCard variant="soft" class="rounded-2xl">
-          <template #header><h2 class="font-semibold text-highlighted">Top pages</h2></template>
+        <section class="border-b border-default pb-8 last:border-b-0">
+          <header class="mb-4"><h2 class="font-semibold text-highlighted">Top pages</h2></header>
           <table v-if="analytics.topPages.length" class="w-full table-fixed text-left text-sm">
             <thead class="text-xs text-muted"><tr><th class="w-3/5 pb-3 font-medium">Page</th><th class="pb-3 text-right font-medium">Views</th><th class="pb-3 text-right font-medium">Share</th></tr></thead>
             <tbody class="divide-y divide-default">
@@ -65,11 +65,11 @@
             </tbody>
           </table>
           <p v-else class="text-sm text-muted">No page data yet.</p>
-        </UCard>
+        </section>
 
         <div class="space-y-6">
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Traffic sources</h2></template>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Traffic sources</h2></header>
             <div v-if="analytics.attribution.length" class="overflow-x-auto">
               <table class="w-full text-left text-sm">
                 <thead class="text-xs text-muted"><tr><th class="pb-3 font-medium">Source / campaign</th><th class="pb-3 text-right font-medium">Sessions</th><th class="pb-3 pl-4 text-right font-medium">Converting</th></tr></thead>
@@ -83,9 +83,9 @@
               </table>
             </div>
             <p v-else class="text-sm text-muted">No attribution data yet.</p>
-          </UCard>
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Conversions</h2></template>
+          </section>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Conversions</h2></header>
             <p class="mb-4 text-3xl font-semibold tabular-nums text-highlighted">{{ formatCount(analytics.dailyConversions.reduce((total, day) => total + day.events, 0)) }}</p>
             <AnalyticsTrendChart label="Daily conversions" :dates="analytics.dailyConversions.map(day => day.date)" :series="conversionSeries" />
             <div v-if="outcomes.length" class="mt-5 divide-y divide-default text-sm">
@@ -94,9 +94,9 @@
                 <span class="tabular-nums">{{ formatCount(row.events) }}</span>
               </div>
             </div>
-          </UCard>
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Pageviews by language</h2></template>
+          </section>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Pageviews by language</h2></header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in nativeLanguages.rows"
@@ -111,9 +111,9 @@
               <p v-if="nativeLanguages.rows.length" class="text-xs text-muted">{{ formatCount(nativeLanguages.totalSessions) }} distinct sessions across all languages (not the sum of the rows).</p>
               <UButton v-if="nativeLanguages.cursor" size="sm" variant="soft" :loading="nativeLanguages.loading" @click="loadLanguages(true)">Show more</UButton>
             </div>
-          </UCard>
-          <UCard v-if="analytics.values.length || analytics.bookingValue.length" variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Value</h2></template>
+          </section>
+          <section v-if="analytics.values.length || analytics.bookingValue.length" class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Value</h2></header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="row in analytics.values"
@@ -145,9 +145,9 @@
               />
               <p class="text-xs text-muted">Quoted booking value is the price shown when a booking was made, not revenue. Currencies are never added together.</p>
             </div>
-          </UCard>
-          <UCard v-if="analytics.signupCohort.signups" variant="soft" class="rounded-2xl">
-            <template #header><h2 class="font-semibold text-highlighted">Signup funnel</h2></template>
+          </section>
+          <section v-if="analytics.signupCohort.signups" class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4"><h2 class="font-semibold text-highlighted">Signup funnel</h2></header>
             <div class="space-y-6">
               <div class="grid grid-cols-3 gap-4" aria-label="Signup conversion funnel">
                 <div v-for="stage in [
@@ -186,14 +186,14 @@
                 </div>
               </details>
             </div>
-          </UCard>
+          </section>
         </div>
 
         <div class="space-y-6">
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <h2 class="font-semibold text-highlighted">Countries</h2>
-            </template>
+            </header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="country in analytics.countries"
@@ -205,12 +205,12 @@
               />
               <p v-if="!analytics.countries.length" class="text-sm text-muted">No country data yet.</p>
             </div>
-          </UCard>
+          </section>
 
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <h2 class="font-semibold text-highlighted">Referrers</h2>
-            </template>
+            </header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="referrer in analytics.referrers"
@@ -221,12 +221,12 @@
               />
               <p v-if="!analytics.referrers.length" class="text-sm text-muted">No referrer data yet.</p>
             </div>
-          </UCard>
+          </section>
 
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <h2 class="font-semibold text-highlighted">Devices</h2>
-            </template>
+            </header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="device in analytics.devices"
@@ -238,12 +238,12 @@
               />
               <p v-if="!analytics.devices.length" class="text-sm text-muted">No device data yet.</p>
             </div>
-          </UCard>
+          </section>
 
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <h2 class="font-semibold text-highlighted">Cities</h2>
-            </template>
+            </header>
             <div class="space-y-4">
               <DashboardAnalyticsRow
                 v-for="city in analytics.cities"
@@ -255,7 +255,7 @@
               />
               <p v-if="!analytics.cities.length" class="text-sm text-muted">No city data yet.</p>
             </div>
-          </UCard>
+          </section>
         </div>
 
 
@@ -263,7 +263,7 @@
 
       <div v-else-if="tab === 'reviews' && reviews && !loading && !loadError" class="space-y-6">
         <div class="space-y-6">
-          <UCard variant="soft" class="rounded-2xl">
+          <section class="border-b border-default pb-8 last:border-b-0">
             <div class="flex items-baseline gap-2">
               <UIcon name="i-lucide-star" class="size-6 text-primary" />
               <span class="text-4xl font-semibold tabular-nums text-highlighted">{{ reviews.average ?? '—' }}</span>
@@ -286,12 +286,12 @@
                 <span class="w-8 shrink-0 text-right text-sm tabular-nums text-muted">{{ bucket.count }}</span>
               </div>
             </div>
-          </UCard>
+          </section>
 
-          <UCard variant="soft" class="rounded-2xl">
-            <template #header>
+          <section class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <h2 class="font-semibold text-highlighted">Recent reviews</h2>
-            </template>
+            </header>
             <div v-if="reviews.recent.length" class="divide-y divide-default">
               <article v-for="review in reviews.recent" :key="review.id" class="py-4 first:pt-0 last:pb-0">
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -304,19 +304,19 @@
               </article>
             </div>
             <p v-else class="py-8 text-center text-sm text-muted">No approved reviews yet.</p>
-          </UCard>
+          </section>
         </div>
       </div>
 
       <div v-else-if="tab === 'opportunities' && setup && !loading && !loadError" class="space-y-6">
         <div class="space-y-6">
-          <UCard v-if="setup" variant="soft" class="rounded-2xl">
-            <template #header>
+          <section v-if="setup" class="border-b border-default pb-8 last:border-b-0">
+            <header class="mb-4">
               <div class="flex items-baseline justify-between gap-3">
                 <h2 class="min-w-0 truncate font-semibold text-highlighted">{{ setup.label }}</h2>
                 <span class="shrink-0 text-sm tabular-nums text-muted">{{ setup.completed }}/{{ setup.total }}</span>
               </div>
-            </template>
+            </header>
             <span class="mb-4 block h-2 overflow-hidden rounded-full bg-elevated">
               <span
                 class="block h-full rounded-full bg-primary"
@@ -333,7 +333,7 @@
                 <span :class="item.done ? 'text-muted line-through' : 'text-highlighted'">{{ item.label }}</span>
               </li>
             </ul>
-          </UCard>
+          </section>
         </div>
       </div>
 

@@ -27,12 +27,21 @@ export default defineHandler(async (event) => {
   if (!thread) return jsonResponse({ error: 'Thread not found' }, { status: 404 })
   await assertMemberScope(db, { ...memberAccessPrincipal(organization.membership, { env, event }), locationId: thread.location_id })
 
-  const body = await readBody<unknown>(event).catch(() => null)
-  const replyBody = body && typeof body === 'object' && 'body' in body && typeof body.body === 'string' ? body.body : undefined
-  const deliveryId = body && typeof body === 'object' && 'deliveryId' in body && typeof body.deliveryId === 'string' ? body.deliveryId : undefined
+  // A reply with photos arrives as a form, its photos as `photos` parts in the
+  // order they were chosen; every other operation is JSON.
+  const multipart = event.req.headers.get('content-type')?.startsWith('multipart/form-data') ?? false
+  const form = multipart ? await event.req.formData() : null
+  const body = form ? null : await readBody<unknown>(event)
+  const field = (name: string) => {
+    const value = form ? form.get(name) : body && typeof body === 'object' && name in body ? Reflect.get(body, name) : undefined
+    return typeof value === 'string' ? value : undefined
+  }
+  const photos = form
+    ? await Promise.all(form.getAll('photos').filter((part): part is File => part instanceof File)
+        .map(async part => ({ bytes: new Uint8Array(await part.arrayBuffer()), filename: part.name || 'photo' })))
+    : []
   const headerKey = (event.req.headers.get('idempotency-key')) || (event.req.headers.get('x-idempotency-key'))
-  const bodyKey = body && typeof body === 'object' && 'idempotencyKey' in body && typeof body.idempotencyKey === 'string' ? body.idempotencyKey : undefined
-  const idempotencyKey = bodyKey || headerKey || undefined
+  const idempotencyKey = field('idempotencyKey') || headerKey || undefined
 
   if (!idempotencyKey) {
     return jsonResponse({ error: 'Idempotency key is required' }, { status: 400 })
@@ -43,8 +52,9 @@ export default defineHandler(async (event) => {
     organizationId,
     action,
     actorUserId: session.user.id,
-    body: replyBody,
-    deliveryId,
+    body: field('body'),
+    photos,
+    deliveryId: field('deliveryId'),
     idempotencyKey,
     env,
   })
@@ -71,9 +81,8 @@ export default defineHandler(async (event) => {
         occurredAt: new Date().toISOString(),
       }))
     }
-    const publication = Promise.all(invalidations).catch((error) => {
-      console.error('Guest thread invalidation publication failed', error)
-    })
+    // The change is not done until the open inboxes have been told about it.
+    const publication = Promise.all(invalidations)
     const waitUntil = getCloudflareWaitUntil(event)
     if (waitUntil) waitUntil(publication)
     else await publication
@@ -90,7 +99,10 @@ export default defineHandler(async (event) => {
       return jsonResponse({ error: 'This guest has no email on file' }, { status: 400 })
     }
     if (outcome.reason === 'empty_body') {
-      return jsonResponse({ error: 'Reply body is required' }, { status: 400 })
+      return jsonResponse({ error: 'Write a message or add a photo' }, { status: 400 })
+    }
+    if (outcome.reason === 'invalid_photo') {
+      return jsonResponse({ error: outcome.message }, { status: 400 })
     }
     if (outcome.reason === 'missing_idempotency_key') {
       return jsonResponse({ error: 'Idempotency key is required' }, { status: 400 })

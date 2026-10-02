@@ -13,7 +13,7 @@ const DAY = 24 * HOUR
 export const NOTICE_OPTIONS = [
   { value: 0, label: 'No notice', description: 'Guests can book a slot right up to its start.' },
   { value: 2 * HOUR, label: '2 hours', description: 'Slots starting within 2 hours are not offered.' },
-  { value: DAY, label: '1 day', description: 'Guests book by the day before.' },
+  { value: DAY, label: '1 day' },
   { value: 2 * DAY, label: '2 days' },
   { value: 3 * DAY, label: '3 days' },
   { value: 7 * DAY, label: '7 days' },
@@ -35,9 +35,9 @@ export function seatsSummary(capacity: number | null | undefined): string {
  * reschedule cutoff is the same instant, so the guest reads one rule.
  */
 export const CANCELLATION_TIERS = [
-  { id: 'flexible', label: 'Flexible', minutes: 2 * HOUR, points: ['Free to change or cancel until 2 hours before', 'Later changes go through you'] },
-  { id: 'moderate', label: 'Moderate', minutes: DAY, points: ['Free to change or cancel until 1 day before', 'Later changes go through you'] },
-  { id: 'firm', label: 'Firm', minutes: 2 * DAY, points: ['Free to change or cancel until 2 days before', 'Later changes go through you'] },
+  { id: 'flexible', label: 'Flexible', minutes: 2 * HOUR, points: ['Free to change or cancel until 2 hours before'] },
+  { id: 'moderate', label: 'Moderate', minutes: DAY, points: ['Free to change or cancel until 1 day before'] },
+  { id: 'firm', label: 'Firm', minutes: 2 * DAY, points: ['Free to change or cancel until 2 days before'] },
 ] as const
 
 export type CancellationTierId = typeof CANCELLATION_TIERS[number]['id']

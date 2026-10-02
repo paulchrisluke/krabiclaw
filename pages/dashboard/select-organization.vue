@@ -19,20 +19,20 @@
     />
 
     <div v-if="pending" class="space-y-3">
-      <USkeleton v-for="index in 3" :key="index" class="h-16 rounded-2xl" />
+      <USkeleton v-for="index in 3" :key="index" class="h-16 rounded-lg" />
     </div>
 
-    <UCard v-else-if="organizations.length" variant="subtle" class="overflow-hidden rounded-2xl" :ui="{ body: 'p-0! sm:p-0!' }">
+    <!-- Rows on the page itself, a hairline between them, as every list in the dashboard is. -->
+    <div v-else-if="organizations.length">
       <button
-        v-for="(organization, index) in organizations"
+        v-for="organization in organizations"
         :key="organization.id"
         type="button"
-        class="flex min-h-20 w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-elevated disabled:opacity-60"
-        :class="index > 0 ? 'border-t border-default' : ''"
+        class="flex w-full items-center gap-4 border-b border-default py-6 text-left transition-colors last:border-b-0 hover:bg-elevated disabled:opacity-60"
         :disabled="Boolean(entering)"
         @click="enter(organization)"
       >
-        <span class="min-w-0 flex-1 font-semibold text-highlighted">{{ organization.name }}</span>
+        <span class="min-w-0 flex-1 text-base text-highlighted">{{ organization.name }}</span>
         <UIcon
           v-if="entering === organization.id"
           name="i-lucide-loader-circle"
@@ -40,7 +40,7 @@
         />
         <UIcon v-else name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
       </button>
-    </UCard>
+    </div>
 
     <p v-else class="text-sm text-muted">This account belongs to no business yet.</p>
   </div>

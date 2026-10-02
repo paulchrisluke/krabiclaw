@@ -23,7 +23,7 @@
 
     <template #body>
       <!-- Alone it uses the frame, as Airbnb's listing grid does; beside a child it is a column. -->
-      <div class="mx-auto w-full" :class="pair ? 'max-w-2xl' : undefined">
+      <div class="mx-auto w-full" :class="[pair ? 'max-w-2xl' : undefined, fill ? 'flex min-h-0 flex-1 flex-col' : undefined]">
         <slot />
       </div>
     </template>
@@ -61,6 +61,8 @@ const props = defineProps<{
   ui?: { root?: string; body?: string }
   /** For a level whose navbar carries its own control, such as Today's range. */
   navbarUi?: Record<string, string>
+  /** The level is exactly the panel's height and scrolls inside itself: a conversation with its composer at the foot. */
+  fill?: boolean
 }>()
 
 const level = useRouteLevel()

@@ -34,7 +34,7 @@ export const getConfig = async (
            json_extract(settings_json, '$.config.partnerships_email') AS partnerships_email,
            json_extract(settings_json, '$.config.catering_email') AS catering_email,
            json_extract(settings_json, '$.config.careers_email') AS careers_email,
-           CASE WHEN json_extract(integrations_json, '$.google_analytics.status') = 'active' THEN json_extract(integrations_json, '$.google_analytics.measurement_id') END AS google_analytics_measurement_id,
+           (SELECT i.measurement_id FROM organization_integrations i WHERE i.organization_id = organization.id AND i.provider = 'google_analytics') AS google_analytics_measurement_id,
            json_extract(settings_json, '$.config.default_timezone') AS default_timezone
       FROM organization WHERE id = ?
   `, [organizationId])

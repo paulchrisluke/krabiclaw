@@ -161,26 +161,27 @@ keys before retiring the old database; carry important edits explicitly,
 without overwriting new-database writes. There is no write freeze or
 maintenance response in the application.
 
-For the v6-to-v7 social cleanup, create empty v7 databases with location hint
-`wnam` and apply the generated baseline with `wrangler d1 migrations apply`.
-Never execute the SQL file directly: its migration ledger must record it.
-The transfer recognizes the immutable v6 migration chain, retains existing
-category IDs, and copies account, session, OAuth and `jwks` rows from each
-environment's own source. Local development omits encrypted production keys.
+For the v7-to-v8 integrations replacement, create empty v8 databases with
+location hint `wnam` and apply the generated baseline with `wrangler d1
+migrations apply`. Never execute the SQL file directly: its migration ledger
+must record it. The transfer recognizes the immutable v7 chain in
+`migrations-history/v7/` and copies account, session, OAuth and `jwks` rows
+from each environment's own source. Local development omits encrypted
+production keys.
 
-The replacement changes `content_documents_social_source_check` on the parent of
-content blocks and publication receipts. Imports are retired only after the
-owner-approved imported website posts and unused media have been deleted.
-Transfer rejects any remaining imported post, attached import receipt or live
-imported asset; it removes erased import receipts, media provenance and retired
-connection sync state. Outbound publication receipts and authored content remain.
+The replacement drops `organization.integrations_json` and its CHECK
+constraints from the parent of nearly every table, and
+`business_locations.description_provenance`. Each JSON connection becomes one
+`organization_integrations` row; a key that is not one of the four providers,
+a status other than `active`, or a missing account, target or measurement id
+fails the transfer, as does any `description_provenance` value.
 
 ```sh
-node --experimental-strip-types scripts/pull-production-snapshot.ts --source krabiclaw-staging-v6 --out staging-preflight.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v6 --out staging-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v6 --out production-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v6 --out staging-final.sqlite --delta-from staging-initial.sqlite
-node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v6 --out production-final.sqlite --delta-from production-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --source krabiclaw-staging-v7 --out staging-preflight.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v7 --out staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v7 --out production-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --staging --source krabiclaw-staging-v7 --out staging-final.sqlite --delta-from staging-initial.sqlite
+node --experimental-strip-types scripts/pull-production-snapshot.ts --production --source krabiclaw-production-v7 --out production-final.sqlite --delta-from production-initial.sqlite
 ```
 
 Prepare the load before the binding repoint. Inspect changes and deletions since

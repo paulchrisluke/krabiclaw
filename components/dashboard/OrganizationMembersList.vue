@@ -1,156 +1,93 @@
 <template>
-  <div class="space-y-4">
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="font-semibold text-highlighted">Team</h2>
-              <p class="mt-1 text-sm text-muted">People with access to this organization.</p>
-            </div>
-            <div class="flex items-center gap-2">
-              <UBadge :label="`${members.length} member${members.length === 1 ? '' : 's'}`" color="neutral" variant="soft" />
-              <UButton icon="i-lucide-plus" color="neutral" variant="soft" square aria-label="Invite a team member" :to="`${membersPath}/invite`" />
-            </div>
-          </div>
-        </template>
-
-        <div v-if="pending && !data" class="space-y-3">
-          <USkeleton v-for="i in 3" :key="i" class="h-14 rounded-lg" />
-        </div>
-
-        <div v-else-if="members.length" class="divide-y divide-default">
-          <div
-            v-for="member in members"
-            :key="member.id"
-            class="py-4 first:pt-0 last:pb-0 space-y-3"
-          >
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex min-w-0 items-center gap-3">
-                <UAvatar
-                  :src="member.image || undefined"
-                  :alt="member.name || member.email"
-                  icon="i-lucide-user"
-                />
-                <div class="min-w-0">
-                  <p class="truncate font-medium text-highlighted">{{ member.name || member.email }}</p>
-                  <p class="truncate text-sm text-muted">{{ member.email }}</p>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <USelect
-                  v-if="canEditMemberRole(member)"
-                  :model-value="member.role"
-                  :items="roleOptionsFor(member)"
-                  size="xs"
-                  class="w-32 capitalize"
-                  :loading="roleUpdatingId === member.id"
-                  @update:model-value="value => onRoleSelected(member, String(value))"
-                />
-                <UBadge v-else :label="member.role" color="neutral" variant="soft" class="capitalize" />
-                <UButton
-                  v-if="member.role !== 'owner'"
-                  icon="i-lucide-x"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :loading="removingMemberId === member.id"
-                  :aria-label="`Remove ${member.name || member.email}`"
-                  @click="removeMember(member.id)"
-                />
-              </div>
-            </div>
-
-            <UAlert
-              v-if="roleUpdateError && roleUpdateErrorMemberId === member.id"
-              color="error"
-              variant="soft"
-              :description="roleUpdateError"
-            />
-
-          </div>
-        </div>
-
-        <UAlert
-          v-else
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-users"
-          description="No members found for this organization."
-        />
-
-        <UAlert
-          v-if="memberError"
-          class="mt-4"
-          color="error"
-          variant="soft"
-          icon="i-lucide-circle-alert"
-          :description="memberError"
-        />
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="font-semibold text-highlighted">Pending Invitations</h2>
-              <p class="mt-1 text-sm text-muted">Invites that have not been accepted yet.</p>
-            </div>
-            <UBadge :label="`${invitations.length} pending`" color="neutral" variant="soft" />
-          </div>
-        </template>
-
-        <div v-if="pending && !data" class="space-y-3">
-          <USkeleton v-for="i in 2" :key="i" class="h-14 rounded-lg" />
-        </div>
-
-        <div v-else-if="invitations.length" class="divide-y divide-default">
-          <div
-            v-for="invitation in invitations"
-            :key="invitation.id"
-            class="py-4 first:pt-0 last:pb-0 space-y-3"
-          >
-            <div class="flex items-center justify-between gap-4">
+  <!--
+    The team as rows, the way Airbnb lists co-hosts: one hairline list, the
+    role a pill on the row. Pending invitations are a second group under its
+    own heading, not a second card.
+  -->
+  <div class="space-y-8">
+    <section>
+      <h2 class="px-1 text-sm font-semibold text-muted">Team</h2>
+      <div v-if="pending && !data" class="mt-3 space-y-3">
+        <USkeleton v-for="i in 3" :key="i" class="h-14 rounded-lg" />
+      </div>
+      <ul v-else-if="members.length">
+        <li v-for="member in members" :key="member.id" class="border-b border-default py-6 last:border-b-0">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex min-w-0 items-center gap-3">
+              <UAvatar :src="member.image || undefined" :alt="member.name || member.email" icon="i-lucide-user" size="lg" />
               <div class="min-w-0">
-                <p class="truncate font-medium text-highlighted">
-                  {{ invitation.email }}
-                </p>
-                <p class="truncate text-sm text-muted">
-                  <template v-if="invitation.inviterName">Invited by {{ invitation.inviterName }} · </template>Expires {{ formatDate(invitation.expiresAt) }}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <UBadge v-if="invitation.role" :label="invitation.role" color="neutral" variant="soft" class="capitalize" />
-                <UButton
-                  icon="i-lucide-x"
-                  color="neutral"
-                  variant="ghost"
-                  size="xs"
-                  :loading="cancellingInviteId === invitation.id"
-                  :aria-label="`Cancel invitation for ${invitation.email}`"
-                  @click="cancelInvitation(invitation.id)"
-                />
+                <p class="truncate text-base text-highlighted">{{ member.name || member.email }}</p>
+                <p class="truncate text-sm text-muted">{{ member.email }}</p>
               </div>
             </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <USelect
+                v-if="canEditMemberRole(member)"
+                :model-value="member.role"
+                :items="roleOptionsFor(member)"
+                variant="soft"
+                size="sm"
+                :ui="{ base: 'rounded-full capitalize' }"
+                :aria-label="`Role for ${member.name || member.email}`"
+                :loading="roleUpdatingId === member.id"
+                @update:model-value="value => onRoleSelected(member, String(value))"
+              />
+              <UBadge v-else :label="member.role" color="neutral" variant="soft" size="lg" class="rounded-full capitalize" />
+              <UButton
+                v-if="member.role !== 'owner'"
+                icon="i-lucide-x"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :loading="removingMemberId === member.id"
+                :aria-label="`Remove ${member.name || member.email}`"
+                @click="removeMember(member.id)"
+              />
+            </div>
           </div>
-        </div>
+          <UAlert
+            v-if="roleUpdateError && roleUpdateErrorMemberId === member.id"
+            class="mt-3"
+            color="error"
+            variant="soft"
+            :description="roleUpdateError"
+          />
+        </li>
+      </ul>
+      <p v-else class="mt-3 px-1 text-sm text-muted">No members found for this organization.</p>
+      <UAlert v-if="memberError" class="mt-4" color="error" variant="soft" icon="i-lucide-circle-alert" :description="memberError" />
+    </section>
 
-        <UAlert
-          v-else
-          color="neutral"
-          variant="soft"
-          icon="i-lucide-mail"
-          description="No pending invitations."
-        />
-
-        <UAlert
-          v-if="pendingInvitationError"
-          class="mt-4"
-          color="error"
-          variant="soft"
-          icon="i-lucide-circle-alert"
-          :description="pendingInvitationError"
-        />
-      </UCard>
+    <section>
+      <h2 class="px-1 text-sm font-semibold text-muted">Pending Invitations</h2>
+      <div v-if="pending && !data" class="mt-3 space-y-3">
+        <USkeleton v-for="i in 2" :key="i" class="h-14 rounded-lg" />
+      </div>
+      <ul v-else-if="invitations.length">
+        <li v-for="invitation in invitations" :key="invitation.id" class="flex items-center justify-between gap-4 border-b border-default py-6 last:border-b-0">
+          <div class="min-w-0">
+            <p class="truncate text-base text-highlighted">{{ invitation.email }}</p>
+            <p class="truncate text-sm text-muted">
+              <template v-if="invitation.inviterName">Invited by {{ invitation.inviterName }} · </template>Expires {{ formatDate(invitation.expiresAt) }}
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <UBadge v-if="invitation.role" :label="invitation.role" color="neutral" variant="soft" size="lg" class="rounded-full capitalize" />
+            <UButton
+              icon="i-lucide-x"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              :loading="cancellingInviteId === invitation.id"
+              :aria-label="`Cancel invitation for ${invitation.email}`"
+              @click="cancelInvitation(invitation.id)"
+            />
+          </div>
+        </li>
+      </ul>
+      <p v-else class="mt-3 px-1 text-sm text-muted">No pending invitations.</p>
+      <UAlert v-if="pendingInvitationError" class="mt-4" color="error" variant="soft" icon="i-lucide-circle-alert" :description="pendingInvitationError" />
+    </section>
   </div>
 </template>
 
@@ -193,8 +130,6 @@ const isMembersResponse = (
 
 const route = useRoute()
 const dashboard = useDashboardOrganization()
-const { orgPaths } = useDashboardOrganizationLinks()
-const membersPath = computed(() => `${orgPaths.value.settings}/members`)
 const membersKey = computed(() => organizationMembersKey(String(route.params.orgSlug ?? '')))
 
 const { data, pending, refresh } = await useAsyncData(

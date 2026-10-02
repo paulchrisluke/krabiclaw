@@ -52,8 +52,6 @@ Target existing Growth Product `prod_UcH8Sw98ABNwKL`:
 - `images[0]` and `metadata.catalog_image_sha256`: replace only after the approved
   portrait asset has a verified provider URL/hash. The supplied local asset is
   verified (see asset-manifest.json), but a provider-hosted URL is still required.
-- Replace `Auto-sync from Facebook & Instagram` with `Facebook and Instagram
-  publishing`. Retain actual MCP/provider connection conditions in comparison.
 - Broaden the existing restaurant/experience-only bullet to cover supported
   professional services; exact final customer wording remains for review.
 - Review the generic messaging/import bullets against the verified paid gates,

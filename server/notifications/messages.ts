@@ -55,6 +55,8 @@ export interface NotificationMessage {
   body?: string
   facts: NotificationFact[]
   sections?: NotificationSection[]
+  /** Photos the message itself carries — a reply's attachments — shown whole, uncropped. Email only. */
+  photos?: Array<{ imageUrl: string; alt: string }>
   primaryAction?: NotificationAction
   secondaryAction?: NotificationAction
   /** Shown small, under the actions — cancellation windows, link expiry. */

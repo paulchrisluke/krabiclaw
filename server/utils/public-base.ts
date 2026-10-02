@@ -60,7 +60,7 @@ export function loadPublicBase(
                 s.theme_id, s.feature_overrides,
                 s.brand_description,
                 s.seo_title, s.seo_description, s.canonical_url,
-                json_extract(s.integrations_json, '$.google_search_console.verification_token') AS search_console_verification,
+                (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = s.id AND i.provider = 'google_search_console') AS search_console_verification,
                 json_extract(s.settings_json, '$.config.default_timezone') AS default_timezone
            FROM organization s
           WHERE s.id = ? AND ${publicTenantVisibilitySql('s', options.previewAuthorized)}

@@ -1,5 +1,4 @@
-import type { FacebookIntegration } from '~/shared/organization-settings'
-import { execute, queryFirst } from '~/server/db'
+import type { OrganizationIntegration } from '~/shared/organization-settings'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { formBody, metaGraphRequest } from './meta-graph'
 import type { MetaDeadline } from './meta-graph'
@@ -23,10 +22,6 @@ import type { MetaDeadline } from './meta-graph'
 export const FACEBOOK_GRAPH_VERSION = 'v25.0'
 const GRAPH_BASE = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}`
 
-export interface FacebookPagesConnection extends FacebookIntegration {
-  organization_id: string
-}
-
 export interface FacebookPage {
   id: string
   name: string
@@ -47,52 +42,6 @@ const authorized = (target: FacebookPageTarget, init: GraphInit = {}): GraphInit
   ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${target.pageToken}` },
 })
 
-export const storeFacebookPagesConnection = async (
-  env: CloudflareEnv,
-  connection: { organization_id: string; account_id: string; page_id: string; page_name: string },
-  expected: { revision: string | null },
-): Promise<void> => {
-  const now = new Date().toISOString()
-  // A new selection invalidates callers holding the previous revision.
-  const payload = JSON.stringify({
-    revision: crypto.randomUUID(),
-    account_id: connection.account_id,
-    page_id: connection.page_id,
-    page_name: connection.page_name,
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-  })
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook',
-      json_set(json(?),
-        '$.created_at', COALESCE(json_extract(integrations_json, '$.facebook.created_at'), ?)))
-    WHERE id = ?
-      AND json_extract(integrations_json, '$.facebook.revision') IS ?
-  `, [payload, now, connection.organization_id, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('The Facebook connection changed. Reload before saving.')
-}
-
-export const getFacebookPagesConnection = async (
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<FacebookPagesConnection | null> => {
-  const row = await queryFirst<FacebookPagesConnection>(env.DB, `
-    SELECT id AS organization_id,
-           json_extract(integrations_json, '$.facebook.revision') AS revision,
-           json_extract(integrations_json, '$.facebook.account_id') AS account_id,
-           json_extract(integrations_json, '$.facebook.page_id') AS page_id,
-           json_extract(integrations_json, '$.facebook.page_name') AS page_name,
-           json_extract(integrations_json, '$.facebook.status') AS status,
-           json_extract(integrations_json, '$.facebook.created_at') AS created_at,
-           json_extract(integrations_json, '$.facebook.updated_at') AS updated_at
-      FROM organization WHERE id = ?
-       AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'error')
-     LIMIT 1
-  `, [organizationId])
-  return row
-}
-
 /** The Pages a linked Facebook account manages, each with its Page token. */
 export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: string): Promise<FacebookPage[]> => {
   const token = (await linkedAccountAccessToken(env, accountId)).accessToken
@@ -111,9 +60,9 @@ export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: str
 }
 
 /** The connected Page's token, read through the linked account that manages it. */
-export const facebookPageToken = async (env: CloudflareEnv, connection: Pick<FacebookPagesConnection, 'account_id' | 'page_id' | 'page_name'>): Promise<string> => {
-  const page = (await listLinkedFacebookPages(env, connection.account_id)).find(candidate => candidate.id === connection.page_id)
-  if (!page) throw new Error(`The linked Facebook account no longer manages the Page ${connection.page_name}. Connect Facebook again.`)
+export const facebookPageToken = async (env: CloudflareEnv, connection: Pick<OrganizationIntegration, 'account_id' | 'target_id' | 'target_name'>): Promise<string> => {
+  const page = (await listLinkedFacebookPages(env, connection.account_id)).find(candidate => candidate.id === connection.target_id)
+  if (!page) throw new Error(`The linked Facebook account no longer manages the Page ${connection.target_name}. Connect Facebook again.`)
   return page.access_token
 }
 

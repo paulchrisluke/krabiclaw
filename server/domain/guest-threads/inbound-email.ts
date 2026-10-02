@@ -3,6 +3,7 @@ import { compile } from 'html-to-text'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { getGuestRequest, requestSummary } from '~/server/domain/requests'
 import { appendEntry, GuestThreadEntryDedupeConflictError } from '~/server/domain/guest-threads/entries'
+import { attachGuestPhotos, messagePreview, sortGuestFiles, type MessagePhoto } from '~/server/domain/guest-threads/attachments'
 import { updateThreadProjectionIfLatestEntry } from '~/server/domain/guest-threads/repository'
 import type { GuestThreadEntryRow } from '~/server/domain/guest-threads/types'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -21,6 +22,8 @@ export interface InboundGuestEmail {
   submissionId: string
   token: string
   body: string
+  /** Every file the email carried, in order. */
+  files: MessagePhoto[]
   messageId: string
 }
 
@@ -68,7 +71,8 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
 
   // A reply with nothing newly written (only the quoted thread or a signature)
   // is accepted and records nothing.
-  if (!email.body) return
+  const { photos, unshown } = sortGuestFiles(email.files)
+  if (!email.body && !photos.length && !unshown.length) return
 
   let entry: GuestThreadEntryRow
   try {
@@ -77,7 +81,8 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
       kind: 'message',
       actorKind: 'guest',
       channel: 'email',
-      body: email.body,
+      body: email.body || null,
+      payloadJson: unshown.length ? { unshownFiles: unshown } : null,
       dedupeKey: `email:${email.messageId}`,
     })
   } catch (error) {
@@ -87,6 +92,7 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
     throw error
   }
 
+  await attachGuestPhotos(db, env, organization.organizationId, entry.id, photos)
   await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
   try {
@@ -104,7 +110,7 @@ export async function receiveGuestEmail(env: CloudflareEnv, email: InboundGuestE
         guestEmail: summary.guestEmail,
         guestPhone: summary.guestPhone,
         inboundChannel: 'email',
-        messagePreview: email.body,
+        messagePreview: messagePreview(email.body, photos.length),
       })
     }
   } catch (error) {

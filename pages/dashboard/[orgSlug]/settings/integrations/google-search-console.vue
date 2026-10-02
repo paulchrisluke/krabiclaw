@@ -5,7 +5,7 @@
     title="Google Search Console"
     :ready="integrations.summary.value !== undefined"
     :saving="saving"
-    :disabled="!accountId || !selected || (selected === data?.searchConsole?.site_url && accountId === data?.searchConsole?.account_id)"
+    :disabled="!accountId || !selected || (selected === data?.searchConsole?.target_id && accountId === data?.searchConsole?.account_id)"
     :error="error || integrations.failure.value || loadFailure"
     :footer="choosing && Boolean(data?.account_id)"
     save-label="Connect property"
@@ -16,20 +16,20 @@
       v-model:changing="changing"
       logo="i-logos-google-search-console"
       noun="property"
-      :connection="searchConsole && { name: searchConsole.site_url, connectedAt: searchConsole.connected_at, status: searchConsole.status }"
+      :connection="searchConsole && { name: searchConsole.target_name, connectedAt: searchConsole.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"
     >
       <template v-if="data">
         <UFormField v-if="accountOptions.length" label="Google account">
-          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" class="w-full" />
         </UFormField>
         <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Google account</UButton>
         <UButton v-else icon="i-simple-icons-google" size="xl" block :loading="linking" @click="link">Connect Google Search Console</UButton>
 
         <UFormField v-if="data.account_id" label="Property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" size="xl" class="w-full" />
+          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" class="w-full" />
         </UFormField>
       </template>
       <USkeleton v-else-if="pending" class="h-14 rounded-xl" />
@@ -40,13 +40,13 @@
 <script setup lang="ts">
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import IntegrationConnection from '~/components/dashboard/IntegrationConnection.vue'
-import { integrationsKey } from '../integrations.vue'
+import { integrationsKey, type ConnectedIntegration } from '../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 interface SearchConsoleLeaf {
   account_id: string | null
-  searchConsole: { account_id?: string; site_url: string } | null
+  searchConsole: ConnectedIntegration | null
   siteUrl: string | null
   properties: Array<{ siteUrl: string; permissionLevel: string }>
   error: string | null
@@ -84,7 +84,7 @@ const accountOptions = computed(() => {
 })
 
 const selected = ref<string | undefined>()
-watch(data, value => { selected.value = value?.searchConsole?.site_url }, { immediate: true })
+watch(data, value => { selected.value = value?.searchConsole?.target_id }, { immediate: true })
 
 // Linking another account while changing comes back with the picker still open.
 const changing = ref(route.query.change === '1')
@@ -92,7 +92,7 @@ const choosing = computed(() => !searchConsole.value || changing.value)
 function keep() {
   changing.value = false
   accountId.value = data.value?.searchConsole?.account_id
-  selected.value = data.value?.searchConsole?.site_url
+  selected.value = data.value?.searchConsole?.target_id
 }
 // This website's own URL is offered even before the account owns it: Krabiclaw verifies it by serving the tag.
 const options = computed(() => {

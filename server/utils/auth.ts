@@ -138,7 +138,6 @@ export interface CloudflareEnv {
   WHATSAPP_ACCESS_TOKEN?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_VERIFY_TOKEN?: string
-  WHATSAPP_BUSINESS_ACCOUNT_ID?: string
   E2E_ALLOW_DEV_ROUTES?: string
   E2E_DEV_ROUTE_SECRET?: string
   FACEBOOK_APP_ID?: string

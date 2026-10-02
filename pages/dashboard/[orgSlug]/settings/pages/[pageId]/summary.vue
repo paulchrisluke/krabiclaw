@@ -9,7 +9,7 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <UFormField label="Summary" description="A concise introduction used when the page needs one.">
+    <UFormField label="Summary">
       <UTextarea v-model="editor.draft.value.summary" :rows="5" autoresize autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>

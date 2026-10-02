@@ -142,6 +142,11 @@ export async function verifyMetaSignedRequest(signedRequest: string, apps: reado
   return { channel: app.channel, providerAppId: app.appId, providerSubjectId: payload.user_id, issuedAt: typeof payload.issued_at === 'number' ? payload.issued_at : null }
 }
 
+/** The claim that makes a Better Auth JWT a data-deletion confirmation code and nothing else. */
+export const META_DELETION_PURPOSE = 'meta-data-deletion'
+/** How long the status URL Meta hands the person keeps answering. */
+export const META_DELETION_STATUS_SECONDS = 365 * 24 * 60 * 60
+
 /** The Meta apps this deployment is configured with, by the channel each one signs for. */
 export function configuredMetaApps(env: Record<string, unknown>): MetaApp[] {
   const app = (channel: MetaApp['channel'], id: unknown, secret: unknown): MetaApp[] =>

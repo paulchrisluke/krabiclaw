@@ -86,9 +86,9 @@ not a discounted monthly equivalent. Product and price IDs are recorded separate
 from `plan_id: growth`. No credentials or private image URLs are stored.
 
 The public projection matched the provider's seven marketing bullets. The
-`Auto-sync from Facebook & Instagram` bullet conflicts with the audited
-`social.automatic-sync` entry: current explicit provider operations do not prove
-automatic imports. Broad Google Places wording must distinguish the free initial
+former `Auto-sync from Facebook & Instagram` bullet is now `Facebook & Instagram
+publishing`, matching the audited `social.automatic-sync` entry: provider
+operations are explicit and nothing is imported. Broad Google Places wording must distinguish the free initial
 onboarding snapshot from paid manual import and weekly review refresh. Paid
 notification claims map to the separately reviewed WhatsApp enforcement fix and
 its runtime tests; deployment status must be checked before announcing it.

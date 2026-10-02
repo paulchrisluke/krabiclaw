@@ -1,6 +1,5 @@
-import type { GoogleSearchConsoleIntegration } from '~/shared/organization-settings'
-import { execute, queryFirst } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
+import { deleteIntegration, storeIntegration } from './organization-integrations'
 
 /**
  * Search Console as a product of its own, over a Better Auth linked Google
@@ -81,104 +80,6 @@ export async function addSearchConsoleSite(accessToken: string, siteUrl: string)
   })
 }
 
-export async function readSearchConsoleIntegration(
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<GoogleSearchConsoleIntegration | null> {
-  const row = await queryFirst<Omit<GoogleSearchConsoleIntegration, 'verified'> & { verified: number }>(env.DB, `
-    SELECT json_extract(integrations_json, '$.google_search_console.revision') AS revision,
-           json_extract(integrations_json, '$.google_search_console.account_id') AS account_id,
-           json_extract(integrations_json, '$.google_search_console.site_url') AS site_url,
-           json_extract(integrations_json, '$.google_search_console.verified') AS verified,
-           json_extract(integrations_json, '$.google_search_console.verification_token') AS verification_token,
-           json_extract(integrations_json, '$.google_search_console.status') AS status,
-           json_extract(integrations_json, '$.google_search_console.created_at') AS created_at,
-           json_extract(integrations_json, '$.google_search_console.updated_at') AS updated_at
-      FROM organization
-     WHERE id = ?
-       AND json_extract(integrations_json, '$.google_search_console') IS NOT NULL
-     LIMIT 1
-  `, [organizationId])
-  return row ? { ...row, verified: Boolean(row.verified) } : null
-}
-
-/**
- * Persists the verification token before Google is asked to look for it. The
- * page has to be serving the tag by the time the fetch arrives, so the write
- * and the public cache purge come first and the verify call second.
- */
-export async function storeVerificationToken(
-  env: CloudflareEnv,
-  organizationId: string,
-  accountId: string,
-  siteUrl: string,
-  token: string,
-): Promise<void> {
-  if (!env.DB) throw new Error('Database not available')
-  const now = new Date().toISOString()
-  const payload = JSON.stringify({
-    revision: crypto.randomUUID(),
-    account_id: accountId,
-    site_url: siteUrl,
-    verified: false,
-    verification_token: token,
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-  })
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_search_console',
-      json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.google_search_console.created_at'), ?)))
-    WHERE id = ?
-  `, [payload, now, organizationId])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before connecting.')
-}
-
-/**
- * Records the connected property. A property Krabiclaw verified keeps its
- * token, because Google re-checks the tag and drops ownership if it stops
- * being served; one the account already owned never had a token here.
- */
-export async function storeSearchConsoleSelection(
-  env: CloudflareEnv,
-  organizationId: string,
-  accountId: string,
-  siteUrl: string,
-  verificationToken: string | null,
-): Promise<void> {
-  if (!env.DB) throw new Error('Database not available')
-  const now = new Date().toISOString()
-  const payload = JSON.stringify({
-    revision: crypto.randomUUID(),
-    account_id: accountId,
-    site_url: siteUrl,
-    verified: true,
-    ...(verificationToken ? { verification_token: verificationToken } : {}),
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-  })
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_search_console',
-      json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.google_search_console.created_at'), ?)))
-    WHERE id = ?
-  `, [payload, now, organizationId])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before saving.')
-}
-
-/** Clears Search Console state. The linked Google account is its user's, and stays linked. */
-export async function clearSearchConsoleIntegration(
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<void> {
-  if (!env.DB) throw new Error('Database not available')
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_search_console')
-    WHERE id = ?
-  `, [organizationId])
-  if (result.meta?.changes !== 1) throw new Error('Site ownership changed. Reload before disconnecting.')
-}
-
 /**
  * The whole automated verification, in the order the outside world requires:
  * ask for the token, serve it, have Google look, then add the property.
@@ -194,7 +95,10 @@ export async function verifyAndAddProperty(
 ): Promise<void> {
   const { accessToken } = await linkedAccountAccessToken(env, accountId)
   const token = await requestVerificationToken(accessToken, siteUrl)
-  await storeVerificationToken(env, organizationId, accountId, siteUrl, token)
+  // The token is stored before Google is asked to look for it: the page has
+  // to be serving the tag by the time the fetch arrives.
+  const selection = { account_id: accountId, target_id: siteUrl, target_name: siteUrl, verification_token: token }
+  await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: false })
   try {
     await publish()
     await verifySiteOwnership(accessToken, siteUrl)
@@ -202,9 +106,11 @@ export async function verifyAndAddProperty(
   } catch (error) {
     // A property Google would not verify is not connected: the pending record
     // goes, and the tag stops being served, before the failure is reported.
-    await clearSearchConsoleIntegration(env, organizationId)
+    await deleteIntegration(env.DB, organizationId, 'google_search_console')
     await publish()
     throw error
   }
-  await storeSearchConsoleSelection(env, organizationId, accountId, siteUrl, token)
+  // A property Krabiclaw verified keeps its token: Google re-checks the tag and
+  // drops ownership if it stops being served.
+  await storeIntegration(env.DB, organizationId, 'google_search_console', { ...selection, verified: true })
 }

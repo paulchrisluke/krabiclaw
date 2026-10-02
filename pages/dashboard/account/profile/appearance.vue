@@ -1,6 +1,6 @@
 <template>
   <DashboardLeafPanel id="account-appearance" title="Appearance" :disabled="account.saveDisabled.value" @cancel="account.revert" @save="account.save">
-    <URadioGroup v-model="account.themeInput.value" legend="Theme" :items="account.themeOptions" value-key="value" size="xl" variant="card" />
+    <URadioGroup v-model="account.themeInput.value" legend="Theme" :items="account.themeOptions" value-key="value" variant="card" />
   </DashboardLeafPanel>
 </template>
 

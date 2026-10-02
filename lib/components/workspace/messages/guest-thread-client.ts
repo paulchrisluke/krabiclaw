@@ -1,8 +1,12 @@
 import { isRecord } from '~/utils/api-clients'
 import { resolveBookingPresentation } from '~/utils/booking-presentation'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
-import type { GuestThreadDeliveryFailure } from '~/components/conversation/GuestThreadConversation.vue'
-import type { GuestThreadDetailViewModel } from '~/server/domain/guest-threads/types'
+import type {
+  GuestThreadDeliveryFailureViewModel,
+  GuestThreadDetailViewModel,
+  GuestThreadListItemViewModel,
+  GuestThreadSubmissionType,
+} from '~/server/domain/guest-threads/types'
 
 /*
   What the thread list and the conversation both need from the guest-thread API.
@@ -11,37 +15,11 @@ import type { GuestThreadDetailViewModel } from '~/server/domain/guest-threads/t
   vocabulary live here once rather than in each.
 */
 
-export type SubmissionType = 'contact' | 'reservation' | 'booking'
-export type ConversationState = 'needs_attention' | 'waiting_on_guest' | 'resolved'
-
-export interface ThreadListItem {
-  id: string
-  organizationId?: string
-  organizationSlug?: string | null
-  guestName: string
-  submissionType: SubmissionType
-  contextLabel: string
-  locationLabel: string | null
-  conversationState: ConversationState
-  operationalStatus: string | null
-  operationalStatusLabel: string | null
-  unread: boolean
-  unreadCount: number
-  preview: { kind: 'message' | 'submission', text: string } | null
-  lastActivityAt: string
-  needsAttention: boolean
-  imageUrl: string | null
-  whenLabel: string | null
-  /** The server's mailbox resolver decides these; the client never derives them from dates. */
-  mailbox: 'current' | 'past'
-  manuallyArchived: boolean
-  canArchive: boolean
-  canUnarchive: boolean
-}
-
-// The detail API's own view model, not a copy of it. Hand-maintained twins of
-// this shape are what let the conversation read field names the server had
+// The API's own view models, not copies of them. Hand-maintained twins of
+// these shapes are what let the client read field names the server had
 // stopped sending, so there is one declaration and this reads it.
+export type SubmissionType = GuestThreadSubmissionType
+export type ThreadListItem = GuestThreadListItemViewModel
 export type ThreadDetail = GuestThreadDetailViewModel
 
 /*
@@ -83,7 +61,7 @@ export function isThreadListResponse(value: unknown): value is { threads: Thread
     )
 }
 
-export function isDeliveryFailure(value: unknown): value is GuestThreadDeliveryFailure {
+function isDeliveryFailure(value: unknown): value is GuestThreadDeliveryFailureViewModel {
   return isRecord(value)
     && typeof value.id === 'string'
     && (value.channel === 'email' || value.channel === 'whatsapp')

@@ -8,17 +8,17 @@
     <!-- buttons -->
     <template v-if="collection === 'buttons'">
       <UFormField label="Label" required>
-        <UInput :model-value="str('label')" size="xl" autofocus class="w-full" @update:model-value="set('label', $event)" />
+        <UInput :model-value="str('label')" autofocus class="w-full" @update:model-value="set('label', $event)" />
       </UFormField>
       <UFormField label="URL" required>
-        <UInput :model-value="str('url')" size="xl" placeholder="/contact or https://example.com" class="w-full" @update:model-value="set('url', $event)" />
+        <UInput :model-value="str('url')" placeholder="/contact or https://example.com" class="w-full" @update:model-value="set('url', $event)" />
       </UFormField>
     </template>
 
     <!-- steps -->
     <template v-else-if="collection === 'steps'">
       <UFormField label="Step name">
-        <UInput :model-value="str('name')" size="xl" autofocus class="w-full" @update:model-value="set('name', $event)" />
+        <UInput :model-value="str('name')" autofocus class="w-full" @update:model-value="set('name', $event)" />
       </UFormField>
       <UFormField label="Instructions">
         <UTextarea :model-value="str('text')" :rows="6" autoresize class="w-full" @update:model-value="set('text', $event)" />
@@ -28,13 +28,13 @@
     <!-- tiers -->
     <template v-else-if="collection === 'tiers'">
       <UFormField label="Amount" required>
-        <UInput :model-value="str('amount')" size="xl" autofocus class="w-full" @update:model-value="set('amount', $event)" />
+        <UInput :model-value="str('amount')" autofocus class="w-full" @update:model-value="set('amount', $event)" />
       </UFormField>
       <UFormField label="Title" required>
-        <UInput :model-value="str('title')" size="xl" class="w-full" @update:model-value="set('title', $event)" />
+        <UInput :model-value="str('title')" class="w-full" @update:model-value="set('title', $event)" />
       </UFormField>
       <UFormField label="Description">
-        <UInput :model-value="str('description')" size="xl" class="w-full" @update:model-value="set('description', $event)" />
+        <UInput :model-value="str('description')" class="w-full" @update:model-value="set('description', $event)" />
       </UFormField>
     </template>
 
@@ -42,14 +42,14 @@
     <template v-else-if="isPerson">
       <template v-if="field === 'name'">
         <UFormField label="First name">
-          <UInput :model-value="str('first_name')" size="xl" autofocus class="w-full" @update:model-value="set('first_name', $event)" />
+          <UInput :model-value="str('first_name')" autofocus class="w-full" @update:model-value="set('first_name', $event)" />
         </UFormField>
         <UFormField label="Last name">
-          <UInput :model-value="str('last_name')" size="xl" class="w-full" @update:model-value="set('last_name', $event)" />
+          <UInput :model-value="str('last_name')" class="w-full" @update:model-value="set('last_name', $event)" />
         </UFormField>
       </template>
       <UFormField v-else-if="field === 'role'" label="Role">
-        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+        <UInput :model-value="str('title')" autofocus class="w-full" @update:model-value="set('title', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'bio'" label="Bio">
         <UTextarea :model-value="str('bio')" :rows="8" autoresize autofocus class="w-full" @update:model-value="set('bio', $event)" />
@@ -62,7 +62,7 @@
     <!-- a showcase statement: its words, and the three pictures that show it -->
     <template v-else-if="isShowcase">
       <UFormField v-if="field === 'copy'" label="Statement" required>
-        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+        <UInput :model-value="str('title')" autofocus class="w-full" @update:model-value="set('title', $event)" />
       </UFormField>
       <template v-else-if="field === 'pictures'">
         <UFormField v-for="picture in recordPictures" :key="picture.slot" :label="picture.label">
@@ -74,20 +74,20 @@
     <!-- a language: its name, which language it is, and its picture (below) -->
     <template v-else-if="isLanguage && field === 'copy'">
       <UFormField label="Language name" required>
-        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+        <UInput :model-value="str('title')" autofocus class="w-full" @update:model-value="set('title', $event)" />
       </UFormField>
       <UFormField label="Language" required>
-        <USelect :model-value="str('locale') || undefined" :items="localeOptions" value-key="value" label-key="label" size="xl" class="w-full" @update:model-value="set('locale', $event)" />
+        <USelect :model-value="str('locale') || undefined" :items="localeOptions" value-key="value" label-key="label" class="w-full" @update:model-value="set('locale', $event)" />
       </UFormField>
     </template>
 
     <!-- a step: its words and where it is explained -->
     <template v-else-if="isStep">
       <UFormField label="Step" required>
-        <UInput :model-value="str('title')" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+        <UInput :model-value="str('title')" autofocus class="w-full" @update:model-value="set('title', $event)" />
       </UFormField>
       <UFormField label="Link">
-        <UInput :model-value="str('url')" size="xl" placeholder="/docs/getting-started" class="w-full" @update:model-value="set('url', $event)" />
+        <UInput :model-value="str('url')" placeholder="/docs/getting-started" class="w-full" @update:model-value="set('url', $event)" />
       </UFormField>
     </template>
 
@@ -95,27 +95,27 @@
     <template v-else>
       <template v-if="field === 'copy'">
         <UFormField label="Title">
-          <UInput :model-value="str('title', ['name'])" size="xl" autofocus class="w-full" @update:model-value="set('title', $event)" />
+          <UInput :model-value="str('title', ['name'])" autofocus class="w-full" @update:model-value="set('title', $event)" />
         </UFormField>
         <UFormField label="Description">
           <UTextarea :model-value="str('description', ['summary', 'body'])" :rows="4" autoresize class="w-full" @update:model-value="set('description', $event)" />
         </UFormField>
         <UFormField label="Value" description="A figure shown beside the title, if this row has one.">
-          <UInput :model-value="str('value')" size="xl" class="w-full" @update:model-value="set('value', $event)" />
+          <UInput :model-value="str('value')" class="w-full" @update:model-value="set('value', $event)" />
         </UFormField>
       </template>
       <UFormField v-else-if="field === 'icon'" label="Icon" description="A Heroicons name, such as ScaleIcon.">
-        <UInput :model-value="str('icon')" size="xl" autofocus class="w-full" @update:model-value="set('icon', $event)" />
+        <UInput :model-value="str('icon')" autofocus class="w-full" @update:model-value="set('icon', $event)" />
       </UFormField>
       <UFormField v-else-if="field === 'image'" label="Image">
         <MediaPicker :organization-id="organizationId" :model-value="recordMedia('image')?.asset_id" :selected-summary="recordMedia('image')" accept="image" @update:model-value="setRecordMedia('image', $event)" />
       </UFormField>
       <template v-else-if="field === 'link'">
         <UFormField label="Link label">
-          <UInput :model-value="str('label', ['cta_label'])" size="xl" autofocus class="w-full" @update:model-value="set('label', $event)" />
+          <UInput :model-value="str('label', ['cta_label'])" autofocus class="w-full" @update:model-value="set('label', $event)" />
         </UFormField>
         <UFormField label="Link URL">
-          <UInput :model-value="str('url', ['cta_url'])" size="xl" placeholder="/about or https://example.com" class="w-full" @update:model-value="set('url', $event)" />
+          <UInput :model-value="str('url', ['cta_url'])" placeholder="/about or https://example.com" class="w-full" @update:model-value="set('url', $event)" />
         </UFormField>
       </template>
     </template>

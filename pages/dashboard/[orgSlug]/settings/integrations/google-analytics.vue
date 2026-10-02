@@ -5,7 +5,7 @@
     title="Google Analytics"
     :ready="integrations.summary.value !== undefined"
     :saving="saving"
-    :disabled="!accountId || !selected || (selected === data?.analytics?.property_id && accountId === data?.analytics?.account_id)"
+    :disabled="!accountId || !selected || (selected === data?.analytics?.target_id && accountId === data?.analytics?.account_id)"
     :error="error || integrations.failure.value || loadFailure"
     :footer="choosing && Boolean(data?.account_id)"
     @cancel="keep"
@@ -15,20 +15,20 @@
       v-model:changing="changing"
       logo="i-logos-google-analytics"
       noun="property"
-      :connection="analytics && { name: analytics.property_name ?? analytics.measurement_id, connectedAt: analytics.connected_at, status: analytics.status }"
+      :connection="analytics && { name: analytics.target_name, connectedAt: analytics.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"
     >
       <template v-if="data">
         <UFormField v-if="accountOptions.length" label="Google account">
-          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" class="w-full" />
         </UFormField>
         <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Google account</UButton>
         <UButton v-else icon="i-simple-icons-google" size="xl" block :loading="linking" @click="link">Connect Google Analytics</UButton>
 
         <UFormField v-if="data.account_id" label="Analytics property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" size="xl" class="w-full" />
+          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a GA4 property" class="w-full" />
           <p v-if="!data.error && !options.length" class="mt-2 text-sm text-muted">This Google account has no GA4 properties.</p>
         </UFormField>
       </template>
@@ -40,13 +40,13 @@
 <script setup lang="ts">
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import IntegrationConnection from '~/components/dashboard/IntegrationConnection.vue'
-import { integrationsKey } from '../integrations.vue'
+import { integrationsKey, type ConnectedIntegration } from '../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 interface AnalyticsLeaf {
   account_id: string | null
-  analytics: { account_id?: string; property_id?: string; property_name?: string; measurement_id: string } | null
+  analytics: ConnectedIntegration | null
   properties: Array<{ accountName: string; propertyId: string; propertyName: string }>
   error: string | null
 }
@@ -82,7 +82,7 @@ const accountOptions = computed(() => {
 })
 
 const selected = ref<string | undefined>()
-watch(data, value => { selected.value = value?.analytics?.property_id }, { immediate: true })
+watch(data, value => { selected.value = value?.analytics?.target_id }, { immediate: true })
 
 // Linking another account while changing comes back with the picker still open.
 const changing = ref(route.query.change === '1')
@@ -90,7 +90,7 @@ const choosing = computed(() => !analytics.value || changing.value)
 function keep() {
   changing.value = false
   accountId.value = data.value?.analytics?.account_id
-  selected.value = data.value?.analytics?.property_id
+  selected.value = data.value?.analytics?.target_id
 }
 const options = computed(() => (data.value?.properties ?? []).map(property => ({ label: `${property.propertyName} (${property.accountName})`, value: property.propertyId })))
 

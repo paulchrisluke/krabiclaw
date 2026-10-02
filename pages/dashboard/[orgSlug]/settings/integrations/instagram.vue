@@ -16,13 +16,13 @@
       v-model:changing="changing"
       logo="i-skill-icons-instagram"
       noun="account"
-      :connection="instagram && { name: `@${instagram.username}`, image: linkedImage, connectedAt: instagram.connected_at, status: instagram.status }"
+      :connection="instagram && { name: `@${instagram.target_name}`, image: linkedImage, connectedAt: instagram.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"
     >
       <UFormField v-if="accountOptions.length" label="Instagram account">
-        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose an Instagram account" size="xl" class="w-full" />
+        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose an Instagram account" class="w-full" />
       </UFormField>
       <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Instagram account</UButton>
       <UButton v-else icon="i-lucide-instagram" size="xl" block :loading="linking" @click="link">Connect Instagram</UButton>

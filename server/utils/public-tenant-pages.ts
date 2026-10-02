@@ -200,8 +200,8 @@ async function hydrateBlocks(
   // CMS, which never writes that key, listed nothing.
   const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid')
   const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'organization_posts')
-  // The site's social posts — its own updates and what Facebook and Instagram
-  // sync in. They are `social_post` documents, a different record from the
+  // The site's social posts — its own updates, written in KrabiClaw. They are
+  // `social_post` documents, a different record from the
   // articles `organization_posts` reads, and a Saya home shows both.
   for (const block of blocks) {
     if (block.type === 'page_grid' && Array.isArray(block.data.page_ids)) {

@@ -97,7 +97,7 @@ const run = (args: string[], json = false) => {
       cwd: process.cwd(),
       stdio: json ? ['ignore', 'pipe', 'inherit'] : 'inherit',
       encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
+      maxBuffer: 256 * 1024 * 1024,
       env: { ...process.env, WRANGLER_LOG_PATH: logDirectory },
     })
   } catch (error) {

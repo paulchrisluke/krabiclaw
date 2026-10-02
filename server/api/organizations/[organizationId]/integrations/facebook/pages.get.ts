@@ -2,7 +2,8 @@ import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireIntegrationAccount } from '~/server/utils/auth'
-import { getFacebookPagesConnection, listLinkedFacebookPages } from '~/server/utils/facebook-pages'
+import { listLinkedFacebookPages } from '~/server/utils/facebook-pages'
+import { integrationSummary, readIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
@@ -19,10 +20,8 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
   const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
-  const connection = await getFacebookPagesConnection(env, organization.id)
-  const summary = connection
-    ? { account_id: connection.account_id, page_id: connection.page_id, page_name: connection.page_name, status: connection.status }
-    : null
+  const connection = await readIntegration(env.DB, organization.id, 'facebook')
+  const summary = integrationSummary(connection)
   const accountId = event.url.searchParams.get('account_id') || connection?.account_id || null
   if (!accountId) return jsonResponse({ success: true, account_id: null, connection: summary, choices: [], error: null })
 

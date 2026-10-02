@@ -23,60 +23,29 @@ export const INTEGRATION_SCOPES = {
   'facebook': [],
 } as const satisfies Record<string, readonly string[]>
 
-export interface GoogleAnalyticsIntegration {
-  revision: string
-  /** The Better Auth account the property was chosen through. Absent on a site whose measurement id predates the property picker. */
-  account_id?: string
-  /** Absent on a site whose measurement id predates the OAuth property picker. */
-  property_id?: string
-  property_name?: string
-  measurement_id: string
-  status: 'active' | 'disabled' | 'error'
-  created_at: string
-  updated_at: string
-}
+/** The providers an organization connects, one of each. */
+export const INTEGRATION_PROVIDERS = ['facebook', 'instagram', 'google_analytics', 'google_search_console'] as const
+export type IntegrationProvider = typeof INTEGRATION_PROVIDERS[number]
 
-export interface GoogleSearchConsoleIntegration {
-  revision: string
-  /** The Better Auth account the property was connected through. */
+/** One row of `organization_integrations`. */
+export interface OrganizationIntegration {
+  organization_id: string
+  provider: IntegrationProvider
+  /** The Better Auth linked account the organization acts through. */
   account_id: string
-  site_url: string
-  verified: boolean
-  /** Retained only while Google still requires the meta tag to be served. */
-  verification_token?: string
-  status: 'active' | 'disabled' | 'error'
-  created_at: string
-  updated_at: string
-}
-
-export interface FacebookIntegration {
+  /** Page id, Instagram professional account id, GA4 property id or Search Console site URL. */
+  target_id: string
+  /** Page name, Instagram username, GA4 property name or Search Console site URL. */
+  target_name: string
+  /** Google Analytics only. */
+  measurement_id: string | null
+  /** Search Console only. */
+  verified: boolean | null
+  /** Search Console only, while Google still requires the meta tag to be served. */
+  verification_token: string | null
   revision: string
-  /** The Better Auth Facebook account whose Page access manages posts. */
-  account_id: string
-  page_id: string
-  page_name: string
-  status: 'active' | 'disabled' | 'error'
   created_at: string
   updated_at: string
-}
-
-export interface InstagramIntegration {
-  revision: string
-  /** The Better Auth Instagram account post management reads its token through. */
-  account_id: string
-  /** The professional account id post management addresses. */
-  instagram_user_id: string
-  username: string
-  status: 'active' | 'disabled' | 'error'
-  created_at: string
-  updated_at: string
-}
-
-export interface OrganizationIntegrations {
-  google_analytics?: GoogleAnalyticsIntegration
-  google_search_console?: GoogleSearchConsoleIntegration
-  facebook?: FacebookIntegration
-  instagram?: InstagramIntegration
 }
 
 export interface OrganizationSettings {
