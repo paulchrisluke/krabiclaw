@@ -47,7 +47,17 @@
         <div v-if="items.length" class="divide-y divide-default border-y border-default">
           <AgendaRow v-for="item in items" :key="item.id" :item="item" :to="openHere(item)" />
         </div>
-        <p v-else class="py-6 text-center text-sm text-muted">Nothing scheduled.</p>
+        <div v-else-if="!errorMessage" class="py-6 text-center">
+          <img
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/e10ff26b-ab52-4f93-8f48-36e23828aa00/w=224"
+            alt=""
+            aria-hidden="true"
+            width="112"
+            height="112"
+            class="mx-auto size-28 object-contain"
+          >
+          <p class="mt-4 text-sm text-muted">Nothing scheduled.</p>
+        </div>
       </template>
     </div>
   </DashboardIndexPanel>
