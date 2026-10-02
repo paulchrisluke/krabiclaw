@@ -137,6 +137,7 @@ import { useAnalytics } from '~/composables/useAnalytics'
 import '~/assets/css/dashboard.css'
 import { mediaStillUrl } from '~/shared/media-placement-contract'
 import { useMediaQuery } from '@vueuse/core'
+import { requireProductPresentation } from '~/utils/product-presentation'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture.
@@ -413,7 +414,7 @@ const navTargets = computed<DashboardMobileNavItem[]>(() => {
   const items: DashboardMobileNavItem[] = [
     { key: 'today', label: 'Today', icon: 'i-lucide-bookmark', to: routeOrgBase },
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${routeOrgBase}/calendar` },
-    ...(dashboard.organization.value?.vertical === 'service' ? [{ key: 'products', label: 'Products', icon: 'i-lucide-package', to: `${routeOrgBase}/products` }] : []),
+    ...(dashboard.organization.value?.vertical === 'service' ? [{ key: 'products', label: requireProductPresentation('service', dashboard.organization.value.theme_id).collectionLabel, icon: 'i-lucide-package', to: `${routeOrgBase}/products` }] : []),
     { key: 'locations', label: 'Locations', icon: 'i-lucide-map-pin', to: `${routeOrgBase}/locations` },
     { key: 'messages', label: 'Messages', icon: 'i-lucide-message-square', to: `${routeOrgBase}/messages` },
   ]

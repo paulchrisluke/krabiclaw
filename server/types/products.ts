@@ -205,11 +205,11 @@ export interface ProductPresentation {
   collectionPath: '/menu' | '/products' | '/experiences' | '/schedule'
   locationCollectionSegment: ProductSurface
   productPath: (_locationSlug: string, _productSlug: string) => string
-  collectionLabel: 'Menu' | 'Products' | 'Experiences' | 'Consultations'
-  itemLabel: 'Dish' | 'Product' | 'Experience'
+  collectionLabel: 'Menu' | 'Products' | 'Experiences' | 'Consultations' | 'Services'
+  itemLabel: 'Dish' | 'Product' | 'Experience' | 'Service'
   // English plurals are irregular enough here ("Dish" -> "Dishes",
   // "Collection" -> "Collections") that appending an "s" produces visible typos.
-  itemLabelPlural: 'Dishes' | 'Products' | 'Experiences'
+  itemLabelPlural: 'Dishes' | 'Products' | 'Experiences' | 'Services'
   collectionGroupLabel: 'Section' | 'Collection'
   collectionGroupLabelPlural: 'Sections' | 'Collections'
   /**

@@ -7,13 +7,22 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <TenantPageRenderer :page="renderedPage!" />
-    <OnlineServiceBooking v-if="isBlawby && blawbyDocument?.shell.consultation.mode === 'native' && page.product_id" :key="page.page_id" :product-id="page.product_id" @available="bookingAvailable = $event" />
+    <ProductDetailPage v-if="linkedProduct && consultationProducts?.data.value" :key="linkedProduct.id" :organization-id="organizationId" :organization-name="consultationProducts.organizationName" vertical="service" :product="linkedProduct" :booking="linkedProduct.booking" :location="null" :currency="consultationProducts.data.value.currency" :page-document="page" collection-name="Services" :presentation="servicePresentation" :reviews="[]" :collection-siblings="[]" :metafield-definitions="[]">
+      <template #actions>
+        <BlawbyButton v-if="secondaryAction" class="mt-5" variant="outline" :to="secondaryAction.url">{{ secondaryAction.label }}</BlawbyButton>
+      </template>
+      <template #content>
+        <TenantPageRenderer :page="serviceContent!" />
+      </template>
+    </ProductDetailPage>
+    <TenantPageRenderer v-else :page="renderedPage!" />
   </template>
 </template>
 
 <script setup lang="ts">
-import OnlineServiceBooking from '~/components/booking/OnlineServiceBooking.vue'
+import ProductDetailPage from '~/components/products/ProductDetailPage.vue'
+import { requireProductPresentation } from '~/utils/product-presentation'
+import { blockTextOrNull } from '~/utils/tenant-page-block-data'
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
@@ -114,9 +123,19 @@ if (!data.value?.page && status.value === 'success') {
 const page = computed(() => data.value?.page ?? null)
 // A service document owns content and SEO; its explicit root binding owns the
 // Product supplying Price, Session and Booking. Never derive it from a slug.
-const bookingAvailable = ref(false)
+const consultationProducts = isBlawby.value && pagePath.value.startsWith('/services/') && blawbyDocument?.value.shell.consultation.mode === 'native' && page.value?.product_id
+  ? await useOnlineConsultationProducts()
+  : null
+const linkedProduct = computed(() => consultationProducts?.data.value?.products.find(product => product.id === page.value?.product_id && product.active && product.booking?.online_timezone) ?? null)
+const servicePresentation = requireProductPresentation('service')
+const secondaryAction = computed(() => {
+  const hero = page.value?.blocks.find(block => block.type === 'hero')
+  const label = blockTextOrNull(hero?.data.secondary_label)
+  const url = blockTextOrNull(hero?.data.secondary_url)
+  return label && url ? { label, url } : null
+})
 const renderedPage = computed(() => {
-  if (!page.value || !bookingAvailable.value || !blawbyDocument?.value) return page.value
+  if (!page.value || !linkedProduct.value || !blawbyDocument?.value) return page.value
   const schedulePath = blawbyDocument.value.shell.consultation.schedule_path
   return { ...page.value, blocks: page.value.blocks.map(block => {
     const data = { ...block.data }
@@ -127,6 +146,9 @@ const renderedPage = computed(() => {
     return { ...block, data }
   }) }
 })
+// The shared introduction replaces only the hero. Every authored body block
+// stays in its original order, including the prose formerly beside the gallery.
+const serviceContent = computed(() => renderedPage.value ? { ...renderedPage.value, blocks: renderedPage.value.blocks.filter(block => block.type !== 'hero') } : null)
 
 // The locale representations of the page this instance is showing, written the
 // way every other public route writes them (pages/blog/[slug].vue,

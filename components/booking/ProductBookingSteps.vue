@@ -25,12 +25,7 @@
             {{ t('saya.experience_detail.no_availability', { count: PUBLIC_BOOKING_WINDOW_DAYS }) }}
           </p>
           <template v-else>
-          <label v-if="allowTimezoneSelection && bookingTimezone" class="mb-3 block shrink-0 text-sm text-muted">
-            Timezone
-            <select v-model="guestTimezone" class="mt-1 w-full rounded-lg border border-default bg-default px-3 py-2 text-default">
-              <option v-for="zone in timezoneOptions" :key="zone" :value="zone">{{ timezoneLabel(zone) }} ({{ zone }})</option>
-            </select>
-          </label>
+          <BookingTimezoneSelect v-if="allowTimezoneSelection && bookingTimezone" :model-value="bookingTimezone" :options="timezoneOptions" class="mb-3" @update:model-value="guestTimezone = $event" />
           <BookingTimeStep
             v-model="timeSelection"
             :dates="availabilityDates"
@@ -71,8 +66,9 @@
 import BookingRecap from '~/components/booking/BookingRecap.vue'
 import BookingContactForm from '~/components/booking/BookingContactForm.vue'
 import BookingTimeStep from '~/components/booking/BookingTimeStep.vue'
+import BookingTimezoneSelect from '~/components/booking/BookingTimezoneSelect.vue'
 import type { SessionBookingController } from '~/composables/useSessionBooking'
-import { formatTime, timezoneLabel } from '~/utils/timezone'
+import { formatTime } from '~/utils/timezone'
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 const props = defineProps<{ controller: SessionBookingController; confirmationMode: 'instant' | 'review' }>()
 const { bookingStep, sellableVariants, selectedVariantId, variantPriceLabel, sessionsPending,

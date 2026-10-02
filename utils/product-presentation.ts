@@ -1,6 +1,7 @@
 import type { Collection, Product, ProductPresentation, ProductSurface } from '~/server/types/products'
 import { normalizeVertical } from '~/utils/vertical-copy'
 import { isMediaCategory, type MediaCategory } from '~/shared/media-placement-contract'
+import { organizationSupportsBlawbyTemplate } from '~/utils/template-registry'
 
 /**
  * Anything a guest books a seat on is an Experience, whatever the site sells
@@ -46,8 +47,8 @@ export const EXPERIENCE_PRESENTATION: ProductPresentation = {
 }
 
 /** The surface this product is read on, and the paths and words that go with it. */
-export function presentationForProduct(vertical: string | null | undefined, product: Pick<Product, 'booking'>): ProductPresentation {
-  return normalizeVertical(vertical) !== 'service' && isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
+export function presentationForProduct(vertical: string | null | undefined, product: Pick<Product, 'booking'>, themeId?: string): ProductPresentation {
+  return normalizeVertical(vertical) !== 'service' && isExperience(product) ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical, themeId)
 }
 
 /** The words one surface owns: experiences read the same on every vertical. */
@@ -55,7 +56,7 @@ export function presentationForSurface(vertical: string | null | undefined, surf
   return surface === 'experiences' ? EXPERIENCE_PRESENTATION : requireProductPresentation(vertical)
 }
 
-export function resolveProductPresentation(vertical: string | null | undefined): ProductPresentation | null {
+export function resolveProductPresentation(vertical: string | null | undefined, themeId?: string): ProductPresentation | null {
   if (vertical === null || vertical === undefined || vertical.trim() === '') return null
   const normalized = normalizeVertical(vertical)
   if (normalized === 'restaurant') {
@@ -78,9 +79,9 @@ export function resolveProductPresentation(vertical: string | null | undefined):
       collectionPath: '/products',
       locationCollectionSegment: 'products',
       productPath: (locationSlug, productSlug) => `/locations/${encodeURIComponent(locationSlug)}/products/${encodeURIComponent(productSlug)}`,
-      collectionLabel: 'Products',
-      itemLabel: 'Product',
-      itemLabelPlural: 'Products',
+      collectionLabel: organizationSupportsBlawbyTemplate({ vertical, themeId }) ? 'Services' : 'Products',
+      itemLabel: organizationSupportsBlawbyTemplate({ vertical, themeId }) ? 'Service' : 'Product',
+      itemLabelPlural: organizationSupportsBlawbyTemplate({ vertical, themeId }) ? 'Services' : 'Products',
       collectionGroupLabel: 'Collection',
       collectionGroupLabelPlural: 'Collections',
       structuredDataType: 'Product',
@@ -89,8 +90,8 @@ export function resolveProductPresentation(vertical: string | null | undefined):
   return null
 }
 
-export function requireProductPresentation(vertical: string | null | undefined): ProductPresentation {
-  const presentation = resolveProductPresentation(vertical)
+export function requireProductPresentation(vertical: string | null | undefined, themeId?: string): ProductPresentation {
+  const presentation = resolveProductPresentation(vertical, themeId)
   if (!presentation) throw new Error(`Products are not presented for vertical: ${normalizeVertical(vertical)}`)
   return presentation
 }
