@@ -2,6 +2,14 @@
 
 Prepared 2026-10-02 in an isolated Mac checkout. The implementation is on the isolated provider feature branch. Qualification evidence is recorded below; no deployment or production activation has occurred.
 
+## Current source consolidation checkpoint
+
+The isolated Calendar/provider/Payments candidate is based on corrected booking/MCP #1211 at 716f37b0150101aad6c05d30644a3416e92cdf78, including staging 486f61789. That base owns 0002_native_consultation_foundation. The former bundled, unshipped 0002_provider_support is replaced by canonically generated 0003_provider_calendar_payments: Calendar/member/Payments tables, normalized Calendar integration extension and nullable provider assignment fields only. Shipped 0000/0001 and the base's 0002 artifacts are preserved; the seven weekly fields and their existing materializer reads remain.
+
+The earlier account/error/frozen-snapshot correction at 961b1c99f was explicitly reviewed and included as a separate merge, preserving its original commit. The deleted feature-evidence registry stays deleted. The combined source retains the base's bounded booking pagination, incomplete-replay guard and Price requirement while adding the existing provider assignment/filter and Checkout behavior. No tests, builds, provider calls or database operations were performed for this source consolidation. Earlier observations below are historical, not qualification of this candidate.
+
+Source review still identifies unbounded outbound Calendar reconciliation: calendarSubjects reads the full upcoming collection, reconcileIntents reads all live links and slices in JavaScript, unchanged rows rotate through writes, and currentSubject reloads the collection repeatedly. This finding is not resolved by the consolidation and remains pending source review before publication. No new reconciliation framework or state was added.
+
 ## Verified integration baseline
 
 Remote heads fetched and verified:
@@ -18,7 +26,7 @@ Remote heads fetched and verified:
 
 MCP and Calendar heads are ancestors of Payments. The new local branch starts from Payments. Two final Foundation commits (`d6beb2af3`, `0e002e4d2`) and three Cleanup commits (`a15f5b066`, `ce4399904`, `4c2cc9a61`) have been integrated into this branch. Cleanup metadata conflicts retained the newer Payments descriptions, booking/payment tools and Foundation source-page binding; most of a15f5b066 was already incorporated by Payments. No other checkout or branch was modified.
 
-Foundation’s final selector/gallery successor is retained. The original pre-v8 stack and its proof are preserved on backup branches at `ec97225deef17ba5ba3b977fcf8c330898439f6c` and account-corrected `9ac12ab27faf6c3d48b82cb7ea15d656b5287dc2`. The final checkout integrates actual v8 and merged Messages PR #1222. Shipped v8 migrations 0000 and 0001 are retained exactly; canonically generated next additive migration is `0002_provider_support.sql`. Cleanup’s separate contraction hold remains: all seven weekly columns are retained. Calendar output is normalized in organization_integrations; no retired organization integration JSON or v5/v6 history is revived.
+Foundation’s final selector/gallery successor is retained. The original pre-v8 stack and its proof are preserved on backup branches at `ec97225deef17ba5ba3b977fcf8c330898439f6c` and account-corrected `9ac12ab27faf6c3d48b82cb7ea15d656b5287dc2`. The original composed checkout integrated v8 and merged Messages PR #1222, with shipped migrations 0000 and 0001 retained exactly and a generated, unshipped `0002_provider_support.sql`. That bundled migration is now split as described in the current checkpoint above. Cleanup’s separate contraction hold remains: all seven weekly columns are retained. Calendar output is normalized in organization_integrations; no retired organization integration JSON or v5/v6 history is revived.
 
 Read contracts: AGENTS.md; docs/consultations.md; docs/integrations/google-calendar.md; docs/local-development.md; docs/testing-strategy.md; docs/operations/release-and-outage-prevention.md. The primary checkout's ignored .agents/skills contains only ai-seo, which does not apply to this scheduling implementation.
 
