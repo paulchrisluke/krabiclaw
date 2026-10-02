@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:643991307bfc3ce99c40c05283324091258c5ade36908130c111be2eec84bfbf",
+  "fingerprint": "sha256:96c3ed4d98d2d1c1efbae9895806722fe653aa416702d269f3b65160dedac086",
   "tools": [
     {
       "name": "append_content_block",
@@ -17852,7 +17852,7 @@
     },
     {
       "name": "update_location",
-      "description": "Update a location's own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. To change its hero media, call set_media with { owner_type: \"business_location\", owner_id: <location.id>, slot: \"hero\" }. Only provided fields are changed.",
+      "description": "Update a location's own details: regular opening hours, temporary closures/special hours, and contact info. To change its hero media, call set_media with { owner_type: \"business_location\", owner_id: <location.id>, slot: \"hero\" }. Only provided fields are changed.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
