@@ -176,7 +176,14 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'update_reservation_policy',
         args: { organization_id: organizationId, location_id: locationId, slot_capacity: 20 },
       })
-      expect(policySetup.status(), await policySetup.text()).toBe(200)
+      // Only slot_capacity is sent: every other stored field, the cancellation
+      // policy included, is kept. The tool result says so, not the HTTP status.
+      expect(mcpData<{ ok: boolean }>(await policySetup.json()).ok).toBe(true)
+      const policyRead = await mcpRequest(request, baseURL!, {
+        method: 'tools/call', toolName: 'get_reservation_policy',
+        args: { organization_id: organizationId, location_id: locationId },
+      })
+      expect(mcpData<{ policy: { slot_capacity: number | null } }>(await policyRead.json()).policy.slot_capacity).toBe(20)
 
       // The public routes resolve their tenant from the host, and baseURL is the
       // platform's. This used to land on the right tenant only because

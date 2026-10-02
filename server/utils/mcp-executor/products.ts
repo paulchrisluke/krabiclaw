@@ -10,6 +10,7 @@ import {
   deleteProduct,
   getProduct,
   requireOrganizationProduct,
+  hydrateProductMedia,
   listCollectionProducts,
   listCollections,
   listLocationProducts,
@@ -56,6 +57,9 @@ async function resolveCarriedProduct(ctx: McpExecutorContext, productId: string)
   return await requireOrganizationProduct(ctx.organization.db, {
     organizationId: ctx.organization.organizationId, productId,
   }).catch((error: unknown) => {
+    // A product this site does not carry is the caller's mistake; any other
+    // failure is the server's and keeps its own error.
+    if ((error as { statusCode?: number }).statusCode !== 404) throw error
     const message = (error as { statusMessage?: string }).statusMessage
     throw mcpProtocolError(MCP_ERROR.invalidParams, message && message !== 'Not Found' ? message : 'Product not found')
   })
@@ -133,8 +137,10 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
       })
       return productPage(products, window)
     }
-    case 'get_product':
-      return { product: await resolveCarriedProduct(ctx, requiredString(args, 'product_id')) }
+    case 'get_product': {
+      const [product] = await hydrateProductMedia(organization.db, organization.organizationId, [await resolveCarriedProduct(ctx, requiredString(args, 'product_id'))])
+      return { product }
+    }
 
     case 'create_product': {
       // The site carries what it created, withheld until someone publishes it

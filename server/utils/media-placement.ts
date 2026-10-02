@@ -397,7 +397,7 @@ function buildMembershipGuardQuery(input: {
   const now = new Date().toISOString()
   return {
     query: `INSERT INTO media_placements (id, organization_id, owner_type, owner_id, slot, asset_id, sort_order, status, created_at, updated_at)
-      SELECT ?, ?, ?, ?, ?, ?, '__reorder_guard__', 0, '__reorder_guard__', ?, ?
+      SELECT ?, ?, ?, ?, ?, '__reorder_guard__', 0, '__reorder_guard__', ?, ?
        WHERE EXISTS (
          SELECT asset_id FROM media_placements WHERE organization_id = ? AND owner_type = ? AND owner_id = ? AND slot = ?
          EXCEPT
