@@ -26,3 +26,7 @@ Built Worker `http://localhost:3210`, existing isolated D1 `.tmp/payments-review
 - Final build, scoped ESLint and git diff whitespace checks pass. Metronome response tests 2/2 pass. These local proofs do not qualify native Stripe collection.
 
 The one-time buyer proof spec and bespoke SQL fixture were removed under #1225. Use the canonical local setup and the actual account page for manual verification. Historical observations above remain limited to their recorded synthetic environment.
+
+## Current account presentation correction
+
+/account now preserves existing URLs and Checkout returns while leading to the existing My account → Purchases & bookings leaf. It reuses dashboard navigation and panels, gives truthful empty states, and removes the manual transfer-code UI/API/writer. Purchases follow the authenticated Better Auth user across devices; guest sign-in linking remains Better Auth-owned. Hidden native-verified Checkout-return proofs remain separate from normal account use. The old standalone screenshot above is historical and was insufficient UI qualification.

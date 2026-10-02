@@ -12,7 +12,7 @@ import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAut
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
 import {metronomeCurrencyAmount,provisionPaymentsBilling,finalizePaymentsBilling,deliverPaymentsUsage,reconcileNativeBillingCredit} from '../../server/domain/payments/usage.ts'
-import {buyerPayments,ownedBuyerRequest,createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
+import {buyerPayments,ownedBuyerRequest,tokenHash,claimCheckoutReturn} from '../../server/domain/payments/buyer.ts'
 import {mcpFinancialApprovalErrorResult} from '../../server/utils/mcp-financial-handoff.ts'
 const ORG='payments-org',NOW='2026-10-01T00:00:00.000Z'
 async function boot(){
@@ -134,14 +134,16 @@ test('Stripe actual cost report replay and correction bill only attributable del
   assert.throws(()=>stripeFeeMinor('1.3370','USD'))
  }finally{await runtime.dispose()}
 })
-test('cross-device purchase claim needs possession, expires and consumes all sibling proofs', {timeout:120000},async()=>{
+test('verified Checkout return requires an unexpired single-use purchase proof', {timeout:120000},async()=>{
  const {db,runtime}=await boot();try{
   await payable(db,'claim');await db.prepare("UPDATE payments SET captured_amount=10000 WHERE id='claim'").run()
-  await assert.rejects(()=>createPurchaseClaim(db,'other','claim'))
-  const first=await createPurchaseClaim(db,'guest','claim'),second=await createPurchaseClaim(db,'guest','claim')
-  await claimPurchase(db,'verified',first.claim_code)
+  const first=crypto.randomUUID()+crypto.randomUUID(),second=crypto.randomUUID()+crypto.randomUUID(),expired=crypto.randomUUID()+crypto.randomUUID()
+  for(const token of [first,second,expired])await db.prepare('INSERT INTO payment_claims(token_hash,payment_id,expires_at)VALUES(?,?,?)').bind(await tokenHash(token),'claim',token===expired?'2000-01-01T00:00:00.000Z':'2099-01-01T00:00:00.000Z').run()
+  await assert.rejects(()=>claimCheckoutReturn(db,'other',expired),/expired or already used/u)
+  await assert.rejects(()=>claimCheckoutReturn(db,'other',crypto.randomUUID()+crypto.randomUUID()),/expired or already used/u)
+  await claimCheckoutReturn(db,'verified',first)
   assert.equal(await db.prepare("SELECT buyer_user_id FROM payments WHERE id='claim'").first('buyer_user_id'),'verified')
-  await assert.rejects(()=>claimPurchase(db,'other',first.claim_code));await assert.rejects(()=>claimPurchase(db,'other',second.claim_code))
+  await assert.rejects(()=>claimCheckoutReturn(db,'other',first));await assert.rejects(()=>claimCheckoutReturn(db,'other',second))
  }finally{await runtime.dispose()}
 })
 test('Metronome conversion preserves exact minor units without FX',()=>{

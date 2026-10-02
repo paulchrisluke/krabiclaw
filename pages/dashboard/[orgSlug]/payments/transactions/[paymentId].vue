@@ -21,10 +21,20 @@ import {isCurrencyCode} from '~/shared/currencies'
 import type {Payment} from '~/server/domain/payments'
 definePageMeta({layout:'dashboard'})
 const route=useRoute(),api=useDashboardApi(),amount=ref(''),preparing=ref(false),failure=ref('')
-const {data,pending,error,refresh}=await useAsyncData(()=>`payment:${route.params.paymentId}`,()=>api<{payment:Payment;booking_request_id?:string|null;order:Record<string,unknown>|null}>('/api/dashboard/payments',{query:{payment_id:String(route.params.paymentId)},validate:(v:unknown):v is {payment:Payment;booking_request_id?:string|null;order:Record<string,unknown>|null}=>isRecord(v)&&isRecord(v.payment)&&typeof v.payment.id==='string'}),{lazy:true})
-const order=computed(()=>data.value?.order),orderLines=computed(()=>Array.isArray(order.value?.lines)?order.value.lines.filter(isRecord):[])
+type Detail = {payment:Payment;booking_request_id?:string|null;order:(Record<string,unknown>&{lines:Record<string,unknown>[]})|null}
+const {data,pending,error,refresh}=await useAsyncData(()=>`payment:${route.params.paymentId}`,async()=>{
+ const detail=await api<Detail>('/api/dashboard/payments',{query:{payment_id:String(route.params.paymentId)},validate:(v:unknown):v is Detail=>
+  isRecord(v)&&isRecord(v.payment)&&typeof v.payment.id==='string'&&typeof v.payment.price_snapshot_json==='string'
+  &&isCurrencyCode(v.payment.currency)&&Number.isSafeInteger(v.payment.captured_amount)&&Number.isSafeInteger(v.payment.refunded_amount)
+  &&typeof v.payment.subject_type==='string'&&typeof v.payment.state==='string'
+  &&(v.order===null||(isRecord(v.order)&&typeof v.order.fulfillment_status==='string'&&Array.isArray(v.order.lines)&&v.order.lines.every(line=>isRecord(line)&&typeof line.id==='string'&&typeof line.title==='string'&&Number.isSafeInteger(line.quantity)&&Number.isSafeInteger(line.unit_amount)&&isCurrencyCode(line.currency))))})
+ const snapshot:unknown=JSON.parse(detail.payment.price_snapshot_json)
+ if(!isRecord(snapshot)||typeof snapshot.title!=='string'||!snapshot.title.trim())throw new Error('Stored payment purchase title is invalid')
+ return {...detail,purchaseTitle:snapshot.title}
+},{lazy:true})
+const order=computed(()=>data.value?.order),orderLines=computed(()=>order.value?.lines??[])
 async function fulfill(status:string){preparing.value=true;failure.value='';try{await api('/api/dashboard/payments/fulfillment',{method:'POST',body:{payment_id:String(route.params.paymentId),status},validate:(v:unknown):v is Record<string,unknown>=>isRecord(v)&&typeof v.fulfillment_status==='string'});await refresh()}catch(error){failure.value=getErrorMessage(error,'Fulfillment could not be updated')}finally{preparing.value=false}}
 const payment=computed(()=>data.value?.payment)
-const purchaseTitle=computed(()=>{try{const snapshot:unknown=JSON.parse(payment.value?.price_snapshot_json||'{}');return isRecord(snapshot)&&typeof snapshot.title==='string'?snapshot.title:'Purchase'}catch{return 'Purchase'}})
+const purchaseTitle=computed(()=>data.value?.purchaseTitle)
 async function prepare(){preparing.value=true;failure.value='';try{if(!payment.value||!isCurrencyCode(payment.value.currency))throw new Error('Payment currency is invalid');const approval=await api<{authorization_id:string}>('/api/dashboard/payments/refund',{method:'POST',body:{action:'prepare',payment_id:String(route.params.paymentId),amount:majorAmountToMinor(amount.value,payment.value.currency)},validate:(v:unknown):v is {authorization_id:string}=>isRecord(v)&&typeof v.authorization_id==='string'});await navigateTo(`/dashboard/${route.params.orgSlug}/payments/refunds/approve?id=${approval.authorization_id}`)}catch(error){failure.value=getErrorMessage(error,'Refund could not be prepared')}finally{preparing.value=false}}
 </script>
