@@ -90,9 +90,11 @@
 
         <div v-else-if="!activeLoading && !activeError" class="py-24 text-center">
           <img
-            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b2e34737-127b-4117-0666-814df0556800/thumbnail"
+            src="https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0b7e08d0-6b7d-471b-2957-9845392cc200/w=224"
             alt=""
             aria-hidden="true"
+            width="112"
+            height="112"
             class="mx-auto size-28 object-contain"
           >
           <p class="mt-6 text-base font-semibold text-highlighted">{{ emptyTitle }}</p>
