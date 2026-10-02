@@ -814,14 +814,15 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 // Typed weekly recurrence. This replaces the `recurring_slots` JSON map; it is
 // not that map relocated into another ungoverned column.
 // Row meaning: sessions of this Product should exist on this weekday at this
-//   local start time every week, using Product duration and capacity.
+//   local start time, every `interval_weeks` weeks, within the effective dates.
 // Recurrence is defined in LOCAL WALL TIME plus an IANA timezone — an offset
 //   alone is not a recurrence timezone, because offsets move and wall clocks
 //   do not. Session instants are stored in UTC. Nonexistent and ambiguous
 //   local times (spring-forward gaps, fall-back repeats) have defined
 //   behavior in server/utils/availability.ts with real coverage.
 // Null semantics: location_id NULL means the rule is not location-specific.
-// Weekly slots use Product duration/capacity; saved Sessions retain actual facts.
+//   duration_minutes / capacity NULL defer to product_booking_configs.
+//   effective_from_date / effective_until_date NULL mean open-ended.
 // Deletion: cascades from Product and location. Sessions already generated
 //   keep their own times and capacity — deleting a rule does not delete or
 //   move them, and editing one does not silently reschedule existing bookings.
