@@ -184,16 +184,18 @@ test.describe('stateless MCP server', () => {
       // moved its subdomain; naming the tenant is what the other guest journeys
       // already do, and it does not depend on rewriting a live tenant to work.
       const asTenant = { 'x-preview-tenant': 'demo' }
+      const contactEmail = `mcp-contact-${Date.now()}@example.test`
+      const reservationEmail = `mcp-res-${Date.now()}@example.test`
       const publicContact = await request.post(`${baseURL}/api/public/contact`, {
         headers: asTenant,
-        data: { name: 'MCP Contact', email: `mcp-contact-${Date.now()}@example.test`, message: 'hello from MCP e2e' },
+        data: { name: 'MCP Contact', email: contactEmail, message: 'hello from MCP e2e' },
       })
       expect(publicContact.status()).toBe(201)
       const publicReservation = await request.post(`${baseURL}/api/public/reservations`, {
         headers: asTenant,
         data: {
           name: 'MCP Reservation',
-          email: `mcp-res-${Date.now()}@example.test`,
+          email: reservationEmail,
           phone: '+14155552673',
           date: '2030-01-15',
           time: '19:00',
@@ -210,8 +212,10 @@ test.describe('stateless MCP server', () => {
       })
       expect(listContacts.status()).toBe(200)
       const contactsBody = await listContacts.json()
-      const contactSubmissionId = mcpData<{ submissions: Array<{ id: string }> }>(contactsBody).submissions[0]?.id
-      expect(contactSubmissionId).toEqual(expect.any(String))
+      // The shared demo inbox holds other runs' submissions; read back this test's own.
+      const contactSubmission = mcpData<{ submissions: Array<{ id: string; email: string; message: string }> }>(contactsBody)
+        .submissions.find(row => row.email === contactEmail)
+      expect(contactSubmission).toMatchObject({ id: expect.any(String), message: 'hello from MCP e2e' })
 
       const listReservations = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -227,7 +231,8 @@ test.describe('stateless MCP server', () => {
         guests: string
         date: string
         time: string
-      }> }>(reservationsBody).submissions[0]
+        email: string
+      }> }>(reservationsBody).submissions.find(row => row.email === reservationEmail)
       const reservationSubmissionId = reservationSubmission?.id
       expect(reservationSubmissionId).toEqual(expect.any(String))
       expect(reservationSubmission?.location_id).toEqual(expect.any(String))
