@@ -10,6 +10,7 @@ test('provider CMS and MCP share member permissions, public approval, assignment
  const authHeaders=authRequestHeaders(baseURL!),headers={'x-preview-tenant':slug},editor=`/api/editor/organizations/${org}`
  const signin=await page.request.post('/api/auth/sign-in/email',{headers:authHeaders,data:{email:'payments-proof-owner@playwright.example',password}})
  expect(signin.status(),await signin.text()).toBe(200)
+ const ownerDestination=await page.request.get('/api/post-login',{maxRedirects:0});expect(ownerDestination.headers().location).toBe(`/dashboard/${slug}`)
  const ownPath=`/api/organizations/${org}/members/${ownerMember}/scheduling`
  const ownBefore=(await(await page.request.get(ownPath)).json()).scheduling
  const hours={timezone:'UTC',weekly:Array.from({length:7},(_,weekday)=>({weekday,start:'09:00',end:'17:00'})),time_off:[],expected_updated_at:ownBefore?.updated_at??null,public_name:'Approved local guide',public_bio:'Public biography approved by the organization.',public_approved:true}
@@ -24,6 +25,7 @@ test('provider CMS and MCP share member permissions, public approval, assignment
  await page.goto(`/dashboard/${slug}/settings/members/${ownerMember}`)
  await expect(page.getByLabel('Public name',{exact:true})).toHaveValue(hours.public_name)
  await expect(page.getByRole('heading',{name:'Working hours',exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Connect Google for busy checks',exact:true})).toHaveCount(0)
  await page.getByLabel('Public bio',{exact:true}).fill('Changed in the actual CMS form.')
  await page.getByRole('button',{name:'Save profile and availability',exact:true}).click()
  await expect.poll(async()=>mcpData<{scheduling:{public_bio:string}}>(await(await mcpRequest(page.request,baseURL!,{method:'tools/call',toolName:'get_member_scheduling',args:{organization_id:org,member_id:ownerMember}})).json()).scheduling.public_bio).toBe('Changed in the actual CMS form.')
@@ -81,6 +83,7 @@ test('provider CMS and MCP share member permissions, public approval, assignment
   const signin=await self.post('/api/auth/sign-in/email',{headers:authHeaders,data:{email:'payments-proof-buyer@playwright.example',password}});expect(signin.status(),await signin.text()).toBe(200)
   const accepted=await self.post('/api/auth/organization/accept-invitation',{headers:authHeaders,data:{invitationId:(await invite.json()).id}});expect(accepted.status(),await accepted.text()).toBe(200)
   const member=(await accepted.json()).member
+  const destination=await self.get('/api/post-login',{maxRedirects:0});expect(destination.headers().location).toBe(`/dashboard/account/profile/calendar?organization_id=${org}`)
   const selfPath=`/api/organizations/${org}/members/${member.id}/scheduling`
   const selfSave=await self.put(selfPath,{data:{timezone:'UTC',weekly:hours.weekly,time_off:[],expected_updated_at:null}});expect(selfSave.status(),await selfSave.text()).toBe(200)
   const ownOnly=await mcpRequest(self,baseURL!,{method:'tools/call',toolName:'get_member_scheduling',args:{organization_id:org}})
@@ -100,14 +103,17 @@ test('provider CMS and MCP share member permissions, public approval, assignment
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'artifacts/provider-booking-mobile.png',fullPage:true})
   await page.context().clearCookies();await page.context().addCookies((await self.storageState()).cookies)
   const anonymous=await playwrightRequest.newContext({baseURL})
-  try{const unauthenticated=await anonymous.get(`/member-schedule/${org}`,{maxRedirects:0});expect(unauthenticated.status()).toBe(302);expect(unauthenticated.headers().location).toContain('/login?redirect=')}finally{await anonymous.dispose()}
-  const selfPage=await page.goto(`/member-schedule/${org}`)
+  try{const unauthenticated=await anonymous.get(`/dashboard/account/profile/calendar?organization_id=${org}`,{maxRedirects:0});expect(unauthenticated.status()).toBe(302);expect(unauthenticated.headers().location).toContain('/login?redirect=')}finally{await anonymous.dispose()}
+  const selfPage=await page.goto(`/dashboard/account/profile/calendar?organization_id=${org}`)
   expect(selfPage?.headers()['cache-control']).toContain('no-store')
-  await expect(page.getByRole('heading',{name:'My availability',exact:true})).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Calendar & availability',exact:true})).toBeVisible()
   await expect(page.getByRole('checkbox',{name:'Approve this public profile',exact:true})).toHaveCount(0)
+  await expect(page.getByRole('combobox',{name:'Business',exact:true})).toContainText('Payments local proof')
+  await expect(page.getByRole('button',{name:'Connect Google for busy checks',exact:true})).toBeVisible()
   await page.getByLabel('Public name',{exact:true}).fill('Unapproved member name')
   await page.getByRole('button',{name:'Save profile and availability',exact:true}).click()
   await expect.poll(async()=>mcpData<{scheduling:{public_name:string;public_approved:number}}>(await(await mcpRequest(self,baseURL!,{method:'tools/call',toolName:'get_member_scheduling',args:{organization_id:org,member_id:member.id}})).json()).scheduling.public_name).toBe('Unapproved member name')
+  await page.getByRole('heading',{name:'Calendar & availability',exact:true}).scrollIntoViewIfNeeded()
   await page.screenshot({path:'artifacts/provider-self-service-mobile.png',fullPage:true})
   const withheld=await request.get(`/api/public/products/${products[0].slug}/provider`,{headers})
   expect(await withheld.json()).toEqual({provider:null})

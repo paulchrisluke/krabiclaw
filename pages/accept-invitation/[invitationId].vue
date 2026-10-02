@@ -53,7 +53,7 @@ async function acceptInvitation() {
     const result = await authClient.organization.acceptInvitation({ invitationId })
     if (result.error) throw new Error(result.error.message || 'Failed to accept invitation')
     await navigateTo(result.data?.member.role === 'member'
-      ? `/member-schedule/${encodeURIComponent(result.data.member.organizationId)}`
+      ? `/dashboard/account/profile/calendar?organization_id=${encodeURIComponent(result.data.member.organizationId)}`
       : '/dashboard')
   } catch (error) {
     acceptError.value = error instanceof Error ? error.message : 'Failed to accept invitation'

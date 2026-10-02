@@ -1,6 +1,7 @@
 <template>
  <div class="space-y-6">
   <UAlert v-if="error" color="error" :description="error" />
+  <template v-if="loaded">
   <p class="text-sm text-muted">Changes affect future availability. Existing bookings keep their assigned person and time.</p>
   <BookingTimezoneSelect v-model="timezone" :options="timezoneOptions" />
   <section class="space-y-3"><h2 class="font-semibold">Working hours</h2>
@@ -17,6 +18,8 @@
    <template v-if="self"><USelect v-model="accountId" :items="accountOptions" placeholder="Select your linked Google account" class="w-full" /><UButton color="neutral" variant="soft" @click="linkGoogle">Connect Google for busy checks</UButton><UButton :disabled="!accountId" color="neutral" variant="soft" @click="loadCalendars">Choose busy calendars</UButton><UCheckbox v-for="calendar in calendars" :key="calendar.id" :model-value="calendarIds.includes(calendar.id)" :label="calendar.summary" @update:model-value="checked=>calendarIds=checked?[...calendarIds,calendar.id]:calendarIds.filter(id=>id!==calendar.id)" /><UButton :disabled="!accountId || !calendarIds.length" @click="selectCalendar">Save busy calendars</UButton></template>
    <div class="flex gap-2"><UButton v-if="scheduling?.calendar_account_id" color="neutral" variant="soft" @click="refreshCalendar">Recheck busy data</UButton><UButton v-if="scheduling?.calendar_account_id" color="neutral" variant="soft" @click="disconnectCalendar">Use internal scheduling</UButton></div>
   </section>
+  </template>
+  <p v-else-if="saving" class="text-sm text-muted">Loading availability…</p>
  </div>
 </template>
 <script setup lang="ts">
@@ -26,11 +29,12 @@ import { localPartsAt, localDateTimeToInstant, TIMEZONE_OPTIONS } from '~/utils/
 import type { readMemberScheduling } from '~/server/domain/member-scheduling'
 const props=defineProps<{organizationId:string;memberId:string;admin?:boolean;self?:boolean}>()
 type Scheduling=Awaited<ReturnType<typeof readMemberScheduling>>
+const loaded=ref(false)
 const scheduling=ref<Scheduling>(null),error=ref(''),saving=ref(false),timezone=ref(Intl.DateTimeFormat().resolvedOptions().timeZone),weekly=ref<WorkingHours[]>([]),timeOff=ref<{start:string;end:string}[]>([]),publicName=ref(''),publicPhoto=ref(''),publicBio=ref(''),approve=ref(false)
 const timezoneOptions = computed(()=>[...new Set([timezone.value, ...TIMEZONE_OPTIONS])].filter((zone):zone is string=>Boolean(zone)))
 const accountId=ref(''),calendarIds=ref<string[]>([]),calendars=ref<{id:string;summary:string}[]>([])
-const linked=useLinkedAccounts('google',MEMBER_BUSY_SCOPES)
-const accountOptions=computed(()=>linked.data.value?.map(a=>({label:a.label,value:a.id}))??[])
+const linked=props.self?useLinkedAccounts('google',MEMBER_BUSY_SCOPES):null
+const accountOptions=computed(()=>linked?.data.value?.map(a=>({label:a.label,value:a.id}))??[])
 const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((label,value)=>({label,value}))
 const base=computed(()=>`/api/organizations/${props.organizationId}/members/${props.memberId}`)
 function local(instant:string,zone:string){const p=localPartsAt(new Date(instant),zone);const pad=(v:number)=>String(v).padStart(2,'0');return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`}
@@ -38,11 +42,11 @@ function apply(value:Scheduling){scheduling.value=value;if(!value)return;timezon
 async function run(action:()=>Promise<void>){error.value='';saving.value=true;try{await action()}catch(e){error.value=getErrorMessage(e,'Schedule could not be saved')}finally{saving.value=false}}
 function instant(value:string){const [date,time]=value.split('T');if(!date||!time)throw new Error('Complete the time-off interval');return localDateTimeToInstant(date,time,timezone.value,'reject').toISOString()}
 async function save(){await run(async()=>apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/scheduling`,{method:'PUT',body:{timezone:timezone.value,weekly:weekly.value,time_off:timeOff.value.map(i=>({start:instant(i.start),end:instant(i.end)})),expected_updated_at:scheduling.value?.updated_at??null,public_name:publicName.value||null,public_photo_url:publicPhoto.value||null,public_bio:publicBio.value||null,...(props.admin?{public_approved:approve.value}:{})}})).scheduling))}
-async function linkGoogle(){await run(async()=>{await linked.link(window.location.href)})}
+async function linkGoogle(){await run(async()=>{if(!linked)throw new Error('Open Calendar & availability in My account to connect Google');await linked.link(window.location.href,{access_type:'offline',prompt:'consent'})})}
 async function loadCalendars(){await run(async()=>{calendars.value=(await $fetch<{calendars:typeof calendars.value}>(`${base.value}/calendars`,{query:{account_id:accountId.value}})).calendars})}
 async function calendar(body:Record<string,unknown>){await run(async()=>apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/calendar`,{method:'POST',body})).scheduling))}
 async function selectCalendar(){await calendar({action:'select',account_id:accountId.value,calendar_ids:calendarIds.value})}
 async function disconnectCalendar(){await calendar({action:'select',account_id:null,calendar_ids:[]})}
 async function refreshCalendar(){await calendar({action:'refresh'})}
-onMounted(()=>run(async()=>apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/scheduling`)).scheduling)))
+onMounted(()=>run(async()=>{apply((await $fetch<{scheduling:Scheduling}>(`${base.value}/scheduling`)).scheduling);loaded.value=true}))
 </script>

@@ -1,5 +1,5 @@
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { listUserOrganizations, resolveUserOrganization } from '~/server/utils/member-access'
+import { isOrganizationWideRole, listUserOrganizations, resolveUserOrganization } from '~/server/utils/member-access'
 
 export type PostLoginDestination = `/dashboard/${string}`
 
@@ -28,6 +28,12 @@ export type PostLoginRoute =
   | { kind: 'choose', destination: '/dashboard/select-organization' }
   | { kind: 'onboard', destination: '/dashboard/onboarding' }
 
+function organizationDestination(organization: { id: string; slug: string; role: string }): PostLoginDestination {
+  return isOrganizationWideRole(organization.role)
+    ? `/dashboard/${encodeURIComponent(organization.slug)}`
+    : `/dashboard/account/profile/calendar?organization_id=${encodeURIComponent(organization.id)}`
+}
+
 export async function resolvePostLoginRoute(
   env: CloudflareEnv,
   { userId, activeOrganizationId }: PostLoginPrincipal,
@@ -37,7 +43,7 @@ export async function resolvePostLoginRoute(
     // must not route them into a dashboard they can no longer open. A stale one
     // is not an error — the membership list below answers again from scratch.
     const active = await resolveUserOrganization(env, { userId, organizationId: activeOrganizationId })
-    if (active) return { kind: 'enter', destination: `/dashboard/${encodeURIComponent(active.slug)}` }
+    if (active) return { kind: 'enter', destination: organizationDestination(active) }
   }
 
   const organizations = await listUserOrganizations(env, userId)
@@ -45,5 +51,7 @@ export async function resolvePostLoginRoute(
   if (organizations.length > 1) return { kind: 'choose', destination: '/dashboard/select-organization' }
 
   const only = organizations[0]!
-  return { kind: 'activate', organizationId: only.id, destination: `/dashboard/${encodeURIComponent(only.slug)}` }
+  const membership = await resolveUserOrganization(env, { userId, organizationId: only.id })
+  if (!membership) throw new Error('Organization membership changed during sign-in; retry')
+  return { kind: 'activate', organizationId: only.id, destination: organizationDestination(membership) }
 }

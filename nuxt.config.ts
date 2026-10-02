@@ -288,7 +288,6 @@ export default defineNuxtConfig({
           '/api',
           '/auth',
           '/dashboard',
-          '/member-schedule',
           '/dev',
           '/oauth',
           '/transfer',
@@ -429,7 +428,6 @@ export default defineNuxtConfig({
     // self-fetch with no bindings and a bespoke session provider to work around
     // it. Nitro still serves `/server/api/**`; only the Vue pages move.
     '/dashboard/**': { ssr: false, headers: { 'cache-control': 'no-store' } },
-    '/member-schedule/**': { ssr: false, headers: { 'cache-control': 'no-store' } },
     '/auth/**':      { headers: { 'cache-control': 'no-store' } },
     '/signup':       { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
     '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
