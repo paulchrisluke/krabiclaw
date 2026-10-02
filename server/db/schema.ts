@@ -814,15 +814,14 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 // Typed weekly recurrence. This replaces the `recurring_slots` JSON map; it is
 // not that map relocated into another ungoverned column.
 // Row meaning: sessions of this Product should exist on this weekday at this
-//   local start time, every `interval_weeks` weeks, within the effective dates.
+//   local start time every week, using Product duration and capacity.
 // Recurrence is defined in LOCAL WALL TIME plus an IANA timezone — an offset
 //   alone is not a recurrence timezone, because offsets move and wall clocks
 //   do not. Session instants are stored in UTC. Nonexistent and ambiguous
 //   local times (spring-forward gaps, fall-back repeats) have defined
 //   behavior in server/utils/availability.ts with real coverage.
 // Null semantics: location_id NULL means the rule is not location-specific.
-//   duration_minutes / capacity NULL defer to product_booking_configs.
-//   effective_from_date / effective_until_date NULL mean open-ended.
+// Weekly slots use Product duration/capacity; saved Sessions retain actual facts.
 // Deletion: cascades from Product and location. Sessions already generated
 //   keep their own times and capacity — deleting a rule does not delete or
 //   move them, and editing one does not silently reschedule existing bookings.
@@ -839,17 +838,6 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	weekday: integer().notNull(),
 	// Local wall-clock 'HH:MM'.
 	start_time: text().notNull(),
-	// A repeating slot: start_time, then every interval_minutes until the last
-	// start at or before end_time. Both null is a single start time, which is
-	// what a class is. A restaurant service is one row per weekday instead of
-	// one per seating.
-	end_time: text(),
-	interval_minutes: integer(),
-	interval_weeks: integer().default(1).notNull(),
-	effective_from_date: text(),
-	effective_until_date: text(),
-	duration_minutes: integer(),
-	capacity: integer(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -862,25 +850,11 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	// SQLite UNIQUE treats NULLs as distinct, so a single key over the nullable
 	// location_id would let a location-neutral rule be inserted repeatedly —
 	// the common case. Two partial indexes instead, one per location state.
-	// effective_from_date is deliberately NOT part of the key: two rules for the
-	// same weekday and time differing only by effective window are an ambiguity
-	// about which one governs, not two distinct slots.
-	uniqueIndex("product_availability_rules_slot_unique").on(table.product_id, table.location_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NOT NULL`),
-	uniqueIndex("product_availability_rules_neutral_slot_unique").on(table.product_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NULL`),
+	uniqueIndex("product_availability_rules_slot_unique").on(table.product_id, table.location_id, table.weekday, table.start_time).where(sql`location_id IS NOT NULL`),
+	uniqueIndex("product_availability_rules_neutral_slot_unique").on(table.product_id, table.weekday, table.start_time).where(sql`location_id IS NULL`),
 	index("product_availability_rules_product_idx").on(table.product_id, table.weekday, table.start_time),
 	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
 	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
-	// end_time and interval_minutes are one feature: neither means anything
-	// alone, and a repeat that ends before it starts has no occurrences.
-	check("product_availability_rules_repeat_check", sql`(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)`),
-	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
-	// A cadence longer than a week has to say from when, or "every other
-	// Saturday" means a different Saturday depending on the day generation
-	// happens to run. The anchor is the rule's own effective start.
-	check("product_availability_rules_anchor_check", sql`interval_weeks = 1 OR effective_from_date IS NOT NULL`),
-	check("product_availability_rules_dates_check", sql`(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)`),
-	check("product_availability_rules_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
-	check("product_availability_rules_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
 	check("product_availability_rules_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
 ]);
 

@@ -11,18 +11,10 @@
         :description="errorMessage"
       />
 
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="font-semibold text-highlighted">Connect your business to Stripe</h2>
-              <p class="mt-1 text-sm text-muted">Stripe verifies your business through its hosted onboarding so payment capabilities can be enabled.</p>
-            </div>
-            <UBadge v-if="account" :color="statusPresentation.color" variant="soft">
-              {{ statusPresentation.label }}
-            </UBadge>
-          </div>
-        </template>
+      <div>
+        <UBadge v-if="account" :color="statusPresentation.color" variant="soft" size="lg" class="mb-4 rounded-full">
+          {{ statusPresentation.label }}
+        </UBadge>
 
         <div v-if="loading" class="space-y-3" aria-label="Loading Stripe Connect status">
           <USkeleton class="h-5 w-48" />
@@ -91,14 +83,14 @@
             </UButton>
           </div>
         </div>
-      </UCard>
+      </div>
     </div>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Stripe Connect | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Payouts | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'

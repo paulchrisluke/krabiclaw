@@ -11,11 +11,11 @@
   >
     <div class="space-y-6">
       <UFormField label="Street" help="One line per line."><UTextarea v-model="editor.detailsForm.addressLines" :rows="3" autofocus class="w-full" /></UFormField>
-      <UFormField label="Neighbourhood"><UInput v-model="editor.detailsForm.sublocality" size="xl" class="w-full" /></UFormField>
-      <UFormField label="City"><UInput v-model="editor.detailsForm.locality" size="xl" class="w-full" /></UFormField>
-      <UFormField label="State or province"><UInput v-model="editor.detailsForm.administrativeArea" size="xl" class="w-full" /></UFormField>
-      <UFormField label="Postcode"><UInput v-model="editor.detailsForm.postalCode" size="xl" class="w-full" /></UFormField>
-      <UFormField label="Country" help="Two-letter code, e.g. TH."><UInput v-model="editor.detailsForm.regionCode" size="xl" class="w-full" /></UFormField>
+      <UFormField label="Neighbourhood"><UInput v-model="editor.detailsForm.sublocality" class="w-full" /></UFormField>
+      <UFormField label="City"><UInput v-model="editor.detailsForm.locality" class="w-full" /></UFormField>
+      <UFormField label="State or province"><UInput v-model="editor.detailsForm.administrativeArea" class="w-full" /></UFormField>
+      <UFormField label="Postcode"><UInput v-model="editor.detailsForm.postalCode" class="w-full" /></UFormField>
+      <UFormField label="Country" help="Two-letter code, e.g. TH."><UInput v-model="editor.detailsForm.regionCode" class="w-full" /></UFormField>
     </div>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>

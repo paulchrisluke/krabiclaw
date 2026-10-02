@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import {
   CapacityUnavailableError,
+  setProductBookingConfig,
+  deleteProductBookingConfig,
+  replaceWeeklySchedule,
   claimSessionCapacity,
   listSessions,
   materializeSessions,
@@ -23,14 +27,16 @@ const PRODUCT = 'prod-class'
 const ACTOR = 'user-actor'
 const NOW = '2026-09-11T00:00:00.000Z'
 
-async function boot() {
+async function boot(legacy = false) {
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'availability-proof', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
     env: { DB: { type: 'd1' } },
   } }] })
   const db = await runtime.getD1Database('DB')
-  const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
+  const statements = legacy
+    ? ['0000_baseline', '0001_drop_typed_social_profiles', '0002_products_overview', '0004_native_consultation_foundation', '0006_payments'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
     VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
@@ -39,6 +45,7 @@ async function boot() {
     VALUES (?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, NOW, NOW).run()
   await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
     .bind(PRODUCT, ORG, ACTOR, ACTOR).run()
+  await db.prepare('INSERT INTO product_publications (organization_id, product_id, published, created_by, updated_by) VALUES (?, ?, 1, ?, ?)').bind(ORG, PRODUCT, ACTOR, ACTOR).run()
   for (const [id, name] of [['var-adult', 'Adult'], ['var-child', 'Child']]) {
     await db.prepare(`INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)`)
       .bind(id, ORG, PRODUCT, name, ACTOR, ACTOR).run()
@@ -52,12 +59,12 @@ async function boot() {
   return { runtime, db }
 }
 
-function addRule(db: D1Database, id: string, over: Partial<{ weekday: number; start_time: string; interval_weeks: number; timezone: string; effective_from_date: string | null; capacity: number | null; location_id: string | null }> = {}) {
+function addRule(db: D1Database, id: string, over: Partial<{ weekday: number; start_time: string; timezone: string; location_id: string | null }> = {}) {
   return db.prepare(`INSERT INTO product_availability_rules
-    (id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks, effective_from_date, capacity, created_by, updated_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(id, ORG, PRODUCT, over.location_id ?? LOCATION, over.timezone ?? 'Asia/Bangkok', over.weekday ?? 0,
-      over.start_time ?? '14:00', over.interval_weeks ?? 1, over.effective_from_date ?? null, over.capacity ?? null, ACTOR, ACTOR).run()
+    (id, organization_id, product_id, location_id, timezone, weekday, start_time, created_by, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(id, ORG, PRODUCT, over.location_id === undefined ? LOCATION : over.location_id, over.timezone ?? 'Asia/Bangkok', over.weekday ?? 0,
+      over.start_time ?? '14:00', ACTOR, ACTOR).run()
 }
 
 test('session materialization is idempotent across cancel, edit and reschedule', { timeout: 120_000 }, async () => {
@@ -225,6 +232,206 @@ test('capacity cannot be reduced below seats already claimed, and a past session
 
 test('the occurrence key is the intended local start, not the actual instant', () => {
   assert.equal(occurrenceKey('rule-1', '2026-10-04', '14:00'), 'rule-1:2026-10-04T14:00')
+})
+
+
+test('shared booking defaults retain omissions, zero and null; all history blocks removal', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
+  try {
+    await setProductBookingConfig(db, { ...scope, patch: { default_capacity: 0 } })
+    assert.deepEqual(await db.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), { duration_minutes: 120, default_capacity: 0 })
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } })
+    assert.deepEqual(await db.prepare('SELECT duration_minutes, default_capacity FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first(), { duration_minutes: null, default_capacity: 0 })
+    await assert.rejects(setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 0 } }), /duration_minutes/)
+    await assert.rejects(setProductBookingConfig(db, { ...scope, organizationId: 'other-org', patch: { default_capacity: 99 } }), /not found/i)
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 60, default_capacity: null } })
+    const scheduled = await replaceWeeklySchedule(db, { ...scope, locationId: LOCATION, slots: [{ weekday: 1, start_time: '10:00' }] })
+    assert(scheduled.sessions.created > 0)
+    const session = await db.prepare("SELECT id FROM product_sessions WHERE starts_at > ? AND status = 'scheduled' ORDER BY starts_at LIMIT 1").bind(new Date().toISOString()).first<string>('id')
+    assert(session)
+    const booking = await claimSessionCapacity(db, { ...scope, sessionId: session, productVariantId: 'var-adult', partySize: 1 })
+    await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
+    await assert.rejects(deleteProductBookingConfig(db, scope), /has bookings/)
+    assert.equal(await db.prepare('SELECT default_capacity FROM product_booking_configs WHERE product_id = ?').bind(PRODUCT).first('default_capacity'), null)
+    assert.equal(await db.prepare('SELECT status FROM bookings WHERE id = ?').bind(booking.bookingId).first('status'), 'cancelled')
+  } finally { await runtime.dispose() }
+})
+
+test('weekly replacement uses saved timezone, converges and preserves booked occurrences on clear', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, locationId: LOCATION, actorId: ACTOR }
+  const slots = [{ weekday: 0, start_time: '14:00' }, { weekday: 1, start_time: '10:00' }]
+  try {
+    await assert.rejects(replaceWeeklySchedule(db, { ...scope, timezone: 'UTC', slots }), /timezone must match/)
+    await assert.rejects(replaceWeeklySchedule(db, { ...scope, slots: [{ weekday: 0, start_time: '14:00', capacity: null }] }), /only weekday and start_time/)
+    await assert.rejects(replaceWeeklySchedule(db, { ...scope, locationId: 'foreign-location', slots }), /Location not found/)
+    await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
+      VALUES ('other-studio', ?, 'other-studio', 'Other studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(ORG, NOW, NOW).run()
+    await addRule(db, 'other-location-rule', { location_id: 'other-studio', weekday: 3, start_time: '12:00' })
+    await materializeSessions(db, { organizationId: ORG, productId: PRODUCT, throughDate: addLocalDays(localNow('Asia/Bangkok').date, 31), actorId: ACTOR })
+    const first = await replaceWeeklySchedule(db, { ...scope, slots })
+    assert(first.sessions.created > 0)
+    assert(first.rules.every(rule => rule.timezone === 'Asia/Bangkok'))
+    const before = (await db.prepare('SELECT id, starts_at, ends_at, capacity FROM product_sessions ORDER BY id').all()).results
+    const monday = await db.prepare('SELECT id FROM product_sessions WHERE capacity = 10 AND location_id = ? AND starts_at > ? ORDER BY starts_at LIMIT 1').bind(LOCATION, new Date().toISOString()).first<string>('id')
+    assert(monday)
+    const booked = await claimSessionCapacity(db, { ...scope, sessionId: monday, productVariantId: 'var-adult', partySize: 1 })
+    const repeated = await replaceWeeklySchedule(db, { ...scope, slots })
+    assert.equal(repeated.sessions.created, 0)
+    assert.deepEqual(repeated.rules.map(rule => rule.id).sort(), first.rules.map(rule => rule.id).sort())
+    assert.deepEqual((await db.prepare('SELECT id, starts_at, ends_at, capacity FROM product_sessions ORDER BY id').all()).results, before)
+    const otherSessions = (await db.prepare("SELECT id, status FROM product_sessions WHERE location_id = 'other-studio' ORDER BY id").all()).results
+    assert(otherSessions.length > 0)
+    const cleared = await replaceWeeklySchedule(db, { ...scope, slots: [] })
+    assert.deepEqual(cleared.rules, [])
+    assert.equal(await db.prepare("SELECT id FROM product_availability_rules WHERE location_id = 'other-studio'").first('id'), 'other-location-rule')
+    assert.deepEqual((await db.prepare("SELECT id, status FROM product_sessions WHERE location_id = 'other-studio' ORDER BY id").all()).results, otherSessions)
+    assert(cleared.cancelled > 0)
+    assert.deepEqual(await db.prepare('SELECT status, availability_rule_id FROM product_sessions WHERE id = ?').bind(monday).first(), { status: 'scheduled', availability_rule_id: null })
+    assert.deepEqual(await db.prepare('SELECT status, product_session_id FROM bookings WHERE id = ?').bind(booked.bookingId).first(), { status: 'confirmed', product_session_id: monday })
+    // Clearing remains valid after the duration default has been cleared.
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: null } })
+    assert.deepEqual((await replaceWeeklySchedule(db, { ...scope, slots: [] })).rules, [])
+  } finally { await runtime.dispose() }
+})
+
+test('readding a weekly slot preserves every fact of sessions with booking history', { timeout: 120_000 }, async () => {
+  for (const scenario of ['active', 'cancelled-booking', 'cancelled-session', 'edited', 'moved'] as const) {
+    const { runtime, db } = await boot()
+    const scope = { organizationId: ORG, productId: PRODUCT, locationId: LOCATION, actorId: ACTOR }
+    const slots = [{ weekday: 0, start_time: '14:00' }]
+    try {
+      await replaceWeeklySchedule(db, { ...scope, slots })
+      const sessionId = await db.prepare('SELECT id FROM product_sessions WHERE starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<string>('id')
+      assert(sessionId)
+      const booking = await claimSessionCapacity(db, { ...scope, sessionId, productVariantId: 'var-adult', partySize: 6 })
+      if (scenario === 'cancelled-booking') await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
+      if (scenario === 'cancelled-session') await updateSession(db, { ...scope, sessionId, status: 'cancelled' })
+      if (scenario === 'edited') await updateSession(db, { ...scope, sessionId, capacity: 8 })
+      if (scenario === 'moved') {
+        const row = await db.prepare('SELECT starts_at, ends_at FROM product_sessions WHERE id = ?').bind(sessionId).first<{ starts_at: string; ends_at: string }>()
+        assert(row)
+        await updateSession(db, { ...scope, sessionId, startsAt: new Date(Date.parse(row.starts_at) + 3_600_000).toISOString(), endsAt: new Date(Date.parse(row.ends_at) + 3_600_000).toISOString() })
+      }
+      const read = () => db.prepare('SELECT id, source_occurrence_key, timezone, starts_at, ends_at, capacity, status FROM product_sessions WHERE id = ?').bind(sessionId).first()
+      const before = await read()
+      const bookingBefore = await db.prepare('SELECT id, product_session_id, status, party_size FROM bookings WHERE id = ?').bind(booking.bookingId).first()
+      await replaceWeeklySchedule(db, { ...scope, slots: [] })
+      await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 30, default_capacity: 2 } })
+      await replaceWeeklySchedule(db, { ...scope, slots })
+      assert.deepEqual(await read(), before, `${scenario}: adoption must preserve booked actual facts and generation identity`)
+      assert.deepEqual(await db.prepare('SELECT id, product_session_id, status, party_size FROM bookings WHERE id = ?').bind(booking.bookingId).first(), bookingBefore)
+      await replaceWeeklySchedule(db, { ...scope, slots })
+      assert.deepEqual(await read(), before, `${scenario}: normal replay also preserves history`)
+    } finally { await runtime.dispose() }
+  }
+})
+
+
+test('unbooked re-add retains the existing cancellation and default-refresh behavior', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, locationId: LOCATION, actorId: ACTOR }
+  const slots = [{ weekday: 0, start_time: '14:00' }]
+  try {
+    await replaceWeeklySchedule(db, { ...scope, slots })
+    const first = await db.prepare('SELECT id, starts_at FROM product_sessions WHERE starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<{ id: string; starts_at: string }>()
+    assert(first)
+    await replaceWeeklySchedule(db, { ...scope, slots: [] })
+    assert.equal(await db.prepare('SELECT status FROM product_sessions WHERE id = ?').bind(first.id).first('status'), 'cancelled')
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 30, default_capacity: 2 } })
+    await replaceWeeklySchedule(db, { ...scope, slots })
+    assert.deepEqual(await db.prepare('SELECT id, starts_at, ends_at, capacity, status FROM product_sessions WHERE id = ?').bind(first.id).first(), {
+      id: first.id, starts_at: first.starts_at, ends_at: new Date(Date.parse(first.starts_at) + 30 * 60_000).toISOString(), capacity: 2, status: 'scheduled',
+    })
+  } finally { await runtime.dispose() }
+})
+
+test('neutral adoption protects cancelled history and a claim racing its atomic write', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot()
+  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
+  try {
+    await addRule(db, 'neutral-old', { location_id: null })
+    const throughDate = addLocalDays(localNow('Asia/Bangkok').date, 31)
+    await materializeSessions(db, { ...scope, throughDate })
+    const rows = (await db.prepare('SELECT id FROM product_sessions WHERE location_id IS NULL AND starts_at > ? ORDER BY starts_at').bind(new Date().toISOString()).all<{ id: string }>()).results
+    assert(rows.length >= 2)
+    const protectedId = rows[0]!.id
+    const racingId = rows[1]!.id
+    const booking = await claimSessionCapacity(db, { ...scope, sessionId: protectedId, productVariantId: 'var-adult', partySize: 6 })
+    await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
+    await updateSession(db, { ...scope, sessionId: protectedId, status: 'cancelled' })
+    const read = (id: string) => db.prepare('SELECT id, source_occurrence_key, starts_at, ends_at, timezone, capacity, status FROM product_sessions WHERE id = ?').bind(id).first()
+    const protectedBefore = await read(protectedId)
+    const raceBefore = await read(racingId)
+    await db.batch([
+      db.prepare("UPDATE product_sessions SET availability_rule_id = NULL WHERE availability_rule_id = 'neutral-old'"),
+      db.prepare("DELETE FROM product_availability_rules WHERE id = 'neutral-old'"),
+    ])
+    await setProductBookingConfig(db, { ...scope, patch: { duration_minutes: 30, default_capacity: 2 } })
+    await addRule(db, 'neutral-new', { location_id: null })
+    const [claim, generation] = await Promise.allSettled([
+      claimSessionCapacity(db, { ...scope, sessionId: racingId, productVariantId: 'var-adult', partySize: 6 }),
+      materializeSessions(db, { ...scope, throughDate }),
+    ])
+    assert.equal(generation.status, 'fulfilled')
+    assert.deepEqual(await read(protectedId), protectedBefore)
+    if (claim.status === 'fulfilled') assert.deepEqual(await read(racingId), raceBefore, 'the committed claim protects all session facts')
+    else {
+      assert(claim.reason instanceof CapacityUnavailableError)
+      assert.equal((await read(racingId))?.capacity, 2, 'adoption won and the larger claim was refused')
+    }
+    const invalid = await db.prepare("SELECT count(*) n FROM product_sessions s WHERE s.capacity IS NOT NULL AND s.capacity < (SELECT COALESCE(SUM(b.party_size),0) FROM bookings b WHERE b.product_session_id=s.id AND b.status='confirmed')").first('n')
+    assert.equal(invalid, 0)
+    assert.equal(await db.prepare('SELECT product_session_id FROM bookings WHERE id = ?').bind(booking.bookingId).first('product_session_id'), protectedId)
+  } finally { await runtime.dispose() }
+})
+
+
+const weeklyMigration = () => readFileSync('migrations/0003_minimal_weekly_schedule.sql', 'utf8')
+  .split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean)
+
+test('weekly forward migration preserves rule IDs, all Session facts and Booking links on D1', { timeout: 120_000 }, async () => {
+  const { runtime, db } = await boot(true)
+  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
+  try {
+    // New code must deploy against the old schema before its contraction.
+    await replaceWeeklySchedule(db, { ...scope, locationId: LOCATION, slots: [{ weekday: 0, start_time: '14:00' }] })
+    await addRule(db, 'neutral', { location_id: null, start_time: '15:00' })
+    await materializeSessions(db, { ...scope, throughDate: addLocalDays(localNow('Asia/Bangkok').date, 31) })
+    const sessionId = await db.prepare('SELECT id FROM product_sessions WHERE location_id IS NULL AND starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<string>('id')
+    assert(sessionId)
+    const booking = await claimSessionCapacity(db, { ...scope, sessionId, productVariantId: 'var-adult', partySize: 6 })
+    await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
+    await updateSession(db, { ...scope, sessionId, capacity: 8, status: 'cancelled' })
+    const read = async () => ({
+      rules: (await db.prepare('SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time, created_at, updated_at, created_by, updated_by FROM product_availability_rules ORDER BY id').all()).results,
+      sessions: (await db.prepare('SELECT * FROM product_sessions ORDER BY id').all()).results,
+      bookings: (await db.prepare('SELECT * FROM bookings ORDER BY id').all()).results,
+    })
+    const before = await read()
+    await db.batch(weeklyMigration().map(sql => db.prepare(sql)))
+    assert.deepEqual(await read(), before)
+    assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])
+    assert.equal(await db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name LIKE '__%weekly%' OR name='__new_product_availability_rules'").first('n'), 0)
+    await assert.rejects(addRule(db, 'duplicate-scoped'), /UNIQUE/)
+    await assert.rejects(addRule(db, 'duplicate-neutral', { location_id: null, start_time: '15:00' }), /UNIQUE/)
+    await assert.rejects(db.prepare("INSERT INTO product_sessions (id, organization_id, product_id, availability_rule_id, timezone, starts_at, ends_at, created_by, updated_by) VALUES ('invalid-rule', ?, ?, 'missing-rule', 'Asia/Bangkok', '2030-01-01T00:00:00.000Z', '2030-01-01T01:00:00.000Z', ?, ?)").bind(ORG, PRODUCT, ACTOR, ACTOR).run(), /FOREIGN KEY/)
+  } finally { await runtime.dispose() }
+})
+
+test('weekly forward migration aborts without altering history for every populated retired field', { timeout: 120_000 }, async () => {
+  for (const patch of ["end_time='16:00', interval_minutes=30", "interval_weeks=2, effective_from_date='2026-01-01'", "effective_from_date='2026-01-01'", "effective_until_date='2030-01-01'", 'duration_minutes=30', 'capacity=0']) {
+    const { runtime, db } = await boot(true)
+    try {
+      await addRule(db, 'used-rule')
+      await db.prepare(`UPDATE product_availability_rules SET ${patch} WHERE id='used-rule'`).run()
+      const before = (await db.prepare('SELECT * FROM product_availability_rules').all()).results
+      await assert.rejects(db.batch(weeklyMigration().map(sql => db.prepare(sql))), /CHECK constraint failed/)
+      assert.deepEqual((await db.prepare('SELECT * FROM product_availability_rules').all()).results, before)
+      assert.equal(await db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='__weekly_simplification_guard'").first('n'), 0)
+    } finally { await runtime.dispose() }
+  }
 })
 
 // Named invariants: review allocations exclude concurrent overlaps across explicitly

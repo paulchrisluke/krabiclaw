@@ -34,14 +34,13 @@ central `2026-09-30.preview` pin in the existing Stripe client factory; default
 Better Auth/billing callers retain `2026-08-26.dahlia`. Better Auth's separate inbound
 subscription endpoint retains `2025-11-17.clover` and remains canonical.
 
-Verified sandbox-only creation on 2026-10-01: platform `acct_1ULcs2RBlJkGOR4x`,
+Verified sandbox account on 2026-10-01: platform `acct_1ULcs2RBlJkGOR4x`,
 connected account `acct_1ULddoRBlJCkNTaU`, livemode=false, dashboard=express,
 fees_collector=application, losses_collector=stripe, requirements_collector=stripe.
-Card/payout capabilities remain restricted for requirements_past_due. No agreement,
-charge, refund or transfer was made. The earlier full Dashboard attempt was rejected
-with account_controller_unsupported_configuration (request req_v2ltJWeYlHU4XfDxO).
-The implementation uses the proven documented preview path, with no support gate.
-Account creation proof is not payment-readiness or Checkout-capture proof.
+After owner-completed hosted onboarding, card/payout capabilities are active with
+zero requirements. Native direct capture/refund, hosted hold conversion and
+merchant-approved rejection were verified; exact provider evidence is recorded in
+`sandbox-verification-2026-10-01.md`. No liability fallback or live action occurred.
 
 Primary contracts: [Managed Risk](https://docs.stripe.com/connect/risk-management/managed-risk),
 [Accounts v2 responsibilities](https://docs.stripe.com/connect/accounts-v2/connected-account-configuration),
@@ -123,7 +122,7 @@ parent or dedicated seller payment-method configuration, Metronome test workspac
 and HTTPS platform return origin. Keep the subscription secret separate. Complete
 merchant-hosted onboarding and Radar before claiming native card readiness.
 No deployment, live webhook change, OAuth grant change or production activation is
-part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Native hosted capture, actual Worker/D1 hold conversion, merchant-approved rejection/full refund, signed replay and thin Connect SDK refresh also pass. Actual delayed cost attribution and operating-customer Stripe collection remain pending configuration. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
+part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Native hosted capture, actual Worker/D1 hold conversion, merchant-approved rejection/full refund, signed replay and thin Connect SDK refresh also pass. Native synthetic operating invoice collection and paid-invoice credit settlement also passed. Actual fee report APIs require live data; Metronome-synchronized collection remains blocked before its unapproved persistent sandbox OAuth grant. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
 
 ## Local verification
 
@@ -155,3 +154,9 @@ then delivers an explicit adjustment. This servicing path never grants new payme
 acceptance. Negative finalized credits still require the native credit-note path.
 [Metronome contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date).
 Native end/reopen/rating proof remains part of the provider configuration verification.
+
+## Dependency reconciliation — 2026-10-02
+
+The existing draft integrates verified Calendar `4a8df9e82b525a2dfb619c36aac94b82ccf1d259`, based on MCP `61f4ada75e361ef4fe839c05d7a3c531cd074c15` and Foundation `a7fd549e`. Shared weekly configuration/timezone/validation changes remain canonical; Payments hold counting, capture conversion and actor-bound paid rejection extend those same allocator and operation paths. Foundation `0004` and Calendar `0005` SQL/snapshots are preserved; Payments is regenerated as `0006` from the canonical schema. Cleanup successor `a15f5b066` awaits root coordination. No unfinished UI redesign, remote DDL, provider mutation, merge or deployment is included in this reconciliation.
+
+Successor validation: Payments D1 15/15; canonical availability D1 including weekly history preservation 13/13; Calendar D1 2/2; migration baseline/transfer tests 3/3; affected unit/controller checks 6/6. Typecheck, changed-file lint, production build and migration lint pass. The existing production Worker/browser test passed against a freshly migrated isolated D1: financial servicing, immutable order principal, current-tier acceptance denial, buyer ownership isolation, actor-bound paid-rejection MCP approval handoff, origin checks, forged-claim rejection and signed replay. Refreshed desktop/mobile screenshots were captured. No repeated native TEST setup, provider financial mutation or persistent OAuth grant occurred.

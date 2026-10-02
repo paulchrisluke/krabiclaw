@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:88c6467b3affa03bd33c00af702713d1a90777d3fd3dfbafc20862a339d82cb0",
+  "fingerprint": "sha256:57562e9fced891984c8b800dbf1c08acff5742a654d6ae84149883b45ac73247",
   "tools": [
     {
       "name": "append_content_block",
@@ -15,7 +15,7 @@
             ]
           },
           "data": {
-            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, prompt_heading, cta_label, items.*.title, items.*.prompt, items.*.description. Also cta_url (url). showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label, eyebrow, caption, items.*.title. Also url (url), example_type (one of websites, posts). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
             "type": "object"
           },
           "document_id": {
@@ -643,6 +643,69 @@
                 "active": {
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
+                },
+                "booking": {
+                  "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
+                    "default_capacity": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "duration_minutes": {
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "organization_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "duration_minutes",
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "collections": {
                   "items": {
@@ -2829,6 +2892,69 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "collections": {
                 "items": {
                   "properties": {
@@ -3382,6 +3508,80 @@
       }
     },
     {
+      "name": "create_qa",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "question": {
+            "description": "Required non-empty question; at most 500 characters after trimming.",
+            "type": "string"
+          },
+          "question_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_tenant_page",
       "inputSchema": {
         "additionalProperties": false,
@@ -3392,7 +3592,7 @@
               "additionalProperties": false,
               "properties": {
                 "data": {
-                  "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+                  "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, prompt_heading, cta_label, items.*.title, items.*.prompt, items.*.description. Also cta_url (url). showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label, eyebrow, caption, items.*.title. Also url (url), example_type (one of websites, posts). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
                   "type": "object"
                 },
                 "id": {
@@ -3935,6 +4135,84 @@
           }
         },
         "required": [
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_product_booking_config",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_qa",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "qa_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "qa_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id",
           "deleted"
         ],
         "type": "object"
@@ -4774,7 +5052,7 @@
                 ]
               },
               "max_capacity": {
-                "description": "Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).",
+                "description": "Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.",
                 "type": [
                   "number",
                   "null"
@@ -6923,6 +7201,69 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -11924,6 +12265,69 @@
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
                 },
+                "booking": {
+                  "properties": {
+                    "calendar_group": {
+                      "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "confirmation_mode": {
+                      "enum": [
+                        "instant",
+                        "review"
+                      ],
+                      "type": "string"
+                    },
+                    "default_capacity": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "duration_minutes": {
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "online_payment_required": {
+                      "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                      "type": "boolean"
+                    },
+                    "online_timezone": {
+                      "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "organization_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "duration_minutes",
+                    "default_capacity",
+                    "confirmation_mode",
+                    "online_payment_required",
+                    "online_timezone",
+                    "calendar_group"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
                 "collections": {
                   "items": {
                     "properties": {
@@ -12647,6 +13051,69 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -13766,6 +14233,68 @@
       }
     },
     {
+      "name": "reorder_qa",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updates": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "sort_order"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "updates"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "updated": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "replace_content_block",
       "inputSchema": {
         "additionalProperties": false,
@@ -13774,7 +14303,7 @@
             "type": "string"
           },
           "data": {
-            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+            "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, prompt_heading, cta_label, items.*.title, items.*.prompt, items.*.description. Also cta_url (url). showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label, eyebrow, caption, items.*.title. Also url (url), example_type (one of websites, posts). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
             "type": "object"
           },
           "expected_updated_at": {
@@ -13883,6 +14412,97 @@
           "document_id",
           "updated_at",
           "blocks"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "replace_product_weekly_schedule",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "description": "A saved location ID, or explicit null for online sessions in the Product’s saved online timezone.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "start_time": {
+                  "description": "Local HH:mm time.",
+                  "type": "string"
+                },
+                "weekday": {
+                  "maximum": 6,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "weekday",
+                "start_time"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "product_id",
+          "location_id",
+          "slots"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "cancelled": {
+            "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sessions": {
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "existing": {
+                "type": "integer"
+              },
+              "skipped": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "created",
+              "existing",
+              "skipped"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "rules",
+          "sessions",
+          "cancelled"
         ],
         "type": "object"
       }
@@ -14361,6 +14981,54 @@
       }
     },
     {
+      "name": "set_consultation_mode",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "native",
+              "external_url",
+              "native_disabled"
+            ],
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "settings": {
+            "properties": {
+              "mode": {
+                "enum": [
+                  "native",
+                  "external_url",
+                  "native_disabled"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mode"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "set_default_currency",
       "inputSchema": {
         "additionalProperties": false,
@@ -14600,6 +15268,137 @@
       }
     },
     {
+      "name": "set_product_booking_config",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "calendar_group": {
+            "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmation_mode": {
+            "enum": [
+              "instant",
+              "review"
+            ],
+            "type": "string"
+          },
+          "default_capacity": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "duration_minutes": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "online_payment_required": {
+            "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+            "type": "boolean"
+          },
+          "online_timezone": {
+            "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "config": {
+            "properties": {
+              "calendar_group": {
+                "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                "maxLength": 64,
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confirmation_mode": {
+                "enum": [
+                  "instant",
+                  "review"
+                ],
+                "type": "string"
+              },
+              "default_capacity": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "duration_minutes": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "online_payment_required": {
+                "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                "type": "boolean"
+              },
+              "online_timezone": {
+                "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "duration_minutes",
+              "default_capacity",
+              "confirmation_mode",
+              "online_payment_required",
+              "online_timezone",
+              "calendar_group"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "set_product_location",
       "inputSchema": {
         "additionalProperties": false,
@@ -14634,6 +15433,69 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -15141,6 +16003,69 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -16540,7 +17465,7 @@
             "type": "string"
           },
           "max_capacity": {
-            "description": "Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.",
+            "description": "Stored location capacity metadata; does not limit reservation availability. Reservation seats per start time are controlled by update_reservation_policy.slot_capacity. Pass null to clear the metadata.",
             "type": [
               "number",
               "null"
@@ -17746,6 +18671,69 @@
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
               },
+              "booking": {
+                "properties": {
+                  "calendar_group": {
+                    "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmation_mode": {
+                    "enum": [
+                      "instant",
+                      "review"
+                    ],
+                    "type": "string"
+                  },
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "online_payment_required": {
+                    "description": "Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.",
+                    "type": "boolean"
+                  },
+                  "online_timezone": {
+                    "description": "IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity",
+                  "confirmation_mode",
+                  "online_payment_required",
+                  "online_timezone",
+                  "calendar_group"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "collections": {
                 "items": {
                   "properties": {
@@ -18224,6 +19212,83 @@
       }
     },
     {
+      "name": "update_qa",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "qa_id": {
+            "type": "string"
+          },
+          "question": {
+            "description": "Required non-empty question; at most 500 characters after trimming.",
+            "type": "string"
+          },
+          "question_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "qa_id": {
+            "type": "string"
+          },
+          "updated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "qa_id",
+          "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "update_reservation_policy",
       "inputSchema": {
         "additionalProperties": false,
@@ -18246,7 +19311,7 @@
             ]
           },
           "cancellation_policy": {
-            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "description": "Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.",
             "enum": [
               "flexible",
               "moderate",
@@ -18394,7 +19459,7 @@
               "additionalProperties": false,
               "properties": {
                 "data": {
-                  "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, items.*.title, items.*.prompt, items.*.description. showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label. Also url (url). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
+                  "description": "Typed block payload. Plain-text fields are rendered literally, so markdown syntax written into one reaches the reader as raw characters — a heading of \"**Title**\" publishes with the asterisks showing. Only the fields listed as markdown are parsed. A markdown field also requires editor_mode alongside it: \"rich\" for prose the visual editor can handle, \"source\" for tables or raw HTML. Asset IDs and delivery URLs belong in the block media array, never in data. Fields by block type — heading block: literal — text. Also level (one of 1, 2, 3, 4, 5, 6). markdown block: parsed as markdown — markdown. Also editor_mode (one of rich, source). image block: literal — caption. gallery block: literal — caption. video block: literal — title, caption. Also url (url), upload_date (Upload date (YYYY-MM-DD)). faq block: literal — title. Also source (one of page_qa, organization_qa). how_to block: literal — title, label, estimated_time, tool_items.*, supply_items.*, steps.*.name, steps.*.text. divider block: no text fields. cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). contact_cta block: literal — title, accent, description, label, secondary_label. Also url (url), secondary_url (url). booking_cta block: literal — title, accent, description, label, secondary_label, price_line, notice. Also url (url), secondary_url (url). callout block: literal — title, body, badge, buttons.*.label. Also tone (one of neutral, info, success, warning, danger). hero block: literal — title, accent, rotating_accents.*, eyebrow, subtitle, cta_label, secondary_label. Also cta_url (url), secondary_url (url). button_group block: literal — buttons.*.label. feature_grid block: literal — title, description, items.*.title, items.*.description, items.*.value, items.*.label, cta_label; parsed as markdown — items.*.body. Also source (one of manual, organization_posts, calculator, billing_plans, billing_features), layout (one of cards, pictures), cta_url (url). comparison block: literal — title, description, problem_title, problem_label, problem_items.*.title, problem_items.*.description, solution_title, solution_label, solution_items.*.title, solution_items.*.description. stat_grid block: literal — title, description, label, items.*.value, items.*.title. workflow_grid block: literal — title, description, label, prompt_heading, cta_label, items.*.title, items.*.prompt, items.*.description. Also cta_url (url). showcase block: literal — items.*.title. language_reach block: literal — title, subtitle, description, pin_label, items.*.title. steps block: literal — title, items.*.title, cta_label. Also cta_url (url). video_feature block: literal — title, description, video_title, items.*.title, items.*.description. Also video_url (url), upload_date (Upload date (YYYY-MM-DD)). media_text block: literal — title, body, label, eyebrow, caption, items.*.title. Also url (url), example_type (one of websites, posts). contact_form block: no text fields. team_grid block: literal — title, description, items.*.first_name, items.*.last_name, items.*.title, items.*.bio. testimonial_grid block: literal — title, description. donation_choices block: literal — title, description, tiers.*.title, tiers.*.description. Also destination (url). page_grid block: literal — title, accent, description. Also page_ids (page ids). product_grid block: literal — title, description. Also collection_id (collection id), product_ids (product ids). location_grid block: literal — title, description. Also location_ids (location ids). social_posts block: literal — title, description, call_to_action.label. Also limit (whole number 1–12, default 6), location_id (location id), call_to_action.url (url). ai_assistance block: literal — label, intro, prompts.*.title, prompts.*.prompt, prompts.*.description, prompts.*.copy_label.",
                   "type": "object"
                 },
                 "id": {
@@ -18529,6 +19594,13 @@
           "path": {
             "description": "The page path to write. Send the current path unless you are moving the page; a different path moves it and creates the locale-scoped redirect.",
             "type": "string"
+          },
+          "product_id": {
+            "description": "Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "recipe": {
             "description": "The template section this page fills, or null for a page that fills none. Send the recipe from the last read unless you are changing it; an omitted recipe is not kept.",

@@ -271,6 +271,8 @@ async function attachTenantPageMedia(db: DbClient, organizationId: string, block
       kind: item.kind,
       alt_text: item.alt_text,
       file_name: item.file_name,
+      width: item.width,
+      height: item.height,
     })),
   }))
 }

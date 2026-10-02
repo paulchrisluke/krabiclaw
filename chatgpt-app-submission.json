@@ -188,6 +188,18 @@
         "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment policy; required positive collection reserves a hold and hands off to hosted Checkout without creating an unpaid Booking. Existing content is not deleted or overwritten."
       }
     },
+    "create_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a new authored question and answer; retries may create duplicates.",
+        "open_world_justification": "Creates a new authored question and answer; retries may create duplicates. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates a new authored question and answer; retries may create duplicates. Existing content is not deleted or overwritten."
+      }
+    },
     "create_tenant_page": {
       "annotations": {
         "readOnlyHint": false,
@@ -306,6 +318,30 @@
         "read_only_justification": "Deletes a product, its reviews and placements, and updates the remaining product order.",
         "open_world_justification": "Deletes a product, its reviews and placements, and updates the remaining product order. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Deletes a product, its reviews and placements, and updates the remaining product order. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "delete_product_booking_config": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Disables product booking when no booking history exists.",
+        "open_world_justification": "Disables product booking when no booking history exists. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Disables product booking when no booking history exists. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "delete_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes selected authored Q&A and its translations.",
+        "open_world_justification": "Deletes selected authored Q&A and its translations. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes selected authored Q&A and its translations. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_resource_localization": {
@@ -1028,6 +1064,18 @@
         "destructive_justification": "Overwrites media placement ordering for the selected public content collection. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reorder_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites authored Q&A sort positions in one scope.",
+        "open_world_justification": "Overwrites authored Q&A sort positions in one scope. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites authored Q&A sort positions in one scope. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "replace_content_block": {
       "annotations": {
         "readOnlyHint": false,
@@ -1038,6 +1086,18 @@
         "read_only_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position.",
         "open_world_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "replace_product_weekly_schedule": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history.",
+        "open_world_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "replace_resource_localizations": {
@@ -1136,6 +1196,18 @@
         "destructive_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "set_consultation_mode": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes.",
+        "open_world_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "set_default_currency": {
       "annotations": {
         "readOnlyHint": false,
@@ -1158,6 +1230,18 @@
         "read_only_justification": "Replaces or clears the asset assigned to a single public media placement.",
         "open_world_justification": "Replaces or clears the asset assigned to a single public media placement. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces or clears the asset assigned to a single public media placement. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_product_booking_config": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts.",
+        "open_world_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_product_location": {
@@ -1290,6 +1374,18 @@
         "read_only_justification": "Overwrites product fields, including public content, availability and price.",
         "open_world_justification": "Overwrites product fields, including public content, availability and price. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites product fields, including public content, availability and price. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "update_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites selected authored Q&A fields and public visibility.",
+        "open_world_justification": "Overwrites selected authored Q&A fields and public visibility. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites selected authored Q&A fields and public visibility. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "update_reservation_policy": {

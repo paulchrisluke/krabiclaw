@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f1b05829-d5e6-4d1f-84f8-20df40a44e26",
-  "prevId": "3eab074a-69ec-4c89-bbb0-94a9777a6710",
+  "id": "147d175b-2604-48e5-88ab-63f4865bc4af",
+  "prevId": "f63252da-6b9d-41c7-af16-74c4b530a1b8",
   "tables": {
     "account": {
       "name": "account",
@@ -1306,7 +1306,7 @@
       "checkConstraints": {
         "bookings_status_check": {
           "name": "bookings_status_check",
-          "value": "status IN ('pending', 'confirmed', 'cancelled')"
+          "value": "status IN ('confirmed', 'cancelled')"
         },
         "bookings_instants_check": {
           "name": "bookings_instants_check",
@@ -2635,342 +2635,6 @@
         "content_documents_social_source_check": {
           "name": "content_documents_social_source_check",
           "value": "kind <> 'social_post' OR row_role <> 'root' OR (source IN ('manual','template')) IS 1"
-        }
-      }
-    },
-    "google_calendar_cleanup_jobs": {
-      "name": "google_calendar_cleanup_jobs",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "calendar_id": {
-          "name": "calendar_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lease_token": {
-          "name": "lease_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lease_until": {
-          "name": "lease_until",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "google_calendar_cleanup_provider_unique": {
-          "name": "google_calendar_cleanup_provider_unique",
-          "columns": [
-            "calendar_id",
-            "event_id"
-          ],
-          "isUnique": true
-        },
-        "google_calendar_cleanup_due_idx": {
-          "name": "google_calendar_cleanup_due_idx",
-          "columns": [
-            "state",
-            "next_attempt_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "google_calendar_cleanup_state_check": {
-          "name": "google_calendar_cleanup_state_check",
-          "value": "state IN ('pending', 'error', 'deleted')"
-        }
-      }
-    },
-    "google_calendar_event_links": {
-      "name": "google_calendar_event_links",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "integration_revision": {
-          "name": "integration_revision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "calendar_id": {
-          "name": "calendar_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "booking_kind": {
-          "name": "booking_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "operational_id": {
-          "name": "operational_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "booking_revision": {
-          "name": "booking_revision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "synced_revision": {
-          "name": "synced_revision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "next_attempt_at": {
-          "name": "next_attempt_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lease_token": {
-          "name": "lease_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lease_until": {
-          "name": "lease_until",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "google_calendar_subject_unique": {
-          "name": "google_calendar_subject_unique",
-          "columns": [
-            "organization_id",
-            "integration_revision",
-            "booking_kind",
-            "operational_id"
-          ],
-          "isUnique": true,
-          "where": "state <> 'deleted'"
-        },
-        "google_calendar_provider_unique": {
-          "name": "google_calendar_provider_unique",
-          "columns": [
-            "calendar_id",
-            "event_id"
-          ],
-          "isUnique": true
-        },
-        "google_calendar_due_idx": {
-          "name": "google_calendar_due_idx",
-          "columns": [
-            "organization_id",
-            "state",
-            "next_attempt_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "google_calendar_event_links_organization_id_organization_id_fk": {
-          "name": "google_calendar_event_links_organization_id_organization_id_fk",
-          "tableFrom": "google_calendar_event_links",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "google_calendar_kind_check": {
-          "name": "google_calendar_kind_check",
-          "value": "booking_kind IN ('booking', 'reservation')"
-        },
-        "google_calendar_state_check": {
-          "name": "google_calendar_state_check",
-          "value": "state IN ('pending', 'synced', 'cleanup', 'deleted', 'error')"
         }
       }
     },
@@ -5693,13 +5357,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "consultation_settings_json": {
-          "name": "consultation_settings_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "settings_json": {
           "name": "settings_json",
           "type": "text",
@@ -7251,56 +6908,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "end_time": {
-          "name": "end_time",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "interval_minutes": {
-          "name": "interval_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "interval_weeks": {
-          "name": "interval_weeks",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "effective_from_date": {
-          "name": "effective_from_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "effective_until_date": {
-          "name": "effective_until_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "duration_minutes": {
-          "name": "duration_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "capacity": {
-          "name": "capacity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -7339,8 +6946,7 @@
             "product_id",
             "location_id",
             "weekday",
-            "start_time",
-            "interval_weeks"
+            "start_time"
           ],
           "isUnique": true,
           "where": "location_id IS NOT NULL"
@@ -7350,8 +6956,7 @@
           "columns": [
             "product_id",
             "weekday",
-            "start_time",
-            "interval_weeks"
+            "start_time"
           ],
           "isUnique": true,
           "where": "location_id IS NULL"
@@ -7434,30 +7039,6 @@
           "name": "product_availability_rules_start_time_check",
           "value": "start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'"
         },
-        "product_availability_rules_repeat_check": {
-          "name": "product_availability_rules_repeat_check",
-          "value": "(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)"
-        },
-        "product_availability_rules_interval_check": {
-          "name": "product_availability_rules_interval_check",
-          "value": "interval_weeks >= 1"
-        },
-        "product_availability_rules_anchor_check": {
-          "name": "product_availability_rules_anchor_check",
-          "value": "interval_weeks = 1 OR effective_from_date IS NOT NULL"
-        },
-        "product_availability_rules_dates_check": {
-          "name": "product_availability_rules_dates_check",
-          "value": "(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)"
-        },
-        "product_availability_rules_duration_check": {
-          "name": "product_availability_rules_duration_check",
-          "value": "duration_minutes IS NULL OR duration_minutes > 0"
-        },
-        "product_availability_rules_capacity_check": {
-          "name": "product_availability_rules_capacity_check",
-          "value": "capacity IS NULL OR capacity >= 0"
-        },
         "product_availability_rules_timezone_check": {
           "name": "product_availability_rules_timezone_check",
           "value": "timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'"
@@ -7491,36 +7072,6 @@
         "default_capacity": {
           "name": "default_capacity",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "confirmation_mode": {
-          "name": "confirmation_mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'instant'"
-        },
-        "online_payment_required": {
-          "name": "online_payment_required",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "online_timezone": {
-          "name": "online_timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "calendar_group": {
-          "name": "calendar_group",
-          "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
@@ -7610,18 +7161,6 @@
         "product_booking_configs_capacity_check": {
           "name": "product_booking_configs_capacity_check",
           "value": "default_capacity IS NULL OR default_capacity >= 0"
-        },
-        "product_booking_configs_confirmation_check": {
-          "name": "product_booking_configs_confirmation_check",
-          "value": "confirmation_mode IN ('instant', 'review')"
-        },
-        "product_booking_configs_payment_check": {
-          "name": "product_booking_configs_payment_check",
-          "value": "online_payment_required IN (0, 1)"
-        },
-        "product_booking_configs_calendar_check": {
-          "name": "product_booking_configs_calendar_check",
-          "value": "calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)"
         }
       }
     },

@@ -63,6 +63,8 @@ export interface TenantPageMedia {
   // endpoint would have supplied, so a picker reading this summary shows what it
   // would have shown after fetching.
   file_name?: string | null
+  width?: number | null
+  height?: number | null
 }
 
 export interface TenantPageSnapshotMetadata {
@@ -250,7 +252,10 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   divider: blockDefinitionWithMetadata('divider', 'Divider', 'A break between sections.', ALL_RECIPES, {},
     { accessibility: 'inherited', seo: 'none' }),
 
-  cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A prompt with one button.', ALL_RECIPES, CTA_FIELDS),
+  cta: blockDefinitionWithMetadata('cta', 'Call to action', 'A prompt with one button.', ALL_RECIPES, {
+    ...CTA_FIELDS,
+    media: { kind: 'media', label: 'Background image', translatable: false, section: 'image', slot: 'media' },
+  }),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact prompt', 'A prompt to get in touch.', ALL_RECIPES, CTA_FIELDS),
   // A booking prompt says what it costs and what the visitor is agreeing to.
   // Both were stored and read as `priceLine` and `notice`, which no list
@@ -371,6 +376,9 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     title: text('Section title', { section: 'settings' }),
     description: prose('Description', { section: 'settings' }),
     label: text('Label', { section: 'settings' }),
+    prompt_heading: text('Prompt heading', { section: 'prompts' }),
+    cta_label: text('Link label', { section: 'link', pairedWith: 'cta_url' }),
+    cta_url: link('Link URL', { section: 'link', pairedWith: 'cta_label' }),
     items: {
       kind: 'list', label: 'Workflows', section: 'items',
       of: {
@@ -455,6 +463,16 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
     media: { kind: 'media', label: 'Image or video', translatable: false, section: 'image', slot: 'media', accept: 'any' },
     label: text('Link label', { section: 'link', pairedWith: 'url' }),
     url: link('Link URL', { section: 'link', pairedWith: 'label' }),
+    eyebrow: text('Product name'),
+    caption: text('Example caption', { section: 'examples' }),
+    example_type: { kind: 'enum', label: 'Example type', translatable: false, section: 'examples', options: [
+      { value: 'websites', label: 'Website examples' },
+      { value: 'posts', label: 'Photos and posts' },
+    ] },
+    items: { kind: 'list', label: 'Examples', section: 'examples', of: {
+      title: text('Example name', { required: true }),
+      image: { kind: 'media', label: 'Picture', translatable: false, slot: 'image' },
+    } },
   }),
 
   // The form a visitor writes in. It has no fields of its own — what it asks

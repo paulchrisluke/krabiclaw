@@ -1,4 +1,4 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { updateQa } from '~/server/utils/location-qa'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
@@ -13,8 +13,9 @@ export default defineHandler(async (event) => {
   }
   try {
     return jsonResponse(await updateQa(db, {
-      organizationId: organization.id, locationId: null, pagePath: typeof (body as ApiRecord).page_path === 'string' ? String((body as ApiRecord).page_path) : null, }, qaId, Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'page_path'))))
+      organizationId: organization.id, locationId: null, pagePath: (body as { page_path?: string | null }).page_path ?? null, }, qaId, Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'page_path'))))
   } catch (error) {
+    rethrowHttpError(error)
     const message = error instanceof Error ? error.message : 'Q&A update failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }

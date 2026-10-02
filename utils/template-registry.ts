@@ -137,7 +137,7 @@ export const publicTemplateRegistry: Record<PublicTemplateSlug, PublicTemplateDe
       // the Saya catalog's route on a customer host and Krabiclaw's own page on
       // this one. Everything else Krabiclaw publishes is an unclaimed path the
       // catch-all serves, the same as any tenant's.
-      paths: ['/experiences'],
+      paths: ['/experiences', '/products'],
       prefixes: [],
       catchAll: true,
     },

@@ -1,5 +1,6 @@
 import { expect, request as playwrightRequest, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
+import { mcpData, mcpRequest } from './helpers/mcp'
 import { blawbyTestExtraHeaders } from './test-env'
 
 test.use({ timezoneId: 'America/New_York' })
@@ -40,16 +41,38 @@ test('native online review uses canonical Products, holds capacity, and releases
     products.push(product)
     const config = await page.request.put(`${editor}/products/${product.id}/booking`, { data: { duration_minutes: 45, default_capacity: 1, confirmation_mode: 'review', online_payment_required: true, online_timezone: 'UTC', calendar_group: `local-${stamp}` } })
     expect(config.status(), await config.text()).toBe(200)
-    const schedule = await page.request.put(`${editor}/products/${product.id}/availability`, { data: { location_id: null, slots: [{ weekday: tomorrow.getUTCDay(), start_time: '14:00', capacity: 1 }] } })
+    const schedule = await page.request.put(`${editor}/products/${product.id}/availability`, { data: { location_id: null, slots: [{ weekday: tomorrow.getUTCDay(), start_time: '14:00' }] } })
     expect(schedule.status(), await schedule.text()).toBe(200)
     const publish = await page.request.put(`${editor}/products/${product.id}/publication`, { data: { published: true } })
     expect(publish.status(), await publish.text()).toBe(200)
   }
-  const activate = await page.request.put(`${editor}/consultation`, { data: { mode: 'native' } })
+  const activate = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'set_consultation_mode', args: { organization_id: org, mode: 'native' } })
   expect(activate.status(), await activate.text()).toBe(200)
+  expect(mcpData<{ settings: { mode: string } }>(await activate.json()).settings.mode).toBe('native')
+  expect((await (await page.request.get(`${editor}/consultation`)).json()).mode).toBe('native')
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
     await expect(page.getByLabel('Online timezone', { exact: true })).toHaveValue('UTC')
     await page.screenshot({ path: 'artifacts/consultations-editor-desktop.png', fullPage: true })
+    const bindViaMcp = async (productId?: string | null) => {
+      const current = (await (await page.request.get(`${editor}/pages/${service.id}`)).json()).page
+      const response = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'update_tenant_page', args: {
+        organization_id: org, variant_id: service.id, expected_updated_at: current.document.updated_at,
+        path: current.path, title: current.title, summary: current.summary, pageType: current.page_type,
+        recipe: current.recipe, sortOrder: current.sort_order,
+        blocks: current.blocks.map((block: { id: string; type: string; level: number | null; parent_block_id: string | null; source_block_id: string | null; data: Record<string, unknown> }) => ({
+          id: block.id, type: block.type, level: block.level, parent_block_id: block.parent_block_id, source_block_id: block.source_block_id, data: block.data,
+        })),
+        ...(productId === undefined ? {} : { product_id: productId }),
+      } })
+      expect(response.status(), await response.text()).toBe(200)
+      expect((await response.json()).result.isError).not.toBe(true)
+    }
+    await bindViaMcp(null)
+    expect((await (await page.request.get(`${editor}/pages/${service.id}`)).json()).page.product_id).toBeNull()
+    await bindViaMcp(products[0]!.id)
+    await bindViaMcp()
+    expect((await (await page.request.get(`${editor}/pages/${service.id}`)).json()).page.product_id).toBe(products[0]!.id)
+    await bindViaMcp(null)
     await page.setExtraHTTPHeaders(headers)
     await page.goto(`/dashboard/north-carolina-legal-services/pages/${service.id}/booking`)
     const bindingSelector = page.getByRole('combobox', { name: 'Consultation Product' })

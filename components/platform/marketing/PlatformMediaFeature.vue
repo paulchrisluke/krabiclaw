@@ -4,7 +4,8 @@
     shows them on the right, in one dark card. The badges name the assistants
     a Krabiclaw site is edited from.
   -->
-  <section v-if="page.path === '/pricing'" class="kc-pricing-benefit" :class="{ 'kc-pricing-benefit--reverse': benefitIndex % 2 === 1 }" data-parity-section="media-feature">
+  <PlatformProductStory v-if="page.recipe === 'products'" :block="block" :page="page" />
+  <section v-else-if="page.path === '/pricing'" class="kc-pricing-benefit" :class="{ 'kc-pricing-benefit--reverse': benefitIndex % 2 === 1 }" data-parity-section="media-feature">
     <div class="kc-pricing-benefit__inner">
       <div><h2>{{ title }}</h2><p v-if="body">{{ body }}</p></div>
       <img v-if="mediaStillUrl(media)" :src="mediaStillUrl(media)!" :alt="media?.alt_text ?? ''" loading="lazy" decoding="async">
@@ -58,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import PlatformProductStory from '~/components/platform/marketing/PlatformProductStory.vue'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'

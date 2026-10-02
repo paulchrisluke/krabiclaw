@@ -5,7 +5,6 @@
     <UInputTags
       v-if="field.kind === 'list'"
       :model-value="stringList"
-      size="xl"
       class="w-full"
       @update:model-value="writeStringList($event)"
     />
@@ -28,7 +27,6 @@
       :items="options"
       value-key="value"
       label-key="label"
-      size="xl"
       class="w-full"
       @update:model-value="writeEnum($event)"
     />
@@ -63,7 +61,6 @@
       value-key="value"
       label-key="label"
       multiple
-      size="xl"
       class="w-full"
       :placeholder="`Choose ${field.label.toLowerCase()}`"
       @update:model-value="writeStringList($event)"
@@ -75,7 +72,6 @@
       :items="referenceOptions"
       value-key="value"
       label-key="label"
-      size="xl"
       class="w-full"
       :placeholder="`Choose a ${field.label.toLowerCase()}`"
       @update:model-value="write($event)"
@@ -86,7 +82,6 @@
       :model-value="numberValue"
       :min="field.min"
       :max="field.max"
-      size="xl"
       class="w-full"
       @update:model-value="writeNumber($event)"
     />
@@ -97,7 +92,6 @@
         v-for="(child, childKey) in field.of"
         :key="childKey"
         :model-value="recordValue(String(childKey))"
-        size="xl"
         class="w-full"
         :placeholder="child.kind === 'url' ? '/contact or https://example.com' : child.label"
         :aria-label="child.label"
@@ -117,7 +111,6 @@
     <UInput
       v-else
       :model-value="stringValue"
-      size="xl"
       :type="field.kind === 'url' ? 'text' : 'text'"
       :placeholder="field.kind === 'url' ? '/contact or https://example.com' : undefined"
       :autofocus="autofocus"

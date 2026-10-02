@@ -49,7 +49,11 @@ test('MCP Product booking uses public capacity, durable replay, guest identity a
       const listed = await call<{ sessions: Array<{ id: string; starts_at: string; remaining: number | null; is_full: boolean }> }>('list_product_booking_sessions', { product_id: product, from, to })
       const available = listed.sessions.filter(s => !s.is_full && (s.remaining === null || s.remaining >= 2))
       expect(available.length).toBeGreaterThanOrEqual(3)
-      await configure('review')
+      const reviewedPolicy = await call<{ config: { duration_minutes: number; default_capacity: number; confirmation_mode: string } }>('set_product_booking_config', { product_id: product, confirmation_mode: 'review' })
+      expect(reviewedPolicy.config).toMatchObject({ duration_minutes: 120, default_capacity: 8, confirmation_mode: 'review' })
+      const policyReadback = await request.get(editor)
+      expect(policyReadback.status()).toBe(200)
+      expect((await policyReadback.json()).product.booking).toMatchObject({ duration_minutes: 120, default_capacity: 8, confirmation_mode: 'review' })
       const since = new Date().toISOString()
       const key = crypto.randomUUID()
       const args = { product_slug: 'pottery-wheel-class', session_id: available[0]!.id, party_size: 1, guest_name: 'MCP Guest', guest_email: 'pottery-owner@playwright.example', idempotency_key: key, source: 'operator', external_reference: `external-${key}`, guest_acknowledgement: false }

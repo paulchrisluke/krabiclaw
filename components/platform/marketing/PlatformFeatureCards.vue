@@ -7,6 +7,18 @@
   -->
   <PlatformPricingComparison v-if="isComparison" :block="block" :page="page" />
   <PlatformPlansSection v-else-if="isPlans" :block="block" :page="page" />
+  <section v-else-if="page.recipe === 'products'" class="kc-product-more" data-parity-section="product-more">
+    <div class="kc-product-more__inner">
+      <h2 v-if="title">{{ title }}</h2>
+      <div class="kc-product-more__columns">
+        <div v-for="item in items" :key="item.title">
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.description }}</p>
+          <NuxtLink v-if="item.url && item.linkLabel" :to="route(item.url)" class="kc-product-link">{{ item.linkLabel }} <span aria-hidden="true">↗</span></NuxtLink>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!--
     A grid whose cards carry pictures: a large headline, the cards as a

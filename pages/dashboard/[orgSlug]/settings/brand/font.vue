@@ -6,13 +6,13 @@
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
     :error="editor.editorError.value ?? ''"
-    :footer="editor.supportsOrganizationFonts.value"
+    :footer="editor.sayaTheme.value"
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <template v-if="editor.supportsOrganizationFonts.value">
+    <template v-if="editor.sayaTheme.value">
       <UFormField label="Website font">
-        <USelect v-model="editor.form.font_preset" :items="ORGANIZATION_FONT_OPTIONS" value-key="value" label-key="label" size="xl" class="w-full" />
+        <USelect v-model="editor.form.font_preset" :items="ORGANIZATION_FONT_OPTIONS" value-key="value" label-key="label" class="w-full" />
       </UFormField>
       <div class="mt-6 space-y-3 rounded-lg border border-default p-5 text-2xl leading-relaxed" :style="organizationFontStyles(editor.form.font_preset)" data-testid="site-font-preview">
         <p lang="en">Welcome · 123</p>

@@ -51,7 +51,7 @@ No historical price/duration or operating hours are hard-coded.
 
 `organization.consultation_settings_json` stores the same public consultation
 object with one canonical `mode`: `external_url`, `native_disabled`, or `native`.
-Migration 0002 adds the column and backfills the complete legacy object without
+Migration 0004 adds the column and backfills the complete legacy object without
 rebuilding the referenced organization parent or changing other settings. Reads
 fall back to legacy JSON only during rollout; writers use only the new column.
 Native activation is an explicit operator setting, separate from publishing the
@@ -106,7 +106,7 @@ archival cleanup above; deletion would violate the existing history contract.
 
 Foundation deliberately returns `payment_required` for a required positive Price
 until #1169 supplies authenticated capture/hold conversion. It never fabricates
-payment success. No #1202 tools, #1203 OAuth/projection, financial provider calls,
+payment success. No #1202 guest-operation tools, #1203 OAuth/projection, financial provider calls,
 production products, migrations, deployment or cutover activation are included.
 
 ## Owner visual review and provider direction
@@ -148,3 +148,44 @@ Do not reinterpret a tenant calendar_group as a provider ID or silently remove i
 existing overlap protection. Payments and Calendar migrations/interfaces are being
 integrated separately; provider schema changes require coordination with those
 contracts rather than editing their worktrees or reserved migrations.
+
+## Cleanup-stack integration
+
+Foundation is based on cleanup PR #1218 (`9ea1749988`), including the shared
+CMS, Session authority and minimal weekly schedule changes. The migration head
+is `0004_native_consultation_foundation.sql`, regenerated from that canonical
+base. Applied baseline, Products `0002` and weekly `0003` history is unchanged.
+The generated config rebuild is replaced by additive columns so D1 cannot
+cascade-delete Session history; the generated snapshot remains authoritative.
+Archived transfers apply the guarded weekly simplification once and then the
+remaining forward migrations before projecting the target schema.
+
+HTTP and MCP call the same `setProductBookingConfig`, `replaceWeeklySchedule`,
+`updateTenantPage` and `setPublicConsultationMode` writers. Booking configuration
+accepts `confirmation_mode`, `online_payment_required`, `online_timezone` and
+`calendar_group` alongside Product duration/capacity. Omitted fields retain saved
+values; explicit null clears nullable fields, and capacity zero remains zero.
+`replace_product_weekly_schedule` requires an explicit location ID or null and
+accepts only weekday/start_time slots. Null uses the Product's configured online
+timezone. Existing Session facts and every Booking link survive replacement.
+
+`update_tenant_page.product_id` binds an existing source page to a same-tenant
+Product, retains the binding when omitted and unbinds with null. Translations
+inherit the source binding. `set_consultation_mode` configures only the existing
+site mode through the CMS writer; MCP's normal mutation path awaits cache purge.
+These are configuration adapters, not the #1202 guest operations feature.
+Payments and Calendar must regenerate their unshipped migrations against this
+verified head before advancing. Provider assignment and commercial gating remain
+separate coordinated decisions. The cleanup release deployment hold still applies.
+
+This Foundation Worker reads the new `0004` columns and is not the cleanup
+code-first artifact for an old schema. Do not deploy it through the cleanup
+code-first exception. Qualify and coordinate the Foundation expansion/activation
+separately after the cleanup rollout's approved schema sequence. No deployment
+or remote DDL authorization is implied by this local integration.
+
+The final complete CodeRabbit review against cleanup head `9ea1749988`
+completed with one minor finding. Online Product detail preloads now filter
+full sessions consistently with physical Product detail preloads. Focused
+Worker/browser adapter checks and the remaining template journeys passed;
+no repeated partial review or full-suite loop was used.

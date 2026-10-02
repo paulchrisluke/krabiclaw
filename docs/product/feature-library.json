@@ -24,7 +24,8 @@
         "set_default_currency",
         "update_organization_settings",
         "get_workspace_context",
-        "set_workspace_context"
+        "set_workspace_context",
+        "set_consultation_mode"
       ],
       "verification": {
         "status": "source-reviewed",
@@ -40,10 +41,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/organizations.ts": "1698e4abee77767d3671db7477531e1326539a6aa5dd46cb29c8f5c1f3967548",
+          "server/utils/mcp-executor/organizations.ts": "fd5a5e4d2441dddeabc8a1798659af45c51b05a43a139ca13b196621a01b58d9",
           "server/utils/mcp-context.ts": "e80f577ec6fb81a5f15ca6b4b3fb0718ee706b5654312bc74e1737569c1d809f",
           "tests/unit/mcp-tool-annotations.test.ts": "e0d40edff8ace2d57063dd159992412b72f1bfa81508c71b6e988353ae173799",
-          "server/utils/mcp-tools/organizations.ts": "b7b7fd46a519f63a7848a5091d2dd5520af245728cc5408b3d69c821342cdf21",
+          "server/utils/mcp-tools/organizations.ts": "28797ffbbacd2cf913fa32281b9ee51649b3a8836698604499d38c4f8e3e1edf",
           "server/utils/mcp-tools/context.ts": "49abd2dd8c1a37aa3867597bdcbc862bebac2d1127e8baedbea00c9d0837dd6d"
         }
       },
@@ -85,10 +86,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "6d06837919ec4024fb0c49b3f6328cb76ea2eece6a3e642bdae9d70d505ac782",
-          "server/utils/mcp-executor/content.ts": "85557d0dced129da7b117aad51716ac99e9df4cbf035a22a9c3d4073ee073dcc",
+          "server/utils/content/pages.ts": "42abf9963058293c4788a583adc16139945a71cbed236f03edddf21d5c4ee757",
+          "server/utils/mcp-executor/content.ts": "345fd091f0d0a293775e1d444c60011f3aae5b02be146e1e91a9c4b49db80d84",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
-          "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
+          "server/utils/mcp-tools/content.ts": "2b0d85907ef358d5bffc4993cd511e0edfb936f2dbf53153aa5120e1730266d5"
         }
       },
       "pendingOwnerDecision": null,
@@ -122,9 +123,9 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/content/pages.ts": "6d06837919ec4024fb0c49b3f6328cb76ea2eece6a3e642bdae9d70d505ac782",
+          "server/utils/content/pages.ts": "42abf9963058293c4788a583adc16139945a71cbed236f03edddf21d5c4ee757",
           "tests/integration/tenant-page-delete-d1.test.ts": "36836afb68492570ab3ca63d90dea80e0cc8e2a2c986cbacdef6c42de6aa5119",
-          "server/utils/mcp-tools/content.ts": "16f262e4717764c7a6650a5d8a8095e67c52ecee8834cb9668b0f8fa9a5c0f93"
+          "server/utils/mcp-tools/content.ts": "2b0d85907ef358d5bffc4993cd511e0edfb936f2dbf53153aa5120e1730266d5"
         }
       },
       "pendingOwnerDecision": null,
@@ -162,9 +163,9 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "130403223a12065bc1e679179e369a9d27391f88c4de17d3a8b21de98e9236a0",
-          "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
-          "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
+          "server/utils/availability.ts": "a5b701eeac94846ba3c6cbff5fdca01fe0526290aab01bdff6e0b80307c4d3bd",
+          "tests/integration/availability-d1.test.ts": "fe6e7c9818ba90d3d935ef9c544fc03018c6356f6d4efd8394eeab895621f02e",
+          "server/utils/mcp-tools/locations.ts": "939c976e55cf273e0e41feb3dd142440e5cb5a3ab6dca78d9df32e541a5c7946"
         }
       },
       "pendingOwnerDecision": null,
@@ -178,7 +179,7 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration.",
+      "currentBehavior": "One product model covers variants, location listings, collections and metafields; booking/payment require valid configuration. CMS and MCP share booking-default and weekly-rule writers. New occurrences use defaults; saved Sessions own actual facts, and any booking history protects them when rules are cleared or re-added. Weekly slots expose weekday/time only; Product owns duration and capacity. No per-rule overrides, recurrence windows or multiweek cadence remain.",
       "entitlementKeys": [],
       "mcpOperations": [
         "batch_create_products",
@@ -200,7 +201,10 @@
         "set_product_location",
         "set_product_publication",
         "update_collection",
-        "update_product"
+        "update_product",
+        "set_product_booking_config",
+        "delete_product_booking_config",
+        "replace_product_weekly_schedule"
       ],
       "verification": {
         "status": "source-reviewed",
@@ -215,10 +219,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/products.ts": "642e71fa754e4f60027716fc9d15300a458efb3e76c850d70229c806b6019df2",
+          "server/utils/mcp-executor/products.ts": "c4c78b4c66ef010c5319b21c0a967b39109977bcbd0a03e464a84852a6aacd76",
           "server/utils/product-management.ts": "15df0d1ef1e07a8cf1cacd8e0528e3fdfd9dcbf0859a2fdece903c49e89aebce",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
-          "server/utils/mcp-tools/products.ts": "945146f3fc067d6900992adce1fbf143b5d8bcda8e0fc2e84c225cdc55b9d25f"
+          "server/utils/mcp-tools/products.ts": "b5b19b02a404e3b8083a12d9526f88f35d31a5558a02b17accc957a4d2e7d76e"
         }
       },
       "pendingOwnerDecision": null,
@@ -232,18 +236,18 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "Configured Products accept capacity-safe pending/instant bookings through one public/MCP creation service. MCP guest identity is independent from the operator; durable replay, provenance and explicit guest acknowledgement are recorded. Review/cancel operations and guest-approved changes reuse inbox services. Restaurant table Reservations keep their distinct canonical operations. Required online collection gates unpaid allocation; positive pay-later is supported.",
+      "currentBehavior": "Configured products/locations accept guest requests. Confirmation and thank-you emails are distinct from the gated explicit review-request sender. Authorized MCP Product booking creation and operational transitions share the public/dashboard domain services with durable caller idempotency, nullable guest identity separate from operator audit, provenance and explicit guest acknowledgement choice. Changes require the existing guest acceptance flow; required positive online payment remains guarded pending the separate Payments integration.",
       "entitlementKeys": [],
       "mcpOperations": [
-        "cancel_product_booking",
-        "cancel_table_reservation",
-        "confirm_product_booking",
         "create_product_booking",
         "get_product_booking",
-        "list_product_booking_sessions",
         "list_product_bookings",
+        "list_product_booking_sessions",
+        "confirm_product_booking",
         "reject_product_booking",
+        "cancel_product_booking",
         "request_product_booking_change",
+        "cancel_table_reservation",
         "request_table_reservation_change"
       ],
       "verification": {
@@ -266,12 +270,12 @@
         "evidenceSha256": {
           "server/domain/requests.ts": "f34f851d6a9ad4a7ab1c1390623d654d4c3a8d05216abd0418a77c6b0d978cd7",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
-          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
+          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
           "server/domain/product-bookings.ts": "7815fb8d94fe19dc2b1289706c155c6a4cc94506287b055aea5c16959c7b831f",
-          "server/utils/mcp-tools/bookings.ts": "c86da02c81b65c806f80f1a872bec3aa2a74f7831b77cde99c3e4f9742a824bf",
+          "server/utils/mcp-tools/bookings.ts": "ade7ee20c7826e883e9431a890d7cfad70300c3ac9fe8a583de12d91c4b7365f",
           "server/utils/mcp-executor/bookings.ts": "c7b4b8be63fc9d88b52971f8e2566520a0695f3ae0f3303231fdcfb8a5fdfab4",
-          "tests/e2e/mcp-bookings.spec.ts": "5bdfd9461491a0644b93c27c4437486e9ceabaf65820593013f9dba26765b07e",
-          "tests/integration/availability-d1.test.ts": "769bcdf7422cd83c39cf4136008c4bac9d20c44de945ce244ea2664f8a1cb96e",
+          "tests/e2e/mcp-bookings.spec.ts": "0e626711ada01c3daa8b47950786657f829e627099e99beaf7ca2d5fe6131e03",
+          "tests/integration/availability-d1.test.ts": "fe6e7c9818ba90d3d935ef9c544fc03018c6356f6d4efd8394eeab895621f02e",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
@@ -416,11 +420,15 @@
         "free": "conditional",
         "growth": "conditional"
       },
-      "currentBehavior": "Tenant Q&A management follows authorization and publication rules.",
+      "currentBehavior": "Tenant Q&A management follows authorization and publication rules. CMS and MCP share tenant-scoped authored Q&A writers; imported answers remain protected.",
       "entitlementKeys": [],
       "mcpOperations": [
         "list_location_qa",
-        "list_organization_qa"
+        "list_organization_qa",
+        "create_qa",
+        "update_qa",
+        "delete_qa",
+        "reorder_qa"
       ],
       "verification": {
         "status": "source-reviewed",
@@ -432,8 +440,8 @@
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/qa.ts": "7e94e818a6f8e145da9f0b5a239b39fb3d01092a67ea002950ccdf7e01270db4",
-          "server/utils/mcp-tools/qa.ts": "2e2ef3a0bcec60cc77008e09e933c044cddbdac8610c1cec2e4565c6a9cf4799"
+          "server/utils/mcp-executor/qa.ts": "43d277d152c02d754e414bc33b81aa6daabba113ad94c0da6d1ff7853c41146c",
+          "server/utils/mcp-tools/qa.ts": "b7b37dbc49f3d5a29573b77272a55d3c2761e4dc2cf0b1a97bba129c83ae5dea"
         }
       },
       "pendingOwnerDecision": null,
@@ -498,7 +506,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
           "server/utils/mcp-tools/submissions.ts": "37c55ef8f1758b10a399f0f736c01ac9dfe49791424315619f4f60a1da7f75d6",
-          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
+          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
         }
       },
       "pendingOwnerDecision": null,
@@ -772,7 +780,7 @@
           "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
-          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
+          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
         }
       },
       "pendingOwnerDecision": null,
@@ -808,7 +816,7 @@
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
           "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
-          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458",
+          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
         }
       },
@@ -870,7 +878,7 @@
           "server/utils/review-requests.ts": "62c1d1119e0932684c413b74abd7dbe14440f8cd45573b139d0cc77960cf3e23",
           "server/utils/review-request-delivery.ts": "932422b5ff5576042d09c722808cbd8ba1228e79416a11786e7337edff2bce63",
           "server/tasks/review-request-automation.ts": "c317371d25d12653f986590c7164360d0b27c73e3fb904f1b352517af32513f9",
-          "tests/integration/guest-delivery-d1.test.ts": "cbce7798d41aae03f8d073f59a7e559fa59fb86f16313e2da6a42c7fe74c8458"
+          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
         }
       },
       "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question.",
@@ -897,7 +905,7 @@
         "tests": [],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
+          "utils/template-registry.ts": "251ab4ff9dff4b03e37ecf9803dfca224849065023710bda4d81945cb6ccf133",
           "server/utils/organization-provisioning.ts": "15b896cd96c3d8f4b1deaaf1f265fff27c7d4e90ed95eb526e25245feb292e79"
         }
       },
@@ -927,7 +935,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "utils/article-collections.ts": "337f87b4bafa14a00d73017ce37601ceab394161339d199117d52362a3372c03",
-          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
+          "utils/template-registry.ts": "251ab4ff9dff4b03e37ecf9803dfca224849065023710bda4d81945cb6ccf133",
           "server/utils/billing-plans.ts": "523e5e4b7b7e9ba61963dcb843b52810d15aafd761a5d6631c92e132ce41f420"
         }
       },
@@ -1024,8 +1032,8 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/seo-policy.ts": "125511b679debfd02a108b4101701947eeb8e9c57b771420d76f3ea501e5e6af",
-          "utils/template-registry.ts": "b669ebc7d76a1c7196ec2b2b4cccd4b410008b686fa740387b268147cca19d79",
+          "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
+          "utils/template-registry.ts": "251ab4ff9dff4b03e37ecf9803dfca224849065023710bda4d81945cb6ccf133",
           "tests/unit/product-seo.test.ts": "28ab3dbb00e32fef593e241c414f1fae608d039eaf123c675dfb33ab77701745"
         }
       },

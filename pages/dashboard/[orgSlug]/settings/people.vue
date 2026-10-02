@@ -15,16 +15,17 @@
           <USkeleton v-for="i in 6" :key="i" class="h-12 rounded-lg" />
         </div>
 
-        <ul v-else class="divide-y divide-default rounded-2xl border border-default">
-          <li v-for="user in users" :key="user.id" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <ul v-else>
+          <li v-for="user in users" :key="user.id" class="flex flex-wrap items-center justify-between gap-3 border-b border-default py-6 last:border-b-0">
             <div class="min-w-0">
-              <p class="truncate text-sm font-medium text-highlighted">{{ user.name || user.email }}</p>
-              <p class="truncate text-xs text-muted">{{ user.email }}<span v-if="user.role && user.role !== 'user'"> · {{ user.role }}</span><span v-if="user.banned"> · banned</span></p>
+              <p class="truncate text-base text-highlighted">{{ user.name || user.email }}</p>
+              <p class="truncate text-sm text-muted">{{ user.email }}<span v-if="user.role && user.role !== 'user'"> · {{ user.role }}</span><span v-if="user.banned"> · banned</span></p>
             </div>
             <UButton
-              size="xs"
+              size="sm"
               color="neutral"
               variant="soft"
+              class="rounded-full"
               :disabled="user.id === currentUserId"
               :loading="impersonatingUserId === user.id"
               @click="impersonate(user.id)"
@@ -32,10 +33,10 @@
               Impersonate
             </UButton>
           </li>
-          <li v-if="!users.length" class="px-4 py-8 text-center text-sm text-muted">No accounts yet.</li>
+          <li v-if="!users.length" class="py-6 text-sm text-muted">No accounts yet.</li>
         </ul>
         <div v-if="total > pageSize" class="flex items-center justify-between gap-3">
-          <p class="text-xs text-muted">Showing {{ offset + 1 }}–{{ offset + users.length }} of {{ total }}.</p>
+          <p class="text-sm text-muted">Showing {{ offset + 1 }}–{{ offset + users.length }} of {{ total }}.</p>
           <div class="flex gap-2">
             <UButton color="neutral" variant="soft" :disabled="loading || offset === 0" @click="changePage(-1)">Previous</UButton>
             <UButton color="neutral" variant="soft" :disabled="loading || offset + users.length >= total" @click="changePage(1)">Next</UButton>

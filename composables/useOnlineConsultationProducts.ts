@@ -20,4 +20,3 @@ export async function useOnlineConsultationProducts() {
   if (error.value) throw error.value
   return { data, pending, error, organizationId, organizationName }
 }
-

@@ -15,7 +15,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     inputSchema: { ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and returns hosted Stripe Checkout; only authenticated native payment success creates the booking. No import or model assertion marks a booking paid. ${description}`,
+    description: `Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. ${description}`,
     inputSchema: {
       product_slug: { type: 'string' }, session_id: { type: 'string' }, variant_id: { type: 'string' },
       party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 },
@@ -30,7 +30,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
   }),
   ...(['confirm', 'reject', 'cancel'] as const).map(action => organizationTool({
     name: `${action}_product_booking`, domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `${action} a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. ${action === 'reject' ? 'Captured principal requires actor-bound browser financial approval; an approval handoff does not complete rejection or refund. ' : ''}Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. ${description}`,
+    description: `${action} a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. ${description}`,
     inputSchema: { operational_booking_id: bookingId, idempotency_key: key }, required: ['operational_booking_id', 'idempotency_key'],
   })),
   organizationTool({ name: 'request_product_booking_change', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,

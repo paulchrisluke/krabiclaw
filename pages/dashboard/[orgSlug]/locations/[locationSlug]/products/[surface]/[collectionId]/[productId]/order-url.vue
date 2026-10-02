@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-order-url"
+    :ready="p.ready.value"
     :title="p.sectionLabels['order-url']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"

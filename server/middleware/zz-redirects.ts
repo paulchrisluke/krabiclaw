@@ -134,6 +134,9 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
 export default defineHandler(async (event) => {
   const url = event.url
   const normalizedPathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
+  if (event.context.tenantType === TENANT_TYPES.PLATFORM && normalizedPathname === '/features') {
+    return redirect(`/products${url.search}`, 301)
+  }
 
   // The MCP connector URL is meant for ChatGPT's "Connect" flow, but people
   // tap it directly from emails/WhatsApp messages instead of copying it.

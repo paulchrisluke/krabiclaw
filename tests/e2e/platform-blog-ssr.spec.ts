@@ -294,8 +294,8 @@ for (const signedIn of [false, true]) {
         await expect(menu).toHaveCount(0)
         await expect(toggle).toBeFocused()
         await toggle.click()
-        await menu.getByRole('link', { name: 'Features', exact: true }).click()
-        await expect(page).toHaveURL(/\/features$/)
+        await menu.getByRole('link', { name: 'Products', exact: true }).click()
+        await expect(page).toHaveURL(/\/products$/)
         await expect(page.locator('#platform-mobile-nav')).toHaveCount(0)
         expect(await page.evaluate(() => document.documentElement.style.overflow)).not.toBe('hidden')
       }

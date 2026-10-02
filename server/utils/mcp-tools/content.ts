@@ -143,12 +143,13 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_tenant_page',
-      description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because omitted content metadata is written as null. The optional product_id binding is retained when omitted; null explicitly unbinds the source page. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
       inputSchema: {
         variant_id: { type: 'string' },
+        product_id: { type: ['string', 'null'], description: 'Explicit canonical Product binding on the source page only. Omit to retain; null unbinds. Translations inherit the source binding; slugs never imply a relationship.' },
         expected_updated_at: { type: 'string' },
         ...TENANT_PAGE_METADATA_SCHEMA,
         blocks: TENANT_PAGE_BLOCKS_SCHEMA,
@@ -207,7 +208,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and the guest-facing rules. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -215,7 +216,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
-        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.' },
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.' },
       },
       required: ['location_id'],
       outputSchema: {

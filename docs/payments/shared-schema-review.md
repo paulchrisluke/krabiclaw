@@ -1,6 +1,6 @@
 # Payments shared-schema inventory at owner pause
 
-Read-only inventory for the deletion-first CMS/shared-contract review. No deletion or new schema change is authorized by this document. Payments draft #1213 is paused; this records the implemented surfaces for review, not a claim that every structure must be retained.
+Read-only inventory for the deletion-first CMS/shared-contract review. No deletion or new schema change is authorized by this document. Payments draft #1213 resumed on the verified dependency successor on 2026-10-02; this records the implemented surfaces for review, not a claim that every structure must be retained.
 
 ## Canonical dependencies reused
 
@@ -41,4 +41,4 @@ No account/tenant/catalog deletion should cascade through required financial rec
 
 ## Dependency boundary
 
-Current integrated Foundation is `aa21be84ce1994139c0b7dd806eba90e5c52ce2c`, MCP `0fceadbd7b4651a51f42ce1785c9ab3959968f95`, Calendar `43515b3b822a8bb93c43e77a2b34add23125b9d1`. The newly pushed CMS work has not been merged or modified in this isolated worktree. Root should review its canonical catalog/editor/deletion contracts before further Payments integration. Current draft remains stacked; no retarget, merge, deployment or deletion was performed at the pause.
+Current integrated Foundation is `a7fd549e` through MCP `61f4ada75e361ef4fe839c05d7a3c531cd074c15` and Calendar `4a8df9e82b525a2dfb619c36aac94b82ccf1d259`. Foundation migration `0004` and Calendar `0005` remain unchanged; canonical tooling regenerated Payments as additive `0006`. Only the verified dependency successor is incorporated; no unfinished service/schedule UI redesign is imported. Root should review its canonical catalog/editor/deletion contracts before further Payments integration. Current draft remains stacked; no retarget, merge, deployment or deletion was performed at the pause.

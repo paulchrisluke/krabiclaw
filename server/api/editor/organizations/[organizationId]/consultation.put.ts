@@ -8,7 +8,6 @@ import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cach
 export default defineHandler(async event => {
   const { env, db, organization } = await requireOrganizationAccess(event, getRouterParam(event, 'organizationId')!)
   const body = await readStrictBody<{ mode: unknown }>(event, { mode: 'unknown' })
-  if (!['native', 'external_url', 'native_disabled'].includes(String(body.mode))) return jsonResponse({ error: 'Invalid consultation mode' }, { status: 400 })
   const settings = await setPublicConsultationMode(db, organization.id, body.mode as 'native' | 'external_url' | 'native_disabled')
   await purgePublicResourceCacheNow(env, organization.id)
   return jsonResponse(settings)

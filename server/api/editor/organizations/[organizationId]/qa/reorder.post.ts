@@ -1,4 +1,4 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { reorderQa } from '~/server/utils/location-qa'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
@@ -7,14 +7,13 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID required' }, { status: 400 })
   const { db, organization } = await requireOrganizationAccess(event, organizationId)
   const body = await readBody<{ page_path?: string | null; updates?: Array<{ id?: unknown; sort_order?: unknown }> }>(event)
-  const pagePath = typeof body?.page_path === 'string' ? String(body.page_path) : null
-  const updates = Array.isArray(body?.updates)
-    ? body.updates.map(item => ({ id: String(item.id ?? ''), sort_order: Number(item.sort_order) }))
-    : []
+  const pagePath = body?.page_path ?? null
+  const updates = body?.updates as Array<{ id: string; sort_order: number }>
   try {
     return jsonResponse(await reorderQa(db, {
       organizationId: organization.id, locationId: null, pagePath, }, updates))
   } catch (error) {
+    rethrowHttpError(error)
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'
     return jsonResponse({ error: message }, { status: message.includes('scope') ? 404 : 400 })
   }

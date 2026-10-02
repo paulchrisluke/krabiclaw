@@ -19,22 +19,36 @@
     {
       "idx": 2,
       "version": "6",
-      "when": 1790829730169,
-      "tag": "0002_burly_tigra",
+      "when": 1790828089754,
+      "tag": "0002_products_overview",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "6",
-      "when": 1790834273934,
-      "tag": "0003_google_calendar_projection",
+      "when": 1790859705994,
+      "tag": "0003_minimal_weekly_schedule",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "6",
-      "when": 1790836454973,
-      "tag": "0004_payments",
+      "when": 1790862282934,
+      "tag": "0004_native_consultation_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790901300755,
+      "tag": "0005_google_calendar_projection",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790902172209,
+      "tag": "0006_payments",
       "breakpoints": true
     }
   ]

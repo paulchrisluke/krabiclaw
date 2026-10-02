@@ -23,13 +23,13 @@
     >
       <template v-if="data">
         <UFormField v-if="accountOptions.length" label="Google account">
-          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" size="xl" class="w-full" />
+          <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose a Google account" class="w-full" />
         </UFormField>
         <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Google account</UButton>
         <UButton v-else icon="i-simple-icons-google" size="xl" block :loading="linking" @click="link">Connect Google Search Console</UButton>
 
         <UFormField v-if="data.account_id" label="Property" :error="data.error ?? undefined">
-          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" size="xl" class="w-full" />
+          <USelectMenu v-model="selected" :items="options" value-key="value" placeholder="Choose a property" class="w-full" />
         </UFormField>
       </template>
       <USkeleton v-else-if="pending" class="h-14 rounded-xl" />

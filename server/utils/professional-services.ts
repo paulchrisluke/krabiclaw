@@ -98,6 +98,7 @@ export async function initializePublicConsultationSettings(db: DbClient, organiz
 
 /** Only this adapter writes consultation settings. Legacy JSON is read-only during rollout. */
 export async function setPublicConsultationMode(db: DbClient, organizationId: string, mode: PublicConsultationSettings['mode']): Promise<PublicConsultationSettings> {
+  if (mode !== 'native' && mode !== 'external_url' && mode !== 'native_disabled') throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid consultation mode' })
   const settings = await getPublicConsultationSettings(db, organizationId)
   if (mode === 'external_url' && !settings.external_url) throw new HTTPError({ statusCode: 400, statusMessage: 'Configure an external destination before enabling it' })
   await executeBatch(db, [{

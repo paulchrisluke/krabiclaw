@@ -103,7 +103,7 @@ export const locationObject = {
     short_description: { type: ['string', 'null'] },
     status: { type: 'string' },
     timezone: { ...timezoneSchema, type: ['string', 'null'] },
-    max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).' },
+    max_capacity: { type: ['number', 'null'], description: 'Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.' },
     seo_title: { type: ['string', 'null'] },
     seo_description: { type: ['string', 'null'] },
     canonical_url: { type: ['string', 'null'] },
@@ -859,6 +859,13 @@ const D = Object.freeze(openWorldDestructiveAnnotations())
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
+  create_qa: W,
+  update_qa: D,
+  delete_qa: D,
+  reorder_qa: D,
+  set_product_booking_config: D,
+  delete_product_booking_config: D,
+  replace_product_weekly_schedule: D,
   create_product_booking: { ...W, idempotentHint: true },
   get_product_booking: R,
   list_product_bookings: R,
@@ -932,6 +939,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   save_generated_image_file: W,
   set_brand_color: D,
   set_default_currency: D,
+  set_consultation_mode: D,
   set_media: D,
   set_workspace_context: BD,
   reconcile_products: D,

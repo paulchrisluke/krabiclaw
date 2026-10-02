@@ -378,7 +378,7 @@ export async function loadPublicProductSessions(
   // nothing here rather than a time in a zone nobody chose.
   if (!detail.location) {
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
-    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions
+    return (await listPublicBookingSessions(db, detail.organization.id, detail.product.slug, 'online')).sessions.filter(session => !session.is_full)
   }
   if (!detail.location.timezone) return []
   const window = bookingWindow(detail.location.timezone)

@@ -28,7 +28,7 @@ export interface MediaAsset {
   id: string
   organization_id: string
   kind: 'image' | 'video' | 'file'
-  provider: 'cloudflare_images' | 'cloudflare_r2'
+  provider: 'cloudflare_images' | 'cloudflare_r2' | 'static'
   source: 'uploaded' | 'generated' | 'external'
   generation_key: string | null
   cloudflare_image_id: string | null

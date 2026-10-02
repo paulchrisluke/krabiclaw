@@ -1,3 +1,4 @@
+import { setProductBookingConfig, deleteProductBookingConfig, replaceWeeklySchedule } from '~/server/utils/availability'
 import type { CreateProductInput, Product, ReconcileProductInput, UpdateProductInput } from '~/server/types/products'
 import {
   createCollection,
@@ -96,6 +97,24 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
   const scope = { organizationId: organization.organizationId}
 
   switch (toolName) {
+    case 'set_product_booking_config': {
+      const config = await setProductBookingConfig(organization.db, {
+        ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId,
+        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group },
+      })
+      return { config }
+    }
+    case 'delete_product_booking_config':
+      await deleteProductBookingConfig(organization.db, { ...scope, productId: requiredString(args, 'product_id') })
+      return { deleted: true }
+    case 'replace_product_weekly_schedule': {
+      const locationId = args.location_id === null ? null : requiredString(args, 'location_id')
+      if (locationId !== null) await authorizeLocation(ctx, locationId)
+      return await replaceWeeklySchedule(organization.db, {
+        ...scope, productId: requiredString(args, 'product_id'), locationId,
+        slots: args.slots, actorId: organization.userId,
+      })
+    }
     // Both list tools read the window first and ask the database for exactly
     // one page, so a catalog of four hundred is not loaded and hydrated to
     // answer a request for fifty.

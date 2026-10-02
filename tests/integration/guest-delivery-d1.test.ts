@@ -335,7 +335,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // The instant and the zone the guest agreed to live on the reservation; the
     // confirmation email is formatted from them, never from a server clock.
     await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-status','org-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'confirmed')`).run()
+      VALUES ('reservation-status','org-status','location-status','booking-status','Asia/Bangkok','2098-10-01T11:00:00.000Z','2098-10-01T13:00:00.000Z',2,'confirmed')`).run()
 
     const input = {
       threadId: 'booking-status', actorUserId: 'user-status',
@@ -349,14 +349,14 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const original = requests[0]!
     // The recorded body is now rendered inside the shared email shell, so the
     // sent copy contains it rather than being it.
-    assert.ok(original.text.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
-    assert.ok(original.html.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
+    assert.ok(original.text.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
+    assert.ok(original.html.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
     // Moving the reservation is what makes the pending send stale — the thread
     // carries no copy of the time to move.
-    await db.prepare("UPDATE reservations SET starts_at = '2026-10-02T11:00:00.000Z', ends_at = '2026-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
+    await db.prepare("UPDATE reservations SET starts_at = '2098-10-02T11:00:00.000Z', ends_at = '2098-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
     for (const request of [cancel, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
