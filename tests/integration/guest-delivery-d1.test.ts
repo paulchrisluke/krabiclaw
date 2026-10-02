@@ -309,6 +309,7 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
 })
 
 test('D1 status-email retries preserve recorded content and reject superseded bookings', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-01T10:00:00Z') })
   const runtime = new Miniflare({ workers: [{ config: {
     name: 'status-retry-proof', type: 'worker', compatibilityDate: '2024-11-01',
     manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
