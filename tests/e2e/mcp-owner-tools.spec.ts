@@ -500,7 +500,13 @@ test.describe('stateless MCP server', () => {
         expect((await request.put(`${productUrl}/booking`, { data: { duration_minutes: 0 } })).status()).toBe(400)
         expect((await call('set_product_booking_config', { product_id: productId, duration_minutes: 0 })).result.isError).toBe(true)
         const schedule = { location_id: locationId, slots: [{ weekday: 2, start_time: '10:00' }] }
-        expect((await request.put(`${productUrl}/availability`, { data: schedule })).status()).toBe(200)
+        const savedSchedule = await request.put(`${productUrl}/availability`, { data: schedule })
+        expect(savedSchedule.status(), await savedSchedule.text()).toBe(200)
+        const httpRules = await request.get(`${productUrl}/availability?location_id=${locationId}`)
+        expect(httpRules.status(), await httpRules.text()).toBe(200)
+        expect((await httpRules.json()).rules).toEqual([expect.objectContaining({
+          product_id: productId, location_id: locationId, weekday: 2, start_time: '10:00',
+        })])
         const repeated = mcpData<{ rules: Array<{ id: string; timezone: string }>; sessions: { created: number } }>(await call('replace_product_weekly_schedule', { product_id: productId, ...schedule }))
         expect(repeated.sessions.created).toBe(0)
         const rules = await request.get(`${productUrl}/availability?location_id=${locationId}`)
@@ -558,11 +564,16 @@ test.describe('stateless MCP server', () => {
         expect((await call('update_qa', { qa_id: first.id, page_path: '/different-scope', answer: 'Wrong scope' })).result.isError).toBe(true)
         expect((await request.patch(`${qaUrl}/${first.id}`, { data: { page_path: '/different-scope', answer: 'Wrong scope' } })).status()).toBe(404)
         expect((await call('delete_qa', { qa_id: first.id, page_path: '/parity-check' })).result.isError).not.toBe(true)
+        qaIds.splice(qaIds.indexOf(first.id), 1)
         expect((await (await request.get(`${qaUrl}?page_path=%2Fparity-check`)).json()).qa.map((row: { id: string }) => row.id)).toEqual([viaMcp.id])
       } finally {
-        for (const id of qaIds) await request.delete(`${qaUrl}/${id}?page_path=%2Fparity-check`)
-        await call('delete_product_booking_config', { product_id: productId })
-        await call('delete_product', { product_id: productId })
+        for (const id of qaIds) {
+          const deleted = await request.delete(`${qaUrl}/${id}?page_path=%2Fparity-check`)
+          expect(deleted.status(), await deleted.text()).toBe(200)
+        }
+        expect(mcpData<{ deleted: boolean }>(await call('delete_product_booking_config', { product_id: productId })).deleted).toBe(true)
+        expect(mcpData<{ deleted: boolean }>(await call('delete_product', { product_id: productId })).deleted).toBe(true)
+        expect((await call('get_product', { product_id: productId })).result.isError).toBe(true)
       }
     })
 
