@@ -2,7 +2,7 @@ import {defineHandler,HTTPError} from 'nitro'
 import {cloudflareEnv,jsonResponse,readRequiredBody} from '~/server/utils/api-response'
 import {ensureInteractionUser} from '~/server/utils/auth'
 import {queryFirst} from '~/server/db'
-import {tokenHash,claimPurchase} from '~/server/domain/payments/buyer'
+import {tokenHash,claimCheckoutReturn} from '~/server/domain/payments/buyer'
 import {requirePayment} from '~/server/domain/payments'
 import {reconcilePaymentIntent} from '~/server/domain/payments/events'
 import {createStripeClient} from '~/server/utils/stripe-client'
@@ -18,5 +18,5 @@ export default defineHandler(async event=>{
  const intentId=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id
  await reconcilePaymentIntent(env.DB,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:payment.stripe_account_id}),env)
  const userId=await ensureInteractionUser(event,env)
- return jsonResponse(await claimPurchase(env.DB,userId,body.purchase_claim))
+ return jsonResponse(await claimCheckoutReturn(env.DB,userId,body.purchase_claim))
 })

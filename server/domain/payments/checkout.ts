@@ -3,7 +3,8 @@ import { sessionMemberSql } from '~/server/utils/provider-allocation'
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient, type BatchQuery } from '~/server/db'
-import { selectPrice, type Price } from '~/shared/prices'
+import { assertPriceShape, PRICE_TAX_BEHAVIORS, selectPrice, type Price } from '~/shared/prices'
+import { isRecord } from '~/server/utils/type-guards'
 import { sessionAllocationPredicate } from '~/server/utils/availability'
 import { getStripeConnectedAccount, stripeLivemodeFromKey } from '~/server/utils/stripe-connect'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
@@ -66,11 +67,29 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   if (price?.unit_amount === 0 && !previous) throw new HTTPError({statusCode:409,statusMessage:'Free offerings use the canonical booking flow without checkout'})
   if (previous) {
     const frozen = await requirePayment(db,input.organizationId,previous.payment_id)
-    const snapshot = JSON.parse(frozen.price_snapshot_json) as {title?:string;tax_code?:string|null;price:Price;product_id:string;variant_id:string;quantity:number;session_id:string|null;automatic_tax:boolean;method_configuration_id:string;request_fingerprint?:string}
+    const snapshot: unknown = JSON.parse(frozen.price_snapshot_json)
+    if (!isRecord(snapshot) || typeof snapshot.title !== 'string' || !snapshot.title.trim()
+      || (snapshot.tax_code !== null && (typeof snapshot.tax_code !== 'string' || !snapshot.tax_code.trim()))
+      || typeof snapshot.product_id !== 'string' || typeof snapshot.variant_id !== 'string'
+      || !Number.isSafeInteger(snapshot.quantity) || (snapshot.session_id !== null && typeof snapshot.session_id !== 'string')
+      || typeof snapshot.automatic_tax !== 'boolean' || typeof snapshot.method_configuration_id !== 'string' || !snapshot.method_configuration_id.trim()
+      || (snapshot.request_fingerprint !== undefined && typeof snapshot.request_fingerprint !== 'string')
+      || !isRecord(snapshot.price) || typeof snapshot.price.id !== 'string' || !snapshot.price.id.trim()
+      || snapshot.price.organization_id !== input.organizationId || snapshot.price.product_variant_id !== input.variantId
+      || snapshot.price.currency !== 'USD' || snapshot.price.type !== 'one_time'
+      || !PRICE_TAX_BEHAVIORS.includes(snapshot.price.tax_behavior as Price['tax_behavior'])
+      || (snapshot.price.compare_at_unit_amount !== null && !Number.isSafeInteger(snapshot.price.compare_at_unit_amount))
+      || (snapshot.price.valid_from_at !== null && typeof snapshot.price.valid_from_at !== 'string')
+      || (snapshot.price.valid_until_at !== null && typeof snapshot.price.valid_until_at !== 'string')) {
+      throw new HTTPError({statusCode:409,statusMessage:'Stored checkout snapshot is invalid'})
+    }
+    const frozenPrice = snapshot.price as unknown as Price
+    assertPriceShape(frozenPrice)
+    if (frozenPrice.unit_amount * input.quantity !== frozen.amount || frozenPrice.currency !== frozen.currency) throw new HTTPError({statusCode:409,statusMessage:'Stored checkout snapshot does not match its payment'})
     if (frozen.buyer_user_id !== input.buyerUserId || snapshot.product_id!==input.productId || snapshot.variant_id!==input.variantId || snapshot.quantity!==input.quantity || snapshot.session_id!==(input.sessionId??null) || snapshot.request_fingerprint!==input.requestFingerprint) throw new HTTPError({statusCode:409,statusMessage:'Checkout retry does not match its immutable purchase'})
-    projectionTitle=snapshot.title??projectionTitle
-    projectionTaxCode=snapshot.tax_code??projectionTaxCode
-    price = snapshot.price
+    projectionTitle=snapshot.title
+    projectionTaxCode=snapshot.tax_code
+    price = frozenPrice
     automaticTax = snapshot.automatic_tax
     methodConfigurationId=snapshot.method_configuration_id
   }

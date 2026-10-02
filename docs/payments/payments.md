@@ -75,10 +75,10 @@ same-origin browser approval. MCP gets a browser handoff, not an approval boolea
 Paid rejection commits cancellation, allocation release and full refund intent in
 one guarded D1 batch; provider retry is durable. Ordinary cancellation is distinct.
 
-Buyer ownership uses Better Auth guest identity and purchase possession proofs.
-Typed email never proves ownership. Cross-device manual claims require a verified
-signed-in account and consume all sibling claim proofs for that exact purchase.
-No tenant membership is granted. Hosted return tokens are one-time possession
+Buyer ownership uses Better Auth identity. Signing in on any device reads the same
+owned purchases. Better Auth links guest-owned records when that guest signs in;
+typed email never proves ownership and no tenant membership is granted. There is
+no manual transfer-code flow. Hidden hosted return tokens are one-time possession
 proofs; the server retrieves native Checkout and PaymentIntent before conversion.
 Financial parent FKs retain evidence; tenant deletion stores minimal servicing
 relationships without retaining merchant credentials or recreating the tenant.
