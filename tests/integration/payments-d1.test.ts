@@ -21,7 +21,7 @@ async function boot(){
  try {
  const migration=await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))
  await db.batch(migration.map(query=>db.prepare(query)))
- await db.prepare(`INSERT INTO organization(id,name,slug,subdomain,settings_json,integrations_json,theme_id,default_currency,status,onboarding_status,url_structure,vertical,updated_at) VALUES(?,'Payments','payments','payments','{"config":{"default_timezone":"America/New_York"}}','{}','theme','USD','active','complete','flat','experience',?)`).bind(ORG,NOW).run()
+ await db.prepare(`INSERT INTO organization(id,name,slug,subdomain,settings_json,theme_id,default_currency,status,onboarding_status,url_structure,vertical,updated_at) VALUES(?,'Payments','payments','payments','{"config":{"default_timezone":"America/New_York"}}','theme','USD','active','complete','flat','experience',?)`).bind(ORG,NOW).run()
  for(const id of ['guest','verified','other'])await db.prepare("INSERT INTO user(id,name,email,emailVerified) VALUES(?,?,?,1)").bind(id,id,`${id}@example.com`).run()
  await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by) VALUES('product',?,'Consultation','consultation','guest','guest')").bind(ORG).run()
  await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('variant',?,'product','Hour','guest','guest')").bind(ORG).run()

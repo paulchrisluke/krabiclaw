@@ -132,7 +132,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         'Your own domain (yourbusiness.com)',
         `${menuCapitalized} updates via ChatGPT — just send us a message`,
         'WhatsApp booking & reservation notifications',
-        'Auto-sync from Facebook & Instagram',
+        'Facebook & Instagram publishing',
         'Google Places imports',
         'Post-booking review requests',
       ],

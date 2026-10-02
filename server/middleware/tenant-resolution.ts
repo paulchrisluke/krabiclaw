@@ -47,8 +47,8 @@ const TENANT_MEDIA_SELECT_SQL = `(SELECT COALESCE(json_group_array(json_object(
 
 const TENANT_SELECT_SQL = `SELECT o.id, o.theme_id, o.subdomain, o.status, o.onboarding_status,
              o.name, ${TENANT_MEDIA_SELECT_SQL} AS media_json, o.vertical,
-             CASE WHEN json_extract(o.integrations_json, '$.facebook.status') IN ('active', 'error') THEN json_extract(o.integrations_json, '$.facebook.page_id') END AS facebook_page_id,
-             CASE WHEN json_extract(o.integrations_json, '$.instagram.status') IN ('active', 'error') THEN json_extract(o.integrations_json, '$.instagram.username') END AS instagram_username,
+             (SELECT i.target_id FROM organization_integrations i WHERE i.organization_id = o.id AND i.provider = 'facebook') AS facebook_page_id,
+             (SELECT i.target_name FROM organization_integrations i WHERE i.organization_id = o.id AND i.provider = 'instagram') AS instagram_username,
              EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/privacy') AS privacy_policy,
              EXISTS (SELECT 1 FROM content_documents d WHERE d.organization_id = o.id AND d.kind = 'page' AND d.row_role = 'root' AND d.path = '/policies/terms') AS terms_policy`
 

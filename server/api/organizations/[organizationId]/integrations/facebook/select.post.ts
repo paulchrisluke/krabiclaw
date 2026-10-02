@@ -3,9 +3,8 @@ import { getRouterParam, readBody } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireIntegrationAccount } from '~/server/utils/auth'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
-import {
-  getFacebookPagesConnection, listLinkedFacebookPages, storeFacebookPagesConnection,
-} from '~/server/utils/facebook-pages'
+import { listLinkedFacebookPages } from '~/server/utils/facebook-pages'
+import { readIntegration, storeIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
@@ -27,7 +26,7 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Facebook requires the Growth plan.' }, { status: 403 })
   }
 
-  const current = await getFacebookPagesConnection(env, organization.id)
+  const current = await readIntegration(env.DB, organization.id, 'facebook')
   await requireIntegrationAccount(env, accountId, {
     userId: session.user.id, currentAccountId: current?.account_id, providerId: 'facebook', scopes: [],
   })
@@ -35,8 +34,8 @@ export default defineHandler(async (event) => {
   const page = (await listLinkedFacebookPages(env, accountId)).find(candidate => candidate.id === pageId)
   if (!page) return jsonResponse({ error: 'That Facebook account does not manage that Page.' }, { status: 400 })
 
-  await storeFacebookPagesConnection(env, {
-    organization_id: organization.id, account_id: accountId, page_id: page.id, page_name: page.name,
+  await storeIntegration(env.DB, organization.id, 'facebook', {
+    account_id: accountId, target_id: page.id, target_name: page.name,
   }, { revision: current?.revision ?? null })
 
   return jsonResponse({ success: true, page_id: page.id, page_name: page.name })

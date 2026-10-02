@@ -67,8 +67,8 @@ export function calendarEvent(subject: CalendarSubject, dashboardUrl: string) {
   }
 }
 export async function readCalendarIntegration(db: DbClient, organizationId: string): Promise<GoogleCalendarIntegration | null> {
-  const row = await queryFirst<{ value: string | null }>(db, "SELECT json_extract(integrations_json, '$.google_calendar') AS value FROM organization WHERE id = ?", [organizationId])
-  return row?.value ? JSON.parse(row.value) as GoogleCalendarIntegration : null
+  const row = await queryFirst<Omit<GoogleCalendarIntegration, 'include_reservations'> & { include_reservations: number }>(db, "SELECT account_id, target_id AS calendar_id, target_name AS calendar_name, calendar_group, include_reservations, status, last_error, revision, created_at, updated_at FROM organization_integrations WHERE organization_id=? AND provider='google_calendar'", [organizationId])
+  return row ? { ...row, include_reservations: Boolean(row.include_reservations) } : null
 }
 export async function calendarGroups(db: DbClient, organizationId: string) {
   return await queryAll<{ calendar_group: string }>(db, 'SELECT DISTINCT calendar_group FROM product_booking_configs WHERE organization_id = ? AND calendar_group IS NOT NULL ORDER BY calendar_group', [organizationId])
@@ -113,7 +113,7 @@ async function reconcileIntents(db: DbClient, organizationId: string, integratio
     const id = crypto.randomUUID()
     await execute(db, `INSERT INTO google_calendar_event_links
       (id, organization_id, integration_revision, account_id, calendar_id, event_id, booking_kind, operational_id, request_id, booking_revision, created_at, updated_at)
-      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM organization WHERE id = ? AND json_extract(integrations_json, '$.google_calendar.revision') = ? AND json_extract(integrations_json, '$.google_calendar.status') <> 'disabled'
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM organization_integrations WHERE organization_id = ? AND provider='google_calendar' AND revision = ? AND status <> 'disabled'
       ON CONFLICT(organization_id, integration_revision, booking_kind, operational_id) WHERE state <> 'deleted' DO UPDATE SET
       request_id = excluded.request_id, booking_revision = excluded.booking_revision,
       state = CASE WHEN google_calendar_event_links.booking_revision <> excluded.booking_revision THEN 'pending' ELSE google_calendar_event_links.state END,
@@ -231,19 +231,19 @@ export async function syncCalendarOrganization(env: CloudflareEnv, organizationI
       const message = error instanceof Error ? error.message : String(error)
       await executeBatch(db, [
         { query: "UPDATE google_calendar_event_links SET state=CASE WHEN state='cleanup' THEN state ELSE 'error' END, last_error=?, attempts=attempts+1, next_attempt_at=?, lease_token=NULL, lease_until=NULL WHERE id=? AND lease_token=?", params: [message, new Date(Date.now() + Math.min(3600_000, 30_000 * 2 ** Math.min(link.attempts, 7))).toISOString(), link.id, lease] },
-        { query: "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar.status', CASE WHEN json_extract(integrations_json, '$.google_calendar.status')='disabled' THEN 'disabled' ELSE 'error' END, '$.google_calendar.last_error', ?) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision')=?", params: [message, organizationId, integration.revision] },
+        { query: "UPDATE organization_integrations SET status=CASE WHEN status='disabled' THEN 'disabled' ELSE 'error' END, last_error=? WHERE organization_id=? AND provider='google_calendar' AND revision=?", params: [message, organizationId, integration.revision] },
       ])
     }
   }
   const remaining = await queryFirst<{ n: number }>(db, "SELECT count(*) n FROM google_calendar_event_links WHERE organization_id=? AND state IN ('pending','cleanup','error')", [organizationId])
   if (!remaining?.n && integration.status === 'disabled') {
-    await execute(db, "UPDATE organization SET integrations_json=json_remove(integrations_json, '$.google_calendar') WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision')=? AND json_extract(integrations_json, '$.google_calendar.status')='disabled'", [organizationId, integration.revision])
-  } else if (!remaining?.n) await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar.status', CASE WHEN json_extract(integrations_json, '$.google_calendar.status')='disabled' THEN 'disabled' ELSE 'active' END, '$.google_calendar.last_error', NULL) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision')=?", [organizationId, integration.revision])
+    await execute(db, "DELETE FROM organization_integrations WHERE organization_id=? AND provider='google_calendar' AND revision=? AND status='disabled'", [organizationId, integration.revision])
+  } else if (!remaining?.n) await execute(db, "UPDATE organization_integrations SET status=CASE WHEN status='disabled' THEN 'disabled' ELSE 'active' END, last_error=NULL WHERE organization_id=? AND provider='google_calendar' AND revision=?", [organizationId, integration.revision])
   return { checked, failed, remaining: remaining?.n ?? 0 }
 }
 /** Disable first, then clean managed identities. A failed cleanup stays visible. */
 export async function disconnectCalendar(db: DbClient, organizationId: string) {
-  await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar.status', 'disabled', '$.google_calendar.updated_at', ?) WHERE id=? AND json_extract(integrations_json, '$.google_calendar') IS NOT NULL", [new Date().toISOString(), organizationId])
+  await execute(db, "UPDATE organization_integrations SET status='disabled', updated_at=? WHERE organization_id=? AND provider='google_calendar'", [new Date().toISOString(), organizationId])
   await execute(db, "UPDATE google_calendar_event_links SET state='cleanup', next_attempt_at=NULL WHERE organization_id=? AND state <> 'deleted'", [organizationId])
 }
 export async function storeCalendarSelection(db: DbClient, organizationId: string, selection: Pick<GoogleCalendarIntegration, 'account_id' | 'calendar_id' | 'calendar_name' | 'calendar_group' | 'include_reservations'>) {
@@ -252,7 +252,17 @@ export async function storeCalendarSelection(db: DbClient, organizationId: strin
   if (existing && pending?.n) throw new Error('Disconnect and finish cleanup of the previous calendar before changing the selection.')
   const now = new Date().toISOString()
   const payload: GoogleCalendarIntegration = { ...selection, revision: crypto.randomUUID(), status: 'active', last_error: null, created_at: now, updated_at: now }
-  const result = await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar', json(?)) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision') IS ? AND NOT EXISTS (SELECT 1 FROM google_calendar_event_links WHERE organization_id=organization.id AND state <> 'deleted') AND NOT EXISTS(SELECT 1 FROM member_scheduling ms,json_each(ms.calendar_ids_json) calendar WHERE ms.organization_id=organization.id AND ms.calendar_account_id IS NOT NULL AND calendar.value=?)", [JSON.stringify(payload), organizationId, existing?.revision ?? null,selection.calendar_id])
+  const result = await execute(db, `INSERT INTO organization_integrations
+    (id,organization_id,provider,account_id,target_id,target_name,calendar_group,include_reservations,status,last_error,revision,created_at,updated_at)
+    SELECT ?,?,'google_calendar',?,?,?,?,?,'active',NULL,?,?,? FROM organization o WHERE o.id=?
+    AND ((? IS NULL AND NOT EXISTS(SELECT 1 FROM organization_integrations i WHERE i.organization_id=o.id AND i.provider='google_calendar'))
+      OR EXISTS(SELECT 1 FROM organization_integrations i WHERE i.organization_id=o.id AND i.provider='google_calendar' AND i.revision=?))
+    AND NOT EXISTS(SELECT 1 FROM google_calendar_event_links WHERE organization_id=o.id AND state<>'deleted')
+    AND NOT EXISTS(SELECT 1 FROM member_scheduling ms,json_each(ms.calendar_ids_json) calendar WHERE ms.organization_id=o.id AND ms.calendar_account_id IS NOT NULL AND calendar.value=?)
+    ON CONFLICT(organization_id,provider) DO UPDATE SET account_id=excluded.account_id,target_id=excluded.target_id,target_name=excluded.target_name,
+    calendar_group=excluded.calendar_group,include_reservations=excluded.include_reservations,status=excluded.status,last_error=NULL,
+    revision=excluded.revision,created_at=excluded.created_at,updated_at=excluded.updated_at`,
+  [crypto.randomUUID(),organizationId,payload.account_id,payload.calendar_id,payload.calendar_name,payload.calendar_group,Number(payload.include_reservations),payload.revision,now,now,organizationId,existing?.revision??null,existing?.revision??null,payload.calendar_id])
   if (result.meta?.changes !== 1) throw new Error('Calendar selection changed. Reload and try again.')
 }
 
@@ -269,7 +279,7 @@ export async function stageCalendarOrganizationCleanup(db: DbClient, organizatio
         CASE WHEN lease_until > ? THEN strftime('%Y-%m-%dT%H:%M:%fZ', lease_until, '+30 seconds') ELSE ? END, ?, ?
       FROM google_calendar_event_links WHERE organization_id=? AND state <> 'deleted'
       ON CONFLICT(calendar_id, event_id) DO NOTHING`, params: [now, now, now, now, organizationId] },
-    { query: "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar.status', 'disabled', '$.google_calendar.updated_at', ?) WHERE id=? AND json_extract(integrations_json, '$.google_calendar') IS NOT NULL", params: [now, organizationId] },
+    { query: "UPDATE organization_integrations SET status='disabled', updated_at=? WHERE organization_id=? AND provider='google_calendar'", params: [now, organizationId] },
     { query: "UPDATE google_calendar_event_links SET state='cleanup', next_attempt_at=NULL WHERE organization_id=? AND state <> 'deleted'", params: [organizationId] },
   ], { operation: 'retain Google Calendar organization cleanup identities' })
 }

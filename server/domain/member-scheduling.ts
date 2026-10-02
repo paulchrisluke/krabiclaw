@@ -103,7 +103,7 @@ export async function selectBusyCalendars(actor: SchedulingActor, memberId: stri
  if(!Array.isArray(input.calendar_ids)||input.calendar_ids.length>10||input.calendar_ids.some(id=>typeof id!=='string'||!id||id.length>1024)||Boolean(input.account_id)!==Boolean(input.calendar_ids.length)) throw new HTTPError({statusCode:400,message:'Choose an account and 1–10 calendars, or disconnect both'})
  if(input.account_id) await requireIntegrationAccount(actor.env,input.account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
  const now=new Date().toISOString()
- const results=await executeBatch(actor.env.DB,[{query:`UPDATE member_scheduling SET calendar_account_id=?,calendar_ids_json=?,calendar_revision=?,busy_json='[]',busy_from=NULL,busy_until=NULL,busy_checked_at=NULL,busy_error=NULL,updated_at=?,updated_by=? WHERE member_id=? AND organization_id=? AND NOT EXISTS(SELECT 1 FROM organization WHERE id=? AND json_extract(integrations_json,'$.google_calendar.status')<>'disabled' AND json_extract(integrations_json,'$.google_calendar.calendar_id') IN (SELECT value FROM json_each(?)))`,params:[input.account_id,JSON.stringify(input.calendar_ids),crypto.randomUUID(),now,actor.userId,memberId,actor.organizationId,actor.organizationId,JSON.stringify(input.calendar_ids)]}])
+ const results=await executeBatch(actor.env.DB,[{query:`UPDATE member_scheduling SET calendar_account_id=?,calendar_ids_json=?,calendar_revision=?,busy_json='[]',busy_from=NULL,busy_until=NULL,busy_checked_at=NULL,busy_error=NULL,updated_at=?,updated_by=? WHERE member_id=? AND organization_id=? AND NOT EXISTS(SELECT 1 FROM organization_integrations WHERE organization_id=? AND provider='google_calendar' AND status<>'disabled' AND target_id IN (SELECT value FROM json_each(?)))`,params:[input.account_id,JSON.stringify(input.calendar_ids),crypto.randomUUID(),now,actor.userId,memberId,actor.organizationId,actor.organizationId,JSON.stringify(input.calendar_ids)]}])
  if(!results[0]?.meta.changes) throw new HTTPError({statusCode:409,message:'Save member hours first and keep busy-input calendars separate from booking output'})
  return readMemberScheduling(actor.env.DB,actor.organizationId,memberId)
 }
@@ -115,7 +115,7 @@ export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, member
   const member=await queryFirst<{userId:string}>(db,'SELECT userId FROM member WHERE id=? AND organizationId=?',[memberId,row.organization_id])
   if(!member) throw new Error('Member is no longer connected')
   await requireIntegrationAccount(env,row.calendar_account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
-  const output=await queryFirst<{calendar:string|null}>(db,"SELECT json_extract(integrations_json,'$.google_calendar.calendar_id') calendar FROM organization WHERE id=? AND json_extract(integrations_json,'$.google_calendar.status')<>'disabled'",[row.organization_id])
+  const output=await queryFirst<{calendar:string|null}>(db,"SELECT target_id calendar FROM organization_integrations WHERE organization_id=? AND provider='google_calendar' AND status<>'disabled'",[row.organization_id])
   const ids=JSON.parse(row.calendar_ids_json) as string[]
   if(output?.calendar && ids.includes(output.calendar)) throw new Error('Busy input overlaps booking output calendar; change the selection')
   const token=await linkedAccountAccessToken(env,row.calendar_account_id)

@@ -3,7 +3,8 @@ import { getRouterParam, readBody } from 'nitro/h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
-import { getInstagramAccount, readInstagramConnection, storeInstagramConnection } from '~/server/utils/instagram'
+import { getInstagramAccount } from '~/server/utils/instagram'
+import { readIntegration, storeIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
@@ -24,14 +25,14 @@ export default defineHandler(async (event) => {
     return jsonResponse({ error: 'Instagram requires the Growth plan.' }, { status: 403 })
   }
 
-  const current = await readInstagramConnection(env, organization.id)
+  const current = await readIntegration(env.DB, organization.id, 'instagram')
   await requireIntegrationAccount(env, accountId, {
     userId: session.user.id, currentAccountId: current?.account_id, providerId: 'instagram', scopes: [],
   })
 
   const account = await getInstagramAccount((await linkedAccountAccessToken(env, accountId)).accessToken)
-  await storeInstagramConnection(env, {
-    organization_id: organization.id, account_id: accountId, instagram_user_id: account.id, username: account.username,
+  await storeIntegration(env.DB, organization.id, 'instagram', {
+    account_id: accountId, target_id: account.id, target_name: account.username,
   }, { revision: current?.revision ?? null })
 
   return jsonResponse({ success: true, username: account.username })

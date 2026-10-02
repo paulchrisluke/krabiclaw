@@ -6,7 +6,7 @@ import { isCurrencyCode } from '~/shared/currencies'
 import { isOrganizationFontPreset, resolveOrganizationFontPreset } from '~/shared/organization-fonts'
 import { purgeOrganizationCaches, purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 import type { UpdateOrganizationSettingsRequest } from '~/server/types/organization'
-import type { OrganizationIntegrations } from '~/shared/organization-settings'
+import { integrationSummary, listIntegrations } from '~/server/utils/organization-integrations'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, toggleableModulesForScope, type CmsCapabilityOverrideDelta, type ProductFeature } from '~/config/cms-registry'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
@@ -87,7 +87,7 @@ export async function loadSettingsPayload(
   db: DbClient,
   organizationId: string,
 ) {
-  const updatedOrganization = await queryFirst<FullOrganizationRow & { vertical: string; theme_id: string; integrations_json: string; locations_json: string }>(db, `
+  const updatedOrganization = await queryFirst<FullOrganizationRow & { vertical: string; theme_id: string; locations_json: string }>(db, `
     SELECT organization.id, subdomain, organization.status,
            (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url, COALESCE((SELECT status FROM organization_domains WHERE organization_id = organization.id AND type = 'custom' AND status NOT IN ('deleted', 'disabled') ORDER BY role = 'canonical' DESC, created_at, id LIMIT 1), 'none') AS custom_domain_status, default_currency,
            name, brand_description,
@@ -103,7 +103,7 @@ export async function loadSettingsPayload(
            contact_email,
            seo_title, seo_description, canonical_url,
            feature_overrides, strftime('%Y-%m-%dT%H:%M:%fZ', organization."createdAt", 'unixepoch') AS created_at, organization.updated_at,
-           vertical, theme_id, integrations_json,
+           vertical, theme_id,
            (SELECT json_group_array(json_object('id', id, 'slug', slug, 'title', title, 'address', address,
                      'phone', phone, 'website_url', website_url, 'image', image,
                      'google_place_id', google_place_id, 'rating', rating, 'review_count', review_count,
@@ -203,7 +203,7 @@ export async function loadSettingsPayload(
     catering_email: siteConfig.catering_email || '',
     careers_email: siteConfig.careers_email || '',
     google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
-    integrations: integrationsSummary(JSON.parse(updatedOrganization.integrations_json) as OrganizationIntegrations, JSON.parse(updatedOrganization.locations_json) as IntegrationLocation[]),
+    integrations: integrationsSummary(await listIntegrations(db, organizationId), JSON.parse(updatedOrganization.locations_json) as IntegrationLocation[]),
     created_at: updatedOrganization.created_at,
     updated_at: updatedOrganization.updated_at,
   }
@@ -226,28 +226,18 @@ interface IntegrationLocation {
 
 /**
  * What each integration is connected to, for the Integrations list and its
- * leaves — names and statuses, never a token. Google Maps is per location, so
+ * leaves — names and ids, never a token. Google Maps is per location, so
  * its answer is the locations and which of them name a place.
  */
-function integrationsSummary(integrations: OrganizationIntegrations, locations: IntegrationLocation[]) {
-  // Choosing a property, Page or account writes a new record, so its
-  // `created_at` is when this connection was made.
-  const { google_calendar: calendar, google_analytics: analytics, google_search_console: searchConsole, facebook, instagram } = integrations
+function integrationsSummary(integrations: Awaited<ReturnType<typeof listIntegrations>>, locations: IntegrationLocation[]) {
+  const connected = (provider: typeof integrations[number]['provider']) => integrationSummary(integrations.find(integration => integration.provider === provider) ?? null)
   return {
     google_maps: locations.map(location => ({ ...location, address: formatPostalAddress(parsePostalAddress(location.address)) || null })),
-    google_analytics: analytics
-      ? { account_id: analytics.account_id ?? null, property_name: analytics.property_name ?? null, measurement_id: analytics.measurement_id, status: analytics.status, connected_at: analytics.created_at }
-      : null,
-    google_calendar: calendar ? { ...calendar, connected_at: calendar.created_at } : null,
-    google_search_console: searchConsole
-      ? { account_id: searchConsole.account_id, site_url: searchConsole.site_url, status: searchConsole.status, connected_at: searchConsole.created_at }
-      : null,
-    facebook: facebook
-      ? { account_id: facebook.account_id, page_name: facebook.page_name, status: facebook.status, connected_at: facebook.created_at }
-      : null,
-    instagram: instagram
-      ? { account_id: instagram.account_id, username: instagram.username, status: instagram.status, connected_at: instagram.created_at }
-      : null,
+    google_calendar: (() => { const row = integrations.find(row => row.provider === 'google_calendar'); return row ? { account_id: row.account_id, calendar_name: row.target_name, status: row.status, connected_at: row.created_at } : null })(),
+    google_analytics: connected('google_analytics'),
+    google_search_console: connected('google_search_console'),
+    facebook: connected('facebook'),
+    instagram: connected('instagram'),
   }
 }
 

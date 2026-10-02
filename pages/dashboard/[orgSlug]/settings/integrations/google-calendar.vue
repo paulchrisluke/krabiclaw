@@ -19,7 +19,7 @@
       v-model:changing="changing"
       logo="i-lucide-calendar"
       noun="calendar"
-      :connection="calendar && { name: calendar.calendar_name, connectedAt: calendar.connected_at, status: calendar.status }"
+      :connection="calendar && { name: calendar.calendar_name, connectedAt: calendar.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"

@@ -16,7 +16,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     const db = await mf.getD1Database('DB')
     const statements = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
     await db.batch(statements.map(statement => db.prepare(statement)))
-    await db.prepare("INSERT INTO organization(id,name,slug,integrations_json) VALUES('org','Org','org','{\"google_analytics\":{\"revision\":\"a\",\"measurement_id\":\"G-123\",\"status\":\"active\"}}'),('other','Other','other','{}')").run()
+    await db.prepare("INSERT INTO organization(id,name,slug) VALUES('org','Org','org'),('other','Other','other')").run()
     await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by) VALUES('p','org','Consultation','consultation','actor','actor'),('class','org','Class','class','actor','actor')").run()
     await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by) VALUES('v','org','p','Consultation','actor','actor')").run()
     await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,calendar_group,online_timezone,confirmation_mode,created_by,updated_by) VALUES('p','org','consultations','America/New_York','review','actor','actor'),('class','org',NULL,'America/New_York','instant','actor','actor')").run()
@@ -26,6 +26,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
     const integration = (await readCalendarIntegration(db, 'org'))!
     assert.equal((await calendarSubjects(db, 'other', integration)).length, 0)
+    await db.prepare("INSERT INTO organization_integrations(id,organization_id,provider,account_id,target_id,target_name,measurement_id,revision)VALUES('analytics','org','google_analytics','linked-account','property','Analytics','G-123','a')").run()
     const env = { DB: db, BETTER_AUTH_URL: 'https://proof.example', BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests', NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.test' } as CloudflareEnv
     await db.prepare("INSERT INTO user(id,name,email) VALUES('owner','Owner','owner@example.test'),('foreign','Foreign','foreign@example.test')").run()
     await db.prepare("INSERT INTO account(id,accountId,providerId,userId,scope) VALUES('linked-account','google-subject','google','owner',?)").bind(INTEGRATION_SCOPES['google-calendar'].join(' ')).run()
@@ -86,7 +87,7 @@ test('committed consultation projection is tenant scoped, private, idempotent an
     const second = await claimSessionCapacity(db, { organizationId: 'org', productId: 'p', sessionId: 's', productVariantId: 'v', partySize: 1 })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(await readCalendarIntegration(db, 'org'), null)
-    assert.equal((await db.prepare('SELECT integrations_json FROM organization WHERE id=\'org\'').first())?.integrations_json, '{"google_analytics":{"revision":"a","measurement_id":"G-123","status":"active"}}')
+    assert.equal((await db.prepare("SELECT measurement_id FROM organization_integrations WHERE organization_id='org' AND provider='google_analytics'").first())?.measurement_id, 'G-123')
     await storeCalendarSelection(db, 'org', { account_id: 'linked-account', calendar_id: 'chosen', calendar_name: 'Calendar', calendar_group: 'consultations', include_reservations: false })
     await syncCalendarOrganization(env, 'org', 25, provider)
     assert.equal(events.size, 1)

@@ -5,57 +5,15 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1790779755992,
+      "when": 1790909523539,
       "tag": "0000_baseline",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1790813829023,
-      "tag": "0001_drop_typed_social_profiles",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1790828089754,
-      "tag": "0002_products_overview",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1790859705994,
-      "tag": "0003_minimal_weekly_schedule",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1790862282934,
-      "tag": "0004_native_consultation_foundation",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1790901300755,
-      "tag": "0005_google_calendar_projection",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1790902172209,
-      "tag": "0006_payments",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1790910948658,
-      "tag": "0007_provider_support",
+      "when": 1790920743921,
+      "tag": "0001_provider_support_v8",
       "breakpoints": true
     }
   ]

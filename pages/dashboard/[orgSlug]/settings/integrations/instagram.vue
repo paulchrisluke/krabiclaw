@@ -16,7 +16,7 @@
       v-model:changing="changing"
       logo="i-skill-icons-instagram"
       noun="account"
-      :connection="instagram && { name: `@${instagram.username}`, image: linkedImage, connectedAt: instagram.connected_at, status: instagram.status }"
+      :connection="instagram && { name: `@${instagram.target_name}`, image: linkedImage, connectedAt: instagram.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"

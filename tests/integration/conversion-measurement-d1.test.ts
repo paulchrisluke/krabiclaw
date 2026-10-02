@@ -196,9 +196,10 @@ test('consent is enforced for GA delivery and withdrawal erases stored identifie
   const realFetch = globalThis.fetch
   const sent: string[] = []
   try {
-    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, "stripeCustomerId", integrations_json) VALUES
-      ('org-platform', 'p', 'p', 'p', '{"config":{"default_timezone":"Asia/Bangkok"}}', NULL, '{"google_analytics":{"revision":"r1","status":"active","measurement_id":"G-TEST"}}'),
-      ('org-customer', 'c', 'c', 'c', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'cus_1', '{}')`).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, "stripeCustomerId") VALUES
+      ('org-platform', 'p', 'p', 'p', '{"config":{"default_timezone":"Asia/Bangkok"}}', NULL),
+      ('org-customer', 'c', 'c', 'c', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'cus_1')`).run()
+    await db.prepare(`INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, measurement_id, revision) VALUES ('ga-platform', 'org-platform', 'google_analytics', 'google-account', '1', 'Platform', 'G-TEST', 'r1')`).run()
     await db.prepare(`INSERT INTO organization_domains (id, organization_id, domain, type, role, status) VALUES ('d1', 'org-platform', 'platform.example', 'subdomain', 'canonical', 'active')`).run()
     for (const id of ['user-a', 'user-b']) await db.prepare(`INSERT INTO user (id, name, email) VALUES (?, ?, ?)`).bind(id, id, `${id}@example.com`).run()
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('m1', 'org-customer', 'user-a', 'owner')`).run()
@@ -292,9 +293,10 @@ test('the Stripe handler records every paid subscription invoice and refund once
   const sent: string[] = []
   try {
     const timezone = '{"config":{"default_timezone":"Asia/Bangkok"}}'
-    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, status, onboarding_status, integrations_json) VALUES
-      ('org-platform', 'p', 'p', 'p', ?, ?, 'active', 'active', '{"google_analytics":{"revision":"r1","status":"active","measurement_id":"G-TEST"}}')`).bind(timezone, PLATFORM_TEMPLATE.themeId).run()
-    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json) VALUES ('org-customer', 'c', 'c', 'c', ?, '{}')`).bind(timezone).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, status, onboarding_status) VALUES
+      ('org-platform', 'p', 'p', 'p', ?, ?, 'active', 'active')`).bind(timezone, PLATFORM_TEMPLATE.themeId).run()
+    await db.prepare(`INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, measurement_id, revision) VALUES ('ga-platform', 'org-platform', 'google_analytics', 'google-account', '1', 'Platform', 'G-TEST', 'r1')`).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json) VALUES ('org-customer', 'c', 'c', 'c', ?)`).bind(timezone).run()
     await db.prepare(`INSERT INTO organization_domains (id, organization_id, domain, type, role, status) VALUES ('d1', 'org-platform', 'platform.example', 'subdomain', 'canonical', 'active')`).run()
     await db.prepare(`INSERT INTO user (id, name, email) VALUES ('founder', 'f', 'f@example.com')`).run()
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role) VALUES ('m1', 'org-customer', 'founder', 'owner')`).run()
@@ -369,9 +371,9 @@ test('Stripe payments keep exact line totals, checkout attribution after expiry,
   const realFetch = globalThis.fetch
   try {
     const timezone = '{"config":{"default_timezone":"Asia/Bangkok"}}'
-    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, status, onboarding_status, integrations_json) VALUES
-      ('org-platform', 'p', 'p', 'p', ?, ?, 'active', 'active', '{}')`).bind(timezone, PLATFORM_TEMPLATE.themeId).run()
-    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json) VALUES ('org-customer', 'c', 'c', 'c', ?, '{}')`).bind(timezone).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, status, onboarding_status) VALUES
+      ('org-platform', 'p', 'p', 'p', ?, ?, 'active', 'active')`).bind(timezone, PLATFORM_TEMPLATE.themeId).run()
+    await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json) VALUES ('org-customer', 'c', 'c', 'c', ?)`).bind(timezone).run()
     for (const id of ['user-a', 'user-b']) await db.prepare(`INSERT INTO user (id, name, email) VALUES (?, ?, ?)`).bind(id, id, `${id}@example.com`).run()
     await db.prepare(`INSERT INTO member (id, "organizationId", "userId", role, "createdAt") VALUES ('m-a', 'org-customer', 'user-a', 'owner', 1000)`).run()
     // The checkout intent is long expired by the time the first payment arrives (a trial), but still names its subscription.

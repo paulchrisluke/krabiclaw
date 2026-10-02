@@ -164,8 +164,8 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "8e3e558679e9c87ec776ed72bdd6f05e9323a17d5a2c8de065c745ebbcc5c289",
-          "tests/integration/availability-d1.test.ts": "5c81968c5828be5a97967d2a0606c3faede2258d01e3cf54438583fd61c4e49f",
-          "server/utils/mcp-tools/locations.ts": "32266354412b4dee65673a4652a6363ab4df0094877d54c607a44b76743fd731"
+          "tests/integration/availability-d1.test.ts": "7ce40322e32f44058cacf4f4dc5a9cebe81c33b4026ce63717fd245d2e7bea60",
+          "server/utils/mcp-tools/locations.ts": "4e751e2ff8d49feb9e0f92b7a90d5c125ec8a3463374322eee14e760ad587072"
         }
       },
       "pendingOwnerDecision": null,
@@ -221,7 +221,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/products.ts": "aef33364e6cf27b0854b9543254a3187ede88b7506e5ff5078d25cf7efec371e",
           "server/utils/product-management.ts": "af6e15c9ff0408ad5c5c07cfd2255ad16704a1dea75e5ac7ef07b7b21bc80861",
-          "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
+          "tests/integration/product-price-d1.test.ts": "9545a45147ef52f63dd398ba5ee875e8ae3e3bd6b418fdf919d7c6a47ca6ab8e",
           "server/utils/mcp-tools/products.ts": "5ad46287b3b647aecf95a0a85a82bc6177ab615da0f2b5f9fa13cf6975b9f729"
         }
       },
@@ -270,12 +270,12 @@
         "evidenceSha256": {
           "server/domain/requests.ts": "45c08096df33f630128f242687797724dd7f98ee06c395bc1c3b1c024b086d86",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
-          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
+          "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c",
           "server/domain/product-bookings.ts": "1a379d525a82de8f8754ef9a0fd5b257c942ec9a0c132aba67643223c939f462",
           "server/utils/mcp-tools/bookings.ts": "06a0c0afc3269fe5a71c01bc58b9992e268176fd0c1e11f5ca7f7134a86f03ed",
           "server/utils/mcp-executor/bookings.ts": "77a61237d98dbc911eca77962209ea30691e7ee70a31910def7e79764d51b95b",
           "tests/e2e/mcp-bookings.spec.ts": "0e626711ada01c3daa8b47950786657f829e627099e99beaf7ca2d5fe6131e03",
-          "tests/integration/availability-d1.test.ts": "5c81968c5828be5a97967d2a0606c3faede2258d01e3cf54438583fd61c4e49f",
+          "tests/integration/availability-d1.test.ts": "7ce40322e32f44058cacf4f4dc5a9cebe81c33b4026ce63717fd245d2e7bea60",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
@@ -506,7 +506,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
           "server/utils/mcp-tools/submissions.ts": "2d09f5c4557c26438067dea55ebe0618f8d448fb04b80861d5781660e004de56",
-          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
+          "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c"
         }
       },
       "pendingOwnerDecision": null,
@@ -579,8 +579,8 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/posts.ts": "ced3916d5ed4f9eeb2d67fb9942e25b4c49b9316ee8b7e1ee712de6a88653d75",
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -619,9 +619,9 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/social-channel-posts.ts": "9eb239fbe37b5154f28d92ef91c9e1da1c01550d2ad83c8cd1d50a3343676f8d",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b",
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -780,7 +780,7 @@
           "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
-          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
+          "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c"
         }
       },
       "pendingOwnerDecision": null,
@@ -816,8 +816,8 @@
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
           "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
-          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
-          "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
+          "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c",
+          "tests/integration/whatsapp-entitlement-d1.test.ts": "9b81ba5a5c87510f37a6b8308956457c960c8b14732d3c5aa75c2984952d453b"
         }
       },
       "pendingOwnerDecision": null,
@@ -878,7 +878,7 @@
           "server/utils/review-requests.ts": "62c1d1119e0932684c413b74abd7dbe14440f8cd45573b139d0cc77960cf3e23",
           "server/utils/review-request-delivery.ts": "932422b5ff5576042d09c722808cbd8ba1228e79416a11786e7337edff2bce63",
           "server/tasks/review-request-automation.ts": "c317371d25d12653f986590c7164360d0b27c73e3fb904f1b352517af32513f9",
-          "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
+          "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c"
         }
       },
       "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question.",
@@ -1001,9 +1001,9 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b"
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e"
         }
       },
       "pendingOwnerDecision": null,
@@ -1092,7 +1092,7 @@
           "server/domain/payments/checkout.ts": "658011f1a7f99bb978abf00767bf66cb50c2b0192f6e6d25ec54935305467f87",
           "server/domain/payments/usage.ts": "b7c955a030b4649ebb59d4791edca166de5fa01f9db98b31dd325f06b3f2e67c",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "bbc07da0159510ae3d1fd6b32b8495c7feee3486dc580f0f5f7240734f46ef1c",
+          "tests/integration/payments-d1.test.ts": "f65ece4ff5728258e6889bc935a71646e96068b5ca349458135d6a7dc4ce9286",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "94f7facc427932ac3b1b8a42b4693b0d71d8fc8cb4b2a9d258749c5523b89f5b",
           "server/tasks/payments-reconcile.ts": "f972ee08c565e0138d694934a930df20eb5b3b159cde95d6de769b369ab8f399",
@@ -1136,10 +1136,10 @@
         ],
         "coverageNote": "Real D1 proves self/admin boundaries, disconnected member isolation, DST hours, group reassignment IDs and audit replay. Production Worker browser proof passes real Better Auth membership, CMS/MCP parity, public approval and org fallback, cross-service conflicts, stable group IDs and private member self-service. No live OAuth or v8 compatibility claim.",
         "evidenceSha256": {
-          "server/domain/member-scheduling.ts": "df4c642650e93f538b69fffffceb4ca131e91d981b8382ecfeee5f3bbb78bf12",
+          "server/domain/member-scheduling.ts": "cf47698c56dee676f1082b805461512a4bb5e764740976db9319ee838d50137b",
           "server/domain/provider-reassignment.ts": "e4d2f20e473a6a6956044bd1013e7016ea59dd9cb94f3e2229ed3490a84425a3",
           "server/utils/provider-allocation.ts": "23381472135a9949a292a0466bfefbbd4fa6f9da59b818e622dcc38e942fe3e8",
-          "tests/integration/member-scheduling-d1.test.ts": "e68dece8f84c7c989349f1cbe88ab836330ea57c78c23b35f606b6c1461182bc",
+          "tests/integration/member-scheduling-d1.test.ts": "21cd055809ccf50bb47a83e9b399c1f978f0c2c126671b947e4f6ddf2a42ebbb",
           "server/utils/public-provider.ts": "a5a3f46c76cf5feda786eb5565e0dfb284fec01e33d656356d806a577473d32d",
           "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
           "tests/e2e/provider-local-proof.spec.ts": "ea6c8deaf7409b8b9a93c2a15d012a2adbdeb7a0b0bc7a037eb1ec39a5bc41da"

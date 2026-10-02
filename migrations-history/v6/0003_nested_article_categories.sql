@@ -1,2 +1,0 @@
-ALTER TABLE `article_categories` ADD `parent_id` text REFERENCES article_categories(id);--> statement-breakpoint
-CREATE INDEX `article_categories_parent_idx` ON `article_categories` (`parent_id`,`sort_order`);

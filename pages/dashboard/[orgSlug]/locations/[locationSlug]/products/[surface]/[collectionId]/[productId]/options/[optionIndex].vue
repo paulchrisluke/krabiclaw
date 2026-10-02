@@ -11,7 +11,7 @@
     @cancel="p.revert"
     @save="p.save(level.to.value ?? undefined)"
   >
-    <div v-if="option" class="space-y-6">
+    <div v-if="option && !removing" class="space-y-6">
       <UFormField label="Option name">
         <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" autofocus class="w-full" />
       </UFormField>
@@ -57,14 +57,24 @@ const removeError = ref('')
 async function remove() {
   removeError.value = ''
   removing.value = true
+  const options = [...p.form.options]
+  const variants = [...p.form.variants]
   p.removeOption(index.value)
   if (!p.isNew.value) {
     if (p.saveDisabled.value) {
       removeError.value = 'Every option needs a name and at least one value before this can be saved.'
+      p.form.options = options
+      p.form.variants = variants
+      removing.value = false
       return
     }
     // A refused save stays here with its reason; Cancel puts the option back.
     await p.save(level.to.value ?? undefined)
+    if (p.saveError.value) {
+      p.form.options = options
+      p.form.variants = variants
+      removing.value = false
+    }
     return
   }
   await navigateTo(level.to.value ?? '/dashboard')

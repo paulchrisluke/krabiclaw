@@ -35,7 +35,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_location',
-      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. To change its hero media, call set_media with { owner_type: "business_location", owner_id: <location.id>, slot: "hero" }. Only provided fields are changed.',
+      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, and contact info. To change its hero media, call set_media with { owner_type: "business_location", owner_id: <location.id>, slot: "hero" }. Only provided fields are changed.',
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,

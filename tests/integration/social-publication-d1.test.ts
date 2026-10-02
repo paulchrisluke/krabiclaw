@@ -13,6 +13,7 @@ import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFing
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { listChannelPosts, getChannelPost, deleteChannelPost } from '../../server/utils/social-channel-posts.ts'
 import { remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
+import { deleteIntegration, listIntegrations, readIntegration, storeIntegration } from '../../server/utils/organization-integrations.ts'
 import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
@@ -28,6 +29,8 @@ import deletionStatus from '../../server/api/integrations/meta/data-deletion.get
 
 const PAGE = '1205835975938850'
 const IG = '17841401765050246'
+const OTHER_PAGE = '1205835975938851'
+const OTHER_IG = '17841401765050247'
 
 type Fault = { match: (request: SeenRequest) => boolean; kind: 'timeout' | 'reject' | 'missing'; times: number }
 interface SeenRequest { method: string; host: string; path: string; query: URLSearchParams; body: Record<string, string> }
@@ -155,7 +158,6 @@ async function setUp() {
     BETTER_AUTH_SECRET: 'local-proof-secret-long-enough-for-auth', BETTER_AUTH_URL: 'https://proof.example', STRIPE_SECRET_KEY: 'sk_test_local_d1_no_stripe_requests',
     NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://proof.example', PREVIEW_SECRET: 'preview-proof-secret',
     FACEBOOK_APP_ID: 'fb-app', FACEBOOK_APP_SECRET: 'facebook-secret', INSTAGRAM_APP_ID: 'ig-app', INSTAGRAM_APP_SECRET: 'instagram-secret',
-    CONNECTOR_TOKEN_ENCRYPTION_KEY: 'local-proof-meta-deletion-confirmation-key',
     CF_ACCOUNT_ID: 'cf-proof', CLOUDFLARE_IMAGES_API_TOKEN: 'cf-images-proof', CLOUDFLARE_IMAGES_VARIANT_BASE: 'https://imagedelivery.example.test/hash',
     MEDIA_BASE_URL: 'https://media.example.test',
   } as unknown as CloudflareEnv
@@ -170,11 +172,11 @@ async function setUp() {
   await run("INSERT INTO user (id, name, email) VALUES ('owner', 'Owner', 'owner@proof.example')")
   await run("INSERT INTO account (id, accountId, providerId, userId, accessToken) VALUES ('fb-account', 'fb-subject', 'facebook', 'owner', 'user-token')")
   await run(`INSERT INTO account (id, accountId, providerId, userId, accessToken, accessTokenExpiresAt) VALUES ('ig-account', 'ig-subject', 'instagram', 'owner', 'ig-token', ${later})`)
+  // One person's linked accounts, two businesses: each organization has its own Page and professional account.
   for (const organization of ['org-a', 'org-b']) {
-    await run(`UPDATE organization SET integrations_json = '${JSON.stringify({
-      facebook: { revision: `fb-rev-${organization}`, account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
-      instagram: { revision: `ig-rev-${organization}`, account_id: 'ig-account', instagram_user_id: IG, username: 'krabiclaw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
-    })}' WHERE id = '${organization}'`)
+    const own = organization === 'org-a'
+    await run(`INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, revision, created_at, updated_at) VALUES ('fb-${organization}', '${organization}', 'facebook', 'fb-account', '${own ? PAGE : OTHER_PAGE}', 'Krabi Claw', 'fb-rev-${organization}', '2026-09-28T00:00:00.000Z', '2026-09-28T00:00:00.000Z'),
+      ('ig-${organization}', '${organization}', 'instagram', 'ig-account', '${own ? IG : OTHER_IG}', 'krabiclaw', 'ig-rev-${organization}', '2026-09-28T00:00:00.000Z', '2026-09-28T00:00:00.000Z')`)
   }
   const meta = new FakeMeta()
   const realFetch = globalThis.fetch
@@ -267,12 +269,12 @@ test('publication: one result, one external post per target, and no blind resend
     assert.equal(elsewhere.outcomes[0]!.code, 'target_conflict')
 
     // A disconnected channel is skipped; the independent website target still publishes; ok is false.
-    await run("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook') WHERE id = 'org-a'")
+    await run("DELETE FROM organization_integrations WHERE organization_id = 'org-a' AND provider = 'facebook'")
     const second = await create('key-2', { body: 'Text only' })
     const partial = await publishPost(env, 'org-a', second.post.id, { expectedUpdatedAt: second.post.updated_at, targets: [targets.website, targets.facebook()] }, 'owner')
     assert.deepEqual([partial.ok, partial.outcomes.map(outcome => `${outcome.status}:${outcome.code ?? ''}`)], [false, ['published:', 'skipped:not_connected']])
     assert.equal(await db.prepare('SELECT count(*) FROM post_publications WHERE post_id = ?').bind(second.post.id).first('count(*)'), 0)
-    await run(`UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook', json('${JSON.stringify({ revision: 'fb-rev-org-a', account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' })}')) WHERE id = 'org-a'`)
+    await run(`INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, revision, created_at, updated_at) VALUES ('fb-org-a', 'org-a', 'facebook', 'fb-account', '${PAGE}', 'Krabi Claw', 'fb-rev-org-a', '2026-09-28T00:00:00.000Z', '2026-09-28T00:00:00.000Z')`)
     // Instagram refuses a text-only post and a PNG before anything is sent; a changed connection is a conflict, not another account.
     const refused = await publishPost(env, 'org-a', second.post.id, { expectedUpdatedAt: (await getPost(db, env, 'org-a', second.post.id))!.updated_at, targets: [targets.instagram(), { ...targets.facebook(), connection_revision: 'old' } as PublishTarget] }, 'owner')
     assert.deepEqual(refused.outcomes.map(outcome => outcome.code), ['media_required', 'connection_changed'])
@@ -396,6 +398,42 @@ test('publication: one result, one external post per target, and no blind resend
   }
 })
 
+test('a provider resource belongs to one organization, and an organization has one of each', async () => {
+  const { runtime, db, restore } = await setUp()
+  try {
+    // An agency's login also manages its client's Page; choosing it on the agency's own site is refused.
+    const conflict = (error: unknown) => error instanceof HTTPError && error.status === 409 && /already connected to another KrabiClaw site/.test(error.message)
+    await assert.rejects(storeIntegration(db, 'org-b', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: 'fb-rev-org-b' }), conflict)
+    await assert.rejects(storeIntegration(db, 'org-b', 'instagram', { account_id: 'ig-account', target_id: IG, target_name: 'krabiclaw' }, { revision: 'ig-rev-org-b' }), conflict)
+    assert.equal((await readIntegration(db, 'org-b', 'facebook'))!.target_id, OTHER_PAGE)
+    assert.equal((await readIntegration(db, 'org-b', 'instagram'))!.target_id, OTHER_IG)
+
+    // The organization that has it can choose it again, a stale revision is a
+    // revision conflict, and a second Facebook row for one organization cannot exist.
+    await storeIntegration(db, 'org-a', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: 'fb-rev-org-a' })
+    assert.notEqual((await readIntegration(db, 'org-a', 'facebook'))!.revision, 'fb-rev-org-a')
+    await assert.rejects(storeIntegration(db, 'org-a', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: 'fb-rev-org-a' }), /The Facebook connection changed/)
+    await assert.rejects(storeIntegration(db, 'org-a', 'facebook', { account_id: 'fb-account', target_id: 'third-page', target_name: 'Third' }, { revision: null }), /The Facebook connection changed/)
+    await assert.rejects(db.prepare("INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, revision) VALUES ('second', 'org-a', 'facebook', 'fb-account', 'third-page', 'Third', 'r')").run(), /UNIQUE constraint failed: organization_integrations.organization_id, organization_integrations.provider/)
+    assert.equal(await db.prepare("SELECT count(*) AS n FROM organization_integrations WHERE organization_id = 'org-a' AND provider = 'facebook'").first('n'), 1)
+
+    // Once the other organization lets it go, it can be connected — but a
+    // selection read before the disconnect cannot bring the connection back.
+    const beforeDisconnect = (await readIntegration(db, 'org-a', 'facebook'))!.revision
+    assert.equal(await deleteIntegration(db, 'org-a', 'facebook'), true)
+    await assert.rejects(storeIntegration(db, 'org-a', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: beforeDisconnect }), /The Facebook connection changed/)
+    assert.equal(await readIntegration(db, 'org-a', 'facebook'), null)
+    assert.equal(await deleteIntegration(db, 'org-a', 'instagram'), true)
+    await storeIntegration(db, 'org-b', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: 'fb-rev-org-b' })
+    await storeIntegration(db, 'org-b', 'instagram', { account_id: 'ig-account', target_id: IG, target_name: 'krabiclaw' }, { revision: 'ig-rev-org-b' })
+    assert.deepEqual((await listIntegrations(db, 'org-b')).map(row => `${row.provider}:${row.target_id}`), [`facebook:${PAGE}`, `instagram:${IG}`])
+    assert.deepEqual(await listIntegrations(db, 'org-a'), [])
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
+
 test('channel inventory and deletion stay separate from authored website content and verified Meta erasure', async () => {
   const { runtime, db, env, cardless, meta, asset, restore } = await setUp()
   try {
@@ -450,8 +488,8 @@ test('channel inventory and deletion stay separate from authored website content
     assert.deepEqual(await deauthorized.json(), { success: true, released: 2 })
     const deletion = await callback('/api/integrations/meta/data-deletion', 'POST')
     assert.equal(deletion.status, 200)
-    const erased = await deletion.json() as { url: string; confirmation_code: string; erased_documents: number; remaining: number }
-    assert.equal(erased.erased_documents, 0)
+    const erased = await deletion.json() as { url: string; confirmation_code: string; detached_publications: number; remaining: number }
+    assert.equal(erased.detached_publications, 1)
     assert.equal(erased.remaining, 0)
     const status = await callback(erased.url, 'GET')
     assert.equal(status.status, 200)

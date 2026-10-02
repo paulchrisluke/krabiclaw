@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { createHmac } from 'node:crypto'
 import test from 'node:test'
 import { Miniflare } from 'miniflare'
+import { H3 } from 'nitro/h3'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
@@ -11,6 +13,7 @@ import { notifyContactSubmitted, notifyGuestThreadReply } from '../../server/uti
 import { requestInsertQueries } from '../../server/domain/requests.ts'
 import { claimDelivery, createDeliveryReceipt, getDeliveryById, getDeliveryRetryEligibility, isVisibleDeliveryFailure, recordDeliveryOutcome } from '../../server/domain/guest-threads/deliveries.ts'
 import { appendEntry } from '../../server/domain/guest-threads/entries.ts'
+import whatsappWebhook from '../../server/api/whatsapp/webhook.post.ts'
 
 // Real D1 billing, membership, preferences and notification persistence. Only
 // the external Meta HTTP boundary is intercepted; no live messages are sent.
@@ -122,6 +125,42 @@ test('organization messaging entitlement fences Meta calls while preserving noti
     } finally {
       globalThis.fetch = originalFetch
     }
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+// The signature is the webhook's only authentication, so a deployment that
+// cannot check it accepts nothing.
+test('the WhatsApp webhook accepts only what Meta signed with the configured app secret', async () => {
+  const runtime = new Miniflare({ workers: [{ config: {
+    name: 'whatsapp-webhook-proof', type: 'worker', compatibilityDate: '2024-11-01',
+    manifest: { mainModule: 'index.mjs', modules: { 'index.mjs': { type: 'esm', contents: 'export default { fetch() { return new Response("ok") } }' } } },
+    env: { DB: { type: 'd1' } },
+  } }] })
+  try {
+    const bindings = await runtime.getBindings<CloudflareEnv>()
+    const app = new H3()
+    app.post('/api/whatsapp/webhook', whatsappWebhook)
+    const body = JSON.stringify({ object: 'whatsapp_business_account', entry: [] })
+    const deliver = (env: Record<string, unknown>, signature?: string) => app.request(Object.assign(new Request('https://proof.example/api/whatsapp/webhook', {
+      method: 'POST', headers: { 'content-type': 'application/json', ...(signature && { 'x-hub-signature-256': signature }) }, body,
+    }), { runtime: { name: 'cloudflare', cloudflare: { env } } }))
+    const sign = (secret: string) => `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`
+
+    const unconfigured = await deliver({ ...bindings }, sign('whatsapp-secret'))
+    assert.equal(unconfigured.status, 500)
+    assert.deepEqual(await unconfigured.json(), { error: 'Missing WHATSAPP_APP_SECRET configuration' })
+
+    const configured = { ...bindings, WHATSAPP_APP_SECRET: 'whatsapp-secret' }
+    for (const signature of [undefined, sign('another-secret'), 'sha256=not-hex']) {
+      const refused = await deliver(configured, signature)
+      assert.equal(refused.status, 403)
+      assert.deepEqual(await refused.json(), { error: 'Invalid signature' })
+    }
+    const accepted = await deliver(configured, sign('whatsapp-secret'))
+    assert.equal(accepted.status, 200)
+    assert.deepEqual(await accepted.json(), { success: true })
   } finally {
     await runtime.dispose()
   }

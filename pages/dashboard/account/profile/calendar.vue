@@ -32,7 +32,7 @@ const selectedBusiness = computed({
 const { data, error } = await useAsyncData('account-member-scheduling', async () => {
   const organizationId = businessId.value
   if (!organizationId) return { organizationId, members: [] }
-  const result = await $fetch<{ members: { id: string; self: boolean }[] }>(`/api/organizations/${organizationId}/members/scheduling`)
+  const result = await applicationFetch<{ members: { id: string; self: boolean }[] }>(`/api/organizations/${organizationId}/members/scheduling`, { validate: (value): value is { members: { id: string; self: boolean }[] } => isRecord(value) && Array.isArray(value.members) && value.members.every(member => isRecord(member) && typeof member.id === 'string' && typeof member.self === 'boolean') })
   return { organizationId, members: result.members }
 }, { server: false, watch: [businessId] })
 const member = computed(() => data.value?.organizationId === businessId.value ? data.value.members.find(member => member.self) : null)

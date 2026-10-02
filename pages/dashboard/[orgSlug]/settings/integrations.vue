@@ -16,7 +16,15 @@
 <script lang="ts">
 import type { InjectionKey, Ref } from 'vue'
 
-export type IntegrationStatus = 'active' | 'disabled' | 'error'
+/** A connected Page, account, property or site, as the settings payload names it. */
+export interface ConnectedIntegration {
+  account_id: string
+  target_id: string
+  target_name: string
+  measurement_id: string | null
+  verified: boolean | null
+  connected_at: string
+}
 
 export interface IntegrationsSummary {
   google_maps: Array<{
@@ -32,11 +40,11 @@ export interface IntegrationsSummary {
     review_count: number | null
     last_synced_at: string | null
   }>
-  google_calendar: { account_id: string; calendar_name: string; status: IntegrationStatus; connected_at: string } | null
-  google_analytics: { account_id: string | null; property_name: string | null; measurement_id: string; status: IntegrationStatus; connected_at: string } | null
-  google_search_console: { account_id: string; site_url: string; status: IntegrationStatus; connected_at: string } | null
-  facebook: { account_id: string; page_name: string; status: IntegrationStatus; connected_at: string } | null
-  instagram: { account_id: string; username: string; status: IntegrationStatus; connected_at: string } | null
+  google_calendar: { account_id: string; calendar_name: string; status: 'active' | 'disabled' | 'error'; connected_at: string } | null
+  google_analytics: ConnectedIntegration | null
+  google_search_console: ConnectedIntegration | null
+  facebook: ConnectedIntegration | null
+  instagram: ConnectedIntegration | null
 }
 
 /** The summary the list shows, and what a leaf refreshes after it changes a connection. */
@@ -71,13 +79,9 @@ const { data: summary, pending, error, refresh } = await useAsyncData(
   { lazy: true },
 )
 
-// A connection that exists names what it is connected to; one whose last sync
-// failed says so, because that is what the tenant has to act on.
-const connection = (value: { status: IntegrationStatus } | null, name: string): Pick<EditorNavigationItem, 'summary' | 'status'> =>
-  !value ? { summary: 'Not connected', status: 'neutral' }
-  : value.status === 'error' ? { summary: `${name} · Last sync failed`, status: 'error' }
-  : value.status === 'disabled' ? { summary: `${name} · Disabled`, status: 'neutral' }
-  : { summary: name, status: 'success' }
+// A connection that exists names what it is connected to.
+const connection = (value: ConnectedIntegration | null, name = value?.target_name): Pick<EditorNavigationItem, 'summary' | 'status'> =>
+  value ? { summary: name, status: 'success' } : { summary: 'Not connected', status: 'neutral' }
 
 const items = computed<EditorNavigationItem[]>(() => {
   const s = summary.value
@@ -90,15 +94,15 @@ const items = computed<EditorNavigationItem[]>(() => {
         ? { summary: `${connected} of ${maps.length} ${maps.length === 1 ? 'location' : 'locations'} connected`, status: connected ? 'success' as const : 'neutral' as const }
         : { summary: 'No locations yet' }) },
     { id: 'google-analytics', label: 'Google Analytics', lead: { icon: 'i-logos-google-analytics' }, to: `${base.value}/google-analytics`,
-      ...connection(s?.google_analytics ?? null, s?.google_analytics?.property_name ?? s?.google_analytics?.measurement_id ?? '') },
+      ...connection(s?.google_analytics ?? null) },
     { id: 'google-search-console', label: 'Google Search Console', lead: { icon: 'i-logos-google-search-console' }, to: `${base.value}/google-search-console`,
-      ...connection(s?.google_search_console ?? null, s?.google_search_console?.site_url ?? '') },
+      ...connection(s?.google_search_console ?? null) },
     { id: 'google-calendar', label: 'Google Calendar', lead: { image: '/platform/integrations/google-calendar.webp', imageFit: 'contain' }, to: `${base.value}/google-calendar`,
-      ...connection(s?.google_calendar ?? null, s?.google_calendar?.calendar_name ?? '') },
+      ...(s?.google_calendar ? { summary: s.google_calendar.calendar_name, status: s.google_calendar.status === 'active' ? 'success' as const : 'error' as const } : { summary: 'Not connected' }) },
     { id: 'facebook', label: 'Facebook', lead: { icon: 'i-logos-facebook' }, to: `${base.value}/facebook`,
-      ...connection(s?.facebook ?? null, s?.facebook?.page_name ?? '') },
+      ...connection(s?.facebook ?? null) },
     { id: 'instagram', label: 'Instagram', lead: { icon: 'i-skill-icons-instagram' }, to: `${base.value}/instagram`,
-      ...connection(s?.instagram ?? null, s?.instagram ? `@${s.instagram.username}` : '') },
+      ...connection(s?.instagram ?? null, s?.instagram ? `@${s.instagram.target_name}` : undefined) },
   ]
 })
 

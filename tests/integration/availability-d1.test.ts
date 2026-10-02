@@ -35,11 +35,11 @@ async function boot(legacy = false) {
   } }] })
   const db = await runtime.getD1Database('DB')
   const statements = legacy
-    ? ['0000_baseline', '0001_drop_typed_social_profiles', '0002_products_overview', '0004_native_consultation_foundation', '0006_payments', '0007_provider_support'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    ? ['0000_baseline', '0001_provider_support_v8'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
-  await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
-    VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', '{}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
+  await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
+    VALUES (?, 'Sessions', 'sessions', 'sessions', '{"config":{"default_timezone":"Asia/Bangkok"}}', 'theme', 'THB', 'active', 'complete', 'flat', 'experience', ?)`)
     .bind(ORG, NOW).run()
   await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
     VALUES (?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, NOW, NOW).run()
@@ -388,50 +388,15 @@ test('neutral adoption protects cancelled history and a claim racing its atomic 
 })
 
 
-const weeklyMigration = () => readFileSync('migrations/0003_minimal_weekly_schedule.sql', 'utf8')
-  .split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean)
-
-test('weekly forward migration preserves rule IDs, all Session facts and Booking links on D1', { timeout: 120_000 }, async () => {
+test('provider additive migration keeps the separately held weekly columns and their populated values', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot(true)
-  const scope = { organizationId: ORG, productId: PRODUCT, actorId: ACTOR }
   try {
-    // New code must deploy against the old schema before its contraction.
-    await replaceWeeklySchedule(db, { ...scope, locationId: LOCATION, slots: [{ weekday: 0, start_time: '14:00' }] })
-    await addRule(db, 'neutral', { location_id: null, start_time: '15:00' })
-    await materializeSessions(db, { ...scope, throughDate: addLocalDays(localNow('Asia/Bangkok').date, 31) })
-    const sessionId = await db.prepare('SELECT id FROM product_sessions WHERE location_id IS NULL AND starts_at > ? ORDER BY starts_at LIMIT 1').bind(new Date().toISOString()).first<string>('id')
-    assert(sessionId)
-    const booking = await claimSessionCapacity(db, { ...scope, sessionId, productVariantId: 'var-adult', partySize: 6 })
-    await setBookingStatus(db, { organizationId: ORG, bookingId: booking.bookingId, status: 'cancelled' })
-    await updateSession(db, { ...scope, sessionId, capacity: 8, status: 'cancelled' })
-    const read = async () => ({
-      rules: (await db.prepare('SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time, created_at, updated_at, created_by, updated_by FROM product_availability_rules ORDER BY id').all()).results,
-      sessions: (await db.prepare('SELECT * FROM product_sessions ORDER BY id').all()).results,
-      bookings: (await db.prepare('SELECT * FROM bookings ORDER BY id').all()).results,
-    })
-    const before = await read()
-    await db.batch(weeklyMigration().map(sql => db.prepare(sql)))
-    assert.deepEqual(await read(), before)
+    await addRule(db, 'held-rule')
+    await db.prepare("UPDATE product_availability_rules SET end_time='16:00',interval_minutes=30,interval_weeks=2,effective_from_date='2026-01-01',effective_until_date='2030-01-01',duration_minutes=30,capacity=0 WHERE id='held-rule'").run()
+    const row = await db.prepare("SELECT end_time,interval_minutes,interval_weeks,effective_from_date,effective_until_date,duration_minutes,capacity FROM product_availability_rules WHERE id='held-rule'").first()
+    assert.deepEqual(row, { end_time: '16:00', interval_minutes: 30, interval_weeks: 2, effective_from_date: '2026-01-01', effective_until_date: '2030-01-01', duration_minutes: 30, capacity: 0 })
     assert.deepEqual((await db.prepare('PRAGMA foreign_key_check').all()).results, [])
-    assert.equal(await db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name LIKE '__%weekly%' OR name='__new_product_availability_rules'").first('n'), 0)
-    await assert.rejects(addRule(db, 'duplicate-scoped'), /UNIQUE/)
-    await assert.rejects(addRule(db, 'duplicate-neutral', { location_id: null, start_time: '15:00' }), /UNIQUE/)
-    await assert.rejects(db.prepare("INSERT INTO product_sessions (id, organization_id, product_id, availability_rule_id, timezone, starts_at, ends_at, created_by, updated_by) VALUES ('invalid-rule', ?, ?, 'missing-rule', 'Asia/Bangkok', '2030-01-01T00:00:00.000Z', '2030-01-01T01:00:00.000Z', ?, ?)").bind(ORG, PRODUCT, ACTOR, ACTOR).run(), /FOREIGN KEY/)
   } finally { await runtime.dispose() }
-})
-
-test('weekly forward migration aborts without altering history for every populated retired field', { timeout: 120_000 }, async () => {
-  for (const patch of ["end_time='16:00', interval_minutes=30", "interval_weeks=2, effective_from_date='2026-01-01'", "effective_from_date='2026-01-01'", "effective_until_date='2030-01-01'", 'duration_minutes=30', 'capacity=0']) {
-    const { runtime, db } = await boot(true)
-    try {
-      await addRule(db, 'used-rule')
-      await db.prepare(`UPDATE product_availability_rules SET ${patch} WHERE id='used-rule'`).run()
-      const before = (await db.prepare('SELECT * FROM product_availability_rules').all()).results
-      await assert.rejects(db.batch(weeklyMigration().map(sql => db.prepare(sql))), /CHECK constraint failed/)
-      assert.deepEqual((await db.prepare('SELECT * FROM product_availability_rules').all()).results, before)
-      assert.equal(await db.prepare("SELECT count(*) n FROM sqlite_schema WHERE name='__weekly_simplification_guard'").first('n'), 0)
-    } finally { await runtime.dispose() }
-  }
 })
 
 // Named invariants: review allocations exclude concurrent overlaps across explicitly
@@ -535,6 +500,6 @@ test('provider allocation shares a class Session, excludes distinct overlapping 
   assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(winner!.id).first('assigned_member_id'),'provider-one','hours/assignment edits never rewrite a booked commitment')
   assert.deepEqual(await publicProductProvider(db,ORG,winner!.product_id,winner!.product_session_id),{name:'Approved public name',photo_url:null,bio:'Approved public bio'})
   await db.prepare("UPDATE member_scheduling SET public_approved=0 WHERE member_id='provider-one'").run()
-  assert.equal(await publicProductProvider(db,ORG,winner!.product_id,winner!.product_session_id),undefined,'unapproved/private identity is not public content')
+  assert.equal(await publicProductProvider(db,ORG,winner!.product_id,winner!.product_session_id),null,'unapproved/private identity is not public content')
  }finally{await runtime.dispose()}
 })

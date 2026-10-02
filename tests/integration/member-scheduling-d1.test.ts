@@ -3,9 +3,11 @@ import test from 'node:test'
 import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson,generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
-import { writeMemberScheduling, readMemberScheduling, requireSchedulingAccess, refreshMemberBusy, workingWindows } from '../../server/domain/member-scheduling.ts'
+import { writeMemberScheduling, readMemberScheduling, requireSchedulingAccess, refreshMemberBusy, workingWindows, selectBusyCalendars } from '../../server/domain/member-scheduling.ts'
 import { claimSessionCapacity, CapacityUnavailableError } from '../../server/utils/availability.ts'
 import { reassignBookingProvider } from '../../server/domain/provider-reassignment.ts'
+import { storeCalendarSelection, readCalendarIntegration, disconnectCalendar, syncCalendarOrganization } from '../../server/utils/google-calendar.ts'
+import { MEMBER_BUSY_SCOPES } from '../../shared/member-scheduling.ts'
 import { roleSatisfies } from '../../server/utils/mcp-auth.ts'
 import type { CloudflareEnv } from '../../server/utils/auth.ts'
 
@@ -14,7 +16,7 @@ test('member self-service uses Better Auth permissions, public approval is admin
  const db=await runtime.getD1Database('DB')
  try {
   await db.batch((await generateSQLiteMigration(await generateSQLiteDrizzleJson({}),await generateSQLiteDrizzleJson(schema))).map(sql=>db.prepare(sql)))
-  await db.prepare(`INSERT INTO organization(id,name,slug,subdomain,settings_json,integrations_json,theme_id,default_currency,status,onboarding_status,url_structure,vertical,updated_at) VALUES('org','Org','org','org','{"config":{"default_timezone":"UTC"}}','{}','theme','USD','active','complete','flat','experience','2026-10-01T00:00:00.000Z')`).run()
+  await db.prepare(`INSERT INTO organization(id,name,slug,subdomain,settings_json,theme_id,default_currency,status,onboarding_status,url_structure,vertical,updated_at) VALUES('org','Org','org','org','{"config":{"default_timezone":"UTC"}}','theme','USD','active','complete','flat','experience','2026-10-01T00:00:00.000Z')`).run()
   for(const id of ['owner','one','two','outsider'])await db.prepare('INSERT INTO user(id,name,email,emailVerified)VALUES(?,?,?,1)').bind(id,id,`${id}@example.test`).run()
   for(const [id,role]of [['owner','owner'],['one','member'],['two','member']])await db.prepare("INSERT INTO member(id,organizationId,userId,role)VALUES(?,'org',?,?)").bind(`member-${id}`,id,role).run()
   const env={DB:db,STRIPE_SECRET_KEY:'sk_test_local_d1_no_stripe_requests',BETTER_AUTH_URL:'https://proof.example',BETTER_AUTH_SECRET:'local-proof-secret-long-enough-for-auth',NUXT_PUBLIC_PLATFORM_DOMAIN:'https://krabiclaw.test'} as CloudflareEnv
@@ -33,6 +35,19 @@ test('member self-service uses Better Auth permissions, public approval is admin
   const changed=await writeMemberScheduling(own,'member-one',{...hours,expected_updated_at:approved!.updated_at,public_name:'Changed public name'})
   assert.equal(changed?.public_approved,0,'self-edited content loses prior approval')
   await writeMemberScheduling({...own,userId:'two'},'member-two',{...hours,timezone:'UTC'})
+  await db.prepare("INSERT INTO account(id,accountId,providerId,userId,scope)VALUES('busy-linked','google-subject','google','one',?)").bind(MEMBER_BUSY_SCOPES.join(' ')).run()
+  const raced = await Promise.allSettled([
+   selectBusyCalendars(own,'member-one',{account_id:'busy-linked',calendar_ids:['same-calendar']}),
+   storeCalendarSelection(db,'org',{account_id:'busy-linked',calendar_id:'same-calendar',calendar_name:'Synthetic calendar',calendar_group:null,include_reservations:false}),
+  ])
+  assert.equal(raced.filter(result=>result.status==='fulfilled').length,1,'input and output selection cannot race into the same calendar')
+  const inputSelection = await readMemberScheduling(db,'org','member-one')
+  const outputSelection = await readCalendarIntegration(db,'org')
+  assert.equal(Number(Boolean(inputSelection?.calendar_account_id))+Number(Boolean(outputSelection)),1)
+  await selectBusyCalendars(own,'member-one',{account_id:null,calendar_ids:[]})
+  await disconnectCalendar(db,'org')
+  await syncCalendarOrganization(env,'org')
+  assert.equal(await readCalendarIntegration(db,'org'),null)
   const day=new Date(Date.now()+3*86400000).toISOString().slice(0,10),start=`${day}T14:00:00.000Z`,end=`${day}T15:00:00.000Z`
   for(const [id,member]of [['one','member-one'],['two','member-two']]) {
    await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by)VALUES(?,'org',?,?,'owner','owner')").bind(id,id,id).run()
