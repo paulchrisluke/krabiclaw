@@ -224,7 +224,7 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
 
   // One instant, one zone: the message the guest reads and the record the
   // host sees are formatted from the same session row.
-  const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at))
+  const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at)) + (session.location_id === null ? ` (${session.timezone})` : '')
   const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
     resolveLocationContact(db, organizationId, session.location_id),
     buildOwnerThreadInboxUrl(env, db, { organizationId: organization.id, locationId: session.location_id ?? undefined, threadId }),
