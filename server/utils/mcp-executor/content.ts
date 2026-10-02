@@ -250,7 +250,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       const locationId = requiredString(args, "location_id");
       const locale = optionalString(args, "locale") ?? "en";
       // A named policy is its two cutoffs, written as the dashboard writes them.
-      const tier = optionalString(args, "cancellation_policy");
+      const tier = args.cancellation_policy;
       if (tier !== undefined && !CANCELLATION_TIER_IDS.includes(tier as CancellationTierId)) {
         throw new Error(`cancellation_policy must be one of ${CANCELLATION_TIER_IDS.join(", ")}`);
       }
