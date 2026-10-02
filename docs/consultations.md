@@ -163,7 +163,10 @@ currently grants messaging; there is no separate booking entitlement. Any new
 commercial gating must preserve existing class and restaurant booking behavior
 and requires the owner's separate decision.
 Online consultation times default to the browser's IANA timezone, shown in an
-editable selector. Configured scheduling zones still own rule input and UTC
+editable searchable `USelectMenu`. Its shared popup is height-bounded and scrolls
+the full timezone list; keyboard selection and Escape stay inside the booking
+modal's focus boundary. The service directory uses the existing `USelect` with
+its standard inset chevron. Configured scheduling zones still own rule input and UTC
 storage. Time choices carry canonical Session IDs, including repeated wall-clock
 times during DST. Changing the display timezone clears the selected time; receipts
 use the selected display zone. Existing physical class and restaurant behavior
