@@ -126,15 +126,10 @@ part of this draft. Native sandbox account readiness, direct-charge zero-applica
 
 ## Local verification
 
-The isolated local Worker proof uses synthetic records and signature-only fake test
-secrets. It never approves a refund or calls a payment provider. In an isolated
-checkout with local migrations applied, run
-`PAYMENTS_LOCAL_PROOF=true node tests/e2e/fixtures/payments-local-proof.mjs`, then
-`yarn wrangler d1 execute DB --local --file .tmp/payments-browser.sql`. The fixture
-writes `.dev.vars.e2e` only in that checkout. Build with the configured localhost
-platform domain and run `PAYMENTS_LOCAL_PROOF=true PLAYWRIGHT_PORT=3206
-PLAYWRIGHT_LOCAL_PREPARED=true yarn playwright test tests/e2e/payments-local-proof.spec.ts`.
-The fixture is intentionally a fresh-database seed, never a remote migration.
+One-time browser observations are retained as screenshots and dated findings.
+The bespoke proof specs and synthetic seed scripts were removed under #1225.
+Use the canonical local setup and the actual CMS/account/guest surfaces for
+manual verification; Google consent is a manual browser check.
 
 Verified: production Worker build and typecheck; complete unit suite; migration
 baseline/archived-table backfill; real D1 capture/hold race, late-capture refund,

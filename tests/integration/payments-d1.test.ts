@@ -11,7 +11,7 @@ import {cancelBookingRequest,getGuestRequest,requestInsertQueries,threadPayloadF
 import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAuthorization,refundPayment,reconcileRefundState} from '../../server/domain/payments/index.ts'
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
-import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage,reconcileNativeBillingCredit} from '../../server/domain/payments/usage.ts'
+import {metronomeCurrencyAmount,provisionPaymentsBilling,finalizePaymentsBilling,deliverPaymentsUsage,reconcileNativeBillingCredit} from '../../server/domain/payments/usage.ts'
 import {buyerPayments,ownedBuyerRequest,createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
 import {mcpFinancialApprovalErrorResult} from '../../server/utils/mcp-financial-handoff.ts'
 const ORG='payments-org',NOW='2026-10-01T00:00:00.000Z'
@@ -375,5 +375,35 @@ test('capture converts the hold’s pinned member even after the offering assign
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),2)
   await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'pinned'),p.intent)
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),2,'capture replay preserves one conversion')
+ }finally{await runtime.dispose()}
+})
+
+test('billing setup cannot create a customer from an invalid provider lookup', {timeout:120000},async(t)=>{
+ const {db,runtime}=await boot()
+ const env={DB:db,BETTER_AUTH_URL:'https://proof.example',STRIPE_SECRET_KEY:'sk_test_local_d1_no_stripe_requests',NUXT_PUBLIC_PLATFORM_DOMAIN:'https://krabiclaw.test',BETTER_AUTH_SECRET:'local-billing-lookup-secret-for-real-D1',METRONOME_API_KEY:'local_provider_double',METRONOME_RATE_CARD_ID:'card'} as never
+ const credit={id:'usd',name:'USD (cents)'}
+ let created=false,customerList:unknown={}
+ t.mock.method(globalThis,'fetch',async(input,init)=>{
+  const url=String(input),body=init?.body?JSON.parse(String(init.body)):{};let data:unknown
+  if(url.includes('rate-cards/getRates'))data=[{product_id:'volume',entitled:true,rate:{rate_type:'FLAT',price:0.01337,credit_type:credit}},{product_id:'cost',entitled:true,rate:{rate_type:'FLAT',price:1,credit_type:credit}}]
+  else if(url.includes('rate-cards/get'))data={id:'card',fiat_credit_type:credit}
+  else if(url.includes('products/get'))data={type:'USAGE',current:{billable_metric_id:body.id}}
+  else if(url.includes('billable-metrics/'))data={aggregation_type:'SUM',aggregation_key:'pricing_amount',event_type_filter:{in_values:url.endsWith('/volume')?['payments_captured_volume']:['payments_stripe_cost','payments_stripe_cost_adjustment']},property_filters:[{name:'pricing_amount',exists:true}]}
+  else if(url.includes('listConfiguredBillingProviders'))data=[{billing_provider:'stripe',delivery_method:'direct_to_billing_provider',delivery_method_id:'delivery',delivery_method_configuration:{stripe_account_id:'acct_platform'}}]
+  else if(url.includes('/v1/customers?'))return new Response(JSON.stringify(customerList),{status:200})
+  else if(url.endsWith('/v1/customers')){created=true;throw new Error('Customer creation must not follow malformed lookup')}
+  else throw new Error(`Unexpected provider request ${url}`)
+  return new Response(JSON.stringify({data}),{status:200})
+ })
+ const stripe={customers:{retrieve:async()=>({invoice_settings:{default_payment_method:'pm_operating'}})},accounts:{retrieveCurrent:async()=>({id:'acct_platform'})}} as unknown as Stripe
+ try{
+  await db.prepare("UPDATE organization SET stripeCustomerId='cus_operating' WHERE id=?").bind(ORG).run()
+  for(const invalid of [{},{data:null},{data:{}},{data:'invalid'}]){
+   customerList=invalid
+   await assert.rejects(provisionPaymentsBilling(db,stripe,env,{organizationId:ORG,userId:'verified',role:'owner'}),/customer list is invalid/u)
+  }
+  assert.equal(created,false)
+  const stored=await db.prepare('SELECT metronome_customer_id,metronome_contract_id,status FROM payment_billing_accounts WHERE organization_id=?').bind(ORG).first()
+  assert.deepEqual(stored,{metronome_customer_id:null,metronome_contract_id:null,status:'provisioning'})
  }finally{await runtime.dispose()}
 })

@@ -24,8 +24,18 @@ test('native rate-card verification rejects a fee rate, currency unit or filter 
   for(const value of ['units','rate','filter']){mutation=value;await assert.rejects(validatePaymentsRateCard(env))}
  }finally{globalThis.fetch=original}
 })
-test('documented empty successful ingestion response is accepted; configuration reads still require a body',async()=>{
- const original=globalThis.fetch
- globalThis.fetch=async()=>new Response(null,{status:200})
- try{assert.deepEqual(await metronomeRequest(env,'/v1/ingest',[]),{});await assert.rejects(metronomeRequest(env,'/v1/customers'))}finally{globalThis.fetch=original}
+test('ingestion acknowledgements and financial read errors retain their distinct provider contracts',async(t)=>{
+ let body='',status=200
+ t.mock.method(globalThis,'fetch',async()=>new Response(body,{status}))
+ for(const value of ['', 'null', '{}']){body=value;assert.deepEqual(await metronomeRequest(env,'/v1/ingest',[]),{})}
+ body='null';await assert.rejects(metronomeRequest(env,'/v1/customers'),/response is invalid/u)
+ body='[]';await assert.rejects(metronomeRequest(env,'/v1/ingest',[]),/response is invalid/u)
+ status=400;body=JSON.stringify({message:`Invalid pricing_amount for buyer@example.com; Bearer hidden-token; ${env.METRONOME_API_KEY}; https://private.example/customer`})
+ await assert.rejects(metronomeRequest(env,'/v1/ingest',[]),(error:unknown)=>{
+  const failure=error as {message:string;data:{provider_status:number}}
+  assert.equal(failure.data.provider_status,400)
+  assert.match(failure.message,/Invalid pricing_amount/u)
+  for(const privateValue of ['buyer@example.com','hidden-token',env.METRONOME_API_KEY,'https://private.example'])assert.equal(failure.message.includes(privateValue),false)
+  return true
+ })
 })

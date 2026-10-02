@@ -7,6 +7,7 @@ import {currencyFractionDigits,type CurrencyCode} from '~/shared/currencies'
 import {authorizePayments,type FinancialPrincipal} from './index'
 import {validatePaymentsRateCard} from './rate-card'
 import {tokenHash} from './buyer'
+import {describeErrorForTelemetry} from '~/server/utils/error-telemetry'
 
 export function metronomeCurrencyAmount(minor:number,currency:CurrencyCode):string {
  if(!Number.isSafeInteger(minor)) throw new Error('Metronome requires exact integer minor units')
@@ -17,10 +18,17 @@ export function metronomeCurrencyAmount(minor:number,currency:CurrencyCode):stri
 export async function metronomeRequest(env:CloudflareEnv,path:string,body?:unknown,key?:string):Promise<Record<string,unknown>> {
  if(!env.METRONOME_API_KEY) throw new HTTPError({statusCode:503,statusMessage:'Metronome is not configured'})
  const response=await fetch(`https://api.metronome.com${path}`,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${env.METRONOME_API_KEY}`,'Content-Type':'application/json',...(key?{'Idempotency-Key':key}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(10000)})
- if(!response.ok) throw new HTTPError({statusCode:502,statusMessage:`Metronome request failed (${response.status})`,data:{provider_status:response.status}})
  const raw=await response.text()
+ let result:unknown
+ try {result=raw.trim()?JSON.parse(raw):null} catch {
+  throw new HTTPError({statusCode:502,statusMessage:`Metronome response is invalid (${response.status})`,data:{provider_status:response.status}})
+ }
+ if(!response.ok) {
+  const message=result&&typeof result==='object'&&!Array.isArray(result)&&'message' in result&&typeof result.message==='string'
+   ?describeErrorForTelemetry(new Error(result.message.replaceAll(env.METRONOME_API_KEY,'[key redacted]').replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,'[email redacted]')),500):''
+  throw new HTTPError({statusCode:502,statusMessage:`Metronome request failed (${response.status})${message?`: ${message}`:''}`,data:{provider_status:response.status}})
+ }
  if(path==='/v1/ingest'&&!raw.trim())return {}
- const result:unknown=JSON.parse(raw)
  if(path==='/v1/ingest'&&result===null)return {}
  if(!result || typeof result!=='object' || Array.isArray(result)) throw new Error('Metronome response is invalid')
  return result as Record<string,unknown>
@@ -67,7 +75,8 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  const reserved=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
  if(!reserved||reserved.stripe_billing_customer_id!==billing.stripeCustomerId)throw new Error('Operating customer changed during Payments billing setup; resolve native billing mapping')
  const known=reserved.metronome_customer_id?null:await metronomeRequest(env,`/v1/customers?ingest_alias=${encodeURIComponent(`payments:${principal.organizationId}`)}`)
- const knownRows=known&&Array.isArray(known.data)?known.data:[]
+ if(known&&!Array.isArray(known.data))throw new HTTPError({statusCode:502,statusMessage:'Metronome customer list is invalid; billing setup stopped'})
+ const knownRows=known?known.data as unknown[]:[]
  if(knownRows.length>1)throw new Error('Payments Metronome ingest alias is ambiguous')
  const knownId=knownRows.length?providerId({data:knownRows[0]}):null
  const metronomeCustomer=reserved.metronome_customer_id??knownId??providerId(await metronomeRequest(env,'/v1/customers',{name:`Payments ${principal.organizationId}`,ingest_aliases:[`payments:${principal.organizationId}`],customer_billing_provider_configurations:[{billing_provider:'stripe',configuration:{stripe_customer_id:billing.stripeCustomerId,stripe_collection_method:'charge_automatically'},delivery_method_id:deliveryMethodId}]},`payments-customer:${principal.organizationId}`))

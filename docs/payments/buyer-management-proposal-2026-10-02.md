@@ -25,8 +25,4 @@ Built Worker `http://localhost:3210`, existing isolated D1 `.tmp/payments-review
 - Screenshot review found account had no application layout. Fixed by reusing standalone. A final built Worker read-only browser snapshot checks the application stylesheet, styled heading, persisted cancellation state, exact contact and unchanged principal. Screenshot: `artifacts/payments-buyer-management.png`.
 - Final build, scoped ESLint and git diff whitespace checks pass. Metronome response tests 2/2 pass. These local proofs do not qualify native Stripe collection.
 
-For a fresh isolated fixture, run the management test with PAYMENTS_BUYER_PROOF=true and PLAYWRIGHT_PREVIEW_URL pointing to the built local Worker. PAYMENTS_BUYER_RECOVERY=true explicitly requires an already cancelled booking and verifies retry; it does not create/reset the premise. The final snapshot is independently selectable with `--grep 'final snapshot'` after actions are exercised.
-
-## Remaining native boundary
-
-Onboarding already returned Ready for existing test merchant acct_1ULvggRBlJ8qySB7. The same Metronome USAGE draft 7a30b370-ea2e-5fd7-b432-77f925eeb7ee has observed issue time 2026-10-03T06:00:00Z. Parent owns the follow-up. No scheduler was created, contract reopened, substitute invoice generated, live action, merge or deployment performed. Overall Payments release acceptance remains withheld pending native collection and final integrated qualification.
+The one-time buyer proof spec and bespoke SQL fixture were removed under #1225. Use the canonical local setup and the actual account page for manual verification. Historical observations above remain limited to their recorded synthetic environment.
