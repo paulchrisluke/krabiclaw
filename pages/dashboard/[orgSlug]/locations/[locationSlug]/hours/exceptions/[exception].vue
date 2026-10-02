@@ -9,7 +9,7 @@
     @cancel="editor.revert"
     @save="save"
   >
-    <template v-if="entry">
+    <template v-if="entry && !removing">
       <LocationHoursException v-model:entry="editor.hoursForm.value.specialHours![index!]!" />
       <UButton v-if="!creating" class="mt-8" color="error" variant="soft" icon="i-lucide-trash-2" label="Remove exception" :loading="editor.saving.value" @click="remove" />
     </template>
@@ -68,10 +68,15 @@ async function save() {
 
 async function remove() {
   removing.value = true
+  const exceptions = [...editor.hoursForm.value.specialHours!]
   editor.hoursForm.value.specialHours!.splice(index.value!, 1)
   await editor.save()
   // A refused save stays here with its reason; Cancel puts the date back.
-  if (editor.editorError.value) return
+  if (editor.editorError.value) {
+    editor.hoursForm.value.specialHours = exceptions
+    removing.value = false
+    return
+  }
   await navigateTo(level.to.value ?? '/dashboard')
 }
 </script>
