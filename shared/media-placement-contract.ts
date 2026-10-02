@@ -14,6 +14,8 @@ export const MEDIA_PLACEMENT_SLOTS = {
   ],
   review: ['portrait', 'gallery', 'social_card'],
   review_request: ['gallery'],
+  // The photos a message in a guest thread carries, in the order they were sent.
+  activity_entry: ['attachments'],
 } as const
 
 export type MediaPlacementOwnerType = keyof typeof MEDIA_PLACEMENT_SLOTS
@@ -47,7 +49,7 @@ const INDEXED_SLOTS = [
 const ORDERED_PLACEMENTS = new Set([
   'business_location:gallery', 'product:gallery', 'content_document:gallery',
   'content_block:gallery', 'review:gallery', 'review_request:gallery',
-  'organization:compliance_document',
+  'organization:compliance_document', 'activity_entry:attachments',
 ])
 
 /**

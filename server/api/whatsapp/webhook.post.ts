@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { sendWhatsAppText } from '~/server/utils/whatsapp'
+import { fetchWhatsAppMedia, sendWhatsAppText } from '~/server/utils/whatsapp'
+import { attachGuestPhotos, messagePreview, sortGuestFiles, type MessagePhoto } from '~/server/domain/guest-threads/attachments'
 import { advanceDeliveryStatus } from '~/server/domain/guest-threads/deliveries'
 import { parseMetaMsisdn } from '~/utils/phone'
 import {
@@ -89,6 +90,15 @@ function messageText(message: WhatsAppMessage): string {
   if (message.type === 'image') return message.image?.caption?.trim() ?? ''
   if (message.type === 'document') return message.document?.caption?.trim() ?? ''
   return ''
+}
+
+/** The file a guest's WhatsApp message carries, downloaded from Meta. */
+async function messageFiles(env: ApiRecord, message: WhatsAppMessage): Promise<MessagePhoto[]> {
+  const media = message.type === 'image' ? message.image : message.type === 'document' ? message.document : undefined
+  if (!media?.id) return []
+  const downloaded = await fetchWhatsAppMedia(env, media.id)
+  const filename = message.document?.filename || `whatsapp-${media.id}`
+  return [{ bytes: new Uint8Array(downloaded.bytes), filename }]
 }
 
 async function reply(env: ApiRecord, toPhone: string, text: string) {
@@ -496,7 +506,8 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       : await findSubmissionByPhone(db, toPhone)
     if (match) {
       const text = messageText(message)
-      if (text) {
+      const { photos, unshown } = sortGuestFiles(await messageFiles(env, message))
+      if (text || photos.length || unshown.length) {
         try {
           const thread = await getGuestRequest(db, match.submissionId, undefined, match.submissionType)
 
@@ -505,9 +516,11 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
             threadId: thread.id,
             kind: 'message',
             actorKind: 'guest',
-            body: text,
+            body: text || null,
+            payloadJson: unshown.length ? { unshownFiles: unshown } : null,
             dedupeKey: `whatsapp:${message.id}`,
           })
+          await attachGuestPhotos(db, env, match.organizationId, entry.id, photos)
           await updateThreadProjectionIfLatestEntry(db, thread.id, entry.id, { conversationState: 'needs_attention' })
 
           const source = thread
@@ -524,7 +537,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
               guestEmail: summary.guestEmail,
               guestPhone: summary.guestPhone,
               inboundChannel: 'whatsapp',
-              messagePreview: text,
+              messagePreview: messagePreview(text, photos.length),
             })
           }
           await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })

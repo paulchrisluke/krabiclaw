@@ -1,5 +1,5 @@
 import { defineComponent, h, type CSSProperties, type PropType } from 'vue'
-import { EMarkdown, ESection, EText } from './vue-email'
+import { EImg, EMarkdown, ESection, EText } from './vue-email'
 import { renderEmail, type RenderedEmail } from './vue-email'
 import EmailFrame from './blocks/EmailFrame'
 import EmailHero from './blocks/EmailHero'
@@ -74,6 +74,12 @@ export const NotificationEmail = defineComponent({
 
         ...(message.sections ?? []).map(section =>
           h(EmailSection, { title: section.title, body: section.body ?? null, facts: section.facts ?? [] }),
+        ),
+
+        ...(message.photos ?? []).map(photo =>
+          h(ESection, { class: 'email-gutter', style: `padding:16px ${layout.gutter} 0` }, () => [
+            h(EImg, { src: photo.imageUrl, alt: photo.alt, width: '552', style: `display:block;width:100%;max-width:100%;height:auto;border-radius:12px;background:${light.bg}` }),
+          ]),
         ),
 
         message.finePrint

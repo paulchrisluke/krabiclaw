@@ -266,7 +266,7 @@ export const media_placements = sqliteTable("media_placements", {
 		foreignColumns: [media_assets.organization_id, media_assets.id],
 		name: "media_placements_asset_scope_fk",
 	}).onDelete("cascade"),
-	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')`),
+	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')`),
 	check("media_placements_sort_order_check", sql`sort_order >= 0`),
 	unique("media_placements_org_owner_slot_asset_unique").on(table.owner_type, table.owner_id, table.slot, table.asset_id),
 	unique("media_placements_org_owner_slot_order_unique").on(table.owner_type, table.owner_id, table.slot, table.sort_order),
