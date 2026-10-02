@@ -56,6 +56,42 @@
         "destructive_justification": "Overwrites the selected location's special hours with an added closure for the given days, so guests cannot book them on the public website. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "cancel_product_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message.",
+        "open_world_justification": "Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Cancels a Product booking through the canonical inbox operation, releasing capacity once and sending its guest status message. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "cancel_table_reservation": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message.",
+        "open_world_justification": "Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Cancels a real restaurant table Reservation through the canonical inbox operation, releasing capacity once and sending its guest status message. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "confirm_product_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message.",
+        "open_world_justification": "Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Confirms a pending Product review booking through the canonical inbox operation, without allocating capacity again, and sends its guest status message. Existing content is not deleted or overwritten."
+      }
+    },
     "create_article_category": {
       "annotations": {
         "readOnlyHint": false,
@@ -126,6 +162,18 @@
         "read_only_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately.",
         "open_world_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Existing content is not deleted or overwritten."
+      }
+    },
+    "create_product_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation.",
+        "open_world_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Atomically creates a tenant Product booking and guest inbox thread, with caller idempotency, operator provenance and explicit guest acknowledgement choice. Uses public capacity and payment-required rules; performs no financial mutation. Existing content is not deleted or overwritten."
       }
     },
     "create_qa": {
@@ -438,6 +486,18 @@
         "read_only_justification": "Reads the selected product and its price and content.",
         "open_world_justification": "Reads the selected product and its price and content. It does not publish content or write to an external service.",
         "destructive_justification": "Reads the selected product and its price and content. Existing content is not deleted or overwritten."
+      }
+    },
+    "get_product_booking": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp.",
+        "open_world_justification": "Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads one tenant Product booking with guest snapshot, operational status, provenance and updated timestamp. Existing content is not deleted or overwritten."
       }
     },
     "get_product_catalog_localization": {
@@ -824,6 +884,18 @@
         "destructive_justification": "Creates and updates products at one location, and marks omitted products unavailable only when explicitly requested. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reject_product_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message.",
+        "open_world_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Rejects a pending Product booking through the canonical inbox operation, releasing capacity and sending its guest status message. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "remove_media": {
       "annotations": {
         "readOnlyHint": false,
@@ -944,6 +1016,30 @@
         "destructive_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "request_product_booking_change": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.",
+        "open_world_justification": "Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Records an audited immutable Product session/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance. Existing content is not deleted or overwritten."
+      }
+    },
+    "request_table_reservation_change": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records an audited immutable restaurant table location/date/time/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance.",
+        "open_world_justification": "Records an audited immutable restaurant table location/date/time/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Records an audited immutable restaurant table location/date/time/party change proposal and emails the guest to approve. Allocation remains unchanged until guest acceptance. Existing content is not deleted or overwritten."
+      }
+    },
     "save_generated_image": {
       "annotations": {
         "readOnlyHint": false,
@@ -990,6 +1086,18 @@
         "read_only_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it.",
         "open_world_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_consultation_mode": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes.",
+        "open_world_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Updates the existing site consultation mode through the shared CMS writer without provider allocation, payment capture or commercial plan changes. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_default_currency": {
