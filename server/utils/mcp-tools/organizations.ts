@@ -130,7 +130,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
         brand_description: { type: 'string' },
         announcement: ANNOUNCEMENT_SCHEMA,
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
-        default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
+        default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 code. Existing prices keep their stored currency and amount; nothing is converted.' },
         status: { type: 'string', enum: ['active', 'inactive'], description: 'Website status: active is Live (public and indexable), inactive is Draft (preview only). A suspended website cannot be changed.' },
         press_email: { type: 'string' },
         partnerships_email: { type: 'string' },
@@ -151,25 +151,6 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
           context: { type: 'object' },
         },
         required: ['ok', 'entity', 'id'],
-      },
-    }),
-  organizationTool({
-      name: 'set_default_currency',
-      description: "Set the selected site’s default currency. Updates the same setting as update_organization_settings.default_currency; existing prices keep their stored currency and amount and are not converted.",
-      domain: 'organizations',
-      minimumRole: 'admin',
-      confirmRequired: false,
-      inputSchema: {
-        currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES], description: 'ISO 4217 currency code.' },
-      },
-      required: ['currency'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          default_currency: { type: 'string' },
-          updated: { type: 'boolean' },
-        },
-        required: ['default_currency', 'updated'],
       },
     }),
   organizationTool({

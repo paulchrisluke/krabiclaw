@@ -36,7 +36,7 @@ test.describe('stateless MCP server', () => {
 
     const pageList = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'list_tenant_pages',
+      toolName: 'list_site_pages',
       args: { organization_id: organizationId, locale: 'en' },
     })
     expect(pageList.status()).toBe(200)
@@ -45,7 +45,7 @@ test.describe('stateless MCP server', () => {
 
     const pageBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_tenant_page',
+      toolName: 'get_site_page',
       args: { organization_id: organizationId, variant_id: homeVariant!.id },
     })
     expect(pageBefore.status()).toBe(200)
@@ -76,19 +76,19 @@ test.describe('stateless MCP server', () => {
       expect(rejected.result.content[0].text).toContain(message)
     }
     const unchanged = await mcpRequest(request, baseURL!, {
-      method: 'tools/call', toolName: 'get_tenant_page',
+      method: 'tools/call', toolName: 'get_site_page',
       args: { organization_id: organizationId, variant_id: homeVariant!.id },
     })
     expect(unchanged.status()).toBe(200)
     const unchangedPage = mcpData<{ page: { blocks: unknown[]; updated_at: string } }>(await unchanged.json()).page
     expect(unchangedPage.blocks).toEqual(pageBeforeData.blocks)
     expect(unchangedPage.updated_at).toBe(pageBeforeData.updated_at)
-    // update_tenant_page replaces the document, so the writer states the path,
+    // update_site_page replaces the document, so the writer states the path,
     // title and identity it read rather than leaving them to be filled in from
     // the stored row. Order is the array's; there is no position to send.
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'update_tenant_page',
+      toolName: 'update_site_page',
       args: {
         organization_id: organizationId,
         variant_id: homeVariant!.id,
@@ -115,7 +115,7 @@ test.describe('stateless MCP server', () => {
 
     const contentRead = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
-      toolName: 'get_tenant_page',
+      toolName: 'get_site_page',
       args: { organization_id: organizationId, variant_id: homeVariant!.id },
     })
     expect(contentRead.status()).toBe(200)
@@ -205,7 +205,7 @@ test.describe('stateless MCP server', () => {
 
       const listContacts = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'get_contact_inquiries',
+        toolName: 'list_contact_inquiries',
         args: { organization_id: organizationId },
       })
       expect(listContacts.status()).toBe(200)
@@ -215,7 +215,7 @@ test.describe('stateless MCP server', () => {
 
       const listReservations = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'get_reservation_inquiries',
+        toolName: 'list_reservation_inquiries',
         args: { organization_id: organizationId },
       })
       expect(listReservations.status()).toBe(200)
@@ -243,8 +243,8 @@ test.describe('stateless MCP server', () => {
       expect(tools.status()).toBe(200)
       const toolsBody = await tools.json() as { result: { tools: Array<{ name: string }> } }
       const toolNames = toolsBody.result.tools.map(tool => tool.name)
-      expect(toolNames).toContain('get_contact_inquiries')
-      expect(toolNames).toContain('get_reservation_inquiries')
+      expect(toolNames).toContain('list_contact_inquiries')
+      expect(toolNames).toContain('list_reservation_inquiries')
     } finally {
       await releaseTenantMutationLock()
     }

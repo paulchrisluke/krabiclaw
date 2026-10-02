@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { credentialSession } from './utils/e2e-auth.mjs'
+import { mcpToolCall } from './utils/mcp-request.mjs'
 
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -39,37 +40,8 @@ async function getAuthHeaders() {
   return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
-async function mcp(headers, name, args = {}) {
-  // Plain JSON-RPC 2.0, as @modelcontextprotocol/server reads it: the method
-  // and tool come from the body. A `_meta['io.modelcontextprotocol/...']` key
-  // claims the modern envelope, which this request does not carry the rest of,
-  // so the server rejected every call as an invalid message.
-  const res = await fetch(`${BASE_URL}/api/mcp`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-      ...headers,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `${name}-${Date.now()}`,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-  })
-  // The transport may answer a single result as a one-event SSE stream.
-  const raw = await res.text()
-  const text = (res.headers.get('content-type') ?? '').includes('text/event-stream')
-    ? raw.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice('data:'.length).trim()).join('')
-    : raw
-  let body
-  try {
-    body = JSON.parse(text)
-  } catch {
-    body = text
-  }
-  return { status: res.status, body }
+function mcp(headers, name, args = {}) {
+  return mcpToolCall(BASE_URL, headers, name, args)
 }
 
 function data(body) {

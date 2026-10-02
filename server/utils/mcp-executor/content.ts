@@ -148,7 +148,7 @@ async function contentBlocksChanged(ctx: McpExecutorContext, document: { id: str
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
   switch (toolName) {
-    case "list_tenant_pages":
+    case "list_site_pages":
       try {
         const pages = await listTenantPages(organization.db, organization.organizationId, { locale: optionalString(args, "locale") });
         const page = paginateMcpCollection(pages, args, { resource: `tenant-pages:${organization.organizationId}:${optionalString(args, 'locale') ?? ''}` });
@@ -156,7 +156,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "get_tenant_page":
+    case "get_site_page":
       try {
         const page = await getTenantPageById(organization.db, requiredString(args, "variant_id"), {
           organizationId: organization.organizationId,
@@ -168,7 +168,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "create_tenant_page":
+    case "create_site_page":
       try {
         const created = await createTenantPage(organization.db, {
           organizationId: organization.organizationId,
@@ -194,7 +194,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "update_tenant_page":
+    case "update_site_page":
       try {
         const variantId = requiredString(args, "variant_id");
         const page = await getTenantPageById(organization.db, variantId, {
@@ -220,7 +220,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "delete_tenant_page":
+    case "delete_site_page":
       try {
         const deleted = await deleteTenantPage(organization.db, requiredString(args, "variant_id"), {
           scope: { organizationId: organization.organizationId},

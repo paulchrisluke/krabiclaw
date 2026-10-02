@@ -64,26 +64,6 @@ export async function handleOrganizationsTools(ctx: McpExecutorContext): Promise
         { settings: settingsResult },
       );
     }
-    case "set_default_currency": {
-      const { isCurrencyCode } = await import("~/shared/currencies");
-      const currency = requiredString(args, "currency").toUpperCase().trim();
-      if (!isCurrencyCode(currency)) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported currency: ${currency}`);
-      }
-      const result = await updateOrganizationSettingsFields(
-        organization.db,
-        organization.env,
-        organization.organizationId,
-        { default_currency: currency },
-        organization.userId,
-      );
-      assertDomainSuccess(result);
-      return {
-        default_currency: currency,
-        updated: true,
-        context: await mutationContextPayload(organization),
-      };
-    }
     case "set_brand_color": {
       const { resolveColor } = await import("~/utils/color-utils");
       const colorInput = requiredString(args, "color");

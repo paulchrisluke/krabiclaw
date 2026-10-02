@@ -5,7 +5,7 @@ import { locationListItemObject, locationMutationSummaryObject, locationObject, 
 export const LOCATIONS_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'list_locations',
-      description: 'List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.',
+      description: 'List the selected site’s locations with their IDs, slugs, titles and active state. Location-scoped tools take these IDs.',
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,

@@ -57,7 +57,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'remove_media',
-      description: 'Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not currently attached is a harmless no-op — it does not change any other attached asset or its order.',
+      description: 'Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not attached changes nothing; other attached assets keep their order.',
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -96,7 +96,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_organization_media_assets',
-      description: 'List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
+      description: 'List the images, videos and Markdown files in the selected site’s media library, with the asset IDs set_media and attach_media take. A file still in the conversation is saved with save_media_attachment.',
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -108,8 +108,8 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       },
     }),
   organizationTool({
-      name: 'upload_user_media',
-      description: "Save an attached image, video or Markdown document to the selected site when requested. Requires the authorized file reference supplied by the host; videos also require a poster image. Creates an active asset with a public URL before placement on a page. Each call makes one download attempt; an uncertain retry may create a duplicate asset.",
+      name: 'save_media_attachment',
+      description: "Save a file from the conversation to the selected site’s media library when the user asks: an image the user attached or generated, a video with its poster image, or a Markdown document. Requires the file reference supplied by the host. Creates an asset with a public URL; set_media or attach_media places it. Each call downloads once, so retrying an uncertain call can create a duplicate asset.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,

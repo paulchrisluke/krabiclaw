@@ -1,10 +1,10 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:01b63442d8c92247fe161b4688f3fc728b097f924eab9301b0fc83a3c245c422",
+  "fingerprint": "sha256:71e363ddcf07649676d4c4b7f08843ad38b9cffeba3ffcf7f9f546145f74007d",
   "tools": [
     {
       "name": "append_content_block",
-      "description": "Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — \"under this paragraph\" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article's cover. Returns the whole document so the next edit has every block's id and updated_at.",
+      "description": "Insert one block into a blog article or site page. Read the document first (get_blog_post, get_site_page): the writer says where the block goes by naming the block it follows in after_block_id — \"under this paragraph\" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article's cover. Returns the whole document so the next edit has every block's id and updated_at.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -20,7 +20,7 @@
             "type": "object"
           },
           "document_id": {
-            "description": "The blog post id or tenant page variant id.",
+            "description": "The blog post id or site page variant id.",
             "type": "string"
           },
           "level": {
@@ -3327,7 +3327,7 @@
       }
     },
     {
-      "name": "create_tenant_page",
+      "name": "create_site_page",
       "description": "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
       "inputSchema": {
         "additionalProperties": false,
@@ -3719,7 +3719,7 @@
     },
     {
       "name": "delete_content_block",
-      "description": "Delete one block, and any blocks nested under it, from a blog article or tenant page. Requires the block's own updated_at from the last read.",
+      "description": "Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block's own updated_at from the last read.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4049,7 +4049,7 @@
       }
     },
     {
-      "name": "delete_tenant_page",
+      "name": "delete_site_page",
       "description": "Delete the selected site page or translation. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.",
       "inputSchema": {
         "additionalProperties": false,
@@ -4654,67 +4654,6 @@
         },
         "required": [
           "post"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_contact_inquiries",
-      "description": "Read the selected site’s contact form submissions, including names, contact details and messages. This tool does not send replies or change submission status; those actions use the dashboard inbox.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "submissions": {
-            "items": {
-              "properties": {
-                "created_at": {
-                  "type": "string"
-                },
-                "email": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "message": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "phone": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "submissions"
         ],
         "type": "object"
       }
@@ -6199,7 +6138,7 @@
     },
     {
       "name": "get_organization_media_assets",
-      "description": "List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.",
+      "description": "List the images, videos and Markdown files in the selected site’s media library, with the asset IDs set_media and attach_media take. A file still in the conversation is saved with save_media_attachment.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7438,129 +7377,6 @@
       }
     },
     {
-      "name": "get_reservation_inquiries",
-      "description": "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "days": {
-            "description": "Optional: only include reservations made in the last N days (max 90).",
-            "type": "number"
-          },
-          "location_id": {
-            "description": "Optional location id to list only that location's reservations.",
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "submissions": {
-            "items": {
-              "properties": {
-                "created_at": {
-                  "type": "string"
-                },
-                "date": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "email": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "guests": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "location_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "location_title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "phone": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "requests": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "status": {
-                  "enum": [
-                    "confirmed",
-                    "cancelled"
-                  ],
-                  "type": "string"
-                },
-                "time": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "summary": {
-            "properties": {
-              "by_status": {
-                "description": "Count of reservations per status.",
-                "type": "object"
-              },
-              "total": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "total",
-              "by_status"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "submissions",
-          "summary"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_reservation_policy",
       "description": "Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.",
       "inputSchema": {
@@ -7933,6 +7749,37 @@
       }
     },
     {
+      "name": "get_site_page",
+      "description": "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
       "name": "get_social_connections",
       "description": "Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), the supported channel operations, and the dashboard URL where a person connects it. Never returns a token.",
       "inputSchema": {
@@ -8069,37 +7916,6 @@
           "website",
           "channels"
         ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_tenant_page",
-      "description": "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "variant_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "variant_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "page": {
-            "type": "object"
-          },
-          "replacement_confirmation": {
-            "type": "object"
-          }
-        },
         "type": "object"
       }
     },
@@ -8833,6 +8649,67 @@
       }
     },
     {
+      "name": "list_contact_inquiries",
+      "description": "Read the selected site’s contact form submissions, including names, contact details and messages. This tool does not send replies or change submission status; those actions use the dashboard inbox.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "submissions": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "phone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "submissions"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_location_products",
       "description": "List the products offered at one explicit location.",
       "inputSchema": {
@@ -9193,7 +9070,7 @@
     },
     {
       "name": "list_locations",
-      "description": "List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.",
+      "description": "List the selected site’s locations with their IDs, slugs, titles and active state. Location-scoped tools take these IDs.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9283,7 +9160,7 @@
     },
     {
       "name": "list_metafield_definitions",
-      "description": "List the tenant descriptive product attribute vocabulary. Adding an attribute of a supported type is one definition here, not a schema change.",
+      "description": "List the site’s product attribute definitions. Adding an attribute of a supported type is one definition here, not a schema change.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9389,7 +9266,7 @@
     },
     {
       "name": "list_organization_qa",
-      "description": "Read general tenant Q&A, or only the specified page Q&A when page_path is provided. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.",
+      "description": "Read the site’s general Q&A, or the Q&A of one page when page_path is provided. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10207,7 +10084,130 @@
       }
     },
     {
-      "name": "list_tenant_pages",
+      "name": "list_reservation_inquiries",
+      "description": "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "description": "Optional: only include reservations made in the last N days (max 90).",
+            "type": "number"
+          },
+          "location_id": {
+            "description": "Optional location id to list only that location's reservations.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "submissions": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "email": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "guests": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "location_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "phone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "requests": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "enum": [
+                    "confirmed",
+                    "cancelled"
+                  ],
+                  "type": "string"
+                },
+                "time": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "properties": {
+              "by_status": {
+                "description": "Count of reservations per status.",
+                "type": "object"
+              },
+              "total": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "total",
+              "by_status"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "submissions",
+          "summary"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "list_site_pages",
       "description": "List authored site-page variants for the requested language, with their paths and document identities. Each language is managed explicitly; this tool does not generate translations.",
       "inputSchema": {
         "additionalProperties": false,
@@ -12301,7 +12301,7 @@
     },
     {
       "name": "remove_media",
-      "description": "Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not currently attached is a harmless no-op — it does not change any other attached asset or its order.",
+      "description": "Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not attached changes nothing; other attached assets keep their order.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14040,56 +14040,29 @@
       }
     },
     {
-      "name": "save_generated_image",
-      "description": "Save an existing base64-encoded generated image to the selected KrabiClaw site when the user requests it. Creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets. For an existing generated attachment, save_generated_image_file accepts its authorized file reference.",
+      "name": "save_media_attachment",
+      "description": "Save a file from the conversation to the selected site’s media library when the user asks: an image the user attached or generated, a video with its poster image, or a Markdown document. Requires the file reference supplied by the host. Creates an asset with a public URL; set_media or attach_media places it. Each call downloads once, so retrying an uncertain call can create a duplicate asset.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "image_data_base64": {
-            "description": "Raw base64 image bytes or a base64 data URL already available from an external source; use save_generated_image_file for a native ChatGPT generated attachment.",
+          "category": {
+            "description": "Optional visual subject used to organize the media library. It never assigns the asset to content.",
+            "enum": [
+              "exterior",
+              "interior",
+              "food",
+              "menu",
+              "team",
+              "other"
+            ],
             "type": "string"
           },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+          "description": {
+            "description": "Description of the media (stored as alt text).",
             "type": "string"
           },
-          "prompt": {
-            "description": "The prompt used to generate the image (stored as alt text).",
-            "type": "string"
-          }
-        },
-        "required": [
-          "image_data_base64"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "asset_id": {
-            "type": "string"
-          },
-          "public_url": {
-            "type": "string"
-          },
-          "thumbnail_url": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id",
-          "public_url"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "save_generated_image_file",
-      "description": "Save an existing generated image attachment to the selected KrabiClaw site when the user requests saving it there. Accepts an authorized file reference and creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "attachment_id": {
-            "description": "Authorized file reference supplied by ChatGPT for the generated image attachment.",
+          "file": {
+            "description": "Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.",
             "properties": {
               "download_url": {
                 "type": "string"
@@ -14114,13 +14087,31 @@
             "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
             "type": "string"
           },
-          "prompt": {
-            "description": "The prompt used to generate the image (stored as alt text).",
-            "type": "string"
+          "poster_file": {
+            "description": "Required poster/thumbnail image for video uploads. Invalid for non-video uploads.",
+            "properties": {
+              "download_url": {
+                "type": "string"
+              },
+              "file_id": {
+                "type": "string"
+              },
+              "file_name": {
+                "type": "string"
+              },
+              "mime_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "download_url",
+              "file_id"
+            ],
+            "type": "object"
           }
         },
         "required": [
-          "attachment_id"
+          "file"
         ],
         "type": "object"
       },
@@ -14129,16 +14120,38 @@
           "asset_id": {
             "type": "string"
           },
+          "kind": {
+            "enum": [
+              "image",
+              "video",
+              "file"
+            ],
+            "type": "string"
+          },
+          "next_step": {
+            "type": "string"
+          },
           "public_url": {
             "type": "string"
           },
-          "thumbnail_url": {
+          "status": {
+            "enum": [
+              "active"
+            ],
             "type": "string"
+          },
+          "thumbnail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
           "asset_id",
-          "public_url"
+          "status",
+          "public_url",
+          "kind"
         ],
         "type": "object"
       }
@@ -14293,58 +14306,6 @@
         },
         "required": [
           "products"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_default_currency",
-      "description": "Set the selected site’s default currency. Updates the same setting as update_organization_settings.default_currency; existing prices keep their stored currency and amount and are not converted.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "description": "ISO 4217 currency code.",
-            "enum": [
-              "THB",
-              "USD",
-              "EUR",
-              "GBP",
-              "JPY",
-              "AUD",
-              "CAD",
-              "SGD",
-              "HKD",
-              "MYR",
-              "IDR",
-              "PHP",
-              "VND",
-              "INR"
-            ],
-            "type": "string"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "currency"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "default_currency": {
-            "type": "string"
-          },
-          "updated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "default_currency",
-          "updated"
         ],
         "type": "object"
       }
@@ -17057,6 +17018,7 @@
             ]
           },
           "default_currency": {
+            "description": "ISO 4217 code. Existing prices keep their stored currency and amount; nothing is converted.",
             "enum": [
               "THB",
               "USD",
@@ -18583,7 +18545,7 @@
       }
     },
     {
-      "name": "update_tenant_page",
+      "name": "update_site_page",
       "description": "Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.",
       "inputSchema": {
         "additionalProperties": false,
@@ -18782,123 +18744,6 @@
             "type": "object"
           }
         },
-        "type": "object"
-      }
-    },
-    {
-      "name": "upload_user_media",
-      "description": "Save an attached image, video or Markdown document to the selected site when requested. Requires the authorized file reference supplied by the host; videos also require a poster image. Creates an active asset with a public URL before placement on a page. Each call makes one download attempt; an uncertain retry may create a duplicate asset.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "category": {
-            "description": "Optional visual subject used to organize the media library. It never assigns the asset to content.",
-            "enum": [
-              "exterior",
-              "interior",
-              "food",
-              "menu",
-              "team",
-              "other"
-            ],
-            "type": "string"
-          },
-          "description": {
-            "description": "Description of the media (stored as alt text).",
-            "type": "string"
-          },
-          "file": {
-            "description": "Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.",
-            "properties": {
-              "download_url": {
-                "type": "string"
-              },
-              "file_id": {
-                "type": "string"
-              },
-              "file_name": {
-                "type": "string"
-              },
-              "mime_type": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "download_url",
-              "file_id"
-            ],
-            "type": "object"
-          },
-          "organization_id": {
-            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
-            "type": "string"
-          },
-          "poster_file": {
-            "description": "Required poster/thumbnail image for video uploads. Invalid for non-video uploads.",
-            "properties": {
-              "download_url": {
-                "type": "string"
-              },
-              "file_id": {
-                "type": "string"
-              },
-              "file_name": {
-                "type": "string"
-              },
-              "mime_type": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "download_url",
-              "file_id"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "asset_id": {
-            "type": "string"
-          },
-          "kind": {
-            "enum": [
-              "image",
-              "video",
-              "file"
-            ],
-            "type": "string"
-          },
-          "next_step": {
-            "type": "string"
-          },
-          "public_url": {
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "active"
-            ],
-            "type": "string"
-          },
-          "thumbnail_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "asset_id",
-          "status",
-          "public_url",
-          "kind"
-        ],
         "type": "object"
       }
     }
