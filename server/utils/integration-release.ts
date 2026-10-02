@@ -1,8 +1,8 @@
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { clearAnalyticsIntegration } from './google-analytics'
-import { clearSearchConsoleIntegration } from './google-search-console'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import type { IntegrationProvider } from '~/shared/organization-settings'
 import type { VerifiedMetaRequest } from './meta-graph'
+import { deleteIntegration, integrationsThroughAccount } from './organization-integrations'
 import { publicResourceCacheInvalidationQuery } from './public-resource-cache'
 import { reconcileZarazAnalytics } from './zaraz-analytics'
 
@@ -29,7 +29,7 @@ export interface ReleaseIntegrationResult {
   released: boolean
 }
 
-const PRODUCT_KEY: Record<IntegrationProduct, string> = {
+const PROVIDER: Record<IntegrationProduct, IntegrationProvider> = {
   'google-analytics': 'google_analytics',
   'google-search-console': 'google_search_console',
   'facebook': 'facebook',
@@ -41,23 +41,7 @@ export async function releaseIntegration(
   organizationId: string,
   product: IntegrationProduct,
 ): Promise<ReleaseIntegrationResult> {
-  const key = PRODUCT_KEY[product]
-  const present = await queryFirst<{ connected: number }>(env.DB, `
-    SELECT json_extract(integrations_json, ?) IS NOT NULL AS connected
-      FROM organization WHERE id = ? LIMIT 1
-  `, [`$.${key}`, organizationId])
-  const released = Boolean(present?.connected)
-
-  if (product === 'google-analytics') {
-    await clearAnalyticsIntegration(env, organizationId)
-  } else if (product === 'google-search-console') {
-    await clearSearchConsoleIntegration(env, organizationId)
-  } else {
-    await execute(env.DB, `
-      UPDATE organization SET integrations_json = json_remove(integrations_json, ?)
-      WHERE id = ?
-    `, [`$.${key}`, organizationId])
-  }
+  const released = await deleteIntegration(env.DB, organizationId, PROVIDER[product])
 
   // Zaraz serves the measurement id of connected sites, so losing Analytics
   // has to withdraw the tag rather than keep collecting for a tenant who
@@ -76,17 +60,13 @@ export async function deauthorizeMetaSubject(env: CloudflareEnv, subject: Verifi
   const context = await createAuth(env).$context
   const account = await context.internalAdapter.findAccountByKey({ providerId: subject.channel, accountId: subject.providerSubjectId })
   if (!account) return []
-  const organizations = await queryAll<{ id: string }>(env.DB, 'SELECT id FROM organization WHERE json_extract(integrations_json, ?) = ?',
-    [`$.${subject.channel}.account_id`, account.id])
   const results: ReleaseIntegrationResult[] = []
-  for (const organization of organizations) results.push(await releaseIntegration(env, organization.id, subject.channel))
+  for (const organizationId of await integrationsThroughAccount(env.DB, subject.channel, account.id)) results.push(await releaseIntegration(env, organizationId, subject.channel))
   await context.internalAdapter.deleteAccount(account.id)
   return results
 }
 
 export interface MetaErasureResult {
-  erased_documents: number
-  erased_media: number
   detached_publications: number
   remaining: number
 }
@@ -115,5 +95,5 @@ export async function eraseMetaSubjectData(env: CloudflareEnv, subject: Verified
   }
   const remaining = await remainingMetaSubjectData(env, subject)
   if (remaining !== 0) throw new Error(`Meta data deletion left ${remaining} record(s) naming ${subject.channel} subject ${subject.providerSubjectId}`)
-  return { erased_documents: 0, erased_media: 0, detached_publications: publications.length, remaining }
+  return { detached_publications: publications.length, remaining }
 }

@@ -274,7 +274,7 @@ currency, both including tax.
 ## Google Analytics delivery
 
 The destination is always the measuring organization's own connected property
-(`organization.integrations_json.google_analytics`) on its canonical host. There
+(the `google_analytics` row of `organization_integrations`) on its canonical host. There
 is no environment-level property (`GA4_MEASUREMENT_ID` was removed) and no
 platform Zaraz tool: KrabiClaw is configured like any tenant by
 `reconcileZarazAnalytics` (`server/utils/zaraz-analytics.ts`), which deletes any GA4

@@ -55,7 +55,7 @@ export const PLAN_DEFINITIONS = Object.freeze([
       'Edit menus, practice areas, content & photos through ChatGPT',
       'Bookings, ticketed experiences & consultation requests',
       'Messaging booking & reservation notifications',
-      'Auto-sync from Facebook & Instagram',
+      'Facebook & Instagram publishing',
       'Google Places imports',
     ],
   },

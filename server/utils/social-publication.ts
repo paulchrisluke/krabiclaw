@@ -9,12 +9,13 @@ import { providerCaption } from '~/shared/posts'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import {
   createUnpublishedPhoto, createUnpublishedVideo, deletePageObject, facebookPageToken,
-  getFacebookPagesConnection, publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
+  publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
 } from '~/server/utils/facebook-pages'
 import {
-  createMediaContainer, instagramAccessToken, publishContainer, readContainerStatus, readInstagramConnection, readMedia, type InstagramTarget,
+  createMediaContainer, instagramAccessToken, publishContainer, readContainerStatus, readMedia, type InstagramTarget,
 } from '~/server/utils/instagram'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
+import { readIntegration } from '~/server/utils/organization-integrations'
 
 /**
  * Publishing a post to its website and to the Facebook Page and Instagram
@@ -85,19 +86,16 @@ interface ConnectionRead {
   targetId: string | null
   targetName: string | null
   revision: string | null
-  status: string | null
   accountId: string | null
 }
 
 async function readConnection(env: CloudflareEnv, organizationId: string, channel: SocialChannel): Promise<ConnectionRead> {
-  if (channel === 'facebook') {
-    const connection = await getFacebookPagesConnection(env, organizationId)
-    return { channel, connected: Boolean(connection), targetId: connection?.page_id ?? null, targetName: connection?.page_name ?? null,
-      revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null }
+  const connection = await readIntegration(env.DB, organizationId, channel)
+  return {
+    channel, connected: Boolean(connection), targetId: connection?.target_id ?? null,
+    targetName: connection ? (channel === 'instagram' ? `@${connection.target_name}` : connection.target_name) : null,
+    revision: connection?.revision ?? null, accountId: connection?.account_id ?? null,
   }
-  const connection = await readInstagramConnection(env, organizationId)
-  return { channel, connected: Boolean(connection), targetId: connection?.instagram_user_id ?? null, targetName: connection ? `@${connection.username}` : null,
-    revision: connection?.revision ?? null, status: connection?.status ?? null, accountId: connection?.account_id ?? null }
 }
 
 const SUPPORTED_FORMATS: Record<SocialChannel, string[]> = {
@@ -119,7 +117,6 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
     if (!entitled) problems.push({ code: 'growth_plan_required', message: 'Publishing to Facebook and Instagram requires the Growth plan.' })
     if (!connection.connected) problems.push({ code: 'not_connected', message: `No ${channel === 'facebook' ? 'Facebook Page' : 'Instagram professional account'} is connected.` })
     else if (!connection.accountId || !(await readLinkedAccount(env, connection.accountId))) problems.push({ code: 'account_unlinked', message: `The ${channel} account this connection was made through is no longer linked. Connect it again.` })
-    else if (connection.status === 'error') problems.push({ code: 'connection_error', message: `The ${channel} connection needs attention. Read or publish to receive the provider's current error.` })
     return {
       channel,
       connected: connection.connected,
@@ -300,7 +297,7 @@ type ChannelResult = PublishOutcome
 
 async function facebookTargetFor(env: CloudflareEnv, connection: ConnectionRead): Promise<FacebookPageTarget> {
   if (connection.channel !== 'facebook' || !connection.connected || !connection.targetId || !connection.accountId || !connection.targetName) throw new Error('The Facebook connection is incomplete. Connect Facebook again.')
-  return { pageId: connection.targetId, pageToken: await facebookPageToken(env, { page_id: connection.targetId, account_id: connection.accountId, page_name: connection.targetName }) }
+  return { pageId: connection.targetId, pageToken: await facebookPageToken(env, { target_id: connection.targetId, account_id: connection.accountId, target_name: connection.targetName }) }
 }
 
 async function instagramTargetFor(env: CloudflareEnv, connection: ConnectionRead): Promise<InstagramTarget> {

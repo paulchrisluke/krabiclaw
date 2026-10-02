@@ -3,7 +3,8 @@ import { getRouterParam, readBody } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireIntegrationAccount } from '~/server/utils/auth'
-import { readAnalyticsIntegration, selectAnalyticsProperty } from '~/server/utils/google-analytics'
+import { selectAnalyticsProperty } from '~/server/utils/google-analytics'
+import { readIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { reconcileZarazAnalytics } from '~/server/utils/zaraz-analytics'
 
@@ -26,7 +27,7 @@ export default defineHandler(async (event) => {
   }
 
   const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
-  const current = await readAnalyticsIntegration(env, organization.id)
+  const current = await readIntegration(env.DB, organization.id, 'google_analytics')
   await requireIntegrationAccount(env, accountId, {
     userId: session.user.id,
     currentAccountId: current?.account_id,

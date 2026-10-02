@@ -4,7 +4,7 @@
 
 Global first, local second, persistent after that.
 
-- **Site/org level** (once per site): brand, currency, timezone default, team, ChatGPT app, socials, core offering.
+- **Site/org level** (once per site): brand, currency, timezone default, team, ChatGPT app, core offering. Social profiles are the accounts connected in Integrations.
 - **Location level** (once per location, repeats on every new location): hours, contact, notification destination, location hero/media, location-specific copy.
 - Onboarding is not a single linear flow that ends at "Create site." It collects the first handful of critical steps; everything else is done from the dashboard after the site exists. The flow itself loads no checklist; `server/utils/onboarding-checklist.ts` feeds the organization analytics report only.
 
@@ -47,7 +47,7 @@ Only asked again on **add-location** (the `add-location` flow), which never re-c
 - Location title, address, hours, phone
 - Notification routing for this location
 - Location hero/media (uses location media only; it remains empty until supplied)
-- Optional location-specific notes/social
+- Optional location-specific notes
 
 ## Deleting a tenant
 

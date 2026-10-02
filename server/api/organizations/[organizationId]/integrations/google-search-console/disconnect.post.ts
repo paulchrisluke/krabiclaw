@@ -3,7 +3,7 @@ import { releaseIntegration } from '~/server/utils/integration-release'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 // One shape for every product: authorize, then hand the whole removal to the
-// shared release path. Nothing here touches integrations_json itself.
+// shared release path.
 export default defineHandler(async (event) => {
   const organizationId = getRouterParam(event, 'organizationId')
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })

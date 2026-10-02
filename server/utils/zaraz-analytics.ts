@@ -391,17 +391,16 @@ export async function reconcileZarazAnalytics(
 
   const rows = await queryAll<ActiveTenantAnalyticsRow>(db, `
     SELECT o.id AS organization_id,
-           json_extract(o.integrations_json, '$.google_analytics.measurement_id') AS ga4_measurement_id,
+           analytics.measurement_id AS ga4_measurement_id,
            domain.domain
       FROM organization o
+      JOIN organization_integrations analytics
+        ON analytics.organization_id = o.id AND analytics.provider = 'google_analytics'
       JOIN organization_domains domain
         ON domain.organization_id = o.id
      WHERE o.status = 'active'
        AND o.onboarding_status = 'active'
-       AND json_extract(o.integrations_json, '$.google_analytics.status') = 'active'
        AND domain.status = 'active'
-       AND json_extract(o.integrations_json, '$.google_analytics.measurement_id') IS NOT NULL
-       AND json_extract(o.integrations_json, '$.google_analytics.measurement_id') <> ''
      ORDER BY o.id, domain.domain
   `)
 
