@@ -181,13 +181,20 @@ export function guestContactReceivedMessage(input: {
   }
 }
 
-export function guestThreadReplyMessage(input: { organizationName: string; organizationLogoUrl: string | null; body: string }): NotificationMessage {
+export function guestThreadReplyMessage(input: {
+  organizationName: string
+  organizationLogoUrl: string | null
+  body: string
+  photos?: Array<{ imageUrl: string; alt: string }>
+}): NotificationMessage {
+  const photos = input.photos ?? []
   return {
     title: `Reply from ${input.organizationName}`,
-    preheader: input.body.slice(0, 120),
+    preheader: input.body ? input.body.slice(0, 120) : `${input.organizationName} sent ${photos.length === 1 ? 'a photo' : `${photos.length} photos`}`,
     hero: null,
     facts: [],
-    sections: [{ title: '', body: input.body }],
+    sections: input.body ? [{ title: '', body: input.body }] : [],
+    photos,
     finePrint: 'Reply to this email and your message goes straight back to the same conversation.',
     category: 'account_security',
     organizationName: input.organizationName,

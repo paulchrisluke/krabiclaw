@@ -64,7 +64,7 @@
         class="m-3"
       >
         <template #actions>
-          <UButton color="warning" variant="soft" size="xs" :loading="loadingThreads" @click="refreshThreads">
+          <UButton color="warning" variant="soft" size="xs" :loading="pending" @click="refreshThreads">
             Refresh
           </UButton>
         </template>
@@ -95,80 +95,99 @@
         32px of gutter between the picture and the pane and made every row
         narrower than the text it holds.
       -->
-      <div
-        v-for="thread in threads"
-        :key="thread.id"
-        class="group relative mx-3"
-        :data-thread-row="thread.id"
+      <!-- A conversation that gains a message slides to its new place; one
+           archived out of this list fades and the rest close up behind it. -->
+      <TransitionGroup
+        tag="div"
+        class="relative"
+        move-class="transition-transform duration-300 ease-out motion-reduce:transition-none"
+        enter-from-class="opacity-0 -translate-y-1"
+        enter-active-class="transition duration-300 ease-out motion-reduce:transition-none"
+        leave-to-class="opacity-0"
+        leave-active-class="absolute inset-x-0 transition-opacity duration-200 motion-reduce:transition-none"
       >
-        <NuxtLink
-          :to="{ path: threadRoute(thread), query: route.query }"
-          class="flex items-start gap-3 rounded-xl px-3 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          :class="[
-            thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60',
-            rowActions(thread).length ? 'pr-12' : '',
-          ]"
+        <div
+          v-for="thread in threads"
+          :key="thread.id"
+          class="group relative mx-3"
+          :data-thread-row="thread.id"
         >
-          <!-- The picture leads: the location's hero, or the business's logo for
-               a thread that came to the business itself. A place with neither
-               keeps the same footprint so the rows do not reflow between them. -->
-          <img
-            v-if="thread.imageUrl"
-            :src="thread.imageUrl"
-            alt=""
-            class="size-14 shrink-0 rounded-xl object-cover"
-            loading="lazy"
+          <NuxtLink
+            :to="{ path: threadRoute(thread), query: route.query }"
+            class="flex items-start gap-3 rounded-xl px-3 py-3 transition duration-200 active:scale-[0.99] active:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            :class="[
+              thread.id === openThreadId ? 'bg-elevated' : 'hover:bg-elevated/60',
+              rowActions(thread).length ? 'pr-12' : '',
+            ]"
           >
-          <div v-else class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-elevated">
-            <UIcon name="i-lucide-image" class="size-5 text-dimmed" />
-          </div>
-
-          <div class="min-w-0 flex-1">
-            <!--
-              A thread with a booking leads with when it is, the way Airbnb's row
-              leads with its date range. One with no booking has nothing to put
-              there, so the name moves up rather than leaving an empty line for
-              the picture to align against.
-            -->
-            <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
-              <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
-              <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+            <!-- The picture leads: the location's hero, or the business's logo for
+                 a thread that came to the business itself. A place with neither
+                 keeps the same footprint so the rows do not reflow between them. -->
+            <img
+              v-if="thread.imageUrl"
+              :src="thread.imageUrl"
+              alt=""
+              class="size-14 shrink-0 rounded-xl object-cover"
+              loading="lazy"
+            >
+            <div v-else class="flex size-14 shrink-0 items-center justify-center rounded-xl bg-elevated">
+              <UIcon name="i-lucide-image" class="size-5 text-dimmed" />
             </div>
-            <div class="flex items-baseline justify-between gap-3">
-              <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
-              <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+
+            <div class="min-w-0 flex-1">
+              <!--
+                A thread with a booking leads with when it is, the way Airbnb's row
+                leads with its date range. One with no booking has nothing to put
+                there, so the name moves up rather than leaving an empty line for
+                the picture to align against.
+              -->
+              <div v-if="occurrenceLine(thread)" class="flex items-baseline justify-between gap-3 text-xs text-muted">
+                <span class="min-w-0 flex-1 truncate">{{ occurrenceLine(thread) }}</span>
+                <span class="shrink-0">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+              </div>
+              <div class="flex items-baseline justify-between gap-3">
+                <p class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ thread.guestName }}</p>
+                <span v-if="!occurrenceLine(thread)" class="shrink-0 text-xs text-muted">{{ formatRelativeTime(thread.lastActivityAt) }}</span>
+              </div>
+              <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
             </div>
-            <p class="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{{ thread.preview?.text || 'New conversation' }}</p>
-          </div>
 
-          <span
-            v-if="thread.unread"
-            class="mt-2 block size-2.5 shrink-0 rounded-full bg-primary"
-            :aria-label="`${thread.guestName}: unread`"
-          />
-        </NuxtLink>
+            <Transition
+              enter-from-class="scale-0"
+              enter-active-class="transition-transform duration-200 ease-out motion-reduce:transition-none"
+              leave-to-class="scale-0"
+              leave-active-class="transition-transform duration-150 motion-reduce:transition-none"
+            >
+              <span
+                v-if="thread.unread"
+                class="mt-2 block size-2.5 shrink-0 rounded-full bg-primary"
+                :aria-label="`${thread.guestName}: unread`"
+              />
+            </Transition>
+          </NuxtLink>
 
-        <!--
-          Airbnb's row menu: a sibling of the row's link, not inside it, so
-          opening it never opens the conversation and the link stays one
-          interactive element. Hover reveals it where there is a pointer; it is
-          always there on a phone and always reachable by Tab.
-        -->
-        <UDropdownMenu
-          v-if="rowActions(thread).length"
-          :items="rowActions(thread)"
-          :content="{ align: 'end' }"
-        >
-          <UButton
-            icon="i-lucide-ellipsis"
-            color="neutral"
-            variant="ghost"
-            class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
-            :loading="mailboxSaving === thread.id"
-            :aria-label="`Conversation actions for ${thread.guestName}`"
-          />
-        </UDropdownMenu>
-      </div>
+          <!--
+            Airbnb's row menu: a sibling of the row's link, not inside it, so
+            opening it never opens the conversation and the link stays one
+            interactive element. Hover reveals it where there is a pointer; it is
+            always there on a phone and always reachable by Tab.
+          -->
+          <UDropdownMenu
+            v-if="rowActions(thread).length"
+            :items="rowActions(thread)"
+            :content="{ align: 'end' }"
+          >
+            <UButton
+              icon="i-lucide-ellipsis"
+              color="neutral"
+              variant="ghost"
+              class="absolute right-2 top-1/2 -translate-y-1/2 rounded-full sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 sm:data-[state=open]:opacity-100"
+              :loading="mailboxSaving === thread.id"
+              :aria-label="`Conversation actions for ${thread.guestName}`"
+            />
+          </UDropdownMenu>
+        </div>
+      </TransitionGroup>
 
       <!--
         Airbnb's own: a 50px full-bleed row at the foot of the list, not a tab
@@ -176,7 +195,7 @@
         lens on the one you are in.
       -->
       <NuxtLink
-        v-if="!loadingThreads && (pastOnly || threads.length > 0)"
+        v-if="data && (pastOnly || threads.length > 0)"
         :to="{ path: listRoute, query: pastOnly ? withoutArchived : { ...route.query, archived: '' } }"
         class="flex items-center justify-between gap-3 px-4 py-4 text-sm font-medium text-default transition hover:bg-elevated/60"
         :class="threads.length ? 'mt-2 border-t border-default' : ''"
@@ -185,11 +204,12 @@
         <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted" />
       </NuxtLink>
 
-      <div v-if="loadingThreads" class="space-y-3 p-4">
+      <!-- Skeleton only before the first answer; a refresh keeps the rows. -->
+      <div v-if="!data && pending" class="space-y-3 p-4">
         <USkeleton v-for="i in 5" :key="i" class="h-14 rounded-xl" />
       </div>
 
-      <div v-else-if="!threadsError && threads.length === 0" class="px-6 py-14 text-center">
+      <div v-else-if="data && threads.length === 0" class="px-6 py-14 text-center">
         <p class="text-base font-medium text-highlighted">{{ emptyTitle }}</p>
         <p class="mt-1 text-sm text-muted">{{ emptyDescription }}</p>
         <UButton
@@ -225,12 +245,6 @@ import { useDashboardInvalidations } from '~/composables/useDashboardInvalidatio
   a conversation, and this component draws no panel or navbar of its own — the
   route parent owns that chrome.
 */
-const props = defineProps<{
-  /** Locks the list to one kind, for a surface that is only ever about that kind. */
-  submissionTypeFilter?: SubmissionType
-  /** Rendered somewhere other than the messages screen: it opens nothing on its own. */
-  embedded?: boolean
-}>()
 const emit = defineEmits<{ first: [target: { path: string; query: LocationQueryRaw } | null] }>()
 
 const dashboard = useDashboardOrganization()
@@ -256,7 +270,6 @@ const openThreadId = computed(() => {
 const pastOnly = computed(() => route.query.archived !== undefined)
 const withoutArchived = computed(() => { const { archived: _archived, ...rest } = route.query; return rest })
 const activeType = computed<SubmissionType | null>(() => {
-  if (props.submissionTypeFilter) return props.submissionTypeFilter
   const value = route.query.filter
   return value === 'contact' || value === 'reservation' || value === 'booking' ? value : null
 })
@@ -281,10 +294,7 @@ const typeMenuItems = computed(() => [typeOptions.value.map(option => ({
 
 const filtersApplied = computed(() => Boolean(route.query.query || route.query.filter || route.query.unread))
 
-const loadingThreads = ref(false)
 const listHydrated = ref(false)
-const threadsError = ref<unknown>(null)
-const threads = ref<ThreadListItem[]>([])
 
 const realtime = useDashboardInvalidations()
 const realtimeFailed = computed(() => realtime.status.value === 'failed')
@@ -296,15 +306,10 @@ onMounted(() => {
 const capabilities = computed(() => {
   const vertical = dashboard.organization.value?.vertical
   if (!vertical) return null
-  try {
-    const normalizedVertical = normalizeVertical(vertical) as OrganizationVertical
-    const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
-    return resolveCmsCapabilities(normalizedVertical, template, {
-      organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
-    })
-  } catch {
-    return null
-  }
+  const template = resolvePublicTemplate({ themeId: dashboard.organization.value?.theme_id, vertical }).slug
+  return resolveCmsCapabilities(normalizeVertical(vertical) as OrganizationVertical, template, {
+    organization: parseCmsFeatureOverrideDelta(dashboard.organization.value?.feature_overrides),
+  })
 })
 
 const dashboardScope = useDashboardRouteScope()
@@ -322,7 +327,6 @@ const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
 */
 const vertical = computed(() => dashboard.organization.value?.vertical ?? null)
 const typeOptions = computed(() => {
-  if (props.submissionTypeFilter) return []
   const kinds: SubmissionType[] = []
   if (effectiveFeatureSet.value.has('reservations')) kinds.push('reservation')
   if (effectiveFeatureSet.value.has('products')) kinds.push('booking')
@@ -349,15 +353,13 @@ const emptyDescription = computed(() => {
   return 'New guest conversations will appear here.'
 })
 
-let threadsRequestToken = 0
-
 const listQuery = computed(() => ({
   type: activeType.value ?? undefined,
   mailbox: pastOnly.value ? 'past' as const : 'current' as const,
   unread: unreadOnly.value ? '1' as const : undefined,
 }))
 
-const initialThreadsKey = computed(() => [
+const listKey = computed(() => [
   'dashboard-guest-threads',
   String(route.params.orgSlug ?? ''),
   organizationId.value,
@@ -366,33 +368,23 @@ const initialThreadsKey = computed(() => [
   unreadOnly.value ? 'unread' : 'any',
 ].join(':'))
 
-const {
-  data: initialThreads,
-  pending: initialThreadsPending,
-  error: initialThreadsError,
-} = await useAsyncData<{ threads: ThreadListItem[] }>(initialThreadsKey, async () => {
+// One loader for the list: the first render, a filter change and a live
+// update all go through it, and a refresh keeps the rows already on screen.
+const { data, pending, error: threadsError, refresh } = await useAsyncData<{ threads: ThreadListItem[] }>(listKey, async () => {
   if (!dashboardScope.value) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
   }
   return await dashboardApi<{ threads: ThreadListItem[] }>(
     `/api/dashboard/organizations/${organizationId.value}/guest-threads`,
-    {
-      query: listQuery.value,
-      validate: isThreadListResponse,
-    },
+    { query: listQuery.value, validate: isThreadListResponse },
   )
 })
-
-watch([initialThreads, initialThreadsPending, initialThreadsError], ([data, pending, error]) => {
-  loadingThreads.value = pending
-  threadsError.value = error
-  threads.value = data?.threads ?? []
-}, { immediate: true })
+const threads = computed(() => data.value?.threads ?? [])
 
 // The newest thread, for the index above to open into its second column on
 // arrival. The list only says which; whether there is a column is the shell's.
 watch([threads, openThreadId], ([rows, open]) => {
-  if (open || props.embedded) return
+  if (open) return
   const first = rows[0]
   emit('first', first ? { path: threadRoute(first), query: route.query } : null)
 }, { immediate: true })
@@ -410,26 +402,6 @@ function threadRoute(thread: ThreadListItem) {
 function occurrenceLine(thread: ThreadListItem) {
   if (thread.whenLabel) return thread.whenLabel
   return thread.locationLabel ?? ''
-}
-
-async function loadThreads() {
-  if (!dashboardScope.value) return
-  const requestToken = ++threadsRequestToken
-  loadingThreads.value = true
-  threadsError.value = null
-  try {
-    const res = await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/organizations/${organizationId.value}/guest-threads`, {
-      query: listQuery.value,
-      validate: isThreadListResponse,
-    })
-    if (requestToken !== threadsRequestToken) return
-    threads.value = res.threads ?? []
-  } catch (error) {
-    if (requestToken !== threadsRequestToken) return
-    threadsError.value = error
-  } finally {
-    if (requestToken === threadsRequestToken) loadingThreads.value = false
-  }
 }
 
 /*
@@ -465,7 +437,7 @@ async function moveThread(thread: ThreadListItem, transition: 'archive' | 'unarc
     const { [attempt]: _completed, ...remaining } = mailboxAttemptKeys.value
     mailboxAttemptKeys.value = remaining
     const wasOpen = openThreadId.value === thread.id
-    await loadThreads()
+    await refresh()
     if (!wasOpen) return
     // The open conversation left this list. Archiving returns to the list so
     // the index can open the next current thread; moving one back follows it
@@ -481,14 +453,14 @@ async function moveThread(thread: ThreadListItem, transition: 'archive' | 'unarc
 
 function refreshThreads() {
   realtime.connect()
-  void loadThreads()
+  void refresh()
 }
 
 
 watch(realtime.event, (event) => {
   if (!event || !('threadId' in event)) return
   if (organizationId.value && event.organizationId !== organizationId.value) return
-  void loadThreads()
+  void refresh()
 })
 
 watch(realtime.connectionEpoch, (epoch) => {

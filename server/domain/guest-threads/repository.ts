@@ -1,3 +1,4 @@
+import { messagePreview } from './attachments'
 import { execute, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { MemberAccessPrincipal } from '~/server/utils/member-access'
@@ -181,6 +182,7 @@ type GuestThreadListRow = GuestThreadRow & {
   organization_name?: string | null
   latest_message_body: string | null
   latest_message_kind: 'message' | null
+  latest_message_photos: number
   source_preview: string | null
   record_starts_at: string | null
   record_ends_at: string | null
@@ -253,6 +255,11 @@ export async function listGuestThreads(
         WHERE request_id = gt.id AND kind = 'message'
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
+      (
+        SELECT COUNT(*) FROM media_placements mp
+        WHERE mp.owner_type = 'activity_entry' AND mp.slot = 'attachments' AND mp.status = 'active'
+          AND mp.owner_id = (SELECT id FROM activity_entries WHERE request_id = gt.id AND kind = 'message' ORDER BY sequence DESC LIMIT 1)
+      ) AS latest_message_photos,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
       ${PLACE_IMAGE_COLUMNS},
@@ -284,7 +291,7 @@ export async function listGuestThreads(
       unread,
       unreadCount: unread ? 1 : 0,
       preview: row.latest_message_kind === 'message'
-        ? { kind: 'message', text: row.latest_message_body ?? '' }
+        ? { kind: 'message', text: messagePreview(row.latest_message_body, row.latest_message_photos) }
         : (preview ? { kind: 'submission', text: preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',
@@ -362,6 +369,11 @@ export async function listOrganizationGuestThreads(
         WHERE request_id = gt.id AND kind = 'message'
         ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind,
+      (
+        SELECT COUNT(*) FROM media_placements mp
+        WHERE mp.owner_type = 'activity_entry' AND mp.slot = 'attachments' AND mp.status = 'active'
+          AND mp.owner_id = (SELECT id FROM activity_entries WHERE request_id = gt.id AND kind = 'message' ORDER BY sequence DESC LIMIT 1)
+      ) AS latest_message_photos,
       ${SOURCE_PREVIEW_SQL} AS source_preview,
       ${SOURCE_PREVIEW_COLUMNS},
       ${PLACE_IMAGE_COLUMNS},
@@ -398,7 +410,7 @@ export async function listOrganizationGuestThreads(
       unread,
       unreadCount: unread ? 1 : 0,
       preview: row.latest_message_kind === 'message'
-        ? { kind: 'message', text: row.latest_message_body ?? '' }
+        ? { kind: 'message', text: messagePreview(row.latest_message_body, row.latest_message_photos) }
         : (preview ? { kind: 'submission', text: preview } : null),
       lastActivityAt: row.updated_at,
       needsAttention: row.conversation_state === 'needs_attention',

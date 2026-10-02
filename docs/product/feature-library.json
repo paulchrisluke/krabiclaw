@@ -164,7 +164,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "8e3e558679e9c87ec776ed72bdd6f05e9323a17d5a2c8de065c745ebbcc5c289",
-          "tests/integration/availability-d1.test.ts": "7ce40322e32f44058cacf4f4dc5a9cebe81c33b4026ce63717fd245d2e7bea60",
+          "tests/integration/availability-d1.test.ts": "dc543fceef41f03bccc99245e61ccdfdbb9271cf03b88d87e77c5b348f45bb13",
           "server/utils/mcp-tools/locations.ts": "4e751e2ff8d49feb9e0f92b7a90d5c125ec8a3463374322eee14e760ad587072"
         }
       },
@@ -275,7 +275,7 @@
           "server/utils/mcp-tools/bookings.ts": "06a0c0afc3269fe5a71c01bc58b9992e268176fd0c1e11f5ca7f7134a86f03ed",
           "server/utils/mcp-executor/bookings.ts": "77a61237d98dbc911eca77962209ea30691e7ee70a31910def7e79764d51b95b",
           "tests/e2e/mcp-bookings.spec.ts": "0e626711ada01c3daa8b47950786657f829e627099e99beaf7ca2d5fe6131e03",
-          "tests/integration/availability-d1.test.ts": "7ce40322e32f44058cacf4f4dc5a9cebe81c33b4026ce63717fd245d2e7bea60",
+          "tests/integration/availability-d1.test.ts": "dc543fceef41f03bccc99245e61ccdfdbb9271cf03b88d87e77c5b348f45bb13",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
@@ -1139,7 +1139,7 @@
           "server/domain/member-scheduling.ts": "cf47698c56dee676f1082b805461512a4bb5e764740976db9319ee838d50137b",
           "server/domain/provider-reassignment.ts": "e4d2f20e473a6a6956044bd1013e7016ea59dd9cb94f3e2229ed3490a84425a3",
           "server/utils/provider-allocation.ts": "23381472135a9949a292a0466bfefbbd4fa6f9da59b818e622dcc38e942fe3e8",
-          "tests/integration/member-scheduling-d1.test.ts": "21cd055809ccf50bb47a83e9b399c1f978f0c2c126671b947e4f6ddf2a42ebbb",
+          "tests/integration/member-scheduling-d1.test.ts": "21fa89121ce6ff14961be339b9e1f41fdb714affe480bb8c4dfe576d97d800df",
           "server/utils/public-provider.ts": "a5a3f46c76cf5feda786eb5565e0dfb284fec01e33d656356d806a577473d32d",
           "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
           "tests/e2e/provider-local-proof.spec.ts": "ea6c8deaf7409b8b9a93c2a15d012a2adbdeb7a0b0bc7a037eb1ec39a5bc41da"
