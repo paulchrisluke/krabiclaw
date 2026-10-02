@@ -109,7 +109,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'upload_user_media',
-      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. Stores the attachment in Cloudflare media storage with a public URL, even before assignment to a page. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
+      description: "Save an attached image, video or Markdown document to the selected site when requested. Requires the authorized file reference supplied by the host; videos also require a poster image. Creates an active asset with a public URL before placement on a page. Each call makes one download attempt; an uncertain retry may create a duplicate asset.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -136,7 +136,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_media_asset',
-      description: 'Update media metadata. Provide at least one of alt_text or category.',
+      description: "Change the selected asset’s alt text or library category. At least one field is required. Category organizes the library and does not assign media to a page.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -155,7 +155,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_media_asset',
-      description: 'Delete a media asset.',
+      description: "Delete the selected site media asset and remove its website placements. Deletes stored media when no other asset references it. Refused while a social publication pins the asset; published provider posts are not deleted.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: true,

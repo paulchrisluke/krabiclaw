@@ -29,7 +29,7 @@ const ANNOUNCEMENT_SCHEMA = {
 export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_organizations',
-      description: 'List the organizations the caller can reach and the current authenticated account identity. Use this to choose the internal organization id for organization_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or business name, match it against the returned organizations and pass the matching id as organization_id; never pass the URL/domain/name itself as organization_id.',
+      description: "List sites available to the signed-in user and the current account identity. Match the requested site against these results and use its internal ID; a public URL, domain or business name is not an organization_id.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -49,7 +49,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     })),
   organizationTool({
       name: 'get_organization',
-      description: 'Get site details for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
+      description: "Read the selected KrabiClaw site’s identity, public address and settings. organization_id is the internal ID returned by get_workspace_context or list_organizations, not a URL, domain or business name.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -79,7 +79,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_organization_settings',
-      description: 'Get editable organization settings for an internal KrabiClaw organization_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or business name as organization_id; call get_workspace_context or list_organizations first and use the returned id.',
+      description: "Read editable settings for the selected KrabiClaw site. Use its internal organization_id from get_workspace_context or list_organizations, not its public URL, domain or name.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -121,7 +121,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_organization_settings',
-      description: 'Update editable organization settings such as brand name, description, the announcement modal, contact email, currency, and website status (Live or Draft). announcement is a full replacement of the announcement (every field together); pass null to remove it entirely. The announcement image and the logo are each an organization media placement, set with set_media (slots "announcement" and "logo"). For brand color changes, use the dedicated set_brand_color tool instead of this generic settings tool.',
+      description: "Change the selected site’s brand, description, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -155,7 +155,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'set_default_currency',
-      description: 'Set the default currency for this organization. Existing clients may continue using this tool; prefer update_organization_settings.default_currency for new integrations. Both use the same settings writer. Affects how Product and experience prices are displayed.',
+      description: "Set the selected site’s default currency. Updates the same setting as update_organization_settings.default_currency; existing prices keep their stored currency and amount and are not converted.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -174,7 +174,7 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'set_brand_color',
-      description: 'Set the brand color theme for the site. Use this tool for any accent-color or theme-color change. Accepts natural language color descriptions like "earthy", "warm terracotta", "ocean blue", "sage green", or hex codes like #8F1D21. The brand color controls the primary accent color across the Saya template (buttons, links, highlights).',
+      description: "Set the selected site’s brand accent color from a color description or hex value. Applies to Saya theme accents such as buttons, links and highlights; it does not change layout or other template settings.",
       domain: 'organizations',
       minimumRole: 'admin',
       confirmRequired: false,

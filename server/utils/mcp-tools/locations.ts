@@ -21,7 +21,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_location',
-      description: 'Get one location.',
+      description: "Read one selected site location, including its contact details, opening hours, timezone and media. Use its returned ID for location-specific changes.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,

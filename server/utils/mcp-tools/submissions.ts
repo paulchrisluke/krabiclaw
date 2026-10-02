@@ -4,7 +4,7 @@ import { reservationSubmissionObject, organizationTool, submissionObject } from 
 export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'get_contact_inquiries',
-      description: 'List contact submissions, including the submitter\'s name, email address, phone number, and message.',
+      description: "Read the selected site’s contact form submissions, including names, contact details and messages. This tool does not send replies or change submission status; those actions use the dashboard inbox.",
       domain: 'submissions',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -16,7 +16,7 @@ export const SUBMISSIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_reservation_inquiries',
-      description: 'Use this when the user asks about table reservations — this is site-wide across all locations by default, and also answers "bookings from the past N days" for reservations. Results include the guest\'s name, contact details, and reservation details. Filter to one location with location_id, or to a recent window with days (e.g. days=2 for "the past two days"). Returns a status-count summary alongside the raw list. Seats booked on a bookable Product are answered in the dashboard inbox, not on this connection.',
+      description: "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
       domain: 'submissions',
       minimumRole: 'admin',
       confirmRequired: false,
