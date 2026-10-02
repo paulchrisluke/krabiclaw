@@ -140,6 +140,14 @@ calls Blawby's canonical Products Services and links the page binding editor to
 the existing service pricing/appointment editor; content and commercial settings
 remain their respective canonical records.
 
+The shared gallery reads the original root cover/gallery placements, preserving
+their order, media kind and video poster. Repeated URLs display once. Feature-grid
+images remain in their authored body blocks; they are not repurposed as gallery
+items. Four visible tiles fit the gallery's explicit grid, with the remaining
+items available in its lightbox. The canonical local browser proof independently
+reads the CMS inventory for Family Law's cover plus seven gallery placements,
+opens every visible tile and navigates all eight loaded lightbox images.
+
 The new service layout requires native mode and an explicit binding to a
 published active online bookable Product. External, disabled, unbound and
 unpublished services use the original renderer without requiring a Product.

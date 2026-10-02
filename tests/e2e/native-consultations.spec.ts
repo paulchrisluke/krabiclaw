@@ -19,7 +19,7 @@ test('native online review uses canonical Products, holds capacity, and releases
   const previous = await (await page.request.get(`${editor}/consultation`)).json()
   const serviceListResponse = await page.request.get(`${editor}/pages?locale=en`)
   expect(serviceListResponse.status(), await serviceListResponse.text()).toBe(200)
-  const serviceRow = (await serviceListResponse.json()).pages.find((page: { path: string }) => page.path === '/services/employment')
+  const serviceRow = (await serviceListResponse.json()).pages.find((page: { path: string }) => page.path === '/services/family')
   expect(serviceRow).toBeTruthy()
   const service = (await (await page.request.get(`${editor}/pages/${serviceRow.id}`)).json()).page
   const writeBinding = async (api: typeof page.request, productId: string | null) => {
@@ -100,6 +100,13 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(publishedService.product_id).toBe(products[0]!.id)
     expect(publishedService.title).toBe(service.title)
     expect(publishedService.blocks.map((block: { id: string }) => block.id)).toEqual(service.blocks.map((block: { id: string }) => block.id))
+    const storedGallery = (await Promise.all(['cover', 'gallery'].map(async slot => {
+      const response = await page.request.get(`${editor}/media?ownerType=content_document&ownerId=${publishedService.id}&slot=${slot}`)
+      expect(response.status(), await response.text()).toBe(200)
+      return (await response.json()).media as Array<{ id: string; public_url: string; kind: string; thumbnail_url: string | null }>
+    }))).flat()
+    expect(storedGallery).toHaveLength(8)
+    expect(publishedService.media.filter((media: { slot: string }) => ['cover', 'gallery'].includes(media.slot)).map((media: { asset_id: string }) => media.asset_id)).toEqual(storedGallery.map(media => media.id))
     await page.goto('/schedule')
     const serviceSelector = page.getByRole('combobox', { name: 'Service', exact: true })
     await expect(serviceSelector).toHaveValue(service.page_id)
@@ -122,12 +129,25 @@ test('native online review uses canonical Products, holds capacity, and releases
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', new URL(service.path, baseURL).href)
     expect(await page.locator('[data-tenant-page] [data-block-type]').evaluateAll(blocks => blocks.map(block => block.getAttribute('data-block-type')))).toEqual(service.blocks.filter((block: { type: string }) => block.type !== 'hero').map((block: { type: string }) => block.type))
     const gallery = publishedService.media.filter((media: { slot: string; public_url: string | null }) => ['cover', 'gallery'].includes(media.slot) && media.public_url)
-    expect(gallery.length).toBeGreaterThan(0)
-    await page.locator('[data-media-gallery] button').first().click()
+    // This existing fixture has one cover and seven authored gallery placements.
+    expect(gallery).toHaveLength(8)
+    expect(gallery.map((media: { public_url: string; kind: string; thumbnail_url: string | null }) => ({ url: media.public_url, kind: media.kind, poster: media.thumbnail_url }))).toEqual(storedGallery.map(media => ({ url: media.public_url, kind: media.kind, poster: media.thumbnail_url })))
+    const visibleTiles = page.locator('[data-media-gallery] button')
+    await expect(visibleTiles).toHaveCount(4)
+    const tileBounds = await visibleTiles.evaluateAll(tiles => tiles.map(tile => { const box = tile.getBoundingClientRect(); const frame = tile.closest('[data-media-gallery]')!.getBoundingClientRect(); return { top: box.top - frame.top, bottom: box.bottom - frame.top, height: frame.height } }))
+    expect(tileBounds.every(tile => tile.top >= 0 && tile.bottom <= tile.height + 1)).toBe(true)
     const lightbox = page.getByRole('dialog', { name: service.title, exact: true })
+    for (let index = 0; index < 4; index++) {
+      await visibleTiles.nth(index).click()
+      await expect(lightbox.locator('section').nth(index).locator('img').last()).toBeInViewport()
+      await lightbox.getByRole('button', { name: 'Close', exact: true }).click()
+    }
+    await visibleTiles.first().click()
     for (let index = 0; index < gallery.length; index++) {
       const image = lightbox.locator('section').nth(index).locator('img').last()
       await expect(image).toHaveAttribute('src', gallery[index].public_url)
+      await expect(image).toBeInViewport()
+      await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0), { timeout: 30_000 }).toBe(true)
       if (index < gallery.length - 1) await lightbox.getByRole('button', { name: 'Next media', exact: true }).click()
     }
     await lightbox.getByRole('button', { name: 'Close', exact: true }).click()
