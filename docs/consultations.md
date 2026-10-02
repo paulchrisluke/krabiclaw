@@ -60,7 +60,11 @@ configurable offerings. No production configuration is changed by this PR.
 `useSessionBooking` owns the shared public orchestration. `ProductBookingSteps`
 owns variant selection, the existing `BookingTimeStep`, `BookingRecap` and
 `BookingContactForm`; `BookingModal` owns dialog accessibility and scroll locking.
-Saya Product detail and Blawby `OnlineProductBooking` consume these exact pieces.
+Saya experiences and native Blawby service pages consume the same
+`ProductDetailPage` composition, including `MediaGallery` and the booking sidebar.
+The native schedule directory feeds its selected Product into that composition.
+The appended `OnlineProductBooking` and `OnlineServiceBooking` wrappers were
+removed. `BookingTimezoneSelect` is shared between availability and the modal.
 The organization Product editor mounts the existing ProductEditorPage and leaves
 without a physical location, including booking policy, timezone and weekly slots.
 
@@ -118,13 +122,32 @@ the source page editor exposes it as Appointment booking. Translations inherit
 that binding, another tenant's Product is refused, and a Product has at most one
 canonical page. Omitted binding fields preserve the existing relationship.
 
-In native mode `/schedule` renders `/services`' existing ordered `page_grid`,
-including its covers and summaries, with configured duration, Price/Free and
-confirmation policy for linked published online Products. An unlinked service
-remains visible with Contact us to schedule. Missing Price says Price
-unavailable; it never means Free. Service pages add the shared booking widget
-without replacing their rich content. Blawby `/experiences/{slug}` is not a service
-route; physical Saya experience routes remain intact.
+In native mode `/schedule` uses `/services`' existing ordered `page_grid` as a
+service dropdown. The selected service keeps its own title, summary, thumbnail
+and full-details URL. The same Product detail composition supplies upcoming
+availability and a sticky booking sidebar, followed by the original guidance,
+FAQ and remaining CMS sections. Unlinked services remain visible with Contact
+us to schedule. Configured Price/Free, duration and instant/review policy come
+from the selected Product. Missing Price says Price unavailable; it never means
+Free. No historical pricing or operating hours are inferred from authored copy.
+
+Native service pages use the complete existing ordered cover/gallery and the
+service document's title/summary above that shared booking composition. Every
+authored body block remains below it in its original order, including the prose
+previously absorbed beside the hero. The service URL, canonical metadata, schema,
+locale representations and document/media records remain unchanged. The CMS
+calls Blawby's canonical Products Services and links the page binding editor to
+the existing service pricing/appointment editor; content and commercial settings
+remain their respective canonical records.
+
+The new service layout requires native mode and an explicit binding to a
+published active online bookable Product. External, disabled, unbound and
+unpublished services use the original renderer without requiring a Product.
+External/disabled `/schedule` also keeps its original presentation and configured
+external destination. Switching modes changes only the consultation settings
+and awaits public cache invalidation; bindings and Booking history are preserved.
+Blawby `/experiences/{slug}` is not a service route; physical Saya experience
+routes remain intact. No production activation is included.
 
 No billing plans or entitlement policy changed. Existing external scheduling and
 contact behavior remains configured by the site's consultation settings. Growth

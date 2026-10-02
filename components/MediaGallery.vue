@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded-xl overflow-hidden">
+  <div class="rounded-xl overflow-hidden" data-media-gallery>
     <div v-if="items.length === 0" class="flex aspect-4/3 items-center justify-center bg-muted">
       <SayaIcon :name="emptyIcon" class="size-16 text-dimmed" />
     </div>

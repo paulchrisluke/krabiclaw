@@ -1,15 +1,15 @@
 <template>
   <div data-parity-root>
     <section class="relative isolate overflow-hidden bg-[var(--blawby-primary-dark)]" data-parity-section="schedule-hero">
-      <div class="blawby-container relative z-20 py-24 text-center sm:py-32 lg:py-40 min-[1920px]:py-48 min-[2560px]:py-64">
+      <div class="blawby-container relative z-20 text-center" :class="consultation.mode === 'native' ? 'py-12 sm:py-16' : 'py-24 sm:py-32 lg:py-40 min-[1920px]:py-48 min-[2560px]:py-64'">
         <div class="mx-auto max-w-4xl min-[1920px]:max-w-6xl min-[2560px]:max-w-7xl">
           <p class="font-bold uppercase text-[var(--blawby-accent)]">{{ identity.name }}</p>
-          <h1 v-if="scheduleTitle.before || scheduleTitle.accent" class="blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:text-8xl min-[2560px]:text-9xl">
+          <h1 v-if="scheduleTitle.before || scheduleTitle.accent" class="blawby-display font-medium text-white" :class="consultation.mode === 'native' ? 'mt-3 text-4xl sm:text-5xl' : 'text-5xl sm:text-7xl min-[1920px]:text-8xl min-[2560px]:text-9xl'">
             {{ scheduleTitle.before }}<span v-if="scheduleTitle.accent" class="text-[var(--blawby-accent)]">{{ scheduleTitle.accent }}</span>{{ scheduleTitle.after }}
           </h1>
           <p v-if="scheduleHero?.subtitle" class="mt-6 text-lg leading-8 text-gray-300 sm:text-xl min-[1920px]:text-2xl">{{ scheduleHero.subtitle }}</p>
-          <p v-if="priceLine" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ priceLine }}</p>
-          <BlawbyButton :to="scheduleHeroDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleHeroDestination)">
+          <p v-if="priceLine && consultation.mode !== 'native'" class="mt-6 text-lg font-bold text-[var(--blawby-accent)] sm:text-xl min-[1920px]:text-2xl">{{ priceLine }}</p>
+          <BlawbyButton v-if="consultation.mode !== 'native'" :to="scheduleHeroDestination" class="mt-10 w-full px-8 py-4 text-lg min-[1920px]:px-4 min-[1920px]:py-4 min-[1920px]:text-base min-[2560px]:px-5 min-[2560px]:py-5 min-[2560px]:text-lg" @click="trackConsultation('schedule_hero', scheduleHeroDestination)">
             <svg class="-ml-0.5 mr-2 size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v4m8-4v4M3 10h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></svg>
             {{ scheduleHero?.cta_label || consultation.cta_label }}
           </BlawbyButton>
@@ -35,7 +35,7 @@
       v-if="scheduleCta"
       :title="String(scheduleCta.title || '')"
       :description="String(scheduleCta.description || '')"
-      :price-line="priceLine"
+      :price-line="consultation.mode === 'native' ? null : priceLine"
       :notice="notice"
       :label="String(scheduleCta.label || consultation.cta_label)"
       :destination="scheduleCtaDestination"

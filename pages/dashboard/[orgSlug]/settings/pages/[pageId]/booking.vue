@@ -3,6 +3,7 @@
     <UFormField label="Consultation Product" description="Link the Product that supplies this service’s duration, prices and appointment schedule. The service page keeps its existing content and images.">
       <USelect v-model="selectedProduct" :items="items" class="w-full" aria-label="Consultation Product" />
     </UFormField>
+    <UButton v-if="selectedProduct !== 'none'" class="mt-5" variant="outline" :to="`/dashboard/${String(route.params.orgSlug)}/products/${selectedProduct}`">Edit service pricing and appointment settings</UButton>
   </DashboardLeafPanel>
 </template>
 <script setup lang="ts">
@@ -15,6 +16,7 @@ definePageMeta({ layout: 'dashboard' })
 const editor = inject(tenantPageEditorKey)!
 const organizationId = await useDashboardOrganizationId()
 const api = useDashboardApi()
+const route = useRoute()
 const { data, error, pending } = await useAsyncData(`service-page-product-options:${organizationId}`, () => api<{ products: Product[] }>(`/api/editor/organizations/${organizationId}/products`, { validate: (value): value is { products: Product[] } => isRecord(value) && Array.isArray(value.products) && value.products.every(isPublicProduct) }))
 const loadError = computed(() => error.value ? getErrorMessage(error.value, 'Products could not be loaded') : '')
 const selectedProduct = computed({ get: () => editor.draft.value.product_id ?? 'none', set: value => { editor.draft.value.product_id = value === 'none' ? null : value } })

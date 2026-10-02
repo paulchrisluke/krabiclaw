@@ -181,7 +181,7 @@ if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization
 // sells otherwise. Until the row has loaded, and for a product being created,
 // the screen speaks the vertical's own surface — it is not yet known to be
 // anything else.
-const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
+const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value, dashboard.organization.value?.theme_id) : requireProductPresentation(vertical, dashboard.organization.value?.theme_id)))
 const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
