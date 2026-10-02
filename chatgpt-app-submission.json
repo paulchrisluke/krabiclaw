@@ -428,6 +428,18 @@
         "destructive_justification": "Reads the selected location, including operational contact and notification settings. Existing content is not deleted or overwritten."
       }
     },
+    "get_member_scheduling": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records.",
+        "open_world_justification": "Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records. Existing content is not deleted or overwritten."
+      }
+    },
     "get_organization": {
       "annotations": {
         "readOnlyHint": true,
@@ -956,6 +968,18 @@
         "destructive_justification": "Reads individual native analytics events, retained sessions and grouped breakdowns from the selected organization's stored analytics without modifying them. Existing content is not deleted or overwritten."
       }
     },
+    "reassign_product_booking": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Atomically reassigns every live attendee in a Session to the offering’s current member, refusing overlap and active checkout holds, retaining IDs and auditing old/new actor values, then sending the canonical guest notice.",
+        "open_world_justification": "Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.",
+        "destructive_justification": "Atomically reassigns every live attendee in a Session to the offering’s current member, refusing overlap and active checkout holds, retaining IDs and auditing old/new actor values, then sending the canonical guest notice. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "reconcile_post_publication": {
       "annotations": {
         "readOnlyHint": false,
@@ -1230,6 +1254,30 @@
         "read_only_justification": "Replaces or clears the asset assigned to a single public media placement.",
         "open_world_justification": "Replaces or clears the asset assigned to a single public media placement. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces or clears the asset assigned to a single public media placement. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_member_busy_calendars": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access.",
+        "open_world_justification": "Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.",
+        "destructive_justification": "Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_member_scheduling": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed.",
+        "open_world_justification": "Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_product_booking_config": {

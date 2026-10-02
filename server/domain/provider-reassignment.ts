@@ -18,7 +18,7 @@ export async function reassignBookingProvider(actor: SchedulingActor, input: {bo
  else {
   await refreshMemberBusy(db,actor.env,input.member_id,true)
   const now=new Date().toISOString(),audit=crypto.randomUUID()
-  const target="(SELECT cfg.assigned_member_id FROM product_booking_configs cfg WHERE cfg.product_id=s.product_id AND cfg.organization_id=s.organization_id)"
+  const target="(SELECT cfg.assigned_member_id FROM product_booking_configs cfg WHERE cfg.product_id=s.product_id AND cfg.organization_id=s.organization_id AND cfg.scheduling_mode='provider')"
   const payload=JSON.stringify({booking_id:booking.id,session_id:booking.product_session_id,old_member_id:booking.assigned_member_id,new_member_id:input.member_id,actor_user_id:actor.userId})
   const queries:BatchQuery[]=[{query:`INSERT INTO activity_entries(id,kind,scope_kind,organization_id,actor_kind,actor_user_id,event_name,payload_json,dedupe_key,occurred_at)
     SELECT ?,'audit','organization',?,'member',?,'booking.reassign',?,?,? FROM product_sessions s

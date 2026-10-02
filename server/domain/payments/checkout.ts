@@ -1,3 +1,4 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { sessionMemberSql } from '~/server/utils/provider-allocation'
 import type Stripe from 'stripe'
 import { HTTPError } from 'nitro'
@@ -83,6 +84,7 @@ export async function createPaymentCheckout(db: DbClient, stripe: Stripe, env: C
   if (expiresAt<=now) throw new HTTPError({statusCode:409,statusMessage:'Checkout hold expired; start a new request',data:{code:'checkout_expired'}})
   if (previous?.checkout_url) return {payment_id:previous.payment_id,checkout_url:previous.checkout_url,expires_at:expiresAt}
   if (!previous) {
+    if(session) await refreshProductBusy(db,env,input.organizationId,input.productId)
     try { await executeBatch(db,[
       {query:`INSERT INTO payments(id,organization_id,buyer_user_id,stripe_account_id,livemode,subject_type,subject_id,location_id,currency,amount,price_snapshot_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,params:[id,input.organizationId,input.buyerUserId,connected.stripeAccountId,Number(connected.livemode),session?'booking':'order',session?null:orderId,session?.location_id??null,price.currency,amount,JSON.stringify({title:projectionTitle,tax_code:projectionTaxCode,price,product_id:input.productId,variant_id:input.variantId,quantity:input.quantity,session_id:input.sessionId??null,automatic_tax:automaticTax,method_configuration_id:methodConfigurationId,request_fingerprint:input.requestFingerprint}),now,now]},
       ...(session ? [{query:`INSERT INTO payment_checkout_holds(id,organization_id,product_id,variant_id,price_id,session_id,buyer_user_id,request_id,payment_id,quantity,amount,currency,calendar_group,starts_at,ends_at,status,expires_at,created_at,assigned_member_id)

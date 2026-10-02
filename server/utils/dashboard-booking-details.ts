@@ -1,3 +1,4 @@
+import { readMemberScheduling } from '~/server/domain/member-scheduling'
 import { getGuestRequest } from '~/server/domain/requests'
 import type { H3Event } from 'nitro'
 import { HTTPError } from 'nitro'
@@ -210,8 +211,9 @@ export async function loadDashboardBookingDetails(
   ])
 
   const provider=row.assigned_member_id?await queryFirst<{name:string|null;busy_error:string|null;busy_checked_at:string|null;conflict:number}>(context.db,`SELECT u.name,ms.busy_error,ms.busy_checked_at,EXISTS(SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<? AND json_extract(busy.value,'$.end')>?) conflict FROM member m LEFT JOIN user u ON u.id=m.userId LEFT JOIN member_scheduling ms ON ms.member_id=m.id AND ms.organization_id=m.organizationId WHERE m.id=? AND m.organizationId=?`,[row.ends_at,row.starts_at,row.assigned_member_id,row.organization_id]):null
+  const scheduling=row.assigned_member_id ? await readMemberScheduling(context.db,row.organization_id,row.assigned_member_id) : null
   return {
-    assignedMemberId: row.assigned_member_id, assignedMemberName:provider?.name??null,providerConflict:Boolean(provider?.conflict),providerCalendarStatus:provider?.busy_error??null,operationalUpdatedAt:row.operational_updated_at,
+    assignedMemberId: row.assigned_member_id, assignedMemberName:provider?.name??null,providerConflict:Boolean(provider?.conflict),providerCalendarStatus: scheduling?.calendar_account_id && scheduling.calendar_status !== 'ready' ? scheduling.busy_error || `Busy-calendar status: ${scheduling.calendar_status}` : null,operationalUpdatedAt:row.operational_updated_at,
     id: row.id,
     operationalBookingId: row.operational_id,
     type: input.type,

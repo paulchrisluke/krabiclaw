@@ -163,8 +163,8 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
-          "server/utils/availability.ts": "a5b701eeac94846ba3c6cbff5fdca01fe0526290aab01bdff6e0b80307c4d3bd",
-          "tests/integration/availability-d1.test.ts": "fe6e7c9818ba90d3d935ef9c544fc03018c6356f6d4efd8394eeab895621f02e",
+          "server/utils/availability.ts": "8e3e558679e9c87ec776ed72bdd6f05e9323a17d5a2c8de065c745ebbcc5c289",
+          "tests/integration/availability-d1.test.ts": "5c81968c5828be5a97967d2a0606c3faede2258d01e3cf54438583fd61c4e49f",
           "server/utils/mcp-tools/locations.ts": "32266354412b4dee65673a4652a6363ab4df0094877d54c607a44b76743fd731"
         }
       },
@@ -219,10 +219,10 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/mcp-executor/products.ts": "c4c78b4c66ef010c5319b21c0a967b39109977bcbd0a03e464a84852a6aacd76",
-          "server/utils/product-management.ts": "15df0d1ef1e07a8cf1cacd8e0528e3fdfd9dcbf0859a2fdece903c49e89aebce",
+          "server/utils/mcp-executor/products.ts": "aef33364e6cf27b0854b9543254a3187ede88b7506e5ff5078d25cf7efec371e",
+          "server/utils/product-management.ts": "af6e15c9ff0408ad5c5c07cfd2255ad16704a1dea75e5ac7ef07b7b21bc80861",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
-          "server/utils/mcp-tools/products.ts": "a1cff52f4e5d88009663527ef2ee7777fd4426ee837912dbeb92c28f24edb9ac"
+          "server/utils/mcp-tools/products.ts": "5ad46287b3b647aecf95a0a85a82bc6177ab615da0f2b5f9fa13cf6975b9f729"
         }
       },
       "pendingOwnerDecision": null,
@@ -268,14 +268,14 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/domain/requests.ts": "f34f851d6a9ad4a7ab1c1390623d654d4c3a8d05216abd0418a77c6b0d978cd7",
+          "server/domain/requests.ts": "45c08096df33f630128f242687797724dd7f98ee06c395bc1c3b1c024b086d86",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
-          "server/domain/product-bookings.ts": "7815fb8d94fe19dc2b1289706c155c6a4cc94506287b055aea5c16959c7b831f",
-          "server/utils/mcp-tools/bookings.ts": "ade7ee20c7826e883e9431a890d7cfad70300c3ac9fe8a583de12d91c4b7365f",
-          "server/utils/mcp-executor/bookings.ts": "c7b4b8be63fc9d88b52971f8e2566520a0695f3ae0f3303231fdcfb8a5fdfab4",
+          "server/domain/product-bookings.ts": "1a379d525a82de8f8754ef9a0fd5b257c942ec9a0c132aba67643223c939f462",
+          "server/utils/mcp-tools/bookings.ts": "06a0c0afc3269fe5a71c01bc58b9992e268176fd0c1e11f5ca7f7134a86f03ed",
+          "server/utils/mcp-executor/bookings.ts": "77a61237d98dbc911eca77962209ea30691e7ee70a31910def7e79764d51b95b",
           "tests/e2e/mcp-bookings.spec.ts": "0e626711ada01c3daa8b47950786657f829e627099e99beaf7ca2d5fe6131e03",
-          "tests/integration/availability-d1.test.ts": "fe6e7c9818ba90d3d935ef9c544fc03018c6356f6d4efd8394eeab895621f02e",
+          "tests/integration/availability-d1.test.ts": "5c81968c5828be5a97967d2a0606c3faede2258d01e3cf54438583fd61c4e49f",
           "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
         }
       },
@@ -777,7 +777,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
+          "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
           "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
@@ -814,7 +814,7 @@
         "coverageNote": "Real D1 tests mock only the Meta provider boundary and prove zero provider calls for Free/ineligible, active/trialing success, downgrade, multi-org membership, preferences, domain/contact/guest-message paths and settled skipped receipts.",
         "evidenceSha256": {
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
-          "server/utils/notifications.ts": "90b810956c47d3e829069eef12ba4307f4e9b114df033ab623ec7de14ca141f8",
+          "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
@@ -1088,20 +1088,58 @@
         "evidenceSha256": {
           "server/utils/mcp-tools/payments.ts": "0d309137df8334364a76b79ffd38aa1fa3662d5455b2a5ad8b0cb039e1b866b0",
           "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
-          "server/domain/payments/index.ts": "c91d39221156f3be0a038786c416ebb416e3b0a6e8571da4f729a1683f373239",
-          "server/domain/payments/checkout.ts": "a1e2ec8ed2872234b73e333ec5d1d16b701da01aaf034f684995551f6ff84777",
+          "server/domain/payments/index.ts": "a81624a404089644214eb39a471e513722b2bec28dd38c49a76021e06c01658e",
+          "server/domain/payments/checkout.ts": "658011f1a7f99bb978abf00767bf66cb50c2b0192f6e6d25ec54935305467f87",
           "server/domain/payments/usage.ts": "b7c955a030b4649ebb59d4791edca166de5fa01f9db98b31dd325f06b3f2e67c",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "df7ace4482a3d3c91dea2a139c87ba0737a9a30e775a5b8ec9fc4bf61f0d0a44",
+          "tests/integration/payments-d1.test.ts": "bbc07da0159510ae3d1fd6b32b8495c7feee3486dc580f0f5f7240734f46ef1c",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
-          "server/domain/payments/events.ts": "e9b1646595ad90955f7a29f3042b4b3a85c80727b98212900127034cd09d5b27",
-          "server/tasks/payments-reconcile.ts": "2bc72d885e43146286cf99a605120f136bc0934f3a8b6c8cfe983d8fe8898f80",
+          "server/domain/payments/events.ts": "94f7facc427932ac3b1b8a42b4693b0d71d8fc8cb4b2a9d258749c5523b89f5b",
+          "server/tasks/payments-reconcile.ts": "f972ee08c565e0138d694934a930df20eb5b3b159cde95d6de769b369ab8f399",
           "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392",
           "tests/unit/session-booking-payments.test.ts": "e42c6eba595eaa3b6d8d4d0fae68504c003757014e2191ebd29edf0227a4bff0",
           "tests/unit/metronome-payments-response.test.ts": "96480d923f99ad4d934dcff7a86467b8df5a304c03de448773ecf95546f98a73"
         }
       },
       "pendingOwnerDecision": "Future higher-tier commercial name and price are separate; current tiers do not receive new Payments acceptance."
+    },
+    {
+      "id": "scheduling.assigned-member",
+      "referenceLabel": "Assigned member scheduling",
+      "pricingComparison": "not-shown",
+      "labelStatus": "owner-approved",
+      "availability": {
+        "free": "available",
+        "growth": "available"
+      },
+      "currentBehavior": "One existing Better Auth member per offering in explicit provider mode; self hours/time off and approved public profile, atomic cross-service occupancy and hold conversion; optional interval-only Google busy input fails closed. Legacy organization scheduling remains the default.",
+      "entitlementKeys": [],
+      "mcpOperations": [
+        "get_member_scheduling",
+        "set_member_scheduling",
+        "set_member_busy_calendars",
+        "reassign_product_booking"
+      ],
+      "verification": {
+        "status": "source-reviewed",
+        "baseline": "11f347e28bf839a9e55015f84ea1b00ce40d3c7d",
+        "sources": [
+          "server/domain/member-scheduling.ts",
+          "server/domain/provider-reassignment.ts",
+          "server/utils/provider-allocation.ts"
+        ],
+        "tests": [
+          "tests/integration/member-scheduling-d1.test.ts"
+        ],
+        "coverageNote": "Real D1 proves self/admin boundaries, disconnected member isolation, DST hours, group reassignment IDs and audit replay. Browser and live consent verification are separate.",
+        "evidenceSha256": {
+          "server/domain/member-scheduling.ts": "df4c642650e93f538b69fffffceb4ca131e91d981b8382ecfeee5f3bbb78bf12",
+          "server/domain/provider-reassignment.ts": "e4d2f20e473a6a6956044bd1013e7016ea59dd9cb94f3e2229ed3490a84425a3",
+          "server/utils/provider-allocation.ts": "23381472135a9949a292a0466bfefbbd4fa6f9da59b818e622dcc38e942fe3e8",
+          "tests/integration/member-scheduling-d1.test.ts": "e68dece8f84c7c989349f1cbe88ab836330ea57c78c23b35f606b6c1461182bc"
+        }
+      },
+      "pendingOwnerDecision": null
     }
   ]
 }

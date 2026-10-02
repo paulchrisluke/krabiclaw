@@ -1,6 +1,6 @@
 # Provider support v1 — prerequisite and domain plan
 
-Prepared 2026-10-02 in an isolated Mac checkout. This is a plan, not an implemented provider feature or release qualification.
+Prepared 2026-10-02 in an isolated Mac checkout. The implementation is on the isolated provider feature branch. Qualification evidence is recorded below; no deployment or production activation has occurred.
 
 ## Verified integration baseline
 
@@ -10,14 +10,14 @@ Remote heads fetched and verified:
 | --- | --- |
 | staging | `9e8ac75cb22b9aca497ef45c024ca1cd992731f5` |
 | Payments #1213 | `d5b90a3347ce416a5b0c937bfcc90f19fb90b761` |
-| Foundation #1211 | `0e002e4d26c077e2415a40856844991b4eefde3f` |
+| Foundation #1211 | `4bb6ea4c49387123754224db4c5ed5e5d9e769cc` |
 | Cleanup #1218 | `4c2cc9a6133ca0482405a6af20f823ac1dc4d5b2` |
 | MCP #1209 | `61f4ada75e361ef4fe839c05d7a3c531cd074c15` |
 | Calendar #1210 | `4a8df9e82b525a2dfb619c36aac94b82ccf1d259` |
 
 MCP and Calendar heads are ancestors of Payments. The new local branch starts from Payments. Two final Foundation commits (`d6beb2af3`, `0e002e4d2`) and three Cleanup commits (`a15f5b066`, `ce4399904`, `4c2cc9a61`) have been integrated into this branch. Cleanup metadata conflicts retained the newer Payments descriptions, booking/payment tools and Foundation source-page binding; most of a15f5b066 was already incorporated by Payments. No other checkout or branch was modified.
 
-Foundation is now preparing a further approved compact timezone selector and chevron alignment successor in #1211. Await its exact final head before the final prerequisite integration pass. Do not duplicate those UI edits. No rebase cascade is needed: apply only the final successor diff to this isolated feature branch, then one implementation/review/CI batch. Preserve migration files/snapshots 0000–0006. Generate the next unshipped migration from the canonical Drizzle schema; inspect generated rebuilds and use additive D1 expansion where a referenced parent rebuild could erase history. Cleanup's schema-contraction deployment hold remains independent.
+Foundation’s exact final compact timezone selector/chevron successor `4bb6ea4c4` was integrated once as `11f347e28`. Migration history 0000–0006 is unchanged. Canonically generated 0007 is additive; Cleanup’s separate schema-contraction release hold remains independent. PR1220 `f0463a299c49c015ec7bfee8ac9182dc272246db` was inspected read-only, not integrated: its normalized integration enum omits Google Calendar, removes `integrations_json`, and its schema does not yet compose the approved Foundation/Calendar/Payments additions. Reconcile after its owner review rather than adding a second integration path.
 
 Read contracts: AGENTS.md; docs/consultations.md; docs/integrations/google-calendar.md; docs/local-development.md; docs/testing-strategy.md; docs/operations/release-and-outage-prevention.md. The primary checkout's ignored .agents/skills contains only ai-seo, which does not apply to this scheduling implementation.
 
@@ -28,7 +28,7 @@ Identity is the existing Better Auth organization `member.id`, with its organiza
 1. Extend `product_booking_configs` with explicit `scheduling_mode` (legacy/provider) and nullable `assigned_member_id`. Default legacy preserves current behavior. One assigned member per Product; no provider pool, picker or round robin. Organization fallback remains explicit when no member is assigned.
 2. Store member domain settings scoped to existing membership: IANA timezone, recurring weekly working windows, dated time off, separately approved public display name/photo/bio. A member may edit their own schedule; owner/admin oversight and public-profile approval use the shared Better Auth permission matrix. Never derive public profile from private user/member email, image or other fields.
 3. Persist `assigned_member_id` on operational Booking and checkout hold through their guarded claim/move/capture SQL. Persist Session-level assignment as the occurrence commitment so every participant in one group Session meets the same person. Preserve operational Booking IDs, old assignment and actor in the existing activity ledger.
-4. Domain-only Google selection/cache stores member, Better Auth linked account ID, selected calendar IDs, selection revision, covered UTC horizon, last successful check, readable failure and busy intervals. No tokens, provider identity duplication, event titles or attendees.
+4. Domain-only Google selection/cache stores member, Better Auth linked account ID, selected calendar IDs, selection revision, covered UTC horizon, last check attempt, readable failure and busy intervals. No tokens, provider identity duplication, event titles or attendees.
 
 Membership removal must not cascade away historical assignment. Use retained IDs/history with nullable live membership references or an explicit refusal while future commitments remain; verify against Better Auth's deletion hooks. This requires inspection of installed Better Auth 1.7.4 before choosing the smallest supported hook.
 
@@ -40,9 +40,9 @@ For provider-backed Sessions, intersect offering-generated Session facts with th
 
 Explicit provider mode bypasses the legacy organization calendar_group overlap guard for named member allocation, without overwriting calendar_group (still used for outbound projection). Legacy/null-member organization scheduling retains its established guard. Do not reinterpret capacity=1 as a tenant-wide provider limit.
 
-Claim SQL selects and stores assignment in the same statement/batch that takes capacity. Capture preserves the hold's pinned assignment even if offering assignment changed, excluding only that authenticated hold. Changes to hours or Product assignment do not rewrite existing Bookings, holds or committed Session assignments. New uncommitted occurrences follow the new offering configuration. A group Session with an existing commitment retains that assignment for later attendees.
+Claim SQL selects and stores assignment in the same statement/batch that takes capacity. Capture preserves the hold's pinned assignment even if offering assignment changed, excluding only that authenticated hold. Changes to hours or Product assignment do not rewrite existing Bookings, holds or committed Session assignments. New uncommitted occurrences follow the new offering configuration. A group Session with a live Booking or unexpired active hold retains that assignment for later attendees. After every live commitment has ended, future allocation follows the current offering assignment; old Booking and hold records retain their identity and history.
 
-Hours are expressed in the member's IANA timezone, using repository timezone conversion with explicit DST handling. If materialized UTC working intervals are needed for atomic SQL, they are a derived, revision-fenced rolling horizon from canonical recurring rules; stale/missing horizon fails closed and is visibly regenerated by the existing bounded scheduling task. Time off remains an interval exclusion, never an edit to existing appointment facts.
+Hours are expressed in the member's IANA timezone. Weekly boundary gaps/folds and ambiguous time-off input fail explicitly; normal hours track DST offsets through the repository converter. If materialized UTC working intervals are needed for atomic SQL, they are a derived, revision-fenced rolling horizon from canonical recurring rules; stale/missing horizon fails closed and is visibly regenerated by the existing bounded scheduling task. Time off remains an interval exclusion, never an edit to existing appointment facts.
 
 Safe migration must not infer providers for historical/unassigned appointments. Default legacy. Explicit provider activation must refuse unresolved future legacy commitments or require the administrator to explicitly assign them through the canonical guarded operation. No production activation or historical backfill is authorized here.
 
@@ -62,7 +62,7 @@ Use Better Auth linked accounts and `linkedAccountAccessToken` for account selec
 
 Google's freebusy.query supports `calendar.events.freebusy`; calendar selection additionally needs `calendar.calendarlist.readonly`. Retrieve only free/busy intervals and calendar identities, with bounded time range/calendar count and errors checked per selected calendar. Keep selected input calendars separate from the organization's outbound calendar; refuse overlap at both input and output selection writers. Do not subtract undifferentiated busy blocks to compensate for managed booking events.
 
-No connection/selection means internal scheduling. A selected account/calendar that is disconnected, failed or stale fails closed for that member only. SQL claim checks matching revision, horizon and bounded successful-check freshness. Recheck before checkout/move/capture as appropriate, with D1 guards checking cache validity at commit. Google/D1 cannot be atomic: persist visible later-conflict state and show it in Team/Booking surfaces; never silently cancel. The existing outbound durable retry remains independent and never undoes Bookings. Input failure and its retry outcome must be visible.
+No connection/selection means internal scheduling. A selected account/calendar that is disconnected, failed or stale fails closed for that member only. SQL claim checks matching revision, horizon and bounded check freshness with no error. Failed attempts update the attempt timestamp so bounded background retry does not starve healthy members; stale/error/disconnected selections remain closed. Recheck before checkout/move/capture as appropriate, with D1 guards checking cache validity at commit. Google/D1 cannot be atomic: persist visible later-conflict state and show it in Team/Booking surfaces; never silently cancel. The existing outbound durable retry remains independent and never undoes Bookings. Input failure and its retry outcome must be visible.
 
 Primary references:
 - https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query
@@ -84,6 +84,14 @@ Use exact repository Node 24.18.1, canonical migration generation/setup, local D
 
 After the focused runtime proof, run the repository required quality, D1, migration, MCP/catalog/submission and full local E2E checks once as the release batch. One review against the final consolidated diff and one draft PR targeting staging. Report exact PR/head, screenshots, CI and any unresolved external-consent verification. No deployment, remote DDL, financial actions, credentials or paid-tier changes.
 
-## Coordination status
+## Qualification checkpoint
 
-Parent-thread message submission was attempted twice and returned `An earlier turn submission is not yet confirmed`; delivery of the pre-commitment schema/contracts plan is therefore unconfirmed. This document and the task's final response are the reviewable handoff. Large provider implementation has not started pending delivery/coordination and Foundation's final UI successor.
+Implemented canonical schema/allocator, member scheduling/profile/busy writers, whole-Session reassignment, CMS/MCP adapters and public profile. Member identity remains Better Auth `member.id`; historical Booking/hold assignment text survives membership removal while new scheduling fails closed.
+
+Local source review corrected direct-edit bypass for provider commitments (legacy behavior preserved), checked cache revision fencing and fair failed-check retries, ensured all checkout/capture routes recheck busy input, and retained whole-Session IDs/audits on reassignment/replay. Only live commitments pin effective Session assignment; expired holds do not permanently pin an otherwise unoccupied future occurrence.
+
+Initial focused proof passed availability 14, Payments 18 and member scheduling 2 real D1 checks. The member proof includes self/admin boundaries, public approval/revocation, missing selected Google account isolation, DST offsets and group reassignment stable IDs/audit/replay/overlap refusal. Migration checks passed additive chain 0000–0007, archived transfer and consultation backfill. Worker build and required quality passed. Final consolidated test results are recorded at PR handoff.
+
+Browser proof uses the existing documented synthetic fixture in `docs/payments/payments.md` and `tests/e2e/fixtures/payments-local-proof.mjs`, local migrations and the production Worker. No production snapshot or private credentials are copied. Generated local-only fixture configuration is merged into canonical `.env` and its `.dev.vars.e2e` removed. `PROVIDER_SUPPORT_PROOF=true PLAYWRIGHT_PORT=3109 PLAYWRIGHT_LOCAL_PREPARED=true yarn playwright test tests/e2e/provider-local-proof.spec.ts` exercises the real Better Auth invitation, self-service boundary, CMS/MCP parity, public approved content, cross-service exclusion and whole-Session reassignment notifications. No live OAuth or financial provider calls.
+
+Automatic review denied the earlier bundled private `.env` copy / production snapshot command and external CodeRabbit disclosure before either ran. The synthetic documented fixture and local source review avoid those actions. Parent approved the schema/self-service/group policy and supplied the exact final Foundation successor; parent message submissions through the app tool have repeatedly returned `An earlier turn submission is not yet confirmed`.

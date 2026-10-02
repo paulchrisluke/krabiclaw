@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:61fea19a9e1aa49a20accd2123bfa009dfa3fce7ea08c8fae52f12c812aa5ddc",
+  "fingerprint": "sha256:643991307bfc3ce99c40c05283324091258c5ade36908130c111be2eec84bfbf",
   "tools": [
     {
       "name": "append_content_block",
@@ -649,6 +649,13 @@
                 },
                 "booking": {
                   "properties": {
+                    "assigned_member_id": {
+                      "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "calendar_group": {
                       "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
@@ -694,6 +701,14 @@
                       "type": "string"
                     },
                     "product_id": {
+                      "type": "string"
+                    },
+                    "scheduling_mode": {
+                      "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                      "enum": [
+                        "legacy",
+                        "provider"
+                      ],
                       "type": "string"
                     }
                   },
@@ -2908,6 +2923,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -2953,6 +2975,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -5435,6 +5465,28 @@
       }
     },
     {
+      "name": "get_member_scheduling",
+      "description": "List accessible members and their scheduling when member_id is omitted, or read one member’s hours, time off, explicitly approved public profile and Calendar status. Ordinary members can read only their own scheduling record; owners/admins can inspect their team. No Google event content or credentials are returned.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "get_organization",
       "description": "Read the selected KrabiClaw site’s identity, public address and settings. organization_id is the internal ID returned by get_workspace_context or list_organizations, not a URL, domain or business name.",
       "inputSchema": {
@@ -7249,6 +7301,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -7294,6 +7353,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -10593,6 +10660,9 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "assigned_member_id": {
+            "type": "string"
+          },
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
@@ -12009,6 +12079,45 @@
       }
     },
     {
+      "name": "reassign_product_booking",
+      "description": "Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "member_id": {
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Operational bookings.id, never the legacy public booking_id (requests.id).",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "member_id",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "reconcile_post_publication",
       "description": "Resolve a Facebook or Instagram publication whose outcome is unknown, or refresh one, by reading Meta: it records only what Meta's own answer proves, never publishes, and never accepts an assertion that something is published. Pass provider_post_id when you know the exact post it became; it must belong to the connected Page or account. What stays ambiguous stays unknown.",
       "inputSchema": {
@@ -12348,6 +12457,13 @@
                 },
                 "booking": {
                   "properties": {
+                    "assigned_member_id": {
+                      "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "calendar_group": {
                       "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
@@ -12393,6 +12509,14 @@
                       "type": "string"
                     },
                     "product_id": {
+                      "type": "string"
+                    },
+                    "scheduling_mode": {
+                      "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                      "enum": [
+                        "legacy",
+                        "provider"
+                      ],
                       "type": "string"
                     }
                   },
@@ -13138,6 +13262,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -13183,6 +13314,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -15370,11 +15509,161 @@
       }
     },
     {
+      "name": "set_member_busy_calendars",
+      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Selected stale/disconnected data blocks that member’s new availability; no selection uses internal scheduling.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "calendar_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "account_id",
+          "calendar_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "set_member_scheduling",
+      "description": "Replace a member’s own timezone, weekly working hours and UTC time-off intervals using the latest updated_at. Owner/admin may oversee any member and approve public profile. Profile edits revoke approval unless explicitly approved by an admin. Existing Booking assignments and times stay fixed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "public_approved": {
+            "type": "boolean"
+          },
+          "public_bio": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_photo_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time_off": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "weekly": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                },
+                "weekday": {
+                  "maximum": 6,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "weekday",
+                "start",
+                "end"
+              ],
+              "type": "object"
+            },
+            "maxItems": 28,
+            "type": "array"
+          }
+        },
+        "required": [
+          "member_id",
+          "timezone",
+          "weekly",
+          "time_off",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "set_product_booking_config",
       "description": "Set Product booking defaults and confirmation, optional payment and online calendar policy for new occurrences; existing sessions own their saved time, capacity and state. Omitted fields retain their values; null clears a default and capacity 0 is retained. Read back with get_product.booking.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "assigned_member_id": {
+            "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "calendar_group": {
             "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
             "maxLength": 64,
@@ -15422,6 +15711,14 @@
           },
           "product_id": {
             "type": "string"
+          },
+          "scheduling_mode": {
+            "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+            "enum": [
+              "legacy",
+              "provider"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -15433,6 +15730,13 @@
         "properties": {
           "config": {
             "properties": {
+              "assigned_member_id": {
+                "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "calendar_group": {
                 "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                 "maxLength": 64,
@@ -15478,6 +15782,14 @@
                 "type": "string"
               },
               "product_id": {
+                "type": "string"
+              },
+              "scheduling_mode": {
+                "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                "enum": [
+                  "legacy",
+                  "provider"
+                ],
                 "type": "string"
               }
             },
@@ -15540,6 +15852,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -15585,6 +15904,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -16111,6 +16438,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -16156,6 +16490,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -18787,6 +19129,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "One existing same-tenant Better Auth member. Existing committed Session assignments are retained.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -18832,6 +19181,14 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "description": "Explicit provider-backed scheduling; legacy retains organization scheduling.",
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },

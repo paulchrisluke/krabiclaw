@@ -56,7 +56,7 @@
             <h2 class="font-semibold">Assigned person</h2><p>{{ booking.assignedMemberName || (booking.assignedMemberId ? 'Previously assigned member' : booking.organizationName) }}</p>
             <UAlert v-if="booking.providerConflict" color="warning" description="A later Google busy interval overlaps this booking. Contact the guest and resolve the conflict; the booking has not been cancelled." />
             <UAlert v-if="booking.providerCalendarStatus" color="warning" :description="booking.providerCalendarStatus" />
-            <USelect v-model="reassignmentMember" :items="reassignmentOptions" placeholder="Select the offering’s assigned member" class="w-full" />
+            <USelect aria-label="Reassign to" v-model="reassignmentMember" :items="reassignmentOptions" placeholder="Select the offering’s assigned member" class="w-full" />
             <p class="text-sm text-muted">Reassignment applies to every attendee in this Session. Active checkout holds refuse the change. First configure the offering’s eligible member.</p>
             <UButton :disabled="!reassignmentMember" color="neutral" variant="soft" :loading="reassignmentSaving" @click="reassignProvider">Reassign Session and notify guests</UButton>
           </section>

@@ -2,7 +2,7 @@ import { BUSY_FRESHNESS_MS } from '~/shared/member-scheduling'
 
 /** Session commitment wins over the current offering assignment. */
 export function sessionMemberSql(s: string): string {
-  return `COALESCE(${s}.assigned_member_id, (SELECT c.assigned_member_id FROM product_booking_configs c WHERE c.organization_id=${s}.organization_id AND c.product_id=${s}.product_id AND c.scheduling_mode='provider'))`
+  return `COALESCE(CASE WHEN ${s}.assigned_member_id IS NOT NULL AND (EXISTS(SELECT 1 FROM bookings committed WHERE committed.product_session_id=${s}.id AND committed.organization_id=${s}.organization_id AND committed.status IN ('pending','confirmed')) OR EXISTS(SELECT 1 FROM payment_checkout_holds committed WHERE committed.session_id=${s}.id AND committed.organization_id=${s}.organization_id AND committed.status='active' AND committed.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))) THEN ${s}.assigned_member_id END, (SELECT c.assigned_member_id FROM product_booking_configs c WHERE c.organization_id=${s}.organization_id AND c.product_id=${s}.product_id AND c.scheduling_mode='provider'))`
 }
 
 /** One occupancy per distinct Session. Group attendees share capacity. */

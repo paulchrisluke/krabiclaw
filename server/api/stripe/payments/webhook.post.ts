@@ -14,6 +14,6 @@ export default defineHandler(async event => {
   let notification
   try {notification=await stripe.webhooks.constructEventAsync(payload,signature,env.STRIPE_PAYMENTS_WEBHOOK_SECRET)}
   catch {throw new HTTPError({statusCode:400,statusMessage:'Invalid Stripe payment signature'})}
-  await processPaymentEvent(env.DB,stripe,notification,payload)
+  await processPaymentEvent(env.DB,stripe,notification,payload,env)
   return jsonResponse({received:true})
 })

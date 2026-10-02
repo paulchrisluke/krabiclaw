@@ -12,6 +12,10 @@ const OUTPUT_PATH = 'chatgpt-app-submission.json'
 // Reviewed effects are authored here; annotation values still come from the registry.
 // A newly exposed tool must receive an explicit review before regeneration succeeds.
 const effects = {
+  get_member_scheduling: 'Reads authorized team scheduling records; ordinary members can read only themselves. Public profile approval and interval-only Calendar status share CMS records.',
+  set_member_scheduling: 'Replaces authorized member hours, timezone, time off and approved public profile using optimistic revision. Existing Booking assignments remain fixed.',
+  set_member_busy_calendars: 'Selects already-linked Google busy calendars or disconnects input, then rechecks interval-only busy data. Grants no OAuth access.',
+  reassign_product_booking: 'Atomically reassigns every live attendee in a Session to the offering’s current member, refusing overlap and active checkout holds, retaining IDs and auditing old/new actor values, then sending the canonical guest notice.',
   get_payment_summary: 'Reads UTC tenant financial and usage summaries, retaining separate currency totals.',
   list_payments: 'Reads a bounded page of seller-scoped tenant transactions and immutable purchase snapshots.',
   get_payment: 'Reads one authorized tenant payment, its native refund and dispute projections.',
@@ -135,6 +139,8 @@ const effects = {
 }
 
 const externalProcessing = {
+  set_member_busy_calendars: 'Reads free/busy intervals from the member’s selected Google calendars using existing granted scopes; writes no Google events.',
+  reassign_product_booking: 'Sends the changed-assignment notice through the existing guest delivery lifecycle after the atomic reassignment.',
   create_payment_checkout: 'The frozen canonical Price and purchase identity are sent to the seller-scoped Stripe Checkout; the buyer authorizes any payment in Stripe.',
   issue_payment_refund: 'The browser-approved amount and connected-account PaymentIntent are sent to Stripe for a native principal refund.',
   get_payment_payouts: 'The seller-scoped Stripe account is queried for native balance and payouts.',

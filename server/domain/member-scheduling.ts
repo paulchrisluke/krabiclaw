@@ -2,7 +2,7 @@ import { HTTPError } from 'nitro'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertRoleAllows, resolveOrganizationMembership } from '~/server/utils/member-access'
 import { linkedAccountAccessToken, requireIntegrationAccount, type CloudflareEnv } from '~/server/utils/auth'
-import { addLocalDays, localDateAt, localDateTimeToInstant, isValidTimezone } from '~/utils/timezone'
+import { addLocalDays, localDateAt, localDateTimeToInstant, isValidTimezone, isValidInstant } from '~/utils/timezone'
 import { BUSY_FRESHNESS_MS, MEMBER_BUSY_SCOPES, type WorkingHours, type SchedulingInterval } from '~/shared/member-scheduling'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
@@ -25,16 +25,20 @@ export async function requireSchedulingAccess(actor: SchedulingActor, memberId: 
 export function workingWindows(timezone: string, weekly: WorkingHours[], now = new Date()): { intervals: SchedulingInterval[]; until: string } {
  if (!isValidTimezone(timezone)) throw new HTTPError({ statusCode: 400, message: 'Choose an IANA timezone' })
  if (!Array.isArray(weekly) || weekly.length > 28) throw new HTTPError({ statusCode: 400, message: 'At most 28 weekly working windows are allowed' })
- for (const slot of weekly) if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6 || typeof slot.start!=='string' || typeof slot.end!=='string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end) || slot.end <= slot.start) throw new HTTPError({ statusCode: 400, message: 'Hours require weekday 0–6 and start before end on the same day' })
+ for (const slot of weekly) if (!slot || typeof slot!=='object' || !Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6 || typeof slot.start!=='string' || typeof slot.end!=='string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end) || slot.end <= slot.start) throw new HTTPError({ statusCode: 400, message: 'Hours require weekday 0–6 and start before end on the same day' })
  const intervals: SchedulingInterval[] = []
  const from = localDateAt(now, timezone)
  for (let day = 0; day < 370; day++) {
   const date = addLocalDays(from, day)
   const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
   for (const slot of weekly.filter(slot => slot.weekday === weekday)) {
-   const start = localDateTimeToInstant(date, slot.start, timezone, 'compatible').toISOString()
-   const end = localDateTimeToInstant(date, slot.end, timezone, 'compatible').toISOString()
-   if (end > start) intervals.push({ start, end })
+   try {
+    const start = localDateTimeToInstant(date, slot.start, timezone, 'reject').toISOString()
+    const end = localDateTimeToInstant(date, slot.end, timezone, 'reject').toISOString()
+    if (end > start) intervals.push({ start, end })
+   } catch {
+    throw new HTTPError({statusCode:400,message:`Working hours on ${date} have a nonexistent or ambiguous DST boundary; choose an unambiguous start and end`})
+   }
   }
  }
  // Merge adjacent/overlapping hours: a Session may span both working windows.
@@ -49,14 +53,23 @@ export function workingWindows(timezone: string, weekly: WorkingHours[], now = n
 function validIntervals(value: unknown): SchedulingInterval[] {
  if (!Array.isArray(value) || value.length > 100) throw new HTTPError({ statusCode: 400, message: 'At most 100 time-off intervals are allowed' })
  return value.map(v=>{
-  if (!v || typeof v.start!=='string' || typeof v.end!=='string' || !Number.isFinite(Date.parse(v.start)) || !Number.isFinite(Date.parse(v.end)) || Date.parse(v.end)<=Date.parse(v.start)) throw new HTTPError({statusCode:400,message:'Time off requires valid start and end instants'})
+  if (!v || typeof v.start!=='string' || typeof v.end!=='string' || !isValidInstant(v.start) || !isValidInstant(v.end) || Date.parse(v.end)<=Date.parse(v.start)) throw new HTTPError({statusCode:400,message:'Time off requires valid start and end instants'})
   return {start:new Date(v.start).toISOString(),end:new Date(v.end).toISOString()}
  })
 }
 export async function readMemberScheduling(db: DbClient, organizationId: string, memberId: string) {
  const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE organization_id=? AND member_id=?',[organizationId,memberId])
  if (!row) return null
- return { ...row, weekly: JSON.parse(row.weekly_json) as WorkingHours[], time_off: JSON.parse(row.time_off_json) as SchedulingInterval[], calendar_ids: JSON.parse(row.calendar_ids_json) as string[], calendar_status: !row.calendar_account_id ? 'internal' : row.busy_error ? 'error' : !row.busy_checked_at || Date.now()-Date.parse(row.busy_checked_at)>BUSY_FRESHNESS_MS ? 'stale' : 'ready' }
+ const linked = row.calendar_account_id ? await queryFirst(db,"SELECT a.id FROM account a JOIN member m ON m.userId=a.userId WHERE a.id=? AND a.providerId='google' AND m.id=? AND m.organizationId=?",[row.calendar_account_id,memberId,organizationId]) : null
+ return {
+  member_id:row.member_id,organization_id:row.organization_id,timezone:row.timezone,
+  weekly:JSON.parse(row.weekly_json) as WorkingHours[],time_off:JSON.parse(row.time_off_json) as SchedulingInterval[],
+  public_name:row.public_name,public_photo_url:row.public_photo_url,public_bio:row.public_bio,public_approved:row.public_approved,
+  calendar_account_id:row.calendar_account_id,calendar_ids:JSON.parse(row.calendar_ids_json) as string[],
+  busy_from:row.busy_from,busy_until:row.busy_until,busy_checked_at:row.busy_checked_at,busy_error:row.busy_error,
+  updated_at:row.updated_at,updated_by:row.updated_by,
+  calendar_status:!row.calendar_account_id?'internal':!linked?'disconnected':row.busy_error?'error':!row.busy_checked_at||Date.now()-Date.parse(row.busy_checked_at)>BUSY_FRESHNESS_MS?'stale':'ready',
+ }
 }
 export async function writeMemberScheduling(actor: SchedulingActor, memberId: string, input: {timezone: string; weekly: WorkingHours[]; time_off: SchedulingInterval[]; expected_updated_at: string | null; public_name?: string | null; public_photo_url?: string | null; public_bio?: string | null; public_approved?: boolean}) {
  if(!input || typeof input!=='object' || typeof input.timezone!=='string' || (input.expected_updated_at!==null && typeof input.expected_updated_at!=='string'))throw new HTTPError({statusCode:400,message:'Complete schedule and current revision required'})
@@ -69,7 +82,7 @@ export async function writeMemberScheduling(actor: SchedulingActor, memberId: st
  const windows=workingWindows(input.timezone,input.weekly)
  const timeOff=validIntervals(input.time_off)
  for(const [key,max] of [['public_name',100],['public_bio',2000],['public_photo_url',2048]] as const) if(input[key]!==undefined && input[key]!==null && (typeof input[key]!=='string' || input[key]!.length>max)) throw new HTTPError({statusCode:400,message:`Invalid ${key}`})
- if(input.public_photo_url) { const url=new URL(input.public_photo_url); if(url.protocol!=='https:' || url.username || url.password) throw new HTTPError({statusCode:400,message:'Public photo must use HTTPS'}) }
+ if(input.public_photo_url) { if(!URL.canParse(input.public_photo_url))throw new HTTPError({statusCode:400,message:'Public photo must be a valid HTTPS URL'});const url=new URL(input.public_photo_url); if(url.protocol!=='https:' || url.username || url.password) throw new HTTPError({statusCode:400,message:'Public photo must use HTTPS'}) }
  const changedProfile=['public_name','public_photo_url','public_bio'].some(key=>input[key as keyof typeof input]!==undefined && input[key as keyof typeof input]!==current?.[key as keyof typeof current])
  const approved=input.public_approved??(changedProfile?false:Boolean(current?.public_approved))
  const now=new Date().toISOString()
@@ -115,7 +128,7 @@ export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, member
   await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_json=?,busy_from=?,busy_until=?,busy_checked_at=?,busy_error=NULL WHERE member_id=? AND calendar_revision=?',params:[JSON.stringify(busy),now,until,new Date().toISOString(),memberId,row.calendar_revision]}])
  } catch(error) {
   const message=error instanceof Error?error.message:String(error)
-  await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_error=? WHERE member_id=? AND calendar_revision=?',params:[message,memberId,row.calendar_revision]}])
+  await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_error=?,busy_checked_at=? WHERE member_id=? AND calendar_revision=?',params:[message,new Date().toISOString(),memberId,row.calendar_revision]}])
   return {error:message}
  }
 }
@@ -128,8 +141,8 @@ export async function memberSchedulingList(actor: SchedulingActor) {
  if(!membership)throw new HTTPError({statusCode:403,message:'Membership required'})
  const {roleAllows}=await import('~/server/utils/member-access')
  const admin=await roleAllows({...membership,permissions:{members:['read']}})
- const members=await queryAll<{id:string;name:string}>(actor.env.DB,`SELECT m.id,u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.organizationId,Number(admin),actor.userId])
- return Promise.all(members.map(async member=>({...member,scheduling:await readMemberScheduling(actor.env.DB,actor.organizationId,member.id)})))
+ const members=await queryAll<{id:string;name:string;is_self:number}>(actor.env.DB,`SELECT m.id,u.name,m.userId=? AS is_self FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.userId,actor.organizationId,Number(admin),actor.userId])
+ return Promise.all(members.map(async ({is_self,...member})=>({...member,self:Boolean(is_self),scheduling:await readMemberScheduling(actor.env.DB,actor.organizationId,member.id)})))
 }
 export async function memberBusyCalendarChoices(actor:SchedulingActor,memberId:string,accountId:string) {
  const member=await requireSchedulingAccess(actor,memberId)

@@ -16,7 +16,7 @@ export default defineHandler(async event=>{
  const checkout=await stripe.checkout.sessions.retrieve(proof.stripe_checkout_id,{}, {stripeAccount:payment.stripe_account_id})
  if(checkout.livemode!==Boolean(payment.livemode) || checkout.client_reference_id!==payment.id || checkout.payment_status!=='paid' || !checkout.payment_intent)throw new HTTPError({statusCode:409,statusMessage:'Stripe has not authenticated a paid purchase'})
  const intentId=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id
- await reconcilePaymentIntent(env.DB,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:payment.stripe_account_id}))
+ await reconcilePaymentIntent(env.DB,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:payment.stripe_account_id}),env)
  const userId=await ensureInteractionUser(event,env)
  return jsonResponse(await claimPurchase(env.DB,userId,body.purchase_claim))
 })

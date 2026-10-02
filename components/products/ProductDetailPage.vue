@@ -314,6 +314,7 @@
 </template>
 
 <script setup lang="ts">
+import WhoYouMeet from '~/components/booking/WhoYouMeet.vue'
 import type { Product, ProductPresentation } from '~/server/types/products'
 import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'

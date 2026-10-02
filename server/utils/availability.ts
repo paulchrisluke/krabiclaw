@@ -817,12 +817,15 @@ export async function updateSession(db: DbClient, input: {
   const capacity = input.capacity === undefined ? session.capacity : input.capacity
   const guard = capacity === null
     ? ''
-    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0)`
+    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0) + (SELECT ${sessionHeldCapacitySql('held')} FROM product_sessions held WHERE held.id=product_sessions.id)`
   const written = await executeBatch(db, [{
     query: `
       UPDATE product_sessions
       SET starts_at = ?, ends_at = ?, capacity = ?, status = ?, updated_at = ?, updated_by = ?
       WHERE organization_id = ? AND id = ? ${guard}
+        AND (${sessionMemberSql('product_sessions')} IS NULL OR (starts_at=? AND ends_at=? AND status=?) OR (
+          NOT EXISTS(SELECT 1 FROM bookings b WHERE b.product_session_id=product_sessions.id AND ${CAPACITY_CONSUMING_SQL})
+          AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds h WHERE h.session_id=product_sessions.id AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))))
         AND (NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})
           OR NOT EXISTS (SELECT 1 FROM (SELECT product_sessions.id AS id, product_sessions.assigned_member_id AS assigned_member_id, product_sessions.organization_id AS organization_id, product_sessions.product_id AS product_id, product_sessions.location_id AS location_id, ? AS starts_at, ? AS ends_at) proposed
             WHERE ${onlineCalendarConflictSql('proposed', 'NULL', 'product_sessions.id')} OR ${providerUnavailableSql('proposed')}))
@@ -831,7 +834,7 @@ export async function updateSession(db: DbClient, input: {
       startsAt, endsAt, capacity,
       input.status ?? session.status, now, input.actorId,
       input.organizationId, input.sessionId,
-      ...(capacity === null ? [] : [capacity]), startsAt, endsAt,
+      ...(capacity === null ? [] : [capacity]), startsAt, endsAt, input.status ?? session.status, startsAt, endsAt,
     ],
   }], { operation: 'Update product session' })
   if (written[0]?.meta?.changes === 0) {

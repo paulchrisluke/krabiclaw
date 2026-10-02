@@ -19,7 +19,7 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
  for(const payment of attempts){try{
   const checkout=await stripe.checkout.sessions.retrieve(payment.stripe_checkout_id,{}, {stripeAccount:payment.stripe_account_id})
   if(checkout.livemode!==Boolean(payment.livemode) || checkout.client_reference_id!==payment.id)throw new Error('Reconciliation checkout financial scope mismatch')
-  if(checkout.payment_status==='paid'&&checkout.payment_intent){const id=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id;await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{}, {stripeAccount:payment.stripe_account_id}));await execute(db,"UPDATE payment_attempts SET status='completed',updated_at=? WHERE payment_id=?",[now,payment.id])}
+  if(checkout.payment_status==='paid'&&checkout.payment_intent){const id=typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id;await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{}, {stripeAccount:payment.stripe_account_id}),env);await execute(db,"UPDATE payment_attempts SET status='completed',updated_at=? WHERE payment_id=?",[now,payment.id])}
   else if(checkout.status==='expired')await execute(db,"UPDATE payment_attempts SET status='expired',updated_at=? WHERE payment_id=?",[now,payment.id])
  }catch(error){errors.push(error instanceof Error?error:new Error(String(error)));await execute(db,'UPDATE payment_attempts SET error=?,updated_at=? WHERE payment_id=?',[String(error),now,payment.id])}}
  const refunds=await queryAll<{payment_id:string;organization_id:string;amount:number;idempotency_key:string;created_by:string|null}>(db,"SELECT r.*,p.organization_id FROM payment_refunds r JOIN payments p ON p.id=r.payment_id WHERE r.status IN ('queued','creating') ORDER BY r.updated_at LIMIT 50")
@@ -46,7 +46,7 @@ export default defineScheduledTask<{skipped?:string;attempts?:number;refunds?:nu
  const settled=await queryAll<Payment>(db,"SELECT * FROM payments WHERE captured_amount>0 AND stripe_payment_intent_id IS NOT NULL ORDER BY updated_at LIMIT 25")
  for(const payment of settled){try{
   const options={stripeAccount:payment.stripe_account_id},id=payment.stripe_payment_intent_id!
-  await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{},options))
+  await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(id,{},options),env)
   const [nativeRefunds,nativeDisputes]=await Promise.all([stripe.refunds.list({payment_intent:id,limit:100},options),stripe.disputes.list({payment_intent:id,limit:100},options)])
   if(nativeRefunds.has_more||nativeDisputes.has_more)throw new Error('Historical payment provider history requires bounded operator review')
   for(const refund of nativeRefunds.data)await reconcileRefundState(db,stripe,payment,refund.id)

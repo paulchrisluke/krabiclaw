@@ -367,11 +367,8 @@ export async function requireMcpOrganization(
     throw new HTTPError({ statusCode: 403, statusMessage: 'Insufficient permissions' })
   }
 
-  // MCP tools operate on the whole tenant at this auth layer, so anything short
-  // of an organization-wide role is refused here rather than silently getting
-  // tenant-wide access. Owner and admin are the only roles there are, so this
-  // is the same question the floor asks; it stays because the floor is what is
-  // published to MCP clients and this is the boundary that enforces it.
+  // Tenant-wide tools retain owner/admin access. The member floor is reserved
+  // for scheduling tools whose domain writer also checks the target member.
   if (!isOrganizationWideRole(role) && minimumRole !== 'member') {
     await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }

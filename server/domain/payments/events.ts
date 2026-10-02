@@ -1,4 +1,6 @@
 import type Stripe from 'stripe'
+import type { CloudflareEnv } from '~/server/utils/auth'
+import { refreshMemberBusy } from '~/server/domain/member-scheduling'
 import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { sessionClaimQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { processStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
@@ -6,10 +8,10 @@ import { executeRefund, reconcileRefundState, requirePayment, type Payment } fro
 
 interface Hold {
   id:string; organization_id:string; product_id:string; variant_id:string; session_id:string
-  buyer_user_id:string|null; request_id:string|null; quantity:number; status:string; expires_at:string; converted_booking_id:string|null
+  buyer_user_id:string|null; request_id:string|null; quantity:number; status:string; expires_at:string; converted_booking_id:string|null; assigned_member_id:string|null
 }
 /** Provider retrieval, account/mode and frozen money checks precede every conversion. */
-export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,intent:Stripe.PaymentIntent) {
+export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,intent:Stripe.PaymentIntent, env?:CloudflareEnv) {
   if (intent.livemode !== Boolean(payment.livemode) || intent.currency.toUpperCase() !== payment.currency || intent.metadata.krabiclaw_payment_id !== payment.id || (payment.stripe_payment_intent_id && payment.stripe_payment_intent_id !== intent.id)) throw new Error('Stripe PaymentIntent financial identity mismatch')
   // Settled refunds never re-enter booking conversion. Recovery remains retryable
   // through its durable refund intent after an interrupted native response.
@@ -46,6 +48,7 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
   const hold = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE payment_id=? AND organization_id=?',[payment.id,payment.organization_id])
   if (!hold) throw new Error('Captured booking payment has no durable hold')
   if (hold.status === 'converted') return
+  if (env && hold.assigned_member_id) await refreshMemberBusy(db,env,hold.assigned_member_id,true)
   const bookingId = crypto.randomUUID()
   const claim = sessionClaimQuery({bookingId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
   const results = await executeBatch(db,[claim, sessionAssignmentQuery(hold.session_id, hold.organization_id, bookingId),
@@ -63,7 +66,7 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
 }
 
 export function paymentEventKey(event:Pick<Stripe.Event,'id'|'account'|'livemode'>):string{return `payments:${event.account??'unscoped'}:${Number(event.livemode)}:${event.id}`}
-export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe.Event,_payload:string) {
+export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe.Event,_payload:string,env?:CloudflareEnv) {
   if(!['checkout.session.','payment_intent.','refund.','charge.dispute.'].some(prefix=>event.type.startsWith(prefix)))return true
   const object=event.data.object as {id?:string;metadata?:Record<string,string>|null}
   const payload=JSON.stringify({id:event.id,type:event.type,account:event.account,livemode:event.livemode,data:{object:{id:object.id,metadata:{krabiclaw_payment_id:object.metadata?.krabiclaw_payment_id}}}})
@@ -81,7 +84,7 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
       if (checkout.client_reference_id !== payment.id || checkout.livemode !== event.livemode || checkout.currency?.toUpperCase() !== payment.currency) throw new Error('Stripe checkout snapshot mismatch')
       if (checkout.payment_status === 'paid' && checkout.payment_intent) {
         const intentId = typeof checkout.payment_intent==='string'?checkout.payment_intent:checkout.payment_intent.id
-        await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:event.account}))
+        await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(intentId,{}, {stripeAccount:event.account}),env)
       } else if (checkout.status === 'expired') await executeBatch(db,[{query:"UPDATE payment_checkout_holds SET status='released' WHERE payment_id=? AND status='active'",params:[payment.id]},{query:"UPDATE payment_attempts SET status='expired',updated_at=? WHERE stripe_checkout_id=?",params:[new Date().toISOString(),checkout.id]}])
       return
     }
@@ -91,7 +94,7 @@ export async function processPaymentEvent(db:DbClient,stripe:Stripe,event:Stripe
       if (!id) return
       const payment = await requirePayment(db,connected.organization_id,id)
       if (payment.stripe_account_id!==event.account || Boolean(payment.livemode)!==event.livemode) throw new Error('Payment event account mismatch')
-      await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(object.id,{}, {stripeAccount:event.account}))
+      await reconcilePaymentIntent(db,stripe,payment,await stripe.paymentIntents.retrieve(object.id,{}, {stripeAccount:event.account}),env)
       return
     }
     if (event.type.startsWith('refund.')) {
