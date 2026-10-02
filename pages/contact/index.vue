@@ -229,7 +229,6 @@
 
 <script setup lang="ts">
 import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
-import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
@@ -359,12 +358,6 @@ const handleTenantContact = async () => {
   }
   mirrorSubmission('contact_submit', submitted.measurement)
 
-  setContactConfirmation({
-    organizationId,
-    organizationName: businessName.value,
-    guestName: tenantForm.value.name,
-    subject: tenantForm.value.subject,
-  })
   await navigateTo(localePath('/contact/confirmed'))
   tenantSubmitting.value = false
 }

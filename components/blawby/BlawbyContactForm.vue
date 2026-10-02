@@ -29,9 +29,8 @@ defineProps<{ block: TenantPageBlock; page: PublicTenantPage }>()
 const { organizationId } = useTenantOrganization()
 const { localePath } = useI18n()
 // The same keyed request the page already made; the shell carries the firm's
-// name for the confirmation and its consultation settings for the tracking.
+// consultation settings for the tracking.
 const { shell } = await useBlawbyRoute('contact')
-const identity = computed(() => shell.value.identity)
 const consultation = computed(() => shell.value.consultation)
 const submitting = ref(false)
 const submitMessage = ref('')
@@ -49,12 +48,6 @@ async function submitContact() {
       validate: (value): value is { success: true; measurement?: SubmissionMeasurement } => isRecord(value) && value.success === true,
     })
     mirrorSubmission('contact_submit', response.measurement)
-    setContactConfirmation({
-      organizationId,
-      organizationName: identity.value.name,
-      guestName: form.name,
-      subject: form.subject,
-    })
     await navigateTo(localePath('/contact/confirmed'))
   } catch (error) {
     const fetchError = error as { data?: { error?: string; message?: string; statusMessage?: string } }

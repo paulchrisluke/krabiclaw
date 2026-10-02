@@ -104,6 +104,7 @@
 
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
+import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { ComponentPublicInstance } from 'vue'
@@ -342,7 +343,8 @@ async function openSelectedResult() {
 async function openResult(result: PublicSearchResult) {
   try {
     const failure = await router.push(result.path)
-    if (failure) {
+    // Choosing the page already open is a completed selection.
+    if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated)) {
       searchError.value = 'Unable to open this result: ' + failure.message
       return
     }
