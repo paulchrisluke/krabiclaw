@@ -1,12 +1,9 @@
 <template>
   <section class="py-10 sm:py-14" aria-label="Choose your consultation">
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <label class="block max-w-xl text-sm font-medium text-default">
-        Service
-        <select v-model="selectedId" class="mt-2 w-full min-w-0 rounded-xl border border-default bg-default px-4 py-3 text-base text-default focus:outline-2 focus:-outline-offset-2 focus:outline-primary">
-          <option v-for="service in items" :key="service.id" :value="service.id">{{ service.title }}</option>
-        </select>
-      </label>
+      <UFormField label="Service" class="max-w-xl">
+        <USelect v-model.nullable="selectedId" :items="items" value-key="id" label-key="title" :portal="false" :ui="{ content: 'z-50' }" class="w-full min-w-0" />
+      </UFormField>
       <div v-if="selectedService" class="mt-8 flex items-start gap-5">
         <img v-if="thumbnail" :src="thumbnail" :alt="selectedService.title" class="size-24 shrink-0 rounded-xl object-cover sm:size-32">
         <div class="max-w-3xl">
