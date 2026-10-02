@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
+import { waitForNuxtHydration } from './helpers'
 
 test('platform blog renders its public API posts in server HTML', async ({ request }) => {
   const api = await request.get('/api/public/blog')
@@ -145,6 +146,7 @@ test('mobile docs retain full navigation and one accessible prompt copy action',
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/docs/make-your-first-site-edit')
   await expect(page.locator('article h1')).toHaveText('Make your first site edit')
+  await waitForNuxtHydration(page)
   const sections = page.getByRole('button', { name: 'On this page', exact: true })
   await sections.press('Enter')
   await expect(sections).toHaveAttribute('aria-expanded', 'true')
@@ -283,6 +285,8 @@ for (const signedIn of [false, true]) {
       await page.setViewportSize({ width, height: 900 })
       for (const path of ['/docs', '/blog']) {
         await page.goto(path)
+        // A click on the server-rendered toggle before hydration does nothing.
+        await waitForNuxtHydration(page)
         const header = page.locator('header').first()
         const toggle = header.getByRole('button', { name: 'Open menu', exact: true })
         await expect(toggle).toBeVisible()

@@ -8,7 +8,6 @@ import { LOCALES_TOOLS } from './locales'
 import { LOCATIONS_TOOLS } from './locations'
 import { MEDIA_TOOLS } from './media'
 import { PRODUCTS_TOOLS } from './products'
-import { ONBOARDING_TOOLS } from './onboarding'
 import { POSTS_TOOLS } from './posts'
 import { QA_TOOLS } from './qa'
 import { REVIEWS_TOOLS } from './reviews'
@@ -24,7 +23,6 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...LOCATIONS_TOOLS,
   ...MEDIA_TOOLS,
   ...PRODUCTS_TOOLS,
-  ...ONBOARDING_TOOLS,
   ...POSTS_TOOLS,
   ...QA_TOOLS,
   ...REVIEWS_TOOLS,

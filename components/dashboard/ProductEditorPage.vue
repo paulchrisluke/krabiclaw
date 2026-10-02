@@ -37,7 +37,7 @@ import type { ComputedRef, InjectionKey, Ref } from 'vue'
 export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
 
-export interface ScheduleSlotDraft { weekday: number; start_time: string; capacity: string }
+export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
 export interface OptionValueDraft { id: string | null; value: string }
 export interface OptionDraft { id: string; name: string; values: OptionValueDraft[] }
@@ -773,7 +773,7 @@ async function saveBooking() {
 // ── The weekly schedule ─────────────────────────────────
 // One draft slot per (weekday, time) at this branch. Capacity is kept as the
 // merchant typed it and read as a number, or the product's default, on save.
-interface ScheduleSlotDraft { weekday: number; start_time: string; capacity: string }
+interface ScheduleSlotDraft { weekday: number; start_time: string }
 const WEEKDAYS = [
   { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
@@ -781,14 +781,14 @@ const WEEKDAYS = [
 const schedule = ref<ScheduleSlotDraft[]>([])
 const scheduleLoading = ref(false)
 const scheduleLoadedFor = ref<string | null>(null)
-const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string; capacity: number | null }> } =>
+const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
   isRecord(value) && Array.isArray(value.rules)
 
 function slotsFor(weekday: number) {
   return schedule.value.filter(slot => slot.weekday === weekday)
 }
 function addSlot(weekday: number) {
-  schedule.value.push({ weekday, start_time: '', capacity: '' })
+  schedule.value.push({ weekday, start_time: '' })
 }
 function removeSlot(slot: ScheduleSlotDraft) {
   schedule.value = schedule.value.filter(entry => entry !== slot)
@@ -804,7 +804,7 @@ async function loadSchedule() {
     const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
     // The reader moved on while this loaded; that location's own load owns the draft.
     if (`${productId.value}:${locationId.value}` !== key) return
-    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time, capacity: rule.capacity === null ? '' : String(rule.capacity) }))
+    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time }))
     scheduleLoadedFor.value = key
   } finally {
     scheduleLoading.value = false
@@ -812,13 +812,13 @@ async function loadSchedule() {
 }
 watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
 
-/** The schedule as the writer takes it: every filled slot, capacity as a number or the default. */
+/** The schedule as the writer takes it: every filled weekly slot; Product owns duration and capacity. */
 async function saveSchedule() {
   const id = locationId.value
   if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return
   const slots = schedule.value
     .filter(slot => slot.start_time.trim())
-    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5), capacity: slot.capacity.trim() ? Number(slot.capacity) : null }))
+    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5) }))
   await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability`, {
     method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
   })

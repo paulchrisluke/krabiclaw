@@ -38,7 +38,7 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
 // One block, addressed by id, on any content document: a blog article, a tenant
 // page variant, a doc. Where it sits is a relationship to a neighbour, so an
 // insert names the block it follows and nothing states a position. The whole
-// document write (update_blog_post, update_tenant_page) is for rewriting an
+// document write (update_blog_post, update_site_page) is for rewriting an
 // article; these are for changing one thing in it.
 const CONTENT_BLOCK_WRITE_SCHEMA = {
   type: { type: 'string', enum: [...CONTENT_BLOCK_TYPES] },
@@ -66,12 +66,12 @@ const TENANT_PAGE_LIFECYCLE_OUTPUT = {
 export const CONTENT_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'append_content_block',
-      description: 'Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
+      description: 'Insert one block into a blog article or site page. Read the document first (get_blog_post, get_site_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
       inputSchema: {
-        document_id: { type: 'string', description: 'The blog post id or tenant page variant id.' },
+        document_id: { type: 'string', description: 'The blog post id or site page variant id.' },
         after_block_id: { type: ['string', 'null'], description: 'The block this one follows. Omit to append at the end.' },
         ...CONTENT_BLOCK_WRITE_SCHEMA,
       },
@@ -95,7 +95,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_content_block',
-      description: 'Delete one block, and any blocks nested under it, from a blog article or tenant page. Requires the block\'s own updated_at from the last read.',
+      description: 'Delete one block, and any blocks nested under it, from a blog article or site page. Requires the block\'s own updated_at from the last read.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -107,8 +107,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: CONTENT_BLOCKS_OUTPUT,
     }),
   organizationTool({
-      name: 'list_tenant_pages',
-      description: 'List canonical tenant-page variants for one manually managed locale. Automated translation is not used; create or update each locale explicitly.',
+      name: 'list_site_pages',
+      description: "List authored site-page variants for the requested language, with their paths and document identities. Each language is managed explicitly; this tool does not generate translations.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -116,8 +116,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: { type: 'object', properties: { pages: { type: 'array', items: { type: 'object' } }, page_info: pageInfoObject }, required: ['pages', 'page_info'] },
     }),
   organizationTool({
-      name: 'get_tenant_page',
-      description: 'Get one canonical tenant-page variant, including its current document timestamp and blocks.',
+      name: 'get_site_page',
+      description: "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -126,8 +126,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   organizationTool({
-      name: 'create_tenant_page',
-      description: 'Create a manually authored tenant-page variant. A non-source locale must provide page_id for an existing source page; no automated translation is performed.',
+      name: 'create_site_page',
+      description: "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -142,8 +142,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   organizationTool({
-      name: 'update_tenant_page',
-      description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      name: 'update_site_page',
+      description: 'Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -159,8 +159,8 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   organizationTool({
-      name: 'delete_tenant_page',
-      description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
+      name: 'delete_site_page',
+      description: 'Delete the selected site page or translation. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -207,7 +207,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and the guest-facing rules. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -215,7 +215,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
-        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.' },
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.' },
       },
       required: ['location_id'],
       outputSchema: {

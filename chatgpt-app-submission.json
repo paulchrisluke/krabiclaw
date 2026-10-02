@@ -128,7 +128,19 @@
         "destructive_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Existing content is not deleted or overwritten."
       }
     },
-    "create_tenant_page": {
+    "create_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a new authored question and answer; retries may create duplicates.",
+        "open_world_justification": "Creates a new authored question and answer; retries may create duplicates. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Creates a new authored question and answer; retries may create duplicates. Existing content is not deleted or overwritten."
+      }
+    },
+    "create_site_page": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
@@ -248,6 +260,30 @@
         "destructive_justification": "Deletes a product, its reviews and placements, and updates the remaining product order. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "delete_product_booking_config": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Disables product booking when no booking history exists.",
+        "open_world_justification": "Disables product booking when no booking history exists. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Disables product booking when no booking history exists. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "delete_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Deletes selected authored Q&A and its translations.",
+        "open_world_justification": "Deletes selected authored Q&A and its translations. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Deletes selected authored Q&A and its translations. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "delete_resource_localization": {
       "annotations": {
         "readOnlyHint": false,
@@ -260,7 +296,7 @@
         "destructive_justification": "Deletes the selected translated resource representation. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "delete_tenant_page": {
+    "delete_site_page": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
@@ -306,18 +342,6 @@
         "read_only_justification": "Reads one live post belonging to the explicitly selected connected channel.",
         "open_world_justification": "The connected provider is queried for one current post.",
         "destructive_justification": "Reads one live post belonging to the explicitly selected connected channel. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_contact_inquiries": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads authorized customer contact inquiries, including personal contact information.",
-        "open_world_justification": "Reads authorized customer contact inquiries, including personal contact information. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads authorized customer contact inquiries, including personal contact information. Existing content is not deleted or overwritten."
       }
     },
     "get_location": {
@@ -416,18 +440,6 @@
         "destructive_justification": "Reads product catalog translations for the selected organization and locale. Existing content is not deleted or overwritten."
       }
     },
-    "get_reservation_inquiries": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads authorized reservation inquiries, including guest contact and reservation information.",
-        "open_world_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. Existing content is not deleted or overwritten."
-      }
-    },
     "get_reservation_policy": {
       "annotations": {
         "readOnlyHint": true,
@@ -452,6 +464,18 @@
         "destructive_justification": "Reads a resource translation and any existing authoring document. Existing content is not deleted or overwritten."
       }
     },
+    "get_site_page": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the selected tenant page and its existing content document.",
+        "open_world_justification": "Reads the selected tenant page and its existing content document. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads the selected tenant page and its existing content document. Existing content is not deleted or overwritten."
+      }
+    },
     "get_social_connections": {
       "annotations": {
         "readOnlyHint": true,
@@ -462,18 +486,6 @@
         "read_only_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token.",
         "open_world_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. It does not publish content or write to an external service.",
         "destructive_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. Existing content is not deleted or overwritten."
-      }
-    },
-    "get_tenant_page": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Reads the selected tenant page and its existing content document.",
-        "open_world_justification": "Reads the selected tenant page and its existing content document. It does not publish content or write to an external service.",
-        "destructive_justification": "Reads the selected tenant page and its existing content document. Existing content is not deleted or overwritten."
       }
     },
     "get_workspace_context": {
@@ -534,6 +546,18 @@
         "read_only_justification": "Lists the collections of the selected organization.",
         "open_world_justification": "Lists the collections of the selected organization. It does not publish content or write to an external service.",
         "destructive_justification": "Lists the collections of the selected organization. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_contact_inquiries": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads authorized customer contact inquiries, including personal contact information.",
+        "open_world_justification": "Reads authorized customer contact inquiries, including personal contact information. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads authorized customer contact inquiries, including personal contact information. Existing content is not deleted or overwritten."
       }
     },
     "list_location_products": {
@@ -668,7 +692,19 @@
         "destructive_justification": "Lists the products of the selected organization. Existing content is not deleted or overwritten."
       }
     },
-    "list_tenant_pages": {
+    "list_reservation_inquiries": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads authorized reservation inquiries, including guest contact and reservation information.",
+        "open_world_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. It does not publish content or write to an external service.",
+        "destructive_justification": "Reads authorized reservation inquiries, including guest contact and reservation information. Existing content is not deleted or overwritten."
+      }
+    },
+    "list_site_pages": {
       "annotations": {
         "readOnlyHint": true,
         "openWorldHint": false,
@@ -836,6 +872,18 @@
         "destructive_justification": "Overwrites media placement ordering for the selected public content collection. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "reorder_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites authored Q&A sort positions in one scope.",
+        "open_world_justification": "Overwrites authored Q&A sort positions in one scope. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites authored Q&A sort positions in one scope. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "replace_content_block": {
       "annotations": {
         "readOnlyHint": false,
@@ -846,6 +894,18 @@
         "read_only_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position.",
         "open_world_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces one block's data and media in the selected blog article or tenant page after a version check, keeping its position. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "replace_product_weekly_schedule": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history.",
+        "open_world_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Replaces weekly availability for one product and location, cancelling removed future sessions with no booking history while preserving any booked history. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "replace_resource_localizations": {
@@ -860,28 +920,16 @@
         "destructive_justification": "Replaces the submitted translations for one resource type and locale; omitted resources remain untouched. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "save_generated_image": {
+    "save_media_attachment": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Stores supplied image bytes as a new media asset with a public URL; it does not generate the image.",
-        "open_world_justification": "The supplied image bytes are stored in Cloudflare storage at a public media URL.",
-        "destructive_justification": "Stores supplied image bytes as a new media asset with a public URL; it does not generate the image. Existing content is not deleted or overwritten."
-      }
-    },
-    "save_generated_image_file": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Stores the supplied image attachment as a new media asset with a public URL; it does not generate the image.",
-        "open_world_justification": "The supplied image attachment is stored in Cloudflare storage at a public media URL.",
-        "destructive_justification": "Stores the supplied image attachment as a new media asset with a public URL; it does not generate the image. Existing content is not deleted or overwritten."
+        "read_only_justification": "Stores a conversation file in Cloudflare media storage and returns a public URL, even before assignment to a page.",
+        "open_world_justification": "The file is stored in Cloudflare storage at a public media URL.",
+        "destructive_justification": "Stores a conversation file in Cloudflare media storage and returns a public URL, even before assignment to a page. Existing content is not deleted or overwritten."
       }
     },
     "set_brand_color": {
@@ -908,18 +956,6 @@
         "destructive_justification": "Overwrites the complete membership and order of the selected collection; products left out lose their place in it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "set_default_currency": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Overwrites the selected organization default currency setting.",
-        "open_world_justification": "Overwrites the selected organization default currency setting. Its effects can change content or behavior on the public website.",
-        "destructive_justification": "Overwrites the selected organization default currency setting. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
     "set_media": {
       "annotations": {
         "readOnlyHint": false,
@@ -930,6 +966,18 @@
         "read_only_justification": "Replaces or clears the asset assigned to a single public media placement.",
         "open_world_justification": "Replaces or clears the asset assigned to a single public media placement. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Replaces or clears the asset assigned to a single public media placement. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
+    "set_product_booking_config": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts.",
+        "open_world_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Sets inputs for new occurrences without changing omitted defaults or existing session facts. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "set_product_location": {
@@ -1064,6 +1112,18 @@
         "destructive_justification": "Overwrites product fields, including public content, availability and price. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
+    "update_qa": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Overwrites selected authored Q&A fields and public visibility.",
+        "open_world_justification": "Overwrites selected authored Q&A fields and public visibility. Its effects can change content or behavior on the public website.",
+        "destructive_justification": "Overwrites selected authored Q&A fields and public visibility. Existing state is deleted, replaced or overwritten rather than only appended."
+      }
+    },
     "update_reservation_policy": {
       "annotations": {
         "readOnlyHint": false,
@@ -1076,7 +1136,7 @@
         "destructive_justification": "Creates or overwrites the reservation policy of the selected location, which is what opens reservations there. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
-    "update_tenant_page": {
+    "update_site_page": {
       "annotations": {
         "readOnlyHint": false,
         "openWorldHint": true,
@@ -1086,18 +1146,6 @@
         "read_only_justification": "Overwrites tenant page metadata or supplied structured content, subject to version and removal checks.",
         "open_world_justification": "Overwrites tenant page metadata or supplied structured content, subject to version and removal checks. Its effects can change content or behavior on the public website.",
         "destructive_justification": "Overwrites tenant page metadata or supplied structured content, subject to version and removal checks. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "upload_user_media": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": true,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Stores a user attachment in Cloudflare media storage and returns a public URL, even before assignment to a page.",
-        "open_world_justification": "The attachment is stored in Cloudflare storage at a public media URL.",
-        "destructive_justification": "Stores a user attachment in Cloudflare media storage and returns a public URL, even before assignment to a page. Existing content is not deleted or overwritten."
       }
     }
   },

@@ -5,11 +5,11 @@ import { NOT_HANDLED, optionalDaysWindow, optionalString } from './shared'
 export async function handleSubmissionsTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, organization } = ctx
   switch (toolName) {
-    case "get_contact_inquiries":
+    case "list_contact_inquiries":
       return {
         submissions: await listContactSubmissions(organization.db, organization.organizationId),
       };
-    case "get_reservation_inquiries": {
+    case "list_reservation_inquiries": {
       const reservationFilter = {
         locationId: optionalString(args, "location_id") ?? null,
         sinceDays: optionalDaysWindow(args, "days"),

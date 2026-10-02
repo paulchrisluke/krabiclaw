@@ -121,7 +121,7 @@ async function publish() {
   const pages = []
   let cursor
   do {
-    const response = await call('list_tenant_pages', { locale: bundle.locale, limit: 100, ...(cursor ? { cursor } : {}) })
+    const response = await call('list_site_pages', { locale: bundle.locale, limit: 100, ...(cursor ? { cursor } : {}) })
     pages.push(...response.pages)
     cursor = response.page_info.has_more ? response.page_info.next_cursor : null
   } while (cursor)
@@ -130,7 +130,7 @@ async function publish() {
     return normalizeTenantPageBlocks(blocks).map(({ id, ...block }) => block)
   }
   async function verifyPage(actual, intended) {
-    const { page } = await call('get_tenant_page', { variant_id: actual.id })
+    const { page } = await call('get_site_page', { variant_id: actual.id })
     if (page.page_id !== intended.page_id || page.path !== intended.path || page.title !== intended.title) throw new Error(`Page metadata differs: ${intended.path}`)
     if (!isDeepStrictEqual(comparableBlocks(page.blocks), comparableBlocks(intended.blocks))) throw new Error(`Page content differs: ${intended.path}; edit the existing translation through the concurrency-aware page editor`)
     if (page.summary !== (intended.summary ?? null)) throw new Error(`Page summary differs: ${intended.path}`)
@@ -160,7 +160,7 @@ async function publish() {
     }
     for (const page of bundle.pages) {
       if (existingPages.has(page.page_id)) continue
-      const { page: created } = await call('create_tenant_page', { ...page, locale: bundle.locale })
+      const { page: created } = await call('create_site_page', { ...page, locale: bundle.locale })
       existingPages.set(page.page_id, created)
       console.log(`Created Thai page ${page.path}`)
     }

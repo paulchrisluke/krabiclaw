@@ -58,11 +58,11 @@ export function formatBookingPolicySummary(
             : `Free cancellation is available up to ${formatMinutes(policy.free_cancellation_until_minutes, locale)} before the experience starts.`)
         : (th
             ? `ยกเลิกได้ฟรีล่วงหน้าสูงสุด ${formatMinutes(policy.free_cancellation_until_minutes, locale)} ก่อนเวลาจอง`
-            : `Change or cancel free up to ${formatMinutes(policy.free_cancellation_until_minutes, locale)} before your booking.`),
+            : `Cancel free up to ${formatMinutes(policy.free_cancellation_until_minutes, locale)} before your booking.`),
     })
   }
 
-  if (policy.reschedule_allowed && policy.reschedule_cutoff_minutes) {
+  if (policy.policy_type === 'experience' && policy.reschedule_allowed && policy.reschedule_cutoff_minutes) {
     items.push({
       id: 'reschedule',
       text: th
@@ -71,7 +71,7 @@ export function formatBookingPolicySummary(
     })
   }
 
-  if (policy.deposit_required) {
+  if (policy.policy_type === 'experience' && policy.deposit_required) {
     items.push({
       id: 'deposit',
       text: policy.deposit_trigger_party_size

@@ -31,13 +31,13 @@ export function seatsSummary(capacity: number | null | undefined): string {
 }
 
 /**
- * One choice sets how late a guest may change or cancel without penalty; the
- * reschedule cutoff is the same instant, so the guest reads one rule.
+ * Named cancellation terms stored by the calendar editor. The persisted
+ * reschedule fields are retained; the reservation flow does not enforce them.
  */
 export const CANCELLATION_TIERS = [
-  { id: 'flexible', label: 'Flexible', minutes: 2 * HOUR, points: ['Free to change or cancel until 2 hours before'] },
-  { id: 'moderate', label: 'Moderate', minutes: DAY, points: ['Free to change or cancel until 1 day before'] },
-  { id: 'firm', label: 'Firm', minutes: 2 * DAY, points: ['Free to change or cancel until 2 days before'] },
+  { id: 'flexible', label: 'Flexible', minutes: 2 * HOUR, points: ['Free cancellation until 2 hours before'] },
+  { id: 'moderate', label: 'Moderate', minutes: DAY, points: ['Free cancellation until 1 day before'] },
+  { id: 'firm', label: 'Firm', minutes: 2 * DAY, points: ['Free cancellation until 2 days before'] },
 ] as const
 
 export type CancellationTierId = typeof CANCELLATION_TIERS[number]['id']
