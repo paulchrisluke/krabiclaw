@@ -36,6 +36,13 @@
       "when": 1790862282934,
       "tag": "0004_native_consultation_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790901300755,
+      "tag": "0005_google_calendar_projection",
+      "breakpoints": true
     }
   ]
 }
