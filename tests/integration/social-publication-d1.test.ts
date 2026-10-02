@@ -13,6 +13,8 @@ import { createPost, deletePost, getPost, listPublicSocialPosts, postPayloadFing
 import { publishPost, reconcilePostPublication, type PublishTarget } from '../../server/utils/social-publication.ts'
 import { listChannelPosts, getChannelPost, deleteChannelPost } from '../../server/utils/social-channel-posts.ts'
 import { remainingMetaSubjectData } from '../../server/utils/integration-release.ts'
+import { getFacebookPagesConnection, storeFacebookPagesConnection } from '../../server/utils/facebook-pages.ts'
+import { readInstagramConnection, storeInstagramConnection } from '../../server/utils/instagram.ts'
 import { MetaGraphError, verifyMetaSignedRequest, configuredMetaApps } from '../../server/utils/meta-graph.ts'
 import { attachMediaPlacement } from '../../server/utils/media-placement.ts'
 import deauthorizeCallback from '../../server/api/integrations/meta/deauthorize.post.ts'
@@ -28,6 +30,8 @@ import deletionStatus from '../../server/api/integrations/meta/data-deletion.get
 
 const PAGE = '1205835975938850'
 const IG = '17841401765050246'
+const OTHER_PAGE = '1205835975938851'
+const OTHER_IG = '17841401765050247'
 
 type Fault = { match: (request: SeenRequest) => boolean; kind: 'timeout' | 'reject' | 'missing'; times: number }
 interface SeenRequest { method: string; host: string; path: string; query: URLSearchParams; body: Record<string, string> }
@@ -172,8 +176,9 @@ async function setUp() {
   await run(`INSERT INTO account (id, accountId, providerId, userId, accessToken, accessTokenExpiresAt) VALUES ('ig-account', 'ig-subject', 'instagram', 'owner', 'ig-token', ${later})`)
   for (const organization of ['org-a', 'org-b']) {
     await run(`UPDATE organization SET integrations_json = '${JSON.stringify({
-      facebook: { revision: `fb-rev-${organization}`, account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
-      instagram: { revision: `ig-rev-${organization}`, account_id: 'ig-account', instagram_user_id: IG, username: 'krabiclaw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
+      // One person's linked accounts, two businesses: each organization has its own Page and professional account.
+      facebook: { revision: `fb-rev-${organization}`, account_id: 'fb-account', page_id: organization === 'org-a' ? PAGE : OTHER_PAGE, page_name: 'Krabi Claw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
+      instagram: { revision: `ig-rev-${organization}`, account_id: 'ig-account', instagram_user_id: organization === 'org-a' ? IG : OTHER_IG, username: 'krabiclaw', status: 'active', created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T00:00:00.000Z' },
     })}' WHERE id = '${organization}'`)
   }
   const meta = new FakeMeta()
@@ -390,6 +395,33 @@ test('publication: one result, one external post per target, and no blind resend
     // Deleted keys answer gone.
     await assert.rejects(create('key-race', { media: [{ asset_id: 'a1', slot: 'cover' }] }), /deleted/)
     assert.equal(await db.prepare('PRAGMA foreign_key_check').all().then(result => result.results.length), 0)
+  } finally {
+    restore()
+    await runtime.dispose()
+  }
+})
+
+test('a Page or Instagram account belongs to one organization', async () => {
+  const { runtime, env, run, restore } = await setUp()
+  try {
+    // An agency's login also manages its client's Page; choosing it on the agency's own site is refused.
+    const conflict = (error: unknown) => error instanceof HTTPError && error.status === 409 && /already connected to another KrabiClaw site/.test(error.message)
+    await assert.rejects(storeFacebookPagesConnection(env, { organization_id: 'org-b', account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw' }, { revision: 'fb-rev-org-b' }), conflict)
+    await assert.rejects(storeInstagramConnection(env, { organization_id: 'org-b', account_id: 'ig-account', instagram_user_id: IG, username: 'krabiclaw' }, { revision: 'ig-rev-org-b' }), conflict)
+    assert.equal((await getFacebookPagesConnection(env, 'org-b'))!.page_id, OTHER_PAGE)
+    assert.equal((await readInstagramConnection(env, 'org-b'))!.instagram_user_id, OTHER_IG)
+
+    // The organization that has it can choose it again, and a stale revision is still a revision conflict.
+    await storeFacebookPagesConnection(env, { organization_id: 'org-a', account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw' }, { revision: 'fb-rev-org-a' })
+    assert.notEqual((await getFacebookPagesConnection(env, 'org-a'))!.revision, 'fb-rev-org-a')
+    await assert.rejects(storeFacebookPagesConnection(env, { organization_id: 'org-a', account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw' }, { revision: 'fb-rev-org-a' }), /The Facebook connection changed/)
+
+    // Once the other organization lets it go, it can be connected.
+    await run("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook', '$.instagram') WHERE id = 'org-a'")
+    await storeFacebookPagesConnection(env, { organization_id: 'org-b', account_id: 'fb-account', page_id: PAGE, page_name: 'Krabi Claw' }, { revision: 'fb-rev-org-b' })
+    await storeInstagramConnection(env, { organization_id: 'org-b', account_id: 'ig-account', instagram_user_id: IG, username: 'krabiclaw' }, { revision: 'ig-rev-org-b' })
+    assert.equal((await getFacebookPagesConnection(env, 'org-b'))!.page_id, PAGE)
+    assert.equal((await readInstagramConnection(env, 'org-b'))!.instagram_user_id, IG)
   } finally {
     restore()
     await runtime.dispose()

@@ -1,4 +1,5 @@
 import type { FacebookIntegration } from '~/shared/organization-settings'
+import { HTTPError } from 'nitro'
 import { execute, queryFirst } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { formBody, metaGraphRequest } from './meta-graph'
@@ -69,8 +70,18 @@ export const storeFacebookPagesConnection = async (
         '$.created_at', COALESCE(json_extract(integrations_json, '$.facebook.created_at'), ?)))
     WHERE id = ?
       AND json_extract(integrations_json, '$.facebook.revision') IS ?
-  `, [payload, now, connection.organization_id, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('The Facebook connection changed. Reload before saving.')
+      AND NOT EXISTS (SELECT 1 FROM organization other
+        WHERE other.id <> ? AND json_extract(other.integrations_json, '$.facebook.page_id') = ?
+          AND json_extract(other.integrations_json, '$.facebook.status') IN ('active', 'error'))
+  `, [payload, now, connection.organization_id, expected.revision, connection.organization_id, connection.page_id])
+  if (result.meta?.changes === 1) return
+  // A Page is one business's: connected to a second site, that site would link
+  // to it and publish to it as if it were its own.
+  if (await queryFirst(env.DB, `SELECT 1 FROM organization WHERE id <> ? AND json_extract(integrations_json, '$.facebook.page_id') = ?
+      AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'error') LIMIT 1`, [connection.organization_id, connection.page_id])) {
+    throw new HTTPError({ statusCode: 409, message: 'That Page is already connected to another KrabiClaw site. Disconnect it there first.' })
+  }
+  throw new Error('The Facebook connection changed. Reload before saving.')
 }
 
 export const getFacebookPagesConnection = async (

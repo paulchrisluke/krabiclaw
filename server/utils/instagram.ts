@@ -1,5 +1,6 @@
 import type { InstagramIntegration } from '~/shared/organization-settings'
 import { setTokenUtil } from 'better-auth/oauth2'
+import { HTTPError } from 'nitro'
 import { execute, queryFirst } from '~/server/db'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { formBody, metaGraphRequest } from './meta-graph'
@@ -96,10 +97,17 @@ export async function storeInstagramConnection(
       json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.instagram.created_at'), ?)))
     WHERE id = ?
       AND json_extract(integrations_json, '$.instagram.revision') IS ?
-  `, [payload, now, input.organization_id, expected.revision])
-  if (result.meta?.changes !== 1) {
-    throw new Error('The Instagram connection changed. Reload before saving.')
+      AND NOT EXISTS (SELECT 1 FROM organization other
+        WHERE other.id <> ? AND json_extract(other.integrations_json, '$.instagram.instagram_user_id') = ?
+          AND json_extract(other.integrations_json, '$.instagram.status') IN ('active', 'error'))
+  `, [payload, now, input.organization_id, expected.revision, input.organization_id, input.instagram_user_id])
+  if (result.meta?.changes === 1) return
+  // An Instagram account is one business's, for the same reason as a Facebook Page.
+  if (await queryFirst(env.DB, `SELECT 1 FROM organization WHERE id <> ? AND json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
+      AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'error') LIMIT 1`, [input.organization_id, input.instagram_user_id])) {
+    throw new HTTPError({ statusCode: 409, message: 'That Instagram account is already connected to another KrabiClaw site. Disconnect it there first.' })
   }
+  throw new Error('The Instagram connection changed. Reload before saving.')
 }
 
 /** The organization's selected professional account. */
