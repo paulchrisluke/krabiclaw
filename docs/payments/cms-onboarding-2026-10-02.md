@@ -104,3 +104,21 @@ status refresh and light/dark asset visibility/load assertions. Both screenshots
 were inspected: `artifacts/payments-integration-marks-light.png` and
 `artifacts/payments-integration-marks-dark.png`. Provider status remains
 action_required/restricted; the incomplete callback never grants readiness.
+
+## Isolated-browser completion attempt
+
+At `2026-10-02T02:52Z`, an isolated Playwright context authenticated through
+canonical Better Auth, loaded the CMS and verified the exact existing account
+and `livemode=false` before clicking Continue Stripe onboarding. That created a
+fresh hosted link for the same account, not another merchant. The hosted page
+explicitly identified a sandbox using test data. Stripe presented an hCaptcha
+human-verification challenge before exposing the business form. This is a
+necessary human action; the agent did not solve, bypass or dismiss it. No fields
+were entered/corrected and no agreement accepted in this isolated attempt.
+
+Safe evidence: `artifacts/payments-isolated-hosted-human-verification.png`,
+excluding URL/link tokens. The isolated browser was closed after documenting the
+blocker; shared native Chrome was untouched. After a human completes the native
+verification in an isolated browser, inspect/correct the prior personal-details
+values against the documented successful fixtures before submission. Completion
+and CMS ready-status callback remain unverified.
