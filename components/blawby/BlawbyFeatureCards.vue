@@ -10,7 +10,7 @@
         <div class="mx-4 mb-12 grid grid-cols-1 gap-y-10 sm:mx-auto lg:grid-cols-2 lg:gap-x-8 xl:grid-cols-3"><BlawbyPricePlan v-for="plan in businessPlans" :key="`${plan.discount}-${plan.price}`" :plan="plan" /></div>
       </template>
 
-      <BlawbyPricingCalculator v-if="calculator.enabled && tableRows.length" :rows="tableRows" :note="String(calculator.note || '')" />
+      <BlawbyPricingCalculator v-if="calculator.enabled !== false && tableRows.length" :rows="tableRows" :note="String(calculator.note || '')" />
 
       <div v-if="tableRows.length" class="mt-12 grid gap-6 lg:grid-cols-[1fr_2fr]">
         <div><h3 class="text-lg font-semibold text-[var(--blawby-primary)]">Federal Poverty Level Guidelines</h3><p class="mt-2 text-sm leading-6 text-gray-600">{{ table.notice }}</p></div>

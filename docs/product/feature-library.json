@@ -249,7 +249,7 @@
         "evidenceSha256": {
           "server/domain/requests.ts": "f94697d18fd915b5efa4b4ce609b979385e6c719adb460f1764b3401f33c927d",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373"
         }
       },
       "pendingOwnerDecision": null,
@@ -475,7 +475,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
           "server/utils/mcp-tools/submissions.ts": "87d56cf808b0a3ef5f3d5a31fcc4d28f39248e9181deef4750c14f09034f6b55",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373"
         }
       },
       "pendingOwnerDecision": null,
@@ -749,7 +749,7 @@
           "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373"
         }
       },
       "pendingOwnerDecision": null,
@@ -785,7 +785,7 @@
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
           "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807",
+          "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
         }
       },
@@ -847,7 +847,7 @@
           "server/utils/review-requests.ts": "62c1d1119e0932684c413b74abd7dbe14440f8cd45573b139d0cc77960cf3e23",
           "server/utils/review-request-delivery.ts": "932422b5ff5576042d09c722808cbd8ba1228e79416a11786e7337edff2bce63",
           "server/tasks/review-request-automation.ts": "c317371d25d12653f986590c7164360d0b27c73e3fb904f1b352517af32513f9",
-          "tests/integration/guest-delivery-d1.test.ts": "cb50afc89ae6ba6576b19fba986037dd4bbb396555dd880ff222ba43eda6b807"
+          "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373"
         }
       },
       "pendingOwnerDecision": "Owner asked about free explicit review requests. Runtime is paid; no policy change here. The later Stripe-free comment did not settle this question.",
