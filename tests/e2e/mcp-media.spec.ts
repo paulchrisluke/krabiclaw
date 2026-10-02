@@ -95,7 +95,8 @@ test.describe('stateless MCP server', () => {
       // The fixture's two-image gallery, in its stored order.
       original = await galleryOrder()
       const [first, second] = original
-      expect(second, 'loc-demo-2 fixture gallery has two images').toEqual(expect.any(String))
+      // Nothing changes until the fixture is known to be exactly the two images restored below.
+      expect(original, 'loc-demo-2 fixture gallery').toHaveLength(2)
       await call('reorder_media', { placement, moves: [{ asset_id: second, before_asset_id: first }] })
       expect(await galleryOrder()).toEqual([second, first])
       await call('reorder_media', { placement, moves: [{ asset_id: first, before_asset_id: second }] })
