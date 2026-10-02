@@ -16,6 +16,8 @@ export type DashboardBookingType = 'reservation' | 'booking'
 
 interface BookingRow {
   id: string
+  assigned_member_id: string | null
+  operational_updated_at: string
   operational_id: string
   organization_id: string
   organization_name: string
@@ -51,6 +53,11 @@ export interface DashboardBookingNote {
 
 export interface DashboardBookingDetails {
   id: string
+  assignedMemberId: string | null
+  assignedMemberName: string | null
+  providerConflict: boolean
+  providerCalendarStatus: string | null
+  operationalUpdatedAt: string
   operationalBookingId: string
   type: DashboardBookingType
   organizationId: string
@@ -120,7 +127,7 @@ async function loadBookingRow(
   // refers to — a reservation or a booking — not on the thread. The thread
   // carries the conversation and the guest.
   return queryFirst<BookingRow>(db, `SELECT r.id, record.id AS operational_id, r.organization_id, s.name AS organization_name, s.vertical,
-    record.location_id, l.slug AS location_slug, l.title AS location_title,
+    record.assigned_member_id, record.operational_updated_at, record.location_id, l.slug AS location_slug, l.title AS location_title,
     json_extract(r.payload_json, '$.guest.name') AS guest_name, json_extract(r.payload_json, '$.guest.email') AS guest_email, json_extract(r.payload_json, '$.guest.phone') AS guest_phone,
     NULL AS guest_image_url, record.party_size, record.starts_at, record.ends_at, record.timezone, record.status, json_extract(r.payload_json, '$.notes') AS requests,
     record.product_id AS experience_id, record.product_name AS experience_title, record.product_session_id AS session_id,
@@ -128,10 +135,10 @@ async function loadBookingRow(
     FROM requests r
     JOIN organization s ON s.id = r.organization_id
     JOIN (
-      SELECT b.id, b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id
+      SELECT b.id, b.request_id, b.status, b.party_size, ps.starts_at, ps.ends_at, ps.timezone, ps.location_id, b.product_id, p.name AS product_name, ps.id AS product_session_id, b.assigned_member_id, b.updated_at AS operational_updated_at
         FROM bookings b JOIN product_sessions ps ON ps.id = b.product_session_id JOIN products p ON p.id = b.product_id
       UNION ALL
-      SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL FROM reservations res
+      SELECT res.id, res.request_id, res.status, res.party_size, res.starts_at, res.ends_at, res.timezone, res.location_id, NULL, NULL, NULL, NULL, res.updated_at FROM reservations res
     ) record ON record.request_id = r.id
     LEFT JOIN business_locations l ON l.id = record.location_id
     WHERE r.id = ? AND r.organization_id = ? AND r.kind = ?`, [bookingId, organizationId, type])
@@ -202,7 +209,9 @@ export async function loadDashboardBookingDetails(
     Promise.resolve(row.timezone),
   ])
 
+  const provider=row.assigned_member_id?await queryFirst<{name:string|null;busy_error:string|null;busy_checked_at:string|null;conflict:number}>(context.db,`SELECT u.name,ms.busy_error,ms.busy_checked_at,EXISTS(SELECT 1 FROM json_each(ms.busy_json) busy WHERE json_extract(busy.value,'$.start')<? AND json_extract(busy.value,'$.end')>?) conflict FROM member m LEFT JOIN user u ON u.id=m.userId LEFT JOIN member_scheduling ms ON ms.member_id=m.id AND ms.organization_id=m.organizationId WHERE m.id=? AND m.organizationId=?`,[row.ends_at,row.starts_at,row.assigned_member_id,row.organization_id]):null
   return {
+    assignedMemberId: row.assigned_member_id, assignedMemberName:provider?.name??null,providerConflict:Boolean(provider?.conflict),providerCalendarStatus:provider?.busy_error??null,operationalUpdatedAt:row.operational_updated_at,
     id: row.id,
     operationalBookingId: row.operational_id,
     type: input.type,

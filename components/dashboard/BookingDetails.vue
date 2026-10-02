@@ -52,6 +52,14 @@
           <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
           <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
 
+          <section v-if="booking.type === 'booking'" class="mt-6 space-y-3 border-t border-default pt-5">
+            <h2 class="font-semibold">Assigned person</h2><p>{{ booking.assignedMemberName || (booking.assignedMemberId ? 'Previously assigned member' : booking.organizationName) }}</p>
+            <UAlert v-if="booking.providerConflict" color="warning" description="A later Google busy interval overlaps this booking. Contact the guest and resolve the conflict; the booking has not been cancelled." />
+            <UAlert v-if="booking.providerCalendarStatus" color="warning" :description="booking.providerCalendarStatus" />
+            <USelect v-model="reassignmentMember" :items="reassignmentOptions" placeholder="Select the offering’s assigned member" class="w-full" />
+            <p class="text-sm text-muted">Reassignment applies to every attendee in this Session. Active checkout holds refuse the change. First configure the offering’s eligible member.</p>
+            <UButton :disabled="!reassignmentMember" color="neutral" variant="soft" :loading="reassignmentSaving" @click="reassignProvider">Reassign Session and notify guests</UButton>
+          </section>
           <div class="mt-6 space-y-2">
             <UButton
               :label="`Change ${noun}`"
@@ -265,6 +273,11 @@ const formattedTime = computed(() => {
   return formatTime(booking.value.bookingTime, 'en')
 })
 // The picture the panel leads with: the hero of the location this was booked at.
+const reassignmentMember=ref(''),reassignmentSaving=ref(false),reassignmentKey=ref<string|null>(null)
+const {data:reassignmentMembers}=await useFetch<{members:{id:string;name:string}[]}>(()=>`/api/organizations/${booking.value?.organizationId}/members/scheduling`,{server:false})
+const reassignmentOptions=computed(()=>reassignmentMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])
+watch(reassignmentMember,()=>{reassignmentKey.value=null})
+async function reassignProvider(){if(!booking.value)return;reassignmentSaving.value=true;actionError.value='';reassignmentKey.value??=crypto.randomUUID();try{await dashboardApi(`/api/dashboard/bookings/booking/${booking.value.operationalBookingId}/provider`,{method:'POST',validate:(value):value is {session_id:string;assigned_member_id:string}=>isRecord(value)&&typeof value.session_id==='string'&&typeof value.assigned_member_id==='string',body:{member_id:reassignmentMember.value,expected_updated_at:booking.value.operationalUpdatedAt,idempotency_key:reassignmentKey.value}});await refreshDetails();reassignmentKey.value=null}catch(e){actionError.value=getErrorMessage(e,'Provider could not be reassigned')}finally{reassignmentSaving.value=false}}
 const bookingImageUrl = computed(() => booking.value
   ? booking.value.locations.find(location => location.id === booking.value!.locationId)?.imageUrl ?? null
   : null)

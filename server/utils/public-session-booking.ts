@@ -1,3 +1,5 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
@@ -5,7 +7,7 @@ import { listOrganizationProducts } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
-export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown) {
+export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown, env?: CloudflareEnv) {
   const product = await queryFirst<{ id: string; organization_id: string; name: string; timezone: string | null }>(db, `
     SELECT p.id, p.organization_id, p.name,
            COALESCE(cfg.online_timezone,
@@ -35,6 +37,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
     throw new HTTPError({ statusCode: 404, statusMessage: 'This product is not on sale at that location' })
   }
 
+  if(env) await refreshProductBusy(db,env,organizationId,product.id)
   const window = bookingWindow(product.timezone)
   const sessions = await listSessions(db, {
     organizationId: product.organization_id, productId: product.id,

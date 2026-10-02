@@ -21,6 +21,12 @@
         <UFormField label="Places per session" description="Default for new sessions. Leave empty for no limit; zero means no places. Existing sessions keep their saved capacity.">
           <UInput v-model="p.form.booking_capacity" inputmode="numeric" placeholder="10" class="w-full" />
         </UFormField>
+        <UFormField label="Who delivers this offering" description="One assigned member. Existing committed Sessions keep their person when this changes.">
+          <USelect v-model="p.form.assigned_member_id" :items="providerOptions" class="w-full" />
+        </UFormField>
+        <UFormField label="Scheduling mode" description="Provider mode intersects this offering with member hours, time off and conflicts. Organization mode preserves existing scheduling.">
+          <USelect v-model="p.form.scheduling_mode" :items="[{label:'Organization / legacy',value:'legacy'},{label:'Assigned member',value:'provider'}]" class="w-full" />
+        </UFormField>
         <UFormField label="Confirmation">
           <USelect v-model="p.form.confirmation_mode" :items="[{ label: 'Instant confirmation', value: 'instant' }, { label: 'Staff review', value: 'review' }]" class="w-full" />
         </UFormField>
@@ -31,7 +37,7 @@
           <UFormField label="Online timezone" description="IANA timezone used for input and display, including daylight saving time.">
             <UInput v-model="p.form.online_timezone" placeholder="America/New_York" class="w-full" />
           </UFormField>
-          <UFormField label="Single calendar group" description="Products with this same explicit group share one calendar and cannot have overlapping appointments. Leave empty for independent sessions.">
+          <UFormField label="Single calendar group" description="In organization mode, this group prevents overlapping appointments. Assigned-member mode checks each member independently; this group still selects outbound Calendar booking output.">
             <UInput v-model="p.form.calendar_group" class="w-full" />
           </UFormField>
         </template>
@@ -61,6 +67,10 @@
 </template>
 
 <script setup lang="ts">
+const dashboard=useDashboardOrganization()
+const {data:providerMembers}=await useFetch<{members:{id:string;name:string}[]}>(()=>`/api/organizations/${dashboard.organization.value?.id}/members/scheduling`,{server:false})
+const providerOptions=computed(()=>[{label:'Tenant organization',value:''},...(providerMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])])
+
 import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
 

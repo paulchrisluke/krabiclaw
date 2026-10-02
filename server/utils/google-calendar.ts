@@ -252,7 +252,7 @@ export async function storeCalendarSelection(db: DbClient, organizationId: strin
   if (existing && pending?.n) throw new Error('Disconnect and finish cleanup of the previous calendar before changing the selection.')
   const now = new Date().toISOString()
   const payload: GoogleCalendarIntegration = { ...selection, revision: crypto.randomUUID(), status: 'active', last_error: null, created_at: now, updated_at: now }
-  const result = await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar', json(?)) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision') IS ? AND NOT EXISTS (SELECT 1 FROM google_calendar_event_links WHERE organization_id=organization.id AND state <> 'deleted')", [JSON.stringify(payload), organizationId, existing?.revision ?? null])
+  const result = await execute(db, "UPDATE organization SET integrations_json=json_set(integrations_json, '$.google_calendar', json(?)) WHERE id=? AND json_extract(integrations_json, '$.google_calendar.revision') IS ? AND NOT EXISTS (SELECT 1 FROM google_calendar_event_links WHERE organization_id=organization.id AND state <> 'deleted') AND NOT EXISTS(SELECT 1 FROM member_scheduling ms,json_each(ms.calendar_ids_json) calendar WHERE ms.organization_id=organization.id AND ms.calendar_account_id IS NOT NULL AND calendar.value=?)", [JSON.stringify(payload), organizationId, existing?.revision ?? null,selection.calendar_id])
   if (result.meta?.changes !== 1) throw new Error('Calendar selection changed. Reload and try again.')
 }
 

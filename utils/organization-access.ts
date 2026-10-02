@@ -3,6 +3,7 @@ import { adminAc, defaultStatements, ownerAc } from 'better-auth/plugins/organiz
 
 const statements = {
   ...defaultStatements,
+  scheduling: ['own'],
   organization: ['read', 'update', 'delete'],
   members: ['read', 'invite', 'update', 'remove'],
   invitations: ['read', 'create', 'cancel'],
@@ -40,8 +41,10 @@ export type OrganizationPermissions = {
   [Resource in keyof typeof statements]?: Array<(typeof statements)[Resource][number]>
 }
 export const organizationRoles = {
+  member: organizationAccessControl.newRole({ scheduling: ['own'] }),
   owner: organizationAccessControl.newRole({
     ...ownerAc.statements,
+    scheduling: ['own'],
     organization: ['read', 'update', 'delete'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],
@@ -68,6 +71,7 @@ export const organizationRoles = {
   }),
   admin: organizationAccessControl.newRole({
     ...adminAc.statements,
+    scheduling: ['own'],
     organization: ['read', 'update'],
     members: ['read', 'invite', 'update', 'remove'],
     invitations: ['read', 'create', 'cancel'],

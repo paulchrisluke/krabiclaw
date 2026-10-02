@@ -61,6 +61,7 @@ export type ThreadPayload = z.infer<typeof threadPayload>
 
 /** The operational record a thread links to, when it has one. */
 export interface ThreadOperationalRecord {
+  assigned_member_id: string | null
   kind: 'booking' | 'reservation'
   id: string
   status: BookingStatus
@@ -93,14 +94,14 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
   return (await queryFirst<ThreadOperationalRecord>(db, `
     SELECT 'booking' AS kind, b.id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone,
-           s.location_id, b.product_id, p.name AS product_name
+           s.location_id, b.product_id, p.name AS product_name, b.assigned_member_id
       FROM bookings b
       JOIN product_sessions s ON s.id = b.product_session_id
       JOIN products p ON p.id = b.product_id
      WHERE b.request_id = ?
     UNION ALL
     SELECT 'reservation', r.id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone,
-           r.location_id, NULL, NULL
+           r.location_id, NULL, NULL, NULL
       FROM reservations r
      WHERE r.request_id = ?
      LIMIT 1

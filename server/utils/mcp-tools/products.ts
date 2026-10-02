@@ -143,6 +143,8 @@ const metafieldDefinitionObject = {
 } as const
 
 const bookingPolicyFields = {
+  scheduling_mode: { type: 'string', enum: ['legacy', 'provider'], description: 'Explicit provider-backed scheduling; legacy retains organization scheduling.' },
+  assigned_member_id: { type: ['string', 'null'], description: 'One existing same-tenant Better Auth member. Existing committed Session assignments are retained.' },
   confirmation_mode: { type: 'string', enum: ['instant', 'review'] },
   online_payment_required: { type: 'boolean', description: 'Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.' },
   online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.' },

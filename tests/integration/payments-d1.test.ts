@@ -319,3 +319,27 @@ test('final native operating credits enforce tenant, amount, state and single-us
   assert.equal(await db.prepare("SELECT delivery_at FROM payment_usage_events WHERE id='other-credit'").first('delivery_at'),null)
  }finally{await runtime.dispose()}
 })
+
+test('capture converts the hold’s pinned member even after the offering assignment changes and class attendees share provider occupancy', {timeout:120000},async()=>{
+ const {db,runtime}=await boot()
+ try {
+  await db.prepare("INSERT INTO member(id,organizationId,userId,role)VALUES('provider',?,'verified','member')").bind(ORG).run()
+  await db.prepare("INSERT INTO member_scheduling(member_id,organization_id,timezone,weekly_json,time_off_json,windows_json,windows_until,calendar_revision,updated_at,updated_by)VALUES('provider',?,'America/New_York','[]','[]',?,'2100-01-01T00:00:00.000Z','revision',?,'verified')").bind(ORG,JSON.stringify([{start:'2099-10-01T13:00:00.000Z',end:'2099-10-01T14:00:00.000Z'}]),NOW).run()
+  await db.prepare("UPDATE product_booking_configs SET scheduling_mode='provider',assigned_member_id='provider' WHERE product_id='product'").run()
+  await db.prepare("UPDATE product_sessions SET assigned_member_id='provider',capacity=3 WHERE id='session'").run()
+  await payable(db,'pinned')
+  await db.prepare("UPDATE payment_checkout_holds SET assigned_member_id='provider' WHERE payment_id='pinned'").run()
+  const attendee=await claimSessionCapacity(db,{organizationId:ORG,productId:'product',sessionId:'session',productVariantId:'variant',partySize:1})
+  assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(attendee.bookingId).first('assigned_member_id'),'provider')
+  await db.prepare("UPDATE product_booking_configs SET assigned_member_id=NULL WHERE product_id='product'").run()
+  const p=provider('pinned')
+  await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'pinned'),p.intent)
+  const converted=await db.prepare("SELECT status,converted_booking_id,assigned_member_id FROM payment_checkout_holds WHERE payment_id='pinned'").first<{status:string;converted_booking_id:string;assigned_member_id:string}>()
+  assert.equal(converted?.status,'converted')
+  assert.equal(converted?.assigned_member_id,'provider')
+  assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(converted!.converted_booking_id).first('assigned_member_id'),'provider')
+  assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),2)
+  await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'pinned'),p.intent)
+  assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),2,'capture replay preserves one conversion')
+ }finally{await runtime.dispose()}
+})

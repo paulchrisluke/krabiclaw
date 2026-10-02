@@ -35,7 +35,7 @@ async function boot(legacy = false) {
   } }] })
   const db = await runtime.getD1Database('DB')
   const statements = legacy
-    ? ['0000_baseline', '0001_drop_typed_social_profiles', '0002_products_overview', '0004_native_consultation_foundation', '0006_payments'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    ? ['0000_baseline', '0001_drop_typed_social_profiles', '0002_products_overview', '0004_native_consultation_foundation', '0006_payments', '0007_provider_support'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, integrations_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
@@ -499,4 +499,42 @@ test('one configured online calendar excludes overlapping pending requests and r
     assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.confirm'").first('n'), 1)
     assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name = 'booking.reject'").first('n'), 1)
   } finally { await runtime.dispose() }
+})
+
+test('provider allocation shares a class Session, excludes distinct overlapping services, and preserves assigned identities after hours/config edits', {timeout:120_000}, async()=>{
+ const {runtime,db}=await boot()
+ try {
+  const {workingWindows}=await import('../../server/domain/member-scheduling.ts')
+  const {publicProductProvider}=await import('../../server/utils/public-provider.ts')
+  const day=addLocalDays(localNow('UTC').date,3), start=`${day}T09:00:00.000Z`, end=`${day}T10:00:00.000Z`
+  await db.prepare(`INSERT INTO user(id,name,email,emailVerified,createdAt,updatedAt) VALUES ('provider-user','Private account name','private-provider@example.com',1,1,1)`).run()
+  await db.prepare(`INSERT INTO member(id,organizationId,userId,role) VALUES ('provider-one',?,'provider-user','member')`).bind(ORG).run()
+  const windows=workingWindows('UTC',Array.from({length:7},(_,weekday)=>({weekday,start:'08:00',end:'18:00'})))
+  await db.prepare(`INSERT INTO member_scheduling(member_id,organization_id,timezone,weekly_json,time_off_json,windows_json,windows_until,public_name,public_bio,public_approved,calendar_revision,updated_at,updated_by) VALUES ('provider-one',?,'UTC','[]','[]',?,?, 'Approved public name','Approved public bio',1,'revision',?,?)`).bind(ORG,JSON.stringify(windows.intervals),windows.until,NOW,ACTOR).run()
+  await db.prepare("UPDATE product_booking_configs SET scheduling_mode='provider',assigned_member_id='provider-one',calendar_group='legacy-output',online_timezone='UTC' WHERE product_id=?").bind(PRODUCT).run()
+  const second='second-service'
+  await db.prepare("INSERT INTO products(id,organization_id,name,slug,created_by,updated_by)VALUES(?,?,'Other service','other-service',?,?)").bind(second,ORG,ACTOR,ACTOR).run()
+  await db.prepare("INSERT INTO product_booking_configs(product_id,organization_id,scheduling_mode,assigned_member_id,duration_minutes,default_capacity,online_timezone,calendar_group,created_by,updated_by)VALUES(?,?,'provider','provider-one',60,3,'UTC','legacy-output',?,?)").bind(second,ORG,ACTOR,ACTOR).run()
+  await db.prepare("INSERT INTO product_variants(id,organization_id,product_id,name,created_by,updated_by)VALUES('second-variant',?,?,'Standard',?,?)").bind(ORG,second,ACTOR,ACTOR).run()
+  for(const [id,product]of [['group-session',PRODUCT],['other-session',second]])await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,created_by,updated_by)VALUES(?,?,?,'UTC',?,?,3,?,?)").bind(id,ORG,product,start,end,ACTOR,ACTOR).run()
+  const claims=await Promise.allSettled([
+   claimSessionCapacity(db,{organizationId:ORG,productId:PRODUCT,sessionId:'group-session',productVariantId:'var-adult',partySize:1}),
+   claimSessionCapacity(db,{organizationId:ORG,productId:second,sessionId:'other-session',productVariantId:'second-variant',partySize:1})
+  ])
+  assert.equal(claims.filter(c=>c.status==='fulfilled').length,1,'only one distinct overlapping Session acquires provider occupancy')
+  const winner=await db.prepare("SELECT id,product_id,product_session_id,assigned_member_id FROM bookings WHERE status='confirmed'").first<{id:string;product_id:string;product_session_id:string;assigned_member_id:string}>()
+  assert.equal(winner?.assigned_member_id,'provider-one')
+  const variant=winner!.product_id===PRODUCT?'var-child':'second-variant'
+  const attendee=await claimSessionCapacity(db,{organizationId:ORG,productId:winner!.product_id,sessionId:winner!.product_session_id,productVariantId:variant,partySize:1})
+  assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(attendee.bookingId).first('assigned_member_id'),'provider-one','a second attendee shares the committed provider')
+  assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),2)
+  assert.equal((await listSessions(db,{organizationId:ORG,fromInstant:`${day}T00:00:00.000Z`,toInstant:`${day}T23:59:59.999Z`})).find(s=>s.id===winner!.product_session_id)?.remaining,1,'remaining capacity is attendee based')
+  await db.prepare("UPDATE product_booking_configs SET assigned_member_id=NULL WHERE product_id=?").bind(winner!.product_id).run()
+  await db.prepare("UPDATE member_scheduling SET time_off_json=? WHERE member_id='provider-one'").bind(JSON.stringify([{start,end}])).run()
+  await assert.rejects(()=>claimSessionCapacity(db,{organizationId:ORG,productId:winner!.product_id,sessionId:winner!.product_session_id,productVariantId:variant,partySize:1}),CapacityUnavailableError)
+  assert.equal(await db.prepare('SELECT assigned_member_id FROM bookings WHERE id=?').bind(winner!.id).first('assigned_member_id'),'provider-one','hours/assignment edits never rewrite a booked commitment')
+  assert.deepEqual(await publicProductProvider(db,ORG,winner!.product_id,winner!.product_session_id),{name:'Approved public name',photo_url:null,bio:'Approved public bio'})
+  await db.prepare("UPDATE member_scheduling SET public_approved=0 WHERE member_id='provider-one'").run()
+  assert.equal(await publicProductProvider(db,ORG,winner!.product_id,winner!.product_session_id),undefined,'unapproved/private identity is not public content')
+ }finally{await runtime.dispose()}
 })

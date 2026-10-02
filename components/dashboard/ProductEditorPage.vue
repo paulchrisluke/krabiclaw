@@ -82,6 +82,8 @@ export interface ProductForm {
   confirmation_mode: 'instant' | 'review'
   online_payment_required: boolean
   online_timezone: string
+  scheduling_mode: 'legacy' | 'provider'
+  assigned_member_id: string
   calendar_group: string
   online_schedule: boolean
   native_consultations: boolean
@@ -298,7 +300,7 @@ const form = reactive<ProductForm>({
   location_published: false,
   bookable: false,
   booking_duration: '',
-  booking_capacity: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
+  booking_capacity: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', scheduling_mode: 'legacy', assigned_member_id: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
   image_asset_id: null as string | null,
 })
 
@@ -347,6 +349,8 @@ function loadForm(row: Product) {
   form.confirmation_mode = row.booking?.confirmation_mode ?? 'instant'
   form.online_payment_required = row.booking?.online_payment_required ?? false
   form.online_timezone = row.booking?.online_timezone ?? ''
+  form.scheduling_mode = row.booking?.scheduling_mode ?? 'legacy'
+  form.assigned_member_id = row.booking?.assigned_member_id ?? ''
   form.calendar_group = row.booking?.calendar_group ?? ''
   form.online_schedule = Boolean(row.booking?.online_timezone)
   form.booking_capacity = row.booking?.default_capacity === null || row.booking === null ? '' : String(row.booking.default_capacity)
@@ -784,6 +788,7 @@ async function saveBooking() {
     body: {
       duration_minutes: Number(form.booking_duration) || null,
       default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null,
+      scheduling_mode: form.scheduling_mode, assigned_member_id: form.assigned_member_id || null,
       confirmation_mode: form.confirmation_mode, online_payment_required: form.online_payment_required,
       online_timezone: form.online_schedule ? form.online_timezone.trim() || null : null,
       calendar_group: form.online_schedule ? form.calendar_group.trim() || null : null,

@@ -99,8 +99,8 @@ export async function handleProductsTools(ctx: McpExecutorContext) {
   switch (toolName) {
     case 'set_product_booking_config': {
       const config = await setProductBookingConfig(organization.db, {
-        ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId,
-        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group },
+        ...scope, productId: requiredString(args, 'product_id'), actorId: organization.userId, env: organization.env,
+        patch: { duration_minutes: args.duration_minutes, default_capacity: args.default_capacity, confirmation_mode: args.confirmation_mode, online_payment_required: args.online_payment_required, online_timezone: args.online_timezone, calendar_group: args.calendar_group, scheduling_mode: args.scheduling_mode, assigned_member_id: args.assigned_member_id },
       })
       return { config }
     }

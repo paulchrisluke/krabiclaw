@@ -1,3 +1,4 @@
+import { handleProvidersTools } from './providers'
 import { HTTPError } from 'nitro';
 
 import type { H3Event } from 'nitro'
@@ -41,6 +42,7 @@ import type { McpExecutorContext } from './shared'
 // domain-handler registry instead of hand-copying it — one list of which
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
+  providers: handleProvidersTools,
   payments: handlePaymentsTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,

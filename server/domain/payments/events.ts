@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
-import { sessionClaimQuery } from '~/server/utils/availability'
+import { sessionClaimQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { processStripeWebhookEvent } from '~/server/utils/stripe-webhook-events'
 import { executeRefund, reconcileRefundState, requirePayment, type Payment } from './index'
 
@@ -48,7 +48,7 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
   if (hold.status === 'converted') return
   const bookingId = crypto.randomUUID()
   const claim = sessionClaimQuery({bookingId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
-  const results = await executeBatch(db,[claim,
+  const results = await executeBatch(db,[claim, sessionAssignmentQuery(hold.session_id, hold.organization_id, bookingId),
     {query:"UPDATE payment_checkout_holds SET status='converted',converted_booking_id=? WHERE id=? AND status IN ('active','released') AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[bookingId,hold.id,bookingId]},
     {query:`INSERT INTO activity_entries(id,request_id,kind,scope_kind,actor_kind,event_name,payload_json,dedupe_key,sequence,occurred_at,created_at) SELECT ?,b.request_id,'operation','request','system','booking.created',json_object('operational_booking_id',b.id,'request_id',b.request_id,'afterStatus',b.status,'payment_id',?,'intent','booking.created'),?,COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id=b.request_id),0)+1,?,? FROM bookings b WHERE b.id=? AND b.request_id IS NOT NULL ON CONFLICT(dedupe_key) DO NOTHING`,params:[crypto.randomUUID(),payment.id,`booking:${bookingId}:created`,now,now,bookingId]},
     {query:'UPDATE payments SET subject_id=?,updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=?)',params:[bookingId,now,payment.id,bookingId]},

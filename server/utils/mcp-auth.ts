@@ -10,7 +10,7 @@ import { assertOrganizationWideAccess, isOrganizationWideRole, resolveOrganizati
 import { getOrganizationEntitlements } from '~/server/utils/billing-access'
 import { cloudflareEnv } from '~/server/utils/api-response'
 
-export type McpToolRole = 'owner' | 'admin'
+export type McpToolRole = 'owner' | 'admin' | 'member'
 
 /**
  * The role floor each tool declares, as a permission.
@@ -23,6 +23,7 @@ export type McpToolRole = 'owner' | 'admin'
  * three configuration tools need.
  */
 const TOOL_ROLE_PERMISSIONS: Record<McpToolRole, OrganizationPermissions> = {
+  member: { scheduling: ['own'] },
   admin: { settings: ['update'] },
   owner: { organization: ['delete'] },
 }
@@ -371,7 +372,7 @@ export async function requireMcpOrganization(
   // tenant-wide access. Owner and admin are the only roles there are, so this
   // is the same question the floor asks; it stays because the floor is what is
   // published to MCP clients and this is the boundary that enforces it.
-  if (!isOrganizationWideRole(role)) {
+  if (!isOrganizationWideRole(role) && minimumRole !== 'member') {
     await assertOrganizationWideAccess(user.db, memberAccessPrincipal(membership, { env: user.env }))
   }
 
@@ -394,7 +395,7 @@ export async function getVisibleOrganizationContext(
   organizationId: string,
 ): Promise<{ role: McpToolRole; organizationId: string } | null> {
   try {
-    const context = await requireMcpOrganization(event, organizationId, 'admin')
+    const context = await requireMcpOrganization(event, organizationId, 'member')
     return { role: context.role, organizationId: context.organizationId }
   } catch (error) {
     const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
@@ -420,7 +421,7 @@ export async function roleSatisfies(organizationId: string, actual: string, mini
 }
 
 export function normalizeRole(role: string | null | undefined): McpToolRole | null {
-  if (role === 'owner' || role === 'admin') return role
+  if (role === 'owner' || role === 'admin' || role === 'member') return role
   return null
 }
 

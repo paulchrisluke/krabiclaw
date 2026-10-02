@@ -1,8 +1,9 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { HTTPError } from 'nitro'
 import { z } from 'zod'
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
-import { listSessions, sessionMoveQuery } from '~/server/utils/availability'
+import { listSessions, sessionMoveQuery, sessionAssignmentQuery } from '~/server/utils/availability'
 import { localDateTimeToInstant } from '~/utils/timezone'
 import { RESERVATION_CAPACITY_CONSUMING_SQL } from '~/shared/bookings'
 import { assertResourceAccess, resolveOrganizationMembership, memberAccessPrincipal } from '~/server/utils/member-access'
@@ -56,6 +57,7 @@ const fieldsSchema = z.discriminatedUnion('kind', [bookingFieldsSchema, reservat
 const requestSchema = z.intersection(fieldsSchema, z.object({ expectedUpdatedAt: z.string().min(1) }))
 const sourceSchema = z.object({
   recordKind: z.enum(['booking', 'reservation']),
+  assignedMemberId: z.string().nullable().default(null),
   recordId: z.string(),
   status: z.string(),
   partySize: z.number().int(),
@@ -119,6 +121,7 @@ async function loadSource(db: DbClient, thread: GuestThreadRow): Promise<Source>
   if (!record) throw new HTTPError({ statusCode: 409, message: 'This conversation has no booking or reservation to change' })
   const payload = thread.payload as { party_size_is_minimum: boolean; notes: string | null; guest: { name: string; email: string; phone: string | null } }
   return {
+    assignedMemberId: record.assigned_member_id,
     recordKind: record.kind, recordId: record.id, status: record.status, partySize: record.party_size,
     startsAt: record.starts_at, endsAt: record.ends_at, timezone: record.timezone,
     locationId: record.location_id, productId: record.product_id,
@@ -332,6 +335,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
 
   if (!result && input.decision) {
     if (!['pending', 'confirmed'].includes(current.status)) throw new HTTPError({ statusCode: 409, message: 'This reservation or booking can no longer be changed' })
+    if(input.decision==='accept' && current.productId)await refreshProductBusy(db,env,thread.organization_id,current.productId)
     const destination = input.decision === 'accept' ? await validateDestination(db, thread as GuestThreadRow, current, proposal.after, resultId) : null
     const id = crypto.randomUUID()
     const now = new Date().toISOString()
@@ -349,7 +353,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
         ON CONFLICT DO NOTHING`,
       params: [id, thread.id, `booking_change.${input.decision === 'accept' ? 'accepted' : 'declined'}`,
         `Guest ${input.decision === 'accept' ? 'accepted' : 'declined'} the requested changes.`,
-        JSON.stringify({ requestId: entry.id, request_id: thread.id, operational_booking_id: current.recordId, beforeStatus: current.status, before: { starts_at: current.startsAt, ends_at: current.endsAt, party_size: current.partySize }, after: destination ? { starts_at: destination.startsAt, ends_at: destination.endsAt ?? new Date(Date.parse(destination.startsAt) + Date.parse(current.endsAt) - Date.parse(current.startsAt)).toISOString(), party_size: proposal.after.partySize } : null }), resultId, thread.id, now, now,
+        JSON.stringify({ requestId: entry.id, request_id: thread.id, operational_booking_id: current.recordId, beforeStatus: current.status, before: { assigned_member_id:current.assignedMemberId, starts_at: current.startsAt, ends_at: current.endsAt, party_size: current.partySize }, after: destination ? { starts_at: destination.startsAt, ends_at: destination.endsAt ?? new Date(Date.parse(destination.startsAt) + Date.parse(current.endsAt) - Date.parse(current.startsAt)).toISOString(), party_size: proposal.after.partySize } : null }), resultId, thread.id, now, now,
         thread.id, thread.organization_id, current.updatedAt],
     }
 
@@ -363,7 +367,8 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
       queries.push(destination.claim(movedBookingId, now))
       queries.push({
         ...entryInsert,
-        query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1'),
+        query: entryInsert.query.replace('AND source.updated_at = ?', 'AND source.updated_at = ? AND changes() = 1').replace("'guest', ?, ?, ?, ?,", "'guest', ?, ?, json_set(?, '$.after.assigned_member_id', (SELECT assigned_member_id FROM bookings WHERE id=?)), ?,"),
+        params: [...entryInsert.params!.slice(0,5), movedBookingId, ...entryInsert.params!.slice(5)],
       })
     } else {
       queries.push(entryInsert)
@@ -387,6 +392,7 @@ export async function respondToBookingChange(db: DbClient, env: ChangeEnv, input
       })
     }
 
+    if(destination && movedBookingId && destination.sessionId) queries.push(sessionAssignmentQuery(destination.sessionId,thread.organization_id,movedBookingId))
     await executeBatch(db, queries, { operation: 'respond to booking change' })
     result = await findEntryByDedupeKey(db, resultId)
     if (!result) {

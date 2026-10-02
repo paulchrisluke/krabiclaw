@@ -1,0 +1,148 @@
+import { HTTPError } from 'nitro'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { assertRoleAllows, resolveOrganizationMembership } from '~/server/utils/member-access'
+import { linkedAccountAccessToken, requireIntegrationAccount, type CloudflareEnv } from '~/server/utils/auth'
+import { addLocalDays, localDateAt, localDateTimeToInstant, isValidTimezone } from '~/utils/timezone'
+import { BUSY_FRESHNESS_MS, MEMBER_BUSY_SCOPES, type WorkingHours, type SchedulingInterval } from '~/shared/member-scheduling'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
+
+export interface SchedulingActor { env: CloudflareEnv; userId: string; organizationId: string }
+export interface MemberScheduling {
+ member_id: string; organization_id: string; timezone: string; weekly_json: string; time_off_json: string; windows_json: string; windows_until: string
+ public_name: string | null; public_photo_url: string | null; public_bio: string | null; public_approved: number
+ calendar_account_id: string | null; calendar_ids_json: string; calendar_revision: string; busy_json: string
+ busy_from: string | null; busy_until: string | null; busy_checked_at: string | null; busy_error: string | null; updated_at: string; updated_by: string
+}
+export async function requireSchedulingAccess(actor: SchedulingActor, memberId: string, admin = false) {
+ const membership = await resolveOrganizationMembership(actor.env, { organizationId: actor.organizationId, userId: actor.userId })
+ if (!membership) throw new HTTPError({ statusCode: 403, message: 'Organization membership required' })
+ const target = await queryFirst<{ id: string; userId: string }>(actor.env.DB, 'SELECT id,userId FROM member WHERE id=? AND organizationId=?', [memberId, actor.organizationId])
+ if (!target) throw new HTTPError({ statusCode: 404, message: 'Member not found' })
+ if (admin || target.userId !== actor.userId) await assertRoleAllows({ ...membership, permissions: { members: ['update'] } })
+ else await assertRoleAllows({ ...membership, permissions: { scheduling: ['own'] } })
+ return target
+}
+export function workingWindows(timezone: string, weekly: WorkingHours[], now = new Date()): { intervals: SchedulingInterval[]; until: string } {
+ if (!isValidTimezone(timezone)) throw new HTTPError({ statusCode: 400, message: 'Choose an IANA timezone' })
+ if (!Array.isArray(weekly) || weekly.length > 28) throw new HTTPError({ statusCode: 400, message: 'At most 28 weekly working windows are allowed' })
+ for (const slot of weekly) if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6 || typeof slot.start!=='string' || typeof slot.end!=='string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot.end) || slot.end <= slot.start) throw new HTTPError({ statusCode: 400, message: 'Hours require weekday 0–6 and start before end on the same day' })
+ const intervals: SchedulingInterval[] = []
+ const from = localDateAt(now, timezone)
+ for (let day = 0; day < 370; day++) {
+  const date = addLocalDays(from, day)
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay()
+  for (const slot of weekly.filter(slot => slot.weekday === weekday)) {
+   const start = localDateTimeToInstant(date, slot.start, timezone, 'compatible').toISOString()
+   const end = localDateTimeToInstant(date, slot.end, timezone, 'compatible').toISOString()
+   if (end > start) intervals.push({ start, end })
+  }
+ }
+ // Merge adjacent/overlapping hours: a Session may span both working windows.
+ const merged: SchedulingInterval[] = []
+ for (const interval of intervals.sort((a,b)=>a.start.localeCompare(b.start))) {
+  const previous=merged.at(-1)
+  if (previous && previous.end>=interval.start) previous.end=previous.end>interval.end?previous.end:interval.end
+  else merged.push({...interval})
+ }
+ return { intervals: merged, until: localDateTimeToInstant(addLocalDays(from,370),'00:00',timezone,'compatible').toISOString() }
+}
+function validIntervals(value: unknown): SchedulingInterval[] {
+ if (!Array.isArray(value) || value.length > 100) throw new HTTPError({ statusCode: 400, message: 'At most 100 time-off intervals are allowed' })
+ return value.map(v=>{
+  if (!v || typeof v.start!=='string' || typeof v.end!=='string' || !Number.isFinite(Date.parse(v.start)) || !Number.isFinite(Date.parse(v.end)) || Date.parse(v.end)<=Date.parse(v.start)) throw new HTTPError({statusCode:400,message:'Time off requires valid start and end instants'})
+  return {start:new Date(v.start).toISOString(),end:new Date(v.end).toISOString()}
+ })
+}
+export async function readMemberScheduling(db: DbClient, organizationId: string, memberId: string) {
+ const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE organization_id=? AND member_id=?',[organizationId,memberId])
+ if (!row) return null
+ return { ...row, weekly: JSON.parse(row.weekly_json) as WorkingHours[], time_off: JSON.parse(row.time_off_json) as SchedulingInterval[], calendar_ids: JSON.parse(row.calendar_ids_json) as string[], calendar_status: !row.calendar_account_id ? 'internal' : row.busy_error ? 'error' : !row.busy_checked_at || Date.now()-Date.parse(row.busy_checked_at)>BUSY_FRESHNESS_MS ? 'stale' : 'ready' }
+}
+export async function writeMemberScheduling(actor: SchedulingActor, memberId: string, input: {timezone: string; weekly: WorkingHours[]; time_off: SchedulingInterval[]; expected_updated_at: string | null; public_name?: string | null; public_photo_url?: string | null; public_bio?: string | null; public_approved?: boolean}) {
+ if(!input || typeof input!=='object' || typeof input.timezone!=='string' || (input.expected_updated_at!==null && typeof input.expected_updated_at!=='string'))throw new HTTPError({statusCode:400,message:'Complete schedule and current revision required'})
+ if(input.public_approved!==undefined && typeof input.public_approved!=='boolean')throw new HTTPError({statusCode:400,message:'Approval must be boolean'})
+ await requireSchedulingAccess(actor,memberId)
+ const db=actor.env.DB
+ const current=await readMemberScheduling(db,actor.organizationId,memberId)
+ if ((current?.updated_at??null)!==input.expected_updated_at) throw new HTTPError({statusCode:409,message:'Member settings changed; reload before saving'})
+ if(input.public_approved!==undefined) await requireSchedulingAccess(actor,memberId,true)
+ const windows=workingWindows(input.timezone,input.weekly)
+ const timeOff=validIntervals(input.time_off)
+ for(const [key,max] of [['public_name',100],['public_bio',2000],['public_photo_url',2048]] as const) if(input[key]!==undefined && input[key]!==null && (typeof input[key]!=='string' || input[key]!.length>max)) throw new HTTPError({statusCode:400,message:`Invalid ${key}`})
+ if(input.public_photo_url) { const url=new URL(input.public_photo_url); if(url.protocol!=='https:' || url.username || url.password) throw new HTTPError({statusCode:400,message:'Public photo must use HTTPS'}) }
+ const changedProfile=['public_name','public_photo_url','public_bio'].some(key=>input[key as keyof typeof input]!==undefined && input[key as keyof typeof input]!==current?.[key as keyof typeof current])
+ const approved=input.public_approved??(changedProfile?false:Boolean(current?.public_approved))
+ const now=new Date().toISOString()
+ const result=await executeBatch(db,[{query:`INSERT INTO member_scheduling(member_id,organization_id,timezone,weekly_json,time_off_json,windows_json,windows_until,public_name,public_photo_url,public_bio,public_approved,calendar_revision,updated_at,updated_by)
+ SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM member WHERE id=? AND organizationId=?)
+ ON CONFLICT(member_id) DO UPDATE SET timezone=excluded.timezone,weekly_json=excluded.weekly_json,time_off_json=excluded.time_off_json,windows_json=excluded.windows_json,windows_until=excluded.windows_until,public_name=excluded.public_name,public_photo_url=excluded.public_photo_url,public_bio=excluded.public_bio,public_approved=excluded.public_approved,updated_at=excluded.updated_at,updated_by=excluded.updated_by
+ WHERE member_scheduling.organization_id=excluded.organization_id AND member_scheduling.updated_at IS ?`,params:[memberId,actor.organizationId,input.timezone,JSON.stringify(input.weekly),JSON.stringify(timeOff),JSON.stringify(windows.intervals),windows.until,input.public_name===undefined?current?.public_name??null:input.public_name,input.public_photo_url===undefined?current?.public_photo_url??null:input.public_photo_url,input.public_bio===undefined?current?.public_bio??null:input.public_bio,Number(approved),crypto.randomUUID(),now,actor.userId,memberId,actor.organizationId,input.expected_updated_at]}, publicResourceCacheInvalidationQuery(actor.organizationId,'member-profile')],{operation:'Save member schedule'})
+ if(!result[0]?.meta.changes) throw new HTTPError({statusCode:409,message:'Member settings changed; reload before saving'})
+ return readMemberScheduling(db,actor.organizationId,memberId)
+}
+export async function refreshWorkingWindows(db: DbClient) {
+ const rows=await queryAll<MemberScheduling>(db,"SELECT * FROM member_scheduling WHERE windows_until<strftime('%Y-%m-%dT%H:%M:%fZ','now','+90 days') ORDER BY windows_until LIMIT 25")
+ for(const row of rows) { const windows=workingWindows(row.timezone,JSON.parse(row.weekly_json)); await executeBatch(db,[{query:'UPDATE member_scheduling SET windows_json=?,windows_until=? WHERE member_id=? AND updated_at=?',params:[JSON.stringify(windows.intervals),windows.until,row.member_id,row.updated_at]}]) }
+}
+export async function selectBusyCalendars(actor: SchedulingActor, memberId: string, input: {account_id: string | null; calendar_ids: string[]}) {
+ const member=await requireSchedulingAccess(actor,memberId)
+ if(input.account_id && member.userId!==actor.userId) throw new HTTPError({statusCode:403,message:'Only the member may select their linked Google account'})
+ if(!Array.isArray(input.calendar_ids)||input.calendar_ids.length>10||input.calendar_ids.some(id=>typeof id!=='string'||!id||id.length>1024)||Boolean(input.account_id)!==Boolean(input.calendar_ids.length)) throw new HTTPError({statusCode:400,message:'Choose an account and 1–10 calendars, or disconnect both'})
+ if(input.account_id) await requireIntegrationAccount(actor.env,input.account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
+ const now=new Date().toISOString()
+ const results=await executeBatch(actor.env.DB,[{query:`UPDATE member_scheduling SET calendar_account_id=?,calendar_ids_json=?,calendar_revision=?,busy_json='[]',busy_from=NULL,busy_until=NULL,busy_checked_at=NULL,busy_error=NULL,updated_at=?,updated_by=? WHERE member_id=? AND organization_id=? AND NOT EXISTS(SELECT 1 FROM organization WHERE id=? AND json_extract(integrations_json,'$.google_calendar.status')<>'disabled' AND json_extract(integrations_json,'$.google_calendar.calendar_id') IN (SELECT value FROM json_each(?)))`,params:[input.account_id,JSON.stringify(input.calendar_ids),crypto.randomUUID(),now,actor.userId,memberId,actor.organizationId,actor.organizationId,JSON.stringify(input.calendar_ids)]}])
+ if(!results[0]?.meta.changes) throw new HTTPError({statusCode:409,message:'Save member hours first and keep busy-input calendars separate from booking output'})
+ return readMemberScheduling(actor.env.DB,actor.organizationId,memberId)
+}
+export async function refreshMemberBusy(db: DbClient, env: CloudflareEnv, memberId: string, force=false) {
+ const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE member_id=?',[memberId])
+ if(!row?.calendar_account_id || (!force && row.busy_checked_at && Date.now()-Date.parse(row.busy_checked_at)<BUSY_FRESHNESS_MS/2 && !row.busy_error)) return
+ const now=new Date().toISOString(), until=new Date(Date.now()+94*86400000).toISOString()
+ try {
+  const member=await queryFirst<{userId:string}>(db,'SELECT userId FROM member WHERE id=? AND organizationId=?',[memberId,row.organization_id])
+  if(!member) throw new Error('Member is no longer connected')
+  await requireIntegrationAccount(env,row.calendar_account_id,{userId:member.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
+  const output=await queryFirst<{calendar:string|null}>(db,"SELECT json_extract(integrations_json,'$.google_calendar.calendar_id') calendar FROM organization WHERE id=? AND json_extract(integrations_json,'$.google_calendar.status')<>'disabled'",[row.organization_id])
+  const ids=JSON.parse(row.calendar_ids_json) as string[]
+  if(output?.calendar && ids.includes(output.calendar)) throw new Error('Busy input overlaps booking output calendar; change the selection')
+  const token=await linkedAccountAccessToken(env,row.calendar_account_id)
+  const response=await fetch('https://www.googleapis.com/calendar/v3/freeBusy',{method:'POST',headers:{Authorization:`Bearer ${token.accessToken}`,'content-type':'application/json'},signal:AbortSignal.timeout(10000),body:JSON.stringify({timeMin:now,timeMax:until,items:ids.map(id=>({id}))})})
+  if(!response.ok) throw new Error(`Google busy-calendar check failed (${response.status}); reconnect or retry`)
+  const data=await response.json() as {calendars?:Record<string,{errors?:unknown[];busy?:SchedulingInterval[]}>}
+  const busy:SchedulingInterval[]=[]
+  for(const id of ids) {const calendar=data.calendars?.[id];if(!calendar||calendar.errors?.length||!Array.isArray(calendar.busy))throw new Error('A selected Google calendar could not be checked'); for(const interval of calendar.busy) {if(!Number.isFinite(Date.parse(interval.start))||!Number.isFinite(Date.parse(interval.end))||Date.parse(interval.end)<=Date.parse(interval.start))throw new Error('Google returned an invalid busy interval');busy.push({start:new Date(interval.start).toISOString(),end:new Date(interval.end).toISOString()})}}
+  if(busy.length>20000) throw new Error('Selected calendars exceed the bounded busy cache')
+  await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_json=?,busy_from=?,busy_until=?,busy_checked_at=?,busy_error=NULL WHERE member_id=? AND calendar_revision=?',params:[JSON.stringify(busy),now,until,new Date().toISOString(),memberId,row.calendar_revision]}])
+ } catch(error) {
+  const message=error instanceof Error?error.message:String(error)
+  await executeBatch(db,[{query:'UPDATE member_scheduling SET busy_error=? WHERE member_id=? AND calendar_revision=?',params:[message,memberId,row.calendar_revision]}])
+  return {error:message}
+ }
+}
+export async function refreshProductBusy(db: DbClient,env:CloudflareEnv,organizationId:string,productId:string) {
+ const members=await queryAll<{id:string}>(db,`SELECT assigned_member_id id FROM product_booking_configs WHERE organization_id=? AND product_id=? AND scheduling_mode='provider' AND assigned_member_id IS NOT NULL UNION SELECT assigned_member_id FROM product_sessions WHERE organization_id=? AND product_id=? AND assigned_member_id IS NOT NULL AND ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')`,[organizationId,productId,organizationId,productId])
+ for(const member of members) await refreshMemberBusy(db,env,member.id)
+}
+export async function memberSchedulingList(actor: SchedulingActor) {
+ const membership=await resolveOrganizationMembership(actor.env,{organizationId:actor.organizationId,userId:actor.userId})
+ if(!membership)throw new HTTPError({statusCode:403,message:'Membership required'})
+ const {roleAllows}=await import('~/server/utils/member-access')
+ const admin=await roleAllows({...membership,permissions:{members:['read']}})
+ const members=await queryAll<{id:string;name:string}>(actor.env.DB,`SELECT m.id,u.name FROM member m JOIN user u ON u.id=m.userId WHERE m.organizationId=? AND (?=1 OR m.userId=?)`,[actor.organizationId,Number(admin),actor.userId])
+ return Promise.all(members.map(async member=>({...member,scheduling:await readMemberScheduling(actor.env.DB,actor.organizationId,member.id)})))
+}
+export async function memberBusyCalendarChoices(actor:SchedulingActor,memberId:string,accountId:string) {
+ const member=await requireSchedulingAccess(actor,memberId)
+ if(member.userId!==actor.userId)throw new HTTPError({statusCode:403,message:'Only the member may inspect their linked calendar choices'})
+ await requireIntegrationAccount(actor.env,accountId,{userId:actor.userId,currentAccountId:null,providerId:'google',scopes:MEMBER_BUSY_SCOPES})
+ const token=await linkedAccountAccessToken(actor.env,accountId)
+ const calendars:{id:string;summary:string}[]=[]
+ let next:string|undefined
+ for(let page=0;page<4;page++) {
+  const response=await fetch(`https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250&fields=items(id,summary),nextPageToken${next?`&pageToken=${encodeURIComponent(next)}`:''}`,{headers:{Authorization:`Bearer ${token.accessToken}`},signal:AbortSignal.timeout(10000)})
+  if(!response.ok)throw new HTTPError({statusCode:502,message:`Google calendar selection failed (${response.status})`})
+  const data=await response.json() as {items?:{id:string;summary:string}[];nextPageToken?:string}
+  calendars.push(...(data.items??[]));next=data.nextPageToken;if(!next)return calendars
+ }
+ throw new HTTPError({statusCode:409,message:'Calendar account exceeds the bounded selection list'})
+}

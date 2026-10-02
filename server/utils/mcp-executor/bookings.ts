@@ -1,3 +1,5 @@
+import { reassignBookingProvider } from '~/server/domain/provider-reassignment'
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { listSessions } from '~/server/utils/availability'
@@ -20,12 +22,14 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
     const productId = requiredString(args, 'product_id')
     const product = await queryFirst(db, 'SELECT id FROM products WHERE id = ? AND organization_id = ?', [productId, organizationId])
     if (!product) throw new HTTPError({ statusCode: 404, message: 'Product not found in this organization' })
+    await refreshProductBusy(db,env,organizationId,productId)
     const sessions = await listSessions(db, { organizationId, productId, fromInstant: new Date(start).toISOString(), toInstant: new Date(end).toISOString() })
     const page = paginateMcpCollection(sessions, args, { resource: `booking-sessions:${organizationId}:${productId}:${from}:${to}` })
     return { sessions: page.items, page_info: page.page_info }
   }
+  if(toolName==='reassign_product_booking')return reassignBookingProvider({env,organizationId,userId:organization.userId},{booking_id:requiredString(args,'operational_booking_id'),member_id:requiredString(args,'member_id'),expected_updated_at:requiredString(args,'expected_updated_at'),idempotency_key:requiredString(args,'idempotency_key')})
   if (toolName === 'list_product_bookings') {
-    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? ORDER BY s.starts_at, b.id`, [organizationId])
+    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, b.assigned_member_id, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? AND (? IS NULL OR b.assigned_member_id=?) ORDER BY s.starts_at, b.id`, [organizationId,args.assigned_member_id??null,args.assigned_member_id??null])
     const bookings = rows.map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
     const page = paginateMcpCollection(bookings, args, { resource: `product-bookings:${organizationId}` })
     return { bookings: page.items, page_info: page.page_info }

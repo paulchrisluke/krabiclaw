@@ -1,3 +1,4 @@
+import { refreshWorkingWindows } from '~/server/domain/member-scheduling'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { queryAll } from '~/server/db'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
@@ -30,6 +31,7 @@ export default defineScheduledTask({
   async run({ context }) {
     const env = (context as { cloudflare?: { env?: CloudflareEnv } } | undefined)?.cloudflare?.env
     if (!env?.DB || !env.ORGANIZATION_CACHE) throw new Error('DB and ORGANIZATION_CACHE are required')
+    await refreshWorkingWindows(env.DB)
     const after = await env.ORGANIZATION_CACHE.get(CURSOR_KEY)
     const products = await queryAll<BookableProduct>(env.DB, `
       SELECT product_id, organization_id FROM product_booking_configs

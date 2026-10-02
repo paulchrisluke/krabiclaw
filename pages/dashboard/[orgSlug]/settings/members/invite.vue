@@ -32,6 +32,7 @@ const dashboard = useDashboardOrganization()
 
 const isOwner = computed(() => dashboard.organization.value?.role === 'owner')
 const BASE_ROLE_OPTIONS = [
+  { label: 'Member — own scheduling', value: 'member' },
   { label: 'Admin', value: 'admin' },
 ]
 // Owner is offered only to an owner, as Better Auth's creatorRole rule has it; enforced again server-side.
@@ -54,7 +55,7 @@ async function sendInvite() {
     if (!organizationId) throw new Error('Organization context is unavailable')
     const result = await authClient.organization.inviteMember({
       email: inviteForm.email,
-      role: inviteForm.role as 'admin' | 'owner',
+      role: inviteForm.role as 'admin' | 'owner' | 'member',
       organizationId,
     })
     if (result.error) throw new Error(result.error.message || 'Failed to send invite.')

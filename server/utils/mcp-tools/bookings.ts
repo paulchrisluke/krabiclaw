@@ -6,13 +6,14 @@ const reservationId = { type: 'string', description: 'Operational reservations.i
 const description = 'Obtain explicit user approval for these exact details before calling. This real-world write is audited and may email the guest. A model-generated confirm flag is not authorization.'
 
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
+ organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
   organizationTool({ name: 'list_product_booking_sessions', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List existing tenant Product sessions and capacity with the canonical online calendar exclusion. Use returned session IDs for creation/change; this does not generate sessions or import external appointments.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
   organizationTool({ name: 'list_product_bookings', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.',
-    inputSchema: { ...paginationInputSchema },
+    inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
     description: `Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. ${description}`,

@@ -308,6 +308,7 @@
         </div>
       </section>
     </article>
+    <div v-if="booking" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><WhoYouMeet :organization-id="organizationId" :organization-name="organizationName || location?.title || ''" :product-id="product.id" :slug="product.slug" :session-id="bookingController.selectedSession.value?.id" /></div>
     <slot name="content" />
   </div>
 </template>
@@ -518,7 +519,7 @@ const { data: initialSessions, error: initialSessionsError } = await useAsyncDat
     const event = useRequestEvent()!
     const { cloudflareEnv } = await import('~/server/utils/api-response')
     const { listPublicBookingSessions } = await import('~/server/utils/public-session-booking')
-    return (await listPublicBookingSessions(cloudflareEnv(event).DB, props.organizationId, props.product.slug, props.location?.id ?? 'online')).sessions.filter(session => !session.is_full)
+    return (await listPublicBookingSessions(cloudflareEnv(event).DB, props.organizationId, props.product.slug, props.location?.id ?? 'online', cloudflareEnv(event))).sessions.filter(session => !session.is_full)
   }
   return (await publicApiRequest<{ success: true; sessions: PublicProductSession[] }>(`/api/public/products/${encodeURIComponent(props.product.slug)}/sessions?location_id=${encodeURIComponent(props.location?.id ?? 'online')}`, {
     validate: (value): value is { success: true; sessions: PublicProductSession[] } => isRecord(value) && value.success === true && Array.isArray(value.sessions),

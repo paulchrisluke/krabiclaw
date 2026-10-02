@@ -48,6 +48,7 @@
     </template>
 
     <div class="mx-auto w-full max-w-3xl pb-28">
+      <USelect v-model="providerFilter" :items="providerFilterOptions" aria-label="Assigned person" class="mb-4 w-full" />
       <!-- One weekday bar for every month below it, as Airbnb's calendar draws it. -->
       <div
         v-if="view === 'month'"
@@ -271,6 +272,7 @@ const router = useRouter()
 const dashboardApi = useDashboardApi()
 const routeKind = typeof route.query.kinds === 'string' && AGENDA_KINDS.includes(route.query.kinds as AgendaKind) ? route.query.kinds : FILTER_ALL
 const routeLocationId = typeof route.query.locationId === 'string' ? route.query.locationId : FILTER_ALL
+const providerFilter=ref('')
 const filters = reactive({ locationId: routeLocationId, kind: routeKind })
 
 const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -355,6 +357,9 @@ const isLocationHours = (value: unknown): value is { location: CalendarLocation 
   isRecord(value) && isRecord(value.location) && typeof value.location.id === 'string' && typeof value.location.status === 'string'
   && typeof value.location.updated_at === 'string' && 'opening_hours' in value.location && 'special_hours' in value.location
 const organizationId = await useDashboardOrganizationId()
+const {data:providerMembers}=await useFetch<{members:{id:string;name:string}[]}>(()=>`/api/organizations/${organizationId}/members/scheduling`,{server:false})
+const providerFilterOptions=computed(()=>[{label:'All assigned people',value:''},...(providerMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])])
+
 const { data: chosenLocation, error: locationError, refresh: refreshLocation } = await useAsyncData(
   () => `calendar-location:${organizationId}:${filters.locationId}`,
   async () => filters.locationId === FILTER_ALL
@@ -419,6 +424,7 @@ async function loadMonth(key: string): Promise<void> {
     const payload = await dashboardApi<AgendaPayload>('/api/dashboard/agenda', {
       query: {
         from: first.toString(), to: last.toString(),
+        assigned_member_id:providerFilter.value || undefined,
         locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
         kinds: filters.kind !== FILTER_ALL ? filters.kind : undefined,
       },
@@ -660,7 +666,7 @@ watch(view, (next) => {
   void ensureLoaded(next === 'year' ? yearKeys.value : monthKeys.value)
 })
 
-watch(() => [filters.locationId, filters.kind], () => {
+watch(() => [filters.locationId, filters.kind, providerFilter.value], () => {
   void router.replace({
     query: {
       ...route.query,
