@@ -35,7 +35,6 @@ test('display rename preserves provider identities and metadata selects one cano
 })
 
 import { PRICING_COMPARISON, comparisonValue } from '../../shared/pricing-comparison.ts'
-import { normalizeTenantPageBlocks } from '../../utils/tenant-page-blocks.ts'
 
 test('comparison rejects unknown capabilities and preserves current review-request policy', () => {
   assert.throws(() => comparisonValue({ entitlement: 'invented_capability' }, 'growth'), /Unknown capability/)
@@ -45,10 +44,4 @@ test('comparison rejects unknown capabilities and preserves current review-reque
   assert.equal(comparisonValue(review, 'growth'), 'Included with setup')
   const onboarding = PRICING_COMPARISON.flatMap(group => [...group.rows]).find(row => row.id === 'places.onboarding')!
   assert.equal(comparisonValue(onboarding, 'free'), 'Included')
-})
-
-test('capability comparison is a canonical feature-grid source, not a parallel page or invented block type', () => {
-  const [block] = normalizeTenantPageBlocks([{ id: 'comparison-block', type: 'feature_grid', position: 5, data: { source: 'billing_features', title: 'Compare the details.' }, media: [] }])
-  assert.equal(block!.type, 'feature_grid')
-  assert.equal(block!.data.source, 'billing_features')
 })

@@ -19,6 +19,7 @@
       <img ref="photoImage" :src="frontImage || plan.image" alt="" loading="eager" decoding="async">
     </div>
     <div class="kc-plan-details">
+    <p v-if="photoError" role="alert" class="text-sm mb-3">{{ photoError }}</p>
     <!-- Highlight Gradient Light for Premium Card -->
     <div v-if="isHighlighted" class="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl opacity-60"></div>
     <div v-if="isHighlighted" class="absolute -bottom-24 -left-24 w-48 h-48 bg-(--kc-teal)/20 rounded-full blur-3xl opacity-40"></div>
@@ -127,13 +128,20 @@ const props = defineProps<{
 const card = useTemplateRef<HTMLElement>('card')
 const photoImage = useTemplateRef<HTMLImageElement>('photoImage')
 const animating = ref(false)
+const photoError = ref<string | null>(null)
 let revealed = false
 function reveal() { revealed = true; animating.value = false }
 onMounted(async () => {
   if (!props.photo || !photoImage.value || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   const image = photoImage.value
   const start = performance.now()
-  await image.decode().catch(() => reveal())
+  try {
+    await image.decode()
+  } catch (error) {
+    photoError.value = 'Plan image could not be displayed: ' + (error instanceof Error ? error.message : String(error))
+    reveal()
+    return
+  }
   if (revealed || performance.now() - start > 800 || !image.naturalWidth || document.hidden || card.value?.contains(document.activeElement)) return
   card.value?.style.setProperty('--flip-delay', `${(props.sequence ?? 0) * 1100}ms`)
   animating.value = true

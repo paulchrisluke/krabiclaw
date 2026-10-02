@@ -359,18 +359,12 @@ const handleTenantContact = async () => {
   }
   mirrorSubmission('contact_submit', submitted.measurement)
 
-  // Best-effort only — a failure here (private browsing, storage quota) must
-  // never make a successful submission look like it failed.
-  try {
-    setContactConfirmation({
-      organizationId,
-      organizationName: businessName.value,
-      guestName: tenantForm.value.name,
-      subject: tenantForm.value.subject,
-    })
-  } catch {
-    // ignore — /contact/confirmed shows a generic success state either way
-  }
+  setContactConfirmation({
+    organizationId,
+    organizationName: businessName.value,
+    guestName: tenantForm.value.name,
+    subject: tenantForm.value.subject,
+  })
   await navigateTo(localePath('/contact/confirmed'))
   tenantSubmitting.value = false
 }

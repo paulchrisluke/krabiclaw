@@ -20,8 +20,8 @@ function logPublicHelpEventDetached(
   const promise = logMcpToolCallEvent(db, {
     ...input, mcpSurface: 'public_help', })
   const waitUntil = getCloudflareWaitUntil(event)
-  if (waitUntil) waitUntil(promise)
-  else promise.catch(() => {})
+  if (!waitUntil) throw new Error('Help telemetry requires the Worker execution context')
+  waitUntil(promise)
 }
 
 function parseAgentEnvelope(raw: string) {

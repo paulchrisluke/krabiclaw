@@ -35,8 +35,13 @@ export default defineHandler(async (event) => {
   if (!validation.valid) return jsonResponse({ error: validation.reason }, { status: 400 })
 
   const canonicalHostname = canonicalDomainForPair(requestedDomain, includeWww)
-  const liveResolution = await inspectDomainResolution(env, canonicalHostname).catch(() => null)
-  if (liveResolution?.resolves_elsewhere && body.acknowledge_live_cutover !== true) {
+  let liveResolution
+  try {
+    liveResolution = await inspectDomainResolution(env, canonicalHostname)
+  } catch (error) {
+    return jsonResponse({ error: `Could not check where ${canonicalHostname} points: ${error instanceof Error ? error.message : String(error)}` }, { status: 502 })
+  }
+  if (liveResolution.resolves_elsewhere && body.acknowledge_live_cutover !== true) {
     return jsonResponse({
       error: 'This domain currently points somewhere else.', live_cutover_warning: {
         hostname: liveResolution.hostname, records: liveResolution.records, message: 'This domain currently points elsewhere and may be live. Changing DNS now can take it offline until Krabiclaw validation finishes.', }, }, { status: 409 })

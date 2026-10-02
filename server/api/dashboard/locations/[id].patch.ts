@@ -72,11 +72,11 @@ export default defineHandler(async (event) => {
 
   await purgePublicResourceCacheNow(env, organizationId)
 
-  const location = (result.data as { location?: { feature_overrides?: string | null } }).location
-  const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides ?? null) : null
+  const { location } = result.data as { location: { feature_overrides: string | null } }
+  const capabilitySummary = await resolveLocationCapabilitySummary(db, organizationId, location.feature_overrides)
   return jsonResponse({
     success: true,
-    location: location ? parseLocationPayload(location) : null,
+    location: parseLocationPayload(location),
     ...capabilitySummary,
   }, { status: result.status })
 })

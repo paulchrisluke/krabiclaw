@@ -79,6 +79,12 @@ export const getBillingAnalyticsContext = (): BillingAnalyticsContext => {
 }
 
 
+export class ErrorEventNotRecorded extends Error {
+  constructor(cause: unknown) {
+    super(`Error event was not recorded: ${cause instanceof Error ? cause.message : String(cause)}`, { cause })
+  }
+}
+
 async function postAuthenticatedInteraction(payload: Record<string, unknown>): Promise<void> {
   const response = await fetch('/api/analytics/interactions', {
     method: 'POST',
@@ -105,13 +111,13 @@ export const useAnalytics = () => {
     const native = Promise.race([pageEventIdFor(path), whenLeaving()]).then(pageEventId => postAuthenticatedInteraction({ event_id: eventId, occurred_at: occurredAt, event_name: eventName, organization_id: organizationId, page_event_id: pageEventId, properties: kept }))
     // The Google Analytics copy is a projection of the native event: it is sent only after the native
     // record accepted it, with the same id. A collection failure is reported through the application's
-    // error hook; the error tracker's own event is the one exception, since reporting its failure as an
-    // error would report itself again without end, so that failure is written to the console only.
+    // error hook, which records an error event. When that error event is the one that failed, it stays
+    // an unhandled rejection for the browser to report; the error tracker does not record it again.
     void native.then(
       () => window.zaraz?.track(eventName, { event_id: eventId, ...kept, ...(organizationId ? { organization_id: organizationId } : {}), device_language: navigator.language, is_prod: import.meta.env.PROD }),
       (error) => {
-        if (eventName === 'error_encountered') console.error('analytics_error_event_not_recorded', error)
-        else void nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
+        if (eventName === 'error_encountered') throw new ErrorEventNotRecorded(error)
+        return nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
       },
     )
   }
