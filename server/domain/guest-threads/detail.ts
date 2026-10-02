@@ -1,9 +1,10 @@
-import type { DbClient } from '~/server/db'
+import { d1JsonStringSet, queryAll, type DbClient } from '~/server/db'
 import { getGuestRequest, getThreadOperationalRecord, requestSummary, requestActions } from '~/server/domain/requests'
 import { formatOperationalStatusLabel } from './status-labels'
 import { resolveGuestThreadMailbox } from './mailbox'
 import { listThreadEntries, parseEntryPayload } from './entries'
 import { getDeliveryRetryEligibility, isVisibleDeliveryFailure, listThreadDeliveries } from './deliveries'
+import { listMessagePhotos } from './attachments'
 import type { GuestThreadDetailViewModel, GuestThreadEntryDeliveryViewModel, GuestThreadEntryViewModel } from './types'
 
 /** Builds the full canonical thread detail view model — the sole source for the detail API. */
@@ -32,12 +33,21 @@ export async function getGuestThreadDetail(
   }
   const deliveryFailureRows = deliveryRows.filter(delivery => isVisibleDeliveryFailure(delivery, nowMs))
 
+  const photos = await listMessagePhotos(db, entryRows.filter(entry => entry.kind === 'message').map(entry => entry.id))
+
+  // Who on the team said or did each thing, by the name their account carries.
+  const actorUserIds = entryRows.flatMap(entry => entry.actor_user_id ? [entry.actor_user_id] : [])
+  const actorNames = new Map(actorUserIds.length
+    ? (await queryAll<{ id: string; name: string }>(db, 'SELECT id, name FROM user WHERE id IN (SELECT value FROM json_each(?))', [d1JsonStringSet(actorUserIds)]))
+        .map(row => [row.id, row.name])
+    : [])
+
   const entries: GuestThreadEntryViewModel[] = entryRows.map(entry => ({
     id: entry.id,
     kind: entry.kind,
     actorKind: entry.actor_kind,
     actorUserId: entry.actor_user_id,
-    actorLabel: null,
+    actorLabel: entry.actor_user_id ? actorNames.get(entry.actor_user_id) ?? null : null,
     channel: entry.channel,
     body: entry.body,
     eventName: entry.event_name,
@@ -45,6 +55,7 @@ export async function getGuestThreadDetail(
     sequence: entry.sequence,
     occurredAt: entry.occurred_at,
     deliveries: deliveriesByEntry.get(entry.id) ?? [],
+    attachments: photos.get(entry.id) ?? [],
   }))
 
   const summary = await requestSummary(db, thread)
