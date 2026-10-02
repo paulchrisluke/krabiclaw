@@ -52,8 +52,8 @@ export const listLinkedFacebookPages = async (env: CloudflareEnv, accountId: str
   // personal User's accounts edge. Its Page nodes expose access_token when
   // the assigned identity has the required Page role.
   do {
-    const params = new URLSearchParams({ fields: 'id,name,access_token,category,fan_count,picture', limit: '100', ...(after ? { after } : {}) })
-    const page = await metaGraphRequest<{ data?: FacebookPage[]; paging?: { cursors?: { after?: string }; next?: string } }>(
+    const params: URLSearchParams = new URLSearchParams({ fields: 'id,name,access_token,category,fan_count,picture', limit: '100', ...(after ? { after } : {}) })
+    const page: { data?: FacebookPage[]; paging?: { cursors?: { after?: string }; next?: string } } = await metaGraphRequest(
       `${GRAPH_BASE}/me/assigned_pages?${params}`, { headers: { authorization: `Bearer ${token}` } })
     if (!Array.isArray(page.data)) throw new Error('Facebook returned no assigned Pages data.')
     for (const assigned of page.data) {
