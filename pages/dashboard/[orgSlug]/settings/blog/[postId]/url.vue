@@ -16,12 +16,13 @@
           <UButton v-if="editor.post.value?.slug_manually_overridden" size="xs" variant="link" @click="editor.resetSlugOverride">Use automatic slug</UButton>
         </div>
       </UFormField>
-      <UCheckbox v-if="editor.post.value?.first_published_at && editor.form.slug !== editor.post.value.slug" v-model="editor.form.redirect_old_slug" label="Redirect old URL" />
+      <SettingRow v-if="editor.post.value?.first_published_at && editor.form.slug !== editor.post.value.slug" v-model="editor.form.redirect_old_slug" label="Redirect old URL" />
     </div>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { blogEditorKey } from '~/lib/components/workspace/blog/BlogPostEditor.vue'
 
 definePageMeta({ layout: 'dashboard' })

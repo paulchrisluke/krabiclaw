@@ -90,7 +90,7 @@ export interface OrganizationSettingsEditor {
   validationMessage: ComputedRef<string | null>
   nameCharactersRemaining: ComputedRef<number>
   descriptionCharactersRemaining: ComputedRef<number>
-  supportsOrganizationFonts: ComputedRef<boolean>
+  sayaTheme: ComputedRef<boolean>
   localizationSettings: Ref<LocalizationSettings | null>
   localizationLoading: Ref<boolean>
   localizationBusy: Ref<boolean>
@@ -187,7 +187,7 @@ const localizationProgress = ref<LocalizationProgress[]>([])
 const localizationProgressError = ref<string | null>(null)
 const newLocale = ref('')
 const loadedSettings = ref<OrganizationSettingsResponse | null>(null)
-const supportsOrganizationFonts = computed(() => loadedSettings.value?.theme === 'saya')
+const sayaTheme = computed(() => loadedSettings.value?.theme === 'saya')
 const originalSignature = ref('')
 const form = reactive<OrganizationSettingsForm>({
   name: '', brand_description: '',
@@ -197,7 +197,7 @@ const form = reactive<OrganizationSettingsForm>({
 })
 // Only the specimen uses Mali. Never change the dashboard's typography.
 useHead(() => ({
-  style: surface.value === 'brand' && detailKey.value === 'font' && supportsOrganizationFonts.value && form.font_preset === 'mali'
+  style: surface.value === 'brand' && detailKey.value === 'font' && sayaTheme.value && form.font_preset === 'mali'
     ? [{ key: 'organization-font-preview', innerHTML: MALI_FONT_CSS }]
     : [],
 }))
@@ -221,8 +221,9 @@ const brandItems = computed<EditorNavigationItem[]>(() => [
   { id: 'sharing-image', label: 'Social sharing image', summary: loadedSettings.value?.media?.some(item => item.slot === 'social_share') ? 'Image selected' : 'Not set', icon: 'i-lucide-panels-top-left', to: `${brandPath.value}/sharing-image` },
   { id: 'description', label: 'Description', summary: explicitSummary(loadedSettings.value?.brand_description), icon: 'i-lucide-align-left', to: `${brandPath.value}/description` },
   { id: 'announcement', label: 'Announcement', summary: loadedSettings.value?.announcement?.enabled ? explicitSummary(loadedSettings.value.announcement.headline) : 'Off', icon: 'i-lucide-megaphone', to: `${brandPath.value}/announcement` },
-  { id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` },
-  ...(supportsOrganizationFonts.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
+  // Brand color and font are Saya's: no other template reads them (layouts/saya.vue).
+  ...(sayaTheme.value ? [{ id: 'color', label: 'Brand color', summary: explicitSummary(loadedSettings.value?.brand_color), icon: 'i-lucide-palette', to: `${brandPath.value}/color` }] : []),
+  ...(sayaTheme.value ? [{ id: 'font', label: 'Website font', summary: loadedSettings.value?.font_preset === 'mali' ? 'Mali (Thai and English)' : 'Default', icon: 'i-lucide-type', to: `${brandPath.value}/font` }] : []),
   { id: 'contact', label: 'Contact details', summary: explicitSummary(loadedSettings.value?.contact_email), icon: 'i-lucide-mail', to: `${brandPath.value}/contact` },
   { id: 'translations', label: 'Translations', summary: 'Translate the brand name and description', icon: 'i-lucide-languages', action: { label: 'Localize' } },
 ])
@@ -234,7 +235,7 @@ function onRowAction(id: string) {
 // sees is here, and nothing here opens a second list.
 const settingsItems = computed<EditorNavigationItem[]>(() => [
   { id: 'status', label: 'Status', summary: loadedSettings.value ? STATUS_LABELS[loadedSettings.value.status] : 'Not set', icon: 'i-lucide-radio', to: `${settingsPath.value}/status` },
-  { id: 'domains', label: 'Domain', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
+  { id: 'domains', label: 'Domains', summary: domainSummary.value, icon: 'i-lucide-globe-2', to: `${settingsPath.value}/domains` },
   { id: 'localization', label: 'Languages', summary: 'Languages the site is published in', icon: 'i-lucide-languages', to: `${settingsPath.value}/localization` },
   { id: 'currency', label: 'Currency', summary: explicitSummary(loadedSettings.value?.default_currency), icon: 'i-lucide-coins', to: `${settingsPath.value}/currency` },
   // Deleting the site deletes the organization, so only an owner is
@@ -290,7 +291,7 @@ const validationMessage = computed(() => {
       return null
     }
     case 'color': return !form.brand_color.trim() || /^#[0-9a-f]{6}$/i.test(form.brand_color) ? null : 'Enter a six-digit hex color.'
-    case 'font': return supportsOrganizationFonts.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
+    case 'font': return sayaTheme.value && isOrganizationFontPreset(form.font_preset) ? null : 'Choose a supported website font.'
     case 'contact': return !form.contact_email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact_email) ? null : 'Enter a valid email address.'
     case 'status': return form.status === 'suspended' ? 'This website is suspended. Contact support to restore it.' : null
     case 'localization': return localizationSettings.value?.effective_plan !== 'growth' ? 'A Growth subscription is required.' : null
@@ -468,7 +469,7 @@ provide(organizationSettingsEditorKey, {
   validationMessage,
   nameCharactersRemaining,
   descriptionCharactersRemaining,
-  supportsOrganizationFonts,
+  sayaTheme,
   localizationSettings,
   localizationLoading,
   localizationBusy,

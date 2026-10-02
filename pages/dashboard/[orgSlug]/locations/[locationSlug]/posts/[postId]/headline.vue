@@ -10,7 +10,7 @@
     @save="post.save"
   >
     <UFormField label="Headline" description="Optional. Shown as the post's title on your site and in this list.">
-      <UInput v-model="post.editor.form.title" size="xl" autofocus placeholder="Add a headline" class="w-full" />
+      <UInput v-model="post.editor.form.title" autofocus placeholder="Add a headline" class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

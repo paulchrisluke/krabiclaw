@@ -1,51 +1,62 @@
 <template>
-  <DashboardLeafPanel
-    id="product-options"
-    :title="p.sectionLabels['options']"
-    :saving="p.saving.value"
-    :disabled="p.saveDisabled.value"
-    :save-label="p.saveLabel.value"
-    :error="p.saveError.value || p.photoError.value || ''"
-    @cancel="p.revert"
-    @save="p.save"
-  >
-    <!-- A combination is what a customer actually buys, so it carries the price, and every combination has to be answered. -->
-    <div class="space-y-6">
-      <div v-for="(option, optionIndex) in p.form.options" :key="option.id" class="space-y-2 rounded-lg border border-default p-3">
-        <div class="flex items-center gap-2">
-          <UInput v-model="option.name" placeholder="Size" :maxlength="PRODUCT_LIMITS.optionName" class="flex-1" aria-label="Option name" />
-          <UButton icon="i-lucide-trash-2" color="neutral" variant="ghost" :aria-label="`Remove ${option.name || 'option'}`" @click="p.removeOption(optionIndex)" />
-        </div>
-        <UInputTags
-          :model-value="option.values.map((value: { value: string }) => value.value)"
-          placeholder="Add a value"
-          :max="PRODUCT_LIMITS.optionValues"
-          :max-length="PRODUCT_LIMITS.optionValue"
-          delimiter=","
-          add-on-blur
-          add-on-paste
-          class="w-full"
-          @update:model-value="p.setOptionValues(optionIndex, $event as string[])"
-        />
-      </div>
-      <UButton v-if="p.form.options.length < PRODUCT_LIMITS.options" label="Add an option" icon="i-lucide-plus" color="neutral" variant="soft" @click="p.addOption" />
-
-      <div v-if="p.form.variants.length > 1" class="space-y-2">
-        <p class="text-sm font-semibold text-highlighted">Combinations</p>
-        <div v-for="variant in p.form.variants" :key="variant.key" class="flex items-center gap-3 rounded-lg border border-default p-3">
-          <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ variant.name }}</span>
-          <UInput v-model="variant.price_major" inputmode="decimal" :placeholder="`Amount (${p.currency})`" class="w-40" />
-        </div>
-      </div>
-    </div>
-  </DashboardLeafPanel>
+  <!--
+    Options as a list: each option is a row previewing its values and opening
+    its own leaf, and each combination a customer can buy is a row carrying its
+    price (DESIGN.md: a pane that would need many fields becomes an index).
+  -->
+  <DashboardIndexPanel id="product-options" :title="p.sectionLabels['options']">
+    <EditorNavigationList :groups="groups" :active-item="activeItem" @act="act" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
+import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import { PRODUCT_LIMITS } from '~/shared/product-limits'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 const p = inject(productEditorKey)!
+const level = useRouteLevel()
+const route = useRoute()
+
+const groups = computed<EditorNavigationGroup[]>(() => [
+  {
+    id: 'options',
+    items: [
+      ...p.form.options.map((option, index) => ({
+        id: `option-${index}`,
+        label: option.name || 'Option',
+        summary: option.values.map(value => value.value).join(', ') || undefined,
+        to: `${level.path.value}/${index}`,
+      })),
+      ...(p.form.options.length < PRODUCT_LIMITS.options ? [{ id: 'add', label: 'Add an option', action: {} }] : []),
+    ],
+  },
+  ...(p.form.variants.length > 1
+    ? [{
+        id: 'combinations',
+        label: 'Combinations',
+        items: p.form.variants.map(variant => ({
+          id: `price-${variant.key}`,
+          label: variant.name,
+          summary: variant.price_major ? `${variant.price_major} ${p.currency}` : undefined,
+          to: `${level.path.value}/prices/${encodeURIComponent(variant.key)}`,
+        })),
+      }]
+    : []),
+])
+
+const activeItem = computed(() => {
+  if (typeof route.params.optionIndex === 'string') return `option-${route.params.optionIndex}`
+  if (typeof route.params.variantKey === 'string') return `price-${route.params.variantKey}`
+  return null
+})
+
+// Adding an option is a draft until its own leaf saves it.
+function act(id: string) {
+  if (id !== 'add') return
+  p.addOption()
+  void navigateTo(`${level.path.value}/${p.form.options.length - 1}`)
+}
 </script>

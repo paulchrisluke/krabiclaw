@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <UFormField label="Contact email">
-      <UInput v-model="editor.form.contact_email" type="email" autocomplete="email" size="xl" autofocus class="w-full" />
+      <UInput v-model="editor.form.contact_email" type="email" autocomplete="email" autofocus class="w-full" />
     </UFormField>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>

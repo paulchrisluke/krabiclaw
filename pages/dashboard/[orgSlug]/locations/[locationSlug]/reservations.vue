@@ -17,7 +17,15 @@
         icon="i-lucide-calendar-off"
         description="This location does not take reservations yet. Saving a policy opens them."
       />
-      <ReservationPolicyForm v-model="editor.reservationForm.value" />
+      <!-- Notice, seats and cancellation are the calendar's settings; this page holds the guests' notes. -->
+      <UFormField label="Anything else" description="Shown at the end of the list on your public page.">
+        <UTextarea
+          :model-value="editor.reservationForm.value.additional_notes_html ?? ''"
+          :rows="4"
+          class="w-full"
+          @update:model-value="setNotes"
+        />
+      </UFormField>
       <UButton
         v-if="editor.reservationConfigExists.value"
         color="error"
@@ -35,7 +43,6 @@
 </template>
 
 <script setup lang="ts">
-import ReservationPolicyForm from '~/components/dashboard/ReservationPolicyForm.vue'
 import { useLocationEditor } from '~/lib/components/workspace/settings/LocationSettingsPage.vue'
 
 definePageMeta({ layout: 'dashboard' })
@@ -43,4 +50,11 @@ definePageMeta({ layout: 'dashboard' })
 const dashboardLocation = useDashboardLocation()
 const organizationId = await useDashboardOrganizationId()
 const editor = await useLocationEditor(organizationId, dashboardLocation.currentLocationId, 'reservations')
+
+
+// Kept as typed: trimming on every keystroke ate the space before the next word.
+function setNotes(next: string | number) {
+  const notes = typeof next === 'string' ? next : ''
+  editor.reservationForm.value = { ...editor.reservationForm.value, additional_notes_html: notes.trim() ? notes : null }
+}
 </script>

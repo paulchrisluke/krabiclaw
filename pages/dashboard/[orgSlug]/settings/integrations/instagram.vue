@@ -22,7 +22,7 @@
       @keep="keep"
     >
       <UFormField v-if="accountOptions.length" label="Instagram account">
-        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose an Instagram account" size="xl" class="w-full" />
+        <USelectMenu v-model="accountId" :items="accountOptions" value-key="value" placeholder="Choose an Instagram account" class="w-full" />
       </UFormField>
       <UButton v-if="accountOptions.length" icon="i-lucide-plus" color="neutral" variant="link" class="px-0" :loading="linking" @click="link">Link another Instagram account</UButton>
       <UButton v-else icon="i-lucide-instagram" size="xl" block :loading="linking" @click="link">Connect Instagram</UButton>

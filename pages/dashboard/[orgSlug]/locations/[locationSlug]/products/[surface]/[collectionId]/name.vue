@@ -10,7 +10,7 @@
     @save="c.save"
   >
     <UFormField label="Name" required>
-      <UInput v-model="c.form.name" :placeholder="c.groupLabel === 'Section' ? 'Appetizers' : 'Accessories'" size="xl" autofocus class="w-full" />
+      <UInput v-model="c.form.name" :placeholder="c.groupLabel === 'Section' ? 'Appetizers' : 'Accessories'" autofocus class="w-full" />
     </UFormField>
     <DashboardResourceLocalization
       v-if="!c.isNew.value && c.hasRecord.value"

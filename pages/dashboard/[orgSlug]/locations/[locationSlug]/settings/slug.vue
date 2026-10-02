@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <UFormField label="Slug" description="The location's segment in its public URL.">
-      <UInput v-model="editor.detailsForm.slug" size="xl" autofocus class="w-full" />
+      <UInput v-model="editor.detailsForm.slug" autofocus class="w-full" />
     </UFormField>
     <UAlert v-if="editor.validationMessage.value" class="mt-6" color="error" variant="soft" :description="editor.validationMessage.value" />
   </DashboardLeafPanel>

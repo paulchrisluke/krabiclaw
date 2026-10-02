@@ -9,14 +9,12 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="space-y-4">
-      <p class="text-base text-muted">A published question appears on the page it is filed under.</p>
-      <UCheckbox v-model="editor.form.published" label="Published" />
-    </div>
+    <SettingRow v-model="editor.form.published" label="Published" description="A published question appears on the page it is filed under." />
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { qaEditorKey } from '~/components/dashboard/QaEditorPage.vue'
 
 definePageMeta({ layout: 'dashboard' })

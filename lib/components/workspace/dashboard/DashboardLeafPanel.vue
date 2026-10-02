@@ -1,12 +1,9 @@
 <template>
   <UDashboardPanel :id="id">
     <template #header>
-      <UDashboardNavbar :title="title" :toggle="false">
-        <!-- An action that belongs to the whole leaf — adding a domain — sits beside its title. -->
-        <template v-if="$slots.right" #right>
-          <slot name="right" />
-        </template>
-        <template #leading>
+      <!-- The bar carries only the way out; the title is the leaf's own, in the body. -->
+      <UDashboardNavbar :toggle="false">
+        <template #left>
           <UButton
             icon="i-lucide-x"
             aria-label="Close"
@@ -18,27 +15,40 @@
             data-testid="dashboard-navbar-close"
             :to="level.to.value ?? undefined"
           />
-          <UIcon v-if="icon" :name="icon" class="size-7 shrink-0" />
+        </template>
+        <!-- An action that belongs to the whole leaf — adding a domain — sits in the bar. -->
+        <template v-if="$slots.right" #right>
+          <slot name="right" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-5xl">
+      <!-- One column width for every leaf: fields do not stretch to the pane. -->
+      <div class="mx-auto w-full max-w-xl">
+        <h1 class="flex items-center gap-3 text-2xl font-semibold text-highlighted lg:text-[32px] lg:leading-tight">
+          <UIcon v-if="icon" :name="icon" class="size-8 shrink-0" />
+          {{ title }}
+        </h1>
+        <!-- The one place a leaf explains itself. A field never carries a sentence. -->
+        <p v-if="lead" class="mt-2 text-base text-muted">{{ lead }}</p>
+
         <UAlert
           v-if="error"
-          class="mb-6"
+          class="mt-6"
           color="error"
           variant="soft"
           icon="i-lucide-triangle-alert"
           :description="error"
         />
 
-        <div v-if="!ready" class="space-y-4">
-          <USkeleton class="h-10" />
-          <USkeleton class="h-14" />
+        <div class="mt-8">
+          <div v-if="!ready" class="space-y-4">
+            <USkeleton class="h-11" />
+            <USkeleton class="h-11" />
+          </div>
+          <slot v-else />
         </div>
-        <slot v-else />
       </div>
     </template>
 
@@ -77,6 +87,8 @@ withDefaults(defineProps<{
   title: string
   /** A mark beside the title, for a leaf known by a logo. */
   icon?: string
+  /** One muted sentence under the title: the only explanation a leaf carries. */
+  lead?: string
   ready?: boolean
   saving?: boolean
   disabled?: boolean
