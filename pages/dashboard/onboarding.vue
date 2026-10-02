@@ -9,6 +9,7 @@
 
         <div class="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
           <NuxtPage v-if="restored" />
+          <p v-else-if="draft.error.value" class="py-16 text-sm text-error" role="alert">{{ draft.error.value }}</p>
           <div v-else class="flex h-full items-center justify-center py-16" aria-live="polite">
             <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
             <span class="sr-only">Loading your answers</span>
@@ -118,7 +119,14 @@ const restored = ref(false)
 
 onMounted(async () => {
   const requested = currentStep.value
-  await draft.restore()
+  // Starting from an empty form would save blanks over the draft, so a draft
+  // that cannot be read stops the flow here.
+  try {
+    await draft.restore()
+  } catch (cause) {
+    draft.error.value = getErrorMessage(cause, 'Your saved answers could not be loaded.')
+    return
+  }
 
   if (route.params.step && !requested) {
     // Not a step at all.

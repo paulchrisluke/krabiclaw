@@ -17,7 +17,6 @@ import { handleLocalesTools } from './locales'
 import { handleLocationsTools } from './locations'
 import { handleMediaTools } from './media'
 import { handleProductsTools } from './products'
-import { handleOnboardingTools } from './onboarding'
 import { handlePostsTools } from './posts'
 import { handleQaTools } from './qa'
 import { handleReviewsTools } from './reviews'
@@ -46,7 +45,6 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   locations: handleLocationsTools,
   media: handleMediaTools,
   products: handleProductsTools,
-  onboarding: handleOnboardingTools,
   posts: handlePostsTools,
   qa: handleQaTools,
   reviews: handleReviewsTools,

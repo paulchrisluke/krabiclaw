@@ -46,7 +46,7 @@ export default defineHandler(async (event) => {
     console.error('domain_sync_failed', {
       organizationId, domainId, userId: session.user.id, error: normalizedError.message, stack: normalizedError.stack ?? null
     })
-    return jsonResponse({ error: 'Failed to sync domain' }, { status: 500 })
+    return jsonResponse({ error: `Failed to sync domain: ${normalizedError.message}` }, { status: 500 })
   }
 })
 import { defineHandler } from 'nitro';

@@ -1,7 +1,7 @@
 {
   "title": "Krabiclaw coastal responsive artwork",
   "version": 3,
-  "status": "30 hero assets assembled and deterministic QA complete; actual-renderer approval pending",
+  "status": "Approved v3 provenance; hero, transition and social background migrated to verified CMS placements. Runtime bundle removed; generated social_card left to automatic reconciliation by user instruction.",
   "files": [
     {
       "file": "hero/xxs/sky.png",

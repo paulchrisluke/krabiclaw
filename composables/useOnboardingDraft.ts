@@ -281,69 +281,64 @@ export function useOnboardingDraft() {
 
   /** Read the unfinished draft back into the flow. Returns false when there is none. */
   async function restore(): Promise<boolean> {
-    try {
-      const res = await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/drafts/active', {
-        validate: (value): value is Record<string, unknown> => isRecord(value),
-      })
-      const draft = isRecord(res.draft) ? res.draft : null
-      if (!draft || typeof draft.draftId !== 'string') return false
-      const details = isRecord(draft.details) ? draft.details : {}
-      const config = isRecord(draft.config) ? draft.config : {}
-      const text = (value: unknown) => typeof value === 'string' ? value : ''
-      // Parse before touching state. These throw on stored hours that no longer
-      // parse, and assigning as we went left the flow half-restored — name and
-      // address in place, hours silently empty — which the next save would have
-      // written back over the hours the owner had already given.
-      const openingHours = parseOpeningHours(details.openingHours as OpeningHours)
-      const specialHours = parseSpecialHours(details.specialHours)
+    const res = await applicationFetch<Record<string, unknown>>('/api/dashboard/onboarding/drafts/active', {
+      validate: (value): value is Record<string, unknown> => isRecord(value),
+    })
+    const draft = isRecord(res.draft) ? res.draft : null
+    if (!draft || typeof draft.draftId !== 'string') return false
+    const details = isRecord(draft.details) ? draft.details : {}
+    const config = isRecord(draft.config) ? draft.config : {}
+    const text = (value: unknown) => typeof value === 'string' ? value : ''
+    // Parse before touching state. These throw on stored hours that no longer
+    // parse, and assigning as we went left the flow half-restored — name and
+    // address in place, hours silently empty — which the next save would have
+    // written back over the hours the owner had already given.
+    const openingHours = parseOpeningHours(details.openingHours as OpeningHours)
+    const specialHours = parseSpecialHours(details.specialHours)
 
-      state.value.draftId = draft.draftId
-      state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
-      state.value.source = draft.sourceType === 'google_places' ? 'google_places' : 'manual'
-      state.value.placeId = typeof draft.placeId === 'string' && draft.placeId ? draft.placeId : null
-      state.value.details.name = text(details.name)
-      state.value.details.city = text(details.city)
-      state.value.details.streetAddress = text(details.streetAddress)
-      state.value.details.addressLine2 = text(details.addressLine2)
-      state.value.details.region = text(details.region)
-      state.value.details.postalCode = text(details.postalCode)
-      state.value.details.phone = text(details.phone)
-      if (typeof details.country === 'string' && details.country) state.value.details.country = details.country
-      if (typeof details.currency === 'string' && details.currency) {
-        state.value.details.currency = details.currency as typeof state.value.details.currency
-      }
-      state.value.hours.timezone = text(details.timezone)
-      state.value.hours.hours = openingHours
-      state.value.hours.specialHours = specialHours
-      state.value.brand.brandColor = text(config.brand_color)
-      state.value.brand.logoNote = text(config.draft_logo_note)
-      state.value.brand.heroPhotoNote = text(config.draft_hero_photo_note)
-      state.value.brand.heroHeadline = text(config.draft_hero_headline)
-      state.value.brand.heroSubtitle = text(config.draft_hero_subtitle)
-      state.value.products = Array.isArray(draft.products)
-        ? draft.products.flatMap(entry => isRecord(entry) && typeof entry.name === 'string'
-          ? [{
-              name: entry.name,
-              category: typeof entry.category === 'string' ? entry.category : '',
-              amountMinor: typeof entry.amountMinor === 'number' ? entry.amountMinor : null,
-            }]
-          : [])
-        : []
-
-      if (typeof draft.organizationId === 'string' && typeof draft.previewToken === 'string' && typeof draft.subdomainCandidate === 'string') {
-        state.value.preview = {
-          draftId: draft.draftId,
-          organizationId: draft.organizationId,
-          previewToken: draft.previewToken,
-          draftName: typeof draft.draftName === 'string' ? draft.draftName : state.value.details.name,
-          subdomainCandidate: draft.subdomainCandidate,
-        }
-      }
-      return true
-    } catch {
-      // An unreadable draft is not worth blocking the flow for.
-      return false
+    state.value.draftId = draft.draftId
+    state.value.vertical = draft.vertical === 'experience' || draft.vertical === 'service' ? draft.vertical : 'restaurant'
+    state.value.source = draft.sourceType === 'google_places' ? 'google_places' : 'manual'
+    state.value.placeId = typeof draft.placeId === 'string' && draft.placeId ? draft.placeId : null
+    state.value.details.name = text(details.name)
+    state.value.details.city = text(details.city)
+    state.value.details.streetAddress = text(details.streetAddress)
+    state.value.details.addressLine2 = text(details.addressLine2)
+    state.value.details.region = text(details.region)
+    state.value.details.postalCode = text(details.postalCode)
+    state.value.details.phone = text(details.phone)
+    if (typeof details.country === 'string' && details.country) state.value.details.country = details.country
+    if (typeof details.currency === 'string' && details.currency) {
+      state.value.details.currency = details.currency as typeof state.value.details.currency
     }
+    state.value.hours.timezone = text(details.timezone)
+    state.value.hours.hours = openingHours
+    state.value.hours.specialHours = specialHours
+    state.value.brand.brandColor = text(config.brand_color)
+    state.value.brand.logoNote = text(config.draft_logo_note)
+    state.value.brand.heroPhotoNote = text(config.draft_hero_photo_note)
+    state.value.brand.heroHeadline = text(config.draft_hero_headline)
+    state.value.brand.heroSubtitle = text(config.draft_hero_subtitle)
+    state.value.products = Array.isArray(draft.products)
+      ? draft.products.flatMap(entry => isRecord(entry) && typeof entry.name === 'string'
+        ? [{
+            name: entry.name,
+            category: typeof entry.category === 'string' ? entry.category : '',
+            amountMinor: typeof entry.amountMinor === 'number' ? entry.amountMinor : null,
+          }]
+        : [])
+      : []
+
+    if (typeof draft.organizationId === 'string' && typeof draft.previewToken === 'string' && typeof draft.subdomainCandidate === 'string') {
+      state.value.preview = {
+        draftId: draft.draftId,
+        organizationId: draft.organizationId,
+        previewToken: draft.previewToken,
+        draftName: typeof draft.draftName === 'string' ? draft.draftName : state.value.details.name,
+        subdomainCandidate: draft.subdomainCandidate,
+      }
+    }
+    return true
   }
 
   return { busy, error, save, seedFromPlace, activate, addLocation, restore, activeDraftOrganizationId, discard, addressSummary }

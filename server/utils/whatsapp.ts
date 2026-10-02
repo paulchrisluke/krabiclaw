@@ -461,7 +461,7 @@ export async function sendWhatsAppText(
       }),
     })
 
-    const data = await response.json().catch(() => ({})) as MetaGraphResponse
+    const data = await response.json() as MetaGraphResponse
     if (!response.ok || data.error) {
       return { success: false, status: 'failed', error: data.error?.message ?? `HTTP ${response.status}` }
     }
@@ -487,7 +487,7 @@ export async function fetchWhatsAppMedia(
   const metaResponse = await fetch(`${GRAPH_BASE}/${mediaId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
-  const meta = await metaResponse.json().catch(() => ({})) as MetaMediaResponse
+  const meta = await metaResponse.json() as MetaMediaResponse
   if (!metaResponse.ok || meta.error || !meta.url || !meta.mime_type) {
     throw new Error(meta.error?.message ?? 'Failed to fetch WhatsApp media metadata')
   }

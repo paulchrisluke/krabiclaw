@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import sharp from 'sharp'
-import crypto from 'node:crypto'
 import { credentialSession } from './utils/e2e-auth.mjs'
+import { mcpToolCall } from './utils/mcp-request.mjs'
 
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -51,37 +50,8 @@ async function getAuthHeaders() {
   return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
 }
 
-async function mcp(headers, name, args = {}) {
-  // Plain JSON-RPC 2.0, as @modelcontextprotocol/server reads it: the method
-  // and tool come from the body. A `_meta['io.modelcontextprotocol/...']` key
-  // claims the modern envelope, which this request does not carry the rest of,
-  // so the server rejected every call as an invalid message.
-  const res = await fetch(`${BASE_URL}/api/mcp`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-      ...headers,
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `${name}-${Date.now()}`,
-      method: 'tools/call',
-      params: { name, arguments: args },
-    }),
-  })
-  // The transport may answer a single result as a one-event SSE stream.
-  const raw = await res.text()
-  const text = (res.headers.get('content-type') ?? '').includes('text/event-stream')
-    ? raw.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice('data:'.length).trim()).join('')
-    : raw
-  let body
-  try {
-    body = JSON.parse(text)
-  } catch {
-    body = text
-  }
-  return { status: res.status, body }
+function mcp(headers, name, args = {}) {
+  return mcpToolCall(BASE_URL, headers, name, args)
 }
 
 function data(body) {
@@ -96,22 +66,9 @@ function data(body) {
 }
 
 
-async function buildFixtureImageBase64() {
-  const width = 320
-  const height = 180
-  const noisyImageBuffer = await sharp(crypto.randomBytes(width * height * 3), {
-    raw: {
-      width,
-      height,
-      channels: 3,
-    },
-  }).jpeg({ quality: 92 }).toBuffer()
-
-  return {
-    rawBase64: noisyImageBuffer.toString('base64'),
-    dataUrl: `data:image/jpeg;base64,${noisyImageBuffer.toString('base64')}`,
-  }
-}
+// A public https image stands in for the file reference ChatGPT supplies for an
+// attached or generated image; the tool downloads it the same way.
+const FIXTURE_IMAGE = { download_url: 'https://krabiclaw.com/krabi-claw-logo.png', file_id: 'mcp-image-flow-fixture', mime_type: 'image/png', file_name: 'krabi-claw-logo.png' }
 
 async function assertResolvableImage(url, label) {
   const res = await fetch(url, { method: 'HEAD' })
@@ -122,13 +79,13 @@ async function assertResolvableImage(url, label) {
   })
 }
 
-async function assertSavedImage(headers, organizationId, imageData, label) {
-  const response = await mcp(headers, 'save_generated_image', {
+async function assertSavedImage(headers, organizationId, label) {
+  const response = await mcp(headers, 'save_media_attachment', {
     organization_id: organizationId,
-    image_data_base64: imageData,
-    prompt: `${label} prompt`,
+    file: FIXTURE_IMAGE,
+    description: `${label} image`,
   })
-  expectStatus(`${label} save_generated_image succeeds`, response)
+  expectStatus(`${label} save_media_attachment succeeds`, response)
   const payload = data(response.body)
   expectValue(`${label} returns asset_id`, Boolean(payload?.asset_id), payload)
   expectValue(`${label} returns public_url`, typeof payload?.public_url === 'string' && payload.public_url.startsWith('https://'), payload)
@@ -200,13 +157,12 @@ async function main() {
   if (!organizationId) throw new Error('Pass --organization-id for a disposable organization provisioned through local setup or the CMS.')
   if (!organizationId) process.exit(1)
 
-  const fixture = await buildFixtureImageBase64()
-  const rawBase64Image = await assertSavedImage(headers, organizationId, fixture.rawBase64, 'raw-base64')
-  const dataUrlImage = await assertSavedImage(headers, organizationId, fixture.dataUrl, 'data-url')
-  const assetId = rawBase64Image?.asset_id
-  const secondAssetId = dataUrlImage?.asset_id
-  expectValue('saved image fixture returns reusable asset_id', Boolean(assetId), rawBase64Image)
-  expectValue('saved image fixture returns second reusable asset_id', Boolean(secondAssetId), dataUrlImage)
+  const firstImage = await assertSavedImage(headers, organizationId, 'first')
+  const secondImage = await assertSavedImage(headers, organizationId, 'second')
+  const assetId = firstImage?.asset_id
+  const secondAssetId = secondImage?.asset_id
+  expectValue('saved image fixture returns reusable asset_id', Boolean(assetId), firstImage)
+  expectValue('saved image fixture returns second reusable asset_id', Boolean(secondAssetId), secondImage)
 
   const locationId = LOCATION_ID
   if (!locationId) throw new Error('Pass --location-id for a disposable location provisioned through the CMS.')

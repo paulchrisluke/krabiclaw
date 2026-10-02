@@ -337,22 +337,25 @@ test('simultaneous drains cannot sync one organization out of order', async (t) 
   }
   const now = new Date('2026-09-29T04:30:00.000Z')
   const first = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now })
+  let second: Promise<number>
   try {
     await firstEntered
     await insertInvalidation(db, {
       id: 'second', status: 'pending', attemptCount: 0, createdAt: '2026-09-29T04:01:00.000Z',
     })
-    await assert.rejects(
-      drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now }),
-      /processing cache or search index work remains|pending cache or search index work remains/,
-    )
+    // The second write's drain waits while the first holds the site.
+    second = drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now })
+    await new Promise(resolve => setTimeout(resolve, 300))
     assert.equal(providerReads, 1)
     assert.deepEqual(await db.prepare("SELECT status, attempt_count FROM public_resource_cache_invalidations WHERE id = 'second'").first(),
       { status: 'pending', attempt_count: 0 })
   } finally {
     releaseFirst()
   }
-  await assert.rejects(first, /pending cache or search index work remains/)
-  assert.equal(await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: 'org', now }), 1)
+  // Both writes become visible, one sync after the other.
+  const [firstProcessed, secondProcessed] = await Promise.all([first, second!])
+  assert.equal(firstProcessed + secondProcessed, 2)
   assert.equal(providerReads, 2)
+  assert.deepEqual(await db.prepare('SELECT id, status FROM public_resource_cache_invalidations ORDER BY id').all().then(result => result.results),
+    [{ id: 'first', status: 'processed' }, { id: 'second', status: 'processed' }])
 })

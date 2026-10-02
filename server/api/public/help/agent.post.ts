@@ -17,11 +17,9 @@ const IP_HOURLY_LIMIT = 30
 function logPublicHelpEventDetached(
   event: Parameters<typeof getCloudflareWaitUntil>[0], db: D1Database | undefined, input: Parameters<typeof logMcpToolCallEvent>[1], ) {
   if (!db) return
-  const promise = logMcpToolCallEvent(db, {
-    ...input, mcpSurface: 'public_help', })
   const waitUntil = getCloudflareWaitUntil(event)
-  if (waitUntil) waitUntil(promise)
-  else promise.catch(() => {})
+  if (!waitUntil) throw new Error('Help telemetry requires the Worker execution context')
+  waitUntil(logMcpToolCallEvent(db, { ...input, mcpSurface: 'public_help' }))
 }
 
 function parseAgentEnvelope(raw: string) {

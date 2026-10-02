@@ -11,14 +11,7 @@ inbox. Authorized MCP operations manage existing tenant resources on the same
 backend. A tool name alone does not establish plan availability, provider
 success, a quota or a customer-facing promise.
 
-## Product evidence
-
-The [feature library](docs/product/feature-library.json) is the canonical mapping
-from stable feature IDs to current availability, entitlement references, MCP
-operations, implementation evidence, tests and unresolved owner decisions.
-Read its [maintenance rules](docs/product/README.md) before adding a feature or
-using it to review a pricing comparison. Reference labels are internal vocabulary
-until approved for publication. The library does not supply paid marketing copy.
+## Plans
 
 Runtime identities are `free` and `growth`; one organization subscription covers
 its sites. Customer display names, Stripe product IDs, price IDs and lookup keys
@@ -32,7 +25,7 @@ are separate concepts. Renaming a plan label does not authorize an ID migration.
 | Starter presentation and CTAs | `server/utils/billing-plans.ts`; Starter has no Stripe subscription product |
 | Runtime entitlement policy | `server/utils/billing-entitlements.ts` |
 | Current organization access | Better Auth subscription rows read by `server/utils/billing-access.ts`, then the actual operation gate |
-| Feature mapping and verification | `docs/product/feature-library.json` |
+| Free/Growth comparison rows | `shared/pricing-comparison.ts`, reading the runtime entitlement policy |
 
 Paid billing surfaces consume `/api/billing/plans`. Entitlements grant capability,
 not presentation copy. An active/trialing subscription must satisfy the canonical

@@ -74,3 +74,40 @@ test('a v7 export transfers into the current baseline, its connections into orga
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+
+test('snapshot payload preserves destination signing keys for refreshes and carries source keys for replacements', async () => {
+  const { writePayload } = await import('../../scripts/transfer-database-export.mjs')
+  const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-signing-transfer-'))
+  const journal = JSON.parse(readFileSync('migrations/meta/_journal.json', 'utf8')) as { entries: Array<{ tag: string }> }
+  const schema = journal.entries.map(entry => readFileSync(`migrations/${entry.tag}.sql`, 'utf8')).join('\n')
+  const source = new Database(':memory:')
+  source.exec(schema)
+  source.prepare("INSERT INTO organization (id, name, slug, subdomain) VALUES ('org', 'Refreshed content', 'org', 'org')").run()
+  source.prepare('INSERT INTO jwks (id, publicKey, privateKey, createdAt) VALUES (?, ?, ?, ?)').run('source', 'fixture-public-source', 'fixture-private-source', 1)
+  try {
+    for (const withoutJwks of [true, false]) {
+      const destination = new Database(':memory:')
+      try {
+        destination.exec(schema)
+        destination.prepare('INSERT INTO jwks (id, publicKey, privateKey, createdAt) VALUES (?, ?, ?, ?)').run('destination', 'fixture-public-destination', 'fixture-private-destination', 2)
+        const payload = join(directory, `payload-${withoutJwks}.sql`)
+        writePayload(source, payload, schema, { withoutJwks })
+        destination.exec(readFileSync(payload, 'utf8'))
+        assert.deepEqual(destination.prepare('SELECT id, publicKey, privateKey, createdAt FROM jwks').all(), [{
+          id: withoutJwks ? 'destination' : 'source',
+          publicKey: withoutJwks ? 'fixture-public-destination' : 'fixture-public-source',
+          privateKey: withoutJwks ? 'fixture-private-destination' : 'fixture-private-source',
+          createdAt: withoutJwks ? 2 : 1,
+        }])
+        assert.equal(destination.prepare("SELECT name FROM organization WHERE id = 'org'").get().name, 'Refreshed content')
+        assert.deepEqual(destination.pragma('foreign_key_check'), [])
+      } finally {
+        destination.close()
+      }
+    }
+  } finally {
+    source.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

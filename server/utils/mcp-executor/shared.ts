@@ -28,79 +28,6 @@ export function resolveImageUploadProvider(contentType: string, env: ApiRecord):
   return provider as "cloudflare_r2" | "cloudflare_images" | undefined;
 }
 
-export async function resolveGeneratedImageUpload(
-  imageData: string,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const normalizedData = normalizeBase64Payload(imageData);
-  const dataUrlMatch = imageData.match(
-    /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/,
-  );
-  if (dataUrlMatch) {
-    const base64 = normalizeBase64Payload(dataUrlMatch[2] || "");
-    let bytes: Uint8Array;
-    try {
-      bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-    } catch {
-      throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid base64 image data in data URL.");
-    }
-    const contentType = validateImageBuffer(bytes, "base64 data URL input");
-    const extension = extensionForContentType(contentType);
-    return {
-      buffer: bytes.buffer as ArrayBuffer,
-      contentType,
-      filename: `ai-generated.${extension}`,
-    };
-  }
-
-  if (
-    /^\/mnt\/data\//.test(imageData) ||
-    /^\/tmp\//.test(imageData) ||
-    /^file:\/\//.test(imageData)
-  ) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "save_generated_image only accepts base64 image data or a data URL. Use save_generated_image_file for attachment-based uploads.",
-    );
-  }
-
-  let bytes: Uint8Array;
-  try {
-    bytes = Uint8Array.from(atob(normalizedData), (c) => c.charCodeAt(0));
-  } catch {
-    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid base64 image data.");
-  }
-  const contentType = validateImageBuffer(bytes, "base64 input");
-  const extension = extensionForContentType(contentType);
-  return {
-    buffer: bytes.buffer as ArrayBuffer,
-    contentType,
-    filename: `ai-generated-${Date.now()}.${extension}`,
-  };
-}
-
-
-export function validateImageBuffer(
-  bytes: Uint8Array,
-  sourceLabel: string,
-): string {
-  if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw new HTTPError({
-      statusCode: 413,
-      statusMessage: `Invalid image payload from ${sourceLabel}: payload exceeds 20 MB limit.`,
-    });
-  }
-
-  const detectedContentType = detectImageContentType(bytes);
-  if (!detectedContentType) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `Invalid image payload from ${sourceLabel}: unsupported or unrecognized image bytes.`,
-    );
-  }
-
-  return detectedContentType;
-}
-
 export async function requireActiveImageAsset(
   db: D1Database,
   organizationId: string,
@@ -237,42 +164,6 @@ async function fetchToolFile(file: ToolFileReference, timeoutMs: number): Promis
       `Failed to download attachment ${file.file_id}: ${reason}`,
     );
   }
-}
-
-export async function resolveGeneratedImageFile(
-  file: ToolFileReference,
-): Promise<{ buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string }> {
-  const response = await fetchToolFile(file, 15_000);
-  if (!response.ok) {
-    throw new HTTPError({
-      statusCode: 400,
-      statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
-    });
-  }
-
-  const contentType =
-    file.mime_type ??
-    response.headers.get("content-type") ??
-    "application/octet-stream";
-  if (!contentType.startsWith("image/")) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `Attachment ${file.file_id} is not an image.`,
-    );
-  }
-
-  const buffer = await readMediaBufferWithLimit(
-    response,
-    `Attachment ${file.file_id}`,
-    MAX_IMAGE_BYTES,
-  );
-  const bytes = buffer;
-  const detectedContentType = validateImageBuffer(
-    bytes,
-    `attachment ${file.file_id}`,
-  );
-  const filename = safeAttachmentFilename(file, detectedContentType);
-  return { buffer, contentType: detectedContentType, filename };
 }
 
 export interface ResolvedMediaFile {
@@ -784,10 +675,6 @@ export function getDateString(date: Date): string {
   return day ?? "";
 }
 
-export function normalizeBase64Payload(value: string) {
-  return value.trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
-}
-
 export function detectImageContentType(bytes: Uint8Array): string | null {
   if (bytes.length >= 8 &&
       bytes[0] === 0x89 &&
@@ -824,22 +711,6 @@ export function detectImageContentType(bytes: Uint8Array): string | null {
     }
   }
   return null;
-}
-
-export function extensionForContentType(contentType: string) {
-  switch (contentType) {
-    case "image/jpeg":
-      return "jpg";
-    case "image/webp":
-      return "webp";
-    case "image/gif":
-      return "gif";
-    case "image/svg+xml":
-      return "svg";
-    case "image/png":
-    default:
-      return "png";
-  }
 }
 
 export function assertDomainSuccess(result: {

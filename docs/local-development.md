@@ -104,6 +104,15 @@ authorized account (`--email` selects it). Remote targets also require an explic
 Only production runs the `social-card-backfill` task: staging sets
 `crons = []`, and it is bounded to a small number of owners per night.
 
+An explicitly requested ordinary staging refresh uses `corepack yarn db:pull:staging`.
+It reads production's default `DB` source and preserves staging's `jwks` signing
+keys. It performs a full content/data refresh, so do not run it for a scoped media
+repair or add it to recurring schedules or every deployment. Staging deploys
+apply migrations; they do not refresh production data. A same-environment
+replacement names its previous database with `--source`, carries that source's
+keys, and follows the release contract. Replacement deltas require an explicit
+source; production loads always require one.
+
 Local setup copies production through `db:pull:local`.
 One SQL read captures the tables and rows from the same database revision.
 D1 exports block concurrent application queries, so setup does not use that

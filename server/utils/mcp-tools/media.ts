@@ -57,7 +57,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'remove_media',
-      description: 'Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not currently attached is a harmless no-op — it does not change any other attached asset or its order.',
+      description: 'Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not attached changes nothing; other attached assets keep their order.',
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -96,7 +96,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_organization_media_assets',
-      description: 'List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
+      description: 'List the images, videos and Markdown files in the selected site’s media library, with the asset IDs set_media and attach_media take. A file still in the conversation is saved with save_media_attachment.',
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -108,8 +108,8 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       },
     }),
   organizationTool({
-      name: 'upload_user_media',
-      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. Stores the attachment in Cloudflare media storage with a public URL, even before assignment to a page. The returned asset_id is active. Every video requires poster_file so the asset always has thumbnail_url metadata.',
+      name: 'save_media_attachment',
+      description: "Save a file from the conversation to the selected site’s media library when the user asks: an image the user attached or generated, a video with its poster image, or a Markdown document. Requires the file reference supplied by the host. Creates an asset with a public URL; set_media or attach_media places it. Each call downloads once, so retrying an uncertain call can create a duplicate asset.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -136,7 +136,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_media_asset',
-      description: 'Update media metadata. Provide at least one of alt_text or category.',
+      description: "Change the selected asset’s alt text or library category. At least one field is required. Category organizes the library and does not assign media to a page.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -155,7 +155,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_media_asset',
-      description: 'Delete a media asset.',
+      description: "Delete the selected site media asset and remove its website placements. Deletes stored media when no other asset references it. Refused while a social publication pins the asset; published provider posts are not deleted.",
       domain: 'media',
       minimumRole: 'admin',
       confirmRequired: true,

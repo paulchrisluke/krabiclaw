@@ -4,7 +4,7 @@ import { pageInfoObject, paginationInputSchema, reviewObject, organizationTool }
 export const REVIEWS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'list_organization_reviews',
-    description: 'List tenant-wide reviews that are not associated with a location, including provenance and verification status.',
+    description: "Read site-wide reviews that have no location, including existing replies, provenance and verification status. This tool makes no changes.",
     domain: 'reviews',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -13,7 +13,7 @@ export const REVIEWS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
       name: 'list_location_reviews',
-      description: 'List reviews for a location.',
+      description: "Read reviews and existing replies for the selected location. Includes review provenance and verification status. Replies to imported Google reviews are managed in Google; this tool makes no changes.",
       domain: 'reviews',
       minimumRole: 'admin',
       confirmRequired: false,

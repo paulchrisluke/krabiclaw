@@ -16,8 +16,7 @@ page or inject a second paid catalog.
 `usePlans()` reads `getCachedPlans()` on the server and `/api/billing/plans` on the
 client. Stripe Product owns paid name, description, image, display metadata and
 `marketing_features`; Stripe Price owns actual amount, currency, cadence and
-identity. The free plan and CTAs are app-owned. The feature library is evidence
-and mapping; it does not replace Stripe marketing copy. The approved headline
+identity. The free plan and CTAs are app-owned. The approved headline
 remains in the current CMS hero block.
 
 [Read-only billing verification](billing-verification.json) records the current
@@ -92,8 +91,7 @@ The new `feature_grid` source `billing_features` selects canonical application
 capability comparison rows. It is semantic source selection, not a rendering flag,
 and adds no block type, route or database schema. `billing_plans` still owns the
 plan cards and the homepage keeps the original billing table presentation.
-Comparison IDs reference the separately reviewed feature library; published
-comparison copy is reviewed manually, never generated from MCP tool names.
+Published comparison copy is reviewed manually, never generated from MCP tool names.
 
 The supplied free portrait and Basic name are changed in the app-owned Starter
 source. Both decorative page photo fronts read the plan block’s canonical CMS

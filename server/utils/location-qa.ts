@@ -1,9 +1,10 @@
+import { HTTPError } from 'nitro'
 import { FAQ_BLOCK_SOURCES, type FaqBlockSource } from '~/shared/faq-block'
 import { getPersistedSourceLocale } from '~/server/utils/localization'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion } from '~/server/utils/content/documents'
 import { executeBatch, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
-import { d1JsonStringSet } from '../db/d1-limits.ts'
+import { d1JsonStringSet, d1JsonValue } from '../db/d1-limits.ts'
 
 export interface QaScope {
   organizationId: string
@@ -12,12 +13,12 @@ export interface QaScope {
 }
 
 export interface CreateQaInput {
-  question: string
-  answer?: string | null
-  question_author?: string | null
-  is_owner_answer?: boolean
-  sort_order?: number
-  status?: 'published' | 'hidden'
+  question: unknown
+  answer?: unknown
+  question_author?: unknown
+  is_owner_answer?: unknown
+  sort_order?: unknown
+  status?: unknown
 }
 
 export interface UpdateQaInput {
@@ -68,6 +69,41 @@ function stringOrNull(value: unknown, maxLength: number) {
   if (value == null) return null
   const normalized = String(value).trim()
   return normalized ? normalized.slice(0, maxLength) : null
+}
+
+function badQaInput(message: string): never {
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
+}
+
+async function assertQaScope(db: DbClient, scope: QaScope) {
+  if (scope.locationId !== null && (typeof scope.locationId !== 'string' || !scope.locationId.trim())) badQaInput('location_id must be a non-empty string or null')
+  if (scope.pagePath != null && typeof scope.pagePath !== 'string') badQaInput('page_path must be a string or null')
+  if (scope.locationId !== null && scope.pagePath != null) badQaInput('Pass location_id or page_path, not both')
+  const owner = scope.locationId === null
+    ? await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ?', [scope.organizationId])
+    : await queryFirst<{ id: string }>(db, 'SELECT id FROM business_locations WHERE organization_id = ? AND id = ?', [scope.organizationId, scope.locationId])
+  if (!owner) throw new HTTPError({ statusCode: 404, statusMessage: 'Q&A scope not found' })
+}
+
+/** Create and update accept the same values; omission on update retains them. */
+function normalizeQaInput(input: UpdateQaInput, creating = false) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) badQaInput('Invalid request body')
+  const normalized: UpdateQaInput = { ...input }
+  if (creating || input.question !== undefined) {
+    if (typeof input.question !== 'string' || !input.question.trim()) badQaInput('question required')
+    if (input.question.trim().length > 500) badQaInput('question must be 500 characters or fewer')
+    normalized.question = input.question.trim()
+  }
+  for (const [field, limit] of [['answer', 2000], ['question_author', 120]] as const) {
+    if (input[field] !== undefined) {
+      if (input[field] !== null && typeof input[field] !== 'string') badQaInput(`${field} must be a string or null`)
+      normalized[field] = stringOrNull(input[field], limit)
+    }
+  }
+  if (input.is_owner_answer !== undefined && typeof input.is_owner_answer !== 'boolean') badQaInput('is_owner_answer must be a boolean')
+  if (input.sort_order !== undefined && !Number.isSafeInteger(input.sort_order)) badQaInput('sort_order must be an integer')
+  if (input.status !== undefined && input.status !== 'published' && input.status !== 'hidden') badQaInput('Invalid Q&A status')
+  return normalized
 }
 
 /**
@@ -136,15 +172,12 @@ export async function attachPageQa<T extends { type: string; data: Record<string
  * among them — with no way left to correct a word.
  */
 export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInput) {
-  const question = input.question.trim()
-  if (!question) return { status: 400, data: { error: 'question required' } }
-  if (question.length > 500) return { status: 400, data: { error: 'question must be 500 characters or fewer' } }
-  const answer = stringOrNull(input.answer, 2000)
-  const status = input.status === 'hidden' ? 'hidden' : 'published'
-  const explicitSortOrder = input.sort_order === undefined ? null : Number(input.sort_order)
-  if (explicitSortOrder !== null && !Number.isInteger(explicitSortOrder)) {
-    return { status: 400, data: { error: 'sort_order must be an integer' } }
-  }
+  await assertQaScope(db, scope)
+  const normalized = normalizeQaInput(input, true)
+  const question = normalized.question as string
+  const answer = stringOrNull(normalized.answer, 2000)
+  const status = normalized.status === 'hidden' ? 'hidden' : 'published'
+  const explicitSortOrder = normalized.sort_order === undefined ? null : normalized.sort_order as number
 
   await getPersistedSourceLocale(db, scope.organizationId)
   const id = crypto.randomUUID()
@@ -154,9 +187,9 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
     id, rowRole: 'root', kind: 'qa', locale: 'en', organizationId: scope.organizationId,
     locationId: scope.locationId, scopePath: pagePath, status, source: 'manual', sortOrder: explicitSortOrder ?? 0,
     title: question, summary: answer,
-    metadata: { question_author: stringOrNull(input.question_author, 120),
+    metadata: { question_author: stringOrNull(normalized.question_author, 120),
       question_date: null, answer_author: null, answer_date: null,
-      is_owner_answer: input.is_owner_answer === false ? 0 : 1, upvote_count: 0 },
+      is_owner_answer: normalized.is_owner_answer === false ? 0 : 1, upvote_count: 0 },
   }, [], {
     additionalQueriesAfter: explicitSortOrder === null ? [{
       query: `UPDATE content_documents SET sort_order = (
@@ -191,16 +224,16 @@ export async function createQa(db: DbClient, scope: QaScope, input: CreateQaInpu
   }
 }
 
-export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updates: UpdateQaInput) {
+export async function updateQa(db: DbClient, scope: QaScope, qaId: string, input: UpdateQaInput) {
+  await assertQaScope(db, scope)
+  const updates = normalizeQaInput(input)
   const sets = ['updated_at = ?']
   const params: unknown[] = [new Date().toISOString()]
   const contentPaths: string[] = []
   const contentValues: unknown[] = []
   if (updates.question !== undefined) {
-    const question = String(updates.question ?? '').trim()
-    if (!question) throw new Error('Question is required')
     sets.push('title = ?')
-    params.push(question.slice(0, 500))
+    params.push(updates.question)
   }
   if (updates.answer !== undefined) {
     sets.push('summary = ?')
@@ -212,25 +245,21 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   }
   if (updates.is_owner_answer !== undefined) {
     contentPaths.push('$.is_owner_answer', '?')
-    contentValues.push(updates.is_owner_answer === false || updates.is_owner_answer === 0 ? 0 : 1)
+    contentValues.push(updates.is_owner_answer === false ? 0 : 1)
   }
   if (updates.status !== undefined) {
-    const status = String(updates.status)
-    if (!['published', 'hidden'].includes(status)) throw new Error('Invalid Q&A status')
     sets.push('status = ?')
-    params.push(status)
+    params.push(updates.status)
   }
   if (updates.sort_order !== undefined) {
-    const sortOrder = Number(updates.sort_order)
-    if (!Number.isInteger(sortOrder)) throw new Error('sort_order must be an integer')
     sets.push('sort_order = ?')
-    params.push(sortOrder)
+    params.push(updates.sort_order)
   }
   if (contentPaths.length) {
     sets.push(`metadata_json = json_set(metadata_json, ${contentPaths.map((value, index) => index % 2 === 0 ? `'${value}'` : value).join(', ')})`)
     params.push(...contentValues)
   }
-  if (sets.length === 1) throw new Error('No update fields provided')
+  if (sets.length === 1) badQaInput('No update fields provided')
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   params.push(qaId, scope.organizationId, ...scoped.params)
@@ -245,11 +274,12 @@ export async function updateQa(db: DbClient, scope: QaScope, qaId: string, updat
   `,
     params,
   }, publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-update')])
-  if (!Number(result?.meta.changes ?? 0)) throw new Error('Q&A not found')
+  if (!Number(result?.meta.changes ?? 0)) throw new HTTPError({ statusCode: 404, statusMessage: 'Q&A not found' })
   return { updated: true, qa_id: qaId }
 }
 
 export async function deleteQa(db: DbClient, scope: QaScope, qaId: string) {
+  await assertQaScope(db, scope)
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   const params = [qaId, scope.organizationId, ...scoped.params]
   const where = `row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}`
@@ -265,35 +295,42 @@ export async function reorderQa(
   scope: QaScope,
   updates: Array<{ id: string; sort_order: number }>,
 ) {
-  if (!updates.length || updates.some(update => !update.id || !Number.isInteger(update.sort_order))) {
-    throw new Error('Q&A reorder requires ids with integer sort_order values')
+  await assertQaScope(db, scope)
+  if (!Array.isArray(updates)) badQaInput('Q&A reorder requires an updates array')
+  if (!updates.length || updates.some(update => !update || typeof update.id !== 'string' || !update.id || !Number.isSafeInteger(update.sort_order))) {
+    badQaInput('Q&A reorder requires ids with integer sort_order values')
   }
   if (new Set(updates.map(update => update.id)).size !== updates.length) {
-    throw new Error('Q&A reorder ids must be distinct')
+    badQaInput('Q&A reorder ids must be distinct')
   }
 
   const scoped = scopeSql(scope.locationId, scope.pagePath)
   const validation = await queryFirst<{ valid_count: number }>(db, `
     SELECT COUNT(*) AS valid_count
     FROM content_documents
-    WHERE row_role = 'root' AND kind = 'qa' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND ${scoped.clause}
+    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id IN (SELECT value FROM json_each(?)) AND organization_id = ? AND ${scoped.clause}
   `, [d1JsonStringSet(updates.map(update => update.id)), scope.organizationId, ...scoped.params])
   if (Number(validation?.valid_count ?? 0) !== updates.length) {
-    throw new Error('Q&A reorder contains records outside the requested scope')
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Q&A reorder contains records outside the requested scope' })
   }
 
   const now = new Date().toISOString()
-  const results = await executeBatch(db, [...updates.map(update => ({
-    query: `
-      UPDATE content_documents
-      SET sort_order = ?, updated_at = ?
-      WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND id = ? AND organization_id = ? AND ${scoped.clause}
-    `,
-    params: [update.sort_order, now, update.id, scope.organizationId, ...scoped.params],
-  })), publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-reorder')])
-  const changed = results.slice(0, updates.length).reduce((sum: number, result: { meta: { changes?: number } }) => sum + Number(result.meta.changes ?? 0), 0)
+  const ids = d1JsonStringSet(updates.map(update => update.id))
+  // One guarded UPDATE: every requested row must still be manual and in scope
+  // at write time. A failed precondition changes no row, even after the read.
+  const [result] = await executeBatch(db, [{
+    query: `UPDATE content_documents SET sort_order = (
+      SELECT json_extract(value, '$.sort_order') FROM json_each(?) WHERE json_extract(value, '$.id') = content_documents.id
+    ), updated_at = ?
+    WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual' AND organization_id = ? AND ${scoped.clause}
+      AND id IN (SELECT value FROM json_each(?))
+      AND (SELECT count(*) FROM content_documents WHERE row_role = 'root' AND kind = 'qa' AND source = 'manual'
+        AND organization_id = ? AND ${scoped.clause} AND id IN (SELECT value FROM json_each(?))) = ?`,
+    params: [d1JsonValue(updates), now, scope.organizationId, ...scoped.params, ids, scope.organizationId, ...scoped.params, ids, updates.length],
+  }, publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-reorder')])
+  const changed = Number(result?.meta.changes ?? 0)
   if (changed !== updates.length) {
-    throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${changed} matched. Reload and try again.`)
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Q&A reorder changed concurrently. Reload and try again.' })
   }
   return { updated: updates.length }
 }

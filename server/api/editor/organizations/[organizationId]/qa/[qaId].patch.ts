@@ -11,13 +11,8 @@ export default defineHandler(async (event) => {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
-  try {
-    return jsonResponse(await updateQa(db, {
-      organizationId: organization.id, locationId: null, pagePath: typeof (body as ApiRecord).page_path === 'string' ? String((body as ApiRecord).page_path) : null, }, qaId, Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'page_path'))))
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Q&A update failed'
-    return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
-  }
+  return jsonResponse(await updateQa(db, {
+    organizationId: organization.id, locationId: null, pagePath: (body as { page_path?: string | null }).page_path ?? null, }, qaId, Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'page_path'))))
 })
 import { defineHandler } from 'nitro';
 import { getRouterParam, readBody  } from 'nitro/h3';
