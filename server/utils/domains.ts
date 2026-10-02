@@ -765,10 +765,10 @@ export async function syncDomainWithCloudflare(
   signal?: AbortSignal,
   options: { forceRevalidation?: boolean; leaseToken?: string } = {}
 ): Promise<DomainRecord> {
+  const leaseToken = options.leaseToken ?? crypto.randomUUID()
   try {
     signal?.throwIfAborted()
 
-    const leaseToken = options.leaseToken ?? crypto.randomUUID()
     const now = new Date().toISOString()
     const domain = await queryFirst<DomainRecord>(db, `
       UPDATE organization_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
@@ -808,6 +808,16 @@ export async function syncDomainWithCloudflare(
     })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
+    // A lease this call took is released with the reason, so a retry is not
+    // locked out until it expires. A caller that passed its own lease
+    // (the reconciliation scheduler) releases it and records the failure itself.
+    if (!options.leaseToken) {
+      await execute(db, `
+        UPDATE organization_domains SET error_message = ?, updated_at = ?,
+          reconciliation_token = NULL, reconciliation_expires_at = NULL
+        WHERE id = ? AND reconciliation_token = ?
+      `, [normalizedError.message, new Date().toISOString(), domainId, leaseToken])
+    }
     if (normalizedError.name === 'AbortError') {
       const abortError = new Error('Domain sync aborted')
       abortError.name = 'AbortError'

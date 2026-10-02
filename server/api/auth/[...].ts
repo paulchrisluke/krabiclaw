@@ -155,17 +155,22 @@ export default defineHandler(async (event) => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const metrics = getRequestDataMetrics(event)
     
-    console.error('[AUTH_HANDLER]', JSON.stringify({
-      event: 'auth_handler_failed',
-      request_id: metrics.requestId,
-      ray_id: (event.req.headers.get('cf-ray')) ?? null,
-      route: safeRoute(event),
-      method: event.req.method,
-      duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),
-      statement_count: metrics.statementCount,
-      d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
-      error_chain: errorChainForTelemetry(error),
-    }))
+    try {
+      console.error('[AUTH_HANDLER]', JSON.stringify({
+        event: 'auth_handler_failed',
+        request_id: metrics.requestId,
+        ray_id: (event.req.headers.get('cf-ray')) ?? null,
+        route: safeRoute(event),
+        method: event.req.method,
+        duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),
+        statement_count: metrics.statementCount,
+        d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
+        error_chain: errorChainForTelemetry(error),
+      }))
+    } catch (telemetryError) {
+      metrics.telemetryErrors.push(telemetryError instanceof Error ? telemetryError.message : String(telemetryError))
+    }
+
     if (error instanceof HTTPError) throw error
     
     throw new HTTPError({
