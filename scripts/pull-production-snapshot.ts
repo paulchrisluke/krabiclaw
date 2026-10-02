@@ -6,9 +6,9 @@
  * rows are copied into the current migration chain and audited before a target
  * is written.
  *
- * Only local development omits jwks: production keys are encrypted under the
- * production secret. A remote replacement carries its own source's jwks, so
- * existing signed tokens remain valid across the binding repoint.
+ * Local development and a normal production-to-staging refresh omit jwks:
+ * each destination retains its own signing keys. A same-environment replacement
+ * names its source and carries that source's jwks across the binding repoint.
  *
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --local
  *   node --experimental-strip-types scripts/pull-production-snapshot.ts --staging
@@ -40,7 +40,7 @@ import { printTransferReport, SCHEMA_OBJECTS_QUERY, transferDatabaseExport } fro
 // standing in front of `main` on data that does not resemble production is the
 // reason tenant rendering, booking and localisation defects kept reaching
 // production green. Staging is the same restore as local with `--env staging`;
-// it is never a target while its schema is already released.
+// ordinary refreshes retain staging signing keys; replacements retain source keys.
 const { values } = parseArgs({
   options: {
     local: { type: 'boolean', default: false },
@@ -57,11 +57,11 @@ const { values } = parseArgs({
 const loads = (['local', 'staging', 'production'] as const).filter(name => values[name])
 if (loads.length > 1 || (loads.length === 0 && !values.out)) throw new Error('Choose one of --local, --staging or --production, or --out <target.sqlite> alone for a preflight.')
 const target = loads[0] ?? 'out'
-const omitJwks = target === 'local'
+const omitJwks = target === 'local' || (target === 'staging' && values.source === 'DB')
 // Production is only ever loaded as a schema replacement: the top-level `DB`
 // binding already names the replacement, and the database it replaces has to
 // be named, or the source would be the destination.
-if ((target === 'staging' || target === 'production') && values.source === 'DB') {
+if ((target === 'production' || (target === 'staging' && values['delta-from'])) && values.source === 'DB') {
   throw new Error(`--${target} loads a replacement database; name that environment's previous database with --source <database>.`)
 }
 const deltaFrom = values['delta-from'] ? resolve(values['delta-from']) : null
@@ -221,7 +221,7 @@ try {
       throw new Error(`${target} import did not return a successful D1 result`)
     }
     if (!deltaFrom) {
-      // The local payload deliberately leaves this environment's signing keys
+      // Cross-environment payloads deliberately leave the destination's signing keys
       // untouched. Verify only the tables the payload actually replaces.
       const restoredTables = manifest.tables.filter(table => !(omitJwks && table.table === 'jwks'))
       // One row of scalar counts: D1 refuses a UNION ALL across every table
