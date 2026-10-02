@@ -110,4 +110,39 @@ test.describe('stateless MCP server', () => {
       }
     }
   })
+  test('product mutation responses preserve the canonical image and gallery', async ({ request, baseURL }, testInfo) => {
+    const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
+    type Product = { id: string; name: string; image: unknown; gallery: unknown[]; media: unknown[]; social_image: unknown }
+    const call = async <T>(toolName: string, args: Record<string, unknown>) => mcpData<T>(await (await mcpRequest(request, baseURL!, {
+      method: 'tools/call', toolName, args: { organization_id: MCP_GROWTH_ORGANIZATION_ID, ...args },
+    })).json())
+    let original: Product | undefined
+    try {
+      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      const listed = await call<{ products: Array<{ id: string }> }>('list_products', {})
+      for (const item of listed.products) {
+        const candidate = (await call<{ product: Product }>('get_product', { product_id: item.id })).product
+        if (candidate.image && candidate.gallery.length > 0) { original = candidate; break }
+      }
+      expect(original, 'seeded product with an image and gallery').toBeDefined()
+      const before = original!
+      const changed = (await call<{ product: Product }>('update_product', { product_id: before.id, name: `${before.name} MCP media check` })).product
+      expect(changed.name).toBe(`${before.name} MCP media check`)
+      for (const field of ['image', 'gallery', 'media', 'social_image'] as const) expect(changed[field]).toEqual(before[field])
+      const read = (await call<{ product: Product }>('get_product', { product_id: before.id })).product
+      for (const field of ['image', 'gallery', 'media', 'social_image'] as const) expect(changed[field]).toEqual(read[field])
+    } finally {
+      try {
+        if (original) {
+          const restored = (await call<{ product: Product }>('update_product', { product_id: original.id, name: original.name })).product
+          expect(restored.name).toBe(original.name)
+          expect(restored.image).toEqual(original.image)
+          expect(restored.gallery).toEqual(original.gallery)
+        }
+      } finally {
+        await releaseTenantMutationLock()
+      }
+    }
+  })
+
 })
