@@ -330,7 +330,7 @@ export async function reorderQa(
   }, publicResourceCacheInvalidationQuery(scope.organizationId, 'qa-reorder')])
   const changed = Number(result?.meta.changes ?? 0)
   if (changed !== updates.length) {
-    throw new Error(`Q&A reorder failed: expected ${updates.length} item(s) to update but only ${changed} matched. Reload and try again.`)
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Q&A reorder changed concurrently. Reload and try again.' })
   }
   return { updated: updates.length }
 }
