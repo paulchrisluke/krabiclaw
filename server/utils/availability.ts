@@ -558,11 +558,13 @@ export interface SessionAllocationInput {
   replacingBookingId?: string | null
   /** Only authenticated capture reconciliation supplies this; public callers cannot exclude holds. */
   capturedPaymentId?: string
+  /** Authenticated automatic capture time; delivery time still checks current capacity. */
+  capturedAt?: string
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
 }
 
 export function sessionAllocationPredicate(input: SessionAllocationInput): BatchQuery {
-  return { query: `${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND h.status='active' AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
+  return { query: `${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND p.refunded_amount=0 AND h.status IN ('active','released') AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
         : ''}EXISTS (
@@ -583,7 +585,7 @@ export function sessionAllocationPredicate(input: SessionAllocationInput): Batch
             WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
           ), 0))
       )`, params: [
-      ...(input.capturedPaymentId ? [input.capturedPaymentId,input.organizationId,input.now,input.sessionId,input.partySize] : []),
+      ...(input.capturedPaymentId ? [input.capturedPaymentId,input.organizationId,input.capturedAt ?? input.now,input.sessionId,input.partySize] : []),
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
@@ -631,6 +633,8 @@ export function sessionClaimQuery(input: {
    */
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
   capturedPaymentId?: string
+  /** Authenticated automatic capture time; delivery time still checks current capacity. */
+  capturedAt?: string
   now: string
 }): BatchQuery {
   return {

@@ -6,7 +6,8 @@ import {generateSQLiteDrizzleJson,generateSQLiteMigration} from 'drizzle-kit/api
 import * as schema from '../../server/db/schema.ts'
 import {sessionAllocationPredicate,claimSessionCapacity} from '../../server/utils/availability.ts'
 import {executeGuestThreadOperation} from '../../server/domain/guest-threads/operations.ts'
-import {requestInsertQueries,threadPayloadForGuest} from '../../server/domain/requests.ts'
+import {requestBookingChange} from '../../server/domain/guest-threads/booking-changes.ts'
+import {getGuestRequest,requestInsertQueries,threadPayloadForGuest} from '../../server/domain/requests.ts'
 import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAuthorization,refundPayment,reconcileRefundState} from '../../server/domain/payments/index.ts'
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
@@ -66,6 +67,23 @@ test('expired hold late capture refunds full principal and retains captured-volu
   assert.equal(await db.prepare('SELECT amount FROM payment_usage_events').first('amount'),10000)
  }finally{await runtime.dispose()}
 })
+test('timely capture delivered after hold release converts only while current capacity remains', {timeout:120000},async()=>{
+ for(const occupied of [false,true]){
+  const {db,runtime}=await boot();try{
+   await payable(db,'delayed','2026-10-01T01:00:00.000Z')
+   await db.prepare("UPDATE payment_checkout_holds SET status='released'").run()
+   if(occupied)await claimSessionCapacity(db,{organizationId:ORG,productId:'product',sessionId:'session',productVariantId:'variant',partySize:1,userId:'other'})
+   const p=provider('delayed')
+   await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'delayed'),p.intent)
+   await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'delayed'),p.intent)
+   assert.equal(await db.prepare('SELECT COUNT(*) n FROM bookings').first('n'),1)
+   assert.equal(await db.prepare('SELECT status FROM payment_checkout_holds').first('status'),occupied?'released':'converted')
+   assert.equal(p.refunds(),occupied?1:0)
+   assert.equal(await db.prepare('SELECT refunded_amount FROM payments').first('refunded_amount'),occupied?10000:0)
+   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_usage_events').first('n'),1)
+  }finally{await runtime.dispose()}
+ }
+})
 test('native financial identity mismatches cannot capture or allocate', {timeout:120000},async()=>{
  const {db,runtime}=await boot();try{await payable(db,'scope');const p=provider('scope'),payment=await requirePayment(db,ORG,'scope')
   for(const override of [{livemode:true},{currency:'thb'},{metadata:{krabiclaw_payment_id:'other'}},{amount_received:9999}])await assert.rejects(()=>reconcilePaymentIntent(db,p.stripe,payment, {...p.intent,...override} as Stripe.PaymentIntent))
@@ -108,6 +126,10 @@ test('paid review rejection requires fresh browser approval and commits release 
   await db.prepare("UPDATE payment_checkout_holds SET request_id='request' WHERE payment_id='reject'").run()
   const p=provider('reject');await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'reject'),p.intent)
   const input={threadId:'request',organizationId:ORG,action:'reject',actorUserId:'verified',idempotencyKey:'reject-once',env:{NUXT_PUBLIC_PLATFORM_DOMAIN:'https://proof.example',EMAIL_REPLY_SECRET:'proof',EMAIL_DELIVERY_MODE:'log_only'}}
+  await db.prepare("INSERT INTO product_sessions(id,organization_id,product_id,timezone,starts_at,ends_at,capacity,status,created_by,updated_by) VALUES('paid-change-session',?,'product','America/New_York',?,?,3,'scheduled','guest','guest')").bind(ORG,new Date(Date.now()+86400000).toISOString(),new Date(Date.now()+90000000).toISOString()).run()
+  const thread=await getGuestRequest(db,'request',ORG);assert(thread)
+  await assert.rejects(()=>requestBookingChange(db,{...input.env,DB:db,BETTER_AUTH_URL:'https://proof.example',BETTER_AUTH_SECRET:'local-proof-secret-long-enough-for-auth',STRIPE_SECRET_KEY:'sk_test_local_d1_no_stripe_requests'},thread,'verified',{kind:'booking',sessionId:'paid-change-session',partySize:2,expectedUpdatedAt:thread.updated_at},'paid-size-change'),/Refund the paid booking before changing its quantity or location/)
+  assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE event_name='booking.change.requested'").first('n'),0)
   await assert.rejects(()=>executeGuestThreadOperation(db,input),error=>{
    const result=mcpFinancialApprovalErrorResult(error,'https://proof.example','Paid rejection requires explicit approval')
    assert(result?.isError)

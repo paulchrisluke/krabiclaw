@@ -11,6 +11,13 @@ interface Hold {
 /** Provider retrieval, account/mode and frozen money checks precede every conversion. */
 export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:Payment,intent:Stripe.PaymentIntent) {
   if (intent.livemode !== Boolean(payment.livemode) || intent.currency.toUpperCase() !== payment.currency || intent.metadata.krabiclaw_payment_id !== payment.id || (payment.stripe_payment_intent_id && payment.stripe_payment_intent_id !== intent.id)) throw new Error('Stripe PaymentIntent financial identity mismatch')
+  // Settled refunds never re-enter booking conversion. Recovery remains retryable
+  // through its durable refund intent after an interrupted native response.
+  if (payment.state === 'refunded') return
+  if (payment.state === 'recovery') {
+    await executeRefund(db,stripe,payment,payment.captured_amount,`unfulfillable:${intent.id}`,'requested_by_customer',null)
+    return
+  }
   const attempt=await queryFirst<{stripe_checkout_id:string}>(db,'SELECT stripe_checkout_id FROM payment_attempts WHERE payment_id=? AND stripe_checkout_id IS NOT NULL ORDER BY created_at DESC LIMIT 1',[payment.id])
   if(!attempt) throw new Error('PaymentIntent has no authorized checkout attempt')
   const checkout=await stripe.checkout.sessions.retrieve(attempt.stripe_checkout_id,{expand:['line_items.data.price']},{stripeAccount:payment.stripe_account_id})
@@ -33,14 +40,16 @@ export async function reconcilePaymentIntent(db:DbClient,stripe:Stripe,payment:P
     {query:"UPDATE payments SET stripe_payment_intent_id=?,captured_amount=?,tax_amount=?,state=CASE WHEN state IN ('refunded','recovery') THEN state ELSE 'captured' END,updated_at=? WHERE id=? AND organization_id=?",params:[intent.id,intent.amount_received,checkout.total_details?.amount_tax??0,now,payment.id,payment.organization_id]},
     {query:"INSERT OR IGNORE INTO payment_usage_events(id,organization_id,payment_id,kind,currency,amount,source_id,provider_occurred_at,created_at) VALUES(?,?,?,'captured_volume',?,?,?,?,?)",params:[crypto.randomUUID(),payment.organization_id,payment.id,payment.currency,intent.amount_received,`capture:${payment.stripe_account_id}:${payment.livemode}:${intent.id}`,new Date(charge.created*1000).toISOString(),now]},
   ],{operation:'Record authenticated capture and usage'})
+  const recorded = await requirePayment(db,payment.organization_id,payment.id)
+  if (recorded.state === 'refunded' || recorded.refunded_amount > 0) return
   if (payment.subject_type !== 'booking') return
   const hold = await queryFirst<Hold>(db,'SELECT * FROM payment_checkout_holds WHERE payment_id=? AND organization_id=?',[payment.id,payment.organization_id])
   if (!hold) throw new Error('Captured booking payment has no durable hold')
   if (hold.status === 'converted') return
   const bookingId = crypto.randomUUID()
-  const claim = sessionClaimQuery({bookingId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id})
+  const claim = sessionClaimQuery({bookingId,organizationId:hold.organization_id,productId:hold.product_id,sessionId:hold.session_id,productVariantId:hold.variant_id,partySize:hold.quantity,userId:hold.buyer_user_id,requestId:hold.request_id,now,capturedPaymentId:payment.id,capturedAt:new Date(charge.created*1000).toISOString()})
   const results = await executeBatch(db,[claim,
-    {query:"UPDATE payment_checkout_holds SET status='converted',converted_booking_id=? WHERE id=? AND status='active' AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[bookingId,hold.id,bookingId]},
+    {query:"UPDATE payment_checkout_holds SET status='converted',converted_booking_id=? WHERE id=? AND status IN ('active','released') AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[bookingId,hold.id,bookingId]},
     {query:`INSERT INTO activity_entries(id,request_id,kind,scope_kind,actor_kind,event_name,payload_json,dedupe_key,sequence,occurred_at,created_at) SELECT ?,b.request_id,'operation','request','system','booking.created',json_object('operational_booking_id',b.id,'request_id',b.request_id,'afterStatus',b.status,'payment_id',?,'intent','booking.created'),?,COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id=b.request_id),0)+1,?,? FROM bookings b WHERE b.id=? AND b.request_id IS NOT NULL ON CONFLICT(dedupe_key) DO NOTHING`,params:[crypto.randomUUID(),payment.id,`booking:${bookingId}:created`,now,now,bookingId]},
     {query:'UPDATE payments SET subject_id=?,updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=?)',params:[bookingId,now,payment.id,bookingId]},
     {query: "UPDATE requests SET conversation_state='needs_attention',payload_json=json_set(payload_json,'$.payment.state','captured'),updated_at=? WHERE id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=?)",params:[now,hold.request_id,bookingId]},

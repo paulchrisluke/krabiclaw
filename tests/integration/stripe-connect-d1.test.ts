@@ -5,9 +5,11 @@ import { Miniflare } from 'miniflare'
 import * as schema from '../../server/db/schema.ts'
 import {
   buildStripeConnectOnboardingUrls,
+  createStripeConnectOnboardingLink,
   deriveStripeConnectStatus,
   ensureStripeConnectedAccount,
   getStripeConnectedAccount,
+  listStripeConnectCountries,
   projectStripeConnectedAccount,
   reserveStripeConnectedAccount,
 } from '../../server/utils/stripe-connect.ts'
@@ -203,4 +205,24 @@ test('Connect webhook work is claimed once across concurrent D1 deliveries', asy
     }>()
     assert.deepEqual(row, { processor: 'connect_marketplace', status: 'processed', attempt_count: 1 })
   })
+})
+
+// Never advertise a country the Accounts v2 onboarding boundary cannot accept.
+test('country chooser includes only currently supported US onboarding', async () => {
+  const stripe = { countrySpecs: { retrieve: async (country: string) => { assert.equal(country, 'US'); return { id: 'US' } } } }
+  assert.deepEqual(await listStripeConnectCountries(stripe as never), ['US'])
+})
+
+test('preview onboarding link uses supported native fields and rejects untrusted redirects', async () => {
+  const input = { stripeAccountId: 'acct_test_seller', returnUrl: 'https://proof.example/return', refreshUrl: 'https://proof.example/refresh' }
+  const stripe = { v2: { core: { accountLinks: { create: async (params: { account: string; use_case: { account_onboarding: Record<string, unknown> } }) => {
+    assert.equal(params.account, input.stripeAccountId)
+    assert.equal('configurations' in params.use_case.account_onboarding, false)
+    assert.equal(params.use_case.account_onboarding.return_url, input.returnUrl)
+    assert.equal(params.use_case.account_onboarding.refresh_url, input.refreshUrl)
+    return { url: 'https://accounts.stripe.com/r/acct_test_seller#alu_test_fixture' }
+  } } } } }
+  assert.equal(new URL(await createStripeConnectOnboardingLink(stripe as never, input)).origin, 'https://accounts.stripe.com')
+  stripe.v2.core.accountLinks.create = async () => ({ url: 'https://accounts.stripe.com.attacker.example/r/fixture' })
+  await assert.rejects(() => createStripeConnectOnboardingLink(stripe as never, input), /untrusted onboarding URL/)
 })

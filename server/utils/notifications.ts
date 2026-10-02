@@ -951,7 +951,7 @@ export async function notifyReviewRequest(
 export async function notifyBookingCreated(
   env: NotificationEnv,
   db: DbClient,
-  opts: BookingNotificationInput
+  opts: BookingNotificationInput & { status: 'pending' | 'confirmed' }
 ) {
   const studio = organizationName(opts)
   const prettyDate = new Intl.DateTimeFormat('en-US', { timeZone: opts.timezone, dateStyle: 'medium' }).format(new Date(opts.startsAt))

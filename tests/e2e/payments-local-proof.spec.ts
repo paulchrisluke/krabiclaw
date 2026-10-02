@@ -8,6 +8,16 @@ test('local Worker financial servicing, buyer ownership and signed payment ingre
  const origin=new URL(baseURL!).origin,authHeaders=authRequestHeaders(baseURL!)
  const signin=await page.request.post('/api/auth/sign-in/email',{headers:authHeaders,data:{email:'payments-proof-owner@playwright.example',password}})
  expect(signin.status(),await signin.text()).toBe(200)
+ // Real CMS/read API boundary with deliberately unconfigured provider credentials:
+ // this proves visible setup failure, never successful native onboarding.
+ const connect=await page.request.get('/api/dashboard/connect?org=payments-local-proof')
+ expect(connect.status(),await connect.text()).toBe(200)
+ expect(await connect.json()).toMatchObject({success:true,account:null})
+ await page.goto('/dashboard/payments-local-proof/settings/integrations/stripe')
+ await expect(page.getByRole('heading',{name:'Stripe',exact:true})).toBeVisible()
+ await expect(page.getByText('Stripe Connect is unavailable',{exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'Continue to Stripe',exact:true})).toBeDisabled()
+ await page.screenshot({path:'artifacts/payments-cms-onboarding-unconfigured.png',fullPage:true})
  const api='/api/dashboard/payments?org=payments-local-proof'
  const transactions=await page.request.get(api)
  expect(transactions.status(),await transactions.text()).toBe(200)

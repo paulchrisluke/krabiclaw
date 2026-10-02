@@ -61,13 +61,13 @@ export async function paymentSummary(db: DbClient, principal: FinancialPrincipal
 }
 
 /** Only an authenticated browser approval may approve this request. MCP receives a handoff. */
-export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number) {
+export async function requestRefundAuthorization(db: DbClient, principal: FinancialPrincipal, paymentId: string, amount: number, action: 'refund' | 'reject_booking' = 'refund') {
   await authorizePayments(principal, 'refund')
   assertMinorAmount(amount)
   const payment = await requirePayment(db, principal.organizationId, paymentId)
   if (amount > payment.captured_amount - payment.refunded_amount) throw new HTTPError({ statusCode: 409, statusMessage: 'Amount exceeds refundable principal' })
   const id = crypto.randomUUID()
-  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,expires_at) VALUES(?,?,?,?,'refund',?,?)`, [id, principal.organizationId, principal.userId, paymentId, amount, new Date(Date.now()+10*60*1000).toISOString()])
+  await execute(db, `INSERT INTO payment_authorizations(id,organization_id,user_id,payment_id,action,amount,expires_at) VALUES(?,?,?,?,?,?,?)`, [id, principal.organizationId, principal.userId, paymentId, action, amount, new Date(Date.now()+10*60*1000).toISOString()])
   return { authorization_id: id, payment_id: paymentId, amount, currency: payment.currency, confirmation_required: true }
 }
 export async function approveRefundAuthorization(db: DbClient, principal: FinancialPrincipal, id: string) {

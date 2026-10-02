@@ -149,6 +149,10 @@ async function validateDestination(db: DbClient, thread: GuestThreadRow, before:
     const booking = await queryFirst<{ product_variant_id: string; user_id: string | null }>(db,
       'SELECT product_variant_id, user_id FROM bookings WHERE id = ?', [before.recordId])
     if (!booking) throw new HTTPError({ statusCode: 409, message: 'The original booking is missing' })
+    if (after.partySize !== before.partySize || target.location_id !== before.locationId) {
+      const paid = await queryFirst(db, "SELECT id FROM payments WHERE organization_id=? AND subject_type='booking' AND subject_id=? AND captured_amount>refunded_amount LIMIT 1", [thread.organization_id, before.recordId])
+      if (paid) throw new HTTPError({ statusCode: 409, message: 'Refund the paid booking before changing its quantity or location' })
+    }
     const location = target.location_id
       ? await queryFirst<{ title: string }>(db, 'SELECT title FROM business_locations WHERE id = ? AND organization_id = ?', [target.location_id, thread.organization_id])
       : null

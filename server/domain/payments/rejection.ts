@@ -12,9 +12,7 @@ export async function rejectedBookingRefundQueries(db:DbClient,input:{organizati
  const amount=payment.captured_amount-payment.refunded_amount
  const approval=input.authorizationId?await queryFirst(db,"SELECT id FROM payment_authorizations WHERE id=? AND organization_id=? AND user_id=? AND payment_id=? AND action='reject_booking' AND amount=? AND approved_at IS NOT NULL AND consumed_at IS NULL AND expires_at>?",[input.authorizationId,input.organizationId,input.actorUserId,payment.id,amount,input.now]):null
  if(!approval){
-  const prepared=await requestRefundAuthorization(db,principal,payment.id,amount)
-  const {execute}=await import('~/server/db')
-  await execute(db,"UPDATE payment_authorizations SET action='reject_booking' WHERE id=?",[prepared.authorization_id])
+  const prepared=await requestRefundAuthorization(db,principal,payment.id,amount,'reject_booking')
   const org=await queryFirst<{slug:string}>(db,'SELECT slug FROM organization WHERE id=?',[input.organizationId])
   throw new HTTPError({statusCode:409,statusMessage:'Paid rejection requires explicit approval of the full principal refund',data:{financial_approval_url:`/dashboard/${encodeURIComponent(org!.slug)}/payments/refunds/approve?id=${prepared.authorization_id}`}})
  }

@@ -363,38 +363,25 @@ export async function createStripeConnectOnboardingLink(
     use_case: {
       type: 'account_onboarding',
       account_onboarding: {
-        configurations: ['merchant'],
         collection_options: { fields: 'eventually_due', future_requirements: 'include' },
         return_url: input.returnUrl,
         refresh_url: input.refreshUrl,
       },
     },
-  })
+  } as Stripe.V2.Core.AccountLinkCreateParams)
+  // The pinned preview removes the stable SDK's configurations input; the
+  // account's enabled configuration determines the hosted collection flow.
   const parsed = new URL(link.url)
-  if (parsed.protocol !== 'https:' || parsed.origin !== 'https://connect.stripe.com') {
+  if (parsed.protocol !== 'https:' || !['https://connect.stripe.com', 'https://accounts.stripe.com'].includes(parsed.origin)) {
     throw new Error('Stripe returned an untrusted onboarding URL')
   }
   return parsed.toString()
 }
 
 export async function listStripeConnectCountries(stripe: Stripe): Promise<string[]> {
-  const countries: string[] = []
-  let startingAfter: string | undefined
-  do {
-    const page = await stripe.countrySpecs.list({
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-    })
-    for (const country of page.data) {
-      countries.push(country.id.toUpperCase())
-    }
-    if (page.has_more) {
-      const lastCountry = page.data.at(-1)
-      if (!lastCountry) throw new Error('Stripe Country Specs pagination returned an empty page')
-      startingAfter = lastCountry.id
-    } else {
-      startingAfter = undefined
-    }
-  } while (startingAfter)
-  return countries.sort()
+  // Fetch only the country the current Accounts v2 managed-risk boundary accepts.
+  // Enumerating every Stripe country adds unrelated pagination to CMS onboarding.
+  const country = await stripe.countrySpecs.retrieve('US')
+  if (country.id.toUpperCase() !== 'US') throw new Error('Stripe returned an unexpected country specification')
+  return ['US']
 }

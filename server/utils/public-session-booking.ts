@@ -14,7 +14,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
              WHERE l.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1 AND l.status = 'active' ORDER BY l.id LIMIT 1)) AS timezone
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      JOIN product_booking_configs cfg ON cfg.product_id = p.id
+      JOIN product_booking_configs cfg ON cfg.product_id = p.id AND cfg.organization_id = p.organization_id
      WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
      LIMIT 1
   `, [organizationId, slug])
