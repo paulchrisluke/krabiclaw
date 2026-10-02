@@ -112,8 +112,10 @@ if (organizationId && isPublicSurface) {
     }),
     { server: true },
   )
-  if (error.value) console.error('[announcement-modal] failed to load public config', error.value)
-  announcement.value = isPublicAnnouncement(data.value?.announcement) ? data.value.announcement : null
+  if (error.value) throw createError(error.value)
+  const loaded = data.value!.announcement
+  if (loaded !== null && !isPublicAnnouncement(loaded)) throw createError({ statusCode: 500, statusMessage: 'The site announcement is invalid' })
+  announcement.value = loaded
 }
 
 const storageKey = computed(() => announcement.value

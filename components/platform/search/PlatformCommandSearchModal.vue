@@ -42,6 +42,7 @@
         </div>
 
         <div class="min-h-0 overflow-y-auto">
+          <p v-if="searchError" role="alert" class="px-5 py-4 text-sm">{{ searchError }}</p>
           <div v-if="query.trim() && loading" class="px-5 py-10 text-sm" :class="mutedTextClass">
             {{ searchingLabel }}
           </div>
@@ -51,7 +52,7 @@
             <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ emptyStateHint }}</p>
           </div>
 
-          <div v-else-if="results.length === 0" class="px-5 py-10">
+          <div v-else-if="!searchError && results.length === 0" class="px-5 py-10">
             <p class="text-sm font-medium" :class="defaultTextClass">{{ noResultsLabel }}</p>
             <p class="mt-2 text-sm leading-6" :class="mutedTextClass">{{ noResultsHint }}</p>
           </div>
@@ -103,6 +104,7 @@
 
 <script setup lang="ts">
 import { $fetch } from 'ofetch'
+import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { ComponentPublicInstance } from 'vue'
@@ -193,6 +195,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const query = ref('')
 const loading = ref(false)
+const searchError = ref<string | null>(null)
 const results = ref<PublicSearchResult[]>([])
 const selectedIndex = ref(0)
 const resultRefs = new Map<string, HTMLButtonElement>()
@@ -339,13 +342,19 @@ async function openSelectedResult() {
 
 async function openResult(result: PublicSearchResult) {
   try {
-    await router.push(result.path)
+    const failure = await router.push(result.path)
+    // Choosing the page already open is a completed selection.
+    if (failure && !isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+      searchError.value = 'Unable to open this result: ' + failure.message
+      return
+    }
     close()
     query.value = ''
+    searchError.value = null
     results.value = []
     selectedIndex.value = 0
-  } catch {
-    // Navigation failed - keep modal open for user to try again
+  } catch (error) {
+    searchError.value = 'Unable to open this result: ' + (error instanceof Error ? error.message : String(error))
   }
 }
 
@@ -353,6 +362,7 @@ let debounceHandle: ReturnType<typeof setTimeout> | null = null
 let requestSequence = 0
 
 async function runSearch() {
+  searchError.value = null
   const normalized = query.value.trim()
   if (!normalized) {
     requestSequence += 1
@@ -378,7 +388,7 @@ async function runSearch() {
     selectedIndex.value = 0
   } catch (error) {
     if (requestId !== requestSequence) return
-    console.error('Platform search failed:', error)
+    searchError.value = 'Search failed: ' + (error instanceof Error ? error.message : String(error))
     results.value = []
     selectedIndex.value = 0
   } finally {
@@ -404,6 +414,7 @@ watch(isOpen, async (openNow) => {
   if (!openNow) {
     requestSequence += 1
     query.value = ''
+    searchError.value = null
     results.value = []
     selectedIndex.value = 0
     loading.value = false

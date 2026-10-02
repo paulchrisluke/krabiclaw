@@ -15,7 +15,7 @@ import { createDb, execute, executeBatch, queryAll, schema, type BatchQuery } fr
 import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
 import { parsePhoneOrThrow } from '~/utils/phone'
-import { notifyNewUserSignup } from '~/server/utils/notification-center'
+import { createCanonicalNotification, notifyNewUserSignup } from '~/server/utils/notification-center'
 import { measurementOutcome, readPageEventId, recordAndDeliverConversion } from '~/server/utils/organization-conversions'
 import { getPlatformOrganization } from '~/server/utils/platform-organization'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
@@ -428,11 +428,17 @@ export function createAuth(env: CloudflareEnv) {
         await sendPasswordResetEmail(env, {
           email: user.email,
           resetUrl: url,
-        }).catch((error) => {
-          console.error('auth_reset_password_email_failed', {
-            email: user.email,
-            error,
+        }).catch(async (error) => {
+          // Better Auth keeps the reset response generic to prevent enumeration.
+          // Its callback failure must still be visible to platform operators.
+          await createCanonicalNotification(db, {
+            scope: 'global',
+            template: 'auth.reset_password_email_failed',
+            severity: 'error',
+            title: 'Password reset email failed',
+            message: error instanceof Error ? error.message : String(error),
           })
+          throw error
         })
       },
       onPasswordReset: async ({ user }) => {
@@ -447,11 +453,15 @@ export function createAuth(env: CloudflareEnv) {
         await sendVerificationEmail(env, {
           email: user.email,
           verificationUrl: url,
-        }).catch((error) => {
-          console.error('auth_verification_email_failed', {
-            email: user.email,
-            error,
+        }).catch(async (error) => {
+          await createCanonicalNotification(db, {
+            scope: 'global',
+            template: 'auth.verification_email_failed',
+            severity: 'error',
+            title: 'Verification email failed',
+            message: error instanceof Error ? error.message : String(error),
           })
+          throw error
         })
       },
     },

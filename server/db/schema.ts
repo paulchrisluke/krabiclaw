@@ -838,6 +838,17 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	weekday: integer().notNull(),
 	// Local wall-clock 'HH:MM'.
 	start_time: text().notNull(),
+	// A repeating slot: start_time, then every interval_minutes until the last
+	// start at or before end_time. Both null is a single start time, which is
+	// what a class is. A restaurant service is one row per weekday instead of
+	// one per seating.
+	end_time: text(),
+	interval_minutes: integer(),
+	interval_weeks: integer().default(1).notNull(),
+	effective_from_date: text(),
+	effective_until_date: text(),
+	duration_minutes: integer(),
+	capacity: integer(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -850,11 +861,25 @@ export const product_availability_rules = sqliteTable("product_availability_rule
 	// SQLite UNIQUE treats NULLs as distinct, so a single key over the nullable
 	// location_id would let a location-neutral rule be inserted repeatedly —
 	// the common case. Two partial indexes instead, one per location state.
-	uniqueIndex("product_availability_rules_slot_unique").on(table.product_id, table.location_id, table.weekday, table.start_time).where(sql`location_id IS NOT NULL`),
-	uniqueIndex("product_availability_rules_neutral_slot_unique").on(table.product_id, table.weekday, table.start_time).where(sql`location_id IS NULL`),
+	// effective_from_date is deliberately NOT part of the key: two rules for the
+	// same weekday and time differing only by effective window are an ambiguity
+	// about which one governs, not two distinct slots.
+	uniqueIndex("product_availability_rules_slot_unique").on(table.product_id, table.location_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NOT NULL`),
+	uniqueIndex("product_availability_rules_neutral_slot_unique").on(table.product_id, table.weekday, table.start_time, table.interval_weeks).where(sql`location_id IS NULL`),
 	index("product_availability_rules_product_idx").on(table.product_id, table.weekday, table.start_time),
 	check("product_availability_rules_weekday_check", sql`weekday BETWEEN 0 AND 6`),
 	check("product_availability_rules_start_time_check", sql`start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'`),
+	// end_time and interval_minutes are one feature: neither means anything
+	// alone, and a repeat that ends before it starts has no occurrences.
+	check("product_availability_rules_repeat_check", sql`(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)`),
+	check("product_availability_rules_interval_check", sql`interval_weeks >= 1`),
+	// A cadence longer than a week has to say from when, or "every other
+	// Saturday" means a different Saturday depending on the day generation
+	// happens to run. The anchor is the rule's own effective start.
+	check("product_availability_rules_anchor_check", sql`interval_weeks = 1 OR effective_from_date IS NOT NULL`),
+	check("product_availability_rules_dates_check", sql`(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)`),
+	check("product_availability_rules_duration_check", sql`duration_minutes IS NULL OR duration_minutes > 0`),
+	check("product_availability_rules_capacity_check", sql`capacity IS NULL OR capacity >= 0`),
 	check("product_availability_rules_timezone_check", sql`timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'`),
 ]);
 

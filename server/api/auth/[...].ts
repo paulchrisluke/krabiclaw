@@ -167,8 +167,8 @@ export default defineHandler(async (event) => {
         d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
         error_chain: errorChainForTelemetry(error),
       }))
-    } catch {
-      // Telemetry must never replace the auth response.
+    } catch (telemetryError) {
+      metrics.telemetryErrors.push(telemetryError instanceof Error ? telemetryError.message : String(telemetryError))
     }
 
     if (error instanceof HTTPError) throw error

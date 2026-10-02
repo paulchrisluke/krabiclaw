@@ -124,8 +124,9 @@ async function share() {
     try {
       await navigator.share({ title: 'Booking confirmed', text, url: window.location.origin })
       return
-    } catch {
-      // user cancelled the native share sheet — fall through to clipboard
+    } catch (error) {
+      // Cancelling the native share sheet falls through to the clipboard.
+      if (!(error instanceof DOMException && error.name === 'AbortError')) throw error
     }
   }
   if (import.meta.client && navigator.clipboard) {

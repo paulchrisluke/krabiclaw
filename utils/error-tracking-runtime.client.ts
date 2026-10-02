@@ -1,4 +1,4 @@
-import { useAnalytics } from '~/composables/useAnalytics'
+import { ErrorEventNotRecorded, useAnalytics } from '~/composables/useAnalytics'
 
 type VueErrorHandler = (_error: unknown, _instance: unknown, _info: string | undefined) => void
 
@@ -21,6 +21,7 @@ export function registerErrorTracking(): VueErrorHandler {
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason
+    if (reason instanceof ErrorEventNotRecorded) return
     const message = sanitizeMessage(reason instanceof Error ? reason.message : reason)
     trackError('unhandled_rejection', message)
   })

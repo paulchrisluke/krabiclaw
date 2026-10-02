@@ -435,8 +435,7 @@ export async function listCollectionProducts(db: DbClient, input: {
 export async function requireOrganizationProduct(db: DbClient, input: {
   organizationId: string; productId: string
 }): Promise<Product> {
-  const product = await getProduct(db, input.organizationId, input.productId).catch(() => null)
-  if (!product) notFound()
+  const product = await getProduct(db, input.organizationId, input.productId)
   if (!product.publications.some(entry => entry.organization_id === input.organizationId)) {
     notFound('This site does not carry that product')
   }

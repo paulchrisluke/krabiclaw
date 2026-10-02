@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "147d175b-2604-48e5-88ab-63f4865bc4af",
+  "id": "92d3b0e3-bc0d-4c57-b745-2fd7b56dfcc4",
   "prevId": "500f9c49-8c08-45ac-8794-67904ae07a1c",
   "tables": {
     "account": {
@@ -1306,7 +1306,7 @@
       "checkConstraints": {
         "bookings_status_check": {
           "name": "bookings_status_check",
-          "value": "status IN ('confirmed', 'cancelled')"
+          "value": "status IN ('pending', 'confirmed', 'cancelled')"
         },
         "bookings_instants_check": {
           "name": "bookings_instants_check",
@@ -5482,6 +5482,13 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "consultation_settings_json": {
+          "name": "consultation_settings_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -7029,6 +7036,56 @@
           "notNull": true,
           "autoincrement": false
         },
+        "end_time": {
+          "name": "end_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "interval_minutes": {
+          "name": "interval_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "interval_weeks": {
+          "name": "interval_weeks",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "effective_from_date": {
+          "name": "effective_from_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "effective_until_date": {
+          "name": "effective_until_date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duration_minutes": {
+          "name": "duration_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "capacity": {
+          "name": "capacity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -7067,7 +7124,8 @@
             "product_id",
             "location_id",
             "weekday",
-            "start_time"
+            "start_time",
+            "interval_weeks"
           ],
           "isUnique": true,
           "where": "location_id IS NOT NULL"
@@ -7077,7 +7135,8 @@
           "columns": [
             "product_id",
             "weekday",
-            "start_time"
+            "start_time",
+            "interval_weeks"
           ],
           "isUnique": true,
           "where": "location_id IS NULL"
@@ -7160,6 +7219,30 @@
           "name": "product_availability_rules_start_time_check",
           "value": "start_time GLOB '[0-2][0-9]:[0-5][0-9]' AND start_time < '24:00'"
         },
+        "product_availability_rules_repeat_check": {
+          "name": "product_availability_rules_repeat_check",
+          "value": "(end_time IS NULL) = (interval_minutes IS NULL) AND (end_time IS NULL OR (end_time GLOB '[0-2][0-9]:[0-5][0-9]' AND end_time < '24:00' AND end_time > start_time)) AND (interval_minutes IS NULL OR interval_minutes > 0)"
+        },
+        "product_availability_rules_interval_check": {
+          "name": "product_availability_rules_interval_check",
+          "value": "interval_weeks >= 1"
+        },
+        "product_availability_rules_anchor_check": {
+          "name": "product_availability_rules_anchor_check",
+          "value": "interval_weeks = 1 OR effective_from_date IS NOT NULL"
+        },
+        "product_availability_rules_dates_check": {
+          "name": "product_availability_rules_dates_check",
+          "value": "(effective_from_date IS NULL OR date(effective_from_date, '+0 days') IS effective_from_date) AND (effective_until_date IS NULL OR date(effective_until_date, '+0 days') IS effective_until_date) AND (effective_from_date IS NULL OR effective_until_date IS NULL OR effective_until_date >= effective_from_date)"
+        },
+        "product_availability_rules_duration_check": {
+          "name": "product_availability_rules_duration_check",
+          "value": "duration_minutes IS NULL OR duration_minutes > 0"
+        },
+        "product_availability_rules_capacity_check": {
+          "name": "product_availability_rules_capacity_check",
+          "value": "capacity IS NULL OR capacity >= 0"
+        },
         "product_availability_rules_timezone_check": {
           "name": "product_availability_rules_timezone_check",
           "value": "timezone <> '' AND timezone NOT GLOB '*[^A-Za-z0-9/_+-]*'"
@@ -7226,6 +7309,36 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "confirmation_mode": {
+          "name": "confirmation_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'instant'"
+        },
+        "online_payment_required": {
+          "name": "online_payment_required",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "online_timezone": {
+          "name": "online_timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "calendar_group": {
+          "name": "calendar_group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -7282,6 +7395,18 @@
         "product_booking_configs_capacity_check": {
           "name": "product_booking_configs_capacity_check",
           "value": "default_capacity IS NULL OR default_capacity >= 0"
+        },
+        "product_booking_configs_confirmation_check": {
+          "name": "product_booking_configs_confirmation_check",
+          "value": "confirmation_mode IN ('instant', 'review')"
+        },
+        "product_booking_configs_payment_check": {
+          "name": "product_booking_configs_payment_check",
+          "value": "online_payment_required IN (0, 1)"
+        },
+        "product_booking_configs_calendar_check": {
+          "name": "product_booking_configs_calendar_check",
+          "value": "calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)"
         }
       }
     },

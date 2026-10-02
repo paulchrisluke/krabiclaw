@@ -65,6 +65,11 @@ export interface ProductAvailabilityRule {
   timezone: string
   weekday: number
   start_time: string
+  interval_weeks: number
+  effective_from_date: string | null
+  effective_until_date: string | null
+  duration_minutes: number | null
+  capacity: number | null
 }
 
 export interface ProductSession {
@@ -175,19 +180,20 @@ export async function listAvailabilityRules(
   productId: string,
 ): Promise<ProductAvailabilityRule[]> {
   return queryAll<ProductAvailabilityRule>(db, `
-    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time
+    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time,
+           interval_weeks, effective_from_date, effective_until_date, duration_minutes, capacity
     FROM product_availability_rules
     WHERE organization_id = ? AND product_id = ?
     ORDER BY weekday, start_time, id
   `, [organizationId, productId])
 }
 
-function resolvedDuration(config: ProductBookingConfig): number {
-  const minutes = config.duration_minutes
+function resolvedDuration(rule: ProductAvailabilityRule, config: ProductBookingConfig): number {
+  const minutes = rule.duration_minutes ?? config.duration_minutes
   if (minutes === null) {
     throw new HTTPError({
       statusCode: 409,
-      statusMessage: 'Set a session length on the product before generating sessions',
+      statusMessage: 'Set a session length on the product or the rule before generating sessions',
     })
   }
   return minutes
@@ -272,20 +278,27 @@ export async function materializeSessions(db: DbClient, input: {
     if (!isValidTimezone(rule.timezone)) {
       throw new HTTPError({ statusCode: 409, statusMessage: `Rule ${rule.id} has an invalid timezone` })
     }
-    const duration = resolvedDuration(config)
-    const capacity = config.default_capacity
+    const duration = resolvedDuration(rule, config)
+    const capacity = rule.capacity ?? config.default_capacity
 
     // The window is expressed in the rule's own local calendar: a weekly slot
     // is a wall-clock fact, so walking UTC days would drift across DST.
     const today = localNow(rule.timezone).date
-    const from = [input.fromDate ?? today, today]
+    const from = [input.fromDate ?? today, rule.effective_from_date ?? '0000-01-01', today]
       .reduce((latest, value) => (value > latest ? value : latest))
-    const through = [input.throughDate, addLocalDays(today, MAX_GENERATION_DAYS)]
+    const through = [input.throughDate, rule.effective_until_date ?? '9999-12-31', addLocalDays(today, MAX_GENERATION_DAYS)]
       .reduce((earliest, value) => (value < earliest ? value : earliest))
     if (from > through) continue
 
     for (let date = from; date <= through; date = addLocalDays(date, 1)) {
       if (new Date(`${date}T00:00:00Z`).getUTCDay() !== rule.weekday) continue
+      if (rule.interval_weeks > 1) {
+        if (!rule.effective_from_date) throw new HTTPError({ statusCode: 500, statusMessage: `Rule ${rule.id} repeats every ${rule.interval_weeks} weeks with no effective start` })
+        const weeksSinceAnchor = Math.floor(
+          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${rule.effective_from_date}T00:00:00Z`)) / (7 * 86_400_000),
+        )
+        if (weeksSinceAnchor % rule.interval_weeks !== 0) continue
+      }
       const resolved = instantsFor(rule, date, duration)
       if ('reason' in resolved) { skipped.push(resolved); continue }
       planned += 1

@@ -83,8 +83,7 @@ test('consultation settings backfill preserves the full legacy object and refere
     db.exec(readFileSync('migrations/0001_message_attachments.sql', 'utf8'))
     const settings = { consultation: { mode: 'external_url', cta_label: 'Schedule', external_url: 'https://example.com/book', schedule_path: '/schedule', confirmation_path: '/confirmed', tracking_enabled: false, metadata_json: { custom: 'preserved' } }, config: { default_timezone: 'America/New_York' } }
     db.prepare('INSERT INTO organization (id,name,slug,createdAt,settings_json) VALUES (?,?,?,?,?)').run('consultation-migration', 'Example', 'consultation-migration', 1, JSON.stringify(settings))
-    db.exec(readFileSync('migrations/0003_minimal_weekly_schedule.sql', 'utf8'))
-    db.exec(readFileSync('migrations/0004_native_consultation_foundation.sql', 'utf8'))
+    db.exec(readFileSync('migrations/0002_native_consultation_foundation.sql', 'utf8'))
     const row = db.prepare('SELECT settings_json,consultation_settings_json FROM organization WHERE id = ?').get('consultation-migration') as { settings_json: string; consultation_settings_json: string }
     assert.deepEqual(JSON.parse(row.settings_json), settings)
     assert.deepEqual(JSON.parse(row.consultation_settings_json), settings.consultation)
