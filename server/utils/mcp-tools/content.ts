@@ -108,7 +108,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'list_tenant_pages',
-      description: 'List canonical tenant-page variants for one manually managed locale. Automated translation is not used; create or update each locale explicitly.',
+      description: "List authored site-page variants for the requested language, with their paths and document identities. Each language is managed explicitly; this tool does not generate translations.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -117,7 +117,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_tenant_page',
-      description: 'Get one canonical tenant-page variant, including its current document timestamp and blocks.',
+      description: "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -127,7 +127,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'create_tenant_page',
-      description: 'Create a manually authored tenant-page variant. A non-source locale must provide page_id for an existing source page; no automated translation is performed.',
+      description: "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -143,7 +143,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_tenant_page',
-      description: 'Replace canonical tenant-page content with optimistic concurrency. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      description: 'Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -160,7 +160,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'delete_tenant_page',
-      description: 'Delete a canonical tenant page. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
+      description: 'Delete the selected site page or translation. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
@@ -207,7 +207,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_reservation_policy',
-      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and the guest-facing rules. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
+      description: 'Create or amend the reservation policy for one location — the calendar settings\' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to "not stated", which is not a default.',
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -215,7 +215,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         location_id: { type: 'string' },
         locale: { type: 'string' },
         ...locationReservationConfigWriteSchema,
-        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.' },
+        cancellation_policy: { type: 'string', enum: CANCELLATION_TIER_IDS, description: 'Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.' },
       },
       required: ['location_id'],
       outputSchema: {

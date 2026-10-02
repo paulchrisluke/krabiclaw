@@ -1,5 +1,7 @@
 import { PUBLIC_BOOKING_WINDOW_DAYS } from '~/shared/bookings'
 import { HTTPError } from 'nitro'
+import { requireOrganizationProduct } from '~/server/utils/product-management'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   CAPACITY_CONSUMING_SQL,
@@ -59,11 +61,6 @@ export interface ProductAvailabilityRule {
   timezone: string
   weekday: number
   start_time: string
-  interval_weeks: number
-  effective_from_date: string | null
-  effective_until_date: string | null
-  duration_minutes: number | null
-  capacity: number | null
 }
 
 export interface ProductSession {
@@ -104,26 +101,65 @@ export async function requireBookingConfig(
   return row
 }
 
+/** Shared capability writer: omitted defaults stay stored; null clears and zero capacity closes seats. */
+export async function setProductBookingConfig(db: DbClient, input: {
+  organizationId: string; productId: string; actorId: string
+  patch: { duration_minutes?: unknown; default_capacity?: unknown }
+}): Promise<ProductBookingConfig> {
+  await requireOrganizationProduct(db, input)
+  if (!input.patch || typeof input.patch !== 'object' || Array.isArray(input.patch)) badRequest('Invalid request body')
+  for (const field of ['duration_minutes', 'default_capacity'] as const) {
+    const value = input.patch[field]
+    if (value !== undefined && value !== null && (!Number.isSafeInteger(value) || (value as number) < 0)) badRequest(`${field} must be a non-negative integer or null`)
+  }
+  if (input.patch.duration_minutes === 0) badRequest('duration_minutes must be positive')
+  const now = new Date().toISOString()
+  await executeBatch(db, [{
+    query: `INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_at, updated_at, created_by, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (product_id) DO UPDATE SET
+        duration_minutes = CASE WHEN ? THEN excluded.duration_minutes ELSE product_booking_configs.duration_minutes END,
+        default_capacity = CASE WHEN ? THEN excluded.default_capacity ELSE product_booking_configs.default_capacity END,
+        updated_at = excluded.updated_at, updated_by = excluded.updated_by
+      WHERE product_booking_configs.organization_id = excluded.organization_id`,
+    params: [input.productId, input.organizationId, input.patch.duration_minutes ?? null, input.patch.default_capacity ?? null,
+      now, now, input.actorId, input.actorId, input.patch.duration_minutes !== undefined ? 1 : 0, input.patch.default_capacity !== undefined ? 1 : 0],
+  }, publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config')], { operation: 'Set product booking config' })
+  return requireBookingConfig(db, input.organizationId, input.productId)
+}
+
+export async function deleteProductBookingConfig(db: DbClient, input: { organizationId: string; productId: string }): Promise<void> {
+  await requireOrganizationProduct(db, input)
+  const booked = await queryFirst<{ n: number }>(db, 'SELECT count(*) AS n FROM bookings WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])
+  if ((booked?.n ?? 0) > 0) throw new HTTPError({ statusCode: 409, statusMessage: 'This product has bookings. Leave bookings on and turn the product off instead.' })
+  await executeBatch(db, [{
+    query: `DELETE FROM product_booking_configs WHERE organization_id = ? AND product_id = ?
+      AND NOT EXISTS (SELECT 1 FROM bookings WHERE organization_id = ? AND product_id = ?)`,
+    params: [input.organizationId, input.productId, input.organizationId, input.productId],
+  }, publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config-delete')], { operation: 'Remove product booking config' })
+  const remaining = await queryFirst<{ product_id: string }>(db, 'SELECT product_id FROM product_booking_configs WHERE organization_id = ? AND product_id = ?', [input.organizationId, input.productId])
+  if (remaining) throw new HTTPError({ statusCode: 409, statusMessage: 'The booking configuration changed while it was being removed' })
+}
+
 export async function listAvailabilityRules(
   db: DbClient,
   organizationId: string,
   productId: string,
 ): Promise<ProductAvailabilityRule[]> {
   return queryAll<ProductAvailabilityRule>(db, `
-    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time,
-           interval_weeks, effective_from_date, effective_until_date, duration_minutes, capacity
+    SELECT id, organization_id, product_id, location_id, timezone, weekday, start_time
     FROM product_availability_rules
     WHERE organization_id = ? AND product_id = ?
     ORDER BY weekday, start_time, id
   `, [organizationId, productId])
 }
 
-function resolvedDuration(rule: ProductAvailabilityRule, config: ProductBookingConfig): number {
-  const minutes = rule.duration_minutes ?? config.duration_minutes
+function resolvedDuration(config: ProductBookingConfig): number {
+  const minutes = config.duration_minutes
   if (minutes === null) {
     throw new HTTPError({
       statusCode: 409,
-      statusMessage: 'Set a session length on the product or the rule before generating sessions',
+      statusMessage: 'Set a session length on the product before generating sessions',
     })
   }
   return minutes
@@ -186,12 +222,14 @@ export interface MaterializeSessionsResult {
 export async function materializeSessions(db: DbClient, input: {
   organizationId: string
   productId: string
+  locationId?: string | null
   fromDate?: string
   throughDate: string
   actorId: string
 }): Promise<MaterializeSessionsResult> {
   const config = await requireBookingConfig(db, input.organizationId, input.productId)
-  const rules = await listAvailabilityRules(db, input.organizationId, input.productId)
+  const rules = (await listAvailabilityRules(db, input.organizationId, input.productId))
+    .filter(rule => input.locationId === undefined || rule.location_id === input.locationId)
   if (rules.length === 0) return { created: 0, existing: 0, skipped: [] }
 
   assertAvailabilityDate(input.throughDate, 'through')
@@ -206,41 +244,31 @@ export async function materializeSessions(db: DbClient, input: {
     if (!isValidTimezone(rule.timezone)) {
       throw new HTTPError({ statusCode: 409, statusMessage: `Rule ${rule.id} has an invalid timezone` })
     }
-    const duration = resolvedDuration(rule, config)
-    const capacity = rule.capacity ?? config.default_capacity
+    const duration = resolvedDuration(config)
+    const capacity = config.default_capacity
 
     // The window is expressed in the rule's own local calendar: a weekly slot
     // is a wall-clock fact, so walking UTC days would drift across DST.
     const today = localNow(rule.timezone).date
-    const from = [input.fromDate ?? today, rule.effective_from_date ?? '0000-01-01', today]
+    const from = [input.fromDate ?? today, today]
       .reduce((latest, value) => (value > latest ? value : latest))
-    const through = [input.throughDate, rule.effective_until_date ?? '9999-12-31', addLocalDays(today, MAX_GENERATION_DAYS)]
+    const through = [input.throughDate, addLocalDays(today, MAX_GENERATION_DAYS)]
       .reduce((earliest, value) => (value < earliest ? value : earliest))
     if (from > through) continue
 
-    // A cadence longer than a week counts from the rule's own effective start,
-    // which the schema requires it to have. Counting from the generation
-    // window instead would move every other Saturday to the other Saturday
-    // whenever generation ran on a different day.
     for (let date = from; date <= through; date = addLocalDays(date, 1)) {
       if (new Date(`${date}T00:00:00Z`).getUTCDay() !== rule.weekday) continue
-      if (rule.interval_weeks > 1) {
-        if (!rule.effective_from_date) throw new HTTPError({ statusCode: 500, statusMessage: `Rule ${rule.id} repeats every ${rule.interval_weeks} weeks with no effective start` })
-        const weeksSinceAnchor = Math.floor(
-          (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${rule.effective_from_date}T00:00:00Z`)) / (7 * 86_400_000),
-        )
-        if (weeksSinceAnchor % rule.interval_weeks !== 0) continue
-      }
       const resolved = instantsFor(rule, date, duration)
       if ('reason' in resolved) { skipped.push(resolved); continue }
       planned += 1
       // A slot that was removed and added back meets its own old sessions at
       // the same instant: the removal cancelled the unbooked ones and left the
       // booked ones scheduled, and cut every one of them loose from the rule.
-      // Those orphans are adopted by the new rule (a cancelled one is scheduled
-      // again) rather than tripping the instant-unique index and failing the
-      // whole batch. A session another live rule owns, or one a merchant made
-      // by hand (no occurrence key), is left alone.
+      // Detached generated sessions without booking history retain the existing
+      // re-adoption behavior. Any booking, including cancelled history, protects
+      // every actual fact and the occurrence identity. The predicate is inside
+      // the UPSERT, so a claim arriving during generation protects the row too.
+      // A live rule's session or a hand-made session is also left alone.
       writes.push({
         query: `
           INSERT INTO product_sessions (
@@ -254,12 +282,14 @@ export async function materializeSessions(db: DbClient, input: {
             ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
             updated_at = excluded.updated_at, updated_by = excluded.updated_by
             WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)
           ON CONFLICT (product_id, starts_at) WHERE location_id IS NULL DO UPDATE SET
             availability_rule_id = excluded.availability_rule_id, source_occurrence_key = excluded.source_occurrence_key,
             status = CASE WHEN product_sessions.status = 'cancelled' THEN 'scheduled' ELSE product_sessions.status END,
             ends_at = excluded.ends_at, capacity = excluded.capacity, timezone = excluded.timezone,
             updated_at = excluded.updated_at, updated_by = excluded.updated_by
             WHERE product_sessions.availability_rule_id IS NULL AND product_sessions.source_occurrence_key IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)
         `,
         params: [
           crypto.randomUUID(), input.organizationId, input.productId, rule.location_id, rule.id,
@@ -279,14 +309,13 @@ export async function materializeSessions(db: DbClient, input: {
 export interface WeeklySlotInput {
   weekday: number
   start_time: string
-  capacity: number | null
 }
 
 /**
  * Replace a product's weekly schedule at one location.
  *
- * The schedule is the set of (weekday, time) slots the merchant runs, each
- * with its own places or the product's default. A slot that stays keeps its
+ * The schedule is the set of (weekday, time) slots the merchant runs, using
+ * the Product's duration and capacity. A slot that stays keeps its
  * rule — and with it every session and booking already hanging off it; a slot
  * that goes cancels its future sessions that nobody has booked, leaves the
  * booked ones as the commitments they are, and then removes the rule. A slot
@@ -298,23 +327,34 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
   organizationId: string
   productId: string
   locationId: string
-  timezone: string
-  slots: WeeklySlotInput[]
+  timezone?: string
+  slots: unknown
   actorId: string
 }): Promise<{ rules: ProductAvailabilityRule[]; sessions: MaterializeSessionsResult; cancelled: number }> {
-  if (!isValidTimezone(input.timezone)) badRequest('timezone must be a valid IANA zone')
+  await requireOrganizationProduct(db, input)
+  const location = await queryFirst<{ timezone: string | null }>(db, 'SELECT timezone FROM business_locations WHERE organization_id = ? AND id = ?', [input.organizationId, input.locationId])
+  if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found' })
+  if (!isValidTimezone(location.timezone)) throw new HTTPError({ statusCode: 409, statusMessage: "Set the location's timezone before scheduling sessions" })
+  const timezone = location.timezone
+  if (input.timezone !== undefined && input.timezone !== timezone) badRequest('timezone must match the location timezone')
+  if (!Array.isArray(input.slots)) badRequest('slots must be an array')
+  const slots: WeeklySlotInput[] = input.slots.map(entry => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) badRequest('each slot must be an object')
+    if (typeof entry.weekday !== 'number' || typeof entry.start_time !== 'string') badRequest('each slot needs a weekday and a start_time')
+    if (Object.keys(entry).some(key => key !== 'weekday' && key !== 'start_time')) badRequest('slots support only weekday and start_time; set duration and capacity on the product')
+    return { weekday: entry.weekday, start_time: entry.start_time }
+  })
   const seen = new Set<string>()
-  for (const slot of input.slots) {
+  for (const slot of slots) {
     if (!Number.isInteger(slot.weekday) || slot.weekday < 0 || slot.weekday > 6) badRequest('weekday must be 0 (Sunday) to 6 (Saturday)')
     assertLocalStartTime(slot.start_time)
-    if (slot.capacity !== null && (!Number.isSafeInteger(slot.capacity) || slot.capacity < 0)) badRequest('capacity must be a non-negative integer or null')
     const key = `${slot.weekday}:${slot.start_time}`
     if (seen.has(key)) badRequest(`The schedule lists ${slot.start_time} twice on the same day`)
     seen.add(key)
   }
   const config = await requireBookingConfig(db, input.organizationId, input.productId)
   // Weekly slots carry no duration of their own; they read the product's.
-  if (config.duration_minutes === null) badRequest('Set the session duration before adding a weekly schedule')
+  if (slots.length && config.duration_minutes === null) badRequest('Set the session duration before adding a weekly schedule')
 
   const existing = (await listAvailabilityRules(db, input.organizationId, input.productId))
     .filter(rule => rule.location_id === input.locationId)
@@ -323,46 +363,35 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
   const now = new Date().toISOString()
   const writes: BatchQuery[] = []
 
-  for (const slot of input.slots) {
+  for (const slot of slots) {
     const current = byKey.get(`${slot.weekday}:${slot.start_time}`)
     if (current) {
       kept.add(current.id)
-      // A kept slot is a weekly slot: the same defaults a new one is inserted
-      // with, so a rule that arrived with its own interval, dates or duration
-      // is brought back to the weekly shape rather than kept as an exception.
-      if (
-        current.capacity !== slot.capacity || current.timezone !== input.timezone
-        || current.interval_weeks !== 1 || current.effective_from_date !== null
-        || current.effective_until_date !== null || current.duration_minutes !== null
-      ) {
+      if (current.timezone !== timezone) {
         writes.push({
-          query: `UPDATE product_availability_rules
-                  SET capacity = ?, timezone = ?, interval_weeks = 1, effective_from_date = NULL,
-                      effective_until_date = NULL, duration_minutes = NULL, updated_at = ?, updated_by = ?
-                  WHERE organization_id = ? AND id = ?`,
-          params: [slot.capacity, input.timezone, now, input.actorId, input.organizationId, current.id],
+          query: `UPDATE product_availability_rules SET timezone = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND id = ?`,
+          params: [timezone, now, input.actorId, input.organizationId, current.id],
         })
       }
       continue
     }
     writes.push({
       query: `INSERT INTO product_availability_rules (
-                id, organization_id, product_id, location_id, timezone, weekday, start_time, interval_weeks,
-                effective_from_date, effective_until_date, duration_minutes, capacity, created_at, updated_at, created_by, updated_by
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?, ?, ?, ?)`,
-      params: [crypto.randomUUID(), input.organizationId, input.productId, input.locationId, input.timezone,
-        slot.weekday, slot.start_time, slot.capacity, now, now, input.actorId, input.actorId],
+                id, organization_id, product_id, location_id, timezone, weekday, start_time, created_at, updated_at, created_by, updated_by
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [crypto.randomUUID(), input.organizationId, input.productId, input.locationId, timezone,
+        slot.weekday, slot.start_time, now, now, input.actorId, input.actorId],
     })
   }
 
   const removed = existing.filter(rule => !kept.has(rule.id))
   for (const rule of removed) {
-    // Future sessions nobody holds a seat on go with the slot. A session with
-    // a booking stays scheduled: the guest was promised it.
+    // Only sessions with no booking history go with the slot. Cancelled
+    // bookings still belong to that session's history and protect its facts.
     writes.push({
       query: `UPDATE product_sessions SET status = 'cancelled', updated_at = ?, updated_by = ?
               WHERE organization_id = ? AND availability_rule_id = ? AND status = 'scheduled' AND starts_at > ?
-                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})`,
+                AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.organization_id = product_sessions.organization_id AND b.product_session_id = product_sessions.id)`,
       params: [now, input.actorId, input.organizationId, rule.id, now],
     })
     // The rule is the session's provenance, and the schema refuses to delete a
@@ -387,13 +416,14 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
     for (let index = 0; index < removed.length; index += 1) cancelled += results[first + index * 3]?.meta?.changes ?? 0
   }
 
-  const today = localNow(input.timezone).date
+  const today = localNow(timezone).date
   const sessions = await materializeSessions(db, {
-    organizationId: input.organizationId, productId: input.productId,
+    organizationId: input.organizationId, productId: input.productId, locationId: input.locationId,
     throughDate: addLocalDays(today, PUBLIC_BOOKING_WINDOW_DAYS), actorId: input.actorId,
   })
   const rules = (await listAvailabilityRules(db, input.organizationId, input.productId))
     .filter(rule => rule.location_id === input.locationId)
+  await executeBatch(db, [publicResourceCacheInvalidationQuery(input.organizationId, 'product-weekly-schedule')])
   return { rules, sessions, cancelled }
 }
 

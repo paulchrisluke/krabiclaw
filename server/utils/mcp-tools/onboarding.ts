@@ -4,7 +4,7 @@ import { fileReferenceObject, organizationTool } from './shared'
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'save_generated_image',
-      description: 'Upload a base64-encoded image to Cloudflare Images and persist a media_asset record with a public URL. Use ONLY when you already have a raw base64 string (e.g. from an external API). For ChatGPT native image_generation output, use save_generated_image_file instead — passing image_generation_call.result base64 here will be blocked by safety checks.',
+      description: "Save an existing base64-encoded generated image to the selected KrabiClaw site when the user requests it. Creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets. For an existing generated attachment, save_generated_image_file accepts its authorized file reference.",
       domain: 'onboarding',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -25,7 +25,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'save_generated_image_file',
-      description: 'Use this right after generating an AI photo for the user — "make me a photo", "create an image". Primary path for saving a ChatGPT natively-generated image to media storage with a public URL. After calling image_generation, pass the resulting image as attachment_id (a file reference). This avoids safety blocks that occur when raw base64 is passed to save_generated_image.',
+      description: "Save an existing generated image attachment to the selected KrabiClaw site when the user requests saving it there. Accepts an authorized file reference and creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets.",
       domain: 'onboarding',
       minimumRole: 'admin',
       confirmRequired: false,

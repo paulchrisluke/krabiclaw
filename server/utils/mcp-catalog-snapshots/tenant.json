@@ -1,9 +1,10 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:196ec4787841c33a162c4d848ecabb39ddae3ba49de116bcb9cfab9e68044351",
+  "fingerprint": "sha256:01b63442d8c92247fe161b4688f3fc728b097f924eab9301b0fc83a3c245c422",
   "tools": [
     {
       "name": "append_content_block",
+      "description": "Insert one block into a blog article or tenant page. Read the document first (get_blog_post, get_tenant_page): the writer says where the block goes by naming the block it follows in after_block_id — \"under this paragraph\" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article's cover. Returns the whole document so the next edit has every block's id and updated_at.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -176,6 +177,7 @@
     },
     {
       "name": "attach_media",
+      "description": "Attach one existing media asset to an ordered collection placement (a gallery or a compliance document list), appending it after the current last item. Rejects if the asset is already attached, or if the collection is full. For a single-valued placement (a cover, hero, or logo) use set_media instead.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -361,6 +363,7 @@
     },
     {
       "name": "batch_create_products",
+      "description": "Validate every row, then create all products atomically. Any invalid row rolls back the complete request.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -643,6 +646,38 @@
                 "active": {
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
+                },
+                "booking": {
+                  "properties": {
+                    "default_capacity": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "duration_minutes": {
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "organization_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "duration_minutes",
+                    "default_capacity"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "collections": {
                   "items": {
@@ -1125,6 +1160,7 @@
     },
     {
       "name": "block_dates",
+      "description": "Close a location for every day from one date to another, inclusive, so guests cannot book those days — the same closure the calendar's Block writes to the location's special hours. Whole days only. Existing closures and dated hours are kept.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1203,6 +1239,7 @@
     },
     {
       "name": "create_article_category",
+      "description": "Create a category in the blog or the documentation, at the top level or under another category (parent_id). It goes last among its siblings; place it with reorder_article_categories. Its slug comes from the name and does not change later.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1315,6 +1352,7 @@
     },
     {
       "name": "create_blog_post",
+      "description": "Create a draft blog or documentation article with ordered content_blocks. It stays private until published. A category in the selected collection is required for publication. Use a new idempotency_key for each article; retrying the same key returns the same article. The preview_url allows draft review.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1807,6 +1845,7 @@
     },
     {
       "name": "create_collection",
+      "description": "Create an empty collection. Products are added to it afterwards with set_collection_products.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1891,6 +1930,7 @@
     },
     {
       "name": "create_metafield_definition",
+      "description": "Define a product attribute: its name, type, constraints and whether it may be translated. Values are set on products through metafields.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -1999,6 +2039,7 @@
     },
     {
       "name": "create_post",
+      "description": "Create a short post as a draft: an optional title, the caption as body (plain text, newlines kept), ordered image or video media, an optional location and an optional call_to_action {label, url}. Nothing is public until publish_post. A draft may be empty; publishing needs words, media or a call to action. Event dates, offers and codes are written in the body. Pass a new idempotency_key per post: repeating a call with the same key returns the same post instead of a second one. Use create_blog_post for long-form articles.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2432,6 +2473,7 @@
     },
     {
       "name": "create_product",
+      "description": "Create a product with its options, variants and prices in the selected site’s catalog. Creation makes the site carry it but does not publish it; visibility and location offerings are set separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2699,6 +2741,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -3178,7 +3252,83 @@
       }
     },
     {
+      "name": "create_qa",
+      "description": "Create authored Q&A in the explicit site, page or location scope. Omitted sort_order appends. This creates a new record on every call and is not idempotent: do not automatically retry an uncertain response. Imported Google content remains managed in Google.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "question": {
+            "description": "Required non-empty question; at most 500 characters after trimming.",
+            "type": "string"
+          },
+          "question_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_tenant_page",
+      "description": "Create an authored site-page language variant. For a secondary language, page_id must name an existing source-language page. Content must be supplied for that language; this tool does not translate it.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3379,6 +3529,7 @@
     },
     {
       "name": "delete_article_category",
+      "description": "Delete an empty category. A category that still has articles or subcategories is refused with how many it holds: ask the user where they should go, move each article with update_blog_post (category_id) and each subcategory with update_article_category (parent_id), then delete it.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3414,6 +3565,7 @@
     },
     {
       "name": "delete_blog_post",
+      "description": "Permanently delete the selected blog or documentation article and its owned content. Use only when the user requests removing that article; a published article is removed from the website.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3450,6 +3602,7 @@
     },
     {
       "name": "delete_channel_post",
+      "description": "Permanently delete exactly the provider_post_id on the explicitly selected connected Facebook Page. Keeps the website post and marks its publication receipt removed. Read get_social_connections and list_channel_posts first. Instagram deletion is unavailable with this app's Instagram Login connection; delete Instagram posts in Instagram. Use delete_post to remove website content separately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3535,6 +3688,7 @@
     },
     {
       "name": "delete_collection",
+      "description": "Delete a collection. The products in it are untouched.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3565,6 +3719,7 @@
     },
     {
       "name": "delete_content_block",
+      "description": "Delete one block, and any blocks nested under it, from a blog article or tenant page. Requires the block's own updated_at from the last read.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3614,6 +3769,7 @@
     },
     {
       "name": "delete_media_asset",
+      "description": "Delete the selected site media asset and remove its website placements. Deletes stored media when no other asset references it. Refused while a social publication pins the asset; published provider posts are not deleted.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3644,6 +3800,7 @@
     },
     {
       "name": "delete_metafield_definition",
+      "description": "Remove an attribute from the vocabulary. Its value is removed from every product that carried it.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3674,6 +3831,7 @@
     },
     {
       "name": "delete_post",
+      "description": "Delete a post from the website. Its Facebook and Instagram posts are not deleted; use delete_channel_post for an explicit supported channel deletion. Refused while a publication of it is in progress or unresolved.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3708,6 +3866,7 @@
     },
     {
       "name": "delete_product",
+      "description": "Delete a product and everything it owns. Refused while a canonical product page still points at it.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3737,7 +3896,88 @@
       }
     },
     {
+      "name": "delete_product_booking_config",
+      "description": "Disable booking for a carried product. Refused whenever any booking history exists, including cancelled bookings.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_qa",
+      "description": "Delete authored Q&A and its content document tree in its explicit scope. Imported Google records are protected.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "qa_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "qa_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id",
+          "deleted"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "delete_resource_localization",
+      "description": "Permanently delete the requested language representation and its owned document and redirects. This localization tool does not delete Q&A; authored Q&A uses delete_qa. Billing is unchanged.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3810,6 +4050,7 @@
     },
     {
       "name": "delete_tenant_page",
+      "description": "Delete the selected site page or translation. Deleting a translation removes that translation; deleting the source locale removes the page and every translation with it, and the response names the locales that went. A page the site template renders cannot be deleted, because its route would then have nothing to show.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -3868,6 +4109,7 @@
     },
     {
       "name": "get_blog_post",
+      "description": "Read one blog or documentation article by ID or slug, including its ordered content_blocks and updated_at token. Use that token when editing or publishing the article.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4198,6 +4440,7 @@
     },
     {
       "name": "get_calendar",
+      "description": "What is on one location's calendar between two dates, as the dashboard calendar shows it: every reservation, experience booking and published post, plus which dates the location cannot take — its own closures, a location that is not active, and weekdays its hours never open. Dates are the location's local calendar days. At most 62 days per call.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4287,6 +4530,7 @@
     },
     {
       "name": "get_channel_post",
+      "description": "Read one live native provider post from the explicitly selected connected channel. provider_post_id comes from list_channel_posts; it is not a website post_id. Does not import or change website content.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4416,6 +4660,7 @@
     },
     {
       "name": "get_contact_inquiries",
+      "description": "Read the selected site’s contact form submissions, including names, contact details and messages. This tool does not send replies or change submission status; those actions use the dashboard inbox.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4476,6 +4721,7 @@
     },
     {
       "name": "get_location",
+      "description": "Read one selected site location, including its contact details, opening hours, timezone and media. Use its returned ID for location-specific changes.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -4570,7 +4816,7 @@
                 ]
               },
               "max_capacity": {
-                "description": "Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).",
+                "description": "Stored location capacity metadata; does not limit reservations. Reservation capacity uses location_reservation_configs.slot_capacity.",
                 "type": [
                   "number",
                   "null"
@@ -4919,6 +5165,7 @@
     },
     {
       "name": "get_organization",
+      "description": "Read the selected KrabiClaw site’s identity, public address and settings. organization_id is the internal ID returned by get_workspace_context or list_organizations, not a URL, domain or business name.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -5026,6 +5273,7 @@
     },
     {
       "name": "get_organization_analytics",
+      "description": "Read the selected site’s website traffic, attribution, conversion rates, booking values, verified purchase revenue, refunds and signup-cohort summaries. Dates are inclusive in the site’s timezone; the default is 30 days. Amounts are minor units per currency; booking quotes are not collected revenue. Cash amounts include tax, while value fields exclude it. Session conversion rates compare converting sessions with sessions in the same attribution group; signup counts and business counts use distinct populations.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -5951,6 +6199,7 @@
     },
     {
       "name": "get_organization_media_assets",
+      "description": "List uploaded images, videos, or Markdown files for a site. Use it first to find asset IDs before assigning image/video media with set_media. New user-provided media uses upload_user_media with a native ChatGPT attachment.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6085,6 +6334,7 @@
     },
     {
       "name": "get_organization_settings",
+      "description": "Read editable settings for the selected KrabiClaw site. Use its internal organization_id from get_workspace_context or list_organizations, not its public URL, domain or name.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6298,6 +6548,7 @@
     },
     {
       "name": "get_post",
+      "description": "Get one short post: its words, call to action, ordered media, website status, preview link for a draft, and each Facebook or Instagram publication with its exact state.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6612,6 +6863,7 @@
     },
     {
       "name": "get_product",
+      "description": "Read one site product with its options, variants, prices, publication, locations, collections, descriptive attributes and booking defaults. Prices belong to variants; booking defaults apply to new sessions.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -6635,6 +6887,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -7115,6 +7399,7 @@
     },
     {
       "name": "get_product_catalog_localization",
+      "description": "Read source Product fields and existing translations for one published secondary language. Collection names are translated separately with the resource-localization tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7154,6 +7439,7 @@
     },
     {
       "name": "get_reservation_inquiries",
+      "description": "Read table reservations for the selected site, optionally filtered by location and creation window of up to 90 days. Returns guest contact details, reservation details and status counts. Product session bookings are separate and use the dashboard inbox.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7276,6 +7562,7 @@
     },
     {
       "name": "get_reservation_policy",
+      "description": "Get the reservation policy for one location. A null policy means the location does not take reservations; there is no site-level policy underneath it.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7438,6 +7725,7 @@
     },
     {
       "name": "get_resource_localization",
+      "description": "Read the requested resource or document in exactly the named language. A missing translation returns not found rather than source-language content.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7646,6 +7934,7 @@
     },
     {
       "name": "get_social_connections",
+      "description": "Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), the supported channel operations, and the dashboard URL where a person connects it. Never returns a token.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7785,6 +8074,7 @@
     },
     {
       "name": "get_tenant_page",
+      "description": "Read one site-page language variant, including its path, title, ordered blocks and current timestamp. Use its returned IDs and concurrency information for edits.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -7815,6 +8105,7 @@
     },
     {
       "name": "get_workspace_context",
+      "description": "Read the active site and location and the sites available to the signed-in user. Use returned internal organization and location IDs to target site tools. URLs, domains and names are not IDs.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {},
@@ -7955,6 +8246,7 @@
     },
     {
       "name": "list_article_categories",
+      "description": "List categories and subcategories in one site blog or documentation collection, in public display order, with article and child-category counts. Published articles require a category in their collection.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8049,6 +8341,7 @@
     },
     {
       "name": "list_blog_posts",
+      "description": "List draft and published long-form articles in the selected site’s blog or documentation collection. Results are paginated in public display order. Short website posts are listed separately by list_posts.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8323,6 +8616,7 @@
     },
     {
       "name": "list_channel_posts",
+      "description": "Read live posts directly from the explicitly selected connected Facebook Page or Instagram professional account. Does not import website posts or media. Read get_social_connections first and supply the exact channel, target_id and connection_revision. next_after is Meta's cursor; pass it as after for the next page.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8467,6 +8761,7 @@
     },
     {
       "name": "list_collections",
+      "description": "List this organization merchandising collections, in the order guests see them. Omit location_id for every collection; send it to narrow to one location.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8539,6 +8834,7 @@
     },
     {
       "name": "list_location_products",
+      "description": "List the products offered at one explicit location.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8674,6 +8970,7 @@
     },
     {
       "name": "list_location_qa",
+      "description": "Read Q&A for an explicit location. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8759,6 +9056,7 @@
     },
     {
       "name": "list_location_reviews",
+      "description": "Read reviews and existing replies for the selected location. Includes review provenance and verification status. Replies to imported Google reviews are managed in Google; this tool makes no changes.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8895,6 +9193,7 @@
     },
     {
       "name": "list_locations",
+      "description": "List site locations in a compact format with ids, slugs, titles, and active-state markers so you can target location-scoped tools reliably.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -8984,6 +9283,7 @@
     },
     {
       "name": "list_metafield_definitions",
+      "description": "List the tenant descriptive product attribute vocabulary. Adding an attribute of a supported type is one definition here, not a schema change.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9058,6 +9358,7 @@
     },
     {
       "name": "list_organization_locales",
+      "description": "Read the site’s English source language and authored secondary languages. English is fixed as the source; this tool does not create or translate content.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9088,6 +9389,7 @@
     },
     {
       "name": "list_organization_qa",
+      "description": "Read general tenant Q&A, or only the specified page Q&A when page_path is provided. This tool lists authored and imported Q&A. Authored Q&A can be managed through the CMS and authored Q&A tools; imported Google question and answer content is managed in Google.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9175,6 +9477,7 @@
     },
     {
       "name": "list_organization_reviews",
+      "description": "Read site-wide reviews that have no location, including existing replies, provenance and verification status. This tool makes no changes.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9306,6 +9609,7 @@
     },
     {
       "name": "list_organizations",
+      "description": "List sites available to the signed-in user and the current account identity. Match the requested site against these results and use its internal ID; a public URL, domain or business name is not an organization_id.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9420,6 +9724,7 @@
     },
     {
       "name": "list_posts",
+      "description": "List website posts (not live Facebook or Instagram inventory), newest change first, a page at a time. Pass location_id for one location's posts; omit it for all of them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9772,6 +10077,7 @@
     },
     {
       "name": "list_products",
+      "description": "List products carried by the selected site, published or withheld. Results include products across the site; list_location_products narrows to one location.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9902,6 +10208,7 @@
     },
     {
       "name": "list_tenant_pages",
+      "description": "List authored site-page variants for the requested language, with their paths and document identities. Each language is managed explicitly; this tool does not generate translations.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -9965,6 +10272,7 @@
     },
     {
       "name": "open_dates",
+      "description": "Reopen a location for every day from one date to another, inclusive — the same as the calendar's Open. Every closure covering any of those days is cut around the range so the days outside it stay closed with their note; dated hours with no periods on those days are removed. Weekdays the regular hours never open stay closed: change opening_hours for that.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10036,6 +10344,7 @@
     },
     {
       "name": "publish_blog_post",
+      "description": "Publish the selected draft blog or documentation article when publication is requested. Requires expected_updated_at from the latest read. An already published article is unchanged, including its date and announcement.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10371,6 +10680,7 @@
     },
     {
       "name": "publish_post",
+      "description": "Publish a post to exactly the targets listed, and nowhere else: {\"channel\":\"organization\"} for the website, and {\"channel\":\"facebook\"|\"instagram\",\"target_id\",\"connection_revision\"} from get_social_connections. Returns one outcome per target; ok is true only when every target is published. Repeating the call returns the existing receipts and never posts twice. processing means Meta is still preparing the media: call publish_post again to finish the same post. unknown means the final step was not confirmed: resolve it with reconcile_post_publication, never by publishing again. A post is published once per channel; publish a new post for another Page or account. Facebook takes text, a link, photos or one video; Instagram takes one JPEG image, a carousel of up to ten items, or one video as a Reel, and shows the call to action as text.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10519,6 +10829,7 @@
     },
     {
       "name": "put_resource_localization",
+      "description": "Replace the requested resource’s translation in exactly the named language. Resource values replace that translation; document fields and blocks require expected_updated_at. This localization tool does not edit Q&A; authored Q&A uses its dedicated tools.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -10758,6 +11069,7 @@
     },
     {
       "name": "query_organization_analytics",
+      "description": "Read filtered events, sessions, grouped breakdowns or daily summaries from the selected site’s analytics. Results and totals cover the matching population without sampling. Dates are inclusive in the site timezone, default to 30 days and span at most 365. Grouped amount metrics require currency; conversion metrics require outcome_event and reject outcome-only dimensions. Daily summaries are derived rows, not individual events. Coverage reports missing facts rather than treating them as zero. Continue with next_cursor using the same query; null means complete.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11140,6 +11452,7 @@
     },
     {
       "name": "reconcile_post_publication",
+      "description": "Resolve a Facebook or Instagram publication whose outcome is unknown, or refresh one, by reading Meta: it records only what Meta's own answer proves, never publishes, and never accepts an assertion that something is published. Pass provider_post_id when you know the exact post it became; it must belong to the connected Page or account. What stays ambiguous stays unknown.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11185,6 +11498,7 @@
     },
     {
       "name": "reconcile_products",
+      "description": "Create and update the supplied products in one idempotent pass, keyed by product_id. Products omitted from the request are left alone unless deactivate_missing is true, which turns off their sale switch — it never deletes them and never claims they are sold out.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -11473,6 +11787,38 @@
                 "active": {
                   "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                   "type": "boolean"
+                },
+                "booking": {
+                  "properties": {
+                    "default_capacity": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "duration_minutes": {
+                      "minimum": 1,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "organization_id": {
+                      "type": "string"
+                    },
+                    "product_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "duration_minutes",
+                    "default_capacity"
+                  ],
+                  "type": [
+                    "object",
+                    "null"
+                  ]
                 },
                 "collections": {
                   "items": {
@@ -11955,6 +12301,7 @@
     },
     {
       "name": "remove_media",
+      "description": "Detach one media asset from an ordered collection placement (a gallery or a compliance document list). Removing an asset that is not currently attached is a harmless no-op — it does not change any other attached asset or its order.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12140,6 +12487,7 @@
     },
     {
       "name": "remove_product_location",
+      "description": "Stop offering a product at one location. The product and its other locations are untouched.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12167,6 +12515,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -12647,6 +13027,7 @@
     },
     {
       "name": "reorder_article_categories",
+      "description": "Set the order of one set of sibling categories on the public site — the index, its sidebar and the menu: the collection's top level (parent_id null or omitted), or one category's subcategories. Send every sibling id exactly once; a partial order is rejected.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -12756,6 +13137,7 @@
     },
     {
       "name": "reorder_blog_posts",
+      "description": "Replace the public display order of articles in one blog or documentation collection. Supply every article ID in that collection exactly once, including drafts. New articles with sort_order 0 appear first until ordered; category ordering is separate.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13003,6 +13385,7 @@
     },
     {
       "name": "reorder_collections",
+      "description": "Change the order of whole collections. Send every collection id in the scope exactly once, in the intended order; a partial order is rejected.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13084,6 +13467,7 @@
     },
     {
       "name": "reorder_media",
+      "description": "Reorder assets already attached to an ordered collection placement (a gallery or a compliance document list) without changing which assets are attached. Each move names one already-attached asset_id and, optionally, a before_asset_id or after_asset_id (also already attached) to move it next to; omit both to move it to the end. Moves apply in the order given. Rejects the entire call if any named asset or anchor is not currently attached — it never attaches, restores, or detaches anything.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13286,7 +13670,71 @@
       }
     },
     {
+      "name": "reorder_qa",
+      "description": "Set sort positions of authored Q&A records in one explicit scope. Every id must be distinct, manual and in scope; otherwise no record is reordered. Imported Google records are protected.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updates": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "sort_order": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "sort_order"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "updates"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "updated": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "replace_content_block",
+      "description": "Replace one block's data and media in place, keeping its position. Requires the block's own updated_at from the last read; a stale token is rejected with a conflict.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13408,7 +13856,96 @@
       }
     },
     {
+      "name": "replace_product_weekly_schedule",
+      "description": "Replace all weekly weekday/time slots for one Product and location, using the location’s saved timezone and Product duration/capacity. Empty slots clears that location’s schedule. Any Booking history, including cancelled bookings, protects saved Session times, capacity and state. Removed future sessions without history are cancelled; re-adding an unbooked slot can reopen its sessions with current defaults.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "location_id": {
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "slots": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "start_time": {
+                  "description": "Local HH:mm time.",
+                  "type": "string"
+                },
+                "weekday": {
+                  "maximum": 6,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "weekday",
+                "start_time"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "product_id",
+          "location_id",
+          "slots"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "cancelled": {
+            "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "sessions": {
+            "properties": {
+              "created": {
+                "type": "integer"
+              },
+              "existing": {
+                "type": "integer"
+              },
+              "skipped": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "created",
+              "existing",
+              "skipped"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "rules",
+          "sessions",
+          "cancelled"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "replace_resource_localizations",
+      "description": "Atomically replace 1–250 exact localizations of one resource type for one locale. Omitted resources remain untouched; any invalid item rejects the whole submitted batch.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13504,6 +14041,7 @@
     },
     {
       "name": "save_generated_image",
+      "description": "Save an existing base64-encoded generated image to the selected KrabiClaw site when the user requests it. Creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets. For an existing generated attachment, save_generated_image_file accepts its authorized file reference.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13546,6 +14084,7 @@
     },
     {
       "name": "save_generated_image_file",
+      "description": "Save an existing generated image attachment to the selected KrabiClaw site when the user requests saving it there. Accepts an authorized file reference and creates a media asset with a public URL; it does not assign or publish the image. Repeated calls may create duplicate assets.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13606,6 +14145,7 @@
     },
     {
       "name": "set_brand_color",
+      "description": "Set the selected site’s brand accent color from a color description or hex value. Applies to Saya theme accents such as buttons, links and highlights; it does not change layout or other template settings.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13647,6 +14187,7 @@
     },
     {
       "name": "set_collection_products",
+      "description": "Replace the membership and order of one collection with exactly the product ids you send, in that order. Anything you leave out is removed from this collection — the products themselves are untouched. Position lives on the membership, so the same product can sit third here and first elsewhere.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13758,6 +14299,7 @@
     },
     {
       "name": "set_default_currency",
+      "description": "Set the selected site’s default currency. Updates the same setting as update_organization_settings.default_currency; existing prices keep their stored currency and amount and are not converted.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13809,6 +14351,7 @@
     },
     {
       "name": "set_media",
+      "description": "Assign one media asset to a single-valued CMS placement (a placement that holds at most one asset, such as a post cover, a location hero, or a site logo). Construct placement from the target entity: owner_type is its entity type, owner_id is its id, and slot is the media role. For a post cover use {owner_type:\"content_document\", owner_id:<post.id>, slot:\"cover\"}; for a location hero use {owner_type:\"business_location\", owner_id:<location.id>, slot:\"hero\"}. Pass asset_id:null to clear it. For an ordered collection (a gallery or a compliance document list, which can hold many assets) use attach_media, remove_media, and reorder_media instead — this tool rejects those. Video cover/hero assets must already have thumbnail_url/poster metadata.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -13996,7 +14539,82 @@
       }
     },
     {
+      "name": "set_product_booking_config",
+      "description": "Set the Product duration and capacity defaults used for new sessions. Existing sessions retain their saved times, capacity and state. Omitted fields stay unchanged; null clears a default and zero capacity means no places. Read back with get_product.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "default_capacity": {
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "duration_minutes": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "config": {
+            "properties": {
+              "default_capacity": {
+                "minimum": 0,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "duration_minutes": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "organization_id": {
+                "type": "string"
+              },
+              "product_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "duration_minutes",
+              "default_capacity"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "set_product_location",
+      "description": "Set whether the selected location offers a product and whether it appears on that location’s website surfaces. Existing product prices do not establish a location offering.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14030,6 +14648,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -14510,6 +15160,7 @@
     },
     {
       "name": "set_product_publication",
+      "description": "Publish or withhold a product on the selected site. This changes website visibility, independently of its sale switch and individual location visibility.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -14537,6 +15188,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -15017,6 +15700,7 @@
     },
     {
       "name": "set_workspace_context",
+      "description": "Save the selected active site and optional location for this connection. Use internal IDs returned by site/location reads. Explicit IDs supplied to later tools still determine their targets.",
       "inputSchema": {
         "additionalProperties": false,
         "anyOf": [
@@ -15181,6 +15865,7 @@
     },
     {
       "name": "update_article_category",
+      "description": "Rename a category, change its description, or move it under another category (parent_id; null moves it to the top level, where it goes last). Its page's address (slug) stays the same.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15287,6 +15972,7 @@
     },
     {
       "name": "update_blog_post",
+      "description": "Edit the selected blog or documentation article. Only supplied metadata changes; content_blocks replaces the entire body and requires expected_updated_at from the latest read. Stale tokens conflict. Changes to a published article are public immediately.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15792,6 +16478,7 @@
     },
     {
       "name": "update_collection",
+      "description": "Rename a collection or change its description or position.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15872,6 +16559,7 @@
     },
     {
       "name": "update_location",
+      "description": "Update a location's own details: regular opening hours, temporary closures/special hours, and contact info. To change its hero media, call set_media with { owner_type: \"business_location\", owner_id: <location.id>, slot: \"hero\" }. Only provided fields are changed.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -15936,7 +16624,7 @@
             "type": "string"
           },
           "max_capacity": {
-            "description": "Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.",
+            "description": "Stored location capacity metadata; does not limit reservation availability. Reservation seats per start time are controlled by update_reservation_policy.slot_capacity. Pass null to clear the metadata.",
             "type": [
               "number",
               "null"
@@ -16243,6 +16931,7 @@
     },
     {
       "name": "update_media_asset",
+      "description": "Change the selected asset’s alt text or library category. At least one field is required. Category organizes the library and does not assign media to a page.",
       "inputSchema": {
         "additionalProperties": false,
         "anyOf": [
@@ -16299,6 +16988,7 @@
     },
     {
       "name": "update_organization_settings",
+      "description": "Change the selected site’s brand, description, contact email, default currency, announcement or Live/Draft status. Only supplied settings change. An announcement replaces all its fields, and null removes it. Logos and announcement images are separate media placements; this tool does not change them.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -16461,6 +17151,7 @@
     },
     {
       "name": "update_post",
+      "description": "Change a post's title, body, call_to_action, location, visibility or (while a draft) slug. Only the fields sent change. expected_updated_at is the updated_at you last read; a stale one conflicts. Media changes go through set_media, attach_media, remove_media and reorder_media on the post. Words and media cannot change while a Facebook or Instagram publication of this post is in progress or unresolved. Editing a published post changes the website only; nothing already sent to Facebook or Instagram is edited.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -16871,6 +17562,7 @@
     },
     {
       "name": "update_product",
+      "description": "Replace a site product’s intended state, including complete options, variants and prices. Keep variant IDs to preserve their booking links. Removing a variant with live bookings is refused; publication and location offerings are separate.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -17141,6 +17833,38 @@
               "active": {
                 "description": "The merchant sale switch. Not visibility and not stock: a disabled product is not sold out.",
                 "type": "boolean"
+              },
+              "booking": {
+                "properties": {
+                  "default_capacity": {
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "duration_minutes": {
+                    "minimum": 1,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "organization_id": {
+                    "type": "string"
+                  },
+                  "product_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_minutes",
+                  "default_capacity"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "collections": {
                 "items": {
@@ -17620,7 +18344,86 @@
       }
     },
     {
+      "name": "update_qa",
+      "description": "Update authored Q&A in its explicit scope. Omitted fields retain their values. Imported Google records and translations cannot be edited through this tool.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_owner_answer": {
+            "type": "boolean"
+          },
+          "location_id": {
+            "description": "Location scope; omit for site or page Q&A. Cannot be combined with page_path.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "page_path": {
+            "description": "Page scope such as /about; omit for general site Q&A.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "qa_id": {
+            "type": "string"
+          },
+          "question": {
+            "description": "Required non-empty question; at most 500 characters after trimming.",
+            "type": "string"
+          },
+          "question_author": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sort_order": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "published",
+              "hidden"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "qa_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "qa_id": {
+            "type": "string"
+          },
+          "updated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "qa_id",
+          "updated"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "update_reservation_policy",
+      "description": "Create or amend the reservation policy for one location — the calendar settings' advance notice, seats per time slot and cancellation policy, and guest-facing notes. Deposit and reschedule fields are stored settings; the reservation flow does not collect deposits or enforce reschedule cutoffs. Creating it is what lets the location take reservations. Omitted fields keep their stored value; a field set to null is cleared to \"not stated\", which is not a default.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -17642,7 +18445,7 @@
             ]
           },
           "cancellation_policy": {
-            "description": "Flexible: free change or cancel until 2 hours before. Moderate: until 1 day before. Firm: until 2 days before. Sets the free-cancellation and reschedule cutoffs together; do not also pass those fields.",
+            "description": "Flexible: 2 hours. Moderate: 1 day. Firm: 2 days. Sets the stored free-cancellation and reschedule cutoffs together; do not also pass those fields. The guest cancellation route does not enforce these cutoffs.",
             "enum": [
               "flexible",
               "moderate",
@@ -17781,6 +18584,7 @@
     },
     {
       "name": "update_tenant_page",
+      "description": "Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -17983,6 +18787,7 @@
     },
     {
       "name": "upload_user_media",
+      "description": "Save an attached image, video or Markdown document to the selected site when requested. Requires the authorized file reference supplied by the host; videos also require a poster image. Creates an active asset with a public URL before placement on a page. Each call makes one download attempt; an uncertain retry may create a duplicate asset.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

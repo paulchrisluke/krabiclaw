@@ -26,7 +26,7 @@ const localizationObject = { oneOf: [
 export const LOCALES_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'list_organization_locales',
-    description: 'List the immutable English source locale and exact authored secondary locales for this organization. Billing is managed only in the dashboard.',
+    description: "Read the site’s English source language and authored secondary languages. English is fixed as the source; this tool does not create or translate content.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -42,7 +42,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_resource_localization',
-    description: 'Read one exact resource or content document representation. Returns not found when that exact representation does not exist; never returns English fallback content.',
+    description: "Read the requested resource or document in exactly the named language. A missing translation returns not found rather than source-language content.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -56,7 +56,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'put_resource_localization',
-    description: 'Fully replace one exact resource or content document representation. Q&A is read-only and cannot be changed. Resource values replace the exact localization; document fields and blocks update the exact representation with expected_updated_at.',
+    description: "Replace the requested resource’s translation in exactly the named language. Resource values replace that translation; document fields and blocks require expected_updated_at. This localization tool does not edit Q&A; authored Q&A uses its dedicated tools.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: true,
@@ -74,7 +74,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'delete_resource_localization',
-    description: 'Permanently delete one localized resource representation and its owned document and redirect state. Q&A is read-only and cannot be deleted. This does not change billing.',
+    description: "Permanently delete the requested language representation and its owned document and redirects. This localization tool does not delete Q&A; authored Q&A uses delete_qa. Billing is unchanged.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: true,
@@ -88,7 +88,7 @@ export const LOCALES_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_product_catalog_localization',
-    description: 'List canonical Product IDs, source Product fields, and existing Product localizations for one published secondary locale. Localize collection names separately with get_resource_localization and put_resource_localization using resource_type collection, resource_id collection_id, and values { name }.',
+    description: "Read source Product fields and existing translations for one published secondary language. Collection names are translated separately with the resource-localization tools.",
     domain: 'locales',
     minimumRole: 'admin',
     confirmRequired: false,

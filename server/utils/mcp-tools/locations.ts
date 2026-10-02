@@ -21,7 +21,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'get_location',
-      description: 'Get one location.',
+      description: "Read one selected site location, including its contact details, opening hours, timezone and media. Use its returned ID for location-specific changes.",
       domain: 'locations',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -45,7 +45,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         phone: { type: 'string', description: 'Public phone number shown to guests on the website and in booking/reservation confirmation emails.' },
         email: { type: ['string', 'null'], description: 'Public email shown to guests on the website and in booking/reservation confirmation emails. Pass null to clear it.' },
         timezone: { type: 'string', description: 'IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.' },
-        max_capacity: { type: ['number', 'null'], description: 'Maximum total guests this location can seat per reservation time slot. Reservation slots are still generated and bookable when this is left unset (no cap enforced) — set it to actually limit how many guests can book the same time slot. Pass null to clear it.' },
+        max_capacity: { type: ['number', 'null'], description: 'Stored location capacity metadata; does not limit reservation availability. Reservation seats per start time are controlled by update_reservation_policy.slot_capacity. Pass null to clear the metadata.' },
         opening_hours: openingHoursInputSchema,
         special_hours: specialHoursInputSchema,
         ...seoOverrideFieldsSchema(),
