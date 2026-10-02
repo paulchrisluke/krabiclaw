@@ -152,12 +152,29 @@ test('authored Q&A validation is shared and mixed imported reorders are atomic',
     }, [])
     const before = await listQa(db, ORG, null, false, '/pricing')
     assert.equal(before.find(row => row.id === authored.data.id)?.question, 'Authored question')
-    for (const input of [{ question: '' }, { question: 'q'.repeat(501) }, { sort_order: '3' }, { is_owner_answer: 1 }, { answer: 123 }, { status: 'draft' }]) {
-      await assert.rejects(createQa(db, scope, { question: 'Valid', ...input }), /question|sort_order|is_owner_answer|answer|status/)
-      await assert.rejects(updateQa(db, scope, authored.data.id, input), /question|sort_order|is_owner_answer|answer|status/)
+    for (const [input, expected] of [
+      [{ question: '' }, /question required/],
+      [{ question: 'q'.repeat(501) }, /500 characters/],
+      [{ sort_order: '3' }, /sort_order must be an integer/],
+      [{ is_owner_answer: 1 }, /is_owner_answer must be a boolean/],
+      [{ answer: 123 }, /answer must be a string or null/],
+      [{ status: 'draft' }, /Invalid Q&A status/],
+    ] as const) {
+      await assert.rejects(createQa(db, scope, { question: 'Valid', ...input }), expected)
+      await assert.rejects(updateQa(db, scope, authored.data.id, input), expected)
     }
     await assert.rejects(reorderQa(db, scope, [{ id: authored.data.id, sort_order: 0 }, { id: imported.data.id, sort_order: 1 }]), /outside the requested scope/)
     assert.deepEqual(await listQa(db, ORG, null, false, '/pricing'), before)
+    // Exercise the zero-write conflict result on actual D1 without changing any Q&A.
+    await db.prepare("CREATE TRIGGER skip_qa_reorder BEFORE UPDATE OF sort_order ON content_documents WHEN OLD.kind = 'qa' BEGIN SELECT RAISE(IGNORE); END").run()
+    try {
+      await assert.rejects(reorderQa(db, scope, [{ id: authored.data.id, sort_order: 0 }]),
+        { status: 409, statusText: 'Q&A reorder changed concurrently. Reload and try again.' })
+      assert.deepEqual(await listQa(db, ORG, null, false, '/pricing'), before)
+    } finally {
+      await db.prepare('DROP TRIGGER skip_qa_reorder').run()
+    }
+
     await assert.rejects(updateQa(db, scope, imported.data.id, { answer: 'Overwrite' }), /Q&A not found/)
     assert.equal((await deleteQa(db, scope, imported.data.id)).status, 404)
     await assert.rejects(createQa(db, { ...scope, locationId: 'foreign-location', pagePath: null }, { question: 'Wrong tenant' }), /Q&A scope not found/)
