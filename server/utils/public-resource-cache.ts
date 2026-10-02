@@ -104,7 +104,6 @@ export async function drainPublicResourceCacheInvalidations(
     `, [nowIso, row.id, row.attempt_count, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, staleClaimCutoff])
     if (Number(claim.meta?.changes ?? 0) !== 1) continue
     const claimedAttemptCount = row.attempt_count + 1
-    let remainingUploads = 0
     try {
       await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
       if (productionSearch && !syncedOrganizations.has(row.organization_id)) {
@@ -116,7 +115,6 @@ export async function drainPublicResourceCacheInvalidations(
         if (synced.pending > 0) {
           const more = publicResourceCacheInvalidationQuery(row.organization_id, 'search-sync-continue')
           await execute(db, more.query, more.params ?? [])
-          remainingUploads = synced.pending
         } else {
           // This complete reconciliation rebuilt the organization's desired
           // state from D1. It also repairs changes behind older terminal rows,
@@ -148,9 +146,6 @@ export async function drainPublicResourceCacheInvalidations(
       failedOrganizations.add(row.organization_id)
       continue
     }
-    if (remainingUploads > 0 && options.organizationId) {
-      throw new Error(`Site changes for organization ${row.organization_id} were saved, but ${remainingUploads} search index uploads remain pending; a queued continuation will finish them`)
-    }
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, `Failed to drain site changes for ${failedOrganizations.size} organization(s): ${failures.map(error => error.message).join('; ')}`)
@@ -160,8 +155,9 @@ export async function drainPublicResourceCacheInvalidations(
       SELECT DISTINCT status FROM public_resource_cache_invalidations
        WHERE organization_id = ? AND status IN ('pending', 'processing', 'failed')
     `, [options.organizationId])).map(row => row.status))
-    // Another request draining this site held a claim that blocked this one's
-    // rows. Wait for it to finish, then claim what it left.
+    // Drain queued search continuations as well as rows blocked by another
+    // request's claim. A scoped write succeeds only after its durable work
+    // converges; the existing deadline and real provider errors still fail it.
     const waitDeadline = options.waitDeadline ?? Date.now() + ORGANIZATION_DRAIN_WAIT_MS
     if (unfinished.size > 0 && !unfinished.has('failed') && Date.now() < waitDeadline) {
       await new Promise(resolve => setTimeout(resolve, 100))
