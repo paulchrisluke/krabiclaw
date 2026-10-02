@@ -166,7 +166,7 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expectOwnerDispatch(state)
   })
 
-  test('guest validation rejects invalid input and re-used cancellation tokens', async ({ request }) => {
+  test('guest validation rejects invalid input and cancellation retries preserve the existing outcome', async ({ request }) => {
     const baseURL = testBaseUrl()
     const headers = { ...devLoginHeaders(), 'x-preview-tenant': 'pottery-house' }
     // A guest names a SESSION, not a date and a time: the occurrence is a real
@@ -189,7 +189,18 @@ test.describe('tenant guest journeys (disposable local/preview data only)', () =
     expect(JSON.stringify(body)).not.toContain('cancel-once@playwright.example')
     const cancelURL = `${baseURL}/api/public/booking-requests/${body.booking_id}/cancel`
     const authHeaders = { ...headers, Authorization: `Bearer ${body.cancellation_token}` }
-    expect((await request.post(cancelURL, { headers: authHeaders })).status()).toBe(200)
-    expect((await request.post(cancelURL, { headers: authHeaders })).status()).not.toBe(200)
+    const cancelled = await request.post(cancelURL, { headers: authHeaders })
+    expect(cancelled.status()).toBe(200)
+    expect(await cancelled.json()).toEqual({ success: true, kind: 'booking' })
+    // The capability is spent once; an authorized retry returns the existing
+    // outcome and can recover deduplicated notification delivery.
+    const replay = await request.post(cancelURL, { headers: authHeaders })
+    expect(replay.status()).toBe(200)
+    expect(await replay.json()).toEqual({ success: true, kind: 'booking' })
+    expect((await request.post(cancelURL, {
+      headers: { ...headers, Authorization: 'Bearer invalid-cancellation-token' },
+    })).status()).toBe(404)
+    // A spent token no longer grants the pre-cancellation guest read.
+    expect((await request.get(cancelURL.replace(/\/cancel$/, ''), { headers: authHeaders })).status()).toBe(404)
   })
 })
