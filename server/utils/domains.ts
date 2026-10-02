@@ -781,7 +781,7 @@ export async function syncDomainWithCloudflare(
     if (!domain.cloudflare_hostname_id) {
       const hostname = await createCloudflareHostname(env, domain.domain, signal)
       signal?.throwIfAborted()
-      return persistCloudflareState(env, db, domainId, hostname, { leaseToken, incrementRetry: true, actorType, actorId })
+      return await persistCloudflareState(env, db, domainId, hostname, { leaseToken, incrementRetry: true, actorType, actorId })
     }
 
     const dnsInspection = await inspectDomainResolution(env, domain.domain, signal)
@@ -798,7 +798,7 @@ export async function syncDomainWithCloudflare(
       triggeredRevalidation = true
       signal?.throwIfAborted()
     }
-    return persistCloudflareState(env, db, domainId, hostname, {
+    return await persistCloudflareState(env, db, domainId, hostname, {
       leaseToken,
       incrementRetry: true,
       actorType,
