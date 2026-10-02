@@ -229,7 +229,6 @@
 
 <script setup lang="ts">
 import type { SubmissionMeasurement } from '~/composables/useOrganizationConversionTracking'
-import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
@@ -359,18 +358,6 @@ const handleTenantContact = async () => {
   }
   mirrorSubmission('contact_submit', submitted.measurement)
 
-  // Best-effort only — a failure here (private browsing, storage quota) must
-  // never make a successful submission look like it failed.
-  try {
-    setContactConfirmation({
-      organizationId,
-      organizationName: businessName.value,
-      guestName: tenantForm.value.name,
-      subject: tenantForm.value.subject,
-    })
-  } catch {
-    // ignore — /contact/confirmed shows a generic success state either way
-  }
   await navigateTo(localePath('/contact/confirmed'))
   tenantSubmitting.value = false
 }

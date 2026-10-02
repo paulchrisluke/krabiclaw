@@ -42,13 +42,15 @@ export function publicResourceCacheInvalidationQuery(
   }
 }
 
+const ORGANIZATION_DRAIN_WAIT_MS = 10_000
+
 export type OrganizationChangeDrainEnv = Pick<CloudflareEnv, 'AI_SEARCH' | 'AI_SEARCH_INSTANCE_ID' | 'NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN' | 'NUXT_PUBLIC_PLATFORM_DOMAIN'>
 
 export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
   env: OrganizationChangeDrainEnv,
-  options: { limit?: number; now?: Date; organizationId?: string },
+  options: { limit?: number; now?: Date; organizationId?: string; waitDeadline?: number },
 ): Promise<number> {
   const freeOrganizationDomain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   if (!freeOrganizationDomain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
@@ -154,13 +156,19 @@ export async function drainPublicResourceCacheInvalidations(
     throw new AggregateError(failures, `Failed to drain site changes for ${failedOrganizations.size} organization(s): ${failures.map(error => error.message).join('; ')}`)
   }
   if (options.organizationId) {
-    const unfinished = await queryAll<{ status: string }>(db, `
-      SELECT status FROM public_resource_cache_invalidations
+    const unfinished = new Set((await queryAll<{ status: string }>(db, `
+      SELECT DISTINCT status FROM public_resource_cache_invalidations
        WHERE organization_id = ? AND status IN ('pending', 'processing', 'failed')
-       LIMIT 1
-    `, [options.organizationId])
-    if (unfinished.length > 0) {
-      throw new Error(`Site changes for organization ${options.organizationId} were saved, but ${unfinished[0]!.status} cache or search index work remains`)
+    `, [options.organizationId])).map(row => row.status))
+    // Another request draining this site held a claim that blocked this one's
+    // rows. Wait for it to finish, then claim what it left.
+    const waitDeadline = options.waitDeadline ?? Date.now() + ORGANIZATION_DRAIN_WAIT_MS
+    if (unfinished.size > 0 && !unfinished.has('failed') && Date.now() < waitDeadline) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+      return processed + await drainPublicResourceCacheInvalidations(db, kv, env, { ...options, waitDeadline })
+    }
+    if (unfinished.size > 0) {
+      throw new Error(`Site changes for organization ${options.organizationId} were saved, but ${[...unfinished].join('/')} cache or search index work remains`)
     }
   }
   return processed

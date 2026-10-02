@@ -34,7 +34,6 @@ import {
   putPublicResourceCache,
 } from "~/server/utils/public-resource-cache";
 import { recordRequestPhase } from "~/server/utils/request-metrics";
-import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isNonProductionHost } from "~/server/utils/tenant-hosts";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
@@ -284,17 +283,8 @@ async function loadPublicPageSource(
           if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
           return parsed;
         } catch (error) {
-          console.warn("[public-resource-cache] corrupt page entry", {
-            organizationId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          const deletion = kv.delete(cacheKey).catch((deleteError: unknown) => {
-            console.warn("[public-resource-cache] corrupt page deletion failed", {
-              organizationId,
-              error: String(deleteError),
-            });
-          });
-          getCloudflareWaitUntil(event)?.(deletion);
+          await kv.delete(cacheKey);
+          throw new HTTPError({ statusCode: 500, statusMessage: "Public page cache is invalid", cause: error });
         }
       }
       if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "MISS");
@@ -857,13 +847,7 @@ async function loadPublicPageSource(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).ORGANIZATION_CACHE as KVNamespace | undefined;
     if (kv) {
-      const putAsync = putPublicResourceCache(kv, cacheKey, JSON.stringify(payload)).catch(
-        (err: unknown) => {
-          console.warn("[public-resource-cache] page put failed:", String(err));
-        },
-      );
-      const waitUntil = getCloudflareWaitUntil(event);
-      if (waitUntil) waitUntil(putAsync);
+      await putPublicResourceCache(kv, cacheKey, JSON.stringify(payload));
     }
   }
 

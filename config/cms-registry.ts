@@ -366,24 +366,24 @@ function isProductFeatureArray(value: unknown): value is ProductFeature[] {
   return Array.isArray(value) && value.every(item => typeof item === 'string')
 }
 
-/** Parses sites.feature_overrides / business_locations.feature_overrides — a JSON
- *  { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta object, or NULL. Universal
- *  (client + server safe) so both the dashboard's client-side resolveCmsCapabilities calls and
- *  the server's DB-backed resolver share one implementation instead of each hand-rolling their
- *  own JSON.parse. Malformed JSON, a non-object, or a malformed sub-array is treated the same as
- *  absent (fall back to defaults) rather than throwing — a corrupt override column must never
- *  500 the dashboard. */
+/** Parses organization.feature_overrides / business_locations.feature_overrides: a JSON
+ *  { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta object, or NULL. Shared by
+ *  the dashboard's client-side resolveCmsCapabilities calls and the server's DB-backed resolver.
+ *  A stored value that is not that shape is invalid state and throws. */
 export function parseCmsFeatureOverrideDelta(raw: string | null | undefined): CmsCapabilityOverrideDelta | null {
   if (!raw) return null
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
-    const record = parsed as Record<string, unknown>
-    return {
-      enabled: isProductFeatureArray(record.enabled) ? record.enabled : [],
-      disabled: isProductFeatureArray(record.disabled) ? record.disabled : [],
+  const parsed: unknown = JSON.parse(raw)
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('feature_overrides must be a JSON object')
+  }
+  const record = parsed as Record<string, unknown>
+  for (const key of ['enabled', 'disabled'] as const) {
+    if (record[key] !== undefined && !isProductFeatureArray(record[key])) {
+      throw new Error(`feature_overrides.${key} must be an array of feature ids`)
     }
-  } catch {
-    return null
+  }
+  return {
+    enabled: (record.enabled as ProductFeature[] | undefined) ?? [],
+    disabled: (record.disabled as ProductFeature[] | undefined) ?? [],
   }
 }

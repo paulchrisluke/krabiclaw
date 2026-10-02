@@ -30,7 +30,7 @@ export async function getWhatsAppProviderStatus(env: ProviderStatusEnv): Promise
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal }
     )
     clearTimeout(timeoutId)
-    const body = await response.json().catch(() => ({})) as { id?: string; error?: { message?: string } }
+    const body = await response.json() as { id?: string; error?: { message?: string } }
     if (!response.ok || body.error) {
       return { ok: false, detail: body.error?.message ?? `HTTP ${response.status}` }
     }

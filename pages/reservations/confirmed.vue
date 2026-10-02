@@ -44,8 +44,8 @@
 
     <div v-else class="mx-auto max-w-xl px-4 pt-24 pb-24 text-center sm:px-6 lg:px-8">
       <SayaIcon name="exclamation-triangle" class="mx-auto size-12 text-error" />
-      <h2 class="mt-6 text-xl font-bold">No reservation found</h2>
-      <p class="mt-2 text-muted">We couldn't find a confirmation to show. Check your email for the details.</p>
+      <h2 class="mt-6 text-xl font-bold">{{ loadError ? 'Reservation could not be loaded' : 'No reservation found' }}</h2>
+      <p class="mt-2 text-muted">{{ loadError ?? 'We couldn\'t find a confirmation to show. Check your email for the details.' }}</p>
       <SayaButton to="/reservations" variant="soft" class="mt-10">Select a time</SayaButton>
     </div>
   </div>
@@ -70,6 +70,7 @@ const justCopied = ref(false)
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 const pending = ref(true)
+const loadError = ref<string | null>(null)
 
 // One instant plus one zone, read in the location's own zone — the guest sees
 // the hour the table is held, wherever they open the page.
@@ -150,8 +151,8 @@ onMounted(async () => {
         locationId: typeof res.booking.location_id === 'string' ? res.booking.location_id : null,
         cancelUrl: `/reservations/cancel?id=${resId}#${token}`,
       }
-    } catch {
-      confirmation.value = null
+    } catch (cause) {
+      loadError.value = getErrorMessage(cause, 'This reservation could not be loaded.')
     }
   }
   pending.value = false
@@ -164,8 +165,9 @@ async function share() {
     try {
       await navigator.share({ title: 'Reservation confirmed', text, url: window.location.origin })
       return
-    } catch {
-      // user cancelled the native share sheet — fall through to clipboard
+    } catch (error) {
+      // Cancelling the native share sheet falls through to the clipboard.
+      if (!(error instanceof DOMException && error.name === 'AbortError')) throw error
     }
   }
   if (import.meta.client && navigator.clipboard) {

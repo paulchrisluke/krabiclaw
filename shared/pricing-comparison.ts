@@ -1,8 +1,8 @@
 import { getPlanEntitlements } from '../server/utils/billing-entitlements'
 
-// Reviewed comparison copy, not Stripe's paid marketing_features. IDs map to the
-// feature evidence library; source ownership and unresolved policies are recorded
-// in docs/design/pricing/implementation-plan.md. Keep provider bullets untouched.
+// Reviewed comparison copy, not Stripe's paid marketing_features. Source ownership
+// and unresolved policies are recorded in docs/design/pricing/implementation-plan.md.
+// Keep provider bullets untouched.
 export interface PricingComparisonRow {
   id: string
   label: string

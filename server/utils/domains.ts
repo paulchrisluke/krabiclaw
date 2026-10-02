@@ -285,7 +285,13 @@ async function cloudflareRequest<T>(
     }
   })
 
-  const body = await response.json().catch(() => null) as ApiValue
+  const text = await response.text()
+  let body: ApiValue
+  try {
+    body = JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Cloudflare API HTTP ${response.status} returned non-JSON: ${text.slice(0, 200)}`, { cause: error })
+  }
   if (!response.ok || body?.success === false) {
     const message = body?.errors?.map((err: ApiValue) => err.message).filter(Boolean).join('; ') || `Cloudflare API HTTP ${response.status}`
     throw new Error(message)
@@ -371,11 +377,10 @@ function normalizeDnsValue(value: string | null | undefined): string {
   return String(value || '').trim().toLowerCase().replace(/\.$/, '')
 }
 
-type DnsQueryResult = { ok: true; values: string[] } | { ok: false; values: [] }
 
 const DNS_RECORD_TYPES = { A: 1, CNAME: 5, AAAA: 28 } as const
 
-async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<DnsQueryResult> {
+async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<string[]> {
   const url = new URL('https://cloudflare-dns.com/dns-query')
   url.searchParams.set('name', hostname)
   url.searchParams.set('type', type)
@@ -391,16 +396,13 @@ async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', sign
       headers: { accept: 'application/dns-json' },
       signal: timeoutController.signal,
     })
-    if (!response.ok) return { ok: false, values: [] }
-    const body = await response.json().catch(() => null) as { Answer?: Array<{ type?: number; data?: string }> } | null
-    if (!body) return { ok: false, values: [] }
-    return { ok: true, values: (body.Answer ?? [])
+    if (!response.ok) throw new Error(`DNS ${type} lookup for ${hostname} failed (HTTP ${response.status})`)
+    const body = await response.json() as { Status?: number; Answer?: Array<{ type?: number; data?: string }> }
+    if (body.Status !== 0 && body.Status !== 3) throw new Error(`DNS ${type} lookup for ${hostname} failed (status ${body.Status})`)
+    return (body.Answer ?? [])
       .filter(answer => answer.type === DNS_RECORD_TYPES[type])
       .map((answer) => normalizeDnsValue(answer.data))
-      .filter(Boolean) }
-  } catch (error) {
-    if (signal?.aborted) throw error
-    return { ok: false, values: [] }
+      .filter(Boolean)
   } finally {
     clearTimeout(timeout)
     signal?.removeEventListener('abort', abort)
@@ -432,23 +434,17 @@ export function domainRecordsPointToSaas(
 export async function inspectDomainResolution(env: DomainEnv, hostname: string, signal?: AbortSignal): Promise<DomainResolutionInspection> {
   const normalizedHostname = normalizeDomain(hostname)
   const cnameTarget = normalizeDnsValue(env.CF_SAAS_CNAME_TARGET)
-  const [cnameResult, aResult, aaaaResult] = await Promise.all([
+  const [cnameRecords, aRecords, aaaaRecords] = await Promise.all([
     queryDnsJson(normalizedHostname, 'CNAME', signal),
     queryDnsJson(normalizedHostname, 'A', signal),
     queryDnsJson(normalizedHostname, 'AAAA', signal),
   ])
-  const cnameRecords = cnameResult.values
-  const aRecords = aResult.values
-  const aaaaRecords = aaaaResult.values
   const records = [
     ...cnameRecords.map((value) => ({ type: 'CNAME' as const, value })),
     ...aRecords.map((value) => ({ type: 'A' as const, value })),
     ...aaaaRecords.map((value) => ({ type: 'AAAA' as const, value })),
   ]
-  const lookupsSucceeded = cnameResult.ok && aResult.ok && aaaaResult.ok
-  const pointsToSaas = lookupsSucceeded
-    ? domainRecordsPointToSaas(cnameRecords, aRecords, aaaaRecords, cnameTarget)
-    : null
+  const pointsToSaas = domainRecordsPointToSaas(cnameRecords, aRecords, aaaaRecords, cnameTarget)
   return {
     hostname: normalizedHostname,
     checked_at: new Date().toISOString(),
@@ -475,7 +471,7 @@ async function persistCloudflareState(
     actorType?: DomainActorType
     actorId?: string | null
     skipPromotion?: boolean
-    dnsInspection?: DomainResolutionInspection | null
+    dnsInspection?: DomainResolutionInspection
     triggeredRevalidation?: boolean
   } = {}
 ): Promise<DomainRecord> {
@@ -769,10 +765,10 @@ export async function syncDomainWithCloudflare(
   signal?: AbortSignal,
   options: { forceRevalidation?: boolean; leaseToken?: string } = {}
 ): Promise<DomainRecord> {
+  const leaseToken = options.leaseToken ?? crypto.randomUUID()
   try {
     signal?.throwIfAborted()
 
-    const leaseToken = options.leaseToken ?? crypto.randomUUID()
     const now = new Date().toISOString()
     const domain = await queryFirst<DomainRecord>(db, `
       UPDATE organization_domains SET reconciliation_token = ?, reconciliation_expires_at = ?
@@ -785,24 +781,24 @@ export async function syncDomainWithCloudflare(
     if (!domain.cloudflare_hostname_id) {
       const hostname = await createCloudflareHostname(env, domain.domain, signal)
       signal?.throwIfAborted()
-      return persistCloudflareState(env, db, domainId, hostname, { leaseToken, incrementRetry: true, actorType, actorId })
+      return await persistCloudflareState(env, db, domainId, hostname, { leaseToken, incrementRetry: true, actorType, actorId })
     }
 
-    const dnsInspection = await inspectDomainResolution(env, domain.domain, signal).catch(() => null)
+    const dnsInspection = await inspectDomainResolution(env, domain.domain, signal)
     signal?.throwIfAborted()
     let hostname = await getCloudflareHostname(env, domain.cloudflare_hostname_id, signal)
     signal?.throwIfAborted()
     const shouldPatch = options.forceRevalidation
       || hostname.status === 'moved'
       || domain.status === 'failed'
-      || (Boolean(dnsInspection?.points_to_saas) && hostname.status !== 'active')
+      || (dnsInspection.points_to_saas === true && hostname.status !== 'active')
     let triggeredRevalidation = false
     if (shouldPatch) {
       hostname = await patchCloudflareHostname(env, domain.cloudflare_hostname_id, signal)
       triggeredRevalidation = true
       signal?.throwIfAborted()
     }
-    return persistCloudflareState(env, db, domainId, hostname, {
+    return await persistCloudflareState(env, db, domainId, hostname, {
       leaseToken,
       incrementRetry: true,
       actorType,
@@ -812,6 +808,16 @@ export async function syncDomainWithCloudflare(
     })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
+    // A lease this call took is released with the reason, so a retry is not
+    // locked out until it expires. A caller that passed its own lease
+    // (the reconciliation scheduler) releases it and records the failure itself.
+    if (!options.leaseToken) {
+      await execute(db, `
+        UPDATE organization_domains SET error_message = ?, updated_at = ?,
+          reconciliation_token = NULL, reconciliation_expires_at = NULL
+        WHERE id = ? AND reconciliation_token = ?
+      `, [normalizedError.message, new Date().toISOString(), domainId, leaseToken])
+    }
     if (normalizedError.name === 'AbortError') {
       const abortError = new Error('Domain sync aborted')
       abortError.name = 'AbortError'

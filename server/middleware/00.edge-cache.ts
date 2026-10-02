@@ -46,19 +46,13 @@ export default defineHandler(async (event) => {
   const kv = (event.req.runtime?.cloudflare?.env as any)?.ORGANIZATION_CACHE as KVNamespace | undefined
   if (!kv) return
 
-  try {
-    const hit = await kv.get(key, 'text')
-    if (!hit) return
+  const hit = await kv.get(key, 'text')
+  if (!hit) return
 
-    const cacheControl = `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`
-
-    setResponseHeaders(event, {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': cacheControl,
-      'x-edge-cache': 'HIT',
-    })
-    return hit
-  } catch {
-    // KV errors are non-fatal — fall through to SSR
-  }
+  setResponseHeaders(event, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': `public, s-maxage=${CACHE_TTL_SECONDS}, stale-while-revalidate=${CACHE_TTL_SECONDS}, max-age=0`,
+    'x-edge-cache': 'HIT',
+  })
+  return hit
 })
