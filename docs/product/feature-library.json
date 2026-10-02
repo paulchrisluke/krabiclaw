@@ -268,7 +268,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/domain/requests.ts": "45c08096df33f630128f242687797724dd7f98ee06c395bc1c3b1c024b086d86",
+          "server/domain/requests.ts": "5550c67aaa18018378b18906aae3d180a9f519fe5a3cef3df96fa5a646fe2a97",
           "server/utils/reservations.ts": "3b6562f8683526d5389fcb4a6f40d3a7bf6285d5ef3bbcf316020d1cc5978f3d",
           "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c",
           "server/domain/product-bookings.ts": "1a379d525a82de8f8754ef9a0fd5b257c942ec9a0c132aba67643223c939f462",
@@ -276,7 +276,7 @@
           "server/utils/mcp-executor/bookings.ts": "77a61237d98dbc911eca77962209ea30691e7ee70a31910def7e79764d51b95b",
           "tests/e2e/mcp-bookings.spec.ts": "0e626711ada01c3daa8b47950786657f829e627099e99beaf7ca2d5fe6131e03",
           "tests/integration/availability-d1.test.ts": "dc543fceef41f03bccc99245e61ccdfdbb9271cf03b88d87e77c5b348f45bb13",
-          "tests/integration/request-consolidation-d1.test.ts": "2fb06261b66daedeba7c34da546f8cd7fbef238a2c7e7f6987ea1ee4d2cb916b"
+          "tests/integration/request-consolidation-d1.test.ts": "9d44bcfb792bcc205ac22495206038f204604d93fee60024c324d49d4e038b4b"
         }
       },
       "pendingOwnerDecision": null,
@@ -777,7 +777,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
+          "server/utils/notifications.ts": "c282c1a70222f066c074b21266f02a95121231a4b0024f13cb1f7947e8d8415f",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "server/domain/notification-preferences.ts": "caa2a6972d8fc64f64db2bd75f15a2e2b792018e525526c48257191f13d46ac0",
           "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c"
@@ -814,7 +814,7 @@
         "coverageNote": "Real D1 tests mock only the Meta provider boundary and prove zero provider calls for Free/ineligible, active/trialing success, downgrade, multi-org membership, preferences, domain/contact/guest-message paths and settled skipped receipts.",
         "evidenceSha256": {
           "server/utils/whatsapp.ts": "472184bc2cd45e987c624a61c120d1e4865bb5c2d4ead0e6a1688dff8290c0df",
-          "server/utils/notifications.ts": "9b8e65405eece6c606a7cb4cc5725904c7d0f9fc00ebedca22e88e4c3d0e84fc",
+          "server/utils/notifications.ts": "c282c1a70222f066c074b21266f02a95121231a4b0024f13cb1f7947e8d8415f",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "tests/integration/guest-delivery-d1.test.ts": "2dd6d6e6c259697e44aefd4c9f3d28d6184f11d662f23ea3084e42e53838375c",
           "tests/integration/whatsapp-entitlement-d1.test.ts": "9b81ba5a5c87510f37a6b8308956457c960c8b14732d3c5aa75c2984952d453b"
@@ -1090,15 +1090,15 @@
           "server/utils/mcp-executor/payments.ts": "02f66f0c03a499ea39f2a563a4a384900a2fd3d976317352f25d9ccf93d29672",
           "server/domain/payments/index.ts": "a81624a404089644214eb39a471e513722b2bec28dd38c49a76021e06c01658e",
           "server/domain/payments/checkout.ts": "658011f1a7f99bb978abf00767bf66cb50c2b0192f6e6d25ec54935305467f87",
-          "server/domain/payments/usage.ts": "b7c955a030b4649ebb59d4791edca166de5fa01f9db98b31dd325f06b3f2e67c",
+          "server/domain/payments/usage.ts": "6fdd347224403896ad68d8c6088cf42360cc654a57db6b156762aeaffcb0bad2",
           "server/utils/billing-entitlements.ts": "2c72a1c74507a5efb1b90524379787637ba96c35ca2e20c6ca695548466e8efd",
-          "tests/integration/payments-d1.test.ts": "f65ece4ff5728258e6889bc935a71646e96068b5ca349458135d6a7dc4ce9286",
+          "tests/integration/payments-d1.test.ts": "eeb449a8a372da62b69ff7569add79c92f514783a8a2192ae6ce708755f3a968",
           "tests/unit/payments-contract.test.ts": "b9d17f61ac8f13d906afdf87ba790b5c4ed16120c4438f28d64c1180c8a922a4",
           "server/domain/payments/events.ts": "94f7facc427932ac3b1b8a42b4693b0d71d8fc8cb4b2a9d258749c5523b89f5b",
           "server/tasks/payments-reconcile.ts": "f972ee08c565e0138d694934a930df20eb5b3b159cde95d6de769b369ab8f399",
           "tests/unit/payments-rate-card.test.ts": "2a71f162d4f281fed2d67ee2af4f4cff99133a8230aa10b055cb75606cd6a392",
           "tests/unit/session-booking-payments.test.ts": "e42c6eba595eaa3b6d8d4d0fae68504c003757014e2191ebd29edf0227a4bff0",
-          "tests/unit/metronome-payments-response.test.ts": "96480d923f99ad4d934dcff7a86467b8df5a304c03de448773ecf95546f98a73"
+          "tests/unit/metronome-payments-response.test.ts": "f6a016785414f06725aea33a5a8f2a96358d6f9bdd7f9ce7afc8911dc1885342"
         }
       },
       "pendingOwnerDecision": "Future higher-tier commercial name and price are separate; current tiers do not receive new Payments acceptance."
