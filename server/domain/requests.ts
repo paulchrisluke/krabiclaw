@@ -72,6 +72,8 @@ export interface ThreadOperationalRecord {
   location_id: string | null
   product_id: string | null
   product_name: string | null
+  organization_id: string
+  user_id: string | null
 }
 
 export function parseGuestRequest(row: Record<string, unknown>): GuestRequest {
@@ -94,14 +96,14 @@ export async function getGuestRequest(db: DbClient, id: string, organizationId?:
 export async function getThreadOperationalRecord(db: DbClient, requestId: string): Promise<ThreadOperationalRecord | null> {
   return (await queryFirst<ThreadOperationalRecord>(db, `
     SELECT 'booking' AS kind, b.id, b.status, b.party_size, s.starts_at, s.ends_at, s.timezone,
-           s.location_id, b.product_id, p.name AS product_name, b.assigned_member_id
+           s.location_id, b.product_id, p.name AS product_name, b.assigned_member_id, b.organization_id, b.user_id
       FROM bookings b
       JOIN product_sessions s ON s.id = b.product_session_id
       JOIN products p ON p.id = b.product_id
      WHERE b.request_id = ?
     UNION ALL
     SELECT 'reservation', r.id, r.status, r.party_size, r.starts_at, r.ends_at, r.timezone,
-           r.location_id, NULL, NULL, NULL
+           r.location_id, NULL, NULL, NULL, r.organization_id, r.user_id
       FROM reservations r
      WHERE r.request_id = ?
      LIMIT 1
@@ -155,8 +157,12 @@ export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
  * because the clock says so.
  */
 export function requestActions(record: ThreadOperationalRecord | null, now: string): string[] {
-  if (!record || record.status === 'cancelled' || record.ends_at <= now) return []
+  if (!canCancelBookingRequest(record, now)) return []
   return record.kind === 'booking' && record.status === 'pending' ? ['confirm', 'reject', 'change', 'cancel'] : ['change', 'cancel']
+}
+
+export function canCancelBookingRequest(record: ThreadOperationalRecord | null, now: string): record is ThreadOperationalRecord {
+  return Boolean(record && ['pending', 'confirmed'].includes(record.status) && record.ends_at > now && !isBookingComplete(record, now))
 }
 
 export function requestPreview(request: GuestRequest, record: ThreadOperationalRecord | null): string {
@@ -189,12 +195,27 @@ export async function requestSummary(db: DbClient, request: GuestRequest) {
  * record is what releases the seats — the thread holds none.
  */
 export async function cancelBookingRequest(db: DbClient, input: {
-  id: string; organizationId: string; kind: BookingRequest['kind']; tokenHash: string; now: string
-}): Promise<{ request: BookingRequest; record: ThreadOperationalRecord; wasConfirmed: boolean } | null> {
+  id: string; organizationId: string; kind: BookingRequest['kind']; now: string
+} & ({ tokenHash: string; buyerUserId?: never } | { buyerUserId: string; tokenHash?: never })): Promise<{ request: BookingRequest; record: ThreadOperationalRecord; wasConfirmed: boolean; changed: boolean } | null> {
   const current = await getGuestRequest(db, input.id, input.organizationId, input.kind)
   if (!current || current.kind === 'contact') return null
   const record = await getThreadOperationalRecord(db, current.id)
-  if (!record || !['pending', 'confirmed'].includes(record.status) || record.ends_at <= input.now || isBookingComplete(record, input.now)) return null
+  if (!record || record.organization_id !== input.organizationId || record.kind !== current.kind) return null
+  if (input.buyerUserId && (current.user_id !== input.buyerUserId || record.user_id !== input.buyerUserId)) return null
+  async function readCancelled() {
+    const request = await getGuestRequest(db, input.id, input.organizationId, input.kind)
+    const cancelled = await getThreadOperationalRecord(db, input.id)
+    if (!request || request.kind === 'contact' || !request.payload.cancellation.used_at || !cancelled || cancelled.status !== 'cancelled' || cancelled.organization_id !== input.organizationId || cancelled.kind !== request.kind) return null
+    if (input.buyerUserId ? request.user_id !== input.buyerUserId || cancelled.user_id !== input.buyerUserId
+      : request.payload.cancellation.token_hash !== input.tokenHash || !request.payload.cancellation.expires_at || request.payload.cancellation.expires_at <= input.now) return null
+    const entry = await queryFirst<{ payload_json: string }>(db, 'SELECT payload_json FROM activity_entries WHERE request_id = ? AND dedupe_key = ?', [input.id, `${cancelled.kind}:${cancelled.id}:guest-cancel`])
+    if (!entry) return null
+    const before = JSON.parse(entry.payload_json).beforeStatus
+    if (!['pending', 'confirmed'].includes(before)) throw new Error('Cancellation audit has no valid prior status')
+    return { request, record: cancelled, wasConfirmed: before === 'confirmed', changed: false }
+  }
+  if (record.status === 'cancelled') return await readCancelled()
+  if (!canCancelBookingRequest(record, input.now)) return null
 
   // Two writes, one batch, each carrying the other's condition: the token is
   // spent only while the record is still cancellable, and the record is
@@ -207,33 +228,32 @@ export async function cancelBookingRequest(db: DbClient, input: {
       query: `UPDATE requests SET
           payload_json = json_set(payload_json, '$.cancellation.used_at', ?), updated_at = ?
         WHERE id = ? AND organization_id = ? AND kind = ?
-          AND json_extract(payload_json, '$.cancellation.token_hash') = ?
+          AND ${input.buyerUserId ? 'user_id = ?' : "json_extract(payload_json, '$.cancellation.token_hash') = ? AND json_extract(payload_json, '$.cancellation.expires_at') > ?"}
           AND json_extract(payload_json, '$.cancellation.used_at') IS NULL
-          AND json_extract(payload_json, '$.cancellation.expires_at') > ?
-          AND EXISTS (SELECT 1 FROM ${table} WHERE id = ? AND status = ?) RETURNING *`,
-      params: [input.now, input.now, input.id, input.organizationId, input.kind, input.tokenHash, input.now, record.id, record.status],
+          AND EXISTS (SELECT 1 FROM ${table} WHERE id = ? AND organization_id = ? AND request_id = ? AND status = ?${input.buyerUserId ? ' AND user_id = ?' : ''}) RETURNING *`,
+      params: [input.now, input.now, input.id, input.organizationId, input.kind, ...(input.buyerUserId ? [input.buyerUserId] : [input.tokenHash, input.now]), record.id, input.organizationId, input.id, record.status, ...(input.buyerUserId ? [input.buyerUserId] : [])],
     },
     {
       query: `UPDATE ${table} SET status = 'cancelled', cancelled_at = ?, cancellation_reason = 'guest_cancelled', updated_at = ?
-        WHERE id = ? AND status = ?
+        WHERE id = ? AND organization_id = ? AND request_id = ? AND status = ?${input.buyerUserId ? ' AND user_id = ?' : ''}
           AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ?
             AND json_extract(payload_json, '$.cancellation.used_at') = ?)`,
-      params: [input.now, input.now, record.id, record.status, input.id, input.organizationId, input.now],
+      params: [input.now, input.now, record.id, input.organizationId, input.id, record.status, ...(input.buyerUserId ? [input.buyerUserId] : []), input.id, input.organizationId, input.now],
     },
     {
       query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
         SELECT ?, ?, 'operation', 'request', 'guest', ?, ?, ?,
           COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = ?), 0) + 1, ?, ?
         WHERE changes() = 1`,
-      params: [crypto.randomUUID(), input.id, `${record.kind}.cancel`, JSON.stringify({ action: 'cancel', beforeStatus: record.status, afterStatus: 'cancelled', operational_booking_id: record.id, request_id: input.id }), `${record.kind}:${record.id}:guest-cancel`, input.id, input.now, input.now],
+      params: [crypto.randomUUID(), input.id, `${record.kind}.cancel`, JSON.stringify({ action: 'cancel', beforeStatus: record.status, afterStatus: 'cancelled', operational_booking_id: record.id, request_id: input.id, ...(input.buyerUserId ? { actor_user_id: input.buyerUserId } : {}) }), `${record.kind}:${record.id}:guest-cancel`, input.id, input.now, input.now],
     },
   ], { operation: 'Cancel booking request' })
 
   const row = (consumed?.results?.[0] ?? null) as Record<string, unknown> | null
-  if (!row) return null
+  if (!row) return await readCancelled()
   if ((released?.meta?.changes ?? 0) !== 1) throw new Error('Cancellation consumed the token without releasing the booking')
 
   const request = parseGuestRequest(row)
   if (request.kind === 'contact') throw new Error('Cancellation returned a contact thread')
-  return { request, record: { ...record, status: 'cancelled' }, wasConfirmed: record.status === 'confirmed' }
+  return { request, record: { ...record, status: 'cancelled' }, wasConfirmed: record.status === 'confirmed', changed: true }
 }

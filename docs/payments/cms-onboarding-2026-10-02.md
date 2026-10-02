@@ -1,7 +1,11 @@
 # CMS Stripe onboarding verification — 2026-10-02
 
-The actual CMS journey reached hosted Stripe sandbox onboarding and verified
-incomplete return/status refresh. Completion to a ready account remains unverified.
+The real CMS → hosted Stripe sandbox onboarding → CMS return/status journey is
+complete. The owner submitted the final agreement; native Stripe readback and
+independent local D1 readback confirm the existing sandbox account is ready with
+active card payments and payouts, livemode=false and zero requirements. Earlier
+checkpoints below record the intermediate blockers; the final section records
+the completed result.
 
 CMS route: `/dashboard/{orgSlug}/settings/integrations/stripe`, under
 Settings → Integrations → Stripe. The tested local organization is
@@ -122,3 +126,65 @@ blocker; shared native Chrome was untouched. After a human completes the native
 verification in an isolated browser, inspect/correct the prior personal-details
 values against the documented successful fixtures before submission. Completion
 and CMS ready-status callback remain unverified.
+
+## Visible replacement-task continuation
+
+On 2026-10-02 the existing native Chrome sandbox tab was reopened through the
+already-authenticated local CMS for the same account. The title was `[Test]
+Sandbox | Set up payments with Stripe`, and each hosted step explicitly stated
+that it was using a test account with test data. No CAPTCHA appeared in this
+visible continuation. Shared gallery tabs were preserved.
+
+Stripe accepted personal details, business details and public details. The final
+Review and submit surface independently displayed Jenny Rosen, Born on January
+1, 1901, `address_full_match San Francisco, CA 94103 US`, the existing synthetic
+email, website `https://accessible.stripe.com`, support phone `+1 0000000000`,
+and descriptor `ACCESSIBLE.STRIPE.COM`. Personal phone was `0000000000` and SSN
+last four `0000`; both were verified in the form before submission. The date
+control's accessibility value stayed zero despite the actual rendered date;
+the screenshot and subsequent review surface confirmed January 1, 1901.
+
+The native test-bank Autofill control automatically advanced after filling
+routing `110000000` and account `000123456789`; it did not leave a separate
+Submit click. This unexpected behavior is recorded explicitly: the manual bank
+form had displayed a bank-debit authorization notice. No separate Submit was
+clicked. Finish without saving was selected on the subsequent Link screen; no
+Link credentials or OAuth grant were created. Final review displays STRIPE TEST
+BANK and the expected masked account ending 6789.
+
+Execution stopped at the final Agree and submit button. Its notice explicitly
+certifies correctness and accepts the Connected Account Agreement, Acquirer
+Disclosure and autodialed text messages. No approval for that final action was
+recorded and it was not clicked. The visible tab remains on Review and submit.
+A completed hosted return and ready CMS status remain unverified.
+
+The existing build is running at https://localhost:3207 with preserved
+.tmp/payments-review-state, runtime session 87768. Local startup uses HTTPS
+BETTER_AUTH_URL and platform/site origins; the free-organization local origin is
+HTTP to match the observed local proxy auth origin. No source code rebuild,
+new account, PR, deployment or remote schema change occurred.
+
+## Completed hosted submission and ready CMS verification
+
+The owner personally clicked Agree and submit in the visible hosted sandbox tab.
+Native Chrome observation confirmed return to the authenticated CMS Stripe
+integration route. The callback invoked status POST successfully (200); the
+return marker was removed from the current URL. The initial callback projection
+was restricted/restricted with an empty requirement list at
+2026-10-02T03:43:29.867Z, reflecting Stripe's asynchronous verification.
+
+An independent read through the installed Stripe SDK and the existing test key
+then confirmed the exact same account acct_1ULvggRBlJ8qySB7, livemode=false,
+card_payments active, stripe_balance.payouts active, empty status_details and
+requirements.entries=[], Express dashboard, application fee collector and
+Stripe losses/requirements collectors. No new object was created by that read.
+
+Clicking the actual CMS Refresh status button updated the visible surface to
+Ready, 'Stripe has enabled card payments for this business', US, Card payments
+Active. Independent read-only local SQLite inspection confirmed ready/active,
+livemode 0 and requirements_json=[] after that refresh. This completes the real
+CMS → hosted Stripe SANDBOX onboarding → CMS return/status readiness journey.
+The visible Chrome tab remains on the Ready CMS integration screen. No live
+financial action, new merchant, OAuth grant, deployment or new PR occurred.
+Payments plan acceptance remains a separate entitlement and is not granted by
+this onboarding result.

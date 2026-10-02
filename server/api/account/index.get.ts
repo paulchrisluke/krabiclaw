@@ -5,5 +5,5 @@ import {buyerPayments} from '~/server/domain/payments/buyer'
 export default defineHandler(async event=>{
  const env=cloudflareEnv(event),session=await getAuthSession(event,env)
  if(!session) throw new HTTPError({statusCode:401,statusMessage:'Sign in to view your purchases'})
- return jsonResponse(await buyerPayments(env.DB,session.user.id))
+ return jsonResponse(await buyerPayments(env.DB,session.user.id),{headers:{'cache-control':'private, no-store'}})
 })

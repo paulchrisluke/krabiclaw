@@ -1,6 +1,6 @@
-import { formatCalendarDate, formatTime } from '~/utils/timezone'
-import { getGuestRequest } from '~/server/domain/requests'
-import type { DbClient } from '~/server/db'
+import { formatCalendarDate, formatTime, localPartsAt } from '~/utils/timezone'
+import { getGuestRequest, requestSummary, type cancelBookingRequest } from '~/server/domain/requests'
+import { queryFirst, type DbClient } from '~/server/db'
 import { getEmailDeliveryMode, hashEmail, isReservedTestDomain, sendEmail } from '~/server/utils/email-delivery'
 import { buildWhatsAppTemplatePayload, sendWhatsAppNotification, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { hasOrganizationEntitlement } from '~/server/utils/billing'
@@ -1419,4 +1419,42 @@ export async function renderNotificationCatalog(origin: string): Promise<Catalog
       whatsapp,
     }
   }))
+}
+
+/** Cancellation delivery is shared by emailed capabilities and authenticated buyers. */
+export async function notifyGuestCancellation(env: NotificationEnv, db: DbClient, cancelled: NonNullable<Awaited<ReturnType<typeof cancelBookingRequest>>>) {
+  const request = cancelled.request
+  const record = cancelled.record
+  const organizationId = request.organization_id
+  const summary = await requestSummary(db, request)
+  await publishGuestInboxThreadEvent(env, db, { threadId: request.id, type: 'thread.changed' })
+
+  const organization = await queryFirst<{ name?: string | null }>(db, 'SELECT name FROM organization WHERE id = ? LIMIT 1', [organizationId])
+
+  if (record.kind === 'booking') {
+    await notifyBookingCancelled(env, db, {
+      organizationId: request.organization_id, organizationName: organization?.name,
+      locationId: record.location_id, bookingId: request.id, guestName: request.payload.guest.name,
+      email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
+      productTitle: record.product_name ?? summary.productTitle ?? '',
+      startsAt: record.starts_at, timezone: record.timezone, partySize: record.party_size,
+      notes: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
+    })
+  } else {
+    // The reservation email states a calendar date and a clock time, so the
+    // instant is read back in the reservation's own zone rather than the
+    // worker's.
+    const parts = localPartsAt(new Date(record.starts_at), record.timezone)
+    const localDate = `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+    const localTime = `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
+    await notifyReservationCancelled(env, db, {
+      organizationId: request.organization_id, organizationName: organization?.name,
+      locationId: record.location_id, locationName: summary.locationTitle, reservationId: request.id,
+      guestName: request.payload.guest.name, email: request.payload.guest.email, phone: request.payload.guest.phone,
+      date: localDate, time: localTime,
+      guests: `${record.party_size}${request.payload.party_size_is_minimum ? '+' : ''}`,
+      requests: request.payload.notes, wasConfirmed: cancelled.wasConfirmed,
+    })
+  }
+
 }

@@ -7,12 +7,12 @@ import * as schema from '../../server/db/schema.ts'
 import {sessionAllocationPredicate,claimSessionCapacity} from '../../server/utils/availability.ts'
 import {executeGuestThreadOperation} from '../../server/domain/guest-threads/operations.ts'
 import {requestBookingChange} from '../../server/domain/guest-threads/booking-changes.ts'
-import {getGuestRequest,requestInsertQueries,threadPayloadForGuest} from '../../server/domain/requests.ts'
+import {cancelBookingRequest,getGuestRequest,requestInsertQueries,threadPayloadForGuest} from '../../server/domain/requests.ts'
 import {approveRefundAuthorization,executeRefund,requirePayment,requestRefundAuthorization,refundPayment,reconcileRefundState} from '../../server/domain/payments/index.ts'
 import {processPaymentEvent,paymentEventKey,reconcilePaymentIntent} from '../../server/domain/payments/events.ts'
 import {ingestStripeFeeReport,stripeFeeMinor} from '../../server/domain/payments/costs.ts'
 import {metronomeCurrencyAmount,finalizePaymentsBilling,deliverPaymentsUsage,reconcileNativeBillingCredit} from '../../server/domain/payments/usage.ts'
-import {createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
+import {buyerPayments,ownedBuyerRequest,createPurchaseClaim,claimPurchase} from '../../server/domain/payments/buyer.ts'
 import {mcpFinancialApprovalErrorResult} from '../../server/utils/mcp-financial-handoff.ts'
 const ORG='payments-org',NOW='2026-10-01T00:00:00.000Z'
 async function boot(){
@@ -54,6 +54,40 @@ test('active checkout holds exclude ordinary claims; authenticated capture conve
   assert.equal(await db.prepare('SELECT status FROM payment_checkout_holds').first('status'),'converted')
   assert.equal(await db.prepare('SELECT COUNT(*) n FROM payment_usage_events').first('n'),1)
   assert.equal(await db.prepare('SELECT receipt_url FROM payments').first('receipt_url'),'https://pay.stripe.com/test-receipt')
+ }finally{await runtime.dispose()}
+})
+test('buyer cancellation verifies both ownership rows, exact eligibility and one paid servicing mutation', {timeout:120000},async()=>{
+ const {db,runtime}=await boot();try{
+  await payable(db,'buyer-cancel')
+  await db.batch(requestInsertQueries({id:'buyer-request',kind:'booking',organization_id:ORG,location_id:null,user_id:'guest',review_id:null,conversation_state:'needs_attention',resolved_at:null,payload:threadPayloadForGuest({name:'Guest',email:'guest@example.com',phone:null}),created_at:NOW,updated_at:NOW}).map(write=>db.prepare(write.query).bind(...write.params)))
+  await db.prepare("UPDATE payment_checkout_holds SET request_id='buyer-request' WHERE payment_id='buyer-cancel'").run()
+  const p=provider('buyer-cancel');await reconcilePaymentIntent(db,p.stripe,await requirePayment(db,ORG,'buyer-cancel'),p.intent)
+  const booking=await db.prepare('SELECT id,request_id FROM bookings').first<{id:string;request_id:string}>()
+  assert.ok(booking)
+  const scope=await ownedBuyerRequest(db,'guest',booking.request_id)
+  assert.equal(scope.organization_id,ORG)
+  await assert.rejects(()=>ownedBuyerRequest(db,'other',booking.request_id),/Owned booking not found/u)
+  const input={id:booking.request_id,organizationId:ORG,kind:'booking' as const,buyerUserId:'guest',now:NOW}
+  assert.equal(await cancelBookingRequest(db,{...input,buyerUserId:'other'}),null)
+  assert.equal(await cancelBookingRequest(db,{...input,organizationId:'other-org'}),null)
+  assert.equal(await cancelBookingRequest(db,{...input,now:'2100-01-01T00:00:00.000Z'}),null)
+  await db.prepare("UPDATE requests SET user_id='other' WHERE id=?").bind(booking.request_id).run()
+  await assert.rejects(()=>ownedBuyerRequest(db,'guest',booking.request_id),/Owned booking not found/u)
+  assert.equal(await cancelBookingRequest(db,input),null)
+  await db.prepare("UPDATE requests SET user_id='guest' WHERE id=?").bind(booking.request_id).run()
+  const before=await buyerPayments(db,'guest')
+  assert.equal(before.bookings[0]?.can_cancel,true)
+  assert.equal('payload_json' in before.bookings[0]!,false)
+  const results=await Promise.all([cancelBookingRequest(db,input),cancelBookingRequest(db,input)])
+  assert.equal(results.filter(value=>value?.changed).length,1)
+  assert.equal(results.filter(value=>value&&!value.changed).length,1)
+  assert.equal(await db.prepare('SELECT status FROM bookings WHERE id=?').bind(booking.id).first('status'),'cancelled')
+  assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE request_id=? AND event_name='booking.cancel'").bind(booking.request_id).first('n'),1)
+  const audit=await db.prepare("SELECT payload_json FROM activity_entries WHERE request_id=? AND event_name='booking.cancel'").bind(booking.request_id).first<string>('payload_json')
+  assert.equal(JSON.parse(audit!).actor_user_id,'guest')
+  const paid=await requirePayment(db,ORG,'buyer-cancel');assert.equal(paid.captured_amount,10000);assert.equal(paid.refunded_amount,0)
+  assert.equal(p.refunds(),0)
+  assert.equal((await buyerPayments(db,'guest')).bookings[0]?.can_cancel,false)
  }finally{await runtime.dispose()}
 })
 test('expired hold late capture refunds full principal and retains captured-volume usage', {timeout:120000},async()=>{

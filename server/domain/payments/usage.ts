@@ -37,13 +37,29 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  const {assertRoleAllows}=await import('~/server/utils/member-access')
  await assertRoleAllows({organizationId:principal.organizationId,role:principal.role,permissions:{billing:['update']}})
  const existing=await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
- if(existing?.metronome_contract_id) return existing
  if(!env.METRONOME_RATE_CARD_ID) throw new HTTPError({statusCode:503,statusMessage:'Payments USD Metronome rate card must be configured'})
  await validatePaymentsRateCard(env)
  const billing=await getOrganizationBillingStatus(env,db,principal.organizationId)
  if(!billing.stripeCustomerId) throw new HTTPError({statusCode:409,statusMessage:'Tenant operating billing customer is required'})
  const customer=await stripe.customers.retrieve(billing.stripeCustomerId)
  if(customer.deleted || !customer.invoice_settings.default_payment_method) throw new HTTPError({statusCode:409,statusMessage:'Set an operating payment method as the Stripe Customer default'})
+ const nativePlatform=await stripe.accounts.retrieveCurrent()
+ const deliveries:Record<string,unknown>[]=[]
+ let deliveryCursor:string|null=null
+ for(let page=0;page<100;page++){
+  const listed=await metronomeRequest(env,'/v1/listConfiguredBillingProviders',{...(deliveryCursor?{next_page:deliveryCursor}:{})})
+  if(!Array.isArray(listed.data))throw new Error('Native Metronome billing providers are invalid')
+  for(const value of listed.data){
+   if(!value||typeof value!=='object')throw new Error('Native Metronome billing provider shape invalid')
+   const row=value as Record<string,unknown>,configuration=row.delivery_method_configuration as Record<string,unknown>|undefined
+   if(row.billing_provider==='stripe'&&row.delivery_method==='direct_to_billing_provider'&&configuration?.stripe_account_id===nativePlatform.id)deliveries.push(row)
+  }
+  deliveryCursor=typeof listed.next_page==='string'?listed.next_page:null
+  if(!deliveryCursor)break
+  if(page===99)throw new Error('Native Metronome billing providers require bounded operator review')
+ }
+ if(deliveries.length!==1||typeof deliveries[0]!.delivery_method_id!=='string')throw new Error('A unique Metronome delivery connection for this Stripe platform is required')
+ const deliveryMethodId=deliveries[0]!.delivery_method_id
  // Metronome requires contract starts on a UTC hour boundary.
  const start=new Date();start.setUTCMinutes(0,0,0)
  const now=existing?.contract_start_at??start.toISOString()
@@ -54,19 +70,18 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
  const knownRows=known&&Array.isArray(known.data)?known.data:[]
  if(knownRows.length>1)throw new Error('Payments Metronome ingest alias is ambiguous')
  const knownId=knownRows.length?providerId({data:knownRows[0]}):null
- const metronomeCustomer=reserved.metronome_customer_id??knownId??providerId(await metronomeRequest(env,'/v1/customers',{name:`Payments ${principal.organizationId}`,ingest_aliases:[`payments:${principal.organizationId}`],customer_billing_provider_configurations:[{billing_provider:'stripe',configuration:{stripe_customer_id:billing.stripeCustomerId,stripe_collection_method:'charge_automatically'},delivery_method:'direct_to_billing_provider'}]},`payments-customer:${principal.organizationId}`))
+ const metronomeCustomer=reserved.metronome_customer_id??knownId??providerId(await metronomeRequest(env,'/v1/customers',{name:`Payments ${principal.organizationId}`,ingest_aliases:[`payments:${principal.organizationId}`],customer_billing_provider_configurations:[{billing_provider:'stripe',configuration:{stripe_customer_id:billing.stripeCustomerId,stripe_collection_method:'charge_automatically'},delivery_method_id:deliveryMethodId}]},`payments-customer:${principal.organizationId}`))
  await execute(db,'UPDATE payment_billing_accounts SET metronome_customer_id=?,updated_at=? WHERE organization_id=?',[metronomeCustomer,new Date().toISOString(),principal.organizationId])
- const nativePlatform=await stripe.accounts.retrieveCurrent()
  const configurations=await metronomeRequest(env,'/v1/getCustomerBillingProviderConfigurations',{customer_id:metronomeCustomer})
  if(!Array.isArray(configurations.data))throw new Error('Native Metronome collection configurations are invalid')
  const matchingConfigurations=configurations.data.filter(value=>{
   if(!value||typeof value!=='object')return false
   const row=value as Record<string,unknown>,config=row.configuration as Record<string,unknown>|undefined,delivery=row.delivery_method_configuration as Record<string,unknown>|undefined
-  return !row.archived_at&&row.billing_provider==='stripe'&&row.customer_id===metronomeCustomer&&row.delivery_method==='direct_to_billing_provider'&&config?.stripe_customer_id===billing.stripeCustomerId&&config?.stripe_collection_method==='charge_automatically'&&delivery?.stripe_account_id===nativePlatform.id
+  return !row.archived_at&&row.billing_provider==='stripe'&&row.customer_id===metronomeCustomer&&row.delivery_method_id===deliveryMethodId&&row.delivery_method==='direct_to_billing_provider'&&config?.stripe_customer_id===billing.stripeCustomerId&&config?.stripe_collection_method==='charge_automatically'&&delivery?.stripe_account_id===nativePlatform.id
  }) as Record<string,unknown>[]
  if(matchingConfigurations.length!==1||typeof matchingConfigurations[0]!.id!=='string')throw new Error('A unique operating Stripe customer collection mapping in this platform account is required')
  const billingConfigurationId=matchingConfigurations[0]!.id
- let contract:string|null=null,cursor:string|null=null
+ let contract:string|null=null,cursor:string|null=null,attachConfiguration=false
  for(let page=0;page<100;page++){
   const listed=await metronomeRequest(env,'/v2/contracts/list',{customer_id:metronomeCustomer,include_archived:true,limit:20,...(cursor?{cursor}:{})})
   if(!Array.isArray(listed.data))throw new Error('Native Metronome contract list is invalid')
@@ -75,14 +90,27 @@ export async function provisionPaymentsBilling(db:DbClient,stripe:Stripe,env:Clo
    const row=value as Record<string,unknown>
    if(row.uniqueness_key!==`payments:${principal.organizationId}`)continue
    if(contract||row.archived_at||row.rate_card_id!==env.METRONOME_RATE_CARD_ID||typeof row.starting_at!=='string'||Date.parse(row.starting_at)!==Date.parse(reserved.contract_start_at))throw new Error('Existing native Payments contract conflicts with immutable setup')
+   if(reserved.metronome_contract_id&&reserved.metronome_contract_id!==row.id)throw new Error('Persisted Payments contract conflicts with native setup')
+   const configuration=row.customer_billing_provider_configuration as Record<string,unknown>|undefined
+   if(configuration&&configuration.id!==billingConfigurationId)throw new Error('Existing native Payments contract uses a different billing configuration')
+   if(!configuration){
+    if(!Array.isArray(row.billing_provider_configuration_schedule)||row.billing_provider_configuration_schedule.length)throw new Error('Existing native Payments contract has an unresolved billing configuration schedule')
+    attachConfiguration=true
+   }
    contract=providerId({data:row})
   }
   cursor=typeof listed.next_page==='string'?listed.next_page:typeof listed.cursor==='string'?listed.cursor:null
   if(!cursor)break
   if(page===99)throw new Error('Native Payments contracts require bounded operator review')
  }
+ if(reserved.metronome_contract_id&&!contract)throw new Error('Persisted Payments contract is missing from native setup')
+ if(attachConfiguration)await metronomeRequest(env,'/v2/contracts/edit',{customer_id:metronomeCustomer,contract_id:contract,uniqueness_key:`payments-collection:${principal.organizationId}:${billingConfigurationId}`,add_billing_provider_configuration_update:{billing_provider_configuration:{billing_provider_configuration_id:billingConfigurationId},schedule:{effective_at:'START_OF_CURRENT_PERIOD'}}})
  contract??=providerId(await metronomeRequest(env,'/v1/contracts/create',{customer_id:metronomeCustomer,rate_card_id:env.METRONOME_RATE_CARD_ID,starting_at:reserved.contract_start_at,uniqueness_key:`payments:${principal.organizationId}`,billing_provider_configuration:{billing_provider_configuration_id:billingConfigurationId}},`payments-contract:${principal.organizationId}`))
- await execute(db,"UPDATE payment_billing_accounts SET metronome_contract_id=?,status='active',updated_at=? WHERE organization_id=?",[contract,new Date().toISOString(),principal.organizationId])
+ const verified=await metronomeRequest(env,'/v2/contracts/get',{customer_id:metronomeCustomer,contract_id:contract})
+ const verifiedContract=verified.data as Record<string,unknown>|undefined
+ const verifiedConfiguration=verifiedContract?.customer_billing_provider_configuration as Record<string,unknown>|undefined
+ if(verifiedContract?.id!==contract||verifiedConfiguration?.id!==billingConfigurationId)throw new Error('Native Payments contract collection mapping was not applied')
+ await execute(db,'UPDATE payment_billing_accounts SET metronome_contract_id=?,status=?,updated_at=? WHERE organization_id=?',[contract,['closed','closing','servicing'].includes(reserved.status)?reserved.status:'active',new Date().toISOString(),principal.organizationId])
  return await queryFirst<BillingAccount>(db,'SELECT * FROM payment_billing_accounts WHERE organization_id=?',[principal.organizationId])
 }
 export async function paymentsUsageStatus(db:DbClient,env:CloudflareEnv,organizationId:string) {
