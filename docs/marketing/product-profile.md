@@ -113,7 +113,7 @@ Krabiclaw exists so restaurants and local businesses can keep a polished, multil
 - Location content, 1270×760: `docs/marketing/directory-assets/03-location-content.png`
 - Customer inbox, 1270×760: `docs/marketing/directory-assets/04-customer-inbox.png`
 
-The screenshots use the populated Ember & Slice local fixture and direct owner authentication. They contain no impersonation UI. Do not use `krabi-claw-free.png`.
+The screenshots use the populated Ember & Slice local fixture and direct owner authentication. They contain no impersonation UI.
 
 ## Evidence
 

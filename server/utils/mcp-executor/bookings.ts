@@ -3,7 +3,7 @@ import { refreshProductBusy } from '~/server/domain/member-scheduling'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { listSessions } from '~/server/utils/availability'
-import { paginateMcpCollection } from '~/server/utils/mcp-pagination'
+import { mcpPageInfo, mcpPageWindow, paginateMcpCollection } from '~/server/utils/mcp-pagination'
 import { createProductBooking } from '~/server/domain/product-bookings'
 import { getGuestRequest, getThreadOperationalRecord } from '~/server/domain/requests'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
@@ -29,10 +29,11 @@ export async function handleBookingsTools(ctx: McpExecutorContext): Promise<unkn
   }
   if(toolName==='reassign_product_booking')return reassignBookingProvider({env,organizationId,userId:organization.userId},{booking_id:requiredString(args,'operational_booking_id'),member_id:requiredString(args,'member_id'),expected_updated_at:requiredString(args,'expected_updated_at'),idempotency_key:requiredString(args,'idempotency_key')})
   if (toolName === 'list_product_bookings') {
-    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, b.assigned_member_id, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? AND (? IS NULL OR b.assigned_member_id=?) ORDER BY s.starts_at, b.id`, [organizationId,args.assigned_member_id??null,args.assigned_member_id??null])
-    const bookings = rows.map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
-    const page = paginateMcpCollection(bookings, args, { resource: `product-bookings:${organizationId}` })
-    return { bookings: page.items, page_info: page.page_info }
+    const resource = { resource: `product-bookings:${organizationId}` }
+    const window = mcpPageWindow(args, resource)
+    const rows = await queryAll<Record<string, unknown> & { guest_json: string | null; provenance_json: string | null }>(db, `SELECT b.id AS operational_booking_id, b.request_id, b.product_id, b.product_variant_id, b.product_session_id, b.status, b.party_size, b.user_id, b.updated_at, b.assigned_member_id, s.starts_at, s.ends_at, s.timezone, json_extract(r.payload_json, '$.guest') AS guest_json, json_extract(r.payload_json, '$.provenance') AS provenance_json FROM bookings b JOIN product_sessions s ON s.id = b.product_session_id LEFT JOIN requests r ON r.id = b.request_id AND r.organization_id = b.organization_id WHERE b.organization_id = ? AND (? IS NULL OR b.assigned_member_id=?) ORDER BY s.starts_at, b.id LIMIT ? OFFSET ?`, [organizationId, args.assigned_member_id??null, args.assigned_member_id??null, window.limit + 1, window.offset])
+    const bookings = rows.slice(0, window.limit).map(({ guest_json, provenance_json, ...booking }) => ({ ...booking, guest: guest_json === null ? null : JSON.parse(guest_json), provenance: provenance_json === null ? null : JSON.parse(provenance_json) }))
+    return { bookings, page_info: mcpPageInfo(window, bookings.length, rows.length > window.limit, resource) }
   }
   if (toolName === 'create_product_booking') {
     if (!event) throw new HTTPError({ statusCode: 500, message: 'Booking creation requires the request context' })

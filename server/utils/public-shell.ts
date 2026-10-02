@@ -6,7 +6,6 @@ import {  setHeader } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { executeBatch, queryAll, type BatchQuery } from '~/server/db'
 import { buildPublicResourceCacheKey, getPublicResourceCache, putPublicResourceCache } from '~/server/utils/public-resource-cache'
-import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { loadPublicBase } from '~/server/utils/public-base'
 import { appendPublicShellQueries, buildPublicShellPayload } from '~/server/utils/public-shell-query'
 import { previewSecretOf, resolvePreviewAuthorization } from '~/server/utils/preview-token'
@@ -69,17 +68,8 @@ export async function loadPublicShellSource(
         if (mutateHeaders) setHeader(event, 'x-bootstrap-cache', 'HIT')
         return parsed
       } catch (error) {
-        console.warn('[public-resource-cache] corrupt shell entry', {
-          organizationId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        const deletion = cache.delete(cacheKey).catch((deleteError: unknown) => {
-          console.warn('[public-resource-cache] corrupt shell deletion failed', {
-            organizationId,
-            error: String(deleteError),
-          })
-        })
-        getCloudflareWaitUntil(event)?.(deletion)
+        await cache.delete(cacheKey)
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Public shell cache is invalid', cause: error })
       }
     }
     if (mutateHeaders) setHeader(event, 'x-bootstrap-cache', 'MISS')
@@ -143,10 +133,7 @@ export async function loadPublicShellSource(
     payload.count = payload.locations.length
   }
   if (useCache && cache) {
-    const write = putPublicResourceCache(cache, cacheKey, JSON.stringify(payload))
-      .catch(error => console.warn('[public-resource-cache] shell put failed:', String(error)))
-    const waitUntil = getCloudflareWaitUntil(event)
-    if (waitUntil) waitUntil(write)
+    await putPublicResourceCache(cache, cacheKey, JSON.stringify(payload))
   }
   return payload
 }

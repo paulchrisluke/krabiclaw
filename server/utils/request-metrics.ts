@@ -17,6 +17,9 @@ export interface RequestDataMetrics {
   phases: Record<string, number>
   resources: Map<string, number>
   finalized: boolean
+  // A telemetry write that failed. It never replaces the operation's own
+  // outcome; the request's [data-request] record reports it.
+  telemetryErrors: string[]
 }
 
 const metricsByEvent = new WeakMap<object, RequestDataMetrics>()
@@ -53,6 +56,7 @@ export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
       phases: {},
       resources: new Map(),
       finalized: false,
+      telemetryErrors: [],
     }
     metricsByEvent.set(event, metrics)
   }
@@ -120,8 +124,8 @@ async function logD1Query(
   error?: unknown,
   meta: D1MetaSummary[] = [],
 ) {
+  const metrics = getRequestDataMetrics(event)
   try {
-    const metrics = getRequestDataMetrics(event)
     const identity = queryIdentity(query)
     const firstMeta = meta[0]
     console[level]('[d1-query]', JSON.stringify({
@@ -148,8 +152,8 @@ async function logD1Query(
         : null,
       error_chain: error ? errorChainForTelemetry(error) : null,
     }))
-  } catch {
-    // Telemetry must never replace the query outcome.
+  } catch (telemetryError) {
+    metrics.telemetryErrors.push(telemetryError instanceof Error ? telemetryError.message : String(telemetryError))
   }
 }
 
@@ -236,8 +240,8 @@ export function instrumentD1(event: H3Event, database: D1Database | D1DatabaseSe
                 duration_ms: Number(batchDurationMs.toFixed(2)),
                 error_chain: errorChainForTelemetry(error),
               }))
-            } catch {
-              // Telemetry must never replace the batch error.
+            } catch (telemetryError) {
+              metrics.telemetryErrors.push(telemetryError instanceof Error ? telemetryError.message : String(telemetryError))
             }
             throw error
           } finally {
@@ -363,6 +367,7 @@ export async function flushRequestMetrics(event: HTTPEvent, response: Response) 
   }
   console.info('[data-request]', JSON.stringify({
     metricHeadersError,
+    telemetryErrors: metrics.telemetryErrors,
     requestId: metrics.requestId,
     rayId: event.req.headers.get('cf-ray'),
     phases: Object.fromEntries(Object.entries(metrics.phases).map(([name, duration]) => [name, Number(duration.toFixed(2))])),

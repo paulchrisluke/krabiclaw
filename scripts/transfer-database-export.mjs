@@ -422,6 +422,8 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       const normalizedTable = baseSql.split('--> statement-breakpoint').find(statement => statement.includes('CREATE TABLE `organization_integrations`'))
       assert(normalizedTable, 'v8 normalized integration table is missing')
       stage.exec(normalizedTable)
+    }
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
       for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
     }
     const names = tableNames(stage)

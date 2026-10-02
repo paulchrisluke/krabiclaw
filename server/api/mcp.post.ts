@@ -34,7 +34,7 @@ import { mcpFinancialApprovalErrorResult } from "~/server/utils/mcp-financial-ha
 
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
-// Fires a telemetry write without ever blocking or failing the MCP response.
+// Worker execution context reports telemetry rejection without replaying a committed tool.
 function logMcpEventDetached(
   event: Parameters<typeof getCloudflareWaitUntil>[0], db: D1Database | undefined, input: Parameters<typeof logMcpToolCallEvent>[1], ) {
   if (!db) return;
@@ -43,8 +43,7 @@ function logMcpEventDetached(
     env, ...input, userAgent: input.userAgent ?? (event.req.headers.get("user-agent")) ?? null, cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
-  if (waitUntil) waitUntil(logged);
-  else void logged.catch(error => console.error("Failed to persist MCP telemetry:", error));
+  waitUntil!(logged);
 }
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
@@ -356,6 +355,9 @@ function peekMcpId(body: unknown): JsonRpcId | undefined {
 }
 
 export default defineHandler(async (event) => {
+  if (!getCloudflareWaitUntil(event)) {
+    throw new HTTPError({ statusCode: 503, statusMessage: "MCP requires the Worker execution context" });
+  }
   const requestStartedAt = Date.now();
   const cfEnv = cloudflareEnv(event);
   const baseUrl = cfEnv.BETTER_AUTH_URL?.replace(/\/$/, "");

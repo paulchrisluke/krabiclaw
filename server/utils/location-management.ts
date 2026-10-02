@@ -1,3 +1,4 @@
+import { HTTPError } from 'nitro';
 import { parsePostalAddress, type PostalAddress } from '~/utils/postal-address'
 import { parseOpeningHours, parseSpecialHours, type OpeningHours, type SpecialHours } from '~/shared/reservation-hours'
 import { organizationEventQuery } from "~/server/utils/organization-events";
@@ -216,37 +217,28 @@ export async function resolveLocationCapabilitySummary(
   db: D1Database,
   organizationId: string,
   locationFeatureOverridesRaw: string | null,
-): Promise<LocationCapabilitySummary | null> {
+): Promise<LocationCapabilitySummary> {
   const organization = await queryFirst<{ vertical: string; theme_id: string; feature_overrides: string | null }>(db, `
     SELECT vertical, theme_id, feature_overrides FROM organization WHERE id = ? LIMIT 1
   `, [organizationId]);
-  if (!organization) return null;
+  if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: "Organization not found" });
   const { parseCmsFeatureOverrideDelta } = await import("~/config/cms-registry");
-  try {
-    const { capabilities: organizationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-      organizationEnabledFeatures: organization.feature_overrides,
-    });
-    const organizationEffectiveFeatures = [...new Set([...organizationCapabilities.pages.map((p) => p.feature), ...organizationCapabilities.managers.map((m) => m.id)])];
+  const { capabilities: organizationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+    organizationEnabledFeatures: organization.feature_overrides,
+  });
+  const organizationEffectiveFeatures = [...new Set([...organizationCapabilities.pages.map((p) => p.feature), ...organizationCapabilities.managers.map((m) => m.id)])];
 
-    const { capabilities: locationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
-      organizationEnabledFeatures: organization.feature_overrides,
-      locationEnabledFeatures: locationFeatureOverridesRaw,
-    });
-    const locationEffectiveFeatures = [...new Set([...locationCapabilities.pages.map((p) => p.feature), ...locationCapabilities.managers.map((m) => m.id)])];
+  const { capabilities: locationCapabilities } = resolveOrganizationCmsCapabilities(organization.vertical, organization.theme_id, {
+    organizationEnabledFeatures: organization.feature_overrides,
+    locationEnabledFeatures: locationFeatureOverridesRaw,
+  });
+  const locationEffectiveFeatures = [...new Set([...locationCapabilities.pages.map((p) => p.feature), ...locationCapabilities.managers.map((m) => m.id)])];
 
-    return {
-      organization_effective_features: organizationEffectiveFeatures,
-      location_effective_features: locationEffectiveFeatures,
-      location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
-    };
-  } catch (error) {
-    // Fix the source of truth (mismatched vertical/theme, corrupt override JSON) rather than
-    // reporting a fake "everything disabled" summary — that would look like real product state
-    // instead of an unresolved config problem. Callers already handle a null summary safely
-    // (spreading null into a response object is a no-op).
-    console.error("resolveLocationCapabilitySummary: failed to resolve capabilities", { organizationId, error });
-    return null;
-  }
+  return {
+    organization_effective_features: organizationEffectiveFeatures,
+    location_effective_features: locationEffectiveFeatures,
+    location_feature_overrides: parseCmsFeatureOverrideDelta(locationFeatureOverridesRaw),
+  };
 }
 
 /**

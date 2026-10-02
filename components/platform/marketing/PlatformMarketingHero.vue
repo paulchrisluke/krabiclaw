@@ -1,12 +1,9 @@
 <template>
-  <!-- The preview moves the authored CMS copy into the scene's compensated
-       text layer. The current CMS layout remains available with preview off. -->
   <PlatformCoastalScene v-if="page.recipe === 'products'" :block="block" :page="page" />
   <template v-else-if="variant === 'home'">
     <section
       ref="homeHero"
       class="kc-parallax-hero"
-      :class="{ 'kc-homepage-pilot-art': localHomepagePilot }"
       data-parity-section="hero"
       aria-label="Krabiclaw"
     >
@@ -43,10 +40,8 @@
         </picture>
       </div>
 
-      <div class="kc-parallax-hero__mark" :class="localHomepagePilot ? 'kc-parallax-hero__mark--copy max-w-304 px-6' : undefined">
-        <span v-if="!localHomepagePilot" class="kc-parallax-hero__mark-line" aria-hidden="true">Ready when</span>
-        <span v-if="!localHomepagePilot" class="kc-parallax-hero__mark-line kc-parallax-hero__mark-line--strong" aria-hidden="true">You are.</span>
-        <div v-if="localHomepagePilot" class="kc-parallax-hero__copy">
+      <div class="kc-parallax-hero__mark max-w-304 px-6">
+        <div class="kc-parallax-hero__copy">
           <span v-if="eyebrow" class="kc-parallax-intro__eyebrow">
             <span class="size-1.5 rounded-full bg-(--kc-teal) shrink-0" />
             {{ eyebrow }}
@@ -78,49 +73,13 @@
 
           <!-- One action: sign up when signed out, the dashboard when signed in. -->
           <div v-if="ctaLabel && ctaUrl" ref="heroActions" class="kc-parallax-intro__actions" :inert="heroActionCovered" :style="{ pointerEvents: heroActionCovered ? 'none' : undefined }">
-            <PlatformAccountCta label="Start free" :to="ctaUrl" variant="gradient" size="xl" />
+            <PlatformAccountCta :label="ctaLabel" :to="ctaUrl" variant="gradient" size="xl" />
           </div>
         </div>
       </div>
     </section>
 
-    <section class="kc-parallax-intro" :class="{ 'kc-homepage-pilot-art': localHomepagePilot }">
-      <div v-if="!localHomepagePilot" class="kc-parallax-intro__inner">
-        <span v-if="eyebrow" class="kc-parallax-intro__eyebrow">
-          <span class="size-1.5 rounded-full bg-(--kc-teal) shrink-0" />
-          {{ eyebrow }}
-        </span>
-
-        <h1 class="kc-parallax-intro__title">
-          <template v-for="(line, index) in titleLines" :key="index">
-            <br v-if="index > 0">
-            <span v-if="line.highlighted" class="kc-parallax-intro__highlight">{{ line.text }}</span>
-            <span v-else>{{ line.text }}</span>
-          </template>
-          <template v-if="rotatingAccents.length">
-            <br>
-            <!-- Read once, whole; the turning phrase is for the eye. -->
-            <span class="sr-only">{{ rotatingAccents.join(', ') }}</span>
-            <span class="kc-parallax-intro__rotator" aria-hidden="true">
-              <Transition name="kc-rotate" mode="out-in">
-                <span
-                  :key="rotatingIndex"
-                  class="kc-parallax-intro__rotating"
-                  :class="'kc-parallax-intro__rotating--' + (rotatingIndex % 3)"
-                >{{ rotatingAccents[rotatingIndex] }}</span>
-              </Transition>
-            </span>
-          </template>
-        </h1>
-
-        <p v-if="subtitle" class="kc-parallax-intro__subtitle">{{ subtitle }}</p>
-
-        <!-- One action: sign up when signed out, the dashboard when signed in. -->
-        <div v-if="!localHomepagePilot && ctaLabel && ctaUrl" class="kc-parallax-intro__actions">
-          <PlatformAccountCta :label="ctaLabel" :to="ctaUrl" variant="gradient" size="xl" />
-        </div>
-      </div>
-    </section>
+    <section class="kc-parallax-intro" :style="{ '--kc-transition-image': transitionImage }" aria-hidden="true" />
   </template>
 
   <!-- The About header: a pill, a headline, a lede. Nothing else. -->
@@ -234,9 +193,6 @@ type ParallaxLayer = {
  * original art-directed mobile/tablet/desktop compositions editable through
  * Krabiclaw's normal media tools instead of baking image URLs into the frontend.
  */
-// Issue #1185: approved coastal preview; production keeps exact CMS sources.
-const localHomepagePilot = import.meta.dev || useRuntimeConfig().public.homepageCoastalPreview
-
 const PARALLAX_BREAKPOINTS: ParallaxBreakpoint[] = ['xxs', 'xs', 'sm', 'md', 'lg']
 
 function mediaUrl(slot: string): string | null {
@@ -246,7 +202,6 @@ function mediaUrl(slot: string): string | null {
 
 function parallaxImageSet(slot: string): ParallaxImageSet {
   return Object.fromEntries(PARALLAX_BREAKPOINTS.map((breakpoint) => {
-    if (localHomepagePilot) return [breakpoint, '/homepage-pilot/hero/' + breakpoint + '/' + slot.replace('parallax_', '') + '.png']
     const exactSlot = slot + '_' + breakpoint
     const url = mediaUrl(exactSlot)
     if (!url) throw new Error('Homepage hero is missing required media placement ' + exactSlot)
@@ -293,6 +248,11 @@ const parallaxLayers = computed<ParallaxLayer[]>(() => [
 ])
 
 const parallaxForeground = computed<ParallaxImageSet>(() => parallaxImageSet('parallax_foreground'))
+const transitionImage = computed(() => {
+  const url = mediaUrl('media')
+  if (!url) throw new Error('Homepage hero is missing required media placement media')
+  return `url("${url}")`
+})
 
 const homeHero = ref<HTMLElement | null>(null)
 const heroActions = ref<HTMLElement | null>(null)
@@ -300,7 +260,7 @@ const heroActionCovered = ref(true)
 const heroAlphaMasks = new Map<string, { width: number, height: number, pixels: Uint8ClampedArray } | null>()
 
 async function loadHeroAlphaMasks() {
-  if (!localHomepagePilot || !homeHero.value) return
+  if (!homeHero.value) return
   const images = Array.from(homeHero.value.querySelectorAll<HTMLImageElement>('picture img')).slice(1)
   await Promise.all(images.map(async (image) => {
     let source = image.currentSrc
@@ -383,14 +343,13 @@ function scheduleHomeParallax() {
 
 onMounted(() => {
   if (variant.value !== 'home') return
-  if (!localHomepagePilot && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   renderHomeParallax()
   homeHeroScrollListener = scheduleHomeParallax
   window.addEventListener('scroll', homeHeroScrollListener, { passive: true })
 })
 
 onMounted(() => {
-  if (!localHomepagePilot || variant.value !== 'home') return
+  if (variant.value !== 'home') return
   void loadHeroAlphaMasks()
   window.addEventListener('resize', refreshHeroActionCoverage)
 })
@@ -465,7 +424,7 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   overflow: hidden;
   overflow: clip;
   /* The artwork's own black, so no strip of another shade shows at its foot. */
-  background: #010000;
+  background: #000;
 }
 
 .kc-parallax-hero__art {
@@ -523,31 +482,18 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   top: calc(120px / var(--kc-scene-ratio));
   left: 50%;
   display: flex;
-  width: min(82vw, 34rem);
+  width: 100%;
   flex-direction: column;
   align-items: center;
   color: white;
-  font-family: var(--font-jost);
-  font-size: clamp(2.6rem, 6.5vw, 5.25rem);
-  letter-spacing: -0.02em;
-  line-height: 0.92;
-  text-align: center;
-  text-shadow: 0 2px 18px rgb(0 0 0 / 32%);
-  transform: translate3d(-50%, var(--kc-parallax-offset), 0);
-  will-change: transform;
-}
-
-.kc-parallax-hero__mark-line {
-  display: block;
-  font-weight: 400;
-}
-
-.kc-parallax-hero__mark--copy {
-  width: 100%;
   font-family: var(--font-sans);
   font-size: 1rem;
   letter-spacing: normal;
   line-height: normal;
+  text-align: center;
+  text-shadow: 0 2px 18px rgb(0 0 0 / 32%);
+  transform: translate3d(-50%, var(--kc-parallax-offset), 0);
+  will-change: transform;
 }
 
 .kc-parallax-hero__copy {
@@ -572,10 +518,6 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   line-height: 1.5;
 }
 
-.kc-parallax-intro.kc-homepage-pilot-art {
-  min-height: 128px;
-}
-
 @media (max-width: 599px) {
   .kc-parallax-hero__copy { gap: 0.5rem; }
   .kc-parallax-hero__copy .kc-parallax-intro__title {
@@ -597,14 +539,11 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   }
 }
 
-.kc-parallax-hero__mark-line--strong {
-  font-weight: 600;
-}
-
 .kc-parallax-intro {
   position: relative;
   z-index: 30;
-  margin-top: -1px;
+  min-height: 128px;
+  margin-top: -2px;
   overflow: hidden;
   background: var(--ui-bg);
   color: var(--ui-text);
@@ -616,30 +555,10 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
   top: 0;
   right: 0;
   left: 0;
-  height: clamp(9rem, 20vw, 16rem);
-  /* Starts on the artwork's own black so the scene has no bottom edge, then
-     spills down in soft, uneven lobes like the canopy above it. */
-  background: linear-gradient(to bottom, #010000 0%, #010000 22%, rgb(1 0 0 / 70%) 48%, transparent 100%);
-  /* The solid layer keeps the blur off the top edge, which meets the art. */
-  mask-image: linear-gradient(#000, #000), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 240' preserveAspectRatio='none'%3E%3Cfilter id='b'%3E%3CfeGaussianBlur stdDeviation='10'/%3E%3C/filter%3E%3Cpath filter='url(%23b)' d='M0 0H1440V132C1392 168 1338 196 1276 178C1214 160 1180 118 1112 126C1044 134 1014 198 944 204C874 210 842 150 772 144C702 138 676 186 606 196C536 206 498 142 428 136C358 130 330 184 262 190C194 196 158 150 96 146C58 144 26 158 0 170Z'/%3E%3C/svg%3E");
-  mask-size: 100% 40%, 100% 100%;
-  mask-position: top;
-  mask-repeat: no-repeat;
+  height: 128px;
+  background: var(--kc-transition-image) top center / 100% 100% no-repeat;
   content: "";
   pointer-events: none;
-}
-
-.kc-parallax-intro__inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: min(92vw, 860px);
-  margin: 0 auto;
-  padding: clamp(8rem, 15vw, 11rem) 0 clamp(5rem, 9vw, 7rem);
-  flex-direction: column;
-  align-items: center;
-  gap: 1.4rem;
-  text-align: center;
 }
 
 .kc-parallax-intro__eyebrow {
@@ -736,11 +655,6 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
 }
 
 @media (max-width: 599px) {
-  .kc-parallax-intro__inner {
-    width: min(88vw, 34rem);
-    padding-top: 8rem;
-  }
-
   .kc-parallax-intro__title {
     max-width: 12ch;
     font-size: clamp(2.15rem, 10vw, 3.15rem);
@@ -763,28 +677,17 @@ const gradientClass = computed(() => GRADIENT_CLASS[variant.value] ?? GRADIENT_C
     will-change: auto;
   }
 }
-@media (min-width: 0px) {
-  .kc-parallax-hero.kc-homepage-pilot-art { background: #000; }
-
-  .kc-homepage-pilot-art .kc-parallax-hero__foreground::after {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 96px;
-    background: linear-gradient(to bottom, transparent, #000 calc(100% - 2px), #000);
-    content: '';
-    pointer-events: none;
-  }
-
-  .kc-parallax-intro.kc-homepage-pilot-art { margin-top: -2px; }
-
-  .kc-parallax-intro.kc-homepage-pilot-art::before {
-    height: 128px;
-    background: url('/homepage-pilot/transitions/next_row_transition.png') top center / 100% 100% no-repeat;
-    mask-image: none;
-  }
+.kc-parallax-hero__foreground::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 96px;
+  background: linear-gradient(to bottom, transparent, #000 calc(100% - 2px), #000);
+  content: '';
+  pointer-events: none;
 }
+
 </style>
 
 <style scoped>

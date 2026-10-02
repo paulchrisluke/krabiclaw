@@ -35,7 +35,7 @@ async function boot(legacy = false) {
   } }] })
   const db = await runtime.getD1Database('DB')
   const statements = legacy
-    ? ['0000_baseline', '0001_message_attachments', '0002_provider_support'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
+    ? ['0000_baseline', '0001_message_attachments', '0002_native_consultation_foundation', '0003_provider_calendar_payments'].flatMap(name => readFileSync(`migrations/${name}.sql`, 'utf8').split('--> statement-breakpoint').map(sql => sql.trim()).filter(Boolean))
     : await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), await generateSQLiteDrizzleJson(schema))
   await db.batch(statements.map(statement => db.prepare(statement)))
   await db.prepare(`INSERT INTO organization (id, name, slug, subdomain, settings_json, theme_id, default_currency, status, onboarding_status, url_structure, vertical, updated_at)
