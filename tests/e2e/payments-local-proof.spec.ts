@@ -90,3 +90,44 @@ test('local Worker financial servicing, buyer ownership and signed payment ingre
  const forged=await request.post('/api/account/checkout-return',{data:{payment_id:'payments-proof-order',purchase_claim:'forged-return'}})
  expect(forged.status()).toBe(400)
 })
+
+test.describe('existing native sandbox CMS account',()=>{
+ test.use({ignoreHTTPSErrors:true})
+ test('incomplete Stripe return refreshes native requirements without granting readiness',async({page,baseURL})=>{
+  test.skip(process.env.PAYMENTS_CONNECT_READ_PROOF!=='true'||!['localhost','127.0.0.1'].includes(new URL(baseURL!).hostname),'Explicit read-only existing sandbox proof; never create or complete provider accounts here')
+  await page.setViewportSize({width:1280,height:1000})
+  const expectedAccount=process.env.PAYMENTS_CONNECT_READ_ACCOUNT
+  expect(expectedAccount).toMatch(/^acct_/)
+  const signin=await page.request.post('/api/auth/sign-in/email',{headers:authRequestHeaders(baseURL!),data:{email:'payments-proof-owner@playwright.example',password}})
+  expect(signin.status(),await signin.text()).toBe(200)
+  const endpoint='/api/dashboard/connect?org=payments-local-proof'
+  const before=await page.request.get(endpoint)
+  expect(before.status(),await before.text()).toBe(200)
+  const original=(await before.json()).account
+  expect(original).toMatchObject({stripeAccountId:expectedAccount,livemode:false,status:'action_required',cardPaymentsStatus:'restricted'})
+  expect(original.requirements.length).toBeGreaterThan(0)
+  const refresh=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/dashboard/connect/status'&&response.request().method()==='POST')
+  await page.goto('/dashboard/payments-local-proof/settings/integrations/stripe?stripe_connect=returned')
+  expect((await refresh).status()).toBe(200)
+  await expect(page).not.toHaveURL(/stripe_connect=/)
+  await expect(page.getByText('Action required',{exact:true})).toBeVisible()
+  await expect(page.getByText('Stripe requirements',{exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Continue Stripe onboarding',exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Refresh status',exact:true})).toBeVisible()
+  const after=(await (await page.request.get(endpoint)).json()).account
+  expect(after).toMatchObject({stripeAccountId:expectedAccount,livemode:false,status:'action_required',cardPaymentsStatus:'restricted'})
+  expect(Date.parse(after.stripeRefreshedAt)).toBeGreaterThan(Date.parse(original.stripeRefreshedAt))
+  await page.screenshot({path:'artifacts/payments-cms-onboarding-requirements.png',fullPage:true})
+  await page.goto('/dashboard/payments-local-proof/settings/integrations')
+  for(const path of ['/platform/integrations/stripe-blurple.svg','/platform/integrations/google-calendar.webp']){
+   const image=page.locator(`img[src="${path}"]`)
+   await expect(image).toBeVisible()
+   await expect.poll(()=>image.evaluate(element=>(element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  }
+  await page.screenshot({path:'artifacts/payments-integration-marks-light.png',fullPage:true})
+  await page.evaluate(()=>document.documentElement.classList.add('dark'))
+  await expect(page.locator('img[src="/platform/integrations/stripe-white.svg"]')).toBeVisible()
+  await expect(page.locator('img[src="/platform/integrations/stripe-blurple.svg"]')).toBeHidden()
+  await page.screenshot({path:'artifacts/payments-integration-marks-dark.png',fullPage:true})
+ })
+})

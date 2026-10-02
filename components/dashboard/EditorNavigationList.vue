@@ -35,11 +35,21 @@
               v-if="item.lead.image"
               :src="item.lead.image"
               alt=""
-              class="size-full object-cover"
+              class="size-full"
+              :class="[item.lead.imageFit === 'contain' ? 'object-contain p-2' : 'object-cover', item.lead.darkImage ? 'dark:hidden' : '']"
               loading="lazy"
               decoding="async"
             >
-            <UIcon v-else :name="item.lead.icon" class="size-7 text-dimmed" />
+            <img
+              v-if="item.lead.image && item.lead.darkImage"
+              :src="item.lead.darkImage"
+              alt=""
+              class="hidden size-full dark:block"
+              :class="item.lead.imageFit === 'contain' ? 'object-contain p-2' : 'object-cover'"
+              loading="lazy"
+              decoding="async"
+            >
+            <UIcon v-if="!item.lead.image" :name="item.lead.icon" class="size-7 text-dimmed" />
           </span>
           <span class="min-w-0 flex-1">
             <!-- The picture leads, in the row's own footprint (DESIGN.md). -->
@@ -137,7 +147,7 @@ export interface EditorNavigationItem {
    * has a picture, `icon` in its place when it has none — or on its own, for
    * a product known by its logo.
    */
-  lead?: { image?: string | null; icon: string }
+  lead?: { image?: string | null; darkImage?: string; imageFit?: 'cover' | 'contain'; icon?: string }
   /** A dot ahead of the summary: the thing the row names is working, failing, or off. */
   status?: 'success' | 'error' | 'neutral'
   /** Renders the summary as absent rather than as a value. */

@@ -84,7 +84,7 @@ const items = computed<EditorNavigationItem[]>(() => {
   const maps = s?.google_maps ?? []
   const connected = maps.filter(location => location.google_place_id).length
   return [
-    { id: 'stripe', label: 'Stripe', lead: { icon: 'i-logos-stripe' }, to: `${base.value}/stripe`, summary: 'Payments onboarding and account management' },
+    { id: 'stripe', label: 'Stripe', lead: { image: '/platform/integrations/stripe-blurple.svg', darkImage: '/platform/integrations/stripe-white.svg', imageFit: 'contain' }, to: `${base.value}/stripe`, summary: 'Payments onboarding and account management' },
     { id: 'google-maps', label: 'Google Maps', lead: { icon: 'i-logos-google-maps' }, to: `${base.value}/google-maps`,
       ...(maps.length
         ? { summary: `${connected} of ${maps.length} ${maps.length === 1 ? 'location' : 'locations'} connected`, status: connected ? 'success' as const : 'neutral' as const }
@@ -93,7 +93,7 @@ const items = computed<EditorNavigationItem[]>(() => {
       ...connection(s?.google_analytics ?? null, s?.google_analytics?.property_name ?? s?.google_analytics?.measurement_id ?? '') },
     { id: 'google-search-console', label: 'Google Search Console', lead: { icon: 'i-logos-google-search-console' }, to: `${base.value}/google-search-console`,
       ...connection(s?.google_search_console ?? null, s?.google_search_console?.site_url ?? '') },
-    { id: 'google-calendar', label: 'Google Calendar', lead: { icon: 'i-lucide-calendar' }, to: `${base.value}/google-calendar`,
+    { id: 'google-calendar', label: 'Google Calendar', lead: { image: '/platform/integrations/google-calendar.webp', imageFit: 'contain' }, to: `${base.value}/google-calendar`,
       ...connection(s?.google_calendar ?? null, s?.google_calendar?.calendar_name ?? '') },
     { id: 'facebook', label: 'Facebook', lead: { icon: 'i-logos-facebook' }, to: `${base.value}/facebook`,
       ...connection(s?.facebook ?? null, s?.facebook?.page_name ?? '') },

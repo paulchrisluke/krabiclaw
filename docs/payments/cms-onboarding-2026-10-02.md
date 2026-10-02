@@ -54,21 +54,53 @@ servicing, actor approval handoff and signed ingress. That test uses synthetic
 provider credentials and is separate from the native checkpoints above.
 
 Safe committed screenshots:
-`artifacts/payments-cms-onboarding-unconfigured.png` and
-`artifacts/payments-cms-hosted-test-code.png`. The requirements screenshot is
-available locally at `artifacts/payments-cms-onboarding-requirements.png`; its
-browser chrome is excluded from publication. No onboarding URL tokens or real
+`artifacts/payments-cms-onboarding-unconfigured.png`,
+`artifacts/payments-cms-hosted-test-code.png` and
+`artifacts/payments-cms-onboarding-requirements.png`. The last is refreshed by
+the actual CMS read-only browser check, excluding desktop/browser chrome. No onboarding URL tokens or real
 identity data are committed.
 
 Remaining check: complete the business forms and verify the native return to
-ready status. Mac execution transport disconnected intermittently, and another
-desktop browser activity interrupted screen capture/focus; further desktop form
-interaction was stopped to preserve that activity. The native form was not
-declared complete. Resume the specifically identified sandbox tab; do not target
-the other task's active tab. Stop if an actual binding agreement, persistent
-permission/credential change, or live action is required.
+ready status. Resuming the existing account reached the Individual personal-details
+form. Desktop focus changed during synthetic test-data entry; interaction stopped
+without submitting that form or accepting an agreement. Browser focus is released.
+The account has not been declared ready. Resume the specifically identified
+sandbox tab only when desktop control is available; stop at an actual binding
+agreement, persistent permission/credential change, or live action.
 
 Seller onboarding requires financial integration permission. It does not grant
 Payments acceptance: that separate entitlement remains false on current plans.
 Existing payment servicing remains available after downgrade. No real financial
 action, OAuth grant, remote DDL, merge or deployment occurred in this check.
+
+The additional existing-account browser check passed against the real native
+sandbox provider boundary: the CMS callback invoked status POST, removed its
+returned marker, refreshed the durable UTC timestamp and retained
+action_required/restricted with requirements. It creates no account or provider
+financial object. Run with PAYMENTS_CONNECT_READ_PROOF=true and the explicit
+PAYMENTS_CONNECT_READ_ACCOUNT plus the existing local HTTPS preview URL.
+
+The approved brand correction uses the exact official assets from artwork PR
+[#1221](https://github.com/paulchrisluke/krabiclaw/pull/1221), commit
+`abf20d589`: Google Calendar WebP and Stripe's original blurple/white SVG
+wordmarks. Their provenance and usage metadata are retained in
+`public/platform/integrations/README.md`. Integration rows preserve image aspect
+ratios and choose the white Stripe wordmark in dark mode. Existing image rows
+retain their default cover behavior. No runtime asset service or additional icon
+package is introduced.
+
+Owner correction checkpoint: the exact Connect testing guide was re-read after
+form entry was paused. Selected DOB/address/individual phone/SSN-last-four
+tokens match its successful-verification scenarios; zero-valued tokens are
+explicitly documented for those fields. The attempted city spelling omitted a
+space, and the state selection and keystroke delivery were not verified after
+desktop focus changed. They must be inspected and corrected before submitting.
+No claim of fully compliant entry or successful identity verification is made.
+No business URL, tax ID, bank account or agreement has been submitted.
+
+Final isolated verification: typecheck, targeted ESLint and production build
+passed. The native existing-account browser case passed (1/1), including actual
+status refresh and light/dark asset visibility/load assertions. Both screenshots
+were inspected: `artifacts/payments-integration-marks-light.png` and
+`artifacts/payments-integration-marks-dark.png`. Provider status remains
+action_required/restricted; the incomplete callback never grants readiness.
