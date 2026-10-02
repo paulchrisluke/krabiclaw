@@ -831,31 +831,17 @@ export function globalTool(definition: RawMcpToolDefinition | McpToolDefinition)
 
 export type RawMcpToolDefinition = Omit<McpToolDefinition, 'annotations' | 'securitySchemes'>
 
-// The explicit catalog table below is authoritative. These defaults are only
-// constructors for definitions whose reviewed table entry has the same shape.
-export const READ_ONLY_DEFAULT: McpToolAnnotations = Object.freeze({
+// The explicit catalog table below is authoritative. Website/CMS operations
+// stay within the selected workspace even when its content is publicly visible.
+// Publishing to a social audience and downloading host files cross that boundary.
+const R: McpToolAnnotations = Object.freeze({
   readOnlyHint: true,
   idempotentHint: true,
   openWorldHint: false,
   destructiveHint: false,
 })
-
-export function openWorldWriteAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
-}
-
-export function boundedDestructiveAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
-}
-
-export function openWorldDestructiveAnnotations(): McpToolAnnotations {
-  return { readOnlyHint: false, openWorldHint: true, destructiveHint: true }
-}
-
-const R = READ_ONLY_DEFAULT
-const W = Object.freeze(openWorldWriteAnnotations())
-const BD = Object.freeze(boundedDestructiveAnnotations())
-const D = Object.freeze(openWorldDestructiveAnnotations())
+const W: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint: false, destructiveHint: false })
+const D: McpToolAnnotations = Object.freeze({ readOnlyHint: false, openWorldHint: false, destructiveHint: true })
 
 /** Submission-review contract. Every real public tool is listed explicitly. */
 export const EXPECTED_TOOL_ANNOTATIONS = {
@@ -901,24 +887,24 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   list_posts: R,
   get_social_connections: R,
   // Reads Meta, and records what the read proves about one publication.
-  reconcile_post_publication: W,
-  list_channel_posts: { ...R, openWorldHint: true },
-  get_channel_post: { ...R, openWorldHint: true },
-  delete_channel_post: D,
+  reconcile_post_publication: D,
+  list_channel_posts: R,
+  get_channel_post: R,
+  delete_channel_post: { ...D, openWorldHint: true },
   list_organization_locales: R,
   list_organization_qa: R,
   list_organization_reviews: R,
   list_organizations: R,
   list_site_pages: R,
   publish_blog_post: D,
-  publish_post: D,
+  publish_post: { ...D, openWorldHint: true },
   put_resource_localization: D,
   remove_media: D,
   reorder_media: D,
   replace_content_block: D,
   set_brand_color: D,
   set_media: D,
-  set_workspace_context: BD,
+  set_workspace_context: D,
   reconcile_products: D,
   update_blog_post: D,
   update_location: D,
@@ -931,7 +917,7 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_organization_settings: D,
   update_site_page: D,
   delete_site_page: D,
-  save_media_attachment: W,
+  save_media_attachment: { ...W, openWorldHint: true },
   list_products: R,
   set_product_publication: D,
   set_product_location: D,

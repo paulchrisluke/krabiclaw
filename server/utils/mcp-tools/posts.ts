@@ -62,7 +62,7 @@ const channelPostObject = {
 export const POSTS_TOOLS: McpToolDefinition[] = [
   organizationTool({
     name: 'get_social_connections',
-    description: 'Where this organization can publish short posts: its website, and the exact Facebook Page and Instagram professional account it connected, each with the target_id and connection_revision publish_post needs, the formats it takes, anything in the way (plan, disconnected account), the supported channel operations, and the dashboard URL where a person connects it. Never returns a token.',
+    description: "Read the site’s saved website, Facebook Page and Instagram publishing connections before selecting a publication target. Returns target_id, connection_revision, supported formats and operations, stored connection problems and setup links. Live provider access is checked by channel operations; a saved connection does not establish current Page or account access. Credentials are not returned.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -86,7 +86,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_channel_post',
-    description: 'Read one live native provider post from the explicitly selected connected channel. provider_post_id comes from list_channel_posts; it is not a website post_id. Does not import or change website content.',
+    description: "Read one post from the selected connected Facebook Page or Instagram professional account when the user wants its current caption, media or public link. Use provider_post_id from list_channel_posts and the exact target from get_social_connections. Website content is unchanged.",
     domain: 'posts', minimumRole: 'admin', confirmRequired: false,
     inputSchema: { ...channelTargetProperties, provider_post_id: { type: 'string' } },
     required: [...channelTargetRequired, 'provider_post_id'],
@@ -105,7 +105,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'list_posts',
-    description: 'List website posts (not live Facebook or Instagram inventory), newest change first, a page at a time. Pass location_id for one location\'s posts; omit it for all of them.',
+    description: "List draft or published short website posts when the user wants to find announcements to review or edit. Results are paginated, newest change first. Filter by location_id for one location. Use list_channel_posts for live Facebook or Instagram posts.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -122,7 +122,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'get_post',
-    description: 'Get one short post: its words, call to action, ordered media, website status, preview link for a draft, and each Facebook or Instagram publication with its exact state.',
+    description: "Read a short website post before editing or publishing it. Returns its caption, call to action, ordered media, website status, draft preview link and stored Facebook or Instagram publication receipts. Use get_channel_post for current provider content.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: false,
@@ -132,7 +132,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'create_post',
-    description: 'Create a short post as a draft: an optional title, the caption as body (plain text, newlines kept), ordered image or video media, an optional location and an optional call_to_action {label, url}. Nothing is public until publish_post. A draft may be empty; publishing needs words, media or a call to action. Event dates, offers and codes are written in the body. Pass a new idempotency_key per post: repeating a call with the same key returns the same post instead of a second one. Use create_blog_post for long-form articles.',
+    description: "Create a draft short post when the user wants an announcement, event notice or offer. Supports a plain-text caption, ordered media, optional title, location and call to action. It stays private until publish_post. Use a new idempotency_key for each post and reuse it only for retries of that request. Long-form articles use create_blog_post.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: true,
@@ -170,7 +170,7 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
   }),
   organizationTool({
     name: 'reconcile_post_publication',
-    description: 'Resolve a Facebook or Instagram publication whose outcome is unknown, or refresh one, by reading Meta: it records only what Meta\'s own answer proves, never publishes, and never accepts an assertion that something is published. Pass provider_post_id when you know the exact post it became; it must belong to the connected Page or account. What stays ambiguous stays unknown.',
+    description: "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
     domain: 'posts',
     minimumRole: 'admin',
     confirmRequired: true,
