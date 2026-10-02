@@ -66,7 +66,7 @@ const TENANT_PAGE_LIFECYCLE_OUTPUT = {
 export const CONTENT_TOOLS: McpToolDefinition[] = [
   organizationTool({
       name: 'append_content_block',
-      description: 'Insert one block into a blog article or site page. Read the document first (get_blog_post, get_site_page): the writer says where the block goes by naming the block it follows in after_block_id — "under this paragraph" is the id of the markdown block holding that paragraph; omit after_block_id for the end of the document. To place a block inside a paragraph run, first replace_content_block the markdown block with the text before the split, then append the new block after it, then append the remaining text. The first block of an article, when it is an image, is the article\'s cover. Returns the whole document so the next edit has every block\'s id and updated_at.',
+      description: "Add a content block to an existing blog article or site page when the user requests an insertion. Read the document first and use after_block_id to insert after an existing block; omit it to append. An image in the first article block becomes its cover. Returns the updated document with block IDs and timestamps.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: false,
@@ -143,7 +143,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   organizationTool({
       name: 'update_site_page',
-      description: 'Replace the selected site-page language variant using the latest read token. This writes the whole document: provide the complete blocks array, path, title and expected_updated_at from the last read, because every omitted metadata field is written as null rather than kept. Sending a different path moves the page and creates its locale-scoped redirect. If existing block ids are omitted, also provide the exact removed_block_ids and confirmation_token returned by the canonical page read.',
+      description: "Replace a site-page language variant when the user wants to edit its content or metadata. Read it first and supply the complete blocks, path, title, pageType, recipe, sortOrder and expected_updated_at. Omitted summary is cleared. A changed path creates a language-specific redirect. To remove blocks, supply the exact removed_block_ids and confirmation_token from the page read.",
       domain: 'content',
       minimumRole: 'admin',
       confirmRequired: true,
