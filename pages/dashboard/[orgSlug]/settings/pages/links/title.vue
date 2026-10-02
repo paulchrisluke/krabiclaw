@@ -10,7 +10,7 @@
     @save="editor.save"
   >
     <UFormField label="Title" required>
-      <UInput v-model="editor.form.title" aria-label="Links page title" size="xl" maxlength="160" autofocus class="w-full" />
+      <UInput v-model="editor.form.title" aria-label="Links page title" maxlength="160" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

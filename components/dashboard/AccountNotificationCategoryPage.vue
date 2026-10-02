@@ -2,9 +2,9 @@
   <div v-if="setting" class="space-y-6">
     <UAlert v-if="failure" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="failure" />
 
-    <div class="space-y-4">
-      <USwitch v-model="draft.email" label="Email" :disabled="emailLocked || saving" size="lg" />
-      <USwitch v-model="draft.whatsapp" label="WhatsApp" :disabled="!phoneVerified || saving" size="lg" />
+    <div>
+      <SettingRow v-model="draft.email" label="Email" :disabled="emailLocked || saving" />
+      <SettingRow v-model="draft.whatsapp" label="WhatsApp" :disabled="!phoneVerified || saving" />
     </div>
 
     <NuxtLink v-if="!phoneVerified" to="/dashboard/account/profile/personal" class="block text-sm text-muted underline underline-offset-2">
@@ -15,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { authClient } from '~/lib/auth-client'
 import { isMandatoryEmailCategory, isNotificationCategory, type NotificationCategory } from '~/shared/notification-categories'
 

@@ -67,6 +67,16 @@
   }
 }
 
+/*
+ * The dashboard's type is measured against Airbnb's host tools: 16px body,
+ * 14px muted. base.css scales the platform root to 106% for the marketing
+ * site, which made every dashboard control 17px. Scoped with :has so the rule
+ * leaves with the dashboard on a client-side navigation to another surface.
+ */
+:root:has([data-surface="dashboard"]) {
+  font-size: 100%;
+}
+
 .w-\(--width\) {
   width: var(--width);
 }

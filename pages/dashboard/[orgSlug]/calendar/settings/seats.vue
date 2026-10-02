@@ -3,6 +3,7 @@
   <DashboardLeafPanel
     id="calendar-settings-seats"
     title="Seats per time slot"
+    lead="How many guests can start at the same time?"
     :ready="!editor.loading.value"
     :saving="editor.saving.value"
     :disabled="editor.saveDisabled.value"
@@ -10,17 +11,14 @@
     @cancel="editor.revert"
     @save="editor.save"
   >
-    <div class="mx-auto w-full max-w-md space-y-6">
-      <p class="text-base text-muted">How many guests can start at the same time? Once a time slot is full, guests are offered the next one.</p>
-      <UCheckbox :model-value="limited" label="Limit seats" @update:model-value="setLimited($event === true)" />
-      <UFormField v-if="limited" label="Seats">
-        <UInputNumber :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" size="xl" class="w-full" @update:model-value="setSeats" />
-      </UFormField>
-    </div>
+    <SettingRow :model-value="limited" label="Limit seats" @update:model-value="setLimited">
+      <UInputNumber v-if="limited" :model-value="editor.reservationForm.value.slot_capacity ?? 20" :min="1" aria-label="Seats" class="w-36" @update:model-value="setSeats" />
+    </SettingRow>
   </DashboardLeafPanel>
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { useCalendarLocationEditor } from '~/composables/useCalendarLocationEditor'
 
 definePageMeta({ layout: 'dashboard' })

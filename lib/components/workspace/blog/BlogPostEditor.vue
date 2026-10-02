@@ -82,7 +82,7 @@ import type { DashboardArticleCategory } from '~/composables/useArticleCategorie
 export type SettingsSection = 'category' | 'excerpt' | 'publishing' | 'share' | 'url'
 export const SETTINGS_SECTIONS: SettingsSection[] = ['category', 'excerpt', 'publishing', 'share', 'url']
 export const SETTINGS_LABELS: Record<SettingsSection, string> = {
-  category: 'Category', excerpt: 'Excerpt', publishing: 'When it goes live',
+  category: 'Category', excerpt: 'Excerpt', publishing: 'Visibility',
   share: 'Share preview', url: 'URL',
 }
 
@@ -98,7 +98,6 @@ export interface BlogEditor {
   /** The post's collection's categories, the Category leaf's choices. */
   categories: Ref<DashboardArticleCategory[] | undefined>
   categoriesError: Ref<unknown>
-  lifecycleLabel: ComputedRef<string>
   generatedSlug: ComputedRef<string>
   resolvedExcerpt: ComputedRef<string>
   resolvedSeo: ComputedRef<{ title: string; description: string; canonicalUrl: string }>
@@ -193,7 +192,6 @@ const statusLabel = computed(() => {
 })
 /** One key for this editor's creation, so a repeated press makes one article. */
 const createKey = crypto.randomUUID()
-const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedOrganizationName = computed(() => post.value?.editor_organization_name || '')
@@ -246,7 +244,7 @@ const settingsGroups = computed<EditorNavigationGroup[]>(() => {
       id: 'publishing',
       label: 'Publishing',
       items: [
-        { id: 'publishing', to: `${postPath.value}/publishing`, label: 'When it goes live', summary: publishingSummary.value },
+        { id: 'publishing', to: `${postPath.value}/publishing`, label: 'Visibility', summary: publishingSummary.value },
         row('url', 'URL', form.slug || generatedSlug.value, 'Generated from the headline'),
       ],
     },
@@ -610,7 +608,6 @@ provide(blogEditorKey, {
   collectionOptions,
   categories,
   categoriesError,
-  lifecycleLabel,
   generatedSlug,
   resolvedExcerpt,
   resolvedSeo,

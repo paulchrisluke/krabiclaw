@@ -11,10 +11,10 @@
   >
     <div class="space-y-6">
       <UFormField label="Email address" required>
-        <UInput v-model="inviteForm.email" type="email" placeholder="teammate@example.com" size="xl" autofocus class="w-full" />
+        <UInput v-model="inviteForm.email" type="email" placeholder="teammate@example.com" autofocus class="w-full" />
       </UFormField>
       <UFormField label="Role">
-        <USelect v-model="inviteForm.role" :items="roleOptions" size="xl" class="w-full" />
+        <USelect v-model="inviteForm.role" :items="roleOptions" class="w-full" />
       </UFormField>
     </div>
   </DashboardLeafPanel>

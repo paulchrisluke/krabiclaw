@@ -1,6 +1,7 @@
 <template>
   <DashboardLeafPanel
     id="product-name"
+    :ready="p.ready.value"
     :title="p.sectionLabels['name']"
     :saving="p.saving.value"
     :disabled="p.saveDisabled.value"
@@ -10,7 +11,7 @@
     @save="p.save"
   >
     <UFormField label="Name" required>
-      <UInput v-model="p.form.name" size="xl" autofocus class="w-full" />
+      <UInput v-model="p.form.name" autofocus class="w-full" />
     </UFormField>
   </DashboardLeafPanel>
 </template>

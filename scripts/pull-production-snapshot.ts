@@ -97,9 +97,7 @@ const run = (args: string[], json = false) => {
       cwd: process.cwd(),
       stdio: json ? ['ignore', 'pipe', 'inherit'] : 'inherit',
       encoding: 'utf8',
-      // The whole snapshot is one SELECT's JSON. Production passed 64 MiB in
-      // October 2026, which Node reported only as ENOBUFS.
-      maxBuffer: 512 * 1024 * 1024,
+      maxBuffer: 256 * 1024 * 1024,
       env: { ...process.env, WRANGLER_LOG_PATH: logDirectory },
     })
   } catch (error) {
@@ -144,7 +142,7 @@ function copyProductionRows(path: string) {
   }
   // One SELECT gives all tables the same SQLite read snapshot. Include the
   // catalog in that read and reject schema changes since column discovery.
-  // A copy larger than the buffer fails with ENOBUFS before any target write.
+  // The existing buffer limit rejects oversized copies before target writes.
   // workerd limits each compound SELECT to five terms. Materialized CTEs
   // keep each group within that limit without splitting the read snapshot.
   // https://github.com/cloudflare/workerd/blob/main/src/workerd/util/sqlite.c++

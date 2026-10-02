@@ -5,8 +5,8 @@
       <UButton icon="i-lucide-plus" size="sm" @click="openAddModal">Add domain</UButton>
     </template>
 
-    <div class="mx-auto max-w-5xl space-y-4">
-      <UCard>
+    <div class="space-y-4">
+      <div>
         <UAlert
           v-if="actionError"
           color="error"
@@ -125,7 +125,7 @@
             </div>
           </div>
         </div>
-      </UCard>
+      </div>
     </div>
 
     <UModal v-model:open="addModalOpen" title="Add domain">
@@ -143,7 +143,7 @@
             :description="liveCutoverWarning.message"
           />
 
-          <UCheckbox
+          <SettingRow
             v-if="liveCutoverWarning"
             v-model="addForm.acknowledge_live_cutover"
             label="I understand changing DNS can interrupt the current site until validation finishes."
@@ -166,6 +166,7 @@
 </template>
 
 <script setup lang="ts">
+import SettingRow from '~/components/dashboard/SettingRow.vue'
 import { formatTimestamp } from '~/utils/timezone'
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })

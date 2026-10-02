@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-3">
     <UFormField label="Note">
-      <UInput :model-value="calculatorNote" size="xl" class="w-full" @update:model-value="setCalculatorNote($event)" />
+      <UInput :model-value="calculatorNote" class="w-full" @update:model-value="setCalculatorNote($event)" />
     </UFormField>
     <div class="grid gap-2 text-xs text-muted lg:grid-cols-4">
       <span>Household size</span><span>250% limit</span><span>350% limit</span><span>400% limit</span>
