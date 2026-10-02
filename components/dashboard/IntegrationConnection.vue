@@ -12,9 +12,7 @@
       <UAvatar :src="connection.image ?? undefined" :icon="logo" alt="" size="3xl" />
       <div class="min-w-0 flex-1">
         <p class="truncate font-semibold text-highlighted">{{ connection.name }}</p>
-        <p class="mt-0.5 truncate text-sm" :class="connection.status === 'active' ? 'text-muted' : 'text-error'">
-          {{ connection.status === 'error' ? 'Last sync failed' : connection.status === 'disabled' ? 'Disabled' : `Connected on ${connectedOn}` }}
-        </p>
+        <p class="mt-0.5 truncate text-sm text-muted">Connected on {{ connectedOn }}</p>
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <UButton v-if="!changing" color="neutral" variant="outline" @click="changing = true">Change {{ noun }}</UButton>
@@ -41,13 +39,11 @@
   default slot for connecting or changing it. The leaf owns the picker's draft
   and the Save that commits it; `changing` says when the picker is open.
 */
-import type { IntegrationStatus } from '~/pages/dashboard/[orgSlug]/settings/integrations.vue'
-
 const props = defineProps<{
   logo: string
   /** What the business is connected to: an account, a property, a Page. */
   noun: string
-  connection: { name: string; image?: string | null; connectedAt: string; status: IntegrationStatus } | null
+  connection: { name: string; image?: string | null; connectedAt: string } | null
   disconnecting?: boolean
 }>()
 

@@ -67,22 +67,49 @@ const columns = (db, table) => db.prepare(`PRAGMA table_info(${qi(table)})`).all
 const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(name => row[name]))).sort().join('\n'))
 
 /**
- * Columns a current schema dropped on purpose, so an older export may still
- * carry them. The typed social profile URLs are gone: a site links only the
- * accounts it connected in Integrations.
+ * Columns the current schema dropped, so a v7 export still carries them. Each
+ * is either mapped below or must hold nothing; a value nobody maps fails.
  */
 const RETIRED_COLUMNS = {
-  media_assets: ['origin_publication_id'],
-  post_publications: ['origin'],
-  business_locations: ['facebook_url', 'instagram_url', 'tiktok_url'],
-  organization: ['social_facebook_url', 'social_instagram_url', 'social_tiktok_url'],
+  organization: ['integrations_json'],
+  business_locations: ['description_provenance'],
 }
 
-/** Article tags are retired with the v6 content model, including any residual source rows. */
-export const TRANSFORMS = [{
-  name: 'article_tags_removed',
-  sql: "UPDATE content_documents SET metadata_json = json_remove(metadata_json, '$.tags') WHERE kind = 'article' AND json_type(metadata_json, '$.tags') IS NOT NULL",
-}]
+/**
+ * v7 kept each organization's connections as keys of
+ * `organization.integrations_json`; v8 keeps one `organization_integrations`
+ * row per connection. Every key maps to exactly one row or the transfer fails.
+ */
+const INTEGRATION_KEYS = {
+  facebook: { target_id: 'page_id', target_name: 'page_name' },
+  instagram: { target_id: 'instagram_user_id', target_name: 'username' },
+  google_analytics: { target_id: 'property_id', target_name: 'property_name' },
+  google_search_console: { target_id: 'site_url', target_name: 'site_url' },
+}
+
+function integrationRows(stage) {
+  const rows = []
+  for (const organization of stage.prepare("SELECT id, integrations_json FROM organization WHERE integrations_json <> '{}'").all()) {
+    for (const [provider, value] of Object.entries(JSON.parse(organization.integrations_json))) {
+      const keys = INTEGRATION_KEYS[provider]
+      assert(keys, `${organization.id}: unmapped integration ${provider}`)
+      assert(value.status === 'active', `${organization.id}: ${provider} is ${value.status}; only an active connection maps`)
+      const row = {
+        id: `${organization.id}:${provider}`, organization_id: organization.id, provider, account_id: value.account_id,
+        target_id: value[keys.target_id], target_name: value[keys.target_name],
+        measurement_id: provider === 'google_analytics' ? value.measurement_id : null,
+        verified: provider === 'google_search_console' ? Number(Boolean(value.verified)) : null,
+        verification_token: provider === 'google_search_console' ? value.verification_token ?? null : null,
+        revision: value.revision, created_at: value.created_at, updated_at: value.updated_at,
+      }
+      for (const name of ['account_id', 'target_id', 'target_name', 'revision', 'created_at', 'updated_at', ...(provider === 'google_analytics' ? ['measurement_id'] : [])]) {
+        assert(typeof row[name] === 'string' && row[name].trim(), `${organization.id}: ${provider}.${name} is missing`)
+      }
+      rows.push(row)
+    }
+  }
+  return rows
+}
 
 const LOCALIZED_OWNER_TABLES = {
   organization: 'organization', business_location: 'business_locations', product: 'products',
@@ -314,12 +341,11 @@ export const SCHEMA_OBJECTS_QUERY = "SELECT type, name, sql FROM sqlite_schema W
  */
 
 /**
- * Copy a recognized archived or current export through the canonical migration chain.
- * A v5 source is loaded into the v6 baseline before forward migrations run.
- * For a v6 source, its D1 ledger determines the exact migration prefix, so
- * data-only migrations are not skipped and existing category IDs are copied.
- * Existing category IDs are carried into the current baseline, including
- * during the final delta after a binding repoint.
+ * Copy a recognized v7 or current export through the canonical migration chain.
+ * The source's D1 ledger determines the exact migration prefix, so data-only
+ * migrations are not skipped. A v7 source's integration connections become
+ * `organization_integrations` rows, including during the final delta after a
+ * binding repoint.
  * @param {string} sourcePath
  * @param {string} targetPath
  * @param {{ payloadPath?: string | null, withoutJwks?: boolean, deltaFrom?: string | null }} [options]
@@ -350,7 +376,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v6', 'migrations-history/v5']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -364,12 +390,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       break
     }
     assert(recognized, 'Source schema differs from every recorded migration chain; no rows were copied')
-    const fromV5 = sourceDirectory === 'migrations-history/v5'
-    const appliedCount = fromV5 ? 1 : ledger.length
-    if (fromV5) {
-      sourceDirectory = 'migrations-history/v6'
-      sourceFiles = readdirSync(resolve(sourceDirectory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
-    }
+    const appliedCount = ledger.length
     stage.exec(sourceFiles.slice(0, appliedCount).map(name => readFileSync(resolve(sourceDirectory, name), 'utf8')).join('\n'))
     stage.pragma('foreign_keys = OFF')
     const sourceTables = tableNames(source)
@@ -388,28 +409,12 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       assert(digest(rows, targetColumns) === digest(stage.prepare(`SELECT * FROM ${qi(table)}`).all(), targetColumns), `${table}: copy differs`)
     }
     for (const name of sourceFiles.slice(appliedCount)) stage.exec(readFileSync(resolve(sourceDirectory, name), 'utf8'))
-    for (const transform of TRANSFORMS) {
-      const result = stage.prepare(transform.sql).run()
-      manifest.transforms.push({ name: transform.name, changes: result.changes, sql_sha256: hash(transform.sql) })
-    }
 
-    // Retiring imports may discard only receipts whose website and stored media
-    // were already erased through the application. Required content fails here.
-    const retiresImports = columns(stage, 'post_publications').includes('origin')
-    if (retiresImports) {
-      assert(stage.prepare("SELECT count(*) AS n FROM content_documents WHERE kind = 'social_post' AND row_role = 'root' AND source IN ('facebook','instagram')").get().n === 0,
-        'Imported website posts remain. Remove approved content through MCP before transfer.')
-      assert(stage.prepare("SELECT count(*) AS n FROM post_publications WHERE origin = 'import' AND post_id IS NOT NULL").get().n === 0,
-        'Imported publication documents remain; no provenance was discarded.')
-      assert(stage.prepare("SELECT count(*) AS n FROM media_assets WHERE origin_publication_id IS NOT NULL AND status <> 'deleted'").get().n === 0,
-        'Imported media remains active. Remove approved unused assets through MCP before transfer.')
-      const result = stage.prepare("DELETE FROM post_publications WHERE origin = 'import'").run()
-      manifest.transforms.push({ name: 'retire_erased_import_receipts', changes: result.changes })
-      stage.prepare(`UPDATE organization SET integrations_json = json_set(integrations_json, '$.facebook.status', 'active')
-        WHERE json_extract(integrations_json, '$.facebook.status') = 'error' AND json_extract(integrations_json, '$.facebook.sync.last_error') IS NOT NULL`).run()
-      stage.prepare(`UPDATE organization SET integrations_json = json_set(integrations_json, '$.instagram.status', 'active')
-        WHERE json_extract(integrations_json, '$.instagram.status') = 'error' AND json_extract(integrations_json, '$.instagram.sync.last_error') IS NOT NULL`).run()
-      stage.prepare("UPDATE organization SET integrations_json = json_remove(integrations_json, '$.facebook.sync', '$.instagram.sync')").run()
+    const fromV7 = columns(stage, 'organization').includes('integrations_json')
+    const integrations = fromV7 ? integrationRows(stage) : []
+    if (fromV7) {
+      assert(stage.prepare('SELECT count(*) AS n FROM business_locations WHERE description_provenance IS NOT NULL').get().n === 0,
+        'business_locations.description_provenance holds values nothing maps; no rows were copied')
     }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n
@@ -428,6 +433,13 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       }
     })
     copy()
+    if (fromV7) {
+      const names = Object.keys(integrations[0] ?? { id: null })
+      const insert = target.prepare(`INSERT INTO organization_integrations (${names.map(qi).join(',')}) VALUES (${names.map(() => '?').join(',')})`)
+      target.transaction(() => { for (const row of integrations) insert.run(...names.map(name => row[name])) })()
+      assert(count(target, 'organization_integrations') === integrations.length, 'organization_integrations differs from the connections it maps')
+      manifest.transforms.push({ name: 'integrations_json_to_organization_integrations', changes: integrations.length })
+    }
     manifest.tables = names.map(table => ({ table, source_rows: sourceTables.includes(table) ? count(source, table) : 0, target_rows: count(target, table) }))
     const violations = target.pragma('foreign_key_check')
     assert(violations.length === 0, `Foreign key violations after transfer (${violations.length}): ${JSON.stringify(violations.slice(0, 8))}`)

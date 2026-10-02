@@ -1,6 +1,5 @@
-import type { GoogleAnalyticsIntegration } from '~/shared/organization-settings'
-import { execute, queryFirst } from '~/server/db'
 import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
+import { storeIntegration } from './organization-integrations'
 
 /**
  * Google Analytics as a product of its own, over a Better Auth linked Google
@@ -8,9 +7,7 @@ import { linkedAccountAccessToken, type CloudflareEnv } from './auth'
  * measurement id derived from it, and the `account_id` it was picked through;
  * the account and its tokens are Better Auth's.
  *
- * The measurement id is the part that outlives the connection's details: Zaraz
- * serves it, and a site whose id was set before this flow existed keeps it
- * without a property or a credential beside it. There is one way to write it,
+ * The measurement id is what Zaraz serves. There is one way to write it,
  * which is choosing a property here.
  */
 
@@ -67,67 +64,6 @@ export async function getGa4MeasurementId(accessToken: string, propertyId: strin
   return null
 }
 
-export async function readAnalyticsIntegration(
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<GoogleAnalyticsIntegration | null> {
-  return await queryFirst<GoogleAnalyticsIntegration>(env.DB, `
-    SELECT json_extract(integrations_json, '$.google_analytics.revision') AS revision,
-           json_extract(integrations_json, '$.google_analytics.account_id') AS account_id,
-           json_extract(integrations_json, '$.google_analytics.property_id') AS property_id,
-           json_extract(integrations_json, '$.google_analytics.property_name') AS property_name,
-           json_extract(integrations_json, '$.google_analytics.measurement_id') AS measurement_id,
-           json_extract(integrations_json, '$.google_analytics.status') AS status,
-           json_extract(integrations_json, '$.google_analytics.created_at') AS created_at,
-           json_extract(integrations_json, '$.google_analytics.updated_at') AS updated_at
-      FROM organization
-     WHERE id = ?
-       AND json_extract(integrations_json, '$.google_analytics') IS NOT NULL
-     LIMIT 1
-  `, [organizationId]) ?? null
-}
-
-/** Records the chosen property. Refuses when the record moved since it was read. */
-export async function storeAnalyticsSelection(
-  env: CloudflareEnv,
-  organizationId: string,
-  selection: { account_id: string; property_id: string; property_name: string; measurement_id: string },
-  expected: { revision: string | null },
-): Promise<void> {
-  if (!env.DB) throw new Error('Database not available')
-  const now = new Date().toISOString()
-  const payload = JSON.stringify({
-    revision: crypto.randomUUID(),
-    account_id: selection.account_id,
-    property_id: selection.property_id,
-    property_name: selection.property_name,
-    measurement_id: selection.measurement_id,
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-  })
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.google_analytics',
-      json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.google_analytics.created_at'), ?)))
-    WHERE id = ?
-      AND json_extract(integrations_json, '$.google_analytics.revision') IS ?
-  `, [payload, now, organizationId, expected.revision])
-  if (result.meta?.changes !== 1) throw new Error('Google Analytics settings changed. Reload before saving.')
-}
-
-/** Clears Analytics state. The linked Google account is its user's, and stays linked. */
-export async function clearAnalyticsIntegration(
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<void> {
-  if (!env.DB) throw new Error('Database not available')
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_remove(integrations_json, '$.google_analytics')
-    WHERE id = ?
-  `, [organizationId])
-  if (result.meta?.changes !== 1) throw new Error('Organization ownership changed. Reload before disconnecting.')
-}
-
 /** Picks the property and resolves its measurement id in one step. */
 export async function selectAnalyticsProperty(
   env: CloudflareEnv,
@@ -142,8 +78,8 @@ export async function selectAnalyticsProperty(
   if (!measurementId) {
     throw new Error('That property has no web data stream, so there is no measurement ID to collect with.')
   }
-  await storeAnalyticsSelection(env, organizationId, {
-    account_id: accountId, property_id: propertyId, property_name: propertyName, measurement_id: measurementId,
+  await storeIntegration(env.DB, organizationId, 'google_analytics', {
+    account_id: accountId, target_id: propertyId, target_name: propertyName, measurement_id: measurementId,
   }, expected)
   return measurementId
 }

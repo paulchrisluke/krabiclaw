@@ -1,7 +1,4 @@
-import type { InstagramIntegration } from '~/shared/organization-settings'
 import { setTokenUtil } from 'better-auth/oauth2'
-import { HTTPError } from 'nitro'
-import { execute, queryFirst } from '~/server/db'
 import { createAuth, linkedAccountAccessToken, type CloudflareEnv } from './auth'
 import { formBody, metaGraphRequest } from './meta-graph'
 import type { MetaDeadline } from './meta-graph'
@@ -18,10 +15,6 @@ import type { MetaDeadline } from './meta-graph'
 
 export const INSTAGRAM_GRAPH_VERSION = 'v23.0'
 const INSTAGRAM_GRAPH = `https://graph.instagram.com/${INSTAGRAM_GRAPH_VERSION}`
-
-export interface InstagramConnection extends InstagramIntegration {
-  organization_id: string
-}
 
 /**
  * The one token operation Better Auth cannot perform. A long-lived Instagram
@@ -75,62 +68,6 @@ export async function getInstagramAccount(accessToken: string): Promise<{ id: st
   const id = account.user_id ?? account.id
   if (!id || !account.username) throw new Error('Instagram did not return the connected account')
   return { id: String(id), username: account.username }
-}
-
-export async function storeInstagramConnection(
-  env: CloudflareEnv,
-  input: { organization_id: string; account_id: string; instagram_user_id: string; username: string },
-  expected: { revision: string | null },
-): Promise<void> {
-  const now = new Date().toISOString()
-  const payload = JSON.stringify({
-    revision: crypto.randomUUID(),
-    account_id: input.account_id,
-    instagram_user_id: input.instagram_user_id,
-    username: input.username,
-    status: 'active',
-    created_at: now,
-    updated_at: now,
-  })
-  const result = await execute(env.DB, `
-    UPDATE organization SET integrations_json = json_set(integrations_json, '$.instagram',
-      json_set(json(?), '$.created_at', COALESCE(json_extract(integrations_json, '$.instagram.created_at'), ?)))
-    WHERE id = ?
-      AND json_extract(integrations_json, '$.instagram.revision') IS ?
-      AND NOT EXISTS (SELECT 1 FROM organization other
-        WHERE other.id <> ? AND json_extract(other.integrations_json, '$.instagram.instagram_user_id') = ?
-          AND json_extract(other.integrations_json, '$.instagram.status') IN ('active', 'error'))
-  `, [payload, now, input.organization_id, expected.revision, input.organization_id, input.instagram_user_id])
-  if (result.meta?.changes === 1) return
-  // An Instagram account is one business's, for the same reason as a Facebook Page.
-  if (await queryFirst(env.DB, `SELECT 1 FROM organization WHERE id <> ? AND json_extract(integrations_json, '$.instagram.instagram_user_id') = ?
-      AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'error') LIMIT 1`, [input.organization_id, input.instagram_user_id])) {
-    throw new HTTPError({ statusCode: 409, message: 'That Instagram account is already connected to another KrabiClaw site. Disconnect it there first.' })
-  }
-  throw new Error('The Instagram connection changed. Reload before saving.')
-}
-
-/** The organization's selected professional account. */
-export async function readInstagramConnection(
-  env: CloudflareEnv,
-  organizationId: string,
-): Promise<InstagramConnection | null> {
-  const row = await queryFirst<InstagramConnection>(env.DB, `
-    SELECT id AS organization_id,
-           json_extract(integrations_json, '$.instagram.revision') AS revision,
-           json_extract(integrations_json, '$.instagram.account_id') AS account_id,
-           json_extract(integrations_json, '$.instagram.instagram_user_id') AS instagram_user_id,
-           json_extract(integrations_json, '$.instagram.username') AS username,
-           json_extract(integrations_json, '$.instagram.status') AS status,
-           json_extract(integrations_json, '$.instagram.created_at') AS created_at,
-           json_extract(integrations_json, '$.instagram.updated_at') AS updated_at
-      FROM organization
-     WHERE id = ?
-       AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'error')
-     LIMIT 1
-  `, [organizationId])
-  if (row && (typeof row.username !== 'string' || !row.username.trim())) throw new Error('The Instagram connection has no username. Connect Instagram again.')
-  return row
 }
 
 export interface InstagramTarget {

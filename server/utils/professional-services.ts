@@ -259,7 +259,7 @@ export async function getPublicBlawbyShellData(
     getPublicThemeTokens(db, organizationId),
     listPublishedTenantPagePaths(db, organizationId, locale),
     queryFirst<{ token: string | null }>(db, `
-      SELECT json_extract(integrations_json, '$.google_search_console.verification_token') AS token
+      SELECT (SELECT i.verification_token FROM organization_integrations i WHERE i.organization_id = organization.id AND i.provider = 'google_search_console') AS token
         FROM organization WHERE id = ? LIMIT 1
     `, [organizationId]),
   ])

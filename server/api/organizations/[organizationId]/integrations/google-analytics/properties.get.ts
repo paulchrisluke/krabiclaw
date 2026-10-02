@@ -3,7 +3,8 @@ import { getRouterParam } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import { jsonResponse } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
-import { listGa4Properties, readAnalyticsIntegration } from '~/server/utils/google-analytics'
+import { listGa4Properties } from '~/server/utils/google-analytics'
+import { integrationSummary, readIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 
 /**
@@ -20,7 +21,7 @@ export default defineHandler(async (event) => {
   if (!organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
 
   const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
-  const analytics = await readAnalyticsIntegration(env, organization.id)
+  const analytics = integrationSummary(await readIntegration(env.DB, organization.id, 'google_analytics'))
   const accountId = event.url.searchParams.get('account_id') || analytics?.account_id || null
   if (!accountId) return jsonResponse({ success: true, account_id: null, analytics, properties: [], error: null })
 

@@ -5,7 +5,7 @@
     title="Facebook"
     :ready="integrations.summary.value !== undefined"
     :saving="saving"
-    :disabled="!accountId || !chosenPage || (chosenPage === data?.connection?.page_id && accountId === data?.connection?.account_id)"
+    :disabled="!accountId || !chosenPage || (chosenPage === data?.connection?.target_id && accountId === data?.connection?.account_id)"
     :error="error || integrations.failure.value || loadFailure"
     :footer="choosing && choices.length > 0"
     save-label="Connect this Page"
@@ -16,7 +16,7 @@
       v-model:changing="changing"
       logo="i-logos-facebook"
       noun="Page"
-      :connection="facebook && { name: facebook.page_name, connectedAt: facebook.connected_at, status: facebook.status }"
+      :connection="facebook && { name: facebook.target_name, connectedAt: facebook.connected_at }"
       :disconnecting="disconnecting"
       @disconnect="disconnect"
       @keep="keep"
@@ -39,13 +39,13 @@
 <script setup lang="ts">
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
 import IntegrationConnection from '~/components/dashboard/IntegrationConnection.vue'
-import { integrationsKey } from '../integrations.vue'
+import { integrationsKey, type ConnectedIntegration } from '../integrations.vue'
 
 definePageMeta({ layout: 'dashboard' })
 
 interface FacebookLeaf {
   account_id: string | null
-  connection: { account_id: string; page_id: string; page_name: string; status: string } | null
+  connection: ConnectedIntegration | null
   choices: Array<{ id: string; name: string }>
   error: string | null
 }
@@ -82,7 +82,7 @@ const accountOptions = computed(() => {
 
 const choices = computed(() => (data.value?.choices ?? []).map(page => ({ value: page.id, label: page.name })))
 const chosenPage = ref<string | undefined>()
-watch(data, value => { chosenPage.value = value?.connection?.page_id }, { immediate: true })
+watch(data, value => { chosenPage.value = value?.connection?.target_id }, { immediate: true })
 
 // Linking another account while changing comes back with the picker still open.
 const changing = ref(route.query.change === '1')
@@ -90,7 +90,7 @@ const choosing = computed(() => !facebook.value || changing.value)
 function keep() {
   changing.value = false
   accountId.value = data.value?.connection?.account_id
-  chosenPage.value = data.value?.connection?.page_id
+  chosenPage.value = data.value?.connection?.target_id
 }
 
 const loadFailure = computed(() => loadError.value ? getErrorMessage(loadError.value, 'Could not load Facebook.')

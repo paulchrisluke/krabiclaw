@@ -163,8 +163,8 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "8064a5659c2b39cb185b2c8ba75fca3c624eb3d670d37b3da70d742f4f629e99",
-          "tests/integration/availability-d1.test.ts": "ae01ed18228875d804958a28a5780c34d98ebc5d0fe3e00f1f4acbe73cc23725",
-          "server/utils/mcp-tools/locations.ts": "e4a94487d2efc78328c0dc9f7c17eb04fbd3a82fa53de4ed7cdfbf93e4b062ec"
+          "tests/integration/availability-d1.test.ts": "feba8718075154b7559500ffe543bb5e70765d40778c285bf7a1c1891bc907c9",
+          "server/utils/mcp-tools/locations.ts": "f6cbcbee398fc7229a520af7318413cfd9018e18947c4934e07ffd026055cee9"
         }
       },
       "pendingOwnerDecision": null,
@@ -217,7 +217,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/products.ts": "642e71fa754e4f60027716fc9d15300a458efb3e76c850d70229c806b6019df2",
           "server/utils/product-management.ts": "e741a34cce66b6de8e04ca0775af5c3bf6fea76ead20e7032aa636e422eb6662",
-          "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
+          "tests/integration/product-price-d1.test.ts": "9545a45147ef52f63dd398ba5ee875e8ae3e3bd6b418fdf919d7c6a47ca6ab8e",
           "server/utils/mcp-tools/products.ts": "945146f3fc067d6900992adce1fbf143b5d8bcda8e0fc2e84c225cdc55b9d25f"
         }
       },
@@ -548,8 +548,8 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/posts.ts": "ced3916d5ed4f9eeb2d67fb9942e25b4c49b9316ee8b7e1ee712de6a88653d75",
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
+          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -588,9 +588,9 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/social-channel-posts.ts": "9eb239fbe37b5154f28d92ef91c9e1da1c01550d2ad83c8cd1d50a3343676f8d",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b",
+          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -786,7 +786,7 @@
           "server/utils/notifications.ts": "09f598f313cfaf9af0595e0d503d8cb000dbbc77baca1dda535ed928d057efef",
           "server/utils/domain-notifications.ts": "031e1cc868f1393a5597dfaf936112ae93fdece51c38de52c0dd7aed4f964935",
           "tests/integration/guest-delivery-d1.test.ts": "6fe890ec3ccfb3e2b26b417c5c72e581ee1184ecf3a85d72d54e5a628e95b373",
-          "tests/integration/whatsapp-entitlement-d1.test.ts": "f024a4602d60d6a5dc06d4d1e2b71c9687e38269cf0fe80c0bfb1125e2d1e368"
+          "tests/integration/whatsapp-entitlement-d1.test.ts": "9b81ba5a5c87510f37a6b8308956457c960c8b14732d3c5aa75c2984952d453b"
         }
       },
       "pendingOwnerDecision": null,
@@ -970,9 +970,9 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/social-publication.ts": "44dda50b0b7656b625132c777f5e7663bc7eff90edb25ae08bf12d1d572b06e4",
+          "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b",
-          "tests/integration/social-publication-d1.test.ts": "87e614eb783c9622838f0cf56a859a8905a93a7cc013fd775b1f7e2ef465d21b"
+          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55"
         }
       },
       "pendingOwnerDecision": null,
