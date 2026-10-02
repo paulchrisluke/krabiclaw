@@ -61,7 +61,15 @@ export async function readMemberScheduling(db: DbClient, organizationId: string,
  const row=await queryFirst<MemberScheduling>(db,'SELECT * FROM member_scheduling WHERE organization_id=? AND member_id=?',[organizationId,memberId])
  if (!row) return null
  const linked = row.calendar_account_id ? await queryFirst(db,"SELECT a.id FROM account a JOIN member m ON m.userId=a.userId WHERE a.id=? AND a.providerId='google' AND m.id=? AND m.organizationId=?",[row.calendar_account_id,memberId,organizationId]) : null
+ const conflicts = row.calendar_account_id ? await queryAll<{ session_id: string; starts_at: string; ends_at: string; booking_count: number; total: number }>(db, `
+  SELECT s.id session_id,s.starts_at,s.ends_at,count(b.id) booking_count,count(*) OVER() total
+  FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id AND s.organization_id=b.organization_id
+  WHERE b.organization_id=? AND b.assigned_member_id=? AND b.status IN ('pending','confirmed') AND s.ends_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
+   AND EXISTS(SELECT 1 FROM json_each(?) busy WHERE json_extract(busy.value,'$.start')<s.ends_at AND json_extract(busy.value,'$.end')>s.starts_at)
+  GROUP BY s.id,s.starts_at,s.ends_at ORDER BY s.starts_at,s.id LIMIT 25`, [organizationId,memberId,row.busy_json]) : []
  return {
+  calendar_conflict_count:conflicts[0]?.total??0,
+  calendar_conflicts:conflicts.map(({total,...conflict})=>conflict),
   member_id:row.member_id,organization_id:row.organization_id,timezone:row.timezone,
   weekly:JSON.parse(row.weekly_json) as WorkingHours[],time_off:JSON.parse(row.time_off_json) as SchedulingInterval[],
   public_name:row.public_name,public_photo_url:row.public_photo_url,public_bio:row.public_bio,public_approved:row.public_approved,

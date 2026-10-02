@@ -580,7 +580,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/posts.ts": "ced3916d5ed4f9eeb2d67fb9942e25b4c49b9316ee8b7e1ee712de6a88653d75",
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
-          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
+          "tests/integration/social-publication-d1.test.ts": "1c264654a1562dbbe0e5ccd0211ea296ce5f90d56b2a383ce76df07aceec9d30",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -621,7 +621,7 @@
         "evidenceSha256": {
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/social-channel-posts.ts": "9eb239fbe37b5154f28d92ef91c9e1da1c01550d2ad83c8cd1d50a3343676f8d",
-          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
+          "tests/integration/social-publication-d1.test.ts": "1c264654a1562dbbe0e5ccd0211ea296ce5f90d56b2a383ce76df07aceec9d30",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -1003,7 +1003,7 @@
         "evidenceSha256": {
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b",
-          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e"
+          "tests/integration/social-publication-d1.test.ts": "1c264654a1562dbbe0e5ccd0211ea296ce5f90d56b2a383ce76df07aceec9d30"
         }
       },
       "pendingOwnerDecision": null,
@@ -1136,10 +1136,10 @@
         ],
         "coverageNote": "Real D1 proves self/admin boundaries, disconnected member isolation, DST hours, group reassignment IDs and audit replay. Production Worker browser proof passes real Better Auth membership, CMS/MCP parity, public approval and org fallback, cross-service conflicts, stable group IDs and private member self-service. No live OAuth or v8 compatibility claim.",
         "evidenceSha256": {
-          "server/domain/member-scheduling.ts": "cf47698c56dee676f1082b805461512a4bb5e764740976db9319ee838d50137b",
+          "server/domain/member-scheduling.ts": "4f3ca3d67814e5a10815023fea588b385403ea6cc86b200ea036039fab1f45cb",
           "server/domain/provider-reassignment.ts": "e4d2f20e473a6a6956044bd1013e7016ea59dd9cb94f3e2229ed3490a84425a3",
           "server/utils/provider-allocation.ts": "23381472135a9949a292a0466bfefbbd4fa6f9da59b818e622dcc38e942fe3e8",
-          "tests/integration/member-scheduling-d1.test.ts": "21fa89121ce6ff14961be339b9e1f41fdb714affe480bb8c4dfe576d97d800df",
+          "tests/integration/member-scheduling-d1.test.ts": "12350cbe0afeb253f2d0b6207c9034a829f6fa3dc971586348f2c59848bb0a37",
           "server/utils/public-provider.ts": "a5a3f46c76cf5feda786eb5565e0dfb284fec01e33d656356d806a577473d32d",
           "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
           "tests/e2e/provider-local-proof.spec.ts": "ea6c8deaf7409b8b9a93c2a15d012a2adbdeb7a0b0bc7a037eb1ec39a5bc41da"
