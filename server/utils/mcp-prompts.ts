@@ -37,7 +37,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
   },
   {
     name: "triage_inbox",
-    description: "Summarize new contact messages, reservation requests, Product bookings, and reviews awaiting a reply.",
+    description: "Summarize contact messages, table reservations and reviews awaiting a reply.",
     arguments: [],
   },
   {
@@ -116,7 +116,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: "Create a new bookable Product",
         text: [
           `Based on this description, call create_product with a sensible name, description, and at least one variant carrying its price: ${description}`,
-          "Booking is a capability the Product gains, not a different kind of row: configure it after creation so the duration and default capacity live with the Product, and generate its sessions before telling the user it can be booked.",
+          "After creation, use set_product_booking_config for Product duration/capacity and replace_product_weekly_schedule for the selected location’s weekday/time slots. Read the generated availability before claiming it is bookable.",
           "Publish it with set_product_publication and say where it is offered with set_product_location only once the user has approved making it public.",
           "If the user has media ready, call attach_media once per asset after creation with placement { owner_type: 'product', owner_id: <exact Product id>, slot: 'gallery' }, then use reorder_media only if the requested order differs.",
           "Report back what was created, its current status, and the live URL when one is available.",
@@ -131,7 +131,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call list_locations, then list_location_reviews for each location, and pull out any review that has no owner reply yet.",
           "Summarize what's new, grouped by type (messages, reservations, reviews needing a reply), oldest first.",
           "Seats booked on a bookable Product are not on this connection: read and answer those in the dashboard inbox, and say so rather than reaching for a tool that does not exist.",
-          "Reviews and Q&A are read-only. Direct the user to Google to manage Google reviews, questions, and replies.",
+          "Reviews and imported Google Q&A are managed in Google. Authored Q&A can be changed with the dedicated Q&A tools.",
           "There is no tool on this connection to reply to or change the status of contact or reservation submissions — for those, tell the user what's waiting and point them to the dashboard inbox and reservations pages to respond. Do not attempt to call a tool that doesn't exist for this.",
         ].join(" "),
       };

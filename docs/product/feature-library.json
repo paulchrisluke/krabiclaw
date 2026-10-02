@@ -44,8 +44,8 @@
           "server/utils/mcp-executor/organizations.ts": "fd5a5e4d2441dddeabc8a1798659af45c51b05a43a139ca13b196621a01b58d9",
           "server/utils/mcp-context.ts": "e80f577ec6fb81a5f15ca6b4b3fb0718ee706b5654312bc74e1737569c1d809f",
           "tests/unit/mcp-tool-annotations.test.ts": "e0d40edff8ace2d57063dd159992412b72f1bfa81508c71b6e988353ae173799",
-          "server/utils/mcp-tools/organizations.ts": "28797ffbbacd2cf913fa32281b9ee51649b3a8836698604499d38c4f8e3e1edf",
-          "server/utils/mcp-tools/context.ts": "49abd2dd8c1a37aa3867597bdcbc862bebac2d1127e8baedbea00c9d0837dd6d"
+          "server/utils/mcp-tools/organizations.ts": "5532cc5ac5bb02bd28f70a25dae25375b3008bc08ebcb7f10a0516f69288e9bb",
+          "server/utils/mcp-tools/context.ts": "ea655995ee26868c0a67aac84ddc33e420913544d2e3270fc7d1584060277dd5"
         }
       },
       "pendingOwnerDecision": null,
@@ -89,7 +89,7 @@
           "server/utils/content/pages.ts": "42abf9963058293c4788a583adc16139945a71cbed236f03edddf21d5c4ee757",
           "server/utils/mcp-executor/content.ts": "345fd091f0d0a293775e1d444c60011f3aae5b02be146e1e91a9c4b49db80d84",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
-          "server/utils/mcp-tools/content.ts": "2b0d85907ef358d5bffc4993cd511e0edfb936f2dbf53153aa5120e1730266d5"
+          "server/utils/mcp-tools/content.ts": "485dbc54fa78be0e4fcaf20a7f35c06d239940c9dfa1d8bc46facb113fe5130f"
         }
       },
       "pendingOwnerDecision": null,
@@ -125,7 +125,7 @@
         "evidenceSha256": {
           "server/utils/content/pages.ts": "42abf9963058293c4788a583adc16139945a71cbed236f03edddf21d5c4ee757",
           "tests/integration/tenant-page-delete-d1.test.ts": "36836afb68492570ab3ca63d90dea80e0cc8e2a2c986cbacdef6c42de6aa5119",
-          "server/utils/mcp-tools/content.ts": "2b0d85907ef358d5bffc4993cd511e0edfb936f2dbf53153aa5120e1730266d5"
+          "server/utils/mcp-tools/content.ts": "485dbc54fa78be0e4fcaf20a7f35c06d239940c9dfa1d8bc46facb113fe5130f"
         }
       },
       "pendingOwnerDecision": null,
@@ -165,7 +165,7 @@
           "server/utils/mcp-executor/locations.ts": "b5d2c46efeb1e9289302fe6a9810b56e2e290148cef5a3ffe57c02162378097c",
           "server/utils/availability.ts": "a5b701eeac94846ba3c6cbff5fdca01fe0526290aab01bdff6e0b80307c4d3bd",
           "tests/integration/availability-d1.test.ts": "fe6e7c9818ba90d3d935ef9c544fc03018c6356f6d4efd8394eeab895621f02e",
-          "server/utils/mcp-tools/locations.ts": "939c976e55cf273e0e41feb3dd142440e5cb5a3ab6dca78d9df32e541a5c7946"
+          "server/utils/mcp-tools/locations.ts": "32266354412b4dee65673a4652a6363ab4df0094877d54c607a44b76743fd731"
         }
       },
       "pendingOwnerDecision": null,
@@ -222,7 +222,7 @@
           "server/utils/mcp-executor/products.ts": "c4c78b4c66ef010c5319b21c0a967b39109977bcbd0a03e464a84852a6aacd76",
           "server/utils/product-management.ts": "15df0d1ef1e07a8cf1cacd8e0528e3fdfd9dcbf0859a2fdece903c49e89aebce",
           "tests/integration/product-price-d1.test.ts": "a720fdde6bf084c21c5caf986a8802ddb8afa304c9b0e307bf92e0af05f65d92",
-          "server/utils/mcp-tools/products.ts": "b5b19b02a404e3b8083a12d9526f88f35d31a5558a02b17accc957a4d2e7d76e"
+          "server/utils/mcp-tools/products.ts": "a1cff52f4e5d88009663527ef2ee7777fd4426ee837912dbeb92c28f24edb9ac"
         }
       },
       "pendingOwnerDecision": null,
@@ -320,7 +320,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/blog.ts": "45da72265693f698e788ceba5d6c298725776db1fefbf49e01a933bf12bee48e",
           "tests/e2e/mcp-content.spec.ts": "dd0c2e4f4855775ed41a967875f416de74d50ed176f29df1d455ec5b56a3cf69",
-          "server/utils/mcp-tools/blog.ts": "e8759620be48a29056a567f4a9fc52439d86629ed8543840b5837e326ead24a1"
+          "server/utils/mcp-tools/blog.ts": "c0794eb08844835947ac201c4ebbfeb7ab89383385a99496382b6f6e24b5a182"
         }
       },
       "pendingOwnerDecision": null,
@@ -365,8 +365,8 @@
           "server/utils/mcp-executor/media.ts": "7ad41d9c749801e4d6272bfc853e8199795dcfebbeedce9011a4cecd650f4981",
           "server/utils/mcp-executor/onboarding.ts": "8d715f5d914d985fde08e97f86249b5dca0658fc8c866446b15738faf3ec048c",
           "tests/e2e/mcp-media.spec.ts": "1319b70953cc15b6b8ad1c3590e8427b2c84b99253271ab6aee70697927c832c",
-          "server/utils/mcp-tools/media.ts": "a7bc0caf168893cc6c38e4e9400bfd8d93cf98862ec417e5763ad5b15471f45c",
-          "server/utils/mcp-tools/onboarding.ts": "94cb8dd4aee5f14b3fd32902853a23e6e398b7ee6f02599f1b8d8675b60d3906"
+          "server/utils/mcp-tools/media.ts": "8364c7d8adc6f08b4fe76821ddc3bc0df77142ed07935ec82d5b785e1e5da7d3",
+          "server/utils/mcp-tools/onboarding.ts": "ffa74c616122ba3bc249e8d7d0666476862e3399a796978d20647a8b1ab5c9f4"
         }
       },
       "pendingOwnerDecision": null,
@@ -406,7 +406,7 @@
           "server/utils/mcp-executor/locales.ts": "55972539a25b5cab40ecea4098c92b835c2366142c21314d2450ed54ab3262df",
           "server/utils/localization.ts": "7ef339b5c4179f9ed1fe42fdb4b40e98f7d19286df6a866d1542e1f8bd9c7bf7",
           "tests/e2e/kikuzuki-localization.spec.ts": "02570caa6f86def0949c534ca44acbb144c7e6c88cb8c3804d5c92bf0123cc48",
-          "server/utils/mcp-tools/locales.ts": "80564d8cba747e815e39fe36767e281570aaeff4151673a281cbee8bef5605c3"
+          "server/utils/mcp-tools/locales.ts": "46fee541d55782a4b59f04c115aa5ffe981cf305a82e5c6eafd3848fa71c34a6"
         }
       },
       "pendingOwnerDecision": null,
@@ -472,7 +472,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/reviews.ts": "bfbde3cc7ef04150fbc60ec79a8b96f54196df896311370b89a35d24ff8eb3fe",
-          "server/utils/mcp-tools/reviews.ts": "5d9e9baec26daa24f8157df0484bc08424792d1d03b069ddbe8c1a6efa32e631"
+          "server/utils/mcp-tools/reviews.ts": "38b73ad78fc22a9113803a6c5ded9eaeb9d246c9e78f80aef2c05228a3be5066"
         }
       },
       "pendingOwnerDecision": null,
@@ -505,7 +505,7 @@
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
           "server/utils/mcp-executor/submissions.ts": "29888ea86de0c05fb6a67104dd2f355d233af01ea72d0d07a8795d83043ce110",
-          "server/utils/mcp-tools/submissions.ts": "37c55ef8f1758b10a399f0f736c01ac9dfe49791424315619f4f60a1da7f75d6",
+          "server/utils/mcp-tools/submissions.ts": "2d09f5c4557c26438067dea55ebe0618f8d448fb04b80861d5781660e004de56",
           "tests/integration/guest-delivery-d1.test.ts": "319f0045a094dc0a2f739eb48c51971dd89b4c2ee91a8ad709fa44a95eb1529d"
         }
       },
@@ -540,7 +540,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/analytics.ts": "5f3c7d1ef1a2b039d01a35f81f8e8afffcb7f1a21bfc6f1154f6564dfdc29c48",
           "tests/integration/analytics-d1.test.ts": "140e5d31c8af838531b9267ac10dff0ff054ee5fe29bb408cc9862a6e35cd9e7",
-          "server/utils/mcp-tools/analytics.ts": "ff1c62f4f516446047e7afb11879eaf5e6e11072beba235cfe21fc932e7eb2cd"
+          "server/utils/mcp-tools/analytics.ts": "5b9c1eedc202eb2c221739945afbe790f38f9a21ae18226e62a65431f5999886"
         }
       },
       "pendingOwnerDecision": null,

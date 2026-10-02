@@ -59,80 +59,21 @@ function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
   return { domain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool) };
 }
 
-const MCP_INSTRUCTIONS = `KrabiClaw — manage your restaurant or business website through this connection.
+const MCP_INSTRUCTIONS = `KrabiClaw manages content and settings for the site selected by the user.
 
-## Image work — applies at any point in the conversation
-Whenever an image is needed (hero, logo, post thumbnail, Product photo, experience cover, story image, or any content section):
+Use internal organization and location IDs from get_workspace_context, list_organizations or list_locations. Confirm an ambiguous target before a write; an explicitly selected target remains selected until the user changes it. Public URLs and names identify a site to look up, not IDs to pass to tools. Organization/location setup, domains and billing are managed in the dashboard.
 
-**AI-generated (user asks you to generate or create an image):**
-1. Prepare an image prompt tailored to the business.
-2. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the prepared prompt.
-3. Immediately call save_generated_image_file({ organization_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
-4. Show the generated image directly in the conversation for review; use the returned public_url when needed.
-5. After the user approves, use the returned asset_id with set_media for a single image or attach_media for an ordered gallery. Use placement { owner_type, owner_id, slot } and the exact owner id returned by a read tool.
-6. If the user wants changes, revise the prompt and repeat from step 2.
+Media tools save existing attachments or assets to the selected site when the user requests that action. Saving creates publicly accessible media even before assignment. save_generated_image_file accepts an existing generated image attachment; upload_user_media accepts user attachments, and videos require a poster image. Use only authorized file references supplied by the host. If attachment delivery fails, report it and request a new attachment rather than inventing a URL. set_media replaces or clears one cover, hero or logo; attach_media, remove_media and reorder_media manage ordered galleries. Use the exact target owner ID and placement requested by the user.
 
-For multi-item requests, repeat the complete flow once per item. Generate one standalone image for each target and never substitute a collage, contact sheet, website screenshot, or UI mockup. For Products, each set_media or attach_media call must include that Product's exact id; use slot image for the explicit primary and gallery for the ordered detail gallery. Finish every requested item before reporting completion.
+create_post makes a draft short website/social post. create_blog_post makes a draft blog or documentation article. create_product makes a catalog offering with variants and prices. Publication is a separate action; changes to already published content can appear immediately. Publish only to the destinations the user requests. Connected social targets and publication states come from get_social_connections and publication reads. Report uncertain publication outcomes and reconcile them without creating a second provider post.
 
-This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
+For whole-document or collection replacement, read the latest state and preserve everything outside the requested change. Use the supplied concurrency tokens and deletion confirmations. Read all pages before claiming a complete collection or replacing it. Prices belong to variants; location offerings and website visibility are separate. Weekly schedules use Product duration/capacity; saved Sessions retain their actual facts and any Booking history protects them.
 
-**User-uploaded (user provides their own photo):**
-1. Ask the user to attach the photo directly in ChatGPT if they have not already done so. Do not send users to the KrabiClaw dashboard/media uploader for photos from this MCP app.
-2. When the user has attached an image in ChatGPT, inspect it visually first. Do not upload or mutate anything yet.
-3. If the intended use is obvious, describe it briefly and ask the user to confirm the target organization, the target placement, and that the attached image should be used.
-4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
-5. After confirmation, call upload_user_media({ organization_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
-6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
-7. After upload_user_media returns asset_id/public_url, call set_media with asset_id for a single-value placement. For an ordered placement, call attach_media for each new asset and reorder_media only when needed.
-8. Reply with the exact organization, placement, asset_id, and public_url that were updated.
+Product bookings and consultations use the shared session allocator and confirmation/payment policy. Required positive collection reserves an expiring hold and hands off to hosted Checkout; authenticated capture alone creates the Booking. Paid review rejection requires an actor-bound authenticated browser financial approval and full-principal refund. Payments reads and existing servicing remain available after downgrade; operating subscription billing stays separate.
 
-**Videos:**
-- Ask the user to attach the video directly in ChatGPT with the paperclip.
-- Every video requires a poster image. Ask the user to attach one before uploading the video.
-- Call upload_user_media({ organization_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) for every video upload.
-- After upload_user_media returns asset_id/public_url, use the exact owner id from a read tool. Call set_media with asset_id for a single cover/hero/logo; call attach_media for a gallery or document list and reorder_media only when needed.
+Contact submissions and table reservations can be read here; response/status work uses the dashboard inbox. Reviews and imported Google Q&A are managed in Google. Authored Q&A has dedicated create, update, delete and reorder tools. Language tools manage exact authored representations rather than automatic translation.
 
-## Choosing a content type
-KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
-- **create_post** — a short post: an announcement, offer or event, with its words, media and an optional call to action. It is a draft until publish_post names where it goes: the website, and the Facebook Page or Instagram account from get_social_connections. Use for "we're running a sale this week" or "come to our event Saturday."
-- **create_blog_post** — long-form narrative/story content on the organization's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
-- **create_product** — a permanent thing the business sells, with its own page: a dish, a class, a package, a tour. What a customer buys is a variant, so give it at least one variant with a price. Booking is a capability a Product gains rather than a different kind of row, so a class and a dish are created the same way. Use it for "we want a dedicated page for X" when X is something people buy or book.
-If a request is ambiguous, ask a brief clarifying question rather than guessing.
-
-## Session start
-Start every conversation by calling get_workspace_context. If no active organization is set yet, call list_organizations to discover the user's organizations and present them clearly.
-- If they have none, explain that organization and location setup must be completed in the KrabiClaw CMS before content can be managed here.
-- Present the available organizations and wait for the user to select one, even when only one is available. Then call set_workspace_context with that explicit selection.
-- Creating, copying, or deleting organizations and locations is managed in the CMS. Do not attempt these operations through other tools.
-
-## Workspace context
-- Use set_workspace_context whenever the user chooses an organization or location.
-- Use get_workspace_context whenever you need to confirm the active organization and location before mutating content.
-- If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
-- organization_id means the internal KrabiClaw organization ID returned by get_workspace_context or list_organizations, such as org-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or business name is never a valid organization_id.
-- If the user gives a public URL such as https://www.potteryhousekrabi.com/products/ceramics-painting-class, first call get_workspace_context or list_organizations and match the URL to the returned organization's public_url/domain context before calling tenant-scoped tools.
-
-## Tenant confirmation policy — enforced before every mutation
-
-Before calling any mutating tool, the active organization must be confirmed for this conversation.
-
-An organization is confirmed when the user explicitly selects it from get_workspace_context or list_organizations in this conversation. If none exists, direct the user to the CMS for setup before making mutations.
-
-Tool categories:
-- **Read-only** (list_*, get_*) — safe to call once list_organizations returns
-- **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed organization
-
-If the user asks you to mutate content before an organization is confirmed, call list_organizations first, confirm the active organization, then proceed.
-
-After applying, always confirm: "[Placement] updated for [business name]." — never leave the target ambiguous.
-
-When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
-
-All other tools require an organization_id obtained from get_workspace_context or list_organizations. Never guess, invent, derive, or pass through IDs from URLs/domains.
-
-For every paginated read, keep calling the same tool with page_info.next_cursor (or the resource-specific next_cursor field) until has_more is false before claiming the collection is complete. batch_create_products and reconcile_products are atomic: read every list_location_products page, then send one complete intended create or reconciliation call with an explicit location_id. Never split one logical Product replacement across multiple mutation calls. A Product belongs to the organization: set_product_publication says whether it is carried, set_product_location says where it is offered, and what a customer buys is a variant, so prices belong to variants. Grouping is a collection — read list_collections, create missing ones with create_collection, and send the complete intended membership and order with set_collection_products; reorder_collections takes every collection ID in the organization exactly once. Collection names are localized separately through put_resource_localization with resource_type collection and values { name }.
-
-Common workflows: manage an organization's Products and the collections that group them, create and publish website posts, triage contact, reservation and booking submissions, update page content directly, upload media, list reviews (replies are managed in Google, not here), and generate or replace images for any content section. Manual locale management is available through the locale tools. Domain setup and Google Places lookup are CMS-only. Publishing to Facebook and Instagram needs the Growth plan and a connected Page or account: call get_social_connections, publish to the targets it returns, and when it reports a problem, tell the user and give them its connect_url.`;
+Report the affected site and actual result, including a returned public or preview URL when useful. Distinguish draft content, published content and unresolved external publication. Tool availability, authorization and entitlements are enforced by the server.`;
 
 // Everything a per-request Server factory needs, threaded through
 // `AuthInfo.extra` since `McpServerFactory` only receives an `McpRequestContext`.
