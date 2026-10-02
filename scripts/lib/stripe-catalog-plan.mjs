@@ -48,7 +48,7 @@ export const PLAN_DEFINITIONS = Object.freeze([
     amountCents: 4900,
     highlighted: true,
     badge: 'Most Popular',
-    imagePath: 'scripts/assets/stripe/growth.png',
+    imagePath: 'scripts/assets/stripe/growth.jpg',
     features: [
       'Restaurant, experience, or legal / professional site live in minutes',
       'Your own domain (yourbusiness.com)',
