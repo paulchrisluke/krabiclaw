@@ -57,13 +57,17 @@ async function processEmail(message: ForwardableEmailMessage, env: unknown): Pro
   const rawEmail = await readEmailBytes(message.raw)
   const messageId = message.headers.get('Message-ID')?.trim()
     || `content-sha256:${await sha256Hex(rawEmail)}`
-  const body = guestReplyText(await PostalMime.parse(rawEmail))
+  const parsed = await PostalMime.parse(rawEmail, { attachmentEncoding: 'arraybuffer' })
 
   await receiveGuestEmail(env, {
     submissionType: reply.submissionType,
     submissionId: reply.submissionId,
     token: reply.token,
-    body,
+    body: guestReplyText(parsed),
+    files: parsed.attachments.map((attachment) => {
+      if (!(attachment.content instanceof ArrayBuffer)) throw new Error('postal-mime returned an attachment that is not an ArrayBuffer')
+      return { bytes: new Uint8Array(attachment.content), filename: attachment.filename || 'attachment' }
+    }),
     messageId,
   })
 }

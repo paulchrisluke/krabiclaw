@@ -77,11 +77,16 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const replayState: { booking: { id: string; status: string; creation_status: string | null } | null } = { booking: null }
   const fingerprint = operator ? await hashIdentifier(JSON.stringify({ slug, sessionId, requestedVariantId, partySize, guestName, guestEmail, phone: normalizedGuestPhone, notes, source: operator.source, externalReference: operator.externalReference, guestAcknowledgement: operator.guestAcknowledgement })) : null
   const replay = async () => {
-    const existing = await queryFirst<{ id: string; status: string; fingerprint: string | null; completed: number | null; creation_status: string | null }>(db, `SELECT b.id, b.status, json_extract(r.payload_json, '$.provenance.fingerprint') AS fingerprint, json_extract(r.payload_json, '$.provenance.followups_completed') AS completed, json_extract(r.payload_json, '$.provenance.creation_status') AS creation_status FROM bookings b JOIN requests r ON r.id = b.request_id WHERE b.organization_id = ? AND r.id = ?`, [organizationId, threadId])
+    const existing = await queryFirst<{ id: string; status: string; fingerprint: string | null; completed: number | null; creation_status: string | null; product_session_id: string; product_variant_id: string; party_size: number }>(db, `SELECT b.id, b.status, b.product_session_id, b.product_variant_id, b.party_size, json_extract(r.payload_json, '$.provenance.fingerprint') AS fingerprint, json_extract(r.payload_json, '$.provenance.followups_completed') AS completed, json_extract(r.payload_json, '$.provenance.creation_status') AS creation_status FROM bookings b JOIN requests r ON r.id = b.request_id WHERE b.organization_id = ? AND r.id = ?`, [organizationId, threadId])
     if (!existing) return null
     if (existing.fingerprint !== fingerprint) return creationResult({ error: 'Idempotency key was reused with different booking details', code: 'idempotency_conflict' }, { status: 409 })
     replayState.booking = existing
-    if (!existing.completed) return null
+    if (!existing.completed) {
+      if (existing.status !== existing.creation_status || existing.product_session_id !== sessionId || (requestedVariantId && existing.product_variant_id !== requestedVariantId) || existing.party_size !== partySize) {
+        return creationResult({ error: 'Booking changed before creation notifications completed. Read the current booking before continuing.', code: 'booking_changed', operational_booking_id: existing.id, request_id: threadId, status: existing.status }, { status: 409 })
+      }
+      return null
+    }
     return creationResult({ success: true, booking_id: threadId, request_id: threadId, operational_booking_id: existing.id, status: existing.status, replayed: true }, { status: 200 })
   }
   if (operator) {
@@ -134,13 +139,13 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const full = await getProduct(db, organization.id, product.id)
   const presentation = resolveBookingPresentation('booking', organization.vertical)
   const config = await requireBookingConfig(db, organization.id, product.id)
-  if (!replayState.booking && config.online_payment_required) {
+  if (!replayState.booking) {
     if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
     const variant = full.variants.find(candidate => candidate.id === productVariantId)
     if (!variant) throw new Error('The selected variant is missing')
     const price = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
     if (!price) return creationResult({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
-    if (price.unit_amount > 0) return creationResult({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
+    if (config.online_payment_required && price.unit_amount > 0) return creationResult({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
   }
   const bookingStatus = config.confirmation_mode === 'review' ? 'pending' : 'confirmed'
 

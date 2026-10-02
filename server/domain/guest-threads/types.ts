@@ -127,6 +127,15 @@ export interface GuestThreadEntryDeliveryViewModel {
   status: GuestThreadDeliveryStatus
 }
 
+/** A photo a message carries. */
+export interface GuestThreadEntryAttachmentViewModel {
+  id: string
+  url: string
+  alt: string | null
+  width: number | null
+  height: number | null
+}
+
 export interface GuestThreadEntryViewModel {
   id: string
   kind: GuestThreadEntryKind
@@ -140,6 +149,7 @@ export interface GuestThreadEntryViewModel {
   sequence: number | null
   occurredAt: string
   deliveries: GuestThreadEntryDeliveryViewModel[]
+  attachments: GuestThreadEntryAttachmentViewModel[]
 }
 
 export interface GuestThreadDeliveryFailureViewModel {

@@ -4,6 +4,8 @@ import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getGuestRequest, getThreadOperationalRecord, requestActions, requestSummary, type GuestRequest, type ThreadOperationalRecord } from '~/server/domain/requests'
 import { deliverGuestThreadEmail, getDeliveryById, getDeliveryClaimEligibility, getDeliveryRetryEligibility, isDeliveryClaimInFlight } from './deliveries'
 import { findEntryByDedupeKey, getEntryById } from './entries'
+import { discardMessagePhotos, listMessagePhotos, MessagePhotoRejection, messagePhotoPlacements, uploadMessagePhotos, type MessagePhoto } from './attachments'
+import type { UploadResolvedMediaInput } from '~/server/utils/media-upload'
 import { mailboxTransitionQueries, updateThreadProjectionIfLatestEntry } from './repository'
 import { resolveGuestThreadMailbox } from './mailbox'
 import { renderNotificationEmail } from '~/server/emails/render'
@@ -34,6 +36,7 @@ export type OperationOutcome =
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
   | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' | 'missing_delivery_id' }
   | { ok: false; status: 400; reason: 'missing_idempotency_key' }
+  | { ok: false; status: 400; reason: 'invalid_photo'; message: string }
   | { ok: false; status: 502; reason: 'delivery_failed'; message: string }
   | { ok: false; status: 504; reason: 'delivery_unknown'; message: string }
 
@@ -42,8 +45,10 @@ export type ExecuteOperationInput = {
   organizationId: string
   action: string
   body?: string
+  /** The photos a reply carries, in the order they were chosen. */
+  photos?: MessagePhoto[]
   deliveryId?: string
-  env: ReplyEmailEnv
+  env: ReplyEmailEnv & UploadResolvedMediaInput['env']
   idempotencyKey?: string
   actorUserId: string
 }
@@ -90,7 +95,7 @@ function emailProvider(env: ReplyEmailEnv, recipient: string): GuestThreadDelive
 }
 
 function entryMatchesRequest(entry: GuestThreadEntryRow, eventName: string, body?: string): boolean {
-  return entry.event_name === eventName && (body === undefined || entry.body === body)
+  return entry.event_name === eventName && (body === undefined || (entry.body ?? '') === body)
 }
 
 function conflict(message = 'Idempotency key was reused with a different request'): OperationOutcome {
@@ -302,9 +307,15 @@ function replySubject(submissionType: GuestThreadSubmissionType, fromName: strin
  * outbound message. A member's reply leads with their own words; a status
  * update leads with what changed.
  */
-async function renderMemberReply(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, body: string) {
+async function renderMemberReply(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, entry: GuestThreadEntryRow) {
   const organizationLogoUrl = await organizationLogo(db, organizationId)
-  return renderNotificationEmail(guestThreadReplyMessage({ organizationName, organizationLogoUrl, body }), { platformDomain: getPlatformDomain(env) })
+  const photos = (await listMessagePhotos(db, [entry.id])).get(entry.id) ?? []
+  return renderNotificationEmail(guestThreadReplyMessage({
+    organizationName,
+    organizationLogoUrl,
+    body: entry.body ?? '',
+    photos: photos.map(photo => ({ imageUrl: photo.url, alt: photo.alt ?? `Photo from ${organizationName}` })),
+  }), { platformDomain: getPlatformDomain(env) })
 }
 
 async function renderStatusUpdate(env: ReplyEmailEnv, db: DbClient, organizationId: string, organizationName: string, heading: string, body: string) {
@@ -414,7 +425,8 @@ async function executeReply(
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const body = (input.body ?? '').trim()
-  if (!body) return { ok: false, status: 400, reason: 'empty_body' }
+  const photos = input.photos ?? []
+  if (!body && !photos.length) return { ok: false, status: 400, reason: 'empty_body' }
 
   const dedupeKey = operationDedupeKey(input)
   const deliveryKey = deliveryDedupeKey(input)
@@ -425,32 +437,47 @@ async function executeReply(
     const entryId = crypto.randomUUID()
     const deliveryId = deliveryKey
     const now = new Date().toISOString()
-    await executeBatch(db, [
-      {
-        query: `
-          INSERT INTO activity_entries
-            (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
-          SELECT ?, id, 'message', 'request', 'member', ?, 'email', ?, 'thread.member_reply', '{}', ?,
-                 COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = requests.id), 0) + 1,
-                 ?, ?
-          FROM requests
-          WHERE id = ? AND organization_id = ?
-          ON CONFLICT(dedupe_key) DO NOTHING
-        `,
-        params: [entryId, input.actorUserId, body, dedupeKey, now, now, context.thread.id, context.thread.organization_id],
-      },
-      {
-        query: `
-          INSERT INTO guest_thread_deliveries
-            (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
-          SELECT ?, id, 'email', ?, 'member_reply', 'pending', ?, ?
-          FROM activity_entries
-          WHERE id = ? AND request_id = ?
-          ON CONFLICT(id) DO NOTHING
-        `,
-        params: [deliveryId, emailProvider(input.env, summary.guestEmail), now, now, entryId, context.thread.id],
-      },
-    ], { operation: 'guest thread reply receipt' })
+    const organizationId = context.thread.organization_id
+    // The photos are stored first and placed by the same batch that writes the
+    // message, so a reply exists with all of its photos or not at all.
+    const assetIds = await uploadMessagePhotos(db, input.env, organizationId, photos, { source: 'uploaded', userId: input.actorUserId })
+      .catch((error: unknown) => {
+        if (error instanceof MessagePhotoRejection) return error
+        throw error
+      })
+    if (assetIds instanceof MessagePhotoRejection) return { ok: false, status: 400, reason: 'invalid_photo', message: assetIds.message }
+    try {
+      await executeBatch(db, [
+        {
+          query: `
+            INSERT INTO activity_entries
+              (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+            SELECT ?, id, 'message', 'request', 'member', ?, 'email', ?, 'thread.member_reply', '{}', ?,
+                   COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = requests.id), 0) + 1,
+                   ?, ?
+            FROM requests
+            WHERE id = ? AND organization_id = ?
+            ON CONFLICT(dedupe_key) DO NOTHING
+          `,
+          params: [entryId, input.actorUserId, body || null, dedupeKey, now, now, context.thread.id, context.thread.organization_id],
+        },
+        {
+          query: `
+            INSERT INTO guest_thread_deliveries
+              (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
+            SELECT ?, id, 'email', ?, 'member_reply', 'pending', ?, ?
+            FROM activity_entries
+            WHERE id = ? AND request_id = ?
+            ON CONFLICT(id) DO NOTHING
+          `,
+          params: [deliveryId, emailProvider(input.env, summary.guestEmail), now, now, entryId, context.thread.id],
+        },
+        ...messagePhotoPlacements(organizationId, entryId, assetIds, now),
+      ], { operation: 'guest thread reply receipt' })
+    } catch (error) {
+      await discardMessagePhotos(db, input.env, organizationId, assetIds, input.actorUserId, error)
+      throw error
+    }
     entry = await findEntryByDedupeKey(db, dedupeKey)
   }
 
@@ -466,7 +493,7 @@ async function executeReply(
     to: summary.guestEmail,
     fromName,
     subject: replySubject(context.thread.kind, fromName),
-    email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, body),
+    email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, entry),
     submissionType: context.thread.kind,
     submissionId: context.thread.id,
   })
@@ -506,7 +533,7 @@ async function retryDelivery(
   const summary = await requestSummary(db, context.thread)
   if (!summary.guestEmail) return { ok: false, status: 400, reason: 'no_guest_email' }
   const fromName = await getOrganizationBrandName(db, context.thread.organization_id)
-  if (!entry.body) return conflict('Delivery entry has no email body')
+  if (delivery.purpose === 'status_update' && !entry.body) return conflict('Delivery entry has no email body')
   const retried = delivery.purpose === 'status_update'
     ? await sendStatusUpdate(db, context, input, entry, delivery)
     : await deliverGuestThreadEmail(db, {
@@ -515,7 +542,7 @@ async function retryDelivery(
         to: summary.guestEmail,
         fromName,
         subject: replySubject(context.thread.kind, fromName),
-        email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, entry.body),
+        email: await renderMemberReply(input.env, db, context.thread.organization_id, fromName, entry),
         submissionType: context.thread.kind,
         submissionId: context.thread.id,
       })

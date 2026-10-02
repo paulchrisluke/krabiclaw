@@ -1,5 +1,4 @@
-import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
-import { readInstagramConnection } from '~/server/utils/instagram'
+import { readIntegration } from '~/server/utils/organization-integrations'
 import { HTTPError } from 'nitro'
 import { createContentDocumentWithBlocks, prepareContentDocumentDeletion, updateContentDocument, type ContentDocumentChanges } from '~/server/utils/content/documents'
 import { parsePostInput, PostValidationError, type PostCallToAction, type PostMediaRef, type PostMutation } from '~/shared/posts'
@@ -520,8 +519,8 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
       FROM post_publications WHERE organization_id = ? AND state = 'published' AND post_id IN (SELECT value FROM json_each(?)) ORDER BY channel`,
     [organizationId, d1JsonStringSet(rootIds)]),
     locale === 'en' ? Promise.resolve([]) : loadExactPublicLocalizations(env, db, organizationId, locale),
-    getFacebookPagesConnection(env, organizationId),
-    readInstagramConnection(env, organizationId),
+    readIntegration(db, organizationId, 'facebook'),
+    readIntegration(db, organizationId, 'instagram'),
   ])
   return rows.map((row) => {
     const rootAction = callToActionOf(row.root_metadata_json)
@@ -541,7 +540,7 @@ async function projectPublicPosts(env: CloudflareEnv, db: DbClient, organization
       })), localizations),
       published_at: row.published_at,
       location: row.location_id && row.location_title && row.location_slug ? { id: row.location_id, title: row.location_title, slug: row.location_slug } : null,
-      publications: publications.filter(item => item.post_id === row.id).map(item => ({ channel: item.channel, url: item.provider_permalink, account_name: item.channel === 'facebook' ? (facebook?.page_id === item.provider_target_id ? facebook.page_name : null) : (instagram?.instagram_user_id === item.provider_target_id ? instagram.username : null) })),
+      publications: publications.filter(item => item.post_id === row.id).map(item => ({ channel: item.channel, url: item.provider_permalink, account_name: [facebook, instagram].find(connection => connection?.provider === item.channel && connection.target_id === item.provider_target_id)?.target_name ?? null })),
       social_image: social.get(row.representation_id)?.social_image ?? null,
       status: row.status,
       visibility: row.visibility,

@@ -3,8 +3,9 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { organizationPublicUrl } from '~/server/utils/domains'
 import {
-  listSearchConsoleSites, readSearchConsoleIntegration, storeSearchConsoleSelection, verifyAndAddProperty,
+  listSearchConsoleSites, verifyAndAddProperty,
 } from '~/server/utils/google-search-console'
+import { readIntegration, storeIntegration } from '~/server/utils/organization-integrations'
 import { requireOrganizationAccess } from '~/server/utils/location-access'
 import { purgePublicResourceCacheNow } from '~/server/utils/public-resource-cache'
 
@@ -28,7 +29,7 @@ export default defineHandler(async (event) => {
   if (!accountId || !requested) return jsonResponse({ error: 'Choose a Google account and a Search Console property.' }, { status: 400 })
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
-  const current = await readSearchConsoleIntegration(env, organization.id)
+  const current = await readIntegration(env.DB, organization.id, 'google_search_console')
   await requireIntegrationAccount(env, accountId, {
     userId: session.user.id,
     currentAccountId: current?.account_id,
@@ -40,7 +41,7 @@ export default defineHandler(async (event) => {
     const { accessToken } = await linkedAccountAccessToken(env, accountId)
     const owned = await listSearchConsoleSites(accessToken)
     if (owned.some(property => property.siteUrl === requested)) {
-      await storeSearchConsoleSelection(env, organization.id, accountId, requested, null)
+      await storeIntegration(env.DB, organization.id, 'google_search_console', { account_id: accountId, target_id: requested, target_name: requested, verified: true })
       return jsonResponse({ success: true, site_url: requested, verified: true })
     }
 

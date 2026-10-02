@@ -1,4 +1,5 @@
-import type { OrganizationSettings, OrganizationIntegrations } from '../../shared/organization-settings'
+import type { OrganizationSettings } from '../../shared/organization-settings'
+import { INTEGRATION_PROVIDERS } from '../../shared/organization-settings'
 import type { MediaCategory } from '~/shared/media-placement-contract'
 import { sql } from "drizzle-orm"
 import { sqliteTable, integer, text, real, unique, uniqueIndex, index, check, foreignKey, primaryKey } from "drizzle-orm/sqlite-core"
@@ -44,7 +45,6 @@ export const business_locations = sqliteTable("business_locations", {
 	last_synced_at: text(),
 	description: text(),
 	short_description: text(),
-	description_provenance: text(),
 	special_hours: text(),
 	price_level: text(),
 	email: text(),
@@ -266,7 +266,7 @@ export const media_placements = sqliteTable("media_placements", {
 		foreignColumns: [media_assets.organization_id, media_assets.id],
 		name: "media_placements_asset_scope_fk",
 	}).onDelete("cascade"),
-	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')`),
+	check("media_placements_owner_type_check", sql`owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')`),
 	check("media_placements_sort_order_check", sql`sort_order >= 0`),
 	unique("media_placements_org_owner_slot_asset_unique").on(table.owner_type, table.owner_id, table.slot, table.asset_id),
 	unique("media_placements_org_owner_slot_order_unique").on(table.owner_type, table.owner_id, table.slot, table.sort_order),
@@ -1139,6 +1139,45 @@ export const inventory_levels = sqliteTable("inventory_levels", {
 ]);
 
 // ---------------------------------------------------------------------------
+// What an organization connected: one per provider, and each provider resource
+// (Page, professional account, GA4 property, Search Console site) on at most
+// one organization. The credential is the connecting person's Better Auth
+// linked account, named by `account_id`; no token is stored here. Unlinking
+// that account does not remove the row: a release has work of its own (Zaraz
+// stops serving a measurement id), so it goes through releaseIntegration.
+// Read/write: server/utils/organization-integrations.ts.
+// ---------------------------------------------------------------------------
+export const organization_integrations = sqliteTable("organization_integrations", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+	provider: text().$type<typeof INTEGRATION_PROVIDERS[number]>().notNull(),
+	account_id: text().notNull(),
+	// Page id, Instagram professional account id, GA4 property id or Search Console site URL.
+	target_id: text().notNull(),
+	// Page name, Instagram username, GA4 property name or Search Console site URL.
+	target_name: text().notNull(),
+	// Google Analytics only: the property's web stream, which Zaraz serves.
+	measurement_id: text(),
+	// Search Console only: whether Google confirmed ownership, and the meta tag
+	// Krabiclaw serves while Google still requires it.
+	verified: integer({ mode: "boolean" }),
+	verification_token: text(),
+	// A new selection writes a new revision, so a caller holding the old one is refused.
+	revision: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("organization_integrations_provider_unique").on(table.organization_id, table.provider),
+	unique("organization_integrations_target_unique").on(table.provider, table.target_id),
+	index("organization_integrations_account_idx").on(table.provider, table.account_id),
+	check("organization_integrations_provider_check", sql`provider IN (${sql.raw(INTEGRATION_PROVIDERS.map(value => `'${value}'`).join(', '))})`),
+	check("organization_integrations_values_check", sql`trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''`),
+	check("organization_integrations_measurement_check", sql`(provider = 'google_analytics') = (measurement_id IS NOT NULL)`),
+	check("organization_integrations_verification_check", sql`(provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))`),
+	check("organization_integrations_instants_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at`),
+]);
+
+// ---------------------------------------------------------------------------
 // Stripe identity mapping.
 //
 // Local ids are local identity. Stripe ids live here, keyed by local entity,
@@ -1370,7 +1409,6 @@ export const organization = sqliteTable("organization", {
 	// ── Formerly `organizations`. ────────────────────────────────────────────────────
 	consultation_settings_json: text({ mode: "json" }).$type<OrganizationSettings["consultation"]>(),
 	settings_json: text({ mode: "json" }).$type<OrganizationSettings>().default({ config: { default_timezone: 'UTC' } }).notNull(),
-	integrations_json: text({ mode: "json" }).$type<OrganizationIntegrations>().default({}).notNull(),
 	theme_id: text().default("saya-theme-v1").notNull(),
 	subdomain: text().unique(),
 	brand_description: text(),
@@ -1400,7 +1438,6 @@ export const organization = sqliteTable("organization", {
 	// the row's modification time and nothing else recorded a publish.
 	check("organization_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
 	check("organization_settings_json_check", sql`json_valid(settings_json) AND json_type(settings_json) IS 'object'`),
-	check("organization_integrations_json_check", sql`json_valid(integrations_json) AND json_type(integrations_json) IS 'object'`),
 	check("organization_config_brand_color_check", sql`json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'`),
 	check("organization_config_press_email_check", sql`json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'`),
 	check("organization_config_partnerships_email_check", sql`json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'`),
@@ -1418,15 +1455,6 @@ export const organization = sqliteTable("organization", {
 	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
 	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
 	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
-	// One key per connected product, each checked on its own. These keys hold
-	// only what the organization selected: which property, site, Page or
-	// professional account. The provider credential behind a selection is the
-	// connecting person's Better Auth linked account (`account_id` names it),
-	// never a token stored on the organization.
-	check("organization_google_analytics_check", sql`json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE`),
-	check("organization_google_search_console_check", sql`json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console') IS 'object' AND json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text') IS TRUE`),
-	check("organization_facebook_check", sql`json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.account_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE`),
-	check("organization_instagram_check", sql`json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.account_id') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE`),
 	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
 	index("organization_created_at_idx").on(table.createdAt),
 ]);

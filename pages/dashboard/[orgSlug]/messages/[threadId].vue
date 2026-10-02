@@ -6,7 +6,13 @@
     is room for one and the sheet over it where there is not — the shells decide
     that, not this page.
   -->
-  <DashboardIndexPanel id="organization-messages-thread" :title="thread?.guestName ?? 'Conversation'" :ui="{ body: 'p-0 sm:p-0 gap-0' }">
+  <!-- On a phone the conversation is pushed over the list, so it slides in the way a pushed screen does. -->
+  <DashboardIndexPanel
+    id="organization-messages-thread"
+    :title="thread?.guestName ?? 'Conversation'"
+    :ui="{ root: 'max-lg:animate-[slide-in-from-right_280ms_var(--ease-out)]', body: 'p-0 sm:p-0 gap-0' }"
+    fill
+  >
     <template v-if="recordTo" #right>
       <UButton :to="recordTo" color="neutral" variant="soft" class="h-10 rounded-full px-4" :aria-label="`Show ${recordTitle.toLowerCase()}`">
         Details

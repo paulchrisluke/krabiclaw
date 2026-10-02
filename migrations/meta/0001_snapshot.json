@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "909f502e-3e9f-440b-9009-f82e216b0bfe",
-  "prevId": "d4bb9b80-7beb-4b4a-a0b9-db39af7fac39",
+  "id": "500f9c49-8c08-45ac-8794-67904ae07a1c",
+  "prevId": "4bd08de3-49ba-4e9c-8199-777f2eeb39e4",
   "tables": {
     "account": {
       "name": "account",
@@ -1528,13 +1528,6 @@
         },
         "short_description": {
           "name": "short_description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description_provenance": {
-          "name": "description_provenance",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -4029,7 +4022,7 @@
         },
         "media_placements_owner_type_check": {
           "name": "media_placements_owner_type_check",
-          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')"
+          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')"
         },
         "media_placements_sort_order_check": {
           "name": "media_placements_sort_order_check",
@@ -5365,14 +5358,6 @@
           "autoincrement": false,
           "default": "'{\"config\":{\"default_timezone\":\"UTC\"}}'"
         },
-        "integrations_json": {
-          "name": "integrations_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
         "theme_id": {
           "name": "theme_id",
           "type": "text",
@@ -5545,10 +5530,6 @@
           "name": "organization_settings_json_check",
           "value": "json_valid(settings_json) AND json_type(settings_json) IS 'object'"
         },
-        "organization_integrations_json_check": {
-          "name": "organization_integrations_json_check",
-          "value": "json_valid(integrations_json) AND json_type(integrations_json) IS 'object'"
-        },
         "organization_config_brand_color_check": {
           "name": "organization_config_brand_color_check",
           "value": "json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'"
@@ -5616,22 +5597,6 @@
         "organization_compliance_nonprofit_check": {
           "name": "organization_compliance_nonprofit_check",
           "value": "json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN ('https://schema.org/Nonprofit501c1', 'https://schema.org/Nonprofit501c2', 'https://schema.org/Nonprofit501c3', 'https://schema.org/Nonprofit501c4', 'https://schema.org/Nonprofit501c5', 'https://schema.org/Nonprofit501c6', 'https://schema.org/Nonprofit501c7', 'https://schema.org/Nonprofit501c8', 'https://schema.org/Nonprofit501c9', 'https://schema.org/Nonprofit501c10', 'https://schema.org/Nonprofit501c11', 'https://schema.org/Nonprofit501c12', 'https://schema.org/Nonprofit501c13', 'https://schema.org/Nonprofit501c14', 'https://schema.org/Nonprofit501c15', 'https://schema.org/Nonprofit501c16', 'https://schema.org/Nonprofit501c17', 'https://schema.org/Nonprofit501c18', 'https://schema.org/Nonprofit501c19', 'https://schema.org/Nonprofit501c20', 'https://schema.org/Nonprofit501c21', 'https://schema.org/Nonprofit501c22', 'https://schema.org/Nonprofit501c23', 'https://schema.org/Nonprofit501c24', 'https://schema.org/Nonprofit501c25', 'https://schema.org/Nonprofit501c26', 'https://schema.org/Nonprofit501c27', 'https://schema.org/Nonprofit501c28', 'https://schema.org/NonprofitANBI', 'https://schema.org/NonprofitSBBI')"
-        },
-        "organization_google_analytics_check": {
-          "name": "organization_google_analytics_check",
-          "value": "json_type(integrations_json, '$.google_analytics') IS NULL OR (json_type(integrations_json, '$.google_analytics') IS 'object' AND json_type(integrations_json, '$.google_analytics.revision') IS 'text' AND json_extract(integrations_json, '$.google_analytics.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_analytics.measurement_id') IS 'text') IS TRUE"
-        },
-        "organization_google_search_console_check": {
-          "name": "organization_google_search_console_check",
-          "value": "json_type(integrations_json, '$.google_search_console') IS NULL OR (json_type(integrations_json, '$.google_search_console') IS 'object' AND json_type(integrations_json, '$.google_search_console.revision') IS 'text' AND json_extract(integrations_json, '$.google_search_console.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.google_search_console.site_url') IS 'text') IS TRUE"
-        },
-        "organization_facebook_check": {
-          "name": "organization_facebook_check",
-          "value": "json_type(integrations_json, '$.facebook') IS NULL OR (json_type(integrations_json, '$.facebook') IS 'object' AND json_type(integrations_json, '$.facebook.revision') IS 'text' AND json_extract(integrations_json, '$.facebook.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.facebook.account_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_id') IS 'text' AND json_type(integrations_json, '$.facebook.page_name') IS 'text') IS TRUE"
-        },
-        "organization_instagram_check": {
-          "name": "organization_instagram_check",
-          "value": "json_type(integrations_json, '$.instagram') IS NULL OR (json_type(integrations_json, '$.instagram') IS 'object' AND json_type(integrations_json, '$.instagram.revision') IS 'text' AND json_extract(integrations_json, '$.instagram.status') IN ('active', 'disabled', 'error') AND json_type(integrations_json, '$.instagram.account_id') IS 'text' AND json_type(integrations_json, '$.instagram.instagram_user_id') IS 'text') IS TRUE"
         },
         "organization_feature_overrides_check": {
           "name": "organization_feature_overrides_check",
@@ -6043,6 +6008,162 @@
         "organization_domains_metadata_check": {
           "name": "organization_domains_metadata_check",
           "value": "metadata IS NULL OR (json_valid(metadata))"
+        }
+      }
+    },
+    "organization_integrations": {
+      "name": "organization_integrations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_name": {
+          "name": "target_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "measurement_id": {
+          "name": "measurement_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "verified": {
+          "name": "verified",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "verification_token": {
+          "name": "verification_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "organization_integrations_account_idx": {
+          "name": "organization_integrations_account_idx",
+          "columns": [
+            "provider",
+            "account_id"
+          ],
+          "isUnique": false
+        },
+        "organization_integrations_provider_unique": {
+          "name": "organization_integrations_provider_unique",
+          "columns": [
+            "organization_id",
+            "provider"
+          ],
+          "isUnique": true
+        },
+        "organization_integrations_target_unique": {
+          "name": "organization_integrations_target_unique",
+          "columns": [
+            "provider",
+            "target_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "organization_integrations_organization_id_organization_id_fk": {
+          "name": "organization_integrations_organization_id_organization_id_fk",
+          "tableFrom": "organization_integrations",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "organization_integrations_provider_check": {
+          "name": "organization_integrations_provider_check",
+          "value": "provider IN ('facebook', 'instagram', 'google_analytics', 'google_search_console')"
+        },
+        "organization_integrations_values_check": {
+          "name": "organization_integrations_values_check",
+          "value": "trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''"
+        },
+        "organization_integrations_measurement_check": {
+          "name": "organization_integrations_measurement_check",
+          "value": "(provider = 'google_analytics') = (measurement_id IS NOT NULL)"
+        },
+        "organization_integrations_verification_check": {
+          "name": "organization_integrations_verification_check",
+          "value": "(provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))"
+        },
+        "organization_integrations_instants_check": {
+          "name": "organization_integrations_instants_check",
+          "value": "strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at"
         }
       }
     },

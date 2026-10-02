@@ -4,7 +4,7 @@ import { Miniflare } from 'miniflare'
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api'
 import * as schema from '../../server/db/schema.ts'
 import { getConfig, setConfig } from '../../server/utils/organization-config.ts'
-import { readAnalyticsIntegration, storeAnalyticsSelection } from '../../server/utils/google-analytics.ts'
+import { deleteIntegration, listIntegrations, readIntegration, storeIntegration } from '../../server/utils/organization-integrations.ts'
 import { getWhatsAppWorkspaceState, patchWhatsAppWorkspaceState, getMcpWorkspacePreference, upsertMcpWorkspacePreference } from '../../server/utils/mcp-context.ts'
 
 test('organization settings and workspace patches preserve independent owners and hold no provider credentials', async () => {
@@ -26,24 +26,21 @@ test('organization settings and workspace patches preserve independent owners an
     // The measurement id is the Analytics integration's, and choosing a GA4
     // property is the only thing that writes it — so it is readable here and
     // there is no settings key that sets it.
-    await db.prepare("UPDATE organization SET integrations_json=json_patch(integrations_json,json(?)) WHERE id='org'").bind(JSON.stringify({ google_analytics: {"revision": "v1", "account_id": "google-account", "status": "active", "measurement_id": "G-OAUTH", "created_at": "2026-01-01T00:00:00.000Z", "updated_at": "2026-01-01T00:00:00.000Z"} })).run()
+    await storeIntegration(db, 'org', 'google_analytics', { account_id: 'google-account', target_id: '100', target_name: 'OAuth', measurement_id: 'G-OAUTH' })
     assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-OAUTH')
     await assert.rejects(db.prepare("UPDATE organization SET settings_json=json_set(settings_json,'$.consultation',json('{}')) WHERE id='org'").run())
     await assert.rejects(setConfig(db, 'other', 'brand_color', '#000000'))
-    await db.prepare("UPDATE organization SET integrations_json='{}' WHERE id='org'").run()
-    const providerEnv = { DB: db } as unknown as Parameters<typeof storeAnalyticsSelection>[0]
-    const selection = { account_id: 'google-account', property_id: '123', property_name: 'Site', measurement_id: 'G-SELECTED' }
+    assert.equal(await deleteIntegration(db, 'org', 'google_analytics'), true)
+    const selection = { account_id: 'google-account', target_id: '123', target_name: 'Site', measurement_id: 'G-SELECTED' }
     // Two selections landing together: the revision guard means one wins.
-    const attempts = await Promise.allSettled([storeAnalyticsSelection(providerEnv, 'org', selection, { revision: null }), storeAnalyticsSelection(providerEnv, 'org', selection, { revision: null })])
+    const attempts = await Promise.allSettled([storeIntegration(db, 'org', 'google_analytics', selection, { revision: null }), storeIntegration(db, 'org', 'google_analytics', selection, { revision: null })])
     assert.equal(attempts.filter(result => result.status === 'fulfilled').length, 1)
     // The organization keeps its selection and the Better Auth account it was
     // made through, and no credential of its own.
-    const stored = await readAnalyticsIntegration(providerEnv, 'org')
+    const stored = await readIntegration(db, 'org', 'google_analytics')
     assert.equal(stored?.account_id, 'google-account')
     assert.equal(stored?.measurement_id, 'G-SELECTED')
-    const integrationsJson = (await db.prepare("SELECT integrations_json FROM organization WHERE id='org'").first<{ integrations_json: string }>())?.integrations_json ?? ''
-    assert.deepEqual(Object.keys(JSON.parse(integrationsJson)), ['google_analytics'])
-    assert.equal(/token/i.test(integrationsJson), false)
+    assert.deepEqual((await listIntegrations(db, 'org')).map(integration => integration.provider), ['google_analytics'])
     await setConfig(db, 'org', 'brand_color', '#abcdef')
 
     await patchWhatsAppWorkspaceState(db, { userId: 'user', pendingConfirmation: { intent: 'one' } })

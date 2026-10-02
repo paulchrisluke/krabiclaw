@@ -84,7 +84,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'WhatsApp content updates', free: false, growth: true },
   { feature: 'Bookings & experiences', free: true, growth: true },
   { feature: 'Custom domain', free: false, growth: true },
-  { feature: 'Facebook auto-sync', free: false, growth: true },
+  { feature: 'Facebook & Instagram publishing', free: false, growth: true },
   { feature: 'Google Places imports', free: false, growth: true },
   { feature: 'Post-booking review requests', free: false, growth: true },
   { feature: 'Messaging notifications', free: false, growth: true },

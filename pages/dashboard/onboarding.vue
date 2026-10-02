@@ -199,12 +199,16 @@ const iframeSrc = computed(() => {
 })
 
 const PRE_DRAFT_VISUALS: Record<string, { url: string; alt: string }> = {
+  welcome: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/65141776-f50d-4a1e-e223-774747d55000/w=800',
+    alt: 'Start building your business website',
+  },
   type: {
-    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9c594a4f-41c8-4c81-3545-fe08d9a70c00/w=800',
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/48434034-9751-4d60-3c88-83c0dea5c600/w=800',
     alt: 'Choose your business type',
   },
   business: {
-    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8be9a754-ef8f-4452-3fc0-90bfa24f2600/w=800',
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/85418a57-9b58-4657-e151-53738ac99100/w=800',
     alt: 'Find your business on Google Maps',
   },
 }
@@ -217,9 +221,9 @@ useHead({
 // illustration rather than an empty column. The welcome screen has no step, and
 // a step with no illustration of its own keeps showing the last one instead of
 // blanking mid-flow.
-const lastVisual = ref(PRE_DRAFT_VISUALS.type!)
+const lastVisual = ref(PRE_DRAFT_VISUALS.welcome!)
 watchEffect(() => {
-  const visual = PRE_DRAFT_VISUALS[currentStep.value?.id ?? 'type']
+  const visual = PRE_DRAFT_VISUALS[currentStep.value?.id ?? 'welcome']
   if (visual) lastVisual.value = visual
 })
 const preDraftVisual = computed(() => iframeSrc.value ? { url: '', alt: '' } : lastVisual.value)
