@@ -1032,7 +1032,7 @@
         ],
         "coverageNote": "Relevant coverage references; not proof that every marketing claim is tested.",
         "evidenceSha256": {
-          "server/utils/seo-policy.ts": "e56540844a244dff8d71019a7e8509e541c2d606acd43b7090249e138bb59ea5",
+          "server/utils/seo-policy.ts": "13b4871832822111819f086f4ba8011e842c35b99997c0b8811694751c67a812",
           "utils/template-registry.ts": "251ab4ff9dff4b03e37ecf9803dfca224849065023710bda4d81945cb6ccf133",
           "tests/unit/product-seo.test.ts": "28ab3dbb00e32fef593e241c414f1fae608d039eaf123c675dfb33ab77701745"
         }
@@ -1121,22 +1121,28 @@
         "reassign_product_booking"
       ],
       "verification": {
-        "status": "source-reviewed",
+        "status": "runtime-tested",
         "baseline": "11f347e28bf839a9e55015f84ea1b00ce40d3c7d",
         "sources": [
           "server/domain/member-scheduling.ts",
           "server/domain/provider-reassignment.ts",
-          "server/utils/provider-allocation.ts"
+          "server/utils/provider-allocation.ts",
+          "server/utils/public-provider.ts",
+          "server/utils/seo-policy.ts"
         ],
         "tests": [
-          "tests/integration/member-scheduling-d1.test.ts"
+          "tests/integration/member-scheduling-d1.test.ts",
+          "tests/e2e/provider-local-proof.spec.ts"
         ],
-        "coverageNote": "Real D1 proves self/admin boundaries, disconnected member isolation, DST hours, group reassignment IDs and audit replay. Browser and live consent verification are separate.",
+        "coverageNote": "Real D1 proves self/admin boundaries, disconnected member isolation, DST hours, group reassignment IDs and audit replay. Production Worker browser proof passes real Better Auth membership, CMS/MCP parity, public approval and org fallback, cross-service conflicts, stable group IDs and private member self-service. No live OAuth or v8 compatibility claim.",
         "evidenceSha256": {
           "server/domain/member-scheduling.ts": "df4c642650e93f538b69fffffceb4ca131e91d981b8382ecfeee5f3bbb78bf12",
           "server/domain/provider-reassignment.ts": "e4d2f20e473a6a6956044bd1013e7016ea59dd9cb94f3e2229ed3490a84425a3",
           "server/utils/provider-allocation.ts": "23381472135a9949a292a0466bfefbbd4fa6f9da59b818e622dcc38e942fe3e8",
-          "tests/integration/member-scheduling-d1.test.ts": "e68dece8f84c7c989349f1cbe88ab836330ea57c78c23b35f606b6c1461182bc"
+          "tests/integration/member-scheduling-d1.test.ts": "e68dece8f84c7c989349f1cbe88ab836330ea57c78c23b35f606b6c1461182bc",
+          "server/utils/public-provider.ts": "a5a3f46c76cf5feda786eb5565e0dfb284fec01e33d656356d806a577473d32d",
+          "server/utils/seo-policy.ts": "13b4871832822111819f086f4ba8011e842c35b99997c0b8811694751c67a812",
+          "tests/e2e/provider-local-proof.spec.ts": "30cb8b7fb23d61c2eae9e529b10488c5fae33b5b48841f193925eff0a124f4e1"
         }
       },
       "pendingOwnerDecision": null

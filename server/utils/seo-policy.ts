@@ -21,6 +21,7 @@ export const PRIVATE_ROUTE_PREFIXES = [
   '/api',
   '/auth',
   '/dashboard',
+  '/member-schedule',
   '/dev',
   '/oauth',
   '/transfer',

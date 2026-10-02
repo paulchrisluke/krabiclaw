@@ -3,7 +3,7 @@
 </template>
 <script setup lang="ts">
 import MemberScheduleEditor from '~/components/dashboard/MemberScheduleEditor.vue'
-definePageMeta({layout:false})
+definePageMeta({layout:'standalone'})
 const route=useRoute(),organizationId=String(route.params.organizationId)
 const {data,error}=await useFetch<{members:{id:string;self:boolean}[]}>(`/api/organizations/${organizationId}/members/scheduling`,{server:false})
 const member=computed(()=>data.value?.members.find(member=>member.self)??null)

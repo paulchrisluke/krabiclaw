@@ -7,7 +7,7 @@ import { PREVIEW_COOKIE_NAME } from '~/server/utils/preview-token'
 import { definePlugin } from 'nitro';
 
 const SKIP_PREFIXES = [
-  '/api/', '/dashboard', '/admin', '/auth/',
+  '/api/', '/dashboard', '/member-schedule', '/admin', '/auth/',
   '/signup', '/login', '/links', '/_nuxt/', '/assets/', '/_ipx/',
 ]
 

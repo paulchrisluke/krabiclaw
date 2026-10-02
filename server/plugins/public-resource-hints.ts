@@ -4,6 +4,7 @@ import { definePlugin } from 'nitro';
 
 const PRIVATE_ROUTE_PREFIXES = [
   '/dashboard',
+  '/member-schedule',
   '/admin',
   '/api/',
   '/auth/',

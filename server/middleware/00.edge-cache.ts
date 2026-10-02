@@ -24,7 +24,7 @@ import { PREVIEW_COOKIE_NAME } from '~/server/utils/preview-token'
 const CACHE_TTL_SECONDS = 60
 
 const SKIP_PREFIXES = [
-  '/api/', '/dashboard', '/auth/',
+  '/api/', '/dashboard', '/member-schedule', '/auth/',
   '/signup', '/login', '/links', '/_nuxt/', '/assets/', '/_ipx/',
 ]
 
