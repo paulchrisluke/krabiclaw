@@ -417,8 +417,12 @@ test('a provider resource belongs to one organization, and an organization has o
     await assert.rejects(db.prepare("INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, revision) VALUES ('second', 'org-a', 'facebook', 'fb-account', 'third-page', 'Third', 'r')").run(), /UNIQUE constraint failed: organization_integrations.organization_id, organization_integrations.provider/)
     assert.equal(await db.prepare("SELECT count(*) AS n FROM organization_integrations WHERE organization_id = 'org-a' AND provider = 'facebook'").first('n'), 1)
 
-    // Once the other organization lets it go, it can be connected.
+    // Once the other organization lets it go, it can be connected — but a
+    // selection read before the disconnect cannot bring the connection back.
+    const beforeDisconnect = (await readIntegration(db, 'org-a', 'facebook'))!.revision
     assert.equal(await deleteIntegration(db, 'org-a', 'facebook'), true)
+    await assert.rejects(storeIntegration(db, 'org-a', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: beforeDisconnect }), /The Facebook connection changed/)
+    assert.equal(await readIntegration(db, 'org-a', 'facebook'), null)
     assert.equal(await deleteIntegration(db, 'org-a', 'instagram'), true)
     await storeIntegration(db, 'org-b', 'facebook', { account_id: 'fb-account', target_id: PAGE, target_name: 'Krabi Claw' }, { revision: 'fb-rev-org-b' })
     await storeIntegration(db, 'org-b', 'instagram', { account_id: 'ig-account', target_id: IG, target_name: 'krabiclaw' }, { revision: 'ig-rev-org-b' })

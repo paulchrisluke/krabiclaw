@@ -54,8 +54,10 @@ export interface IntegrationSelection {
 
 /**
  * Records the organization's selection. With `expected`, the write applies
- * only over that revision (`null`: only when nothing is connected); without
- * it, the selection replaces whatever is there.
+ * only over that revision: `null` creates a connection only where there is
+ * none, and a revision replaces only that row, so a selection read before a
+ * disconnect cannot bring the connection back. Without `expected`, the
+ * selection replaces whatever is there.
  */
 export async function storeIntegration(
   db: DbClient,
@@ -65,21 +67,22 @@ export async function storeIntegration(
   expected?: { revision: string | null },
 ): Promise<OrganizationIntegration> {
   const now = new Date().toISOString()
-  const values = [crypto.randomUUID(), organizationId, provider, selection.account_id, selection.target_id, selection.target_name,
-    selection.measurement_id ?? null, selection.verified === undefined || selection.verified === null ? null : Number(selection.verified),
-    selection.verification_token ?? null, crypto.randomUUID(), now, now]
+  const fields = [selection.account_id, selection.target_id, selection.target_name, selection.measurement_id ?? null,
+    selection.verified === undefined || selection.verified === null ? null : Number(selection.verified), selection.verification_token ?? null, crypto.randomUUID()]
+  const replace = `account_id = ?, target_id = ?, target_name = ?, measurement_id = ?, verified = ?, verification_token = ?, revision = ?, updated_at = ?`
+  const insert = `INSERT INTO organization_integrations (account_id, target_id, target_name, measurement_id, verified, verification_token, revision, updated_at, id, organization_id, provider, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  const statement = expected?.revision
+    ? { query: `UPDATE organization_integrations SET ${replace} WHERE organization_id = ? AND provider = ? AND revision = ?`, params: [...fields, now, organizationId, provider, expected.revision] }
+    : expected
+      // Only where nothing is connected: a row already there is a conflict.
+      ? { query: `${insert} ON CONFLICT (organization_id, provider) DO NOTHING`, params: [...fields, now, crypto.randomUUID(), organizationId, provider, now] }
+      : { query: `${insert} ON CONFLICT (organization_id, provider) DO UPDATE SET account_id = excluded.account_id, target_id = excluded.target_id, target_name = excluded.target_name,
+          measurement_id = excluded.measurement_id, verified = excluded.verified, verification_token = excluded.verification_token,
+          revision = excluded.revision, updated_at = excluded.updated_at`, params: [...fields, now, crypto.randomUUID(), organizationId, provider, now] }
   let changes: number | undefined
   try {
-    const result = await execute(db, `
-      INSERT INTO organization_integrations (id, organization_id, provider, account_id, target_id, target_name, measurement_id, verified, verification_token, revision, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (organization_id, provider) DO UPDATE SET
-        account_id = excluded.account_id, target_id = excluded.target_id, target_name = excluded.target_name,
-        measurement_id = excluded.measurement_id, verified = excluded.verified, verification_token = excluded.verification_token,
-        revision = excluded.revision, updated_at = excluded.updated_at
-      ${expected ? 'WHERE organization_integrations.revision IS ?' : ''}
-    `, expected ? [...values, expected.revision] : values)
-    changes = result.meta?.changes
+    changes = (await execute(db, statement.query, statement.params)).meta?.changes
   } catch (error) {
     if (/UNIQUE constraint failed: organization_integrations\.provider, organization_integrations\.target_id/.test(messages(error))) {
       throw new HTTPError({ statusCode: 409, message: `${TARGETS[provider]} is already connected to another KrabiClaw site. Disconnect it there first.` })

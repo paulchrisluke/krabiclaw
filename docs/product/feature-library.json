@@ -549,7 +549,7 @@
         "evidenceSha256": {
           "server/utils/mcp-executor/posts.ts": "ced3916d5ed4f9eeb2d67fb9942e25b4c49b9316ee8b7e1ee712de6a88653d75",
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
-          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55",
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -590,7 +590,7 @@
         "evidenceSha256": {
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/social-channel-posts.ts": "9eb239fbe37b5154f28d92ef91c9e1da1c01550d2ad83c8cd1d50a3343676f8d",
-          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55",
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b"
         }
       },
@@ -972,7 +972,7 @@
         "evidenceSha256": {
           "server/utils/social-publication.ts": "4cea3dcc0b94e8abf77c232bdb737b463307e768dbdea11a00571160c30a0510",
           "server/utils/mcp-tools/posts.ts": "e094a14f35f83a42b2590db5db8e33163e2c6d276fbd4aefb6e00c6c7e450b7b",
-          "tests/integration/social-publication-d1.test.ts": "1eae0942d07f690846fba1adcb30bf2720c328384671db005d5af621df3e2a55"
+          "tests/integration/social-publication-d1.test.ts": "a4159f204630b69093a1dcb5a26b28c28158f667793e2485c543c6e93685755e"
         }
       },
       "pendingOwnerDecision": null,
