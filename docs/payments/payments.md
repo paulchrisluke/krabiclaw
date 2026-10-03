@@ -6,11 +6,12 @@ FX conversion or replacement for Better Auth platform subscriptions.
 
 ## Coordinated dependencies
 
-This feature is stacked on consultation foundation #1211, booking MCP #1209 and
-Calendar projection #1210. Calendar changes visible in the stacked PR are inherited.
-Schema order is canonical Calendar `0003_google_calendar_projection` followed by
-repo-generated `0004_payments`. Calendar stages cleanup first in the existing tenant
-cleanup helper; Payments retains financial servicing relationships afterward.
+This Payments-only PR builds on the separate Calendar/member scheduling branch,
+which builds on consultation and typed catalog foundation #1211. Its diff contains
+Payments changes; Calendar is reviewed and merged first. Schema order is the v11
+baseline, `0001_calendar_member_scheduling`, then `0002_payments_commerce`.
+Calendar stages cleanup first in the existing tenant cleanup helper; Payments
+retains financial servicing relationships afterward.
 
 Required online collection is an explicit offering policy. Positive pay-later Prices
 remain bookable without Checkout. Valid zero Prices use the canonical free flow;
@@ -124,7 +125,10 @@ merchant-hosted onboarding and Radar before claiming native card readiness.
 No deployment, live webhook change, OAuth grant change or production activation is
 part of this draft. Native sandbox account readiness, direct-charge zero-application-fee/full-principal refund, dedicated synchronous configuration, Checkout session creation and Metronome draft rating are verified in `sandbox-verification-2026-10-01.md`. Native hosted capture, actual Worker/D1 hold conversion, merchant-approved rejection/full refund, signed replay and thin Connect SDK refresh also pass. Native synthetic operating invoice collection and paid-invoice credit settlement also passed. Actual fee report APIs require live data; Metronome-synchronized collection remains blocked before its unapproved persistent sandbox OAuth grant. Persistent event delivery requires an approved reachable destination; the unmerged routes must not be assumed deployed.
 
-## Local verification
+## Historical local verification — 2026-10-02
+
+The following notes describe the superseded implementation. Current validation
+is recorded separately in the replacement PR; these notes do not qualify its head.
 
 One-time browser observations are retained as screenshots and dated findings.
 The bespoke proof specs and synthetic seed scripts were removed under #1225.
@@ -150,18 +154,13 @@ acceptance. Negative finalized credits still require the native credit-note path
 [Metronome contract end semantics](https://docs.metronome.com/api-reference/contracts/update-the-contract-end-date).
 Native end/reopen/rating proof remains part of the provider configuration verification.
 
-## Dependency reconciliation — 2026-10-02
+## Replacement review
 
-The existing draft integrates verified Calendar `4a8df9e82b525a2dfb619c36aac94b82ccf1d259`, based on MCP `61f4ada75e361ef4fe839c05d7a3c531cd074c15` and Foundation `a7fd549e`. Shared weekly configuration/timezone/validation changes remain canonical; Payments hold counting, capture conversion and actor-bound paid rejection extend those same allocator and operation paths. Foundation `0004` and Calendar `0005` SQL/snapshots are preserved; Payments is regenerated as `0006` from the canonical schema. Effective cleanup metadata parity with `a15f5b066cbeecbbe87497ee1e9f4fc148c38cdb` is reconciled on this top branch; lower branch history is preserved. No unfinished UI redesign, remote DDL, provider mutation, merge or deployment is included in this reconciliation.
+This branch replaces the Payments work previously combined in #1213 and #1224.
+The separate Calendar PR owns Google projection and member scheduling. Dated
+sandbox and review documents in this directory retain historical evidence.
 
-Successor validation: Payments D1 15/15; canonical availability D1 including weekly history preservation 13/13; Calendar D1 2/2; migration baseline/transfer tests 3/3; affected unit/controller checks 6/6. Typecheck, changed-file lint, production build and migration lint pass. The existing production Worker/browser test passed against a freshly migrated isolated D1: financial servicing, immutable order principal, current-tier acceptance denial, buyer ownership isolation, actor-bound paid-rejection MCP approval handoff, origin checks, forged-claim rejection and signed replay. Refreshed desktop/mobile screenshots were captured. No repeated native TEST setup, provider financial mutation or persistent OAuth grant occurred.
-
-## Final combined MCP metadata
-
-Cleanup successor `a15f5b066cbeecbbe87497ee1e9f4fc148c38cdb` was compared with inherited `9ea1749988aa3c0c724cdfb16dcc5f5b105c49c9`. Its missing descriptions, concise MCP instructions/prompts, nonempty-description guard and description-aware catalog fingerprint are incorporated at the top of #1213. The cleanup's older catalog snapshot was not copied. Instead the final combined catalog and submission artifact were regenerated once.
-
-All 118 public tool names and input/output schemas match the pre-cleanup combined catalog exactly. Newer page product binding, nullable online weekly scheduling and booking policy fields are preserved. Product booking/consultation and Payments descriptions retain optional pay-later, hold-before-Checkout/native capture and actor-bound paid-rejection financial handoff semantics. Cleanup lower branches remain unchanged; effective metadata parity here does not require another stack-wide rebase. The only differences from cleanup's older wording describe the newer shared booking/page/Payments contracts.
-
-No runtime mutation logic, authorization policy, migrations, provider configuration, service layout redesign or lower branch was changed by this metadata reconciliation. Release still requires coordinated owner review; the unapproved Metronome Sandbox→Stripe TEST read_write grant blocks synchronized usage-invoice collection, and native actual-cost itemized reports require live data. Commercial entitlement activation remains a separate decision; Calendar's real Google consent/event proof remains untested as reported by its owner.
-
-Metadata verification: final catalog/feature evidence checks pass, affected MCP protocol/annotation tests 6/6, changed-file lint and typecheck pass. Submission regeneration produced no diff because its reviewed effects/annotations did not change. No full CI, review, native-provider or lower-branch cycle was repeated.
+Current local checks do not repeat native Stripe/Metronome financial operations
+or authorize a provider OAuth grant. Metronome Sandbox-to-Stripe TEST collection
+and native actual-cost itemization still require the provider qualification
+described above. Commercial Payments entitlement activation is a separate decision.
