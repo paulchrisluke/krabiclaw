@@ -479,13 +479,13 @@
     "get_social_connections": {
       "annotations": {
         "readOnlyHint": true,
-        "openWorldHint": false,
+        "openWorldHint": true,
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token.",
-        "open_world_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, without any token. Existing content is not deleted or overwritten."
+        "read_only_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, and whether Meta currently accepts each connection, without returning any token.",
+        "open_world_justification": "Asks Meta whether each saved Facebook Page and Instagram connection still has access; it reads only the connected accounts.",
+        "destructive_justification": "Reads which website, Facebook Page and Instagram account the organization can publish to, and whether Meta currently accepts each connection, without returning any token. Existing content is not deleted or overwritten."
       }
     },
     "get_workspace_context": {

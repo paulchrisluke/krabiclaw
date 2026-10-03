@@ -10556,6 +10556,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"mp4box@npm:2.4.1":
+  version: 2.4.1
+  resolution: "mp4box@npm:2.4.1"
+  checksum: 10c0/9a21d861dc77935547e6594b4d81aa545c7bf162135017c78475f67b5ab987da06eff58693ff47234b0c9b94a7f2c1bb1adb3f1fbbffdac591bec3efe899c24c
+  languageName: node
+  linkType: hard
+
 "mrmime@npm:^2.0.0":
   version: 2.0.0
   resolution: "mrmime@npm:2.0.0"
@@ -10859,6 +10866,7 @@ __metadata:
     libphonenumber-js: "npm:^1.13.12"
     lighthouse: "npm:^13.4.1"
     marked: "npm:^18.0.11"
+    mp4box: "npm:2.4.1"
     nuxt: "npm:nuxt-nightly@5.0.0-29778575.262cc544"
     nuxt-schema-org: "npm:^6.0.4"
     patch-package: "npm:^8.0.1"
