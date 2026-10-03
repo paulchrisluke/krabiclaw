@@ -26,14 +26,15 @@ export default defineHandler(async (event) => {
   }
 
   const current = await readIntegration(env.DB, organization.id, 'instagram')
+  if (current) return jsonResponse({ error: 'Disconnect Instagram before connecting again.' }, { status: 409 })
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id, currentAccountId: current?.account_id, providerId: 'instagram', scopes: [],
+    userId: session.user.id, currentAccountId: null, providerId: 'instagram', scopes: [],
   })
 
   const account = await getInstagramAccount((await linkedAccountAccessToken(env, accountId)).accessToken)
   await storeIntegration(env.DB, organization.id, 'instagram', {
     account_id: accountId, target_id: account.id, target_name: account.username,
-  }, { revision: current?.revision ?? null })
+  }, { revision: null })
 
   return jsonResponse({ success: true, username: account.username })
 })

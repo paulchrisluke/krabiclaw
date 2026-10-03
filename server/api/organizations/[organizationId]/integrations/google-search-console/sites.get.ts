@@ -1,7 +1,7 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { listSearchConsoleSites } from '~/server/utils/google-search-console'
 import { integrationSummary, readIntegration } from '~/server/utils/organization-integrations'
@@ -39,10 +39,11 @@ export default defineHandler(async (event) => {
     const properties = await listSearchConsoleSites((await linkedAccountAccessToken(env, accountId)).accessToken)
     return jsonResponse({ success: true, account_id: accountId, searchConsole, siteUrl, properties, error: null })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('google_search_console_sites_failed', { organizationId: organization.id, error })
     return jsonResponse({
-      success: true, account_id: accountId, searchConsole, siteUrl, properties: [],
+      account_id: accountId, searchConsole, siteUrl, properties: [],
       error: error instanceof Error ? error.message : String(error),
-    })
+    }, { status: 502 })
   }
 })

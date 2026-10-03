@@ -14,55 +14,23 @@
         <p class="truncate font-semibold text-highlighted">{{ connection.name }}</p>
         <p class="mt-0.5 truncate text-sm text-muted">Connected on {{ connectedOn }}</p>
       </div>
-      <div class="flex shrink-0 items-center gap-2">
-        <UButton v-if="!changing" color="neutral" variant="outline" @click="changing = true">Change {{ noun }}</UButton>
-        <UDropdownMenu :items="[[{ label: 'Disconnect', icon: 'i-lucide-link-2-off', color: 'error', onSelect: () => emit('disconnect') }]]">
-          <UButton icon="i-lucide-ellipsis" color="neutral" variant="outline" square :loading="disconnecting" aria-label="More actions" />
-        </UDropdownMenu>
-      </div>
+      <UButton icon="i-lucide-link-2-off" color="error" variant="outline" :loading="disconnecting" @click="emit('disconnect')">Disconnect</UButton>
     </div>
-
-    <section v-if="changing" class="space-y-4 border-t border-default pt-6">
-      <div class="flex items-center justify-between gap-4">
-        <h3 class="font-semibold text-highlighted">Choose another {{ noun }}</h3>
-        <UButton color="neutral" variant="ghost" size="sm" @click="keep">Keep current</UButton>
-      </div>
-      <slot />
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-/*
-  One integration's connection, shared by every leaf that connects the business
-  to an account: what it is connected to and since when, and the picker in the
-  default slot for connecting or changing it. The leaf owns the picker's draft
-  and the Save that commits it; `changing` says when the picker is open.
-*/
+// Each organization has one connection per provider. Disconnect before connecting again.
 const props = defineProps<{
   logo: string
-  /** What the business is connected to: an account, a property, a Page. */
-  noun: string
   connection: { name: string; image?: string | null; connectedAt: string } | null
   disconnecting?: boolean
 }>()
 
-const emit = defineEmits<{ disconnect: []; keep: [] }>()
-const changing = defineModel<boolean>('changing', { default: false })
-
-// A leaf opens with its picker when linking returned with `?change=1`; the
-// marker is read then and dropped, so a reload does not reopen the picker.
-const route = useRoute()
-if (route.query.change !== undefined) {
-  void navigateTo({ query: { ...route.query, change: undefined } }, { replace: true })
-}
+const emit = defineEmits<{ disconnect: [] }>()
 
 const connectedOn = computed(() => props.connection
   ? new Date(props.connection.connectedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })
   : '')
 
-function keep() {
-  changing.value = false
-  emit('keep')
-}
 </script>

@@ -4,11 +4,38 @@ export function getErrorMessage(error: unknown, fallback: string): string {
     if (data && typeof data === 'object') {
       const dataError = (data as Record<string, unknown>).error
       if (typeof dataError === 'string' && dataError) return dataError
+      const dataMessage = (data as Record<string, unknown>).message
+      if (typeof dataMessage === 'string' && dataMessage) return dataMessage
     }
     const errorMessage = (error as Record<string, unknown>).message
     if (typeof errorMessage === 'string' && errorMessage) return errorMessage
   }
   return fallback
+}
+
+/** Better Auth owns these codes; state_mismatch includes expiry and verification failures. */
+export function oauthErrorMessage(code: unknown, description?: unknown): string {
+  if (typeof code !== 'string' || !code) return ''
+  let message: string
+  switch (code) {
+    case 'state_mismatch':
+    case 'state_security_mismatch':
+    case 'state_not_found':
+      message = 'The connection request expired or could not be verified. Start Connect again from Settings → Integrations in the same browser.'
+      break
+    case 'access_denied':
+      message = 'Authorization was cancelled or denied. Start Connect again and approve the requested access.'
+      break
+    case 'account_already_linked_to_different_user':
+      message = 'This provider account is already linked to another KrabiClaw user. Choose a different account or sign in as the user who linked it.'
+      break
+    case 'unable_to_get_user_info':
+      message = 'The provider could not return your account information. Start Connect again; if it still fails, check your provider account access.'
+      break
+    default:
+      message = 'The provider connection failed. Start Connect again from Settings → Integrations.'
+  }
+  return `${message} (${code})${typeof description === 'string' && description ? ` ${description}` : ''}`
 }
 
 /**
