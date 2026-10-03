@@ -40,7 +40,13 @@ test('organization settings and workspace patches preserve independent owners an
     const stored = await readIntegration(db, 'org', 'google_analytics')
     assert.equal(stored?.account_id, 'google-account')
     assert.equal(stored?.measurement_id, 'G-SELECTED')
+    assert.equal(stored?.revision, attempts.find(result => result.status === 'fulfilled')?.value)
     assert.deepEqual((await listIntegrations(db, 'org')).map(integration => integration.provider), ['google_analytics'])
+    // A failed older verification must not remove the selection that replaced it.
+    assert.equal(await deleteIntegration(db, 'org', 'google_analytics', { revision: 'stale-verification' }), false)
+    assert.equal((await readIntegration(db, 'org', 'google_analytics'))?.measurement_id, 'G-SELECTED')
+    assert.equal(await deleteIntegration(db, 'org', 'google_analytics', { revision: stored!.revision }), true)
+    assert.equal(await readIntegration(db, 'org', 'google_analytics'), null)
     await setConfig(db, 'org', 'brand_color', '#abcdef')
 
     await patchWhatsAppWorkspaceState(db, { userId: 'user', pendingConfirmation: { intent: 'one' } })

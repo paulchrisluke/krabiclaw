@@ -1,7 +1,7 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam, readBody } from 'nitro/h3'
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireIntegrationAccount } from '~/server/utils/auth'
 import { selectAnalyticsProperty } from '~/server/utils/google-analytics'
 import { readIntegration } from '~/server/utils/organization-integrations'
@@ -28,9 +28,9 @@ export default defineHandler(async (event) => {
 
   const { env, session, organization } = await requireOrganizationAccess(event, organizationId)
   const current = await readIntegration(env.DB, organization.id, 'google_analytics')
+  if (current) return jsonResponse({ error: 'Disconnect Google Analytics before connecting again.' }, { status: 409 })
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id,
-    currentAccountId: current?.account_id,
+    userId: session.user.id, currentAccountId: null,
     providerId: 'google',
     scopes: INTEGRATION_SCOPES['google-analytics'],
   })
@@ -38,7 +38,7 @@ export default defineHandler(async (event) => {
   try {
     const measurementId = await selectAnalyticsProperty(
       env, organization.id, accountId, propertyId, propertyName,
-      { revision: current?.revision ?? null },
+      { revision: null },
     )
 
     // The property is only in effect once the tracking configuration carries
@@ -50,6 +50,7 @@ export default defineHandler(async (event) => {
     // environment declares it has no Zaraz zone.
     return jsonResponse({ success: true, measurement_id: measurementId, zaraz: zaraz.status })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('google_analytics_select_failed', { organizationId: organization.id, error })
     return jsonResponse({
       error: error instanceof Error ? error.message : 'Could not select that Analytics property.',
