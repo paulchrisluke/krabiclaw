@@ -88,6 +88,26 @@ test('Krabiclaw pricing retains its billing plans after hydration', async ({ pag
   await expect(page.getByRole('link', { name: 'Get Grow', exact: true })).toHaveAttribute('href', '/signup?plan=growth&redirect=%2Fapi%2Fpost-login%3Fplan%3Dgrowth')
 })
 
+for (const width of [390, 1440]) {
+  test(`Krabiclaw policies render their own headers and body at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    for (const policy of [
+      { path: '/policies/privacy', title: 'Privacy Policy', body: 'This Privacy Policy explains how we collect, use, disclose, retain, and protect Personal Data' },
+      { path: '/policies/terms', title: 'Terms of Service', body: 'A contract for the sale or provision of a merchant\'s products or services is directly between the merchant and its customer.' },
+    ]) {
+      const response = await openTenantPage(page, `${testBaseUrl()}${policy.path}`, {})
+      expect(response?.status()).toBe(200)
+      await waitForNuxtHydration(page)
+      await expect(page.getByRole('heading', { name: policy.title, exact: true, level: 1 })).toBeVisible()
+      await expect(page.locator('main')).toContainText(policy.body)
+      await expect(page.locator('.kc-parallax-hero')).toHaveCount(0)
+    }
+    expect(errors).toEqual([])
+  })
+}
+
 test('Krabiclaw social viewer keyboard navigation changes the visible picture', async ({ page }) => {
   const response = await openTenantPage(page, `${testBaseUrl()}/`, {})
   expect(response?.status()).toBe(200)
