@@ -431,12 +431,15 @@ test('native online review uses canonical Products, holds capacity, and releases
     expect(instant.status).toBe('confirmed')
     for (let replay = 0; replay < 2; replay++) {
       const cancel = await request.post(`/api/public/booking-requests/${instant.request_id}/cancel`, { headers: { ...headers, authorization: `Bearer ${instant.cancellation_token}` } })
-      expect(cancel.status(), await cancel.text()).toBe(replay === 0 ? 200 : 404)
+      expect(cancel.status(), await cancel.text()).toBe(200)
+      expect(await cancel.json()).toEqual({ success: true, kind: 'booking' })
       const cancelledDetails = await page.request.get(`/api/dashboard/bookings/booking/${instant.request_id}?org=north-carolina-legal-services`)
       expect((await cancelledDetails.json()).booking.status).toBe('cancelled')
       const released = await request.get(`/api/public/products/${products[0]!.slug}/sessions?location_id=online`, { headers })
       expect((await released.json()).sessions.find((session: { id: string }) => session.id === sessions[0].id).remaining).toBe(1)
     }
+    const invalidCancel = await request.post(`/api/public/booking-requests/${instant.request_id}/cancel`, { headers: { ...headers, authorization: 'Bearer invalid-cancellation-token' } })
+    expect(invalidCancel.status(), await invalidCancel.text()).toBe(404)
   } finally {
     await writeBinding(cleanupRequest, service.product_id ?? null)
     const restoredMode = await cleanupRequest.put(`${editor}/consultation`, { data: { mode: previous.mode } })
