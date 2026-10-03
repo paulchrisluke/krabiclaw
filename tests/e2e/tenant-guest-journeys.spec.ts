@@ -218,7 +218,7 @@ for (const target of [
         await page.setViewportSize({ width, height: 844 })
         const handoff = page.locator(`a[href="${externalUrl}"]:visible`)
         await expect(handoff).toHaveCount(1)
-        await expect(handoff).toHaveText(target.experience ? 'Book now' : 'Order now')
+        await expect(handoff).toHaveText(target.experience ? 'Book now' : 'Order Now')
         await expect(page.getByRole('button', { name: 'Book now', exact: true })).toHaveCount(0)
       }
       await waitForNuxtHydration(page)

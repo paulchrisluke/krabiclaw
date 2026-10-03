@@ -48,7 +48,7 @@ const items = computed(() => services.value!.page.blocks.filter(block => block.t
 // time from another service cannot persist into the next request.
 const selectedId = ref(items.value.find(item => data.value!.products.some(product => product.id === item.productId))?.id ?? items.value[0]?.id ?? null)
 const selectedService = computed(() => items.value.find(item => item.id === selectedId.value) ?? null)
-const selectedProduct = computed(() => data.value!.products.find(product => product.id === selectedService.value?.productId && product.active && product.booking?.online_timezone) ?? null)
+const selectedProduct = computed(() => data.value!.products.find(product => product.id === selectedService.value?.productId) ?? null)
 const cover = computed(() => selectedService.value?.media.find(media => media.slot === 'cover'))
 const thumbnail = computed(() => blockText(cover.value?.public_url))
 const presentation = requireProductPresentation('service')

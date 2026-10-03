@@ -126,7 +126,7 @@ const page = computed(() => data.value?.page ?? null)
 const consultationProducts = isBlawby.value && pagePath.value.startsWith('/services/') && blawbyDocument?.value.shell.consultation.mode === 'native' && page.value?.product_id
   ? await useOnlineConsultationProducts()
   : null
-const linkedProduct = computed(() => consultationProducts?.data.value?.products.find(product => product.id === page.value?.product_id && product.active && product.booking?.online_timezone) ?? null)
+const linkedProduct = computed(() => consultationProducts?.data.value?.products.find(product => product.id === page.value?.product_id) ?? null)
 const servicePresentation = requireProductPresentation('service')
 const secondaryAction = computed(() => {
   const hero = page.value?.blocks.find(block => block.type === 'hero')
