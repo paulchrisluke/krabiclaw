@@ -570,8 +570,12 @@ test('channel MCP tools report invalid parameters while preserving connection an
       await assert.rejects(handlePostsTools({ toolName, organization, args: { ...args, connection_revision: 'old' } }),
         (error: unknown) => error instanceof HTTPError && error.statusCode === 409 && !('mcp' in error))
       meta.fault('reject', request => request.path.endsWith(toolName === 'list_channel_posts' ? '/posts' : args.provider_post_id))
+      // Meta's refusal is named the way publish_post names it, with Meta's code
+      // and trace, and keeps the provider error as its cause.
       await assert.rejects(handlePostsTools({ toolName, organization, args }),
-        (error: unknown) => error instanceof MetaGraphError && !error.objectMissing && !('mcp' in error))
+        (error: unknown) => error instanceof Error && !('mcp' in error)
+          && /^provider_rejected: .*\(Meta code 100, fbtrace_id [^)]+\)$/.test(error.message)
+          && error.cause instanceof MetaGraphError && !error.cause.objectMissing)
     }
     for (const limit of [0, 101, 1.5, '25', null]) {
       await assert.rejects(handlePostsTools({ toolName: 'list_channel_posts', organization, args: { ...args, limit } }),
