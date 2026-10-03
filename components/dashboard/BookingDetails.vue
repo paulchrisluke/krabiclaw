@@ -59,7 +59,7 @@
             <UAlert v-if="reassignmentError" color="error" title="Team members could not be loaded" :description="getErrorMessage(reassignmentError, 'Reassignment is unavailable')" />
             <USkeleton v-else-if="reassignmentPending" class="h-10" />
             <USelect v-else-if="reassignmentMembers" aria-label="Reassign to" v-model="reassignmentMember" :items="reassignmentOptions" placeholder="Select the offering’s assigned member" class="w-full" />
-            <p class="text-sm text-muted">Reassignment applies to every attendee in this Session. First configure the offering’s eligible member.</p>
+            <p class="text-sm text-muted">Reassignment applies to every attendee in this Session. Active checkout holds refuse the change. First configure the offering’s eligible member.</p>
             <UButton :disabled="!reassignmentMember || !!reassignmentError || reassignmentPending || !reassignmentMembers" color="neutral" variant="soft" :loading="reassignmentSaving" @click="reassignProvider">Reassign Session and notify guests</UButton>
           </section>
           <div class="mt-6 space-y-2">
@@ -541,7 +541,9 @@ async function runAction(action: string) {
     actionAttempt.value = null
     cancelOpen.value = false
   } catch (cause) {
-    actionError.value = getErrorMessage(cause, 'Booking could not be updated')
+    const approvalUrl=isRecord(cause)&&isRecord(cause.data)&&isRecord(cause.data.data)&&typeof cause.data.data.financial_approval_url==='string'?cause.data.data.financial_approval_url:null
+    if(approvalUrl) await navigateTo(approvalUrl)
+    else actionError.value = getErrorMessage(cause, 'Booking could not be updated')
   } finally {
     pendingAction.value = null
   }

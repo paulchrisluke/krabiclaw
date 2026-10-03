@@ -6,7 +6,7 @@ const reservationId = { type: 'string', description: 'Reservation ID from list_r
 const description = 'Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.'
 
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
- organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
+ organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; active checkout holds refuse the change. Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
   organizationTool({ name: 'list_product_booking_sessions', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
@@ -16,7 +16,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. ${description}`,
+    description: `Create an ordinary Product→Variant→Session booking using the public booking service. Review offerings arrive pending; instant offerings arrive confirmed. Positive prices may be pay-later. Required positive online collection reserves an expiring hold and hands off to hosted Stripe Checkout; authenticated native capture alone creates the Booking. No import, paid assertion or direct charge is performed by the tool. ${description}`,
     inputSchema: {
       product_slug: { type: 'string' }, session_id: { type: 'string' }, variant_id: { type: 'string' },
       party_size: { type: 'integer', minimum: 1, maximum: 99 }, guest_name: { type: 'string', minLength: 1 },
@@ -35,7 +35,7 @@ export const BOOKINGS_TOOLS: McpToolDefinition[] = [
     ['cancel', 'Cancel a pending or confirmed product booking or consultation when the user requests cancellation. Releases its places and emails the guest the cancellation.'],
   ] as const).map(([action, purpose]) => organizationTool({
     name: `${action}_product_booking`, domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
-    description: `${purpose} ${description}`,
+    description: `${purpose} ${action} a Product booking through the canonical inbox operation service. Confirm/reject apply to pending review bookings. Paid rejection requires an actor-bound authenticated browser financial approval and refunds full principal. Cancellation releases capacity exactly once. Guest status messages are delivered by the same workflow as dashboard. ${description}`,
     inputSchema: { operational_booking_id: bookingId, idempotency_key: key }, required: ['operational_booking_id', 'idempotency_key'],
   })),
   organizationTool({ name: 'request_product_booking_change', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
