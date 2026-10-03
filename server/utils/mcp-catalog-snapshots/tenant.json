@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f357635edc55c918b09d24713fc95051b8dae2212cffa8b14b3ff40de71e7466",
+  "fingerprint": "sha256:8f64aeed35f6b075110d1ee25cc31ea62b81811256f2b57cbfc53fe103abcac1",
   "tools": [
     {
       "name": "append_content_block",
@@ -755,6 +755,13 @@
                 },
                 "booking": {
                   "properties": {
+                    "assigned_member_id": {
+                      "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "calendar_group": {
                       "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
@@ -800,6 +807,13 @@
                       "type": "string"
                     },
                     "product_id": {
+                      "type": "string"
+                    },
+                    "scheduling_mode": {
+                      "enum": [
+                        "legacy",
+                        "provider"
+                      ],
                       "type": "string"
                     }
                   },
@@ -3075,6 +3089,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -3120,6 +3141,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -5614,6 +5642,28 @@
       }
     },
     {
+      "name": "get_member_scheduling",
+      "description": "List accessible members and their scheduling when member_id is omitted, or read one member’s hours, time off, explicitly approved public profile and Calendar status. Ordinary members can read only their own scheduling record; owners/admins can inspect their team. No Google event content or credentials are returned.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "get_organization",
       "description": "Read the selected KrabiClaw site’s identity, public address and settings. organization_id is the internal ID returned by get_workspace_context or list_organizations, not a URL, domain or business name.",
       "inputSchema": {
@@ -7340,6 +7390,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -7385,6 +7442,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -10602,10 +10666,13 @@
     },
     {
       "name": "list_product_bookings",
-      "description": "List product bookings and consultations for the selected site when the user wants to review appointments, guests or booking status. Returns booking IDs and their inbox conversation IDs. Table reservations use list_reservation_inquiries.",
+      "description": "List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "assigned_member_id": {
+            "type": "string"
+          },
           "cursor": {
             "description": "Opaque next_cursor from the previous page.",
             "type": "string"
@@ -12137,6 +12204,45 @@
       }
     },
     {
+      "name": "reassign_product_booking",
+      "description": "Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "description": "Caller-supplied durable idempotency key. Reuse only for the identical operation.",
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          },
+          "member_id": {
+            "type": "string"
+          },
+          "operational_booking_id": {
+            "description": "Booking ID returned by list_product_bookings or create_product_booking. Distinct from request_id, which identifies the inbox conversation.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operational_booking_id",
+          "member_id",
+          "expected_updated_at",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "reconcile_post_publication",
       "description": "Check an unknown or existing Facebook or Instagram publication when the user wants to resolve or refresh its outcome. Reads the connected provider and updates the stored publication receipt; it does not publish. Supply provider_post_id only when the exact post is known and belongs to that connected Page or account. An unproven outcome remains unknown.",
       "inputSchema": {
@@ -12582,6 +12688,13 @@
                 },
                 "booking": {
                   "properties": {
+                    "assigned_member_id": {
+                      "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "calendar_group": {
                       "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                       "maxLength": 64,
@@ -12627,6 +12740,13 @@
                       "type": "string"
                     },
                     "product_id": {
+                      "type": "string"
+                    },
+                    "scheduling_mode": {
+                      "enum": [
+                        "legacy",
+                        "provider"
+                      ],
                       "type": "string"
                     }
                   },
@@ -13476,6 +13596,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -13521,6 +13648,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -15754,11 +15888,161 @@
       }
     },
     {
+      "name": "set_member_busy_calendars",
+      "description": "Select 1–10 Google busy-input calendars on the member’s own already-linked account with granted free/busy scopes, or disconnect with null account and empty calendar_ids. This tool never grants OAuth access. Busy input must be separate from organization booking output. Selected stale/disconnected data blocks that member’s new availability; no selection uses internal scheduling.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "calendar_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "member_id",
+          "account_id",
+          "calendar_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "set_member_scheduling",
+      "description": "Replace a member’s own timezone, weekly working hours and UTC time-off intervals using the latest updated_at. Owner/admin may oversee any member and approve public profile. Profile edits revoke approval unless explicitly approved by an admin. Existing Booking assignments and times stay fixed.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "member_id": {
+            "description": "Existing Better Auth organization member ID. Ordinary members may name only themselves.",
+            "type": "string"
+          },
+          "organization_id": {
+            "description": "Internal KrabiClaw organization ID from get_workspace_context or list_organizations, e.g. org-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or business name here.",
+            "type": "string"
+          },
+          "public_approved": {
+            "type": "boolean"
+          },
+          "public_bio": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "public_photo_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time_off": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ],
+              "type": "object"
+            },
+            "maxItems": 100,
+            "type": "array"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "weekly": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                },
+                "weekday": {
+                  "maximum": 6,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "weekday",
+                "start",
+                "end"
+              ],
+              "type": "object"
+            },
+            "maxItems": 28,
+            "type": "array"
+          }
+        },
+        "required": [
+          "member_id",
+          "timezone",
+          "weekly",
+          "time_off",
+          "expected_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "type": "object"
+      }
+    },
+    {
       "name": "set_product_booking_config",
       "description": "Configure a product’s duration, capacity, staff review, payment requirement and online calendar when the user wants to set up bookable sessions. Existing sessions keep their saved times, capacity and state. Omitted fields stay unchanged; null clears a nullable default and zero capacity means no places. Read the settings with get_product.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "assigned_member_id": {
+            "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "calendar_group": {
             "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
             "maxLength": 64,
@@ -15806,6 +16090,13 @@
           },
           "product_id": {
             "type": "string"
+          },
+          "scheduling_mode": {
+            "enum": [
+              "legacy",
+              "provider"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -15817,6 +16108,13 @@
         "properties": {
           "config": {
             "properties": {
+              "assigned_member_id": {
+                "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "calendar_group": {
                 "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                 "maxLength": 64,
@@ -15862,6 +16160,13 @@
                 "type": "string"
               },
               "product_id": {
+                "type": "string"
+              },
+              "scheduling_mode": {
+                "enum": [
+                  "legacy",
+                  "provider"
+                ],
                 "type": "string"
               }
             },
@@ -15924,6 +16229,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -15969,6 +16281,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -16599,6 +16918,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -16644,6 +16970,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },
@@ -19485,6 +19818,13 @@
               },
               "booking": {
                 "properties": {
+                  "assigned_member_id": {
+                    "description": "Existing organization member ID for provider scheduling; null uses organization availability.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "calendar_group": {
                     "description": "Explicit shared single-online-calendar exclusion across Products; null removes enrollment. This is not a provider identity.",
                     "maxLength": 64,
@@ -19530,6 +19870,13 @@
                     "type": "string"
                   },
                   "product_id": {
+                    "type": "string"
+                  },
+                  "scheduling_mode": {
+                    "enum": [
+                      "legacy",
+                      "provider"
+                    ],
                     "type": "string"
                   }
                 },

@@ -10,6 +10,7 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
  */
 
 const NAMES: Record<IntegrationProvider, string> = {
+  google_calendar: 'Google Calendar connection',
   facebook: 'Facebook connection',
   instagram: 'Instagram connection',
   google_analytics: 'Google Analytics connection',
@@ -17,16 +18,17 @@ const NAMES: Record<IntegrationProvider, string> = {
 }
 
 const TARGETS: Record<IntegrationProvider, string> = {
+  google_calendar: 'That calendar',
   facebook: 'That Page',
   instagram: 'That Instagram account',
   google_analytics: 'That Google Analytics property',
   google_search_console: 'That Search Console site',
 }
 
-const COLUMNS = 'organization_id, provider, account_id, target_id, target_name, measurement_id, verified, verification_token, revision, created_at, updated_at'
+const COLUMNS = 'organization_id, provider, account_id, target_id, target_name, measurement_id, verified, verification_token, calendar_group, include_reservations, status, last_error, revision, created_at, updated_at'
 
-type Row = Omit<OrganizationIntegration, 'verified'> & { verified: number | null }
-const project = (row: Row): OrganizationIntegration => ({ ...row, verified: row.verified === null ? null : row.verified === 1 })
+type Row = Omit<OrganizationIntegration, 'verified' | 'include_reservations'> & { verified: number | null; include_reservations: number | null }
+const project = (row: Row): OrganizationIntegration => ({ ...row, include_reservations: row.include_reservations === null ? null : row.include_reservations === 1, verified: row.verified === null ? null : row.verified === 1 })
 
 export async function readIntegration(db: DbClient, organizationId: string, provider: IntegrationProvider): Promise<OrganizationIntegration | null> {
   const row = await queryFirst<Row>(db, `SELECT ${COLUMNS} FROM organization_integrations WHERE organization_id = ? AND provider = ?`, [organizationId, provider])

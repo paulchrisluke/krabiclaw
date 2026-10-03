@@ -468,6 +468,14 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
       stage.exec('DROP TABLE product_metafields; DROP TABLE metafield_definitions;')
       manifest.transforms.push({ name: 'named_product_details', changes: facts.length })
     }
+    if (fromV7) {
+      const normalizedTable = readFileSync('migrations-history/v8/0000_baseline.sql', 'utf8').split('--> statement-breakpoint').find(statement => statement.includes('CREATE TABLE `organization_integrations`'))
+      assert(normalizedTable, 'Archived normalized integration schema is missing')
+      stage.exec(normalizedTable)
+    }
+    if (sourceDirectory !== MIGRATIONS_DIRECTORY) {
+      for (const name of files.slice(1)) stage.exec(readFileSync(resolve(MIGRATIONS_DIRECTORY, name), 'utf8'))
+    }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n
     target.exec(schemaSql)

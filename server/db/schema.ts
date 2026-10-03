@@ -687,6 +687,8 @@ export const product_booking_configs = sqliteTable("product_booking_configs", {
 	online_payment_required: integer({ mode: "boolean" }).default(false).notNull(),
 	online_timezone: text(),
 	calendar_group: text(),
+	scheduling_mode: text().default("legacy").notNull(),
+	assigned_member_id: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	created_by: text().notNull(),
@@ -798,6 +800,7 @@ export const product_sessions = sqliteTable("product_sessions", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	product_id: text().notNull(),
+	assigned_member_id: text(),
 	location_id: text(),
 	availability_rule_id: text(),
 	source_occurrence_key: text(),
@@ -868,6 +871,7 @@ export const bookings = sqliteTable("bookings", {
 	product_id: text().notNull(),
 	product_session_id: text().notNull(),
 	product_variant_id: text().notNull(),
+	assigned_member_id: text(),
 	user_id: text().references((): AnySQLiteColumn => user.id, { onDelete: "set null" }),
 	request_id: text(),
 	party_size: integer().notNull(),
@@ -1081,6 +1085,10 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	// Krabiclaw serves while Google still requires it.
 	verified: integer({ mode: "boolean" }),
 	verification_token: text(),
+	calendar_group: text(),
+	include_reservations: integer({ mode: "boolean" }),
+	status: text({ enum: ["active", "disabled", "error"] }),
+	last_error: text(),
 	// A new selection writes a new revision, so a caller holding the old one is refused.
 	revision: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1093,6 +1101,7 @@ export const organization_integrations = sqliteTable("organization_integrations"
 	check("organization_integrations_values_check", sql`trim(account_id) <> '' AND trim(target_id) <> '' AND trim(target_name) <> '' AND trim(revision) <> ''`),
 	check("organization_integrations_measurement_check", sql`(provider = 'google_analytics') = (measurement_id IS NOT NULL)`),
 	check("organization_integrations_verification_check", sql`(provider = 'google_search_console') = (verified IS NOT NULL) AND (verification_token IS NULL OR provider = 'google_search_console') AND (verified IS NULL OR verified IN (0, 1))`),
+	check("organization_integrations_calendar_check", sql`(provider = 'google_calendar') = (include_reservations IS NOT NULL AND status IS NOT NULL) AND (include_reservations IS NULL OR include_reservations IN (0, 1)) AND (status IS NULL OR status IN ('active', 'disabled', 'error')) AND (provider = 'google_calendar' OR (calendar_group IS NULL AND include_reservations IS NULL AND status IS NULL AND last_error IS NULL))`),
 	check("organization_integrations_instants_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at`),
 ]);
 
@@ -2207,3 +2216,82 @@ export const broadcasts = sqliteTable("broadcasts", {
 	check("broadcasts_category_check", sql`category IN (${sql.raw([...NOTIFICATION_CATEGORIES].map(value => `'${value}'`).join(', '))})`),
 	check("broadcasts_created_at_check", sql`strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at`),
 ]);
+
+// Provider identity is allocated before I/O. This table is also the durable
+// projection intent: unsynced revisions and cleanup survive Worker restarts.
+export const google_calendar_event_links = sqliteTable("google_calendar_event_links", {
+ id: text().primaryKey(),
+ organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+ integration_revision: text().notNull(),
+ account_id: text().notNull(),
+ calendar_id: text().notNull(),
+ event_id: text().notNull(),
+ booking_kind: text({ enum: ["booking", "reservation"] }).notNull(),
+ operational_id: text().notNull(),
+ request_id: text(),
+ booking_revision: text().notNull(),
+ synced_revision: text(),
+ state: text({ enum: ["pending", "synced", "cleanup", "deleted", "error"] }).default("pending").notNull(),
+ last_error: text(),
+ attempts: integer().default(0).notNull(),
+ next_attempt_at: text(),
+ lease_token: text(),
+ lease_until: text(),
+ last_synced_at: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, table => [
+ uniqueIndex("google_calendar_subject_unique").on(table.organization_id, table.integration_revision, table.booking_kind, table.operational_id).where(sql`state <> 'deleted'`),
+ uniqueIndex("google_calendar_provider_unique").on(table.calendar_id, table.event_id),
+ index("google_calendar_due_idx").on(table.organization_id, table.state, table.next_attempt_at),
+ check("google_calendar_kind_check", sql`booking_kind IN ('booking', 'reservation')`),
+ check("google_calendar_state_check", sql`state IN ('pending', 'synced', 'cleanup', 'deleted', 'error')`),
+]);
+
+// Minimal cleanup receipts survive physical organization deletion. They have
+// no guest/booking payload and can only remove an already-managed event.
+export const google_calendar_cleanup_jobs = sqliteTable("google_calendar_cleanup_jobs", {
+ id: text().primaryKey(),
+ organization_id: text().notNull(), // original tenant identity, deliberately no cascading FK
+ account_id: text().notNull(),
+ calendar_id: text().notNull(),
+ event_id: text().notNull(),
+ state: text({ enum: ["pending", "error", "deleted"] }).default("pending").notNull(),
+ attempts: integer().default(0).notNull(),
+ last_error: text(),
+ next_attempt_at: text(),
+ lease_token: text(),
+ lease_until: text(),
+ completed_at: text(),
+ created_at: text().notNull(),
+ updated_at: text().notNull(),
+}, table => [
+ uniqueIndex("google_calendar_cleanup_provider_unique").on(table.calendar_id, table.event_id),
+ index("google_calendar_cleanup_due_idx").on(table.state, table.next_attempt_at),
+ check("google_calendar_cleanup_state_check", sql`state IN ('pending', 'error', 'deleted')`),
+]);
+// Domain settings reference existing Better Auth membership. Assignment IDs on
+// historical operational records deliberately survive membership deletion.
+export const member_scheduling = sqliteTable("member_scheduling", {
+ member_id: text().primaryKey().references(() => member.id, { onDelete: "cascade" }),
+ organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
+ timezone: text().notNull(),
+ weekly_json: text().notNull(),
+ time_off_json: text().notNull(),
+ windows_json: text().notNull(),
+ windows_until: text().notNull(),
+ public_name: text(),
+ public_photo_url: text(),
+ public_bio: text(),
+ public_approved: integer({ mode: "boolean" }).default(false).notNull(),
+ calendar_account_id: text(),
+ calendar_ids_json: text().default("[]").notNull(),
+ calendar_revision: text().notNull(),
+ busy_json: text().default("[]").notNull(),
+ busy_from: text(),
+ busy_until: text(),
+ busy_checked_at: text(),
+ busy_error: text(),
+ updated_at: text().notNull(),
+ updated_by: text().notNull(),
+}, t => [index("member_scheduling_org_idx").on(t.organization_id)]);

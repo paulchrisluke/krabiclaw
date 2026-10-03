@@ -134,6 +134,8 @@ const collectionObject = {
 } as const
 
 const bookingPolicyFields = {
+  scheduling_mode: { type: 'string', enum: ['legacy', 'provider'] },
+  assigned_member_id: { type: ['string', 'null'], description: 'Existing organization member ID for provider scheduling; null uses organization availability.' },
   confirmation_mode: { type: 'string', enum: ['instant', 'review'] },
   online_payment_required: { type: 'boolean', description: 'Required online collection for a priced offering; explicit zero Price is free. Does not fabricate payment success.' },
   online_timezone: { type: ['string', 'null'], description: 'IANA timezone for online weekly schedule input. Null clears it when no calendar enrollment requires it.' },

@@ -6,13 +6,14 @@ const reservationId = { type: 'string', description: 'Reservation ID from list_r
 const description = 'Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.'
 
 export const BOOKINGS_TOOLS: McpToolDefinition[] = [
+ organizationTool({name:'reassign_product_booking',domain:'bookings',minimumRole:'admin',confirmRequired:true,description:'Explicitly reassign the entire provider-led Session to the offering’s currently assigned member. All attendees keep Booking IDs and Session time; Checks member hours/time off/busy data/overlap atomically and audits actor/old/new assignment. Guest notifications use the existing inbox delivery workflow. Retry the same key after a notification failure.',inputSchema:{operational_booking_id:bookingId,member_id:{type:'string'},expected_updated_at:{type:'string'},idempotency_key:key},required:['operational_booking_id','member_id','expected_updated_at','idempotency_key']}),
   organizationTool({ name: 'list_product_booking_sessions', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
     description: 'List scheduled sessions and remaining places for a product when the user wants to find a time for a booking or consultation. Includes conflicts with other appointments in its shared calendar. Use the returned session IDs to create or change a booking. This tool does not create sessions.',
     inputSchema: { product_id: { type: 'string' }, from: { type: 'string', description: 'Inclusive ISO UTC instant.' }, to: { type: 'string', description: 'Exclusive ISO UTC instant, at most 93 days after from.' }, ...paginationInputSchema }, required: ['product_id', 'from', 'to'],
   }),
   organizationTool({ name: 'list_product_bookings', domain: 'bookings', minimumRole: 'admin', confirmRequired: false,
-    description: 'List product bookings and consultations for the selected site when the user wants to review appointments, guests or booking status. Returns booking IDs and their inbox conversation IDs. Table reservations use list_reservation_inquiries.',
-    inputSchema: { ...paginationInputSchema },
+    description: 'List operational Product bookings in this tenant, with guest snapshots and canonical status. Returns bookings.id separately from the guest thread request_id.',
+    inputSchema: { assigned_member_id: {type: 'string'}, ...paginationInputSchema },
   }),
   organizationTool({ name: 'create_product_booking', domain: 'bookings', minimumRole: 'admin', confirmRequired: true,
     description: `Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. ${description}`,

@@ -52,6 +52,16 @@
           <h1 class="text-[32px] font-semibold leading-tight text-highlighted">{{ partyTitle }}</h1>
           <p class="mt-1 text-base text-muted">{{ formattedDate }} <span aria-hidden="true">·</span> {{ booking.resourceTitle }}</p>
 
+          <section v-if="booking.type === 'booking'" class="mt-6 space-y-3 border-t border-default pt-5">
+            <h2 class="font-semibold">Assigned person</h2><p>{{ booking.assignedMemberName || (booking.assignedMemberId ? 'Previously assigned member' : booking.organizationName) }}</p>
+            <UAlert v-if="booking.providerConflict" color="warning" description="A later Google busy interval overlaps this booking. Contact the guest and resolve the conflict; the booking has not been cancelled." />
+            <UAlert v-if="booking.providerCalendarStatus" color="warning" :description="booking.providerCalendarStatus" />
+            <UAlert v-if="reassignmentError" color="error" title="Team members could not be loaded" :description="getErrorMessage(reassignmentError, 'Reassignment is unavailable')" />
+            <USkeleton v-else-if="reassignmentPending" class="h-10" />
+            <USelect v-else-if="reassignmentMembers" aria-label="Reassign to" v-model="reassignmentMember" :items="reassignmentOptions" placeholder="Select the offering’s assigned member" class="w-full" />
+            <p class="text-sm text-muted">Reassignment applies to every attendee in this Session. First configure the offering’s eligible member.</p>
+            <UButton :disabled="!reassignmentMember || !!reassignmentError || reassignmentPending || !reassignmentMembers" color="neutral" variant="soft" :loading="reassignmentSaving" @click="reassignProvider">Reassign Session and notify guests</UButton>
+          </section>
           <div class="mt-6 space-y-2">
             <UButton
               :label="`Change ${noun}`"
@@ -265,6 +275,19 @@ const formattedTime = computed(() => {
   return formatTime(booking.value.bookingTime, 'en')
 })
 // The picture the panel leads with: the hero of the location this was booked at.
+const reassignmentMember=ref(''),reassignmentSaving=ref(false),reassignmentKey=ref<string|null>(null)
+const {data:reassignmentMembers,error:reassignmentError,pending:reassignmentPending}=await useAsyncData(
+  ()=>`booking-reassignment:${booking.value?.type}:${booking.value?.organizationId}`,
+  async()=>{
+    if(booking.value?.type!=='booking')return null
+    return await applicationFetch<{members:{id:string;name:string}[]}>(`/api/organizations/${booking.value.organizationId}/members/scheduling`,{
+      validate:(value):value is {members:{id:string;name:string}[]}=>isRecord(value)&&Array.isArray(value.members)&&value.members.every(member=>isRecord(member)&&typeof member.id==='string'&&typeof member.name==='string'),
+    })
+  },{server:false},
+)
+const reassignmentOptions=computed(()=>reassignmentMembers.value?.members.map(m=>({label:m.name,value:m.id}))??[])
+watch(reassignmentMember,()=>{reassignmentKey.value=null})
+async function reassignProvider(){if(!booking.value)return;reassignmentSaving.value=true;actionError.value='';reassignmentKey.value??=crypto.randomUUID();try{await dashboardApi(`/api/dashboard/bookings/booking/${booking.value.operationalBookingId}/provider`,{method:'POST',validate:(value):value is {session_id:string;assigned_member_id:string}=>isRecord(value)&&typeof value.session_id==='string'&&typeof value.assigned_member_id==='string',body:{member_id:reassignmentMember.value,expected_updated_at:booking.value.operationalUpdatedAt,idempotency_key:reassignmentKey.value}});await refreshDetails();reassignmentKey.value=null}catch(e){actionError.value=getErrorMessage(e,'Provider could not be reassigned')}finally{reassignmentSaving.value=false}}
 const bookingImageUrl = computed(() => booking.value
   ? booking.value.locations.find(location => location.id === booking.value!.locationId)?.imageUrl ?? null
   : null)

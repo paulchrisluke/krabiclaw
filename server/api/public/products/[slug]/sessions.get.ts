@@ -24,5 +24,5 @@ export default defineHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  return jsonResponse(await listPublicBookingSessions(db, organizationId, slug, getQuery(event).location_id))
+  return jsonResponse(await listPublicBookingSessions(db, organizationId, slug, getQuery(event).location_id, env))
 })

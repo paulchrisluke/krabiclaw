@@ -54,6 +54,26 @@ test('native online review uses canonical Products, holds capacity, and releases
     await page.goto(`/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`)
     const bookingPath = `/dashboard/north-carolina-legal-services/products/${products[0]!.id}/booking`
     await expect(page.getByRole('link', { name: 'Guest limit One guest per session' })).toBeVisible()
+    // The Calendar-only build saves assignment in the focused CMS editor and
+    // reads it through MCP without requiring Payments tables or Checkout.
+    const membersResponse = await page.request.get(`/api/organizations/${org}/members/scheduling`)
+    expect(membersResponse.status(), await membersResponse.text()).toBe(200)
+    const self = (await membersResponse.json()).members.find((member: { self: boolean }) => member.self)
+    expect(self).toBeTruthy()
+    await page.getByRole('link', { name: 'Who guests meet Tenant organization', exact: true }).click()
+    await page.getByRole('combobox').click()
+    await page.getByRole('option', { name: self.name, exact: true }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Who guests meet Assigned team member', exact: true })).toBeVisible()
+    const assigned = await mcpRequest(page.request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: org, product_id: products[0]!.id } })
+    expect(assigned.status(), await assigned.text()).toBe(200)
+    expect(mcpData<{ product: { booking: Record<string, unknown> } }>(await assigned.json()).product.booking).toMatchObject({ scheduling_mode: 'provider', assigned_member_id: self.id })
+    await page.getByRole('link', { name: 'Who guests meet Assigned team member', exact: true }).click()
+    await page.getByRole('combobox').click()
+    await page.getByRole('option', { name: 'Tenant organization', exact: true }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByRole('link', { name: 'Who guests meet Tenant organization', exact: true })).toBeVisible()
+
     await page.getByRole('link', { name: 'Duration 45 minutes', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled()
     await page.getByLabel('Duration in minutes', { exact: true }).fill('50')

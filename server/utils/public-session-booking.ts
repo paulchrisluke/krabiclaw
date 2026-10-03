@@ -1,3 +1,5 @@
+import { refreshProductBusy } from '~/server/domain/member-scheduling'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { HTTPError } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { bookingWindow, listSessions } from '~/server/utils/availability'
@@ -5,7 +7,7 @@ import { listOrganizationProducts } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { publicTenantVisibilitySql } from '~/server/utils/public-base'
 
-export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown) {
+export async function listPublicBookingSessions(db: DbClient, organizationId: string, slug: string, requestedScope?: unknown, env?: CloudflareEnv) {
   const product = await queryFirst<{ id: string; organization_id: string; name: string; order_url: string | null; timezone: string | null }>(db, `
     SELECT p.id, p.organization_id, p.name, p.order_url,
            COALESCE(cfg.online_timezone,
@@ -14,7 +16,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
              WHERE l.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1 AND l.status = 'active' ORDER BY l.id LIMIT 1)) AS timezone
       FROM products p
       JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
-      JOIN product_booking_configs cfg ON cfg.product_id = p.id
+      JOIN product_booking_configs cfg ON cfg.product_id = p.id AND cfg.organization_id = p.organization_id
      WHERE pub.organization_id = ? AND pub.published = 1 AND p.slug = ? AND p.active = 1
      LIMIT 1
   `, [organizationId, slug])
@@ -36,6 +38,7 @@ export async function listPublicBookingSessions(db: DbClient, organizationId: st
     throw new HTTPError({ statusCode: 404, statusMessage: 'This product is not on sale at that location' })
   }
 
+  if(env) await refreshProductBusy(db,env,organizationId,product.id)
   const window = bookingWindow(product.timezone)
   const sessions = await listSessions(db, {
     organizationId: product.organization_id, productId: product.id,
