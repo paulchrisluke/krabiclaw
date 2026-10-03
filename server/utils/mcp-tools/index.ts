@@ -1,4 +1,5 @@
 import { PROVIDERS_TOOLS, handleProvidersTools } from './providers'
+import { PAYMENTS_TOOLS, handlePaymentsTools } from './payments'
 import type { McpToolDefinition } from './shared'
 import { TOOL_ANNOTATIONS_BY_NAME } from './shared'
 import { ANALYTICS_TOOLS, handleAnalyticsTools } from './analytics'
@@ -39,6 +40,7 @@ import type { McpExecutorContext } from './execution'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...PROVIDERS_TOOLS,
+  ...PAYMENTS_TOOLS,
   ...ANALYTICS_TOOLS,
   ...BLOG_TOOLS,
   ...CONTENT_TOOLS,
@@ -89,6 +91,7 @@ export function getMcpTool(name: string) {
 // domain owns which tool, not two.
 export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promise<unknown>> = {
   providers: handleProvidersTools,
+  payments: handlePaymentsTools,
   analytics: handleAnalyticsTools,
   blog: handleBlogTools,
   content: handleContentTools,

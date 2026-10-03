@@ -1,6 +1,6 @@
 <template>
   <!-- A row on Menu, with its own controls: nothing here saves from a footer. -->
-  <DashboardLeafPanel id="organization-payouts" title="Payouts" lead="Stripe verifies your business through its hosted onboarding so payment capabilities can be enabled." :footer="false">
+  <DashboardLeafPanel id="organization-payouts" title="Stripe" lead="Connect your business to accept payments and manage payouts with Stripe." :footer="false">
     <div class="space-y-4">
       <UAlert
         v-if="errorMessage"
@@ -21,7 +21,7 @@
           <USkeleton class="h-10 w-full" />
         </div>
 
-        <div v-else-if="!account" class="space-y-5">
+        <div v-else-if="!account && !errorMessage" class="space-y-5">
           <UAlert
             color="neutral"
             variant="soft"
@@ -29,7 +29,7 @@
             title="Choose the business's registered country"
             description="This cannot be changed after the Stripe account is created. Krabiclaw does not store the identity details you enter at Stripe."
           />
-          <UFormField label="Business country" description="The country where the business is legally registered.">
+          <UFormField label="Business country">
             <USelectMenu
               v-model="selectedCountry"
               :items="countryOptions"
@@ -45,15 +45,15 @@
           </UButton>
         </div>
 
-        <div v-else class="space-y-5">
+        <div v-else-if="account" class="space-y-5">
           <p class="text-sm text-muted">{{ statusPresentation.description }}</p>
 
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="rounded-lg border border-default p-3">
+            <div class="border-b border-default py-6">
               <p class="text-xs font-medium uppercase tracking-wide text-muted">Business country</p>
               <p class="mt-1 text-sm font-medium text-highlighted">{{ account.country }}</p>
             </div>
-            <div class="rounded-lg border border-default p-3">
+            <div class="border-b border-default py-6">
               <p class="text-xs font-medium uppercase tracking-wide text-muted">Card payments</p>
               <p class="mt-1 text-sm font-medium capitalize text-highlighted">{{ cardPaymentsLabel }}</p>
             </div>
@@ -64,8 +64,8 @@
             color="warning"
             variant="soft"
             icon="i-lucide-list-checks"
-            title="Stripe requirements"
-            :description="requirementsSummary"
+            title="Complete Stripe setup"
+            description="Stripe needs more information. Continue onboarding to review it."
           />
 
           <div class="flex flex-wrap gap-2">
@@ -77,6 +77,7 @@
             >
               {{ account.status === 'creation_failed' ? 'Retry Stripe setup' : 'Continue Stripe onboarding' }}
             </UButton>
+            <UButton v-if="account.stripeAccountId" :loading="openingDashboard" icon="i-lucide-external-link" @click="openDashboard">Open Stripe Express Dashboard</UButton>
             <UButton v-if="account.stripeAccountId" color="neutral" variant="outline" :loading="refreshing" icon="i-lucide-refresh-cw" @click="refreshStatus">
               Refresh status
             </UButton>
@@ -89,7 +90,7 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Payouts | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
+useSeoMeta({ title: 'Stripe | Krabiclaw Dashboard', robots: 'noindex, nofollow' })
 
 type ConnectStatus = 'creating' | 'creation_failed' | 'action_required' | 'pending_review' | 'restricted' | 'ready'
 type CapabilityStatus = 'active' | 'pending' | 'restricted' | 'unsupported'
@@ -166,6 +167,7 @@ const loading = ref(true)
 const countriesLoading = ref(false)
 const starting = ref(false)
 const refreshing = ref(false)
+const openingDashboard = ref(false)
 const errorMessage = ref<string | null>(null)
 
 const countryNames = new Intl.DisplayNames(['en'], { type: 'region' })
@@ -174,7 +176,6 @@ const countryOptions = computed(() => countries.value
   .sort((left, right) => left.label.localeCompare(right.label)))
 const cardPaymentsLabel = computed(() => account.value?.cardPaymentsStatus === null ? 'Not available yet' : account.value?.cardPaymentsStatus.replace('_', ' '))
 const canContinueOnboarding = computed(() => account.value !== null && account.value.status !== 'ready')
-const requirementsSummary = computed(() => account.value === null ? '' : account.value.requirements.map(requirement => requirement.description).join(' '))
 const statusPresentation = computed<{ label: string; description: string; color: 'success' | 'warning' | 'error' | 'neutral' }>(() => {
   switch (account.value?.status) {
     case 'ready': return { label: 'Ready', description: 'Stripe has enabled card payments for this business.', color: 'success' }
@@ -186,6 +187,15 @@ const statusPresentation = computed<{ label: string; description: string; color:
     default: return { label: 'Not started', description: 'Stripe onboarding has not started.', color: 'neutral' }
   }
 })
+
+async function openDashboard() {
+  openingDashboard.value = true
+  try {
+    const result = await dashboardApi<{url:string}>('/api/dashboard/connect/dashboard',{method:'POST',validate:(value):value is {url:string}=>isRecord(value)&&typeof value.url==='string'})
+    await navigateTo(result.url,{external:true})
+  } catch(error) {errorMessage.value=getErrorMessage(error,'Stripe Dashboard could not be opened')}
+  finally {openingDashboard.value=false}
+}
 
 async function loadCountries() {
   countriesLoading.value = true

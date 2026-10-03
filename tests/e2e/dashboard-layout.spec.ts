@@ -89,6 +89,10 @@ test.describe('dashboard pane hierarchy', () => {
     await page.setViewportSize(WIDE)
     await open(page, `${ORG}/settings/integrations`)
     // Integrations is an index of deterministic rows: it opens the first one.
+    await expect(page).toHaveURL(`${ORG}/settings/integrations/stripe`)
+    await expectPanes(page, ['organization-integrations', 'organization-payouts'])
+
+    await page.locator('#dashboard-panel-organization-integrations a[href$="/google-maps"]').click()
     await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
     await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
 
@@ -100,12 +104,32 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['integration-google-maps', `integration-google-maps-${locationSlug}`])
 
     // In-app Back leads to the bare Integrations index, which must not stay
-    // alone at full width: it opens Google Maps again.
+    // alone at full width: it opens the first Stripe row again.
     const back = page.locator('#dashboard-panel-integration-google-maps [data-testid="dashboard-navbar-back"]')
     await expect(back).toHaveAttribute('href', `${ORG}/settings/integrations`)
     await back.click()
-    await expect(page).toHaveURL(`${ORG}/settings/integrations/google-maps`)
-    await expectPanes(page, ['organization-integrations', 'integration-google-maps'])
+    await expect(page).toHaveURL(`${ORG}/settings/integrations/stripe`)
+    await expectPanes(page, ['organization-integrations', 'organization-payouts'])
+  })
+
+  test('Payments surfaces read the migrated ledger and buyer account', async ({ page }) => {
+    await page.setViewportSize(WIDE)
+    await open(page, `${ORG}/payments/overview`)
+    await expect(page.getByText('No captured payment activity in this UTC period.', { exact: true })).toBeVisible()
+    for (const view of ['transactions', 'refunds', 'disputes']) {
+      await open(page, `${ORG}/payments/${view}`)
+      await expect(page.getByText(view === 'transactions' ? 'No transactions in this UTC period.' : `No ${view} yet.`, { exact: true })).toBeVisible()
+    }
+    await open(page, `${ORG}/settings/payments-billing`)
+    await expect(page.getByText('No undelivered usage.', { exact: true })).toBeVisible()
+    const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
+    await open(page, '/account')
+    await expect(page).toHaveURL('/dashboard/account/profile/purchases')
+    const response = await account
+    expect(response.status(), await response.text()).toBe(200)
+    const purchases = await response.json()
+    expect(purchases).toMatchObject({ payments: [], refunds: [] })
+    await expect(page.getByRole('heading', { name: 'Purchases & bookings', exact: true })).toBeVisible()
   })
 
   test('booking Change opens its first field on desktop and not below lg', async ({ page }) => {

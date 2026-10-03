@@ -29,6 +29,13 @@
       "when": 1791081347176,
       "tag": "0003_calendar_connection",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1791096998246,
+      "tag": "0004_payments_commerce",
+      "breakpoints": true
     }
   ]
 }

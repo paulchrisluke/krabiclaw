@@ -551,6 +551,10 @@ export function createAuth(env: CloudflareEnv) {
               query: `UPDATE ${table} SET user_id = ? WHERE user_id = ?`,
               params: [to, from],
             })),
+            ...['payments', 'payment_orders', 'payment_checkout_holds'].map(table => ({
+              query: `UPDATE ${table} SET buyer_user_id = ? WHERE buyer_user_id = ?`,
+              params: [to, from],
+            })),
             { query: 'UPDATE media_assets SET created_by_user_id = ? WHERE created_by_user_id = ?', params: [to, from] },
           ], { operation: 'anonymous-account-link' })
         },

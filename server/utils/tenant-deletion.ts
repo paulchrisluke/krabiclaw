@@ -1,3 +1,4 @@
+import { retainPaymentsForTenantDeletion } from '~/server/domain/payments/retention'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -49,6 +50,7 @@ export async function cleanupOrganizationBeforeDelete(
   for (const imageId of await ownedImageIds(db, organizationId)) {
     await deleteImage(env, imageId)
   }
+  await retainPaymentsForTenantDeletion(db,organizationId)
 }
 
 /**

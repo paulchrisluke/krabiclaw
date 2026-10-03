@@ -151,7 +151,7 @@ export async function setProductBookingConfig(db: DbClient, input: {
   const written = await executeBatch(db, [{
     query: `INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group, scheduling_mode, assigned_member_id, created_at, updated_at, created_by, updated_by)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      WHERE (?<>'provider' OR NOT EXISTS (SELECT 1 FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id WHERE b.organization_id=? AND b.product_id=? AND b.assigned_member_id IS NULL AND b.status IN ('pending','confirmed') AND s.ends_at>?)) AND (?='provider' OR ? IS NULL OR NOT EXISTS (
+      WHERE (?<>'provider' OR NOT EXISTS (SELECT 1 FROM bookings b JOIN product_sessions s ON s.id=b.product_session_id WHERE b.organization_id=? AND b.product_id=? AND b.assigned_member_id IS NULL AND b.status IN ('pending','confirmed') AND s.ends_at>?) AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds h WHERE h.organization_id=? AND h.product_id=? AND h.assigned_member_id IS NULL AND h.status='active' AND h.expires_at>?)) AND (?='provider' OR ? IS NULL OR NOT EXISTS (
         SELECT 1 FROM bookings own_booking
         JOIN product_sessions own_session ON own_session.id = own_booking.product_session_id AND own_session.location_id IS NULL
         JOIN product_sessions other_session ON other_session.organization_id = own_session.organization_id AND other_session.location_id IS NULL
@@ -168,7 +168,7 @@ export async function setProductBookingConfig(db: DbClient, input: {
       WHERE product_booking_configs.organization_id = excluded.organization_id`,
     params: [input.productId, input.organizationId, patch.duration_minutes ?? null, patch.default_capacity ?? null,
       patch.confirmation_mode ?? 'instant', patch.online_payment_required === true ? 1 : 0, patch.online_timezone ?? null, patch.calendar_group ?? null, patch.scheduling_mode ?? 'legacy', patch.assigned_member_id ?? null,
-      now, now, input.actorId, input.actorId, patch.scheduling_mode ?? current?.scheduling_mode ?? 'legacy', input.organizationId, input.productId, now, patch.scheduling_mode ?? current?.scheduling_mode ?? 'legacy', patch.calendar_group ?? null, input.organizationId, input.productId, patch.calendar_group ?? null,
+      now, now, input.actorId, input.actorId, patch.scheduling_mode ?? current?.scheduling_mode ?? 'legacy', input.organizationId, input.productId, now, input.organizationId, input.productId, now, patch.scheduling_mode ?? current?.scheduling_mode ?? 'legacy', patch.calendar_group ?? null, input.organizationId, input.productId, patch.calendar_group ?? null,
       ...fields.map(field => patch[field] !== undefined ? 1 : 0)],
   }, publicResourceCacheInvalidationQuery(input.organizationId, 'product-booking-config')], { operation: 'Set product booking config' })
   if (!written[0]?.meta?.changes) throw new HTTPError({ statusCode: 409, statusMessage: 'Existing appointments overlap this single calendar; resolve them before changing enrollment' })
@@ -475,7 +475,7 @@ export async function replaceWeeklySchedule(db: DbClient, input: {
 }
 
 /** Explicit tenant-scoped online calendar enrollment; intervals are half open. */
-export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL'): string {
+export function onlineCalendarConflictSql(sessionAlias: string, replacingBookingSql = 'NULL', excludingSessionSql = 'NULL', convertingPaymentSql = 'NULL'): string {
   return `(${sessionAlias}.location_id IS NULL AND ${sessionMemberSql(sessionAlias)} IS NULL AND (EXISTS (
     SELECT 1 FROM product_booking_configs own
       JOIN product_booking_configs peer ON peer.organization_id = own.organization_id
@@ -487,7 +487,22 @@ export function onlineCalendarConflictSql(sessionAlias: string, replacingBooking
       AND own.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
       AND occupied.location_id IS NULL AND occupied.starts_at < ${sessionAlias}.ends_at AND occupied.ends_at > ${sessionAlias}.starts_at
       AND b.id IS NOT ${replacingBookingSql} AND occupied.id IS NOT ${excludingSessionSql} AND ${CAPACITY_CONSUMING_SQL}
+  ) OR EXISTS (
+    SELECT 1 FROM payment_checkout_holds h JOIN product_booking_configs own
+      ON own.product_id = ${sessionAlias}.product_id AND own.organization_id = ${sessionAlias}.organization_id
+    WHERE h.organization_id = ${sessionAlias}.organization_id AND own.calendar_group IS NOT NULL
+      AND h.calendar_group = own.calendar_group AND h.status = 'active'
+      AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      AND h.payment_id IS NOT ${convertingPaymentSql} AND h.session_id IS NOT ${excludingSessionSql}
+      AND h.starts_at < ${sessionAlias}.ends_at AND h.ends_at > ${sessionAlias}.starts_at
   )))`
+}
+
+export function sessionHeldCapacitySql(sessionAlias: string, convertingPaymentSql = 'NULL'): string {
+  return `COALESCE((SELECT SUM(h.quantity) FROM payment_checkout_holds h
+    WHERE h.session_id = ${sessionAlias}.id AND h.organization_id = ${sessionAlias}.organization_id
+      AND h.status = 'active' AND h.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      AND h.payment_id IS NOT ${convertingPaymentSql}), 0)`
 }
 
 export async function listSessions(db: DbClient, input: {
@@ -505,12 +520,12 @@ export async function listSessions(db: DbClient, input: {
            COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
-           ), 0) AS claimed,
-           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 0 WHEN s.capacity IS NULL THEN NULL ELSE s.capacity - COALESCE((
+           ), 0) + ${sessionHeldCapacitySql('s')} AS claimed,
+           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 0 WHEN s.capacity IS NULL THEN NULL ELSE s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
            ), 0) END AS remaining,
-           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 1 WHEN s.capacity IS NULL THEN 0 WHEN s.capacity - COALESCE((
+           CASE WHEN (${onlineCalendarConflictSql('s')} OR ${providerUnavailableSql('s')}) THEN 1 WHEN s.capacity IS NULL THEN 0 WHEN s.capacity - ${sessionHeldCapacitySql('s')} - COALESCE((
              SELECT SUM(b.party_size) FROM bookings b
              WHERE b.product_session_id = s.id AND ${CAPACITY_CONSUMING_SQL}
            ), 0) <= 0 THEN 1 ELSE 0 END AS is_full
@@ -560,11 +575,15 @@ export class CapacityUnavailableError extends Error {
 export interface SessionAllocationInput {
   organizationId: string; productId: string; sessionId: string; partySize: number; now: string
   replacingBookingId?: string | null
+  /** Only authenticated capture reconciliation supplies this; public callers cannot exclude holds. */
+  capturedPaymentId?: string
+  /** Authenticated automatic capture time; delivery time still checks current capacity. */
+  capturedAt?: string
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
 }
 
 export function sessionAllocationPredicate(input: SessionAllocationInput): BatchQuery {
-  return { query: `${input.requireUndecided
+  return { query: `${input.capturedPaymentId ? `EXISTS (SELECT 1 FROM payment_checkout_holds h JOIN payments p ON p.id=h.payment_id WHERE p.id=? AND p.organization_id=? AND p.state='captured' AND p.refunded_amount=0 AND h.status IN ('active','released') AND h.expires_at>? AND h.session_id=? AND h.quantity=? AND h.organization_id=p.organization_id AND h.amount=p.amount AND h.currency=p.currency) AND ` : ''}${input.requireUndecided
         ? `EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ? AND updated_at = ?)
            AND NOT EXISTS (SELECT 1 FROM activity_entries WHERE dedupe_key = ?) AND `
         : ''}EXISTS (
@@ -579,17 +598,19 @@ export function sessionAllocationPredicate(input: SessionAllocationInput): Batch
                AND pl.active = 1 AND pl.published = 1
           ))
           AND s.starts_at > ?
-          AND NOT ${onlineCalendarConflictSql('s', '?')}
-          AND NOT ${providerUnavailableSql('s', '?')}
-          AND (s.capacity IS NULL OR s.capacity >= ? + COALESCE((
+          AND NOT ${onlineCalendarConflictSql('s', '?', 'NULL', '?')}
+          AND NOT ${providerUnavailableSql('s', '?', '?')}
+          ${input.capturedPaymentId ? 'AND EXISTS(SELECT 1 FROM payment_checkout_holds held WHERE held.payment_id=? AND held.assigned_member_id IS ' + sessionMemberSql('s') + ')' : ''}
+          AND (s.capacity IS NULL OR s.capacity >= ? + ${sessionHeldCapacitySql('s','?')} + COALESCE((
             SELECT SUM(b.party_size) FROM bookings b
             WHERE b.product_session_id = s.id AND b.id IS NOT ? AND ${CAPACITY_CONSUMING_SQL}
           ), 0))
       )`, params: [
+      ...(input.capturedPaymentId ? [input.capturedPaymentId,input.organizationId,input.capturedAt ?? input.now,input.sessionId,input.partySize] : []),
       ...(input.requireUndecided
         ? [input.requireUndecided.requestId, input.requireUndecided.organizationId, input.requireUndecided.updatedAt, input.requireUndecided.decisionDedupeKey]
         : []),
-      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.replacingBookingId ?? null, input.partySize, input.replacingBookingId ?? null,
+      input.sessionId, input.organizationId, input.productId, input.now, input.replacingBookingId ?? null, input.capturedPaymentId ?? null, input.replacingBookingId ?? null, input.capturedPaymentId ?? null, ...(input.capturedPaymentId ? [input.capturedPaymentId] : []), input.partySize, input.capturedPaymentId ?? null, input.replacingBookingId ?? null,
   ] }
 }
 
@@ -632,6 +653,9 @@ export function sessionClaimQuery(input: {
    * anything.
    */
   requireUndecided?: { requestId: string; organizationId: string; updatedAt: string; decisionDedupeKey: string } | null
+  capturedPaymentId?: string
+  /** Authenticated automatic capture time; delivery time still checks current capacity. */
+  capturedAt?: string
   now: string
 }): BatchQuery {
   return {
@@ -776,7 +800,7 @@ export async function updateSession(db: DbClient, input: {
   // silently oversold. Refuse, and let the merchant cancel bookings first.
   if (input.capacity !== undefined && input.capacity !== null) {
     const claimed = await queryFirst<{ claimed: number }>(db, `
-      SELECT COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id=s.id AND ${CAPACITY_CONSUMING_SQL}),0) AS claimed FROM product_sessions s WHERE s.id=?
+      SELECT COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id=s.id AND ${CAPACITY_CONSUMING_SQL}),0) + ${sessionHeldCapacitySql('s')} AS claimed FROM product_sessions s WHERE s.id=?
     `, [input.sessionId])
     if ((claimed?.claimed ?? 0) > input.capacity) {
       throw new HTTPError({
@@ -793,14 +817,15 @@ export async function updateSession(db: DbClient, input: {
   const capacity = input.capacity === undefined ? session.capacity : input.capacity
   const guard = capacity === null
     ? ''
-    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0)`
+    : `AND ? >= COALESCE((SELECT SUM(b.party_size) FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL}), 0) + (SELECT ${sessionHeldCapacitySql('held')} FROM product_sessions held WHERE held.id=product_sessions.id)`
   const written = await executeBatch(db, [{
     query: `
       UPDATE product_sessions
       SET starts_at = ?, ends_at = ?, capacity = ?, status = ?, updated_at = ?, updated_by = ?
       WHERE organization_id = ? AND id = ? ${guard}
         AND (${sessionMemberSql('product_sessions')} IS NULL OR (starts_at=? AND ends_at=? AND status=?) OR (
-          NOT EXISTS(SELECT 1 FROM bookings b WHERE b.product_session_id=product_sessions.id AND ${CAPACITY_CONSUMING_SQL})))
+          NOT EXISTS(SELECT 1 FROM bookings b WHERE b.product_session_id=product_sessions.id AND ${CAPACITY_CONSUMING_SQL})
+          AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds h WHERE h.session_id=product_sessions.id AND h.status='active' AND h.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))))
         AND (NOT EXISTS (SELECT 1 FROM bookings b WHERE b.product_session_id = product_sessions.id AND ${CAPACITY_CONSUMING_SQL})
           OR NOT EXISTS (SELECT 1 FROM (SELECT product_sessions.id AS id, product_sessions.assigned_member_id AS assigned_member_id, product_sessions.organization_id AS organization_id, product_sessions.product_id AS product_id, product_sessions.location_id AS location_id, ? AS starts_at, ? AS ends_at) proposed
             WHERE ${onlineCalendarConflictSql('proposed', 'NULL', 'product_sessions.id')} OR ${providerUnavailableSql('proposed')}))

@@ -5,7 +5,7 @@ import { requireSchedulingAccess, refreshMemberBusy, type SchedulingActor } from
 import { executeGuestThreadOperation } from './guest-threads/operations'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
-/** Explicitly moves the whole occurrence; attendee identities remain. */
+/** Explicitly moves the whole occurrence; attendee identities and payments remain. */
 export async function reassignBookingProvider(actor: SchedulingActor, input: {booking_id:string;member_id:string;expected_updated_at:string;idempotency_key:string}) {
  if(!input || (['booking_id','member_id','expected_updated_at','idempotency_key'] as const).some(field=>typeof input[field]!=='string' || !input[field]))throw new HTTPError({statusCode:400,message:'Booking, member, current revision and idempotency key are required'})
  await requireSchedulingAccess(actor,input.member_id,true)
@@ -24,15 +24,16 @@ export async function reassignBookingProvider(actor: SchedulingActor, input: {bo
   const queries:BatchQuery[]=[{query:`INSERT INTO activity_entries(id,kind,scope_kind,organization_id,actor_kind,actor_user_id,event_name,payload_json,dedupe_key,occurred_at)
     SELECT ?,'audit','organization',?,'member',?,'booking.reassign',?,?,? FROM product_sessions s
     WHERE s.id=? AND s.organization_id=? AND s.status='scheduled' AND s.starts_at>?
-      AND ${target}=? AND NOT ${providerUnavailableSql('s','NULL',target)}
+      AND ${target}=? AND NOT ${providerUnavailableSql('s','NULL','NULL',target)}
       AND EXISTS(SELECT 1 FROM bookings WHERE id=? AND organization_id=? AND updated_at=? AND status IN ('pending','confirmed'))
-    ON CONFLICT(dedupe_key) DO NOTHING`,params:[audit,actor.organizationId,actor.userId,payload,key,now,booking.product_session_id,actor.organizationId,now,input.member_id,input.booking_id,actor.organizationId,input.expected_updated_at]},
+      AND NOT EXISTS(SELECT 1 FROM payment_checkout_holds h WHERE h.session_id=s.id AND h.status='active' AND h.expires_at>?)
+    ON CONFLICT(dedupe_key) DO NOTHING`,params:[audit,actor.organizationId,actor.userId,payload,key,now,booking.product_session_id,actor.organizationId,now,input.member_id,input.booking_id,actor.organizationId,input.expected_updated_at,now]},
    {query:'UPDATE product_sessions SET assigned_member_id=?,updated_at=? WHERE id=? AND organization_id=? AND EXISTS(SELECT 1 FROM activity_entries WHERE id=?)',params:[input.member_id,now,booking.product_session_id,actor.organizationId,audit]},
    {query:`INSERT INTO activity_entries(id,kind,scope_kind,request_id,actor_kind,actor_user_id,event_name,payload_json,dedupe_key,occurred_at)
     SELECT lower(hex(randomblob(16))),'audit','request',b.request_id,'member',?,'booking.reassign',json_object('operational_booking_id',b.id,'session_id',b.product_session_id,'old_member_id',b.assigned_member_id,'new_member_id',?,'actor_user_id',?),?||':'||b.id,? FROM bookings b WHERE b.product_session_id=? AND b.organization_id=? AND b.request_id IS NOT NULL AND b.status IN ('pending','confirmed') AND EXISTS(SELECT 1 FROM activity_entries WHERE id=?)`,params:[actor.userId,input.member_id,actor.userId,key,now,booking.product_session_id,actor.organizationId,audit]},
    {query:"UPDATE bookings SET assigned_member_id=?,updated_at=? WHERE product_session_id=? AND organization_id=? AND status IN ('pending','confirmed') AND EXISTS(SELECT 1 FROM activity_entries WHERE id=?)",params:[input.member_id,now,booking.product_session_id,actor.organizationId,audit]}]
   const result=await executeBatch(db,queries,{operation:'Reassign provider-led Session'})
-  if(!result[0]?.meta.changes)throw new HTTPError({statusCode:409,message:'Reassignment refused: reload the booking, check the offering assignment and member availability, and retry'})
+  if(!result[0]?.meta.changes)throw new HTTPError({statusCode:409,message:'Reassignment refused: reload the booking, check the offering assignment and member availability, or wait for active checkout holds to expire'})
  }
  const threads=await queryAll<{request_id:string}>(db,"SELECT a.request_id FROM activity_entries a JOIN requests r ON r.id=a.request_id AND r.organization_id=? WHERE a.event_name='booking.reassign' AND a.scope_kind='request' AND a.dedupe_key=?||':'||json_extract(a.payload_json,'$.operational_booking_id')",[actor.organizationId,key])
  const name=await queryFirst<{name:string|null}>(db,'SELECT public_name name FROM member_scheduling WHERE member_id=? AND organization_id=? AND public_approved=1',[input.member_id,actor.organizationId])

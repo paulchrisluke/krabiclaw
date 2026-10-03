@@ -7,18 +7,21 @@ import { notifyBookingCreated, raiseSettledFailures } from '~/server/utils/notif
 import { measurementOutcome, readPageEventId, recordOrganizationConversionEvent } from '~/server/utils/organization-conversions'
 import { resolveLocationContact } from '~/server/utils/contact-resolution'
 import { parsePhone } from '~/utils/phone'
-import { queryAll, queryFirst } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { productPolicySummarySource, renderBookingPolicySummary } from '~/server/utils/reservations'
 import { getProduct, resolveVariantPrice } from '~/server/utils/product-management'
 import { isCurrencyCode } from '~/shared/currencies'
 import { getSourceLocale } from '~/server/utils/organization-locales'
 import { buildOwnerThreadInboxUrl } from '~/server/utils/dashboard-notification-links'
 import { createReservationCancelToken, createReplayableReservationCancelToken, hashReservationCancelToken } from '~/server/utils/reservation-cancel-token'
-import { ensureInteractionUser } from '~/server/utils/auth'
-import { requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
+import { ensureInteractionUser, type CloudflareEnv } from '~/server/utils/auth'
+import { getGuestRequest, getThreadOperationalRecord, requestInsertQueries, threadPayloadForGuest } from '~/server/domain/requests'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveBookingPresentation } from '~/utils/booking-presentation'
 import type { H3Event } from 'nitro'
+import { createPaymentCheckout } from '~/server/domain/payments/checkout'
+import { createStripeClient } from '~/server/utils/stripe-client'
+import { hasOrganizationEntitlement } from '~/server/utils/billing'
 
 export interface BookingCreationContext {
   organizationId: string
@@ -28,6 +31,42 @@ export interface BookingCreationContext {
 }
 
 function creationResult(body: Record<string, unknown>, options: { status: number }) { return { body, status: options.status } }
+
+/** Creation delivery is shared by ordinary claims and authenticated Checkout conversion. */
+export async function notifyProductBookingCreated(env: CloudflareEnv, db: DbClient, organizationId: string, requestId: string, cancellationToken?: string) {
+  const [request, record, organization] = await Promise.all([
+    getGuestRequest(db, requestId, organizationId, 'booking'),
+    getThreadOperationalRecord(db, requestId),
+    queryFirst<{ name: string | null; public_url: string | null }>(db, `SELECT name, (SELECT 'https://' || domain FROM organization_domains WHERE organization_id = organization.id AND role = 'canonical' AND status = 'active') AS public_url FROM organization WHERE id = ?`, [organizationId]),
+  ])
+  if (!request || request.kind !== 'booking' || !record || record.kind !== 'booking' || record.organization_id !== organizationId || !record.product_id || !record.product_name || !organization) throw new Error('Booking creation delivery requires its canonical tenant, request and offering')
+  const creation = await queryFirst<{ status: string }>(db, `SELECT json_extract(payload_json, '$.afterStatus') AS status FROM activity_entries WHERE request_id = ? AND event_name = 'booking.created' AND dedupe_key = ?`, [requestId, `booking:${record.id}:created`])
+  if (creation?.status !== 'pending' && creation?.status !== 'confirmed') throw new Error('Booking creation status is missing or invalid')
+  const token = cancellationToken ?? (await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', requestId)).token
+  const tokenMatches = await hashReservationCancelToken(token) === request.payload.cancellation.token_hash
+  if (cancellationToken && !tokenMatches) throw new Error('Booking cancellation capability does not match its request')
+  const cancelUrl = tokenMatches && organization.public_url
+    ? `${organization.public_url.replace(/\/$/, '')}/bookings/cancel?id=${requestId}#${token}`
+    : env.NUXT_PUBLIC_PLATFORM_DOMAIN ? new URL('/account', env.NUXT_PUBLIC_PLATFORM_DOMAIN).toString() : null
+  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
+    resolveLocationContact(db, organizationId, record.location_id),
+    buildOwnerThreadInboxUrl(env, db, { organizationId, locationId: record.location_id ?? undefined, threadId: requestId }),
+  ])
+  const results = await Promise.allSettled([
+    publishGuestInboxThreadEvent(env, db, { threadId: requestId, type: 'thread.created' }),
+    notifyBookingCreated(env, db, {
+      organizationId, organizationName: organization.name, locationId: record.location_id,
+      guestAcknowledgement: request.payload.provenance?.guest_acknowledgement ?? true,
+      bookingId: requestId, status: creation.status, guestName: request.payload.guest.name,
+      email: request.payload.guest.email, guestPhone: request.payload.guest.phone,
+      productId: record.product_id, productTitle: record.product_name, startsAt: record.starts_at,
+      timezone: record.timezone, partySize: record.party_size, notes: request.payload.notes,
+      cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
+    }),
+  ])
+  raiseSettledFailures('booking creation delivery', `bookingId ${requestId}`, results)
+  return creation.status
+}
 
 /**
  * Claim seats on a session.
@@ -141,13 +180,14 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const full = await getProduct(db, organization.id, product.id)
   const presentation = resolveBookingPresentation('booking', organization.vertical)
   const config = await requireBookingConfig(db, organization.id, product.id)
+  let requiresPayment = false
   if (!replayState.booking) {
     if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
     const variant = full.variants.find(candidate => candidate.id === productVariantId)
     if (!variant) throw new Error('The selected variant is missing')
     const price = resolveVariantPrice(variant, { currency: organization.default_currency, location_id: session.location_id, at: new Date().toISOString() })
     if (!price) return creationResult({ error: 'A valid Price is required for this offering', code: 'price_unavailable' }, { status: 409 })
-    if (config.online_payment_required && price.unit_amount > 0) return creationResult({ error: 'Online payment is required to request this appointment', code: 'payment_required' }, { status: 409 })
+    requiresPayment = Boolean(config.online_payment_required && price.unit_amount > 0)
   }
 
 
@@ -167,8 +207,10 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   }
 
   await refreshProductBusy(db, env, organization.id, product.id)
-  const cancellation = operator ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
+  const cancellation = operator || requiresPayment ? await createReplayableReservationCancelToken(env.EMAIL_REPLY_SECRET ?? '', threadId) : createReservationCancelToken()
   const cancellationTokenHash = await hashReservationCancelToken(cancellation.token)
+  if (requiresPayment && !await hasOrganizationEntitlement(env,organizationId,'payments')) return creationResult({error:'Payments entitlement is required to collect online payment',code:'payment_required'}, {status:409})
+  if (requiresPayment && (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN)) return creationResult({error:'Payments provider configuration is incomplete',code:'payments_unavailable'},{status:503})
   // The person is the Better Auth user; what they typed stays on the thread as
   // this booking's guest snapshot and is never copied onto that user.
   const userId = operator ? null : await ensureInteractionUser(event, env)
@@ -179,6 +221,25 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
     payload.provenance = { source: operator.source, external_reference: operator.externalReference, actor_user_id: operator.userId, idempotency_key: operator.idempotencyKey, fingerprint: fingerprint!, guest_acknowledgement: operator.guestAcknowledgement, creation_kind: 'ordinary', creation_status: config.confirmation_mode === 'review' ? 'pending' : 'confirmed', followups_completed: false }
   }
   payload.cancellation = { token_hash: cancellationTokenHash, expires_at: cancellation.expiresAt, used_at: null }
+
+  if (requiresPayment) {
+    if (!env.STRIPE_SECRET_KEY || !env.NUXT_PUBLIC_PLATFORM_DOMAIN) return creationResult({ error: 'Payments provider configuration is incomplete', code: 'payments_unavailable' }, { status: 503 })
+    const checkoutKey = operator?.idempotencyKey ?? cleanString(body.idempotency_key, 128)
+    if (!checkoutKey || !/^[a-zA-Z0-9_-]{8,128}$/u.test(checkoutKey)) return creationResult({ error: 'A stable checkout request key is required' }, { status: 400 })
+    // Contact stays on the guest thread. A checkout thread waits on the guest;
+    // authenticated capture alone creates its operational Booking and activity.
+    const checkout = await createPaymentCheckout(db, createStripeClient(env.STRIPE_SECRET_KEY, 'payments'), env, {
+      organizationId, buyerUserId: userId, productId: product.id, variantId: productVariantId,
+      sessionId: session.id, requestId: threadId, requestFingerprint: await hashIdentifier(JSON.stringify({ guestName, guestEmail, phone: normalizedGuestPhone, notes })), quantity: partySize, idempotencyKey: checkoutKey,
+      returnOrigin: env.NUXT_PUBLIC_PLATFORM_DOMAIN,
+      following: paymentId => requestInsertQueries({
+        kind: 'booking', id: threadId, organization_id: organizationId, location_id: session.location_id,
+        user_id: userId, review_id: null, conversation_state: 'waiting_on_guest', resolved_at: null,
+        payload, created_at: now, updated_at: now,
+      }, { query: "SELECT 1 FROM payment_checkout_holds WHERE payment_id = ? AND status = 'active'", params: [paymentId] }),
+    })
+    return creationResult({ success: true, status: 'checkout', ...checkout }, { status: 201 })
+  }
 
   let operationalBookingId: string | undefined
   try {
@@ -233,25 +294,9 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   }
 
   if (!operationalBookingId) throw new Error('Booking allocation did not produce an operational ID')
-  // The allocator reads policy atomically with the claim. A setting may have
-  // changed since the preflight read, so notify from the committed creation.
-  const creation = await queryFirst<{ status: string }>(db, `
-    SELECT json_extract(payload_json, '$.afterStatus') AS status FROM activity_entries
-    WHERE request_id = ? AND event_name = 'booking.created' AND dedupe_key = ?
-  `, [threadId, `booking:${operationalBookingId}:created`])
-  if (creation?.status !== 'pending' && creation?.status !== 'confirmed') throw new Error('Booking creation status is missing or invalid')
-  const bookingStatus = creation.status
-  await publishGuestInboxThreadEvent(env, db, { threadId, type: 'thread.created' })
-
   // One instant, one zone: the message the guest reads and the record the
   // host sees are formatted from the same session row.
   const whenLabel = new Intl.DateTimeFormat('en-US', { timeZone: session.timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(session.starts_at)) + (session.location_id === null ? ` (${session.timezone})` : '')
-  const [{ contactPhone, contactEmail }, ownerInboxUrl] = await Promise.all([
-    resolveLocationContact(db, organizationId, session.location_id),
-    buildOwnerThreadInboxUrl(env, db, { organizationId: organization.id, locationId: session.location_id ?? undefined, threadId }),
-  ])
-  const organizationBaseUrl = organization.public_url?.replace(/\/$/, '')
-  const cancelUrl = organizationBaseUrl ? `${organizationBaseUrl}/bookings/cancel?id=${threadId}#${cancellation.token}` : null
   // Telling the owner and recording the conversion are independent, so both are
   // attempted before either failure is raised: running the notification first
   // meant a failed dispatch silently cost the tenant the conversion record too.
@@ -285,20 +330,15 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   const [locale, ...followUps] = await Promise.all([
     requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale) ? requestedLocale : getSourceLocale(db, organization.id),
     ...await Promise.allSettled([
-      notifyBookingCreated(env, db, {
-        organizationId: organization.id, organizationName: organization.name, locationId: session.location_id,
-        guestAcknowledgement: operator?.guestAcknowledgement ?? true, bookingId: threadId, status: bookingStatus, guestName, email: guestEmail, guestPhone: normalizedGuestPhone,
-        productId: product.id, productTitle: product.name, startsAt: session.starts_at, timezone: session.timezone,
-        partySize, notes: notes || null,
-        cancelUrl, contactPhone, contactEmail, ownerInboxUrl,
-      }),
+      notifyProductBookingCreated(env, db, organization.id, threadId, cancellation.token),
       operator ? Promise.resolve({ recorded: false, reason: 'operator_creation', quotedValue: null }) : recordBookingMeasurement(),
     ]),
   ])
   // Only the owner notification can fail the request. Measurement is reported beside the
   // committed result: a guest told a confirmed submission failed would submit again.
   raiseSettledFailures('booking follow-up', `bookingId ${threadId}`, followUps.slice(0, 1),
-    ['notifyBookingCreated'])
+    ['notifyProductBookingCreated'])
+  const bookingStatus = (followUps[0] as PromiseFulfilledResult<'pending' | 'confirmed'>).value
   if (operator) await db.prepare(`UPDATE requests SET payload_json = json_set(payload_json, '$.provenance.followups_completed', json('true')) WHERE id = ? AND organization_id = ?`).bind(threadId, organizationId).run()
   const measurement = measurementOutcome(followUps[1]!)
   const quotedValueOf = (result: PromiseSettledResult<unknown>) => result.status === 'fulfilled' ? (result.value as { quotedValue: unknown }).quotedValue : null
