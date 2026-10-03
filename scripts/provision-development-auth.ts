@@ -7,11 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { hashPassword } from 'better-auth/crypto'
-import {
-  E2E_AUTH_FIXTURES,
-  LOCAL_DEVELOPER_AUTH_FIXTURE,
-  LOCAL_DEVELOPER_LOGIN_URL,
-} from '../config/development-auth-fixtures.ts'
+import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures.ts'
 import { validatePassword } from '../utils/password-validation.ts'
 
 function generatePassword(): string {
@@ -42,8 +38,8 @@ if (options['user-id'] !== undefined && !isLocalDev) throw new Error('--user-id 
 if (isLocalDev) {
   try {
     process.loadEnvFile()
-  } catch {
-    // No .env: every value below stays whatever the shell exported.
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
   }
 }
 
@@ -53,30 +49,14 @@ const e2ePassword = process.env.E2E_TEST_PASSWORD
 if (!e2ePassword) {
   throw new Error('E2E_TEST_PASSWORD is required when provisioning Better Auth E2E credentials.')
 }
-// LOCAL_DEVELOPER_PASSWORD is the single source for this account's password:
-// /api/dev/login signs in with the same value, so the two only agree when it is
-// set. Unset, this stays a throwaway that must be copied from the output below.
-const localDeveloperPassword = isLocalDev
-  ? (process.env.LOCAL_DEVELOPER_PASSWORD
-      ? requirePolicyCompliant(process.env.LOCAL_DEVELOPER_PASSWORD, 'LOCAL_DEVELOPER_PASSWORD')
-      : generatePassword())
-  : ''
-
 const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`
-const availableFixtures = isLocalDev
-  ? [...E2E_AUTH_FIXTURES, LOCAL_DEVELOPER_AUTH_FIXTURE]
-  : E2E_AUTH_FIXTURES
 const credentialFixtures = options['user-id'] !== undefined
-  ? availableFixtures.filter(fixture => fixture.id === options['user-id'])
-  : availableFixtures
+  ? E2E_AUTH_FIXTURES.filter(fixture => fixture.id === options['user-id'])
+  : E2E_AUTH_FIXTURES
 if (!credentialFixtures.length) throw new Error(`Unknown development fixture user: ${options['user-id']}`)
 const e2ePasswordHash = await hashPassword(e2ePassword)
-const localDeveloperPasswordHash = isLocalDev ? await hashPassword(localDeveloperPassword) : ''
 
 const fixtureSql = credentialFixtures.map((fixture) => {
-  const passwordHash = fixture.id === LOCAL_DEVELOPER_AUTH_FIXTURE.id
-    ? localDeveloperPasswordHash
-    : e2ePasswordHash
   const platformRole = fixture.platformRole ?? 'user'
   const memberships = (fixture.memberships ?? []).map((membership) => `
 INSERT INTO member (id, organizationId, userId, role, createdAt)
@@ -109,14 +89,11 @@ ${(fixture.memberships ?? []).length
 DELETE FROM invitation WHERE lower(email) = lower(${sqlString(fixture.email)});
 DELETE FROM account WHERE userId = ${sqlString(fixture.id)} AND providerId = 'credential';
 INSERT INTO account (id, accountId, providerId, userId, password, createdAt, updatedAt)
-VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id)}, 'credential', ${sqlString(fixture.id)}, ${sqlString(passwordHash)}, unixepoch(), unixepoch());
+VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id)}, 'credential', ${sqlString(fixture.id)}, ${sqlString(e2ePasswordHash)}, unixepoch(), unixepoch());
 ${memberships}`
 }).join('\n')
 
-const localDeveloperCleanupSql = isLocalDev
-  ? ''
-  : `DELETE FROM user WHERE id = ${sqlString(LOCAL_DEVELOPER_AUTH_FIXTURE.id)};\n`
-const sql = `PRAGMA foreign_keys = ON;\n${localDeveloperCleanupSql}${fixtureSql}`
+const sql = `PRAGMA foreign_keys = ON;\n${fixtureSql}`
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-e2e-auth-'))
 const sqlPath = join(directory, 'e2e-auth.sql')
 
@@ -128,16 +105,6 @@ try {
   args.push('--file', sqlPath)
   execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
   console.log(`Provisioned ${credentialFixtures.length} verified Better Auth development credentials (local).`)
-  if (credentialFixtures.some(fixture => fixture.id === LOCAL_DEVELOPER_AUTH_FIXTURE.id)) {
-    console.log('\nLocal developer sign-in')
-    if (process.env.LOCAL_DEVELOPER_PASSWORD) {
-      console.log('URL: http://localhost:3000/api/dev/login  (signs in and redirects, no typing)')
-    }
-    console.log(`URL: ${LOCAL_DEVELOPER_LOGIN_URL}`)
-    console.log(`Email: ${LOCAL_DEVELOPER_AUTH_FIXTURE.email}`)
-    console.log(`Password: ${localDeveloperPassword}`)
-    console.log('Use dashboard links after sign-in. When constructing one manually, its segment is the organization slug.')
-  }
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }
