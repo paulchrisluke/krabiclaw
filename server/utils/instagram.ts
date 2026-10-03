@@ -34,9 +34,7 @@ export async function instagramAccessToken(env: CloudflareEnv, accountId: string
   if (token.accessTokenExpiresAt.getTime() - Date.now() > TOKEN_RENEWAL_WINDOW_MS) return token.accessToken
 
   const params = new URLSearchParams({ grant_type: 'ig_refresh_token', access_token: token.accessToken })
-  const response = await fetch(`https://graph.instagram.com/refresh_access_token?${params.toString()}`)
-  if (!response.ok) throw new Error(`Instagram token refresh failed: ${(await response.text()).slice(0, 300)}`)
-  const renewed = await longLivedToken(response)
+  const renewed = longLivedToken(await metaGraphRequest(`https://graph.instagram.com/refresh_access_token?${params.toString()}`))
 
   const context = await createAuth(env).$context
   const updated = await context.internalAdapter.updateAccount(accountId, {
@@ -48,8 +46,7 @@ export async function instagramAccessToken(env: CloudflareEnv, accountId: string
   return renewed.accessToken
 }
 
-async function longLivedToken(response: Response): Promise<{ accessToken: string; expiresAt: Date }> {
-  const token = await response.json() as { access_token?: string; expires_in?: number }
+function longLivedToken(token: { access_token?: string; expires_in?: number }): { accessToken: string; expiresAt: Date } {
   if (!token.access_token || typeof token.expires_in !== 'number') {
     throw new Error('Instagram did not return a long-lived access token and its lifetime')
   }

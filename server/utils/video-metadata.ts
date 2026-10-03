@@ -30,9 +30,15 @@ export function readMp4Metadata(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): V
   const seconds = movie.fragment_duration
     ? movie.fragment_duration.num / movie.fragment_duration.den
     : movie.duration / movie.timescale
-  const width = track.video?.width ?? track.track_width
-  const height = track.video?.height ?? track.track_height
+  // The track header holds the display size (pixel aspect applied); the
+  // sample entry's coded size is the fallback. A quarter-turn in the track's
+  // matrix (a = d = 0) means the picture is shown rotated: swap them.
+  const storedWidth = track.track_width || track.video?.width
+  const storedHeight = track.track_height || track.video?.height
+  const quarterTurn = track.matrix[0] === 0 && track.matrix[4] === 0
+  const [width, height] = quarterTurn ? [storedHeight, storedWidth] : [storedWidth, storedHeight]
   if (!Number.isFinite(seconds) || seconds <= 0) throw new Error('The video file does not state its duration')
   if (!width || !height) throw new Error('The video file does not state its dimensions')
-  return { duration: Math.round(seconds), width, height }
+  // Whole seconds; a clip shorter than half a second is still one second long, not zero.
+  return { duration: Math.max(1, Math.round(seconds)), width, height }
 }
