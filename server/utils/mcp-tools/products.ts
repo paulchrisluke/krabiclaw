@@ -63,6 +63,7 @@ const optionValueWrite = {
 
 const optionWrite = {
   type: 'object',
+  description: 'A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.',
   properties: {
     id: { type: 'string' }, name: { type: 'string' }, sort_order: { type: 'integer' },
     values: { type: 'array', minItems: 1, maxItems: PRODUCT_LIMITS.optionValues, items: optionValueWrite },

@@ -478,7 +478,7 @@ function bookingSummary(): string {
 function publicationSummary(): string {
   const parts = [form.published ? 'Visible on website' : 'Hidden from website']
   if (locationId.value && !form.location_published) parts.push('Hidden at this location')
-  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || vertical === 'service' ? 'Bookings paused' : 'Orders paused')
+  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
 }
 
@@ -653,7 +653,7 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   labels: sectionLabels,
   order: ['name', 'kind'],
   missing: key => key === 'name' ? !form.name.trim() : !form.kind,
-  noun: presentation.value.itemLabel.toLowerCase(),
+  noun: () => form.kind ? presentationForProduct(vertical, { kind: assertProductKind(form.kind) }, dashboard.organization.value?.theme_id).itemLabel.toLowerCase() : 'product',
   saving,
   existingBlocked: () => !sectionValid.value,
   commit,

@@ -27,7 +27,7 @@ const groups = computed<EditorNavigationGroup[]>(() => [
     items: [
       ...p.form.options.map((option, index) => ({
         id: `option-${index}`,
-        label: option.name || 'Option',
+        label: option.name || 'Choice',
         summary: option.values.map(value => value.value).join(', ') || undefined,
         to: `${level.path.value}/${index}`,
       })),

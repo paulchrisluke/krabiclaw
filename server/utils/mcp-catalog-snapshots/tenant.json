@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4b37e557f1846c33a059b1cd29ff09231e30cadf858dcc0c00879a46fa166487",
+  "fingerprint": "sha256:f357635edc55c918b09d24713fc95051b8dae2212cffa8b14b3ff40de71e7466",
   "tools": [
     {
       "name": "append_content_block",
@@ -518,6 +518,7 @@
                 "options": {
                   "items": {
                     "additionalProperties": false,
+                    "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
                     "properties": {
                       "id": {
                         "type": "string"
@@ -2844,6 +2845,7 @@
           "options": {
             "items": {
               "additionalProperties": false,
+              "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
               "properties": {
                 "id": {
                   "type": "string"
@@ -12340,6 +12342,7 @@
                 "options": {
                   "items": {
                     "additionalProperties": false,
+                    "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
                     "properties": {
                       "id": {
                         "type": "string"
@@ -19250,6 +19253,7 @@
           "options": {
             "items": {
               "additionalProperties": false,
+              "description": "A customer choice such as Size, with values such as Small and Large. Variants combine these choices and carry prices. Descriptive facts belong in details.",
               "properties": {
                 "id": {
                   "type": "string"
