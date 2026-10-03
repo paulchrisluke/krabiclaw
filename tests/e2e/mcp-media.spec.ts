@@ -138,7 +138,8 @@ test.describe('stateless MCP server', () => {
     } finally {
       try {
         if (originalName !== undefined) {
-          const restored = (await call<{ product: Product }>('update_product', { product_id: productId, name: originalName })).product
+          await call('update_product', { product_id: productId, name: originalName })
+          const restored = (await call<{ product: Product }>('get_product', { product_id: productId })).product
           expect(restored.name).toBe(originalName)
           expectSeededMedia(restored)
         }

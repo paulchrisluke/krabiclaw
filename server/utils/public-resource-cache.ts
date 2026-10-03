@@ -142,6 +142,14 @@ export async function drainPublicResourceCacheInvalidations(
         if (synced.pending > 0) {
           const more = publicResourceCacheInvalidationQuery(row.organization_id, SEARCH_SYNC_CONTINUE)
           await execute(db, more.query, more.params ?? [])
+          // The new continuation carries on what an earlier, failed one could
+          // not finish, so that failure is superseded rather than outstanding.
+          await execute(db, `
+            UPDATE public_resource_cache_invalidations
+               SET status = 'processed', processed_at = ?, last_error = NULL
+             WHERE organization_id = ? AND status = 'failed' AND reason = ? AND created_at < ?
+               ${scopedRows}
+          `, [nowIso, row.organization_id, SEARCH_SYNC_CONTINUE, nowIso, ...scopeParams])
         } else {
           // This complete reconciliation rebuilt the organization's desired
           // state from D1. It also repairs changes behind older terminal rows,
