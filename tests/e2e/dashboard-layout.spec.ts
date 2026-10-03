@@ -112,6 +112,26 @@ test.describe('dashboard pane hierarchy', () => {
     await expectPanes(page, ['organization-integrations', 'organization-payouts'])
   })
 
+  test('Payments surfaces read the migrated ledger and buyer account', async ({ page }) => {
+    await page.setViewportSize(WIDE)
+    await open(page, `${ORG}/payments/overview`)
+    await expect(page.getByText('No captured payment activity in this UTC period.', { exact: true })).toBeVisible()
+    for (const view of ['transactions', 'refunds', 'disputes']) {
+      await open(page, `${ORG}/payments/${view}`)
+      await expect(page.getByText(`No ${view} yet.`, { exact: true })).toBeVisible()
+    }
+    await open(page, `${ORG}/settings/payments-billing`)
+    await expect(page.getByText('No undelivered usage.', { exact: true })).toBeVisible()
+    const account = page.waitForResponse(response => new URL(response.url()).pathname === '/api/account' && response.request().method() === 'GET')
+    await open(page, '/account')
+    await expect(page).toHaveURL('/dashboard/account/profile/purchases')
+    const response = await account
+    expect(response.status(), await response.text()).toBe(200)
+    const purchases = await response.json()
+    expect(purchases).toMatchObject({ payments: [], refunds: [] })
+    await expect(page.getByRole('heading', { name: 'Purchases & bookings', exact: true })).toBeVisible()
+  })
+
   test('booking Change opens its first field on desktop and not below lg', async ({ page }) => {
     const agenda = await page.request.get('/api/dashboard/agenda', { params: { org: 'ember-slice-demo', from: '2000-01-01', to: '2100-01-01' } })
     expect(agenda.status()).toBe(200)
