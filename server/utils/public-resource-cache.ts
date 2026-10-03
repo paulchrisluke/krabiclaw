@@ -95,6 +95,9 @@ export async function drainPublicResourceCacheInvalidations(
   // Several rows for one site in one drain are one change to converge on: the
   // site's slice is listed and diffed once, and the rest of its rows ride along.
   const syncedOrganizations = new Set<string>()
+  // A row this drain could not claim because another drain of the same site
+  // holds its claim. Only that is worth waiting for.
+  let blockedByAnotherDrain = false
   for (const row of rows) {
     if (failedOrganizations.has(row.organization_id)) continue
     const claim = await execute(db, `
@@ -108,7 +111,10 @@ export async function drainPublicResourceCacheInvalidations(
               AND other.status = 'processing' AND other.claimed_at >= ?
          )
     `, [nowIso, row.id, row.attempt_count, CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, staleClaimCutoff])
-    if (Number(claim.meta?.changes ?? 0) !== 1) continue
+    if (Number(claim.meta?.changes ?? 0) !== 1) {
+      blockedByAnotherDrain = true
+      continue
+    }
     const claimedAttemptCount = row.attempt_count + 1
     try {
       await purgeOrganizationCaches(db, kv, row.organization_id, freeOrganizationDomain)
@@ -164,7 +170,8 @@ export async function drainPublicResourceCacheInvalidations(
     // Another request draining this site held a claim that blocked this one's
     // rows. Wait for it to finish, then claim what it left.
     const waitDeadline = options.waitDeadline ?? Date.now() + ORGANIZATION_DRAIN_WAIT_MS
-    if (unfinished.size > 0 && !unfinished.has('failed') && Date.now() < waitDeadline) {
+    const waitable = blockedByAnotherDrain || unfinished.has('processing')
+    if (waitable && !unfinished.has('failed') && Date.now() < waitDeadline) {
       await new Promise(resolve => setTimeout(resolve, 100))
       return processed + await drainPublicResourceCacheInvalidations(db, kv, env, { ...options, waitDeadline })
     }

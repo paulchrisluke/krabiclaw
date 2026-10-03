@@ -7,7 +7,6 @@ import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 interface CreatedProduct { id: string; name: string; description: string; active: boolean }
 
 test('Product batches validate and commit atomically at the supported limit', async ({ request, baseURL }, testInfo) => {
-  test.setTimeout(120_000)
   const organizationId = MCP_GROWTH_ORGANIZATION_ID
   // deactivate_missing acts on the whole tenant, and the assertions below name
   // its whole catalog, so nothing else may write the demo's products meanwhile.

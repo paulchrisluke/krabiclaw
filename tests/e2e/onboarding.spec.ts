@@ -49,7 +49,6 @@ test.afterEach(async () => {
 })
 
 test('a new owner builds a draft and creates a site through the routed flow', async ({ page, request, baseURL, browser, playwright }) => {
-  test.setTimeout(180_000)
   const owner = await playwright.request.newContext({ baseURL })
   await loginAs(owner, baseURL!, 'user-e2e-kikuzuki-owner')
   const held = await owner.post(`/api/editor/organizations/${otherTenantId}/collections`, { data: { name: 'Small plates' } })
@@ -248,7 +247,6 @@ test('a new owner builds a draft and creates a site through the routed flow', as
 const KIKUZUKI = { placeId: 'ChIJi-IgEJ2VUTAR1R3W1qDnhQ8', name: 'Kikuzuki Japanese Robatayaki & Izakaya' }
 
 test('a new owner picks their Google listing and it seeds location, contact and hours', async ({ page, baseURL }) => {
-  test.setTimeout(180_000)
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
@@ -311,7 +309,6 @@ test('a new owner picks their Google listing and it seeds location, contact and 
 // the draft that created the site goes with it. It used to survive detached, so
 // the owner signing up again was offered the deleted site to resume (#1113).
 test('deleting a site through Better Auth also deletes the draft that created it', async ({ page, baseURL }) => {
-  test.setTimeout(120_000)
   await loginAs(page.request, baseURL!, 'user-e2e-onboarding-wizard')
   const discarded = await page.request.delete('/api/dashboard/onboarding/drafts/active')
   expect(discarded.status(), await discarded.text()).toBe(200)
@@ -360,7 +357,6 @@ test('the business search API refuses what the picker would never send', async (
 // → Google Maps connects a location by the same selection. Both run against the
 // demo tenant's local copy; the location this adds is deactivated at the end.
 test('add-location and Settings connect a location through the same business picker', async ({ page, baseURL }) => {
-  test.setTimeout(180_000)
   await dismissPreviewToolbar(page)
   await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
   const org = 'ember-slice-demo'

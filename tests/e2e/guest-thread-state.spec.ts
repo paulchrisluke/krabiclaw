@@ -170,7 +170,6 @@ function contactNotification(state: NotificationList, guestName: string) {
 
 test('guest thread state stays source-owned, per-user, tenant-isolated, and idempotent', async ({ playwright }) => {
   test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-  test.setTimeout(120_000)
 
   const owner = await playwright.request.newContext({ baseURL })
   const secondOwner = await playwright.request.newContext({ baseURL })
@@ -345,7 +344,6 @@ async function submitContact(request: APIRequestContext, guestName: string) {
 
 test('archive and Move to messages file a conversation without reordering the inbox', async ({ playwright }) => {
   test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-  test.setTimeout(120_000)
 
   const owner = await playwright.request.newContext({ baseURL })
   const foreignOwner = await playwright.request.newContext({ baseURL })
@@ -434,7 +432,6 @@ for (const viewport of [
 ]) {
   test(`the row menu archives a conversation and moves it back (${viewport.name})`, async ({ page }) => {
     test.skip(!writable, 'Guest-thread writes require disposable local or preview data')
-    test.setTimeout(120_000)
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await loginAs(page.request, baseURL, ownerId)
     const guestName = `Mailbox row ${viewport.name} ${Date.now()}`
@@ -513,7 +510,6 @@ for (const viewport of [
 
 test('Today uses the CMS patterns and sends one reservation change request', async ({ page }, testInfo) => {
   test.skip(!writable, 'Today writes require disposable local or preview data')
-  test.setTimeout(180_000)
   releaseDemoLock = await acquireTenantMutationLock(testInfo, E2E_DEMO_ORGANIZATION_ID)
   await loginAs(page.request, baseURL)
 

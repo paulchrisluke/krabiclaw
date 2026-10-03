@@ -2,23 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { expect, test, type APIResponse } from '@playwright/test'
 import { openTenantPage, potteryHouseBaseURL, potteryHouseExtraHeaders } from './helpers'
 import { loginAs } from './helpers/auth'
-import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 import { E2E_KIKUZUKI_ORGANIZATION_ID, kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders, testBaseUrl } from './test-env'
 
 async function expectStatus(response: APIResponse, status: number) {
   expect(response.status(), await response.text()).toBe(status)
 }
-
-let releaseTenantMutationLock: (() => Promise<void>) | undefined
-
-test.beforeAll(async ({ browser: _browser }, testInfo) => {
-  test.setTimeout(700_000)
-  releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, 'site-kikuzuki')
-})
-
-test.afterAll(async () => {
-  await releaseTenantMutationLock?.()
-})
 
 // A restore that fails must not skip the restores after it, or the context
 // disposal. These specs mutate shared preview state, so a half-restored tenant
@@ -44,8 +32,6 @@ async function restoreAll(steps: Array<[string, () => Promise<APIResponse>]>) {
 }
 
 test('Mali saves through Brand and renders for its tenant before hydration', async ({ browser, playwright }) => {
-  // A dashboard save, four tenant pages and an isolation check run in sequence.
-  test.setTimeout(120_000)
   const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })

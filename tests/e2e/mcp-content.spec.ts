@@ -35,7 +35,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('a draft is created once per key, publishes only to its named targets, and matches the public API', async ({ request, baseURL }) => {
-    test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     let createdPostId: string | undefined
@@ -151,7 +150,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('tenant blog tools preserve the canonical block document', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     const discovery = await mcpRequest(request, baseURL!, { method: 'tools/list' })
