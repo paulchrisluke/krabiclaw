@@ -65,10 +65,11 @@ export async function storeIntegration(
   provider: IntegrationProvider,
   selection: IntegrationSelection,
   expected?: { revision: string | null },
-): Promise<OrganizationIntegration> {
+): Promise<string> {
   const now = new Date().toISOString()
+  const revision = crypto.randomUUID()
   const fields = [selection.account_id, selection.target_id, selection.target_name, selection.measurement_id ?? null,
-    selection.verified === undefined || selection.verified === null ? null : Number(selection.verified), selection.verification_token ?? null, crypto.randomUUID()]
+    selection.verified === undefined || selection.verified === null ? null : Number(selection.verified), selection.verification_token ?? null, revision]
   const replace = `account_id = ?, target_id = ?, target_name = ?, measurement_id = ?, verified = ?, verification_token = ?, revision = ?, updated_at = ?`
   const insert = `INSERT INTO organization_integrations (account_id, target_id, target_name, measurement_id, verified, verification_token, revision, updated_at, id, organization_id, provider, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -90,9 +91,7 @@ export async function storeIntegration(
     throw error
   }
   if (changes !== 1) throw new HTTPError({ statusCode: 409, message: `The ${NAMES[provider]} changed. Reload before saving.` })
-  const stored = await readIntegration(db, organizationId, provider)
-  if (!stored) throw new Error(`The ${NAMES[provider]} was written and could not be read back.`)
-  return stored
+  return revision
 }
 
 /** Drizzle reports the query and carries D1's own message as its cause. */
