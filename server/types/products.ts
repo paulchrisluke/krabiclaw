@@ -1,6 +1,6 @@
 import type { ResolvedMediaAsset } from '~/server/utils/media-asset-manager'
 import type { Price, PriceInput } from '~/shared/prices'
-import type { MetafieldValue } from '~/shared/metafields'
+import type { ProductDetails, ProductKind } from '~/shared/product-details'
 import type { SocialImageSource } from '~/utils/social-metadata'
 
 export type ProductSource = 'manual' | 'template' | 'ai' | 'import' | 'copy'
@@ -73,6 +73,7 @@ export interface CollectionMembership {
  * product can appear on two sites at two prices without being duplicated.
  */
 export interface Product {
+  kind: ProductKind
   id: string
   organization_id: string
   name: string
@@ -90,7 +91,7 @@ export interface Product {
   options: ProductOption[]
   variants: ProductVariant[]
   /** Typed descriptive attributes, keyed by '<namespace>.<key>'. */
-  metafields: Record<string, MetafieldValue>
+  details: ProductDetails
   publications: ProductPublication[]
   locations: ProductLocation[]
   collections: CollectionMembership[]
@@ -133,6 +134,7 @@ export interface ProductOptionInput {
 }
 
 export interface CreateProductInput {
+  kind: ProductKind
   name: string
   description?: string
   active?: boolean
@@ -144,7 +146,7 @@ export interface CreateProductInput {
   options?: ProductOptionInput[]
   /** Omitted means one default variant is created. */
   variants?: ProductVariantInput[]
-  metafields?: Record<string, MetafieldValue>
+  details?: ProductDetails
   source?: ProductSource
 }
 

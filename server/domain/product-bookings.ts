@@ -304,6 +304,6 @@ export async function createProductBooking(event: H3Event, context: BookingCreat
   return creationResult({
     success: true, booking_id: threadId, request_id: threadId, operational_booking_id: operationalBookingId, status: replayState.booking?.status ?? bookingStatus, replayed: Boolean(replayState.booking), starts_at: session.starts_at, ends_at: session.ends_at, timezone: session.timezone, presentation, ...(operator ? {} : { cancellation_token: cancellation.token, quoted_value: quotedValueOf(followUps[1]!), measurement }),
     message: bookingStatus === 'pending' ? `Your request for ${product.name} on ${whenLabel} is awaiting review.` : `Your ${presentation.noun} for ${product.name} on ${whenLabel} is confirmed.`,
-    policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.metafields), locale),
+    policy_summary: renderBookingPolicySummary(productPolicySummarySource(full.details), locale),
   }, { status: 201 })
 }

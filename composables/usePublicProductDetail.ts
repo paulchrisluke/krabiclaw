@@ -3,7 +3,6 @@ import type { PublicProductBooking, PublicProductLocationPayload, PublicProductR
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
-import type { MetafieldDefinition } from '~/shared/metafields'
 import { isPublicProduct, type PublicLocaleRepresentation } from '~/utils/public-resource-contracts'
 
 export interface PublicProductDetailPayload {
@@ -25,7 +24,6 @@ export interface PublicProductDetailPayload {
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
   /** The tenant's attribute vocabulary, so the page can label its own facts. */
-  metafieldDefinitions: MetafieldDefinition[]
   localeRepresentations: PublicLocaleRepresentation[]
 }
 
@@ -75,12 +73,6 @@ function isPublicProductDetailPayload(value: unknown): value is PublicProductDet
       && typeof sibling.id === 'string'
       && typeof sibling.name === 'string'
       && typeof sibling.slug === 'string')
-    && Array.isArray(value.metafieldDefinitions)
-    && value.metafieldDefinitions.every(definition => isRecord(definition)
-      && typeof definition.id === 'string'
-      && typeof definition.namespace === 'string'
-      && typeof definition.key === 'string'
-      && typeof definition.name === 'string')
     && Array.isArray(value.localeRepresentations)
     && value.localeRepresentations.every(item => isRecord(item)
       && typeof item.locale === 'string'
@@ -110,11 +102,10 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
     async (_nuxtApp, { signal }) => {
       if (import.meta.server) {
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }, { listMetafieldDefinitions }] = await Promise.all([
+        const [{ cloudflareEnv }, { loadPublicExperienceDetail, loadPublicProductDetail, loadPublicProductReviews, loadPublicProductSessions, publicLocationPayload }, { selectProductCollectionSiblings }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/public-products'),
           import('~/utils/product-seo'),
-          import('~/server/utils/product-management'),
         ])
         const env = cloudflareEnv(requestEvent)
         const db = env.DB
@@ -149,7 +140,6 @@ export async function usePublicProductDetail(routeKind: ProductSurface) {
                 currency: detail.currency, location_id: detail.location?.id ?? null, at: new Date().toISOString(),
               })
             : [],
-          metafieldDefinitions: await listMetafieldDefinitions(db, detail.organization.id),
           localeRepresentations: detail.localeRepresentations,
         }
       }

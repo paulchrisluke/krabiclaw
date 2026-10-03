@@ -25,7 +25,7 @@ export const PRODUCT_LIMITS = {
   optionName: 120,
   optionValue: 240,
   variants: 250,
-  metafields: 64,
+  details: 64,
   orderUrl: 2_048,
   collectionName: 120,
   collectionDescription: 2_000,

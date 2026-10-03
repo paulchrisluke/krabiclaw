@@ -32,7 +32,7 @@ async function open(page: Page, path: string) {
 test.describe('dashboard pane hierarchy', () => {
   test.beforeEach(async ({ page, baseURL }) => {
     await dismissPreviewToolbar(page)
-    await loginAs(page.request, baseURL!, 'user-e2e-demo-owner')
+    await loginAs(page.request, baseURL!)
   })
 
   test('Menu rows keep their URLs and nest under Menu in the matched route tree', async ({ page }) => {

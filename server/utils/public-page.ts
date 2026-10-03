@@ -375,7 +375,7 @@ async function loadPublicPageSource(
       `SELECT DISTINCT p.id, pl.location_id
          FROM products p
          JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id AND pub.published = 1
-         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1 AND pl.active = 1
+         JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id AND pl.published = 1
          JOIN business_locations bl ON bl.id = pl.location_id AND bl.organization_id = pub.organization_id AND bl.status = 'active'
         WHERE pub.organization_id = ? ${locationSlug ? 'AND pl.location_id = ?' : ''} AND p.organization_id = ? AND p.active = 1
         ORDER BY pl.location_id, p.name, p.id`,
@@ -692,7 +692,7 @@ async function loadPublicPageSource(
   }
   options.signal?.throwIfAborted();
   // Reservation policy is a location's own typed row. A product's booking
-  // terms are its metafields and are read with the product, so there is no
+  // terms are its details and are read with the product, so there is no
   // second policy index to resolve here.
   const reservationPolicies = needsReservationPolicies
     ? new Map(await Promise.all(locations.map(async location => [

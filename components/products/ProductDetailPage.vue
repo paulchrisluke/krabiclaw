@@ -323,8 +323,8 @@ import { formatProductMoney } from '~/utils/product-money'
 import { ga4Major } from '~/utils/ga4-projection'
 import { productLocationCollectionPath } from '~/utils/product-presentation'
 import type { ProductCollectionSibling } from '~/utils/product-seo'
-import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { EXPERIENCE_ATTRIBUTE_HANDLES, metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import type { ProductDetailValue } from '~/shared/product-details'
+import { EXPERIENCE_ATTRIBUTE_HANDLES, productDetailFields, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import type { PublicProductBooking, PublicProductLocationPayload, PublicProductReview, PublicProductSession } from '~/server/utils/public-products'
 import { formatPostalAddress, schemaPostalAddress } from '~/utils/postal-address'
 import SayaReviewCard from '~/components/saya/SayaReviewCard.vue'
@@ -352,8 +352,6 @@ const props = defineProps<{
   sessions?: PublicProductSession[]
   collectionName: string
   collectionSiblings: ProductCollectionSibling[]
-  /** The tenant's attribute vocabulary, so this page can label its own facts. */
-  metafieldDefinitions: MetafieldDefinition[]
   currency: CurrencyCode
   presentation: ProductPresentation
   /** Existing page presentation; the Product remains the operational identity. */
@@ -406,7 +404,7 @@ const priceLabel = computed(() => {
   if (props.vertical === 'service' && sellableVariants.value.length === 1 && offer.value?.unit_amount === 0) return 'Free'
   const amount = formatProductMoney(offer.value)
   if (amount) return amount
-  const note = props.product.metafields[PRICING_NOTE_HANDLE]
+  const note = props.product.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : null
 })
 /**
@@ -501,15 +499,15 @@ const factChips = computed(() => {
 })
 
 /**
- * The labelled facts under the product, named by the tenant's own definitions.
- * An attribute with no definition is not rendered under a raw key.
+ * Customer facts labeled by the shared product field schema.
+ * Invalid fields are refused by the canonical product writer.
  */
-const visibleDetails = computed(() => props.metafieldDefinitions.flatMap((definition) => {
-  const handle = metafieldHandle(definition)
+const visibleDetails = computed(() => productDetailFields(props.product.kind).flatMap((definition) => {
+  const handle = productDetailKey(definition)
   // The pricing note is shown where the price goes, so it is not repeated in
   // the attribute list underneath it.
   if (handle === PRICING_NOTE_HANDLE) return []
-  const value = props.product.metafields[handle]
+  const value = props.product.details[handle]
   if (value === undefined || value === null) return []
   const values = Array.isArray(value) ? value : [String(value)]
   return values.length ? [{ key: definition.id, label: definition.name, values }] : []
@@ -561,20 +559,20 @@ const reviewCountLabel = computed(() => (props.reviews.length === 1
  * handle (EXPERIENCE_ATTRIBUTE_HANDLES). Everything else the tenant defined
  * is "things to know".
  */
-function attribute<T>(handle: string, read: (_value: MetafieldValue) => T | null): T | null {
-  const value = props.product.metafields[handle]
+function attribute<T>(handle: keyof Product['details'], read: (_value: ProductDetailValue) => T | null): T | null {
+  const value = props.product.details[handle]
   return value === undefined || value === null ? null : read(value)
 }
-const asText = (value: MetafieldValue) => (typeof value === 'string' && value.trim() ? value : null)
-const asList = (value: MetafieldValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
+const asText = (value: ProductDetailValue) => (typeof value === 'string' && value.trim() ? value : null)
+const asList = (value: ProductDetailValue) => (Array.isArray(value) ? value.map(String).filter(Boolean) : null)
 const tagline = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.tagline, asText))
 const meetingPoint = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.meetingPoint, asText))
 const includedItems = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.includedItems, asList) ?? [])
 const whatToBring = computed(() => attribute(EXPERIENCE_ATTRIBUTE_HANDLES.whatToBring, asList) ?? [])
 const PLACED_ATTRIBUTE_HANDLES = new Set<string>(Object.values(EXPERIENCE_ATTRIBUTE_HANDLES))
 const thingsToKnow = computed(() => visibleDetails.value.filter((detail) => {
-  const definition = props.metafieldDefinitions.find(entry => entry.id === detail.key)
-  return !definition || !PLACED_ATTRIBUTE_HANDLES.has(metafieldHandle(definition))
+  const definition = productDetailFields(props.product.kind).find(entry => entry.id === detail.key)
+  return !definition || !PLACED_ATTRIBUTE_HANDLES.has(productDetailKey(definition))
 }))
 
 const addressLine = computed(() => formatPostalAddress(props.location?.address ?? null))

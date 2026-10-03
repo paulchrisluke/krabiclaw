@@ -1,13 +1,13 @@
 <template>
   <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
-  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :organization-name="detail.brandName" :reviews="detail.reviews" :booking="detail.booking" :sessions="detail.sessions" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :metafield-definitions="detail.metafieldDefinitions" :currency="detail.currency" :presentation="presentation" />
+  <ProductDetailPage :organization-id="organizationId" :vertical="detail.vertical" :product="detail.product" :location="detail.location" :organization-name="detail.brandName" :reviews="detail.reviews" :booking="detail.booking" :sessions="detail.sessions" :collection-name="detail.collectionName" :collection-siblings="detail.collectionSiblings" :currency="detail.currency" :presentation="presentation" />
   </NuxtLayout>
 </template>
 
 <script setup lang="ts">
 import ProductDetailPage from '~/components/products/ProductDetailPage.vue'
 import { EXPERIENCE_PRESENTATION } from '~/utils/product-presentation'
-import { composeProductSeoDescription, isOfferedProduct } from '~/utils/product-seo'
+import { composeProductSeoDescription } from '~/utils/product-seo'
 
 definePageMeta({ layout: false })
 const { isBlawby } = usePublicTemplate()
@@ -19,7 +19,7 @@ const resolved = await usePublicProductDetail('experiences')
 const organizationId = resolved.organizationId
 const detail = computed(() => resolved.detail.value)
 const presentation = detail.value.location ? EXPERIENCE_PRESENTATION : { ...EXPERIENCE_PRESENTATION, collectionPath: '/schedule' as const, collectionLabel: 'Consultations' as const }
-const { localePath, t } = useI18n()
+const { t } = useI18n()
 /** The offer context this page quotes: the branch that runs it, the site currency, now. */
 const priceSelection = computed(() => ({
   currency: detail.value.currency,
@@ -30,7 +30,6 @@ useSocialMetadata(() => ({
   path: presentation.productPath(detail.value.location?.slug ?? '', detail.value.product.slug),
   // An experience with no applicable offer is not being sold, so it points at
   // the index instead of competing with it.
-  canonicalPath: isOfferedProduct(detail.value.product, priceSelection.value) ? undefined : localePath(presentation.collectionPath),
   title: detail.value.product.name,
   description: composeProductSeoDescription({
     product: detail.value.product,

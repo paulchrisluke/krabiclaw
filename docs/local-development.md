@@ -52,7 +52,7 @@ reconciliation reports `zaraz_absent` without calling Cloudflare. Declaring it
 absent while `CF_ZONE_ID` is set fails as a configuration error.
 
 `local:setup` is safe to repeat: it applies the migration chain, refreshes
-the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local test credentials, and
+the demo, Kikuzuki, Pottery House, and NCLS fixtures, copies the shared review credential, and
 verifies the resulting D1 database. Do not replace its steps with direct
 Wrangler writes or a hand-edited local database.
 
@@ -86,7 +86,7 @@ corepack yarn local:cards
 corepack yarn client:verify --url http://localhost:3000 --organization-id org-demo --tenant-slug demo
 ```
 
-It signs in as the developer account and regenerates every tenant's cards
+It signs in as the configured review account and regenerates every tenant's cards
 through the same endpoint the dashboard's own button uses. It needs `yarn dev`
 up, because rendering a card runs in the Worker, and it takes a while on the
 first run — a card is rendered and uploaded per product, post and page. Requests
@@ -97,7 +97,7 @@ Krabiclaw's own site is an ordinary organization here.
 
 Approved `client:import --apply` runs this same generator for the imported site
 and then `client:verify`; failed generation or verification prevents handoff.
-It requires the target Worker to be running and `E2E_TEST_PASSWORD` for the
+It requires the target Worker to be running and `CANARY_LOGIN_PASSWORD` for the
 authorized account (`--email` selects it). Remote targets also require an explicit
 `--base-url`.
 
@@ -135,7 +135,7 @@ Local setup copies the account from production and verifies the configured
 password. It does not create a separate developer identity or reset this
 password. Sign in through the normal `/login` page; there is no developer-login
 shortcut. Test identities used for explicit authorization scenarios remain local
-fixtures, and their provisioning does not alter the review account.
+fixtures for role and access tests. Playwright creates these through Better Auth using the same configured password. Their provisioning through Better Auth does not alter the review account.
 
 `schema:local` applies new forward migrations when the schema changes. A rare
 replacement baseline, such as the v6 WNAM cutover, starts a new migration
@@ -163,7 +163,7 @@ LOCAL_DATABASE_SOURCE_FILE=/absolute/path/to/local-backup.sql corepack yarn loca
 
 `LOCAL_DATABASE_SOURCE_FILE` applies only to local setup, using the same audited
 transfer as `--source-file`. Without it, setup copies production. Test credential
-provisioning does not alter the review account.
+provisioning through Better Auth does not alter the review account.
 
 
 ## Dashboard URLs

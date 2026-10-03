@@ -17,7 +17,7 @@ export function authRequestHeaders(baseURL: string): Record<string, string> {
 export async function loginAs(request: APIRequestContext, baseURL: string, userId?: string) {
   const fixture = userId ? findE2eAuthFixture(userId) : null
   const email = fixture?.email ?? process.env.CANARY_LOGIN_EMAIL
-  const password = fixture ? process.env.E2E_TEST_PASSWORD : process.env.CANARY_LOGIN_PASSWORD
+  const password = process.env.CANARY_LOGIN_PASSWORD
   if (!email || !password) throw new Error('The requested sign-in credential is not configured.')
   const headers = authRequestHeaders(baseURL)
   const res = await request.post(`${baseURL}/api/auth/sign-in/email`, {

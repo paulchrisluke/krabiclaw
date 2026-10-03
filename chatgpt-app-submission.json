@@ -128,18 +128,6 @@
         "destructive_justification": "Creates an empty collection for the selected organization; products are added to it separately. Existing content is not deleted or overwritten."
       }
     },
-    "create_metafield_definition": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all.",
-        "open_world_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Defines a typed product attribute for the organization, which is what makes that attribute storable at all. Existing content is not deleted or overwritten."
-      }
-    },
     "create_post": {
       "annotations": {
         "readOnlyHint": false,
@@ -159,9 +147,9 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately.",
-        "open_world_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Creates a product with explicit variants, prices and attributes; publication and placements are assigned separately. Existing content is not deleted or overwritten."
+        "read_only_justification": "Creates a product with an explicit kind, variants, prices and named details; publication and placements are assigned separately.",
+        "open_world_justification": "Creates a product with an explicit kind, variants, prices and named details; publication and placements are assigned separately. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
+        "destructive_justification": "Creates a product with an explicit kind, variants, prices and named details; publication and placements are assigned separately. Existing content is not deleted or overwritten."
       }
     },
     "create_product_booking": {
@@ -270,18 +258,6 @@
         "read_only_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it.",
         "open_world_justification": "Deletes the stored file from the Cloudflare media account when no other asset references it.",
         "destructive_justification": "Removes an asset and its placements, and deletes backing Cloudflare storage when no other asset references it. Existing state is deleted, replaced or overwritten rather than only appended."
-      }
-    },
-    "delete_metafield_definition": {
-      "annotations": {
-        "readOnlyHint": false,
-        "openWorldHint": false,
-        "destructiveHint": true
-      },
-      "justifications": {
-        "read_only_justification": "Deletes a typed product attribute definition and every product value stored under it.",
-        "open_world_justification": "Deletes a typed product attribute definition and every product value stored under it. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Deletes a typed product attribute definition and every product value stored under it. Existing state is deleted, replaced or overwritten rather than only appended."
       }
     },
     "delete_post": {
@@ -666,18 +642,6 @@
         "read_only_justification": "Lists locations accessible in the selected organization.",
         "open_world_justification": "Lists locations accessible in the selected organization. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
         "destructive_justification": "Lists locations accessible in the selected organization. Existing content is not deleted or overwritten."
-      }
-    },
-    "list_metafield_definitions": {
-      "annotations": {
-        "readOnlyHint": true,
-        "openWorldHint": false,
-        "destructiveHint": false
-      },
-      "justifications": {
-        "read_only_justification": "Lists the organization typed product attribute definitions.",
-        "open_world_justification": "Lists the organization typed product attribute definitions. Its scope is the authenticated KrabiClaw workspace, not arbitrary external entities or the public web.",
-        "destructive_justification": "Lists the organization typed product attribute definitions. Existing content is not deleted or overwritten."
       }
     },
     "list_organization_locales": {
@@ -1302,8 +1266,8 @@
       "description": "Price a Product in words when the owner asks for it.",
       "user_prompt": "At Ember & Slice, West Village, in Drinks, add Submission Daily Catch and price it as “Market price” — it changes every day, so do not put a number on it. If that exact demo item exists, update it instead of duplicating it. Preserve existing collection members.",
       "file_attachment_urls": null,
-      "tools_triggered": "list_organizations, list_locations, list_collections, list_metafield_definitions, create_metafield_definition, create_product, update_product, set_product_location, set_product_publication, set_collection_products",
-      "expected_output": "Creates or updates the explicitly identified demo Product with a variant carrying no price and the metafield pricing.note set to “Market price”, defining that attribute first if the tenant has not, and says the menu will show those words where an amount would be. It does not add a number alongside the note, which the writer rejects.",
+      "tools_triggered": "list_organizations, list_locations, list_collections, create_product, update_product, set_product_location, set_product_publication, set_collection_products",
+      "expected_output": "Creates or updates the explicitly identified demo Product with a variant carrying no price and the named detail pricing_note set to “Market price”, and says the menu will show those words where an amount would be. It does not add a number alongside the note, which the writer rejects.",
       "expected_output_url": null
     },
     {

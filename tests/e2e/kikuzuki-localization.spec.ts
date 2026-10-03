@@ -40,7 +40,7 @@ test.beforeAll(async ({ playwright }, testInfo) => {
   testInfo.setTimeout(120_000)
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
-  await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
+  await loginAs(owner, baseURL)
 
   try {
     await expectStatus(await owner.post(`/api/editor/organizations/${organizationId}/locales/${locale}/add`), 200)
@@ -147,7 +147,7 @@ test('Kikuzuki Localize preserves its translated address', async ({ browser, pla
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
   try {
-    await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
+    await loginAs(owner, baseURL)
     const dashboardContext = await browser.newContext({ baseURL, storageState: await owner.storageState() })
     const cms = await dashboardContext.newPage()
     try {

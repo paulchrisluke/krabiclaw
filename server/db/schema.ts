@@ -290,14 +290,13 @@ export const member = sqliteTable("member", {
 //
 // One catalog for every vertical. A restaurant dish, a pottery class, and a
 // consultation are all Products; nothing about their storage differs. There is
-// no `product_type` discriminator, because a discriminator that selects a
-// schema is how five verticals became five half-models. Capabilities compose
-// instead: a Product gains booking by having a product_booking_configs row,
+// one explicit kind for customer-facing facts; pricing and booking still
+// share the same model. Capabilities compose: a Product gains booking by having a product_booking_configs row,
 // stock by having an inventory_items row, a page by being referenced from a
 // content_documents root. Absence of a capability row is the absence of the
 // capability, never a NULL to be interpreted.
 //
-// Value sets (price `type`, session/booking `status`, metafield `value_type`)
+// Value sets (price `type`, session/booking `status`, product `kind`)
 // are NOT encoded as CHECK constraints. D1 enforces foreign keys on every
 // statement and cannot alter a CHECK in place, so a closed value set on a
 // referenced parent makes adding one value an impossible table rebuild. Value
@@ -319,7 +318,7 @@ export const member = sqliteTable("member", {
 //   never "use the site's". unit_label NULL means amounts are per unsuffixed
 //   unit. tax_code NULL means no declared code, not a default one.
 // Deletion: cascades to variants, options, publication/location rows,
-//   collection membership, metafield values, booking config, rules and
+//   collection membership, named details, booking config, rules and
 //   sessions. A canonical page pointing at the product REFUSES the delete
 //   (content_documents_product_scope_fk), and so does a booking:
 //   the domain checks both and says which, because the cascade would otherwise
@@ -328,6 +327,8 @@ export const member = sqliteTable("member", {
 //   server/utils/product-validation.ts (validators),
 //   server/utils/public-products.ts (public reads).
 export const products = sqliteTable("products", {
+	kind: text().notNull(),
+	details_json: text().default("{}").notNull(),
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
 	name: text().notNull(),
@@ -347,7 +348,7 @@ export const products = sqliteTable("products", {
 	unit_label: text(),
 	// Stripe Product `marketing_features`: generic selling bullets. Not a merge
 	// of inclusions, preparation instructions, policies and features — those are
-	// separate metafield definitions.
+	// named fields for the product kind.
 	marketing_features: text().default("[]").notNull(),
 	// Validated string-to-string annotation/integration escape hatch. The object
 	// shape is enforced here; string-valued entries are enforced by the shared
@@ -367,8 +368,10 @@ export const products = sqliteTable("products", {
 	unique("products_org_slug_unique").on(table.organization_id, table.slug),
 	check("products_name_not_blank_check", sql`trim(name) <> ''`),
 	check("products_slug_check", sql`slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'`),
+	check("products_kind_check", sql`kind IN ('dish', 'experience', 'service', 'item')`),
 	check("products_active_check", sql`active IN (0, 1)`),
 	check("products_marketing_features_check", sql`json_valid(marketing_features) AND json_type(marketing_features) = 'array'`),
+	check("products_details_json_check", sql`json_valid(details_json) AND json_type(details_json) = 'object'`),
 	check("products_metadata_check", sql`json_valid(metadata) AND json_type(metadata) = 'object'`),
 	check("products_order_url_check", sql`order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0)`),
 ]);
@@ -675,112 +678,6 @@ export const collection_products = sqliteTable("collection_products", {
 // ---------------------------------------------------------------------------
 // Typed descriptive extensions.
 //
-// This replaces `products.details_json` and the descriptive half of
-// `experience_json`. A definition names an attribute and states its type and
-// constraints once, for the tenant; a value row supplies one Product's answer.
-// That is the whole extension mechanism: adding an eleventh attribute of a
-// supported type is one definition row — no column, no field-specific handler,
-// no localization-registry entry, no rendering branch.
-//
-// This is deliberately NOT a universal `owner_type + owner_id + payload`
-// store. It carries reusable descriptive product attributes and nothing else.
-// Operational identities, money, capacity allocations and independently
-// referenced records have their own relations below. Page-only prose is block
-// content.
-// ---------------------------------------------------------------------------
-
-// Row meaning: one attribute this tenant's Products may carry.
-// Owner/scope: organization. Namespaced so an imported vocabulary cannot
-//   collide with a merchant's own.
-// `value_type` names a supported type from the registry in shared/ (scalar and
-//   list forms). `validations` is the typed constraint object for that type.
-//   Neither is a CHECK here: a closed set on a referenced parent cannot be
-//   altered in D1.
-// `localizable` is the definition's declaration of localization eligibility.
-//   The localization machinery reads THIS, rather than keeping its own
-//   hardcoded list of attribute names.
-// Null semantics: validations '{}' means "the type's own rules only".
-// Deletion: cascades to every product value of that definition. Deleting a
-//   definition is a deliberate vocabulary change, not a cleanup.
-// Read/write: server/utils/product-validation.ts owns definition and value
-//   validation for every caller — imports, CMS, MCP, onboarding.
-export const metafield_definitions = sqliteTable("metafield_definitions", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	namespace: text().notNull(),
-	key: text().notNull(),
-	name: text().notNull(),
-	description: text(),
-	value_type: text().notNull(),
-	validations: text().default("{}").notNull(),
-	localizable: integer({ mode: "boolean" }).default(false).notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	check("metafield_definitions_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	unique("metafield_definitions_org_id_unique").on(table.organization_id, table.id),
-	unique("metafield_definitions_namespace_key_unique").on(table.organization_id, table.namespace, table.key),
-	check("metafield_definitions_namespace_check", sql`namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'`),
-	check("metafield_definitions_key_check", sql`key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'`),
-	check("metafield_definitions_name_not_blank_check", sql`trim(name) <> ''`),
-	check("metafield_definitions_validations_check", sql`json_valid(validations) AND json_type(validations) = 'object'`),
-	check("metafield_definitions_localizable_check", sql`localizable IN (0, 1)`),
-]);
-
-// Row meaning: this Product's value for this definition.
-// Enforced in SQL: one value per (product, definition), and the Product and
-//   the definition belong to the same organization.
-// Enforced by server/utils/product-validation.ts: the value conforms to the
-//   definition's value_type and validations. A typed list is stored as a JSON
-//   array; the shape is structural here, the element type is the validator's.
-// Null semantics: no row means the Product does not carry the attribute.
-//   There is no per-definition default that a missing row falls back to.
-// Deletion: cascades from Product and from definition.
-// Localized values live in resource_localizations under the product resource
-//   type, gated by metafield_definitions.localizable.
-export const product_metafields = sqliteTable("product_metafields", {
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	product_id: text().notNull(),
-	definition_id: text().notNull(),
-	value: text().notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	created_by: text().notNull(),
-	updated_by: text().notNull(),
-}, (table) => [
-	primaryKey({ columns: [table.product_id, table.definition_id], name: "product_metafields_pk" }),
-	check("product_metafields_instants_check", sql`(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)`),
-	foreignKey({ columns: [table.organization_id, table.product_id], foreignColumns: [products.organization_id, products.id], name: "product_metafields_product_scope_fk" }).onDelete("cascade"),
-	foreignKey({ columns: [table.organization_id, table.definition_id], foreignColumns: [metafield_definitions.organization_id, metafield_definitions.id], name: "product_metafields_definition_scope_fk" }).onDelete("cascade"),
-	index("product_metafields_definition_idx").on(table.definition_id),
-	check("product_metafields_value_check", sql`json_valid(value)`),
-]);
-
-// ---------------------------------------------------------------------------
-// Booking capability: configuration, recurrence rules, concrete sessions.
-//
-// This replaces `products.experience_json` and the tuple-keyed booking columns
-// on `requests`. The chain is deliberate and one-directional: a config row
-// says the Product is bookable; rules describe when sessions should exist;
-// sessions ARE the occurrences and own their own time, capacity and state; a
-// booking claims seats on one session. Nothing infers a step from the absence
-// of another.
-// ---------------------------------------------------------------------------
-
-// The existence of this row is what makes a Product bookable. Not a non-null
-// duration, not a vertical name, not a product_type discriminator.
-// Row meaning: this Product takes bookings, with these defaults.
-// Keys: product_id is the primary key — one config per Product.
-// Null semantics: duration_minutes NULL means each rule or session states its
-//   own length. default_capacity NULL means unlimited unless a rule or session
-//   states a number — which is different from default_capacity = 0, meaning
-//   bookable in principle but currently seatless.
-// Deletion: cascades from Product; cascades to rules and sessions, and through
-//   sessions to bookings. Removing booking capability is explicit and
-//   destructive by design, never a side effect of editing a page.
-// Read/write: server/utils/availability.ts.
 export const product_booking_configs = sqliteTable("product_booking_configs", {
 	product_id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),

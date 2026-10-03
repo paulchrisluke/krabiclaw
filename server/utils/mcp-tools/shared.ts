@@ -582,7 +582,7 @@ export const renderedBookingPolicySummaryObject = {
  *
  * No scope_type and no policy_type: a reservation policy belongs to a
  * location and nothing else, so there is no scope to choose and no cascade to
- * explain. Product booking terms are typed metafields on the product.
+ * explain. Product booking terms are typed details on the product.
  */
 export const locationReservationConfigObject = {
   type: 'object',
@@ -949,9 +949,6 @@ export const EXPECTED_TOOL_ANNOTATIONS = {
   update_article_category: D,
   delete_article_category: D,
   reorder_article_categories: D,
-  list_metafield_definitions: R,
-  create_metafield_definition: W,
-  delete_metafield_definition: D,
   get_product_catalog_localization: R,
   replace_resource_localizations: D,
   get_reservation_policy: R,

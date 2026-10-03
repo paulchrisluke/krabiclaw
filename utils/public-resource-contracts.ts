@@ -113,7 +113,7 @@ export function isPublicProduct(value: unknown): value is Product {
       && typeof variant.id === 'string'
       && typeof variant.name === 'string'
       && Array.isArray(variant.prices))
-    && isRecord(value.metafields)
+    && isRecord(value.details)
     && Array.isArray(value.locations)
     && value.locations.every(entry => isRecord(entry)
       && typeof entry.location_id === 'string'

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "58d8f18f-6ab5-4164-9c1f-770747473d30",
+  "id": "17e7b13f-7ca3-48f5-abeb-41333f070afd",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -4120,6 +4120,168 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "metafield_definitions": {
+      "name": "metafield_definitions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "namespace": {
+          "name": "namespace",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "value_type": {
+          "name": "value_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "validations": {
+          "name": "validations",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
+        },
+        "localizable": {
+          "name": "localizable",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "metafield_definitions_org_id_unique": {
+          "name": "metafield_definitions_org_id_unique",
+          "columns": [
+            "organization_id",
+            "id"
+          ],
+          "isUnique": true
+        },
+        "metafield_definitions_namespace_key_unique": {
+          "name": "metafield_definitions_namespace_key_unique",
+          "columns": [
+            "organization_id",
+            "namespace",
+            "key"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "metafield_definitions_organization_id_organization_id_fk": {
+          "name": "metafield_definitions_organization_id_organization_id_fk",
+          "tableFrom": "metafield_definitions",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "metafield_definitions_instants_check": {
+          "name": "metafield_definitions_instants_check",
+          "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        },
+        "metafield_definitions_namespace_check": {
+          "name": "metafield_definitions_namespace_check",
+          "value": "namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'"
+        },
+        "metafield_definitions_key_check": {
+          "name": "metafield_definitions_key_check",
+          "value": "key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'"
+        },
+        "metafield_definitions_name_not_blank_check": {
+          "name": "metafield_definitions_name_not_blank_check",
+          "value": "trim(name) <> ''"
+        },
+        "metafield_definitions_validations_check": {
+          "name": "metafield_definitions_validations_check",
+          "value": "json_valid(validations) AND json_type(validations) = 'object'"
+        },
+        "metafield_definitions_localizable_check": {
+          "name": "metafield_definitions_localizable_check",
+          "value": "localizable IN (0, 1)"
+        }
+      }
+    },
     "oauthAccessToken": {
       "name": "oauthAccessToken",
       "columns": {
@@ -7396,6 +7558,143 @@
         }
       }
     },
+    "product_metafields": {
+      "name": "product_metafields",
+      "columns": {
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "definition_id": {
+          "name": "definition_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "product_metafields_definition_idx": {
+          "name": "product_metafields_definition_idx",
+          "columns": [
+            "definition_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "product_metafields_organization_id_organization_id_fk": {
+          "name": "product_metafields_organization_id_organization_id_fk",
+          "tableFrom": "product_metafields",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_metafields_product_scope_fk": {
+          "name": "product_metafields_product_scope_fk",
+          "tableFrom": "product_metafields",
+          "tableTo": "products",
+          "columnsFrom": [
+            "organization_id",
+            "product_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "product_metafields_definition_scope_fk": {
+          "name": "product_metafields_definition_scope_fk",
+          "tableFrom": "product_metafields",
+          "tableTo": "metafield_definitions",
+          "columnsFrom": [
+            "organization_id",
+            "definition_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "product_metafields_pk": {
+          "columns": [
+            "product_id",
+            "definition_id"
+          ],
+          "name": "product_metafields_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "product_metafields_instants_check": {
+          "name": "product_metafields_instants_check",
+          "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
+        },
+        "product_metafields_value_check": {
+          "name": "product_metafields_value_check",
+          "value": "json_valid(value)"
+        }
+      }
+    },
     "product_option_values": {
       "name": "product_option_values",
       "columns": {
@@ -8349,21 +8648,6 @@
     "products": {
       "name": "products",
       "columns": {
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "details_json": {
-          "name": "details_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
         "id": {
           "name": "id",
           "type": "text",
@@ -8532,10 +8816,6 @@
           "name": "products_slug_check",
           "value": "slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'"
         },
-        "products_kind_check": {
-          "name": "products_kind_check",
-          "value": "kind IN ('dish', 'experience', 'service', 'item')"
-        },
         "products_active_check": {
           "name": "products_active_check",
           "value": "active IN (0, 1)"
@@ -8543,10 +8823,6 @@
         "products_marketing_features_check": {
           "name": "products_marketing_features_check",
           "value": "json_valid(marketing_features) AND json_type(marketing_features) = 'array'"
-        },
-        "products_details_json_check": {
-          "name": "products_details_json_check",
-          "value": "json_valid(details_json) AND json_type(details_json) = 'object'"
         },
         "products_metadata_check": {
           "name": "products_metadata_check",

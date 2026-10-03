@@ -7,7 +7,6 @@ import { getRouterParam } from 'nitro/h3'
 import { getQuery } from 'nitro/h3'
 import { assertExactCanonicalLocale } from '~/server/utils/localization'
 import { selectProductCollectionSiblings } from '~/utils/product-seo'
-import { listMetafieldDefinitions } from '~/server/utils/product-management'
 
 export default defineHandler(async (event) => {
   const organizationId = event.context.organizationId as string | null | undefined
@@ -40,7 +39,6 @@ export default defineHandler(async (event) => {
       collectionSiblings: siblingCollection
         ? selectProductCollectionSiblings(result.products, result.product, siblingCollection.id, priceSelection)
         : [],
-      metafieldDefinitions: await listMetafieldDefinitions(db, result.organization.id),
       localeRepresentations: result.localeRepresentations,
     })
   } catch (error) {

@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { isExperience, resolveProductPresentation, productLocationCollectionPath } from '~/utils/product-presentation'
+import { isExperience } from '~/utils/product-presentation'
 
 const props = defineProps<{
   locationSlug: string
@@ -34,10 +34,8 @@ const props = defineProps<{
 }>()
 
 const { products, location } = await usePublicPageData({ lazy: false })
-const { organization } = useTenantOrganization()
 const { localePath, t } = useI18n()
 
-const productPresentation = computed(() => resolveProductPresentation((organization as ApiRecord | null)?.vertical as string | null | undefined))
 
 const items = computed(() => {
   const list = [
@@ -48,14 +46,11 @@ const items = computed(() => {
   const here = location.value
     ? products.value.filter(product => product.locations.some(entry => entry.location_id === location.value?.id && entry.published))
     : []
-  if (here.some(product => !isExperience(product)) && productPresentation.value) {
-    list.push({
-      key: productPresentation.value.locationCollectionSegment,
-      label: productPresentation.value.locationCollectionSegment === 'menu'
-        ? t('saya.subnav.menu')
-        : t('saya.footer.products'),
-      href: productLocationCollectionPath((organization as ApiRecord | null)?.vertical as string | null | undefined, props.locationSlug),
-    })
+  if (here.some(product => product.kind === 'dish')) {
+    list.push({ key: 'menu', label: t('saya.subnav.menu'), href: `/locations/${props.locationSlug}/menu` })
+  }
+  if (here.some(product => product.kind === 'item' || product.kind === 'service')) {
+    list.push({ key: 'products', label: t('saya.footer.products'), href: `/locations/${props.locationSlug}/products` })
   }
   if (here.some(isExperience)) {
     list.push({

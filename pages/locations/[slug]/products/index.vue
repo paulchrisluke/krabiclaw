@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import ProductCollectionPage from '~/components/products/ProductCollectionPage.vue'
 import { isCurrencyCode } from '~/shared/currencies'
-import { isExperience, requireProductPresentation } from '~/utils/product-presentation'
+import { presentationForSurface } from '~/utils/product-presentation'
 
 definePageMeta({ layout: 'saya' })
 const { isBlawby } = usePublicTemplate()
@@ -13,7 +13,7 @@ if (isBlawby.value) throw createError({ statusCode: 404 })
 const { products, collections, locations, location, config, organization, data: pagePayload } = await usePublicPageData({ lazy: false })
 // What the merchant sells over the counter. Anything a guest books a seat on
 // is an Experience and has its own surface, so it is not listed twice.
-const goods = computed(() => products.value.filter(product => !isExperience(product)))
+const goods = computed(() => products.value.filter(product => product.kind === 'item' || product.kind === 'service'))
 // A surface with nothing on it is not a page: a studio that sells no
 // merchandise has no /products, rather than an indexable empty one. The
 // navigation hides it for the same reason.
@@ -26,7 +26,7 @@ if (!currentLocation) throw createError({ statusCode: 404 })
 const brandName = organization.value?.name
 if (typeof brandName !== 'string' || brandName.trim().length === 0) throw createError({ statusCode: 500, statusMessage: 'Organization brand is unavailable' })
 const vertical = String(organization.value?.vertical ?? '')
-const presentation = requireProductPresentation(vertical)
+const presentation = presentationForSurface(vertical, 'products')
 if (presentation.locationCollectionSegment !== 'products') throw createError({ statusCode: 404 })
 const rawCurrency = config.value.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })

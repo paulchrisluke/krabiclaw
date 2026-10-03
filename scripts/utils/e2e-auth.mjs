@@ -29,7 +29,7 @@ async function expectOk(response, label) {
 export async function credentialSession(baseURL, options = {}) {
   const fixture = options.userId ? findE2eAuthFixture(options.userId) : null
   const email = options.email || fixture?.email || process.env.CANARY_LOGIN_EMAIL
-  const password = options.password || (fixture ? process.env.E2E_TEST_PASSWORD : process.env.CANARY_LOGIN_PASSWORD)
+  const password = options.password || (process.env.CANARY_LOGIN_PASSWORD)
   if (!email || !password) throw new Error('Configure CANARY_LOGIN_EMAIL and CANARY_LOGIN_PASSWORD, or supply the requested explicit credential.')
 
   const origin = new URL(baseURL).origin

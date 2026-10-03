@@ -231,7 +231,7 @@ import { useSchemaOrg } from '~/composables/useSchemaOrg'
 import type { CurrencyCode } from '~/shared/currencies'
 import { formatProductMoney } from '~/utils/product-money'
 import { minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
-import { PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import { PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { groupProductsByCollection, productLocationCollectionPath } from '~/utils/product-presentation'
 import { getVerticalCopy } from '~/utils/vertical-copy'
 
@@ -325,7 +325,7 @@ const isAvailable = (product: Product, collectionLocationId: string | null = nul
   // "Market price" — is on sale; an amount is what online checkout needs, and
   // that is a different question.
   return priceFor(product, collectionLocationId) !== null
-    || typeof product.metafields[PRICING_NOTE_HANDLE] === 'string'
+    || typeof product.details[PRICING_NOTE_HANDLE] === 'string'
 }
 
 const productHref = (product: Product, collectionLocationId: string | null = null): string | null => {
@@ -357,7 +357,7 @@ const priceFor = (product: Product, collectionLocationId: string | null = null):
 const priceLabel = (product: Product, collectionLocationId: string | null = null): string | null => {
   const amount = formatProductMoney(priceFor(product, collectionLocationId))
   if (amount) return amount
-  const note = product.metafields[PRICING_NOTE_HANDLE]
+  const note = product.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : null
 }
 // One section per collection, in the merchant's order — see
@@ -417,11 +417,11 @@ function previewItem(product: Product) {
 }
 
 /**
- * Dietary marks come from the tenant's own 'menu.dietary-notes' attribute.
+ * Dietary marks come from the product's dietary_notes field.
  * A site that has not defined it shows none, rather than a guess.
  */
 function dietaryTags(product: Product): string[] {
-  const notes = product.metafields['menu.dietary-notes']
+  const notes = product.details['dietary_notes']
   if (!Array.isArray(notes)) return []
   return notes.filter(note => note === 'V' || note === 'VG' || note === 'GF')
 }

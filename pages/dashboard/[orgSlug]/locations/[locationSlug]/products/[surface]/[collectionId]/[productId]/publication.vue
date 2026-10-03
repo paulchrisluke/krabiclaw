@@ -1,28 +1,17 @@
 <template>
-  <DashboardLeafPanel
-    id="product-publication"
-    :ready="p.ready.value"
-    :title="p.sectionLabels['publication']"
-    :saving="p.saving.value"
-    :disabled="p.saveDisabled.value"
-    :save-label="p.saveLabel.value"
-    :error="p.saveError.value || p.photoError.value || ''"
-    @cancel="p.revert"
-    @save="p.save"
-  >
-    <p class="mb-6 text-base text-muted">Choose whether customers can see this {{ p.presentation.value.itemLabel.toLowerCase() }}. Pausing orders or bookings keeps its information on your website.</p>
-    <SettingRow v-model="p.form.published" label="Show on website" />
-    <SettingRow v-model="p.form.active" :label="p.form.bookable || p.presentation.value.itemLabel === 'Service' ? 'Accept bookings' : 'Accept orders'" />
-    <SettingRow v-if="p.locationId.value" v-model="p.form.location_published" label="Show at this location" />
-    <SettingRow v-if="p.locationId.value" v-model="p.form.location_active" :label="p.form.bookable ? 'Accept bookings at this location' : 'Accept orders at this location'" />
-  </DashboardLeafPanel>
+  <DashboardIndexPanel id="product-publication" :title="p.sectionLabels['publication']">
+    <EditorNavigationList :groups="groups" :active-item="level.child.value" />
+  </DashboardIndexPanel>
 </template>
 
 <script setup lang="ts">
-import SettingRow from '~/components/dashboard/SettingRow.vue'
+import EditorNavigationList from '~/components/dashboard/EditorNavigationList.vue'
 import { productEditorKey } from '~/components/dashboard/ProductEditorPage.vue'
-
 definePageMeta({ layout: 'dashboard' })
-
 const p = inject(productEditorKey)!
+const level = useRouteLevel()
+const groups = computed(() => [{ id: 'website', items: [
+  { id: 'visibility', label: 'Show on website', summary: p.form.published ? 'Visible to customers' : 'Hidden from customers', to: `${level.path.value}/visibility` },
+  { id: 'availability', label: p.form.bookable || p.form.kind === 'service' ? 'Accept bookings' : 'Accept orders', summary: p.form.active ? 'Customers can book or order' : 'Paused — the page can stay visible', to: `${level.path.value}/availability` },
+] }])
 </script>

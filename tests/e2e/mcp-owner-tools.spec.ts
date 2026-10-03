@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { dismissPreviewToolbar, waitForNuxtHydration } from './helpers'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpRequest, mcpData } from './helpers/mcp'
 import { tenantTestExtraHeaders } from './test-env'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
@@ -13,7 +12,7 @@ import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 test.describe('stateless MCP server', () => {
   test('owner can use site content and settings tools', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
     const organizationsList = await mcpRequest(request, baseURL!, {
@@ -152,7 +151,7 @@ test.describe('stateless MCP server', () => {
     // A public reservation here shares the demo location's capacity with the calendar specs.
     const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, MCP_GROWTH_ORGANIZATION_ID)
     try {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
       const locationId = 'loc-demo'
@@ -276,7 +275,7 @@ test.describe('stateless MCP server', () => {
     const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
     let priorPolicy: Record<string, unknown> | null = null
     try {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const asTenant = { 'x-preview-tenant': 'demo' }
       const guestSlots = async (date: string) => {
         const response = await request.get(`${baseURL}/api/public/reservations/availability`, { headers: asTenant, params: { location_id: locationId, date, days: 1 } })
@@ -396,7 +395,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('owner can use location, reviews, and QA lifecycle tools', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
 
     const locationId = 'loc-demo'
@@ -446,7 +445,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('authored Q&A has MCP writers while reviews remain read-only', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    await loginAs(request, baseURL!)
     const organizationId = MCP_GROWTH_ORGANIZATION_ID
     for (const [toolName, key] of [['list_organization_qa', 'items'], ['list_organization_reviews', 'reviews']]) {
       const response = await mcpRequest(request, baseURL!, {
@@ -484,7 +483,7 @@ test.describe('stateless MCP server', () => {
     })
 
     test('HTTP and MCP share booking defaults, weekly replacement and authored Q&A', async ({ request, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const locationId = 'loc-demo'
       const call = async (toolName: string, args: Record<string, unknown>) => {
@@ -492,7 +491,7 @@ test.describe('stateless MCP server', () => {
         expect(response.status()).toBe(200)
         return await response.json()
       }
-      const created = mcpData<{ product: { id: string } }>(await call('create_product', { name: 'Shared writer parity' })).product
+      const created = mcpData<{ product: { id: string } }>(await call('create_product', { kind: 'dish', name: 'Shared writer parity' })).product
       const productId = created.id
       const productUrl = `${baseURL}/api/editor/organizations/${organizationId}/products/${productId}`
       const qaUrl = `${baseURL}/api/editor/organizations/${organizationId}/qa`
@@ -590,7 +589,7 @@ test.describe('stateless MCP server', () => {
     })
 
     test('booked session authority survives CMS clear and MCP re-add', async ({ request, page, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const call = async (toolName: string, args: Record<string, unknown>) => {
         const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName, args: { organization_id: organizationId, ...args } })
@@ -600,7 +599,7 @@ test.describe('stateless MCP server', () => {
         return body
       }
       const { settings } = mcpData<{ settings: { default_currency: string } }>(await call('get_organization_settings', {}))
-      const created = mcpData<{ product: { id: string; slug: string } }>(await call('create_product', {
+      const created = mcpData<{ product: { id: string; slug: string } }>(await call('create_product', { kind: 'dish',
         name: 'MCP Session Authority Proof', variants: [{ name: 'Seat', prices: [{ unit_amount: 1000, currency: settings.default_currency }] }],
       })).product
       const url = `${baseURL}/api/editor/organizations/${organizationId}/products/${created.id}`
@@ -611,7 +610,7 @@ test.describe('stateless MCP server', () => {
         await call('set_product_booking_config', { product_id: created.id, duration_minutes: 120, default_capacity: 10, online_timezone: 'UTC' })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: 'loc-demo', slots })
         await call('replace_product_weekly_schedule', { product_id: created.id, location_id: null, slots: [{ weekday: 1, start_time: '10:00' }] })
-        await loginAs(page.request, baseURL!, MCP_GROWTH_USER_ID)
+        await loginAs(page.request, baseURL!)
         const collectionResponse = await page.request.get(`${baseURL}/api/editor/organizations/${organizationId}/collections?location_id=loc-demo`)
         expect(collectionResponse.status()).toBe(200)
         const collectionId = (await collectionResponse.json()).collections[0]?.id
@@ -670,7 +669,7 @@ test.describe('stateless MCP server', () => {
     })
 
     test('owner can manage media and Product tools including public booking', async ({ request, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+      await loginAs(request, baseURL!)
       const organizationId = MCP_GROWTH_ORGANIZATION_ID
       const locationId = 'loc-demo'
 
@@ -706,7 +705,7 @@ test.describe('stateless MCP server', () => {
       const product = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_product',
-        args: {
+        args: { kind: 'dish',
           organization_id: organizationId,
           name: 'MCP Kayak Tour',
           description: 'Half-day tour',
@@ -746,7 +745,7 @@ test.describe('stateless MCP server', () => {
       expect(update.status()).toBe(200)
 
       const invalid = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'create_product', args: { organization_id: organizationId, name: '' },
+        method: 'tools/call', toolName: 'create_product', args: { kind: 'dish', organization_id: organizationId, name: '' },
       })
       expect(invalid.status()).toBe(200)
       expect((await invalid.json()).result?.isError).toBe(true)
@@ -777,7 +776,7 @@ test.describe('stateless MCP server', () => {
       const deleteCandidate = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'create_product',
-        args: { organization_id: organizationId, name: 'Delete MCP Product', description: 'Temporary Product' },
+        args: { kind: 'dish', organization_id: organizationId, name: 'Delete MCP Product', description: 'Temporary Product' },
       })
       expect(deleteCandidate.status()).toBe(200)
       const deleteId = mcpData<{ product: { id: string } }>(await deleteCandidate.json()).product.id

@@ -406,7 +406,7 @@ test('a booking move into a full session leaves the original booking exactly as 
       "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
       "INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('loc-move','org-move','move','Move','Asia/Bangkok')",
-      "INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-move','org-move','Class','class','user-move','user-move')",
+      "INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', 'prod-move','org-move','Class','class','user-move','user-move')",
       "INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-move','org-move','prod-move','Adult','user-move','user-move')",
       "INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES ('prod-move','org-move',60,4,'user-move','user-move')",
       // The branch offers it: a session at a location only takes seats while

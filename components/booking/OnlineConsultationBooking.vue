@@ -15,7 +15,7 @@
       <p v-else role="status" class="mt-5 text-muted">No consultation services are currently published.</p>
       <p v-if="selectedService && !selectedProduct" role="status" class="mt-6 text-muted">Online booking is unavailable for this service. <NuxtLink :to="localePath('/contact')" class="text-primary underline">Contact us to schedule.</NuxtLink></p>
     </div>
-    <ProductDetailPage v-if="selectedProduct" :key="selectedProduct.id" compact :organization-id="organizationId" :organization-name="organizationName" vertical="service" :product="selectedProduct" :booking="selectedProduct.booking" :location="null" :currency="data!.currency" collection-name="Services" :presentation="presentation" :reviews="[]" :collection-siblings="[]" :metafield-definitions="[]" />
+    <ProductDetailPage v-if="selectedProduct" :key="selectedProduct.id" compact :organization-id="organizationId" :organization-name="organizationName" vertical="service" :product="selectedProduct" :booking="selectedProduct.booking" :location="null" :currency="data!.currency" collection-name="Services" :presentation="presentation" :reviews="[]" :collection-siblings="[]" />
   </section>
 </template>
 <script setup lang="ts">

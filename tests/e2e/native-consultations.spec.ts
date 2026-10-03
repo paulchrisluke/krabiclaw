@@ -13,7 +13,7 @@ test('native online review uses canonical Products, holds capacity, and releases
   page.on('response', response => {
     if (/\/api\/(analytics\/track|public\/conversion-events)$/.test(new URL(response.url()).pathname) && response.status() >= 400) analyticsFailures.push(`${response.status()} ${response.url()}`)
   })
-  await loginAs(page.request, baseURL!, 'user-e2e-ncls-owner')
+  await loginAs(page.request, baseURL!)
   const cleanupRequest = await playwrightRequest.newContext({ baseURL, storageState: await page.context().storageState() })
   const org = 'org-ncls-blawby'
   const editor = `/api/editor/organizations/${org}`
@@ -36,7 +36,7 @@ test('native online review uses canonical Products, holds capacity, and releases
   const headers = blawbyTestExtraHeaders()
   try {
   for (let index = 0; index < 2; index++) {
-    const create = await page.request.post(`${editor}/products`, { data: { name: `Local consultation ${stamp}-${index}`, description: 'A local test service for reviewing the native consultation flow.', variants: [{ name: 'Online', prices: [{ unit_amount: 0, currency: 'USD' }] }] } })
+    const create = await page.request.post(`${editor}/products`, { data: { kind: 'service', details: { preparation: 'Bring a list of questions for your consultation', cancellation_policy: 'Contact us at least one day before your appointment to cancel.' }, name: `Local consultation ${stamp}-${index}`, description: 'A local test service for reviewing the native consultation flow.', variants: [{ name: 'Online', prices: [{ unit_amount: 0, currency: 'USD' }] }] } })
     expect(create.status(), await create.text()).toBe(201)
     const product = (await create.json()).product
     products.push(product)
@@ -287,6 +287,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     const restoreNative = await page.request.patch(`${editor}/products/${products[0]!.id}`, { data: { order_url: null } })
     expect(restoreNative.status()).toBe(200)
     await page.goto(service.path)
+    await expect(page.getByText('Bring a list of questions for your consultation', { exact: true })).toBeVisible()
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(page.getByRole('button', { name: 'Request appointment', exact: true })).toBeVisible()
     await page.setViewportSize({ width: 1280, height: 720 })
@@ -334,6 +335,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     const pending = await results.find(result => result.status() === 201)!.json()
     expect(pending).toMatchObject({ status: 'pending', booking_id: pending.request_id })
     expect(pending.operational_booking_id).not.toBe(pending.request_id)
+    expect(pending.policy_summary.additional_notes_html).toBe('Contact us at least one day before your appointment to cancel.')
     const details = await page.request.get(`/api/dashboard/bookings/booking/${pending.request_id}?org=north-carolina-legal-services`)
     expect(details.status(), await details.text()).toBe(200)
     expect((await details.json()).booking).toMatchObject({ locationId: null, locationTitle: 'Online', status: 'pending', operationalBookingId: pending.operational_booking_id })

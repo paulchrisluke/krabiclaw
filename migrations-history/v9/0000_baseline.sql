@@ -586,6 +586,31 @@ CREATE TABLE `member` (
 --> statement-breakpoint
 CREATE INDEX `member_userId_organizationId_idx` ON `member` (`userId`,`organizationId`);--> statement-breakpoint
 CREATE INDEX `member_organizationId_idx` ON `member` (`organizationId`);--> statement-breakpoint
+CREATE TABLE `metafield_definitions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`organization_id` text NOT NULL,
+	`namespace` text NOT NULL,
+	`key` text NOT NULL,
+	`name` text NOT NULL,
+	`description` text,
+	`value_type` text NOT NULL,
+	`validations` text DEFAULT '{}' NOT NULL,
+	`localizable` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "metafield_definitions_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "metafield_definitions_namespace_check" CHECK(namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'),
+	CONSTRAINT "metafield_definitions_key_check" CHECK(key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'),
+	CONSTRAINT "metafield_definitions_name_not_blank_check" CHECK(trim(name) <> ''),
+	CONSTRAINT "metafield_definitions_validations_check" CHECK(json_valid(validations) AND json_type(validations) = 'object'),
+	CONSTRAINT "metafield_definitions_localizable_check" CHECK(localizable IN (0, 1))
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `metafield_definitions_org_id_unique` ON `metafield_definitions` (`organization_id`,`id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `metafield_definitions_namespace_key_unique` ON `metafield_definitions` (`organization_id`,`namespace`,`key`);--> statement-breakpoint
 CREATE TABLE `oauthAccessToken` (
 	`id` text PRIMARY KEY NOT NULL,
 	`clientId` text NOT NULL,
@@ -1072,6 +1097,24 @@ CREATE TABLE `product_locations` (
 );
 --> statement-breakpoint
 CREATE INDEX `product_locations_location_idx` ON `product_locations` (`location_id`,`published`,`active`);--> statement-breakpoint
+CREATE TABLE `product_metafields` (
+	`organization_id` text NOT NULL,
+	`product_id` text NOT NULL,
+	`definition_id` text NOT NULL,
+	`value` text NOT NULL,
+	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+	`created_by` text NOT NULL,
+	`updated_by` text NOT NULL,
+	PRIMARY KEY(`product_id`, `definition_id`),
+	FOREIGN KEY (`organization_id`) REFERENCES `organization`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`product_id`) REFERENCES `products`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`organization_id`,`definition_id`) REFERENCES `metafield_definitions`(`organization_id`,`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "product_metafields_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
+	CONSTRAINT "product_metafields_value_check" CHECK(json_valid(value))
+);
+--> statement-breakpoint
+CREATE INDEX `product_metafields_definition_idx` ON `product_metafields` (`definition_id`);--> statement-breakpoint
 CREATE TABLE `product_option_values` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -1198,8 +1241,6 @@ CREATE INDEX `product_variants_product_sort_idx` ON `product_variants` (`product
 CREATE UNIQUE INDEX `product_variants_org_id_unique` ON `product_variants` (`organization_id`,`id`);--> statement-breakpoint
 CREATE UNIQUE INDEX `product_variants_product_id_unique` ON `product_variants` (`organization_id`,`product_id`,`id`);--> statement-breakpoint
 CREATE TABLE `products` (
-	`kind` text NOT NULL,
-	`details_json` text DEFAULT '{}' NOT NULL,
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
 	`name` text NOT NULL,
@@ -1220,10 +1261,8 @@ CREATE TABLE `products` (
 	CONSTRAINT "products_instants_check" CHECK((created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)),
 	CONSTRAINT "products_name_not_blank_check" CHECK(trim(name) <> ''),
 	CONSTRAINT "products_slug_check" CHECK(slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'),
-	CONSTRAINT "products_kind_check" CHECK(kind IN ('dish', 'experience', 'service', 'item')),
 	CONSTRAINT "products_active_check" CHECK(active IN (0, 1)),
 	CONSTRAINT "products_marketing_features_check" CHECK(json_valid(marketing_features) AND json_type(marketing_features) = 'array'),
-	CONSTRAINT "products_details_json_check" CHECK(json_valid(details_json) AND json_type(details_json) = 'object'),
 	CONSTRAINT "products_metadata_check" CHECK(json_valid(metadata) AND json_type(metadata) = 'object'),
 	CONSTRAINT "products_order_url_check" CHECK(order_url IS NULL OR (order_url LIKE 'https://_%' AND instr(order_url, '@') = 0 AND instr(order_url, char(10)) = 0 AND instr(order_url, char(13)) = 0))
 );

@@ -43,7 +43,7 @@ async function boot(legacy = false) {
     .bind(ORG, NOW).run()
   await db.prepare(`INSERT INTO business_locations (id, organization_id, slug, title, status, timezone, created_at, updated_at)
     VALUES (?, ?, 'studio', 'Studio', 'active', 'Asia/Bangkok', ?, ?)`).bind(LOCATION, ORG, NOW, NOW).run()
-  await db.prepare(`INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
+  await db.prepare(`INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', ?, ?, 'Pottery Class', 'pottery-class', ?, ?)`)
     .bind(PRODUCT, ORG, ACTOR, ACTOR).run()
   await db.prepare('INSERT INTO product_publications (organization_id, product_id, published, created_by, updated_by) VALUES (?, ?, 1, ?, ?)').bind(ORG, PRODUCT, ACTOR, ACTOR).run()
   for (const [id, name] of [['var-adult', 'Adult'], ['var-child', 'Child']]) {
@@ -394,7 +394,7 @@ test('one configured online calendar excludes overlapping pending requests and r
     await db.prepare("INSERT INTO user (id, name, email) VALUES (?, 'Operator', 'operator@example.com')").bind(ACTOR).run()
     await db.prepare("UPDATE product_booking_configs SET confirmation_mode = 'review', online_timezone = 'America/New_York', calendar_group = 'online' WHERE product_id = ?").bind(PRODUCT).run()
     for (const [productId, variantId, group] of [['prod-consult', 'var-consult', 'online'], ['prod-independent', 'var-independent', null]]) {
-      await db.prepare('INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)').bind(productId, ORG, productId, productId, ACTOR, ACTOR).run()
+      await db.prepare(`INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', ?, ?, ?, ?, ?, ?)`).bind(productId, ORG, productId, productId, ACTOR, ACTOR).run()
       await db.prepare('INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES (?, ?, ?, ?, ?, ?)').bind(variantId, ORG, productId, variantId, ACTOR, ACTOR).run()
       await db.prepare("INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, confirmation_mode, online_timezone, calendar_group, created_by, updated_by) VALUES (?, ?, 45, 1, 'review', 'America/New_York', ?, ?, ?)").bind(productId, ORG, group, ACTOR, ACTOR).run()
     }

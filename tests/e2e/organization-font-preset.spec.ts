@@ -35,7 +35,7 @@ test('Mali saves through Brand and renders for its tenant before hydration', asy
   const organizationId = E2E_KIKUZUKI_ORGANIZATION_ID
   const baseURL = testBaseUrl()
   const owner = await playwright.request.newContext({ baseURL })
-  await loginAs(owner, baseURL, 'user-e2e-kikuzuki-owner')
+  await loginAs(owner, baseURL)
   const settingsUrl = `/api/organizations/${organizationId}/settings`
   const initial = await owner.get(settingsUrl)
   await expectStatus(initial, 200)

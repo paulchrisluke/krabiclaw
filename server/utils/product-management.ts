@@ -17,15 +17,7 @@ import {
   type PriceInput,
   type PriceSelection,
 } from '~/shared/prices'
-import {
-  assertMetafieldDefinition,
-  metafieldHandle,
-  PRICING_NOTE_HANDLE,
-  parseMetafieldValue,
-  serializeMetafieldValue,
-  type MetafieldDefinition,
-  type MetafieldValue,
-} from '~/shared/metafields'
+import { assertProductKind, validateProductDetails, ProductDetailError, PRICING_NOTE_HANDLE, type ProductDetailValue, type ProductKind } from '~/shared/product-details'
 import type { CatalogCounts } from '~/utils/product-presentation'
 import type {
   Collection,
@@ -95,7 +87,7 @@ function parseJsonObject(value: unknown, field: string): Record<string, string> 
 const PRODUCT_COLUMNS = `
   p.id, p.organization_id, p.name, p.slug, p.description, p.active, p.order_url, p.unit_label,
   p.marketing_features, p.metadata, p.tax_code, p.source,
-  p.created_at, p.updated_at, p.created_by, p.updated_by
+  p.kind, p.details_json, p.created_at, p.updated_at, p.created_by, p.updated_by
 `
 
 function mapProductRow(row: Row): Product {
@@ -113,7 +105,8 @@ function mapProductRow(row: Row): Product {
     tax_code: row.tax_code === null ? null : String(row.tax_code),
     options: [],
     variants: [],
-    metafields: {},
+    kind: assertProductKind(row.kind),
+    details: validateProductDetails(assertProductKind(row.kind), JSON.parse(String(row.details_json))),
     publications: [],
     locations: [],
     collections: [],
@@ -154,25 +147,11 @@ function mapPriceRow(row: Row): Price {
   }
 }
 
-export function mapMetafieldDefinitionRow(row: Row): MetafieldDefinition {
-  return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    namespace: String(row.namespace),
-    key: String(row.key),
-    name: String(row.name),
-    description: row.description === null ? null : String(row.description),
-    value_type: String(row.value_type) as MetafieldDefinition['value_type'],
-    validations: JSON.parse(String(row.validations)) as MetafieldDefinition['validations'],
-    localizable: Number(row.localizable) === 1,
-  }
-}
-
 /**
  * Load every relationship a Product owns, in one pass per relation.
  *
  * Deliberately not a single join: variants x prices x publications x locations
- * x collections x metafields multiplies rows, and reconstructing distinct sets
+ * x collections x details multiplies rows, and reconstructing distinct sets
  * from that product is where duplicate and dropped children come from.
  */
 async function hydrate(db: DbClient, organizationId: string, products: Product[]): Promise<Product[]> {
@@ -204,12 +183,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?)) ORDER BY collection_id`, params: [organizationId, ids] },
     { query: `SELECT product_id, duration_minutes, default_capacity, confirmation_mode, online_payment_required, online_timezone, calendar_group FROM product_booking_configs
       WHERE organization_id = ? AND product_id IN (SELECT value FROM json_each(?))`, params: [organizationId, ids] },
-    { query: `SELECT pm.product_id, pm.value, d.id AS definition_id, d.organization_id AS definition_org,
-        d.namespace, d.key, d.name, d.description, d.value_type, d.validations, d.localizable
-      FROM product_metafields pm
-      JOIN metafield_definitions d ON d.id = pm.definition_id AND d.organization_id = pm.organization_id
-      WHERE pm.organization_id = ? AND pm.product_id IN (SELECT value FROM json_each(?))
-      ORDER BY d.namespace, d.key`, params: [organizationId, ids] },
+
   ], { operation: 'Hydrate products' })
   const rowsAt = (index: number): Row[] => (batched[index] as { results?: Row[] })?.results ?? []
   const optionRows = rowsAt(0)
@@ -221,7 +195,6 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   const locationRows = rowsAt(6)
   const collectionRows = rowsAt(7)
   const bookingRows = rowsAt(8)
-  const metafieldRows = rowsAt(9)
 
   // The row's existence is the capability, so a product with no row keeps the
   // null it was mapped with.
@@ -284,11 +257,7 @@ async function hydrate(db: DbClient, organizationId: string, products: Product[]
   for (const row of collectionRows) {
     byId.get(String(row.product_id))?.collections.push({ collection_id: String(row.collection_id), sort_order: Number(row.sort_order) })
   }
-  for (const row of metafieldRows) {
-    const definition = mapMetafieldDefinitionRow({ ...row, id: row.definition_id, organization_id: row.definition_org })
-    const product = byId.get(String(row.product_id))
-    if (product) product.metafields[metafieldHandle(definition)] = parseMetafieldValue(definition, String(row.value))
-  }
+
   return products
 }
 
@@ -377,7 +346,7 @@ export async function listLocationProducts(db: DbClient, input: {
     JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
     ${published ? `JOIN product_publications pub ON pub.product_id = p.id AND pub.organization_id = p.organization_id
       AND pub.published = 1` : ''}
-    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1 AND pl.active = 1' : ''}
+    WHERE p.organization_id = ? AND pl.location_id = ?${published ? ' AND pl.published = 1' : ''}
     ORDER BY p.name, p.id
     ${input.window ? 'LIMIT ? OFFSET ?' : ''}
   `, [input.organizationId, input.locationId,
@@ -397,17 +366,17 @@ export async function listLocationProducts(db: DbClient, input: {
 export async function summarizeLocationProducts(db: DbClient, input: {
   organizationId: string; locationId: string
 }): Promise<CatalogCounts> {
-  const row = await queryFirst<{ total: number; bookable: number }>(db, `
+  const row = await queryFirst<{ total: number; experiences: number; dishes: number }>(db, `
     SELECT count(*) AS total,
-           count(bc.product_id) AS bookable
+           count(CASE WHEN p.kind = 'experience' THEN 1 END) AS experiences,
+           count(CASE WHEN p.kind = 'dish' THEN 1 END) AS dishes
       FROM products p
       JOIN product_locations pl ON pl.product_id = p.id AND pl.organization_id = p.organization_id
-      LEFT JOIN product_booking_configs bc ON bc.product_id = p.id AND bc.organization_id = p.organization_id
      WHERE p.organization_id = ? AND pl.location_id = ?
   `, [input.organizationId, input.locationId])
   // The same two numbers countCatalog reads off the rows, so a surface is
   // assigned identically whether the caller counted rows or SQL did.
-  return { total: Number(row?.total ?? 0), experiences: Number(row?.bookable ?? 0) }
+  return { total: Number(row?.total ?? 0), experiences: Number(row?.experiences ?? 0), dishes: Number(row?.dishes ?? 0) }
 }
 
 export async function listCollectionProducts(db: DbClient, input: {
@@ -586,6 +555,7 @@ interface PlannedVariant {
 }
 
 interface PlannedProduct {
+  kind: ProductKind
   id: string
   name: string
   slug: string
@@ -598,7 +568,7 @@ interface PlannedProduct {
   tax_code: string | null
   options: PlannedOption[]
   variants: PlannedVariant[]
-  metafields: Record<string, MetafieldValue>
+  details: Record<string, ProductDetailValue>
   source: ProductSource
 }
 
@@ -745,6 +715,9 @@ async function planProduct(
     knownSlugs?: ReadonlyMap<string, string>
   },
 ): Promise<PlannedProduct> {
+  let kind: ProductKind
+  try { kind = assertProductKind(input.kind); validateProductDetails(kind, input.details ?? {}) }
+  catch (error) { if (!(error instanceof ProductDetailError)) throw error; invalid(error.message) }
   const name = requireTrimmedProductString(input.name, 'name', PRODUCT_LIMITS.name)
   const options = validateProductOptions(input.options)
   const variants = input.variants === undefined
@@ -789,17 +762,10 @@ async function planProduct(
     tax_code: normalizeOptionalProductString(input.tax_code, 'tax_code', PRODUCT_LIMITS.taxCode),
     options: resolved.options,
     variants: plannedVariants,
-    metafields: input.metafields ?? {},
+    kind,
+    details: validateProductDetails(kind, input.details ?? {}),
     source: input.source ?? 'manual',
   }
-}
-
-async function loadMetafieldDefinitions(db: DbClient, organizationId: string): Promise<Map<string, MetafieldDefinition>> {
-  const rows = await queryAll<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ?', [organizationId])
-  return new Map(rows.map((row) => {
-    const definition = mapMetafieldDefinitionRow(row)
-    return [metafieldHandle(definition), definition]
-  }))
 }
 
 /**
@@ -812,7 +778,6 @@ async function loadMetafieldDefinitions(db: DbClient, organizationId: string): P
 function productWrites(
   organizationId: string,
   planned: PlannedProduct,
-  definitions: Map<string, MetafieldDefinition>,
   actor: Actor,
   now: string,
   mode: 'insert' | 'upsert',
@@ -825,19 +790,19 @@ function productWrites(
   const writes: BatchQuery[] = [{
     query: upsert
       ? `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
-             marketing_features, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             marketing_features, metadata, tax_code, source, kind, details_json, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT (id) DO UPDATE SET name = excluded.name, slug = excluded.slug, description = excluded.description,
              active = excluded.active, order_url = excluded.order_url, unit_label = excluded.unit_label,
              marketing_features = excluded.marketing_features, metadata = excluded.metadata,
-             tax_code = excluded.tax_code, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+             tax_code = excluded.tax_code, kind = excluded.kind, details_json = excluded.details_json, updated_at = excluded.updated_at, updated_by = excluded.updated_by
            WHERE products.organization_id = excluded.organization_id`
       : `INSERT INTO products (id, organization_id, name, slug, description, active, order_url, unit_label,
-             marketing_features, metadata, tax_code, source, created_at, updated_at, created_by, updated_by)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             marketing_features, metadata, tax_code, source, kind, details_json, created_at, updated_at, created_by, updated_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [planned.id, organizationId, planned.name, planned.slug, planned.description, planned.active ? 1 : 0,
       planned.order_url, planned.unit_label, JSON.stringify(planned.marketing_features),
-      JSON.stringify(planned.metadata), planned.tax_code, planned.source, now, now, actor.actorId, actor.actorId],
+      JSON.stringify(planned.metadata), planned.tax_code, planned.source, planned.kind, JSON.stringify(planned.details), now, now, actor.actorId, actor.actorId],
   }]
 
   for (const option of planned.options) {
@@ -895,17 +860,6 @@ function productWrites(
     }
   }
 
-  for (const [handle, value] of Object.entries(planned.metafields)) {
-    const definition = definitions.get(handle)
-    // An undefined attribute is rejected, not stored as an untyped blob. The
-    // caller creates the definition first; that is the whole extension model.
-    if (!definition) invalid(`metafield "${handle}" has no definition in this organization`)
-    writes.push({
-      query: `INSERT INTO product_metafields (organization_id, product_id, definition_id, value, created_at, updated_at, created_by, updated_by)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [organizationId, planned.id, definition.id, serializeMetafieldValue(definition, value), now, now, actor.actorId, actor.actorId],
-    })
-  }
   return writes
 }
 
@@ -913,7 +867,7 @@ function assertVariantPricesConsistent(planned: PlannedProduct): void {
   // A product is priced in numbers or in words, never both. Whichever the
   // merchant chose is the one source the page reads; two would need a
   // precedence rule, and a precedence rule is a fallback.
-  const note = planned.metafields[PRICING_NOTE_HANDLE]
+  const note = planned.details[PRICING_NOTE_HANDLE]
   const priced = planned.variants.some(variant => variant.prices.length > 0)
   if (typeof note === 'string' && note.trim() !== '' && priced) {
     invalid(`a product states ${PRICING_NOTE_HANDLE} or a numeric price, not both`)
@@ -939,11 +893,10 @@ export async function createProduct(db: DbClient, input: {
   /** Publish it on `organizationId` in the same batch — see planProductCreateWrites. */
   publication?: { published: boolean }
 }): Promise<Product> {
-  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
   const planned = await planProduct(db, input.organizationId, input.product, { organizationId: input.organizationId })
   assertVariantPricesConsistent(planned)
   const now = new Date().toISOString()
-  const writes = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
+  const writes = productWrites(input.organizationId, planned, input.actor, now, 'insert')
   if (input.publication && input.organizationId) {
     writes.push({
       query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
@@ -986,8 +939,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
   // vocabulary, the currency, the organization's slugs, and who owns any id
   // the caller supplied. Asking per product turned a hundred-row create into a
   // hundred round trips before a single row was written.
-  const [definitions, knownSlugs, idOwners] = await Promise.all([
-    loadMetafieldDefinitions(db, input.organizationId),
+  const [knownSlugs, idOwners] = await Promise.all([
     loadProductSlugs(db, input.organizationId),
     loadSuppliedIdOwners(db, {
       product_options: input.products.flatMap(product => (product.options ?? []).map(option => option.id).filter((id): id is string => Boolean(id))),
@@ -1005,7 +957,7 @@ export async function planProductCreateWrites(db: DbClient, input: {
   for (const product of input.products) {
     const planned = await planProduct(db, input.organizationId, product, { organizationId: input.organizationId, defaultCurrency, takenSlugs: taken, knownSlugs, idOwners })
     assertVariantPricesConsistent(planned)
-    queries.push(...productWrites(input.organizationId, planned, definitions, input.actor, input.now, 'insert'))
+    queries.push(...productWrites(input.organizationId, planned, input.actor, input.now, 'insert'))
     if (input.publication && input.organizationId) {
       queries.push({
         query: `INSERT INTO product_publications (organization_id, product_id, published, created_at, updated_at, created_by, updated_by)
@@ -1064,7 +1016,6 @@ async function planProductUpdate(db: DbClient, input: {
   patch: UpdateProductInput
   actor: Actor
   now: string
-  definitions: Awaited<ReturnType<typeof loadMetafieldDefinitions>>
   defaultCurrency?: CurrencyCode | null
   takenSlugs?: Set<string>
   idOwners?: SuppliedIdOwners
@@ -1074,6 +1025,7 @@ async function planProductUpdate(db: DbClient, input: {
   const { current, patch, organizationId } = input
   const productId = current.id
   const merged: CreateProductInput = {
+    kind: patch.kind ?? current.kind,
     name: patch.name ?? current.name,
     description: patch.description ?? current.description,
     active: patch.active ?? current.active,
@@ -1097,7 +1049,7 @@ async function planProductUpdate(db: DbClient, input: {
         valid_from_at: price.valid_from_at, valid_until_at: price.valid_until_at, source: price.source,
       })),
     })),
-    metafields: patch.metafields ?? current.metafields,
+    details: patch.details ?? current.details,
   }
   const planned = await planProduct(db, organizationId, merged, {
     organizationId: input.organizationId, existingId: productId, defaultCurrency: input.defaultCurrency,
@@ -1118,9 +1070,8 @@ async function planProductUpdate(db: DbClient, input: {
   // that restated the variants is describing the offers.
   const writesPrices = patch.variants !== undefined
   const writes: BatchQuery[] = [
-    // Selections and metafield values are rebuilt wholesale: nothing
+    // Selections and named details are rebuilt wholesale: nothing
     // references them, so replacing them is simpler and cannot drift.
-    { query: 'DELETE FROM product_metafields WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     { query: 'DELETE FROM product_variant_option_values WHERE organization_id = ? AND product_id = ?', params: [organizationId, productId] },
     ...(writesPrices
       ? [{ query: 'DELETE FROM prices WHERE organization_id = ? AND product_variant_id IN (SELECT id FROM product_variants WHERE organization_id = ? AND product_id = ?)', params: [organizationId, organizationId, productId] }]
@@ -1136,7 +1087,7 @@ async function planProductUpdate(db: DbClient, input: {
     { query: 'DELETE FROM product_variants WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptVariants] },
     { query: 'DELETE FROM product_option_values WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptValues] },
     { query: 'DELETE FROM product_options WHERE organization_id = ? AND product_id = ? AND id NOT IN (SELECT value FROM json_each(?))', params: [organizationId, productId, keptOptions] },
-    ...productWrites(organizationId, planned, input.definitions, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
+    ...productWrites(organizationId, planned, input.actor, input.now, 'upsert', { writePrices: writesPrices }),
     ...input.cacheInvalidations,
   ]
   return { writes, keptVariants }
@@ -1170,10 +1121,9 @@ export async function updateProduct(db: DbClient, input: {
   actor: Actor
 }): Promise<Product> {
   const current = await getProduct(db, input.organizationId, input.productId)
-  const definitions = await loadMetafieldDefinitions(db, input.organizationId)
   const now = new Date().toISOString()
   const { writes, keptVariants } = await planProductUpdate(db, {
-    organizationId: input.organizationId, current, patch: input.patch, actor: input.actor, now, definitions,
+    organizationId: input.organizationId, current, patch: input.patch, actor: input.actor, now,
     cacheInvalidations: await productCacheInvalidations(db, input.organizationId, input.productId, 'product_updated'),
   })
 
@@ -1437,43 +1387,6 @@ export async function reorderCollections(db: DbClient, input: {
   ], { operation: 'Reorder collections' })
 }
 
-// ---------------------------------------------------------------------------
-// Metafield definitions
-// ---------------------------------------------------------------------------
-
-export async function listMetafieldDefinitions(db: DbClient, organizationId: string): Promise<MetafieldDefinition[]> {
-  const rows = await queryAll<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ? ORDER BY namespace, key', [organizationId])
-  return rows.map(mapMetafieldDefinitionRow)
-}
-
-export async function createMetafieldDefinition(db: DbClient, input: {
-  organizationId: string
-  definition: Omit<MetafieldDefinition, 'id' | 'organization_id'>
-  actor: Actor
-}): Promise<MetafieldDefinition> {
-  assertMetafieldDefinition(input.definition)
-  const id = crypto.randomUUID()
-  const now = new Date().toISOString()
-  await executeBatch(db, [{
-    query: `INSERT INTO metafield_definitions (id, organization_id, namespace, key, name, description, value_type, validations, localizable, created_at, updated_at, created_by, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    params: [id, input.organizationId, input.definition.namespace, input.definition.key, input.definition.name,
-      input.definition.description, input.definition.value_type, JSON.stringify(input.definition.validations),
-      input.definition.localizable ? 1 : 0, now, now, input.actor.actorId, input.actor.actorId],
-  }], { operation: 'Create metafield definition' })
-  const row = await queryFirst<Row>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ? AND id = ?', [input.organizationId, id])
-  return mapMetafieldDefinitionRow(row!)
-}
-
-export async function deleteMetafieldDefinition(db: DbClient, input: { organizationId: string; definitionId: string }): Promise<void> {
-  // Values cascade. Removing an attribute from the vocabulary removes it from
-  // every product that carried it, which is the point of doing it.
-  await executeBatch(db, [{
-    query: 'DELETE FROM metafield_definitions WHERE organization_id = ? AND id = ?',
-    params: [input.organizationId, input.definitionId],
-  }], { operation: 'Delete metafield definition' })
-}
-
 /**
  * Idempotent upsert keyed by the caller's own product id.
  *
@@ -1515,8 +1428,7 @@ export async function reconcileProducts(db: DbClient, input: {
   // request names. A hundred rows used to mean a hundred of each — the
   // reconcile spent its time on round trips, not on work.
   const requestedIds = input.products.map(entry => entry.product_id).filter((id): id is string => Boolean(id))
-  const [definitions, knownSlugs, existingProducts] = await Promise.all([
-    loadMetafieldDefinitions(db, input.organizationId),
+  const [knownSlugs, existingProducts] = await Promise.all([
     loadProductSlugs(db, input.organizationId),
     listProductsByIds(db, input.organizationId, requestedIds),
   ])
@@ -1544,7 +1456,7 @@ export async function reconcileProducts(db: DbClient, input: {
     if (current) {
       const planned = await planProductUpdate(db, {
         organizationId: input.organizationId, current, patch: rest, actor: input.actor, now,
-        definitions, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
+        defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
         // One invalidation per site at the end of the batch, not one per product.
         cacheInvalidations: [],
       })
@@ -1557,7 +1469,7 @@ export async function reconcileProducts(db: DbClient, input: {
       organizationId: input.organizationId, existingId: productId, defaultCurrency, takenSlugs: taken, idOwners, knownSlugs,
     })
     assertVariantPricesConsistent(planned)
-    const creates = productWrites(input.organizationId, planned, definitions, input.actor, now, 'insert')
+    const creates = productWrites(input.organizationId, planned, input.actor, now, 'insert')
     // The site that reconciles its catalog carries what the reconcile creates,
     // withheld until someone publishes it — the same rule batch creation
     // follows, and what makes "missing from this site's import" answerable.

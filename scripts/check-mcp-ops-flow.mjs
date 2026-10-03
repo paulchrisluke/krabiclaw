@@ -89,7 +89,7 @@ async function main() {
     collectionIds.set(name, collectionId)
   }
 
-  const product = await mcp(headers, 'create_product', {
+  const product = await mcp(headers, 'create_product', { kind: 'dish',
     organization_id: organizationId,
     name: 'MCP Ops Curry',
     variants: [{ name: 'Standard', prices: [{ unit_amount: 1250, currency: 'USD' }] }],
@@ -111,14 +111,14 @@ async function main() {
   const batch = await mcp(headers, 'batch_create_products', {
     organization_id: organizationId,
     products: [
-      { name: 'B-52', variants: [{ name: 'Standard', prices: [{ unit_amount: 700, currency: 'USD' }] }] },
-      { name: 'Lemon Drop', variants: [{ name: 'Standard', prices: [{ unit_amount: 800, currency: 'USD' }] }] },
+      { kind: 'dish', name: 'B-52', variants: [{ name: 'Standard', prices: [{ unit_amount: 700, currency: 'USD' }] }] },
+      { kind: 'dish', name: 'Lemon Drop', variants: [{ name: 'Standard', prices: [{ unit_amount: 800, currency: 'USD' }] }] },
     ],
   })
   expectSuccess('batch_create_products succeeds', batch)
   expectValue('batch_create_products adds two Products atomically', data(batch.body)?.products?.length === 2, batch.body)
 
-  const productUpdate = await mcp(headers, 'update_product', {
+  const productUpdate = await mcp(headers, 'update_product', { kind: 'dish',
     organization_id: organizationId,
     product_id: productId,
     name: 'MCP Ops Green Curry',
@@ -199,7 +199,7 @@ async function main() {
 
   // A bookable Product is a Product: same tool, same shape. Booking is a
   // capability configured on it, not a second kind of row.
-  const bookable = await mcp(headers, 'create_product', {
+  const bookable = await mcp(headers, 'create_product', { kind: 'experience',
     organization_id: organizationId,
     name: 'MCP Ops Kayak Tour',
     description: 'Half-day tour created by MCP ops checker',
@@ -209,7 +209,7 @@ async function main() {
   const bookableId = data(bookable.body)?.product?.id
   expectValue('create_product (bookable) returns Product id', Boolean(bookableId), bookable.body)
 
-  const invalidProduct = await mcp(headers, 'create_product', { organization_id: organizationId, name: '' })
+  const invalidProduct = await mcp(headers, 'create_product', { kind: 'dish', organization_id: organizationId, name: '' })
   expectValue('create_product rejects an empty name over JSON-RPC transport', invalidProduct.status === 200, invalidProduct.body)
   expectValue('create_product invalid name returns tool error', invalidProduct.body?.result?.isError === true, invalidProduct.body)
 

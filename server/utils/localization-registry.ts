@@ -1,26 +1,12 @@
 import { localizationError } from './localization-errors.ts'
-import { queryAll, type DbClient } from '../db/index.ts'
-import {
-  isMetafieldLocalizable,
-  metafieldHandle,
-  validateMetafieldValue,
-  MetafieldError,
-  type MetafieldDefinition,
-} from '../../shared/metafields.ts'
+import { validateProductDetails, assertProductKind, ProductDetailError, type ProductKind } from '../../shared/product-details.ts'
 
 import { LOCALIZED_RESOURCE_TYPES, type LocalizedResourceType } from '../../shared/content-registries.ts'
 export { LOCALIZED_RESOURCE_TYPES, type LocalizedResourceType } from '../../shared/content-registries.ts'
 
 export type LocalizedValues = Record<string, unknown>
 
-/**
- * `metafields` is not a fixed field list. Its keys are the tenant's own
- * metafield definitions, and each definition declares its own type and
- * whether it may be translated at all. That declaration is the ONLY source:
- * this registry deliberately keeps no list of attribute names, so adding an
- * eleventh product attribute needs no edit here.
- */
-type ValueShape = 'text' | 'string_array' | 'metafields' | { readonly [field: string]: ValueShape }
+type ValueShape = 'text' | 'string_array' | 'details' | { readonly [field: string]: ValueShape }
 
 /**
  * How a localized resource is addressed publicly.
@@ -72,7 +58,7 @@ export const RESOURCE_LOCALIZATION_REGISTRY: Readonly<Record<LocalizedResourceTy
   // Product SEO is owned by the canonical content document, so it is not
   // localized here: a second SEO source would be a second thing to keep true.
   product: { table: 'products', tenantScope: 'organization_column', fields: { name: 'text', description: 'text',
-    marketing_features: 'string_array', unit_label: 'text', metafields: 'metafields' }, route: 'derived' },
+    marketing_features: 'string_array', unit_label: 'text', details: 'details' }, route: 'derived' },
   collection: { table: 'collections', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
   // A category's page is at its collection's path under the site's locale prefix; its slug is not translated.
   article_category: { table: 'article_categories', tenantScope: 'organization_column', fields: { name: 'text', description: 'text' }, route: 'none' },
@@ -87,39 +73,22 @@ function isNonBlankText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
-/** The tenant's metafield definitions, keyed by '<namespace>.<key>'. */
-export type MetafieldDefinitionIndex = ReadonlyMap<string, MetafieldDefinition>
-
-function validateMetafields(field: string, value: unknown, definitions: MetafieldDefinitionIndex | undefined): void {
-  if (!isRecord(value)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field} must be an object`, { field })
-  if (!definitions) {
-    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'metafield definitions are required to validate localized attributes', { field })
-  }
-  for (const [handle, entry] of Object.entries(value)) {
-    const definition = definitions.get(handle)
-    if (!definition) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field}.${handle} has no definition`, { field: `${field}.${handle}` })
-    // Eligibility is the definition's own declaration. A number or a boolean
-    // has nothing to translate and is refused here rather than stored as a
-    // string that drifts from the source value.
-    if (!isMetafieldLocalizable(definition)) {
-      localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field}.${handle} is not translatable`, { field: `${field}.${handle}` })
-    }
-    try { validateMetafieldValue(definition, entry) }
-    catch (error) {
-      if (!(error instanceof MetafieldError)) throw error
-      localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field}.${handle}: ${error.message}`, { field: `${field}.${handle}` })
-    }
+function validateDetails(field: string, value: unknown, kind: ProductKind | undefined): void {
+  try { validateProductDetails(assertProductKind(kind), value) }
+  catch (error) {
+    if (!(error instanceof ProductDetailError)) throw error
+    localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field}: ${error.message}`, { field })
   }
 }
 
-function validateShape(field: string, value: unknown, shape: ValueShape, definitions?: MetafieldDefinitionIndex): void {
+function validateShape(field: string, value: unknown, shape: ValueShape, kind?: ProductKind): void {
   if (shape === 'text' && typeof value === 'string') return
   if (typeof shape === 'object' && isRecord(value)) {
     if (Object.keys(value).some(key => !Object.hasOwn(shape, key))) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field} contains unknown localized fields`, { field })
-    for (const [key, nested] of Object.entries(value)) validateShape(`${field}.${key}`, nested, shape[key]!, definitions)
+    for (const [key, nested] of Object.entries(value)) validateShape(`${field}.${key}`, nested, shape[key]!, kind)
     return
   }
-  if (shape === 'metafields') { validateMetafields(field, value, definitions); return }
+  if (shape === 'details') { validateDetails(field, value, kind); return }
   if (shape === 'string_array') {
     if (Array.isArray(value) && value.every(isNonBlankText)) return
   }
@@ -136,7 +105,7 @@ export function parseLocalizedResourceType(value: unknown): LocalizedResourceTyp
 export function validateLocalizedValues(
   resourceType: LocalizedResourceType,
   input: unknown,
-  definitions?: MetafieldDefinitionIndex,
+  kind?: ProductKind,
 ): LocalizedValues {
   if (!isRecord(input)) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'values must be an object')
   const definition = RESOURCE_LOCALIZATION_REGISTRY[resourceType]
@@ -153,7 +122,7 @@ export function validateLocalizedValues(
     if (shape === 'text' && typeof value !== 'string') {
       localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', `${field} must be a string`, { field })
     }
-    validateShape(field, value, shape, definitions)
+    validateShape(field, value, shape, kind)
   }
   return Object.fromEntries(Object.entries(input).sort(([left], [right]) => left.localeCompare(right)))
 }
@@ -172,25 +141,4 @@ export function validateLocalizedRoutePath(resourceType: LocalizedResourceType, 
   const suffix = 'locations/' + SEGMENT
   if (!path.startsWith(prefix) || !new RegExp('^' + suffix + '$').test(path.slice(prefix.length)) || path.includes('//')) localizationError(422, 'LOCALIZATION_VALIDATION_FAILED', 'route_path is invalid for ' + resourceType, { route_path: path })
   return path
-}
-
-/**
- * Load the tenant's metafield definitions for the localization validator.
- *
- * Kept here beside the registry so there is one place that answers "which
- * product attributes are translatable", and it answers by reading the
- * definitions rather than by holding a list.
- */
-export async function loadMetafieldDefinitionIndex(db: DbClient, organizationId: string): Promise<MetafieldDefinitionIndex> {
-  const rows = await queryAll<Record<string, unknown>>(db, 'SELECT * FROM metafield_definitions WHERE organization_id = ?', [organizationId])
-  return new Map(rows.map((row) => {
-    const definition: MetafieldDefinition = {
-      id: String(row.id), organization_id: String(row.organization_id), namespace: String(row.namespace),
-      key: String(row.key), name: String(row.name), description: row.description === null ? null : String(row.description),
-      value_type: String(row.value_type) as MetafieldDefinition['value_type'],
-      validations: JSON.parse(String(row.validations)) as MetafieldDefinition['validations'],
-      localizable: Number(row.localizable) === 1,
-    }
-    return [metafieldHandle(definition), definition]
-  }))
 }

@@ -4,7 +4,7 @@ import { bookingWindow, listSessions } from '~/server/utils/availability'
 import { resolveOrganizationCmsCapabilities } from '~/server/utils/cms-capabilities'
 import { getProductBySlug, hydrateProductMedia, listCollections, listLocationProducts } from '~/server/utils/product-management'
 import type { Collection, Product, ProductBookingConfig, ProductPresentation, ProductSurface } from '~/server/types/products'
-import { EXPERIENCE_PRESENTATION, isExperience, productSurfaceOf, resolveProductPresentation } from '~/utils/product-presentation'
+import { isExperience, productSurfaceOf, resolveProductPresentation, presentationForSurface } from '~/utils/product-presentation'
 import { isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import {
   loadExactPublicLocalizations,
@@ -134,7 +134,7 @@ async function loadProductOrganization(db: DbClient, organizationId: string, rou
   // vertical's own surface still answers only to its own segment.
   const verticalPresentation = resolveProductPresentation(organization.vertical)
   if (!verticalPresentation) return null
-  const presentation = routeKind === 'experiences' ? EXPERIENCE_PRESENTATION : verticalPresentation
+  const presentation = presentationForSurface(organization.vertical, routeKind)
   if (presentation.locationCollectionSegment !== routeKind) return null
   if (!isCurrencyCode(organization.default_currency)) throw new Error(`Unsupported organization currency: ${organization.default_currency}`)
   return { organization, presentation, currency: organization.default_currency }
@@ -206,7 +206,7 @@ export async function loadPublicProductDetail(
     // The product must be published on this site and actually offered at this
     // location: reaching it by slug alone would render a branch's page for
     // something the site withholds, or something that branch does not sell.
-    const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published && entry.active)
+    const offeredHere = found?.locations.some(entry => entry.location_id === location.id && entry.published)
     const publishedHere = found?.publications.some(entry => entry.organization_id === organizationId && entry.published)
     const onThisSurface = found ? productSurfaceOf(collection.organization.vertical, found) === routeKind : false
     if (!found || !offeredHere || !publishedHere || !onThisSurface) return null
@@ -303,7 +303,7 @@ export async function loadPublicExperienceDetail(
   const found = await getProductBySlug(db, resolved.organization.id, productSlug)
   if (!found || !isExperience(found)) return null
   if (!found.publications.some(entry => entry.organization_id === organizationId && entry.published)) return null
-  const offeredAt = new Set(found.locations.filter(entry => entry.published && entry.active).map(entry => entry.location_id))
+  const offeredAt = new Set(found.locations.filter(entry => entry.published).map(entry => entry.location_id))
   const locationRows = (await queryAll<PublicProductLocationRow>(db, `
     SELECT id, slug, title, feature_overrides, timezone, address, phone, maps_url, latitude, longitude
       FROM business_locations

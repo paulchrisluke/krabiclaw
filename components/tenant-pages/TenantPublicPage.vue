@@ -7,7 +7,7 @@
     loop they lost every section the marketing site had (#903).
   -->
   <template v-if="page">
-    <ProductDetailPage v-if="linkedProduct && consultationProducts?.data.value" :key="linkedProduct.id" :organization-id="organizationId" :organization-name="consultationProducts.organizationName" vertical="service" :product="linkedProduct" :booking="linkedProduct.booking" :location="null" :currency="consultationProducts.data.value.currency" :page-document="page" collection-name="Services" :presentation="servicePresentation" :reviews="[]" :collection-siblings="[]" :metafield-definitions="[]">
+    <ProductDetailPage v-if="linkedProduct && consultationProducts?.data.value" :key="linkedProduct.id" :organization-id="organizationId" :organization-name="consultationProducts.organizationName" vertical="service" :product="linkedProduct" :booking="linkedProduct.booking" :location="null" :currency="consultationProducts.data.value.currency" :page-document="page" collection-name="Services" :presentation="servicePresentation" :reviews="[]" :collection-siblings="[]">
       <template #actions>
         <BlawbyButton v-if="secondaryAction" class="mt-5" variant="outline" :to="secondaryAction.url">{{ secondaryAction.label }}</BlawbyButton>
       </template>

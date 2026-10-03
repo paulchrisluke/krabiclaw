@@ -102,9 +102,9 @@ export async function loadPublicShellSource(
        WHERE organization_id = ?  AND locale = ?
          AND resource_type IN ('organization', 'business_location')
     `, [organization.id, locale])
-    // The shell reads the site and its locations; neither carries metafields,
+    // The shell reads the site and its locations; neither carries details,
     // so no definition is in scope here.
-    const localizations = indexStoredPublicLocalizations(localizedRows, new Map())
+    const localizations = indexStoredPublicLocalizations(localizedRows)
     const organizationLocalization = localizations.find(item => item.resourceType === 'organization' && item.resourceId === organizationId)
     payload.locations = projectExactLocalizedCollection('business_location', payload.locations, localizations)
     const localizedOrganization = organizationLocalization

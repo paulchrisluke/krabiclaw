@@ -4,7 +4,6 @@ import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { verifyPassword } from 'better-auth/crypto'
-import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures.ts'
 
 const { values } = parseArgs({
   options: {
@@ -25,8 +24,6 @@ const reviewEmail = sqlString(process.env.CANARY_LOGIN_EMAIL ?? '')
 const sql = `
 SELECT
   (SELECT COUNT(*) FROM organization WHERE id IN (${organizationIds.map(sqlString).join(', ')})) AS seeded_organizations,
-  (SELECT COUNT(*) FROM user WHERE id LIKE 'user-e2e-%') AS fixture_users,
-  (SELECT COUNT(*) FROM account WHERE userId LIKE 'user-e2e-%' AND providerId = 'credential') AS fixture_credentials,
   (SELECT COUNT(*) FROM user WHERE lower(email) = lower(${reviewEmail}) AND emailVerified = 1) AS review_users,
   (SELECT a.password FROM account a JOIN user u ON u.id = a.userId WHERE lower(u.email) = lower(${reviewEmail}) AND a.providerId = 'credential') AS review_password,
   (SELECT COUNT(*) FROM d1_migrations) AS applied_migrations,
@@ -48,8 +45,6 @@ if (!row) throw new Error('D1 fixture verification returned no result row.')
 
 const invariants: Array<[string, number, number]> = [
   ['seeded organizations', Number(row.seeded_organizations), organizationIds.length],
-  ['fixture users', Number(row.fixture_users), E2E_AUTH_FIXTURES.length],
-  ['fixture credentials', Number(row.fixture_credentials), E2E_AUTH_FIXTURES.length],
   ['foreign key errors', Number(row.foreign_key_errors), 0],
 ]
 if (values['local-dev']) {
@@ -64,4 +59,4 @@ if (failures.length > 0) {
 }
 
 const localDeveloperSummary = values['local-dev'] ? ', the configured review credential' : ''
-console.log(`Verified local D1: ${organizationIds.length} curated businesses, ${E2E_AUTH_FIXTURES.length} E2E credentials${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)
+console.log(`Verified local D1: ${organizationIds.length} curated businesses, ${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)

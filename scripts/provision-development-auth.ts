@@ -1,110 +1,65 @@
-#!/usr/bin/env node
+import { request, type FullConfig } from '@playwright/test'
+import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures'
 
-import { execFileSync } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { parseArgs } from 'node:util'
-import { hashPassword } from 'better-auth/crypto'
-import { E2E_AUTH_FIXTURES } from '../config/development-auth-fixtures.ts'
-import { validatePassword } from '../utils/password-validation.ts'
-
-function generatePassword(): string {
-  return requirePolicyCompliant(`Dev-${randomUUID()}-9A!`, 'generated development password')
-}
-
-function requirePolicyCompliant(password: string, source: string): string {
-  const error = validatePassword(password)
-  if (error) throw new Error(`The ${source} is rejected by this app's own password policy: ${error}`)
-  return password
-}
-
-const { values: options } = parseArgs({
-  options: {
-    'local-dev': { type: 'boolean', default: false },
-    'persist-to': { type: 'string' },
-    'user-id': { type: 'string' },
-  },
-  strict: true,
-})
-const isLocalDev = options['local-dev']
-const persistTo = options['persist-to'] ? resolve(options['persist-to']) : null
-if (options['user-id'] !== undefined && !isLocalDev) throw new Error('--user-id requires --local-dev.')
-
-// Local runs are driven by hand, so the developer's own .env is the environment
-// they mean. CI sets these in the real environment and ships no .env file, where
-// this is a no-op.
-if (isLocalDev) {
-  try {
-    process.loadEnvFile()
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+/** Distinct actors are needed only for role, tenant and onboarding journeys. */
+export default async function provisionTestActors(config: FullConfig) {
+  if (process.env.PLAYWRIGHT_PREVIEW_URL) return
+  const baseURL = config.projects[0]?.use.baseURL
+  if (!baseURL || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) throw new Error('Test actors may be provisioned only in the local Worker.')
+  const email = process.env.CANARY_LOGIN_EMAIL
+  const password = process.env.CANARY_LOGIN_PASSWORD
+  if (!email || !password) throw new Error('Configure CANARY_LOGIN_EMAIL and CANARY_LOGIN_PASSWORD.')
+  const admin = await request.newContext({ baseURL, extraHTTPHeaders: { origin: new URL(baseURL).origin } })
+  async function call(context: typeof admin, path: string, data?: Record<string, unknown>) {
+    const response = data ? await context.post(`/api/auth/${path}`, { data }) : await context.get(`/api/auth/${path}`)
+    if (response.status() !== 200) throw new Error(`Better Auth ${path} failed: ${response.status()} ${await response.text()}`)
+    return response.json()
   }
-}
-
-const e2ePassword = process.env.E2E_TEST_PASSWORD
-  ? requirePolicyCompliant(process.env.E2E_TEST_PASSWORD, 'E2E_TEST_PASSWORD')
-  : (isLocalDev ? generatePassword() : '')
-if (!e2ePassword) {
-  throw new Error('E2E_TEST_PASSWORD is required when provisioning Better Auth E2E credentials.')
-}
-const sqlString = (value: string) => `'${value.replaceAll("'", "''")}'`
-const credentialFixtures = options['user-id'] !== undefined
-  ? E2E_AUTH_FIXTURES.filter(fixture => fixture.id === options['user-id'])
-  : E2E_AUTH_FIXTURES
-if (!credentialFixtures.length) throw new Error(`Unknown development fixture user: ${options['user-id']}`)
-const e2ePasswordHash = await hashPassword(e2ePassword)
-
-const fixtureSql = credentialFixtures.map((fixture) => {
-  const platformRole = fixture.platformRole ?? 'user'
-  const memberships = (fixture.memberships ?? []).map((membership) => `
-INSERT INTO member (id, organizationId, userId, role, createdAt)
-VALUES (${sqlString(`member-${fixture.id}-${membership.organizationId}`)}, ${sqlString(membership.organizationId)}, ${sqlString(fixture.id)}, ${sqlString(membership.role)}, unixepoch())
-ON CONFLICT(id) DO UPDATE SET role = excluded.role;
-`).join('')
-  return `
-INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
-VALUES (${sqlString(fixture.id)}, ${sqlString(fixture.name)}, ${sqlString(fixture.email)}, 1, ${sqlString(platformRole)}, unixepoch(), unixepoch())
-ON CONFLICT(id) DO UPDATE SET
-  name = excluded.name,
-  email = excluded.email,
-  emailVerified = 1,
-  role = excluded.role,
-  updatedAt = unixepoch();
-
-UPDATE user
-SET phoneNumber = ${fixture.phoneNumber ? sqlString(fixture.phoneNumber) : 'NULL'},
-    phoneNumberVerified = ${fixture.phoneNumber ? '1' : '0'}
-WHERE id = ${sqlString(fixture.id)};
-
-DELETE FROM session WHERE userId = ${sqlString(fixture.id)};
--- Only the memberships this fixture declares. An unscoped delete also removed
--- the ones a fixture earned at runtime — the onboarding wizard leaves its user
--- owning a new organization on every run — and the insert below could not put
--- them back, because the fixture never declared them.
-${(fixture.memberships ?? []).length
-  ? `DELETE FROM member WHERE userId = ${sqlString(fixture.id)} AND organizationId IN (${(fixture.memberships ?? []).map(membership => sqlString(membership.organizationId)).join(', ')});`
-  : ''}
-DELETE FROM invitation WHERE lower(email) = lower(${sqlString(fixture.email)});
-DELETE FROM account WHERE userId = ${sqlString(fixture.id)} AND providerId = 'credential';
-INSERT INTO account (id, accountId, providerId, userId, password, createdAt, updatedAt)
-VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id)}, 'credential', ${sqlString(fixture.id)}, ${sqlString(e2ePasswordHash)}, unixepoch(), unixepoch());
-${memberships}`
-}).join('\n')
-
-const sql = `PRAGMA foreign_keys = ON;\n${fixtureSql}`
-const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-e2e-auth-'))
-const sqlPath = join(directory, 'e2e-auth.sql')
-
-try {
-  writeFileSync(sqlPath, sql, { encoding: 'utf8', mode: 0o600 })
-  const args = [resolve('node_modules/wrangler/bin/wrangler.js'), 'd1', 'execute', 'DB']
-  args.push('--local')
-  if (persistTo) args.push('--persist-to', persistTo)
-  args.push('--file', sqlPath)
-  execFileSync(process.execPath, args, { cwd: process.cwd(), stdio: 'inherit' })
-  console.log(`Provisioned ${credentialFixtures.length} verified Better Auth development credentials (local).`)
-} finally {
-  rmSync(directory, { recursive: true, force: true })
+  try {
+    await call(admin, 'sign-in/email', { email, password, rememberMe: false })
+    const principal = await call(admin, 'get-session')
+    for (const fixture of E2E_AUTH_FIXTURES) {
+      const found = await call(admin, `admin/list-users?searchField=email&searchOperator=contains&searchValue=${encodeURIComponent(fixture.email)}`)
+      const existing = found.users.find((user: { email: string }) => user.email === fixture.email)
+      if (existing && existing.id !== fixture.id) throw new Error(`Test actor ${fixture.email} has an unexpected ID.`)
+      if (!existing) {
+        const created = await call(admin, 'admin/create-user', {
+          email: fixture.email, name: fixture.name, password, role: fixture.platformRole ?? 'user',
+          data: { id: fixture.id, emailVerified: true, ...(fixture.phoneNumber ? { phoneNumber: fixture.phoneNumber, phoneNumberVerified: true } : {}) },
+        })
+        if (created.user.id !== fixture.id) throw new Error(`Better Auth did not preserve the requested test actor ID for ${fixture.email}.`)
+      } else {
+        await call(admin, 'admin/set-user-password', { userId: fixture.id, newPassword: password })
+      }
+      for (const membership of fixture.memberships ?? []) {
+        const { members } = await call(admin, `organization/list-members?organizationId=${encodeURIComponent(membership.organizationId)}&limit=100`)
+        const member = members.find((candidate: { userId: string }) => candidate.userId === fixture.id)
+        if (member) {
+          if (member.role !== membership.role) throw new Error(`Test actor ${fixture.email} has an unexpected organization role.`)
+          continue
+        }
+        const owners = members.filter((candidate: { role: string }) => candidate.role.split(',').includes('owner'))
+        const owner = owners.find((candidate: { userId: string }) => candidate.userId === principal.user.id) ?? owners[0]
+        if (!owner) throw new Error(`Organization ${membership.organizationId} has no owner to invite its test actor.`)
+        const inviter = await request.newContext({ baseURL, storageState: await admin.storageState(), extraHTTPHeaders: { origin: new URL(baseURL).origin } })
+        const actor = await request.newContext({ baseURL, extraHTTPHeaders: { origin: new URL(baseURL).origin } })
+        let impersonated = false
+        try {
+          if (owner.userId !== principal.user.id) {
+            await call(inviter, 'admin/impersonate-user', { userId: owner.userId })
+            impersonated = true
+          }
+          const invitation = await call(inviter, 'organization/invite-member', { organizationId: membership.organizationId, email: fixture.email, role: membership.role, resend: true })
+          await call(actor, 'sign-in/email', { email: fixture.email, password, rememberMe: false })
+          await call(actor, 'organization/accept-invitation', { invitationId: invitation.id })
+          const { members: verified } = await call(actor, `organization/list-members?organizationId=${encodeURIComponent(membership.organizationId)}&filterField=userId&filterOperator=eq&filterValue=${fixture.id}`)
+          if (verified.length !== 1 || verified[0].role !== membership.role) throw new Error(`Better Auth did not assign ${fixture.email} its requested role.`)
+        } finally {
+          if (impersonated) await call(inviter, 'admin/stop-impersonating', {})
+          await actor.dispose()
+          await inviter.dispose()
+        }
+      }
+    }
+  } finally { await admin.dispose() }
 }

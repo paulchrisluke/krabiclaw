@@ -16,8 +16,8 @@ import {
 // dishes and bookable experiences manages two surfaces, and one that sells
 // only dishes still manages a Menu of Sections.
 
-const dish = { booking: null } as Pick<Product, 'booking'>
-const experience = { booking: { id: 'booking-1' } } as unknown as Pick<Product, 'booking'>
+const dish = { kind: 'dish' } as Pick<Product, 'kind'>
+const experience = { kind: 'experience' } as Pick<Product, 'kind'>
 
 test('a restaurant selling only food reaches the menu surface alone', () => {
   const counts = countCatalog([dish, dish])
@@ -50,14 +50,14 @@ test('a bookable catalog reads as experiences whatever the vertical sells otherw
 test('the same two numbers come from rows or from a count the server did', () => {
   // summarizeLocationProducts answers in this shape straight from SQL, so a
   // surface is assigned identically however the caller learned the counts.
-  assert.deepEqual(countCatalog([dish, dish, experience]), { total: 3, experiences: 1 })
-  assert.equal(catalogSummary('restaurant', { total: 3, experiences: 1 }), '2 dishes · 1 experience')
+  assert.deepEqual(countCatalog([dish, dish, experience]), { total: 3, experiences: 1, dishes: 2 })
+  assert.equal(catalogSummary('restaurant', { total: 3, experiences: 1, dishes: 2 }), '2 dishes · 1 experience')
 })
 
 test('only a vertical\'s own surface and experiences are pages', () => {
   assert.equal(isCatalogSurface('restaurant', 'menu'), true)
   assert.equal(isCatalogSurface('restaurant', 'experiences'), true)
-  assert.equal(isCatalogSurface('restaurant', 'products'), false)
+  assert.equal(isCatalogSurface('restaurant', 'products'), true)
   assert.equal(isCatalogSurface('experience', 'products'), true)
   assert.equal(isCatalogSurface('restaurant', 'pc_loc-demo_standard_drinks'), false)
 })
@@ -95,7 +95,7 @@ test('a collection with no member on a surface is not offered there', () => {
 })
 
 test('a collection with nothing in it is offered on every surface until it holds something', () => {
-  const rows = [{ name: 'Not yet filled', products: [] as Pick<Product, 'booking'>[] }]
+  const rows = [{ name: 'Not yet filled', products: [] as Pick<Product, 'kind'>[] }]
   assert.equal(collectionsOnSurface('restaurant', rows, 'menu').length, 1)
   assert.equal(collectionsOnSurface('restaurant', rows, 'experiences').length, 1)
   const filled = [{ name: 'Not yet filled', products: [dish] }]

@@ -97,7 +97,7 @@ async function assertSavedImage(headers, organizationId, label) {
 
 
 async function createProduct(headers, organizationId, locationId) {
-  const product = await mcp(headers, 'create_product', {
+  const product = await mcp(headers, 'create_product', { kind: 'dish',
     organization_id: organizationId,
     name: 'MCP Image Dish',
     description: 'Used for image tool coverage',
@@ -127,7 +127,7 @@ async function createPost(headers, organizationId) {
 }
 
 async function createSecondProduct(headers, organizationId) {
-  const response = await mcp(headers, 'create_product', {
+  const response = await mcp(headers, 'create_product', { kind: 'experience',
     organization_id: organizationId,
     name: 'MCP Image Class',
     description: 'Second Product used for image tool coverage',

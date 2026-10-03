@@ -34,7 +34,7 @@
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 
-export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
+export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
 export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'website' | number
 
@@ -66,12 +66,13 @@ export interface VariantDraft {
 
 /** The editable shape of one product, as its leaves bind to it. */
 export interface ProductForm {
+  kind: ProductKind | ''
   name: string
   description: string
   order_url: string
   options: OptionDraft[]
   variants: VariantDraft[]
-  metafields: Record<string, MetafieldValue>
+  details: Record<string, ProductDetailValue>
   active: boolean
   published: boolean
   location_active: boolean
@@ -98,7 +99,7 @@ export interface ProductEditor {
   organizationId: string
   locationId: ComputedRef<string | null>
   websiteBooking: ComputedRef<boolean>
-  definitions: Ref<MetafieldDefinition[]>
+  definitions: Ref<ProductDetailField[]>
   isNew: ComputedRef<boolean>
   /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
   ready: ComputedRef<boolean>
@@ -112,12 +113,9 @@ export interface ProductEditor {
   addOption: () => void
   removeOption: (index: number) => void
   setOptionValues: (index: number, values: string[]) => void
-  metafieldKey: (definition: MetafieldDefinition) => string
-  listValue: (definition: MetafieldDefinition) => string[]
-  textValue: (definition: MetafieldDefinition) => string
-  integerValue: (definition: MetafieldDefinition) => number | undefined
-  setIntegerMetafield: (definition: MetafieldDefinition, value: unknown) => void
-  booleanValue: (definition: MetafieldDefinition) => boolean
+  setDetail: (definition: ProductDetailField, value: string | string[]) => void
+  listValue: (definition: ProductDetailField) => string[]
+  textValue: (definition: ProductDetailField) => string
   weekdays: ReadonlyArray<{ value: number; label: string }>
   scheduleLoading: Ref<boolean>
   scheduleError: Ref<string | null>
@@ -141,8 +139,8 @@ export const productEditorKey = Symbol('product-editor') as InjectionKey<Product
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import type { Collection, Product } from '~/server/types/products'
-import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import type { ProductDetailField, ProductDetailValue, ProductKind } from '~/shared/product-details'
+import { productDetailFields, PRODUCT_KINDS, PRODUCT_KIND_LABELS, assertProductKind, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
@@ -194,6 +192,7 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // ── Which leaf is open ──────────────────────────────────
 
 const sectionLabels: Record<SectionKey, string> = {
+  'kind': 'Type',
   'photo': 'Photo',
   'name': 'Name',
   'price': 'Price',
@@ -213,7 +212,7 @@ const ready = computed(() => isNew.value || (product.value?.id === productId.val
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
-const definitions = ref<MetafieldDefinition[]>([])
+const definitions = computed(() => form.kind ? productDetailFields(form.kind) : [])
 const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
@@ -226,8 +225,6 @@ watch(editorKey, () => {
 
 const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
   isRecord(value) && Array.isArray(value.collections)
-const isDefinitionList = (value: unknown): value is { definitions: MetafieldDefinition[] } =>
-  isRecord(value) && Array.isArray(value.definitions)
 const isProductList = (value: unknown): value is { success: true, products: Product[] } =>
   isRecord(value) && Array.isArray(value.products)
 const isOne = (value: unknown): value is { success: true, product: Product } =>
@@ -248,8 +245,6 @@ async function load(options: { force?: boolean } = {}) {
   const id = locationId.value
   if ((!id && !organizationOnly.value) || isNew.value) {
     if (!isNew.value) return
-    // A new item still needs the attribute vocabulary to render its form.
-    definitions.value = (await dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
   const key = `${id}:${productId.value}`
@@ -257,14 +252,12 @@ async function load(options: { force?: boolean } = {}) {
   loadedKey = key
   loadError.value = null
   try {
-    const [collectionResponse, productResponse, definitionResponse, consultationSettings] = await Promise.all([
+    const [collectionResponse, productResponse, consultationSettings] = await Promise.all([
       dashboardApi(`/api/editor/organizations/${organizationId}/collections${id ? `?location_id=${encodeURIComponent(id)}` : ''}`, { validate: isCollectionList }),
       dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList }),
       organizationOnly.value && vertical === 'service' ? dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord }) : Promise.resolve(null),
     ])
     collections.value = collectionResponse.collections
-    definitions.value = definitionResponse.definitions
     product.value = productResponse.product
     loadForm(productResponse.product)
     if (consultationSettings) {
@@ -287,13 +280,15 @@ watch(locationId, () => { void load() })
 
 // ── The form ────────────────────────────────────────────
 
-const form = reactive<ProductForm>({
+const draftKey = `product-draft:${organizationId}:${productId.value}`
+const draft = useState<ProductForm>(draftKey, () => ({
+  kind: '',
   name: '',
   description: '',
   order_url: '',
   options: [] as OptionDraft[],
   variants: [] as VariantDraft[],
-  metafields: {} as Record<string, MetafieldValue>,
+  details: {} as Record<string, ProductDetailValue>,
   active: true,
   published: false,
   location_active: true,
@@ -302,7 +297,8 @@ const form = reactive<ProductForm>({
   booking_duration: '',
   booking_capacity: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
   image_asset_id: null as string | null,
-})
+}))
+const form = reactive(draft.value)
 
 /** What this location and currency pays for one variant, as a major-unit string. */
 function variantPriceMajor(variant: Product['variants'][number]): string {
@@ -314,6 +310,7 @@ function variantPriceMajor(variant: Product['variants'][number]): string {
 const loadedCatalogShape = ref('')
 
 function loadForm(row: Product) {
+  form.kind = row.kind
   form.name = row.name
   form.description = row.description
   form.order_url = row.order_url ?? ''
@@ -333,7 +330,7 @@ function loadForm(row: Product) {
     loaded_price_major: variantPriceMajor(variant),
     prices: variant.prices.map(price => ({ ...price })),
   }))
-  form.metafields = { ...row.metafields }
+  form.details = { ...row.details }
   form.active = row.active
   form.published = row.publications.find(entry => entry.organization_id === organizationId)?.published ?? false
   const here = row.locations.find(entry => entry.location_id === locationId.value)
@@ -367,36 +364,19 @@ function combinationKey(selections: Record<string, string>): string {
     .join(' / ')
 }
 
-function metafieldKey(definition: MetafieldDefinition): string {
-  return metafieldHandle(definition)
+function setDetail(definition: ProductDetailField, value: string | string[]) {
+  const key = productDetailKey(definition)
+  if ((typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length)) Reflect.deleteProperty(form.details, key)
+  else form.details[key] = value
 }
-function listValue(definition: MetafieldDefinition): string[] {
-  const value = form.metafields[metafieldKey(definition)]
+function listValue(definition: ProductDetailField): string[] {
+  const value = form.details[productDetailKey(definition)]
   return Array.isArray(value) ? value : []
 }
-function textValue(definition: MetafieldDefinition): string {
-  const value = form.metafields[metafieldKey(definition)]
+function textValue(definition: ProductDetailField): string {
+  const value = form.details[productDetailKey(definition)]
   return typeof value === 'string' ? value : ''
 }
-function integerValue(definition: MetafieldDefinition): number | undefined {
-  const value = form.metafields[metafieldKey(definition)]
-  // undefined is "not set", which is what an empty number box means. Zero is a
-  // value someone typed.
-  return typeof value === 'number' ? value : undefined
-}
-function setIntegerMetafield(definition: MetafieldDefinition, value: unknown) {
-  const key = metafieldKey(definition)
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    form.metafields[key] = Math.trunc(value)
-    return
-  }
-  // An emptied box is the attribute being unset, not a zero.
-  form.metafields = Object.fromEntries(Object.entries(form.metafields).filter(([entry]) => entry !== key))
-}
-function booleanValue(definition: MetafieldDefinition): boolean {
-  return form.metafields[metafieldKey(definition)] === true
-}
-
 // ── Options and the combinations they produce ───────────
 function addOption() {
   form.options.push({ id: `new-option-${form.options.length + 1}`, name: '', values: [] })
@@ -459,6 +439,7 @@ function rebuildVariants() {
 }
 
 const sectionValid = computed(() => {
+  if (editorKey.value === 'kind') return PRODUCT_KINDS.includes(form.kind as ProductKind)
   if (editorKey.value === 'name') return Boolean(form.name.trim())
   if (editorKey.value === 'options') {
     return form.options.every(option => option.name.trim() && option.values.length > 0)
@@ -482,7 +463,7 @@ function priceSummary(): string {
   if (amount) return amount
   // Priced in words — "Contact us for group pricing" — is a price the merchant
   // set, and the public page shows it; "No price set" would call it missing.
-  const note = row.metafields[PRICING_NOTE_HANDLE]
+  const note = row.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : 'No price set'
 }
 
@@ -505,7 +486,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   const image = product.value?.image
   if (isNew.value) return [{
     id: 'item',
-    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }],
+    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }, { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` }],
   }]
   // Until the row is here there is nothing to summarize. "Not named yet" and
   // "Not bookable" are statements about a product; shown while loading they
@@ -525,6 +506,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           placeholder: !image,
           to: `${itemPath.value}/photo`,
         },
+        { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` },
         { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
         { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },
         {
@@ -550,8 +532,8 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
         {
           id: 'attributes',
           label: 'Details',
-          summary: listSummary(definitions.value.filter(definition => form.metafields[metafieldHandle(definition)] !== undefined).map(definition => definition.name), 'None set'),
-          placeholder: !Object.keys(form.metafields).length,
+          summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
+          placeholder: !Object.keys(form.details).length,
           to: `${itemPath.value}/attributes`,
         },
         { id: 'publication', label: 'Website', summary: publicationSummary(), to: `${itemPath.value}/publication` },
@@ -654,11 +636,12 @@ function payload() {
   const describesCatalog = catalog.variants.length > 0
   const changed = JSON.stringify(catalog) !== loadedCatalogShape.value
   return {
+    kind: assertProductKind(form.kind),
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
     ...(changed && describesCatalog ? catalog : {}),
-    metafields: form.metafields,
+    details: form.details,
     active: form.active,
   }
 }
@@ -668,8 +651,8 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   isNew,
   openKey: editorKey,
   labels: sectionLabels,
-  order: ['name'],
-  missing: () => !form.name.trim(),
+  order: ['name', 'kind'],
+  missing: key => key === 'name' ? !form.name.trim() : !form.kind,
   noun: presentation.value.itemLabel.toLowerCase(),
   saving,
   existingBlocked: () => !sectionValid.value,
@@ -706,6 +689,7 @@ async function commit(bookingConcern?: BookingConcern) {
       if (id) await addToCollection(created.product.id, id)
       // The record it became, not the `new` form it was, so Back from a saved
       // product goes to the collection and never to an empty Add screen.
+      clearNuxtState(draftKey)
       await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
@@ -879,7 +863,7 @@ async function setPrimaryImage(assetId: string | null) {
 // ── Localization ────────────────────────────────────────
 /**
  * Which fields can be translated comes from the tenant's own definitions, so
- * adding an attribute makes it translatable without an edit here.
+ * shared named fields supply the same types and labels as the source editor.
  */
 const productLocalizationFields = computed(() => {
   const row = product.value
@@ -889,10 +873,10 @@ const productLocalizationFields = computed(() => {
   ]
   for (const definition of definitions.value) {
     if (!definition.localizable) continue
-    const handle = metafieldHandle(definition)
-    const value = row?.metafields[handle]
+    const handle = productDetailKey(definition)
+    const value = row?.details[handle]
     fields.push({
-      key: `metafield:${handle}`,
+      key: `detail:${handle}`,
       label: definition.name,
       source: Array.isArray(value) ? value : typeof value === 'string' ? value : null,
       kind: Array.isArray(value) ? 'string-list' : undefined,
@@ -915,9 +899,9 @@ async function loadProductLocalization(locale: string): Promise<Record<string, u
       { validate: isProductLocalizationResponse },
     )
     const values = { ...response.localization.values }
-    const metafields = isRecord(values.metafields) ? values.metafields : {}
-    for (const [handle, value] of Object.entries(metafields)) values[`metafield:${handle}`] = value
-    delete values.metafields
+    const details = isRecord(values.details) ? values.details : {}
+    for (const [handle, value] of Object.entries(details)) values[`detail:${handle}`] = value
+    delete values.details
     return values
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
@@ -933,11 +917,11 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   for (const key of ['name', 'description']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
   }
-  const metafields: Record<string, unknown> = {}
+  const details: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(submitted)) {
-    if (key.startsWith('metafield:')) metafields[key.slice('metafield:'.length)] = value
+    if (key.startsWith('detail:')) details[key.slice('detail:'.length)] = value
   }
-  if (Object.keys(metafields).length) values.metafields = metafields
+  if (Object.keys(details).length) values.details = details
   await dashboardApi(`/api/editor/organizations/${organizationId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
     method: 'PUT',
     body: { values },
@@ -967,12 +951,9 @@ provide(productEditorKey, {
   addOption,
   removeOption,
   setOptionValues,
-  metafieldKey,
+  setDetail,
   listValue,
   textValue,
-  integerValue,
-  setIntegerMetafield,
-  booleanValue,
   weekdays: WEEKDAYS,
   scheduleLoading,
   scheduleError,
