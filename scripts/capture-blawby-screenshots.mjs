@@ -332,7 +332,6 @@ try {
         ? { 'x-preview-tenant': args.tenantSlug, 'cache-control': 'no-store' }
         : undefined,
     })
-    await context.route(/(?:youtube\.com|youtu\.be|googlevideo\.com|vimeo\.com)/, route => route.abort())
     const page = await context.newPage()
     const pageErrors = []
     const failedFirstParty = []
