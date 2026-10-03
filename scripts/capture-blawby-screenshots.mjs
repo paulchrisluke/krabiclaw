@@ -289,7 +289,7 @@ if (args.source === 'reference') {
   }
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({ channel: 'chromium' })
 const manifest = {
   schema_version: 2,
   captured_at: new Date().toISOString(),
@@ -300,7 +300,7 @@ const manifest = {
   observed_reference_etag: referenceEtag,
   base_url: args.url,
   route_inventory_source: args.sitemapUrl || null,
-  browser: { name: 'chromium', version: browser.version(), device_scale_factor: 1 },
+  browser: { name: 'chromium', channel: 'chromium', version: browser.version(), device_scale_factor: 1 },
   rendering: {
     color_scheme: 'light',
     locale: 'en-US',
