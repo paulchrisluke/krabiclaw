@@ -5,7 +5,7 @@
         <USelect v-model.nullable="selectedId" :items="items" value-key="id" label-key="title" :portal="false" :ui="{ content: 'z-50' }" class="w-full min-w-0" />
       </UFormField>
       <div v-if="selectedService" class="mt-8 flex items-start gap-5">
-        <img v-if="thumbnail" :src="thumbnail" :alt="selectedService.title" class="size-24 shrink-0 rounded-xl object-cover sm:size-32">
+        <img v-if="thumbnail" :src="thumbnail" :alt="blockText(cover?.alt_text)" class="size-24 shrink-0 rounded-xl object-cover sm:size-32">
         <div class="max-w-3xl">
           <h2 class="blawby-display text-2xl text-default sm:text-3xl">{{ selectedService.title }}</h2>
           <p v-if="selectedService.description" class="mt-3 leading-7 text-muted">{{ selectedService.description }}</p>
@@ -49,6 +49,7 @@ const items = computed(() => services.value!.page.blocks.filter(block => block.t
 const selectedId = ref(items.value.find(item => data.value!.products.some(product => product.id === item.productId))?.id ?? items.value[0]?.id ?? null)
 const selectedService = computed(() => items.value.find(item => item.id === selectedId.value) ?? null)
 const selectedProduct = computed(() => data.value!.products.find(product => product.id === selectedService.value?.productId && product.active && product.booking?.online_timezone) ?? null)
-const thumbnail = computed(() => blockText(selectedService.value?.media.find(media => media.slot === 'cover')?.public_url))
+const cover = computed(() => selectedService.value?.media.find(media => media.slot === 'cover'))
+const thumbnail = computed(() => blockText(cover.value?.public_url))
 const presentation = requireProductPresentation('service')
 </script>

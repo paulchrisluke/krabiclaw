@@ -149,8 +149,10 @@ to the dashboard. Pass `?next=/some/path` to land somewhere else.
 That route is still a real Better Auth `signInEmail` — it supplies the
 credential rather than skipping the check — and it sits behind
 `assertDevRouteAllowed`, so it 404s unless `import.meta.dev` or
-`E2E_ALLOW_DEV_ROUTES` is on, and demands the `x-dev-route-secret` header on any
-host that is not localhost. Leave both variables unset and nothing changes:
+`E2E_ALLOW_DEV_ROUTES` is on. Under `yarn dev`, localhost needs no secret header;
+other hosts require `x-dev-route-secret`. The built E2E Worker requires that
+header even on localhost, so use normal email/password sign-in there. Leave
+both credential variables unset and nothing changes:
 setup keeps minting a throwaway and the route answers 400.
 
 `local:setup` refreshes the fixture users and sessions. If local data or auth is

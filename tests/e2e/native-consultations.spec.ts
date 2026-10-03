@@ -145,6 +145,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     await zoneSearch.press('Enter')
     await expect(pageTimezone).toContainText('(America/New_York)')
     await expect(page.locator('a[href*="/experiences/"]')).toHaveCount(0)
+    await expect(page.locator('section[aria-label="Choose your consultation"] img')).toHaveAttribute('alt', publishedService.media.find((media: { slot: string }) => media.slot === 'cover').alt_text ?? '')
     await expect.poll(() => page.locator('section[aria-label="Choose your consultation"] img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true)
     await page.setViewportSize({ width: 390, height: 844 })
     await page.setViewportSize({ width: 1280, height: 720 })
@@ -173,6 +174,7 @@ test('native online review uses canonical Products, holds capacity, and releases
     for (let index = 0; index < gallery.length; index++) {
       const image = lightbox.locator('section').nth(index).locator('img').last()
       await expect(image).toHaveAttribute('src', gallery[index].public_url)
+      await expect(image).toHaveAttribute('alt', gallery[index].alt_text ?? '')
       await expect(image).toBeInViewport()
       await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0), { timeout: 30_000 }).toBe(true)
       if (index < gallery.length - 1) await lightbox.getByRole('button', { name: 'Next media', exact: true }).click()

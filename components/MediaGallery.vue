@@ -29,7 +29,7 @@
       <img
         v-else
         :src="items[0]?.url"
-        :alt="items[0]?.alt || title"
+        :alt="items[0]?.alt ?? ''"
         class="h-full w-full object-cover"
       />
       <span
@@ -80,7 +80,7 @@
           <img
             v-else
             :src="item.url"
-            :alt="item.alt || title"
+            :alt="item.alt ?? ''"
             class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
           />
           <span

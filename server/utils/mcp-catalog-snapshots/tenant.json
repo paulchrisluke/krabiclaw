@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:04b0eb722d02ca1e2e00f1a98fdd0cf1b78e0cd476d3e7cab15649aa44133a84",
+  "fingerprint": "sha256:77f5d25425dc985bf375262fc798c726f4d52e6795479981f3f531f0251d83e4",
   "tools": [
     {
       "name": "append_content_block",
@@ -3408,7 +3408,7 @@
     },
     {
       "name": "create_product_booking",
-      "description": "Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. If online payment is required, returns payment_required without creating a booking. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
+      "description": "Create a guest booking or consultation for a published product and an existing session. Requires an available numeric price; specify variant_id when the product has multiple active variants. Staff-review bookings remain pending; instant bookings are confirmed. Paid offerings may allow payment later. For paid sessions requiring online payment, returns payment_required without creating a booking. Free sessions remain bookable. Does not collect payment. Sends owner alerts and sends the guest an acknowledgement only when guest_acknowledgement is true. Call after the user approves the exact change. Records the action in the inbox history and may send email to the guest.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
