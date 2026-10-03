@@ -132,7 +132,9 @@ test.describe('stateless MCP server', () => {
       const changed = (await call<{ product: Product }>('update_product', { product_id: productId, name: `${originalName} MCP media check` })).product
       expect(changed.name).toBe(`${originalName} MCP media check`)
       expectSeededMedia(changed)
-      expectSeededMedia((await call<{ product: Product }>('get_product', { product_id: productId })).product)
+      const saved = (await call<{ product: Product }>('get_product', { product_id: productId })).product
+      expect(saved.name).toBe(`${originalName} MCP media check`)
+      expectSeededMedia(saved)
     } finally {
       try {
         if (originalName !== undefined) {

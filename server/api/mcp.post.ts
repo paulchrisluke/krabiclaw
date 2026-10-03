@@ -304,7 +304,7 @@ function createTenantMcpServer(ctx: McpRequestContext): McpServer {
       const db = env.db ?? (env.DB ? createDb(env.DB) : null);
       if (!kv || !db) throw new Error("ORGANIZATION_CACHE and DB bindings are required to drain site changes after a tenant MCP write");
       try {
-        await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId, limit: 100 });
+        await drainPublicResourceCacheInvalidations(db, kv, env, { organizationId: resolvedOrganizationId });
       } catch (drainError) {
         const reason = `${toolName} wrote its change to organization ${resolvedOrganizationId}, but the site's cache or search index was not updated: ${describeErrorForTelemetry(drainError)}`;
         purgeFailure = purgeFailure ? `${purgeFailure}; ${reason}` : reason;

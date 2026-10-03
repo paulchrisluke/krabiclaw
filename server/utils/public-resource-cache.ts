@@ -51,7 +51,10 @@ export async function drainPublicResourceCacheInvalidations(
   db: DbClient,
   kv: KVNamespace,
   env: OrganizationChangeDrainEnv,
-  options: { limit?: number; now?: Date; organizationId?: string; waitDeadline?: number },
+  options: {
+    limit?: number; now?: Date; organizationId?: string; waitDeadline?: number
+    scope?: { rowIds: string[]; syncedOrganizations: Set<string> }
+  },
 ): Promise<number> {
   const freeOrganizationDomain = normalizeHost(env.NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN)
   if (!freeOrganizationDomain) throw new Error('NUXT_PUBLIC_FREE_ORGANIZATION_DOMAIN is required')
@@ -80,21 +83,33 @@ export async function drainPublicResourceCacheInvalidations(
   // to the scheduled drainer — a request never loops on them. A failed one
   // still fails the write.
   const scopedContinuations = options.organizationId ? `AND reason <> '${SEARCH_SYNC_CONTINUE}'` : ''
+  // Capture responsibility once. A concurrent write can enqueue another row
+  // even with an older timestamp; it belongs to that write's drain.
+  const scope = options.scope ?? (options.organizationId ? {
+    rowIds: (await queryAll<{ id: string }>(db, `
+      SELECT id FROM public_resource_cache_invalidations
+       WHERE organization_id = ? AND (status = 'failed' OR (status IN ('pending', 'processing') ${scopedContinuations}))
+    `, [options.organizationId])).map(row => row.id),
+    syncedOrganizations: new Set<string>(),
+  } : undefined)
+  const scopedRows = scope ? 'AND id IN (SELECT value FROM json_each(?))' : ''
+  const scopeParams = scope ? [JSON.stringify(scope.rowIds)] : []
   const rows = await queryAll<{ id: string; organization_id: string; attempt_count: number }>(db, `
     SELECT id, organization_id, attempt_count
       FROM public_resource_cache_invalidations
      WHERE attempt_count < ?
        AND (status = 'pending' OR (status = 'processing' AND (claimed_at IS NULL OR claimed_at < ?)))
        ${options.organizationId ? `AND organization_id = ? ${scopedContinuations}` : ''}
+       ${scopedRows}
      ORDER BY created_at ASC
      LIMIT ?
-  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : []), options.limit ?? 50])
+  `, [CACHE_INVALIDATION_MAX_ATTEMPTS, staleClaimCutoff, ...(options.organizationId ? [options.organizationId] : []), ...scopeParams, options.limit ?? (scope ? -1 : 50)])
   let processed = 0
   const failures: Error[] = []
   const failedOrganizations = new Set<string>()
   // Several rows for one site in one drain are one change to converge on: the
   // site's slice is listed and diffed once, and the rest of its rows ride along.
-  const syncedOrganizations = new Set<string>()
+  const syncedOrganizations = scope?.syncedOrganizations ?? new Set<string>()
   // A row this drain could not claim because another drain of the same site
   // holds its claim. Only that is worth waiting for.
   let blockedByAnotherDrain = false
@@ -136,7 +151,8 @@ export async function drainPublicResourceCacheInvalidations(
             UPDATE public_resource_cache_invalidations
                SET status = 'processed', processed_at = ?, last_error = NULL
              WHERE organization_id = ? AND status = 'failed' AND created_at < ?
-          `, [nowIso, row.organization_id, nowIso])
+               ${scopedRows}
+          `, [nowIso, row.organization_id, nowIso, ...scopeParams])
         }
       }
       const finalized = await execute(db, `
@@ -166,14 +182,15 @@ export async function drainPublicResourceCacheInvalidations(
     const unfinished = new Set((await queryAll<{ status: string }>(db, `
       SELECT DISTINCT status FROM public_resource_cache_invalidations
        WHERE organization_id = ? AND (status = 'failed' OR (status IN ('pending', 'processing') ${scopedContinuations}))
-    `, [options.organizationId])).map(row => row.status))
+         ${scopedRows}
+    `, [options.organizationId, ...scopeParams])).map(row => row.status))
     // Another request draining this site held a claim that blocked this one's
     // rows. Wait for it to finish, then claim what it left.
     const waitDeadline = options.waitDeadline ?? Date.now() + ORGANIZATION_DRAIN_WAIT_MS
     const waitable = blockedByAnotherDrain || unfinished.has('processing')
-    if (waitable && !unfinished.has('failed') && Date.now() < waitDeadline) {
+    if (unfinished.size > 0 && waitable && !unfinished.has('failed') && Date.now() < waitDeadline) {
       await new Promise(resolve => setTimeout(resolve, 100))
-      return processed + await drainPublicResourceCacheInvalidations(db, kv, env, { ...options, waitDeadline })
+      return processed + await drainPublicResourceCacheInvalidations(db, kv, env, { ...options, now, scope, waitDeadline })
     }
     if (unfinished.size > 0) {
       throw new Error(`Site changes for organization ${options.organizationId} were saved, but ${[...unfinished].join('/')} cache or search index work remains`)
