@@ -55,9 +55,11 @@ export default async function provisionTestActors(config: FullConfig) {
           const { members: verified } = await call(actor, `organization/list-members?organizationId=${encodeURIComponent(membership.organizationId)}&filterField=userId&filterOperator=eq&filterValue=${fixture.id}`)
           if (verified.length !== 1 || verified[0].role !== membership.role) throw new Error(`Better Auth did not assign ${fixture.email} its requested role.`)
         } finally {
-          if (impersonated) await call(inviter, 'admin/stop-impersonating', {})
-          await actor.dispose()
-          await inviter.dispose()
+          try {
+            if (impersonated) await call(inviter, 'admin/stop-impersonating', {})
+          } finally {
+            await Promise.all([actor.dispose(), inviter.dispose()])
+          }
         }
       }
     }

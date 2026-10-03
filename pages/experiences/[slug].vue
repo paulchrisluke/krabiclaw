@@ -18,7 +18,7 @@ if (isBlawby.value) throw createError({ statusCode: 404, statusMessage: 'Page no
 const resolved = await usePublicProductDetail('experiences')
 const organizationId = resolved.organizationId
 const detail = computed(() => resolved.detail.value)
-const presentation = detail.value.location ? EXPERIENCE_PRESENTATION : { ...EXPERIENCE_PRESENTATION, collectionPath: '/schedule' as const, collectionLabel: 'Consultations' as const }
+const presentation = computed(() => detail.value.location ? EXPERIENCE_PRESENTATION : { ...EXPERIENCE_PRESENTATION, collectionPath: '/schedule' as const, collectionLabel: 'Consultations' as const })
 const { t } = useI18n()
 /** The offer context this page quotes: the branch that runs it, the site currency, now. */
 const priceSelection = computed(() => ({
@@ -27,7 +27,7 @@ const priceSelection = computed(() => ({
   at: new Date().toISOString(),
 }))
 useSocialMetadata(() => ({
-  path: presentation.productPath(detail.value.location?.slug ?? '', detail.value.product.slug),
+  path: presentation.value.productPath(detail.value.location?.slug ?? '', detail.value.product.slug),
   // An experience with no applicable offer is not being sold, so it points at
   // the index instead of competing with it.
   title: detail.value.product.name,

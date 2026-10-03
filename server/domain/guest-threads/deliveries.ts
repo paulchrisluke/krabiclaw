@@ -82,16 +82,13 @@ export async function createDeliveryReceipt(
     idempotencyKey: string
   },
 ): Promise<GuestThreadDeliveryRow> {
-  const existing = await getDeliveryById(db, input.idempotencyKey)
-  if (existing) return existing
-
   const id = input.idempotencyKey
   const now = new Date().toISOString()
-  try {
-    await execute(db, `
+  await execute(db, `
       INSERT INTO guest_thread_deliveries
         (id, entry_id, channel, provider, purpose, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+      ON CONFLICT(id) DO NOTHING
     `, [
       id,
       input.entryId,
@@ -101,13 +98,6 @@ export async function createDeliveryReceipt(
       now,
       now,
     ])
-  } catch (error) {
-    if (/UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))) {
-      const concurrent = await getDeliveryById(db, input.idempotencyKey)
-      if (concurrent) return concurrent
-    }
-    throw error
-  }
 
   const created = await getDeliveryById(db, id)
   if (!created) throw new Error('Failed to load created guest thread delivery')
@@ -118,6 +108,19 @@ export async function getDeliveryById(db: DbClient, id: string): Promise<GuestTh
   return await queryFirst<GuestThreadDeliveryRow>(db, `
     SELECT * FROM guest_thread_deliveries WHERE id = ? LIMIT 1
   `, [id])
+}
+
+/** A concurrent caller waits for the claimed send; it never sends a second message. */
+export async function waitForDeliverySettlement(db: DbClient, delivery: GuestThreadDeliveryRow): Promise<GuestThreadDeliveryRow> {
+  const deadline = Date.now() + UNKNOWN_DELIVERY_LEASE_MS
+  while (delivery.status === 'pending' || (delivery.status === 'unknown' && delivery.error === null)) {
+    if (Date.now() >= deadline) throw new Error(`Delivery ${delivery.id} remained in progress without a recorded outcome`)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const current = await getDeliveryById(db, delivery.id)
+    if (!current) throw new Error(`Delivery ${delivery.id} disappeared while waiting for its outcome`)
+    delivery = current
+  }
+  return delivery
 }
 
 export async function getDeliveryByProviderMessageId(

@@ -1366,21 +1366,19 @@ export const organization = sqliteTable("organization", {
 	// the row's modification time and nothing else recorded a publish.
 	check("organization_instants_check", sql`(updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at) AND (analytics_data_start_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', analytics_data_start_at, '+0 days') IS analytics_data_start_at)`),
 	check("organization_settings_json_check", sql`json_valid(settings_json) AND json_type(settings_json) IS 'object'`),
+	check("organization_consultation_settings_check", sql`consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE`),
 	check("organization_config_brand_color_check", sql`json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'`),
 	check("organization_config_press_email_check", sql`json_type(settings_json, '$.config.press_email') IS NULL OR json_type(settings_json, '$.config.press_email') IS 'text'`),
 	check("organization_config_partnerships_email_check", sql`json_type(settings_json, '$.config.partnerships_email') IS NULL OR json_type(settings_json, '$.config.partnerships_email') IS 'text'`),
 	check("organization_config_catering_email_check", sql`json_type(settings_json, '$.config.catering_email') IS NULL OR json_type(settings_json, '$.config.catering_email') IS 'text'`),
 	check("organization_config_careers_email_check", sql`json_type(settings_json, '$.config.careers_email') IS NULL OR json_type(settings_json, '$.config.careers_email') IS 'text'`),
 	check("organization_config_default_timezone_check", sql`json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0`),
-	check("organization_consultation_metadata_check", sql`json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')`),
 	check("organization_compliance_metadata_check", sql`json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')`),
 	check("organization_theme_saya_check", sql`json_type(settings_json, '$.theme_by_template.saya') IS NULL OR (json_type(settings_json, '$.theme_by_template.saya') IS 'object' AND json_type(settings_json, '$.theme_by_template.saya.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.saya.status') IN ('active', 'disabled')) IS TRUE`),
 	check("organization_theme_blawby_check", sql`json_type(settings_json, '$.theme_by_template.blawby') IS NULL OR (json_type(settings_json, '$.theme_by_template.blawby') IS 'object' AND json_type(settings_json, '$.theme_by_template.blawby.tokens') IS 'object' AND json_extract(settings_json, '$.theme_by_template.blawby.status') IN ('active', 'disabled')) IS TRUE`),
 	check("organization_config_object_check", sql`json_type(settings_json, '$.config') IS NULL OR json_type(settings_json, '$.config') IS 'object'`),
 	check("organization_theme_by_template_object_check", sql`json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'`),
-	check("organization_consultation_object_check", sql`json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'`),
 	check("organization_compliance_object_check", sql`json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'`),
-	check("organization_consultation_check", sql`json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE`),
 	check("organization_compliance_check", sql`json_type(settings_json, '$.compliance') IS NULL OR (json_extract(settings_json, '$.compliance.address_visibility') IN ('visible', 'hidden') AND (json_extract(settings_json, '$.compliance.service_area_type') IS NULL OR json_extract(settings_json, '$.compliance.service_area_type') IN ('AdministrativeArea', 'City', 'Country', 'Place', 'State')) AND json_type(settings_json, '$.compliance.same_as') IN ('array', 'null') AND json_type(settings_json, '$.compliance.contact_points') IN ('array', 'null')) IS TRUE`),
 	check("organization_compliance_nonprofit_check", sql`json_extract(settings_json, '$.compliance.nonprofit_status') IS NULL OR json_extract(settings_json, '$.compliance.nonprofit_status') IN (${sql.raw([...NONPROFIT_STATUS_CANONICAL].map(value => `'${value}'`).join(', '))})`),
 	check("organization_feature_overrides_check", sql`feature_overrides IS NULL OR (json_valid(feature_overrides) AND json_type(feature_overrides) IS 'object')`),
@@ -1987,12 +1985,12 @@ export const resource_localizations = sqliteTable("resource_localizations", {
 		table.locale,
 	),
 	uniqueIndex("resource_localizations_org_locale_route_unique")
-		.on(table.locale, table.route_path)
+		.on(table.organization_id, table.locale, table.route_path)
 		.where(sql`route_path IS NOT NULL`),
 	check("resource_localizations_values_json_check", sql`json_valid(values_json) AND json_type(values_json) = 'object'`),
 	check("resource_localizations_non_english_check", sql`locale <> 'en'`),
 	check("resource_localizations_route_path_check", sql`route_path IS NULL OR (route_path LIKE '/' || locale || '/%' AND route_path NOT LIKE '%?%' AND route_path NOT LIKE '%#%' AND route_path NOT LIKE '%//%')`),
-	index("resource_localizations_org_locale_type_idx").on(table.locale, table.resource_type),
+	index("resource_localizations_org_locale_type_idx").on(table.organization_id, table.locale, table.resource_type),
 	index("resource_localizations_resource_idx").on(table.resource_type, table.resource_id),
 ]);
 

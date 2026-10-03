@@ -157,6 +157,8 @@ Role, tenant-isolation and onboarding journeys need distinct actors; Playwright'
 global setup provisions them through Better Auth's admin and organization APIs,
 using the same configured password. It does not rebuild tenant fixtures or write
 authentication rows directly. Preparation does not recopy production on each run.
+It clears transient local rate counters so repeated runs exercise the real
+limits with a fresh quota.
 
 Local Playwright waits for the Worker's health endpoint before running specs.
 The tests exercise cache invalidation without provisioning or indexing a remote

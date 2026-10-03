@@ -765,8 +765,8 @@ export async function replaceResourceLocalizations(
     }
     return {
       resourceId: item.resource_id.trim(),
-      values: validateLocalizedValues(resourceType, item.values, kinds.get(item.resource_id.trim())),
-      routePath: validateLocalizedRoutePath(resourceType, locale, item.route_path),
+      values: item.values,
+      routePath: item.route_path,
     }
   })
   const ids = parsed.map(item => item.resourceId)
@@ -774,6 +774,11 @@ export async function replaceResourceLocalizations(
   const found = new Set(canonical.map(row => row.id))
   const missing = ids.filter(id => !found.has(id))
   if (missing.length) localizationError(404, 'LOCALIZATION_NOT_FOUND', 'One or more canonical resources were not found', { resource_type: resourceType, resource_ids: missing })
+  const validated = parsed.map(item => ({
+    resourceId: item.resourceId,
+    values: validateLocalizedValues(resourceType, item.values, kinds.get(item.resourceId)),
+    routePath: validateLocalizedRoutePath(resourceType, locale, item.routePath),
+  }))
   const existing = await queryAll<PriorLocalization & { resource_id: string }>(db, `
     SELECT id, resource_id, route_path, created_at, created_by_user_id
       FROM resource_localizations
@@ -782,7 +787,7 @@ export async function replaceResourceLocalizations(
   const byResource = new Map(existing.map(row => [row.resource_id, row]))
   const now = new Date().toISOString()
   const statements: BatchQuery[] = []
-  for (const item of parsed) {
+  for (const item of validated) {
     const prior = byResource.get(item.resourceId)
     statements.push(...resourceLocalizationWriteQueries({
       organizationId: input.organizationId, resourceType, resourceId: item.resourceId,

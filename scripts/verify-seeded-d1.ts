@@ -59,4 +59,4 @@ if (failures.length > 0) {
 }
 
 const localDeveloperSummary = values['local-dev'] ? ', the configured review credential' : ''
-console.log(`Verified local D1: ${organizationIds.length} curated businesses, ${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)
+console.log(`Verified local D1: ${organizationIds.length} curated businesses${localDeveloperSummary}, ${row.applied_migrations} migrations, and no foreign key errors.`)
