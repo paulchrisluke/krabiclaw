@@ -32,6 +32,7 @@ async function postNativeInteraction(payload: ConversionPayload & { event_id: st
     keepalive: true,
   })
   if (!response.ok) throw new Error(`Native analytics collection was rejected (${response.status})`)
+  return await response.json() as { ignored?: boolean }
 }
 
 /** A submission's measurement as the server reports it beside the committed result. */
@@ -76,7 +77,7 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     const path = window.location.pathname
     return Promise.race([pageEventIdFor(path), whenLeaving()])
       .then(pageEventId => postNativeInteraction({ ...captured, page_event_id: pageEventId }))
-      .then(() => captured.event_id)
+      .then(result => result.ignored ? null : captured.event_id)
       .catch(async (error) => {
         await nuxtApp.callHook('vue:error', error, null, 'analytics-interaction')
         return null
