@@ -1,6 +1,6 @@
 import { defineHandler } from 'nitro'
 import { getRouterParam } from 'nitro/h3'
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireIntegrationAccount } from '~/server/utils/auth'
 import { listLinkedFacebookPages } from '~/server/utils/facebook-pages'
 import { integrationSummary, readIntegration } from '~/server/utils/organization-integrations'
@@ -33,13 +33,14 @@ export default defineHandler(async (event) => {
     return jsonResponse({
       success: true, account_id: accountId, connection: summary,
       choices: pages.map(page => ({ id: page.id, name: page.name })),
-      error: pages.length ? null : 'That Facebook account manages no Pages. Link the account that manages the business Page.',
+      error: pages.length ? null : 'That Facebook account manages no Pages. Connect the account that manages the business Page.',
     })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('facebook_pages_failed', { organizationId: organization.id, error })
     return jsonResponse({
-      success: true, account_id: accountId, connection: summary, choices: [],
+      account_id: accountId, connection: summary, choices: [],
       error: error instanceof Error ? error.message : String(error),
-    })
+    }, { status: 502 })
   }
 })

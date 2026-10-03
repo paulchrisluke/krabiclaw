@@ -1,5 +1,5 @@
 import { INTEGRATION_SCOPES } from '~/shared/organization-settings'
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { linkedAccountAccessToken, requireIntegrationAccount } from '~/server/utils/auth'
 import { organizationPublicUrl } from '~/server/utils/domains'
 import {
@@ -30,9 +30,9 @@ export default defineHandler(async (event) => {
 
   const { env, db, session, organization } = await requireOrganizationAccess(event, organizationId)
   const current = await readIntegration(env.DB, organization.id, 'google_search_console')
+  if (current) return jsonResponse({ error: 'Disconnect Google Search Console before connecting again.' }, { status: 409 })
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id,
-    currentAccountId: current?.account_id,
+    userId: session.user.id, currentAccountId: null,
     providerId: 'google',
     scopes: INTEGRATION_SCOPES['google-search-console'],
   })
@@ -41,7 +41,7 @@ export default defineHandler(async (event) => {
     const { accessToken } = await linkedAccountAccessToken(env, accountId)
     const owned = await listSearchConsoleSites(accessToken)
     if (owned.some(property => property.siteUrl === requested)) {
-      await storeIntegration(env.DB, organization.id, 'google_search_console', { account_id: accountId, target_id: requested, target_name: requested, verified: true })
+      await storeIntegration(env.DB, organization.id, 'google_search_console', { account_id: accountId, target_id: requested, target_name: requested, verified: true }, { revision: null })
       return jsonResponse({ success: true, site_url: requested, verified: true })
     }
 
@@ -61,6 +61,7 @@ export default defineHandler(async (event) => {
 
     return jsonResponse({ success: true, site_url: ownUrl, verified: true })
   } catch (error) {
+    rethrowHttpError(error)
     console.error('google_search_console_select_failed', { organizationId: organization.id, error })
     return jsonResponse({
       error: error instanceof Error ? error.message : 'Could not connect that Search Console property.',

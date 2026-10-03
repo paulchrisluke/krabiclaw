@@ -27,8 +27,9 @@ export default defineHandler(async (event) => {
   }
 
   const current = await readIntegration(env.DB, organization.id, 'facebook')
+  if (current) return jsonResponse({ error: 'Disconnect Facebook before connecting again.' }, { status: 409 })
   await requireIntegrationAccount(env, accountId, {
-    userId: session.user.id, currentAccountId: current?.account_id, providerId: 'facebook', scopes: [],
+    userId: session.user.id, currentAccountId: null, providerId: 'facebook', scopes: [],
   })
 
   const page = (await listLinkedFacebookPages(env, accountId)).find(candidate => candidate.id === pageId)
@@ -36,7 +37,7 @@ export default defineHandler(async (event) => {
 
   await storeIntegration(env.DB, organization.id, 'facebook', {
     account_id: accountId, target_id: page.id, target_name: page.name,
-  }, { revision: current?.revision ?? null })
+  }, { revision: null })
 
   return jsonResponse({ success: true, page_id: page.id, page_name: page.name })
 })
