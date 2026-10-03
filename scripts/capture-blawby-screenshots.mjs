@@ -353,7 +353,9 @@ try {
         if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
         await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false)
       }
-      await stabilizePage(page)
+      await stabilizePage(page).catch(error => {
+        throw new Error(`${routeConfig.path} could not stabilize at ${viewportName} (${page.url()})`, { cause: error })
+      })
       await page.screenshot({ path: filePath, fullPage: true })
       if (inventoryMode) {
         const mainText = await page.locator('main').innerText().catch(error => {
