@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
-import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 
 interface CreatedProduct { id: string; name: string; description: string; active: boolean }
 
@@ -12,7 +11,7 @@ test('Product batches validate and commit atomically at the supported limit', as
   // its whole catalog, so nothing else may write the demo's products meanwhile.
   const releaseTenantMutationLock = await acquireTenantMutationLock(testInfo, organizationId)
   try {
-    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    await loginAs(request, baseURL!)
     const locationId = 'loc-demo'
 
     // The demo's own catalog is part of the tenant this runs on. Its active
@@ -45,7 +44,7 @@ test('Product batches validate and commit atomically at the supported limit', as
         collectionIds.push(mcpData<{ collection: { id: string } }>(await response.json()).collection.id)
       }
 
-      const products = Array.from({ length: 100 }, (_, index) => ({
+      const products = Array.from({ length: 100 }, (_, index) => ({ kind: 'dish',
         name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
         description: `Original ${index + 1}`,
         variants: [{ name: 'Standard', prices: [{ unit_amount: (100 + index) * 100, currency: 'USD' }] }],
@@ -89,7 +88,7 @@ test('Product batches validate and commit atomically at the supported limit', as
         args: { organization_id: organizationId, product_id: created[0]!.id, location_id: locationId, active: true, published: true },
       })
 
-      const desired = created.slice(0, 95).map((product, index) => ({
+      const desired = created.slice(0, 95).map((product, index) => ({ kind: 'dish',
         product_id: product.id,
         name: `Batch Product ${String(index + 1).padStart(3, '0')}`,
         description: index === 0 ? 'Updated atomically' : `Original ${index + 1}`,

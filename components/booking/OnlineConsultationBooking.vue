@@ -1,0 +1,55 @@
+<template>
+  <section id="consultations" class="py-10 sm:py-14 scroll-mt-32" :aria-label="t('booking.choose_consultation')">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <UFormField :label="t('booking.service')" class="max-w-xl">
+        <USelect v-model.nullable="selectedId" :items="items" value-key="id" label-key="title" :portal="false" :ui="{ content: 'z-50' }" class="w-full min-w-0" />
+      </UFormField>
+      <div v-if="selectedService" class="mt-8 flex items-start gap-5">
+        <img v-if="thumbnail" :src="thumbnail" :alt="blockText(cover?.alt_text)" class="size-24 shrink-0 rounded-xl object-cover sm:size-32">
+        <div class="max-w-3xl">
+          <h2 class="blawby-display text-2xl text-default sm:text-3xl">{{ selectedService.title }}</h2>
+          <p v-if="selectedService.description" class="mt-3 leading-7 text-muted">{{ selectedService.description }}</p>
+          <NuxtLink :to="localePath(selectedService.url)" class="mt-3 inline-block text-sm font-medium text-primary underline underline-offset-4">{{ t('booking.service_details') }}</NuxtLink>
+        </div>
+      </div>
+      <p v-else role="status" class="mt-5 text-muted">{{ t('booking.no_services') }}</p>
+      <p v-if="selectedService && !selectedProduct" role="status" class="mt-6 text-muted">{{ t('booking.service_unavailable') }} <NuxtLink :to="localePath('/contact')" class="text-primary underline">{{ t('booking.contact_schedule') }}</NuxtLink></p>
+    </div>
+    <ProductDetailPage v-if="selectedProduct" :key="selectedProduct.id" compact :organization-id="organizationId" :organization-name="organizationName" vertical="service" :product="selectedProduct" :booking="selectedProduct.booking" :location="null" :currency="data!.currency" :collection-name="t('blawby.footer.services')" :presentation="presentation" :reviews="[]" :collection-siblings="[]" />
+  </section>
+</template>
+<script setup lang="ts">
+import ProductDetailPage from '~/components/products/ProductDetailPage.vue'
+import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
+import { publicApiRequest, isRecord } from '~/utils/api-clients'
+import { blockRecords, blockText } from '~/utils/tenant-page-block-data'
+import { requireProductPresentation } from '~/utils/product-presentation'
+const { data, organizationId, organizationName } = await useOnlineConsultationProducts()
+if (!data.value) throw createError({ statusCode: 500, statusMessage: 'Consultation services were not returned' })
+const event = useRequestEvent()
+const { locale, localePath, t } = useI18n()
+const { data: services, error: servicesError } = await useAsyncData(`consultation-service-grid:${organizationId}:${locale.value}`, async () => {
+  if (import.meta.server) {
+    const { cloudflareEnv } = await import('~/server/utils/api-response')
+    const { getPublicTenantPageForPath } = await import('~/server/utils/public-tenant-pages')
+    const env = cloudflareEnv(event!)
+    const page = await getPublicTenantPageForPath(env, env.DB, organizationId, '/services', { locale: locale.value, preview: Boolean(event!.context.previewAuthorized) })
+    if (!page) throw createError({ statusCode: 404, statusMessage: 'Services page not found' })
+    return { page }
+  }
+  return await publicApiRequest<{ page: PublicTenantPage }>('/api/public/pages', { query: { path: '/services', locale: locale.value }, validate: (value): value is { page: PublicTenantPage } => isRecord(value) && isRecord(value.page) && Array.isArray(value.page.blocks) })
+})
+if (servicesError.value) throw servicesError.value
+if (!services.value) throw createError({ statusCode: 500, statusMessage: 'Service directory was not returned' })
+const items = computed(() => services.value!.page.blocks.filter(block => block.type === 'page_grid').flatMap(block => blockRecords(block.data.items)).map(item => ({
+  id: blockText(item.id), productId: blockText(item.product_id), title: blockText(item.title), description: blockText(item.description), url: blockText(item.url), media: blockRecords(item.media),
+})))
+// Changing the visible service remounts the shared controller so an option or
+// time from another service cannot persist into the next request.
+const selectedId = ref(items.value.find(item => data.value!.products.some(product => product.id === item.productId))?.id ?? items.value[0]?.id ?? null)
+const selectedService = computed(() => items.value.find(item => item.id === selectedId.value) ?? null)
+const selectedProduct = computed(() => data.value!.products.find(product => product.id === selectedService.value?.productId) ?? null)
+const cover = computed(() => selectedService.value?.media.find(media => media.slot === 'cover'))
+const thumbnail = computed(() => blockText(cover.value?.public_url))
+const presentation = requireProductPresentation('service')
+</script>

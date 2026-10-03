@@ -65,7 +65,7 @@ const consultation = computed(() => document.value.shell.consultation)
 const compliance = computed(() => document.value.shell.compliance)
 const themeTokens = computed(() => document.value.shell.themeTokens)
 const pageLinks = computed(() => document.value.shell.pageLinks)
-provide('blawby-schema-context', { identity, compliance })
+provide('blawby-schema-context', { identity, compliance, consultation })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 

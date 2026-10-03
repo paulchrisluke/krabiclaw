@@ -46,7 +46,7 @@ async function authHeaders() {
   if (!shouldTryCredentialLogin) {
     return null
   }
-  return credentialSession(BASE_URL, { userId: process.env.MCP_E2E_USER_ID || 'user-e2e-demo-owner' })
+  return credentialSession(BASE_URL, { userId: process.env.MCP_E2E_USER_ID || undefined })
 }
 
 function expectStatus(label, actual, expected) {

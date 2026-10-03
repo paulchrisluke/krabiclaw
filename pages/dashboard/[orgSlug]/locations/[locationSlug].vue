@@ -89,7 +89,7 @@ const organizationId = await useDashboardOrganizationId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 
 const location = ref<LocationOverview | null>(null)
-const catalog = ref<CatalogCounts>({ total: 0, experiences: 0 })
+const catalog = ref<CatalogCounts>({ total: 0, experiences: 0, dishes: 0 })
 const reservationConfig = ref<LocationReservationConfig | null>(null)
 const counts = ref<LocationContentCounts>({ photos: 0, posts: 0, qa: 0, reviews: 0, organizationQa: 0 })
 const error = ref<string | null>(null)
@@ -192,7 +192,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => [{
 const isOverviewResponse = (value: unknown): value is LocationOverviewResource =>
   isRecord(value)
   && isRecord(value.location) && isRecord(value.location.location)
-  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.experiences === 'number'
+  && isRecord(value.catalog) && typeof value.catalog.total === 'number' && typeof value.catalog.experiences === 'number' && typeof value.catalog.dishes === 'number'
   && (value.reservationConfig === null || isRecord(value.reservationConfig))
   && isRecord(value.counts) && typeof value.counts.photos === 'number'
 

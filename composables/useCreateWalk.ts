@@ -22,7 +22,7 @@ export function useCreateWalk<K extends string>(options: {
   /** Whether this section still blocks creating. */
   missing: (key: K) => boolean
   /** Names the record in `Create <noun>`. */
-  noun: string
+  noun: MaybeRefOrGetter<string>
   saving: Ref<boolean>
   /** What blocks saving an existing record; by default an incomplete open section. */
   existingBlocked?: (outstanding: readonly K[]) => boolean
@@ -35,11 +35,11 @@ export function useCreateWalk<K extends string>(options: {
 
   const createActionLabel = computed(() => {
     const next = outstanding.value[0]
-    return next ? `Start with ${label(next)}` : `Create ${options.noun}`
+    return next ? `Start with ${label(next)}` : `Create ${toValue(options.noun)}`
   })
   const saveLabel = computed(() => {
     if (!options.isNew.value) return undefined
-    return nextOutstanding.value ? `Next: ${label(nextOutstanding.value)}` : `Create ${options.noun}`
+    return nextOutstanding.value ? `Next: ${label(nextOutstanding.value)}` : `Create ${toValue(options.noun)}`
   })
   const saveDisabled = computed(() => options.saving.value
     || (options.isNew.value

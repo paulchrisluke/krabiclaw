@@ -65,7 +65,6 @@ export interface DraftProductRecord {
   price: PriceInput | null
   order_url: string | null
   sort_order: number
-  tags: string[]
   source: 'import'
 }
 
@@ -318,7 +317,6 @@ export function buildOnboardingDraftPayload(input: {
         : { unit_amount: product.amountMinor, ...(input.details.currency ? { currency: input.details.currency } : {}) },
       order_url: null,
       sort_order: index,
-      tags: [],
       source: 'import' as const,
     }
   })

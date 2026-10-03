@@ -28,6 +28,7 @@ const guest = z.object({ name: z.string(), email: z.string(), phone: z.string().
  * `bookings.completed_at` and the `review_requests` record.
  */
 const threadPayload = z.object({
+  provenance: z.object({ source: z.string(), external_reference: z.string().nullable(), actor_user_id: z.string(), idempotency_key: z.string(), fingerprint: z.string(), guest_acknowledgement: z.boolean(), creation_kind: z.literal('ordinary'), creation_status: z.enum(['pending', 'confirmed']), followups_completed: z.boolean() }).optional(),
   guest,
   party_size_is_minimum: z.boolean(),
   notes: z.string().nullable(),
@@ -118,6 +119,7 @@ export async function getThreadOperationalRecord(db: DbClient, requestId: string
  * A new thread has not been archived by anyone, so it carries no archive state.
  */
 export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' | 'archived_by_user_id'>, claimedBy?: BatchQuery): BatchQuery[] {
+  const provenance = request.kind === 'booking' && 'provenance' in request.payload ? request.payload.provenance : undefined
   const values = [request.id, request.kind, request.organization_id, request.location_id, request.user_id, request.review_id,
     request.conversation_state, request.resolved_at, JSON.stringify(request.payload), request.created_at, request.updated_at]
   return [{
@@ -128,9 +130,9 @@ export function requestInsertQueries(request: Omit<GuestRequest, 'archived_at' |
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: claimedBy ? [...values, ...(claimedBy.params ?? [])] : values,
   }, {
-    query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
-      SELECT ?, id, 'submission', 'request', 'guest', 'web', json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
-    params: [crypto.randomUUID(), `request:${request.id}:submission`, request.id],
+    query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, actor_user_id, channel, payload_json, dedupe_key, sequence, occurred_at, created_at)
+      SELECT ?, id, 'submission', 'request', ?, ?, ?, json_object('kind', kind), ?, 1, created_at, created_at FROM requests WHERE id = ? AND changes() = 1`,
+    params: [crypto.randomUUID(), provenance ? 'member' : 'guest', provenance?.actor_user_id ?? null, provenance ? 'system' : 'web', `request:${request.id}:submission`, request.id],
   }, publicResourceCacheInvalidationQuery(request.organization_id, 'guest-thread-create')]
 }
 
@@ -152,8 +154,8 @@ export function threadPayloadForGuest(input: GuestThreadInput): ThreadPayload {
  * because the clock says so.
  */
 export function requestActions(record: ThreadOperationalRecord | null, now: string): string[] {
-  if (!record || record.status === 'cancelled' || isBookingComplete(record, now)) return []
-  return ['change', 'cancel']
+  if (!record || record.status === 'cancelled' || record.ends_at <= now) return []
+  return record.kind === 'booking' && record.status === 'pending' ? ['confirm', 'reject', 'change', 'cancel'] : ['change', 'cancel']
 }
 
 export function requestPreview(request: GuestRequest, record: ThreadOperationalRecord | null): string {
@@ -191,7 +193,7 @@ export async function cancelBookingRequest(db: DbClient, input: {
   const current = await getGuestRequest(db, input.id, input.organizationId, input.kind)
   if (!current || current.kind === 'contact') return null
   const record = await getThreadOperationalRecord(db, current.id)
-  if (record?.status !== 'confirmed' || isBookingComplete(record, input.now)) return null
+  if (!record || !['pending', 'confirmed'].includes(record.status) || record.ends_at <= input.now || isBookingComplete(record, input.now)) return null
 
   // Two writes, one batch, each carrying the other's condition: the token is
   // spent only while the record is still cancellable, and the record is
@@ -216,6 +218,13 @@ export async function cancelBookingRequest(db: DbClient, input: {
           AND EXISTS (SELECT 1 FROM requests WHERE id = ? AND organization_id = ?
             AND json_extract(payload_json, '$.cancellation.used_at') = ?)`,
       params: [input.now, input.now, record.id, record.status, input.id, input.organizationId, input.now],
+    },
+    {
+      query: `INSERT INTO activity_entries (id, request_id, kind, scope_kind, actor_kind, event_name, payload_json, dedupe_key, sequence, occurred_at, created_at)
+        SELECT ?, ?, 'operation', 'request', 'guest', ?, ?, ?,
+          COALESCE((SELECT MAX(sequence) FROM activity_entries WHERE request_id = ?), 0) + 1, ?, ?
+        WHERE changes() = 1`,
+      params: [crypto.randomUUID(), input.id, `${record.kind}.cancel`, JSON.stringify({ action: 'cancel', beforeStatus: record.status, afterStatus: 'cancelled', operational_booking_id: record.id, request_id: input.id }), `${record.kind}:${record.id}:guest-cancel`, input.id, input.now, input.now],
     },
   ], { operation: 'Cancel booking request' })
 

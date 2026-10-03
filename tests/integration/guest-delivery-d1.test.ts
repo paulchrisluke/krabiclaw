@@ -41,8 +41,8 @@ test('D1 claims fence concurrent sends and bound ambiguous provider retries', as
     const now = new Date().toISOString()
     const opening = requestInsertQueries({ id: 'contact-proof', kind: 'contact', organization_id: 'org-proof', location_id: null, user_id: null, review_id: null, conversation_state: 'needs_attention', resolved_at: null, payload: { guest: { name: 'Proof Guest', email: 'guest@proof.example', phone: null }, subject: null, message: 'Hello', consent_at: null, ip_hash: null }, created_at: now, updated_at: now })
     await db.batch(opening.map(write => db.prepare(write.query).bind(...write.params)))
-    await notifyContactSubmitted(env, db, { organizationId: 'org-proof', organizationName: 'Proof', locationId: null,
-      contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })
+    await Promise.all([0, 1].map(() => notifyContactSubmitted(env, db, { organizationId: 'org-proof', organizationName: 'Proof', locationId: null,
+      contactId: 'contact-proof', guestName: 'Proof Guest', email: 'guest@proof.example', subject: null, message: 'Hello' })))
     assert.equal((await listGuestThreads(db, 'org-proof', { userId: 'user-proof', unreadOnly: true }))[0]?.id, 'contact-proof')
     assert.deepEqual((await db.prepare("SELECT d.purpose,d.status FROM guest_thread_deliveries d JOIN activity_entries e ON e.id=d.entry_id WHERE e.request_id='contact-proof' ORDER BY d.purpose").all()).results,
       [{ purpose: 'guest_acknowledgement', status: 'sent' }, { purpose: 'owner_alert', status: 'sent' }])
@@ -336,7 +336,7 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     // The instant and the zone the guest agreed to live on the reservation; the
     // confirmation email is formatted from them, never from a server clock.
     await db.prepare(`INSERT INTO reservations (id,organization_id,location_id,request_id,timezone,starts_at,ends_at,party_size,status)
-      VALUES ('reservation-status','org-status','location-status','booking-status','Asia/Bangkok','2026-10-01T11:00:00.000Z','2026-10-01T13:00:00.000Z',2,'confirmed')`).run()
+      VALUES ('reservation-status','org-status','location-status','booking-status','Asia/Bangkok','2098-10-01T11:00:00.000Z','2098-10-01T13:00:00.000Z',2,'confirmed')`).run()
 
     const input = {
       threadId: 'booking-status', actorUserId: 'user-status',
@@ -350,14 +350,14 @@ test('D1 status-email retries preserve recorded content and reject superseded bo
     const original = requests[0]!
     // The recorded body is now rendered inside the shared email shell, so the
     // sent copy contains it rather than being it.
-    assert.ok(original.text.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
-    assert.ok(original.html.includes('Your reservation for Oct 1, 2026, 6:00 PM for 2 guests has been cancelled.'))
+    assert.ok(original.text.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
+    assert.ok(original.html.includes('Your reservation for Oct 1, 2098, 6:00 PM for 2 guests has been cancelled.'))
     assert.equal((await executeGuestThreadOperation(db, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-unchanged' })).status, 502)
     assert.deepEqual(requests[1], original)
 
     // Moving the reservation is what makes the pending send stale — the thread
     // carries no copy of the time to move.
-    await db.prepare("UPDATE reservations SET starts_at = '2026-10-02T11:00:00.000Z', ends_at = '2026-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
+    await db.prepare("UPDATE reservations SET starts_at = '2098-10-02T11:00:00.000Z', ends_at = '2098-10-02T13:00:00.000Z' WHERE request_id = 'booking-status'").run()
     const attemptsBefore = requests.length
     for (const request of [cancel, { ...input, action: 'retry_delivery', deliveryId, idempotencyKey: 'retry-changed' }]) {
       assert.equal((await executeGuestThreadOperation(db, request)).status, 409)
@@ -406,7 +406,7 @@ test('a booking move into a full session leaves the original booking exactly as 
       "INSERT INTO user (id, name, email) VALUES ('user-move', 'Owner', 'owner@move.example')",
       "INSERT INTO member (id, organizationId, userId, role) VALUES ('member-move','org-move','user-move','owner')",
       "INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('loc-move','org-move','move','Move','Asia/Bangkok')",
-      "INSERT INTO products (id, organization_id, name, slug, created_by, updated_by) VALUES ('prod-move','org-move','Class','class','user-move','user-move')",
+      "INSERT INTO products (kind, id, organization_id, name, slug, created_by, updated_by) VALUES ('experience', 'prod-move','org-move','Class','class','user-move','user-move')",
       "INSERT INTO product_variants (id, organization_id, product_id, name, created_by, updated_by) VALUES ('var-move','org-move','prod-move','Adult','user-move','user-move')",
       "INSERT INTO product_booking_configs (product_id, organization_id, duration_minutes, default_capacity, created_by, updated_by) VALUES ('prod-move','org-move',60,4,'user-move','user-move')",
       // The branch offers it: a session at a location only takes seats while
@@ -444,6 +444,14 @@ test('a booking move into a full session leaves the original booking exactly as 
       'no replacement seat was taken in the full session')
     assert.equal(await db.prepare("SELECT count(*) AS count FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('count'), 0,
       'the decision was not recorded for a move that did not happen')
+    await db.prepare("UPDATE bookings SET status='cancelled' WHERE id='booking-other'").run()
+    await respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' })
+    await respondToBookingChange(db, env, { threadId: 'move-proof', requestId, token, decision: 'accept' })
+    const moved = await db.prepare("SELECT id, product_session_id, status, request_id FROM bookings WHERE id='booking-move'").first()
+    assert.deepEqual(moved, { id: 'booking-move', product_session_id: 'session-to', status: 'confirmed', request_id: 'move-proof' })
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM bookings WHERE request_id='move-proof'").first('n'), 1)
+    assert.equal(await db.prepare("SELECT COUNT(*) n FROM activity_entries WHERE request_id='move-proof' AND event_name='booking_change.accepted'").first('n'), 1)
+
   } finally { await runtime.dispose() }
 })
 

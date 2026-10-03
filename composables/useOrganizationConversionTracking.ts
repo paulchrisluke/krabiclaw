@@ -94,12 +94,12 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
 
   // A product was viewed / a booking was started: native interactions first, then the GA4
   // ecommerce event through Zaraz's ecommerce API. Neither is an outcome.
-  function trackProductView(productId: string, locationId: string, ecommerce: Record<string, unknown> | null) {
+  function trackProductView(productId: string, locationId: string | null, ecommerce: Record<string, unknown> | null) {
     void recordNative({ event_name: 'product_view', stage: 'viewed', product_id: productId, location_id: locationId, page_type: 'product' })
       .then((eventId) => { if (eventId && ecommerce) window.zaraz?.ecommerce?.('Product Viewed', { ...ecommerce, event_id: eventId }) })
   }
 
-  function trackCheckoutStart(productId: string | null, locationId: string, ecommerce: Record<string, unknown> | null, variantId?: string | null) {
+  function trackCheckoutStart(productId: string | null, locationId: string | null, ecommerce: Record<string, unknown> | null, variantId?: string | null) {
     const payload: ConversionPayload = { event_name: 'checkout_start', stage: 'started', product_id: productId, location_id: locationId, page_type: productId ? 'product' : 'reservations' }
     void recordNative(payload, variantId)
       .then((eventId) => { if (eventId) {
@@ -138,7 +138,7 @@ export function useOrganizationConversionTracking(consultationSource?: MaybeRefO
     track({ event_name: 'link_click', stage: 'external_handoff', link_item_id: linkItemId, page_type: 'links', page_path: '/links' })
   }
 
-  function trackProductOrder(locationId: string, productId: string, pagePath?: string) {
+  function trackProductOrder(locationId: string | null, productId: string, pagePath?: string) {
     track({ event_name: 'product_order_external_click', stage: 'external_handoff', location_id: locationId, product_id: productId, page_type: 'product', page_path: pagePath })
   }
 

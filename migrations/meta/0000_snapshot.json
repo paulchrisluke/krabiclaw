@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4bd08de3-49ba-4e9c-8199-777f2eeb39e4",
+  "id": "cc8bdc69-6644-4240-af30-de7f3919300c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -1306,7 +1306,7 @@
       "checkConstraints": {
         "bookings_status_check": {
           "name": "bookings_status_check",
-          "value": "status IN ('confirmed', 'cancelled')"
+          "value": "status IN ('pending', 'confirmed', 'cancelled')"
         },
         "bookings_instants_check": {
           "name": "bookings_instants_check",
@@ -4022,7 +4022,7 @@
         },
         "media_placements_owner_type_check": {
           "name": "media_placements_owner_type_check",
-          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request')"
+          "value": "owner_type IN ('organization', 'business_location', 'product', 'content_document', 'content_block', 'review', 'review_request', 'activity_entry')"
         },
         "media_placements_sort_order_check": {
           "name": "media_placements_sort_order_check",
@@ -4119,168 +4119,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "metafield_definitions": {
-      "name": "metafield_definitions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "namespace": {
-          "name": "namespace",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "value_type": {
-          "name": "value_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "validations": {
-          "name": "validations",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{}'"
-        },
-        "localizable": {
-          "name": "localizable",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "metafield_definitions_org_id_unique": {
-          "name": "metafield_definitions_org_id_unique",
-          "columns": [
-            "organization_id",
-            "id"
-          ],
-          "isUnique": true
-        },
-        "metafield_definitions_namespace_key_unique": {
-          "name": "metafield_definitions_namespace_key_unique",
-          "columns": [
-            "organization_id",
-            "namespace",
-            "key"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "metafield_definitions_organization_id_organization_id_fk": {
-          "name": "metafield_definitions_organization_id_organization_id_fk",
-          "tableFrom": "metafield_definitions",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "metafield_definitions_instants_check": {
-          "name": "metafield_definitions_instants_check",
-          "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
-        },
-        "metafield_definitions_namespace_check": {
-          "name": "metafield_definitions_namespace_check",
-          "value": "namespace <> '' AND namespace = lower(namespace) AND namespace NOT GLOB '*[^a-z0-9_-]*'"
-        },
-        "metafield_definitions_key_check": {
-          "name": "metafield_definitions_key_check",
-          "value": "key <> '' AND key = lower(key) AND key NOT GLOB '*[^a-z0-9_-]*'"
-        },
-        "metafield_definitions_name_not_blank_check": {
-          "name": "metafield_definitions_name_not_blank_check",
-          "value": "trim(name) <> ''"
-        },
-        "metafield_definitions_validations_check": {
-          "name": "metafield_definitions_validations_check",
-          "value": "json_valid(validations) AND json_type(validations) = 'object'"
-        },
-        "metafield_definitions_localizable_check": {
-          "name": "metafield_definitions_localizable_check",
-          "value": "localizable IN (0, 1)"
-        }
-      }
     },
     "oauthAccessToken": {
       "name": "oauthAccessToken",
@@ -5350,6 +5188,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "consultation_settings_json": {
+          "name": "consultation_settings_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "settings_json": {
           "name": "settings_json",
           "type": "text",
@@ -5530,6 +5375,10 @@
           "name": "organization_settings_json_check",
           "value": "json_valid(settings_json) AND json_type(settings_json) IS 'object'"
         },
+        "organization_consultation_settings_check": {
+          "name": "organization_consultation_settings_check",
+          "value": "consultation_settings_json IS NULL OR (json_valid(consultation_settings_json) AND json_type(consultation_settings_json) IS 'object' AND json_extract(consultation_settings_json, '$.mode') IN ('external_url', 'native_disabled', 'native') AND json_type(consultation_settings_json, '$.cta_label') IS 'text' AND json_type(consultation_settings_json, '$.schedule_path') IS 'text' AND json_extract(consultation_settings_json, '$.schedule_path') LIKE '/%' AND json_type(consultation_settings_json, '$.confirmation_path') IS 'text' AND json_extract(consultation_settings_json, '$.confirmation_path') LIKE '/%' AND json_type(consultation_settings_json, '$.tracking_enabled') IN ('true', 'false') AND (json_type(consultation_settings_json, '$.metadata_json') IS NULL OR json_type(consultation_settings_json, '$.metadata_json') IN ('null', 'object')) AND (json_type(consultation_settings_json, '$.external_url') IS NULL OR json_type(consultation_settings_json, '$.external_url') IN ('null', 'text'))) IS TRUE"
+        },
         "organization_config_brand_color_check": {
           "name": "organization_config_brand_color_check",
           "value": "json_type(settings_json, '$.config.brand_color') IS NULL OR json_type(settings_json, '$.config.brand_color') IS 'text'"
@@ -5554,10 +5403,6 @@
           "name": "organization_config_default_timezone_check",
           "value": "json_type(settings_json, '$.config.default_timezone') IS 'text' AND length(json_extract(settings_json, '$.config.default_timezone')) > 0"
         },
-        "organization_consultation_metadata_check": {
-          "name": "organization_consultation_metadata_check",
-          "value": "json_type(settings_json, '$.consultation.metadata_json') IS NULL OR json_type(settings_json, '$.consultation.metadata_json') IN ('null', 'object')"
-        },
         "organization_compliance_metadata_check": {
           "name": "organization_compliance_metadata_check",
           "value": "json_type(settings_json, '$.compliance.metadata_json') IS NULL OR json_type(settings_json, '$.compliance.metadata_json') IN ('null', 'object')"
@@ -5578,17 +5423,9 @@
           "name": "organization_theme_by_template_object_check",
           "value": "json_type(settings_json, '$.theme_by_template') IS NULL OR json_type(settings_json, '$.theme_by_template') IS 'object'"
         },
-        "organization_consultation_object_check": {
-          "name": "organization_consultation_object_check",
-          "value": "json_type(settings_json, '$.consultation') IS NULL OR json_type(settings_json, '$.consultation') IS 'object'"
-        },
         "organization_compliance_object_check": {
           "name": "organization_compliance_object_check",
           "value": "json_type(settings_json, '$.compliance') IS NULL OR json_type(settings_json, '$.compliance') IS 'object'"
-        },
-        "organization_consultation_check": {
-          "name": "organization_consultation_check",
-          "value": "json_type(settings_json, '$.consultation') IS NULL OR (json_extract(settings_json, '$.consultation.mode') IN ('external_url', 'native_disabled') AND json_type(settings_json, '$.consultation.cta_label') IS 'text' AND json_extract(settings_json, '$.consultation.schedule_path') LIKE '/%' AND json_extract(settings_json, '$.consultation.confirmation_path') LIKE '/%' AND json_type(settings_json, '$.consultation.tracking_enabled') IN ('true', 'false')) IS TRUE"
         },
         "organization_compliance_check": {
           "name": "organization_compliance_check",
@@ -7273,6 +7110,36 @@
           "notNull": false,
           "autoincrement": false
         },
+        "confirmation_mode": {
+          "name": "confirmation_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'instant'"
+        },
+        "online_payment_required": {
+          "name": "online_payment_required",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "online_timezone": {
+          "name": "online_timezone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "calendar_group": {
+          "name": "calendar_group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -7358,6 +7225,18 @@
         "product_booking_configs_capacity_check": {
           "name": "product_booking_configs_capacity_check",
           "value": "default_capacity IS NULL OR default_capacity >= 0"
+        },
+        "product_booking_configs_confirmation_check": {
+          "name": "product_booking_configs_confirmation_check",
+          "value": "confirmation_mode IN ('instant', 'review')"
+        },
+        "product_booking_configs_payment_check": {
+          "name": "product_booking_configs_payment_check",
+          "value": "online_payment_required IN (0, 1)"
+        },
+        "product_booking_configs_calendar_check": {
+          "name": "product_booking_configs_calendar_check",
+          "value": "calendar_group IS NULL OR (length(trim(calendar_group)) > 0 AND online_timezone IS NOT NULL)"
         }
       }
     },
@@ -7506,143 +7385,6 @@
         "product_locations_active_check": {
           "name": "product_locations_active_check",
           "value": "active IN (0, 1) AND published IN (0, 1)"
-        }
-      }
-    },
-    "product_metafields": {
-      "name": "product_metafields",
-      "columns": {
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "product_id": {
-          "name": "product_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "definition_id": {
-          "name": "definition_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "product_metafields_definition_idx": {
-          "name": "product_metafields_definition_idx",
-          "columns": [
-            "definition_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "product_metafields_organization_id_organization_id_fk": {
-          "name": "product_metafields_organization_id_organization_id_fk",
-          "tableFrom": "product_metafields",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "product_metafields_product_scope_fk": {
-          "name": "product_metafields_product_scope_fk",
-          "tableFrom": "product_metafields",
-          "tableTo": "products",
-          "columnsFrom": [
-            "organization_id",
-            "product_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "product_metafields_definition_scope_fk": {
-          "name": "product_metafields_definition_scope_fk",
-          "tableFrom": "product_metafields",
-          "tableTo": "metafield_definitions",
-          "columnsFrom": [
-            "organization_id",
-            "definition_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "product_metafields_pk": {
-          "columns": [
-            "product_id",
-            "definition_id"
-          ],
-          "name": "product_metafields_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "product_metafields_instants_check": {
-          "name": "product_metafields_instants_check",
-          "value": "(created_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', created_at, '+0 days') IS created_at) AND (updated_at IS NULL OR strftime('%Y-%m-%dT%H:%M:%fZ', updated_at, '+0 days') IS updated_at)"
-        },
-        "product_metafields_value_check": {
-          "name": "product_metafields_value_check",
-          "value": "json_valid(value)"
         }
       }
     },
@@ -8599,6 +8341,21 @@
     "products": {
       "name": "products",
       "columns": {
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "details_json": {
+          "name": "details_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
+        },
         "id": {
           "name": "id",
           "type": "text",
@@ -8659,14 +8416,6 @@
         },
         "marketing_features": {
           "name": "marketing_features",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
-        "tags": {
-          "name": "tags",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -8775,6 +8524,10 @@
           "name": "products_slug_check",
           "value": "slug <> '' AND slug = lower(slug) AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-' AND slug NOT LIKE '%--%'"
         },
+        "products_kind_check": {
+          "name": "products_kind_check",
+          "value": "kind IN ('dish', 'experience', 'service', 'item')"
+        },
         "products_active_check": {
           "name": "products_active_check",
           "value": "active IN (0, 1)"
@@ -8783,9 +8536,9 @@
           "name": "products_marketing_features_check",
           "value": "json_valid(marketing_features) AND json_type(marketing_features) = 'array'"
         },
-        "products_tags_check": {
-          "name": "products_tags_check",
-          "value": "json_valid(tags) AND json_type(tags) = 'array'"
+        "products_details_json_check": {
+          "name": "products_details_json_check",
+          "value": "json_valid(details_json) AND json_type(details_json) = 'object'"
         },
         "products_metadata_check": {
           "name": "products_metadata_check",
@@ -9544,6 +9297,7 @@
         "resource_localizations_org_locale_route_unique": {
           "name": "resource_localizations_org_locale_route_unique",
           "columns": [
+            "organization_id",
             "locale",
             "route_path"
           ],
@@ -9553,6 +9307,7 @@
         "resource_localizations_org_locale_type_idx": {
           "name": "resource_localizations_org_locale_type_idx",
           "columns": [
+            "organization_id",
             "locale",
             "resource_type"
           ],

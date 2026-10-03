@@ -272,7 +272,7 @@ if (!args.url) {
 }
 const inventoryMode = Boolean(args.sitemapUrl)
 if (inventoryMode) {
-  if (args.source !== 'blawby') throw new Error('--sitemap-url is only for a Blawby target')
+  if (args.source !== 'blawby') throw new Error('--sitemap-url requires --source blawby')
   args.routes = { ...await publishedRoutes(args.sitemapUrl), ...args.explicitRoutes }
 }
 
@@ -313,9 +313,14 @@ const manifest = {
 }
 
 try {
-  for (const [viewportName, viewport] of Object.entries(inventoryMode
+  const captures = Object.entries(inventoryMode
     ? { mobile: BLAWBY_PARITY_VIEWPORTS.mobile, desktop: BLAWBY_PARITY_VIEWPORTS.desktop }
-    : BLAWBY_PARITY_VIEWPORTS)) {
+    : BLAWBY_PARITY_VIEWPORTS).flatMap(([viewportName, viewport]) =>
+    Array.from({ length: inventoryMode ? 2 : 1 }, (_, lane) => ({
+      viewportName, viewport,
+      routes: Object.entries(args.routes).filter((_, index) => !inventoryMode || index % 2 === lane),
+    })))
+  await Promise.all(captures.map(async ({ viewportName, viewport, routes }) => {
     const context = await browser.newContext({
       viewport,
       deviceScaleFactor: 1,
@@ -337,7 +342,7 @@ try {
         failedFirstParty.push(`${response.status()} ${response.url()}`)
       }
     })
-    for (const [routeName, routeConfig] of Object.entries(args.routes)) {
+    for (const [routeName, routeConfig] of routes) {
       pageErrors.length = 0
       failedFirstParty.length = 0
       const targetUrl = resolveUrl(args.url, routeConfig.path)
@@ -346,7 +351,7 @@ try {
       const response = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
       if (inventoryMode) {
         if (response?.status() !== 200) throw new Error(`${routeConfig.path} returned ${response?.status() ?? 'no response'} at ${viewportName}`)
-        await page.locator('.blawby-shell[data-hydrated="true"]').waitFor()
+        await page.waitForFunction(() => document.querySelector('#__nuxt')?.__vue_app__?.$nuxt?.isHydrating === false)
       }
       await stabilizePage(page)
       await page.screenshot({ path: filePath, fullPage: true })
@@ -420,7 +425,7 @@ try {
 
     }
     await context.close()
-  }
+  }))
 } finally {
   await browser.close()
 }

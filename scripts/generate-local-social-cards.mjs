@@ -2,16 +2,22 @@
 import { parseArgs } from 'node:util'
 import { credentialSession } from './utils/e2e-auth.mjs'
 
+try {
+  process.loadEnvFile()
+} catch (error) {
+  if (error.code !== 'ENOENT') throw error
+}
+
 const { values: args } = parseArgs({ options: {
   'base-url': { type: 'string', default: 'http://localhost:3000' },
   'organization-id': { type: 'string' },
   platform: { type: 'boolean', default: false },
-  email: { type: 'string', default: 'developer@playwright.example' },
+  email: { type: 'string', default: process.env.CANARY_LOGIN_EMAIL },
   password: { type: 'string' },
 } })
 const baseURL = args['base-url']
-const password = args.password || process.env.E2E_TEST_PASSWORD
-if (!password) throw new Error('E2E_TEST_PASSWORD or --password is required. Use the credential provisioned by local:setup.')
+const password = args.password || process.env.CANARY_LOGIN_PASSWORD
+if (!args.email || !password) throw new Error('Set CANARY_LOGIN_EMAIL and CANARY_LOGIN_PASSWORD, or pass an explicit email and password.')
 const { cookie } = await credentialSession(baseURL, { email: args.email, password })
 const headers = { cookie, origin: new URL(baseURL).origin, 'content-type': 'application/json' }
 const endpointFor = id => `/api/editor/organizations/${encodeURIComponent(id)}/social-cards/regenerate`

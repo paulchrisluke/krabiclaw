@@ -1,7 +1,13 @@
 # Airbnb parity: schema and MCP handoff
 
-**Status: Brief for the schema change — 2026-10-01.** Written for whoever
-simplifies the booking schema and the MCP tools. The CMS presentation work
+**Status: Historical audit and future schema proposal — 2026-10-01.**
+
+The approved first step is deletion and contract cleanup only, with schema and
+customer rows unchanged. Current implementation findings and compatibility
+decisions are recorded in [deletion-first-step-one.md](deletion-first-step-one.md).
+The proposals and counts below are audit evidence, not migration instructions.
+
+Written for whoever simplifies the booking schema and the MCP tools. The CMS presentation work
 (theme, shells, row controls, Menu fixes) is done in PR #1200; this document
 is what that work found it could not fix without changing the data model.
 
@@ -197,8 +203,9 @@ accessibility and `max_capacity` unless they are made real.
 fields. Delete any page or column outside that list.
 
 **Data moves**: 11 bookable products, 131 rules, 960 sessions and 3 bookings
-move to the new shape; 6 reservation policies lose their dead columns. Use the
-epoch process in `docs/operations/release-and-outage-prevention.md`.
+move to the new shape; 6 reservation policies lose their dead columns. Any
+approved future schema change follows the current forward-migration contract in `docs/operations/release-and-outage-prevention.md`; an epoch
+replacement is not the default. The first cleanup step needs no migration.
 
 ## Screenshot index
 

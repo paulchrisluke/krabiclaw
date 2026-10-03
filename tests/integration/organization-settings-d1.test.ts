@@ -28,7 +28,7 @@ test('organization settings and workspace patches preserve independent owners an
     // there is no settings key that sets it.
     await storeIntegration(db, 'org', 'google_analytics', { account_id: 'google-account', target_id: '100', target_name: 'OAuth', measurement_id: 'G-OAUTH' })
     assert.equal((await getConfig(db, 'org')).google_analytics_measurement_id, 'G-OAUTH')
-    await assert.rejects(db.prepare("UPDATE organization SET settings_json=json_set(settings_json,'$.consultation',json('{}')) WHERE id='org'").run())
+    await assert.rejects(db.prepare("UPDATE organization SET consultation_settings_json=json('{}') WHERE id='org'").run(), /organization_consultation_settings_check/)
     await assert.rejects(setConfig(db, 'other', 'brand_color', '#000000'))
     assert.equal(await deleteIntegration(db, 'org', 'google_analytics'), true)
     const selection = { account_id: 'google-account', target_id: '123', target_name: 'Site', measurement_id: 'G-SELECTED' }

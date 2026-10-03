@@ -64,7 +64,7 @@ async function placeAsset(db: D1Database, input: {
 test('a product grid item carries the product cover, not whichever placement sorted first', { timeout: 120_000 }, async () => {
   const { runtime, db } = await boot()
   try {
-    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: {
+    const product = await createProduct(db, { organizationId: ORG, actor: ACTOR, product: { kind: 'dish',
       name: 'Ceramics Painting Class',
       variants: [{ name: 'Default', prices: [{ unit_amount: 140000, currency: 'THB' }] }],
     } })

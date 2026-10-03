@@ -23,7 +23,7 @@ test('catch-all locale classification uses the tenant published-locale set', () 
 test('localized projection clears untranslated localizable fields', () => {
   const projected = projectExactLocalizedResource(
     'product',
-    { id: 'product-1', name: 'English name', description: 'English description', tags: ['english-tag'], variants: [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }] },
+    { id: 'product-1', name: 'English name', description: 'English description', variants: [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }] },
     {
       resourceType: 'product',
       resourceId: 'product-1',
@@ -36,10 +36,9 @@ test('localized projection clears untranslated localizable fields', () => {
   assert.equal(projected.name, 'บทเรียน')
   // An untranslated field is cleared rather than shown in the source language,
   // and cleared is its type's empty value: the Product contract requires a
-  // description string and a tag list, and a projection missing them failed
+  // description string, and a projection missing it failed
   // every page that carried it.
   assert.equal(projected.description, '')
-  assert.deepEqual(projected.tags, [])
   // Prices are not language, so they survive verbatim.
   assert.deepEqual(projected.variants, [{ id: 'var-1', prices: [{ unit_amount: 2500 }] }])
 })

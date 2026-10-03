@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_ORGANIZATION_ID, mcpData, mcpRequest } from './helpers/mcp'
-import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { acquireTenantMutationLock } from './helpers/tenant-mutation-lock'
 
 interface PriceRow {
@@ -36,7 +35,7 @@ test.afterEach(async () => {
  */
 test('deployed MCP transport prices variants, and refuses to invent a missing amount', async ({ request, baseURL }) => {
 
-  await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+  await loginAs(request, baseURL!)
   const toolsResponse = await mcpRequest(request, baseURL!, { method: 'tools/list' })
   expect(await toolsResponse.json()).toMatchObject({
     result: {
@@ -54,7 +53,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const create = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
-    args: {
+    args: { kind: 'dish',
       organization_id: organizationId,
       name: 'Salmon Roll',
       variants: [
@@ -83,7 +82,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const unpriced = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
-    args: { organization_id: organizationId, name: "Chef's Choice", variants: [{ name: 'Standard' }] },
+    args: { kind: 'dish', organization_id: organizationId, name: "Chef's Choice", variants: [{ name: 'Standard' }] },
   })
   expect(unpriced.status()).toBe(200)
   const unpricedProduct = mcpData<{ product: ProductRow }>(await unpriced.json()).product
@@ -95,7 +94,7 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const ambiguous = await mcpRequest(request, baseURL!, {
     method: 'tools/call',
     toolName: 'create_product',
-    args: {
+    args: { kind: 'dish',
       organization_id: organizationId,
       name: 'Ambiguous Roll',
       variants: [{ name: 'Standard', prices: [
@@ -110,4 +109,14 @@ test('deployed MCP transport prices variants, and refuses to invent a missing am
   const ambiguousBody = await ambiguous.json() as { result?: { isError?: unknown; content?: Array<{ text?: string }> } }
   expect(ambiguousBody.result?.isError, JSON.stringify(ambiguousBody)).toBe(true)
   expect(ambiguousBody.result?.content?.map(part => part.text).join(' ')).toMatch(/price/i)
+
+  const invalidDetails = await mcpRequest(request, baseURL!, {
+    method: 'tools/call', toolName: 'update_product',
+    args: { organization_id: organizationId, product_id: created.id, details: { care_instructions: 'Hand wash only' } },
+  })
+  const invalidDetailsBody = await invalidDetails.json() as { result?: { isError?: boolean; content?: Array<{ text?: string }> } }
+  expect(invalidDetailsBody.result?.isError, JSON.stringify(invalidDetailsBody)).toBe(true)
+  expect(invalidDetailsBody.result?.content?.map(part => part.text).join(' ')).toMatch(/care_instructions.*dish/)
+  const unchanged = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'get_product', args: { organization_id: organizationId, product_id: created.id } })
+  expect(mcpData<{ product: { details: object } }>(await unchanged.json()).product.details).toEqual({})
 })

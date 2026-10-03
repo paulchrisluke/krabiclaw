@@ -22,3 +22,14 @@ export function readBearerToken(authHeader: string | undefined | null): string {
   const [scheme, token] = String(authHeader || '').split(/\s+/, 2)
   return scheme?.toLowerCase() === 'bearer' ? token || '' : ''
 }
+
+/** Recover the same guest capability after an idempotent operator creation retry.
+ * Only the hash is persisted, just as for public cancellations.
+ */
+export async function createReplayableReservationCancelToken(secret: string, requestId: string) {
+  if (!secret || !requestId) throw new Error('Cancellation signing secret and request ID are required')
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const bytes = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`booking-cancel:v1:${requestId}`)))
+  const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+  return { token, expiresAt: new Date(Date.now() + TOKEN_TTL_DAYS * 86400000).toISOString() }
+}

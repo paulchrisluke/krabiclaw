@@ -1,7 +1,14 @@
 @import "tailwindcss" source(none);
+@import "@nuxt/ui/runtime/keyframes.css";
 @source "../../utils/form-constants.ts";
 @source "../../.nuxt/ui/carousel.ts";
 @source "../../.nuxt/ui/button.ts";
+/* Shared public booking fields use the same control themes as the CMS. */
+@source "../../.nuxt/ui/form-field.ts";
+@source "../../.nuxt/ui/input.ts";
+@source "../../.nuxt/ui/select.ts";
+@source "../../.nuxt/ui/select-menu.ts";
+@source "../../app.config.ts";
 /* Markdown copy controls are created by this composable, not a Vue template. */
 @source "../../composables/useCopyableCodeBlocks.ts";
 

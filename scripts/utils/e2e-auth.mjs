@@ -28,10 +28,9 @@ async function expectOk(response, label) {
 
 export async function credentialSession(baseURL, options = {}) {
   const fixture = options.userId ? findE2eAuthFixture(options.userId) : null
-  const email = options.email || fixture?.email
-  const password = options.password || process.env.E2E_TEST_PASSWORD
-  if (!email) throw new Error('A seeded E2E userId or explicit email is required for credential sign-in.')
-  if (!password) throw new Error('E2E_TEST_PASSWORD or an explicit password is required for credential sign-in.')
+  const email = options.email || fixture?.email || process.env.CANARY_LOGIN_EMAIL
+  const password = options.password || (process.env.CANARY_LOGIN_PASSWORD)
+  if (!email || !password) throw new Error('Configure CANARY_LOGIN_EMAIL and CANARY_LOGIN_PASSWORD, or supply the requested explicit credential.')
 
   const origin = new URL(baseURL).origin
   const signIn = await expectOk(await fetch(new URL('/api/auth/sign-in/email', baseURL), {
@@ -42,7 +41,7 @@ export async function credentialSession(baseURL, options = {}) {
   let cookie = mergeCookieHeader('', signIn)
   if (!cookie) throw new Error('Better Auth credential sign-in did not return a session cookie.')
 
-  const organizationId = options.organizationId || fixture?.memberships?.[0]?.organizationId
+  const organizationId = options.organizationId || (fixture ? fixture.memberships?.[0]?.organizationId : process.env.CANARY_ORG_ID)
   if (organizationId) {
     const activeOrganization = await expectOk(await fetch(new URL('/api/auth/organization/set-active', baseURL), {
       method: 'POST',

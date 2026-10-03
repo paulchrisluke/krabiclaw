@@ -28,6 +28,7 @@ import { addressPlaceName, parsePostalAddress } from '~/utils/postal-address'
 export interface PublicTenantPage {
   id: string
   page_id: string
+  product_id?: string | null
   path: string
   title: string
   summary: string | null
@@ -44,6 +45,7 @@ export interface PublicTenantPage {
 
 /** A page referenced by a page_grid block. */
 export interface PublicTenantPageReferenceRow {
+  product_id: string | null
   id: string
   title: string
   summary: string | null
@@ -95,7 +97,7 @@ export async function listPublicTenantPageReferenceRows(
   // representation row. A page with no translation keeps its English title and
   // route rather than disappearing from the grid unexplained.
   const rows = await queryAll<Omit<PublicTenantPageReferenceRow, 'media'>>(db, `
-    SELECT root.id, COALESCE(rep.title, root.title) AS title, COALESCE(rep.summary, root.summary) AS summary,
+    SELECT root.id, root.product_id, COALESCE(rep.title, root.title) AS title, COALESCE(rep.summary, root.summary) AS summary,
            COALESCE(rep.slug, root.slug) AS slug, COALESCE(rep.path, root.path) AS path
       FROM content_documents root
       LEFT JOIN content_documents rep ON rep.root_id = root.id AND rep.row_role = 'representation' AND rep.locale = ?
@@ -337,6 +339,7 @@ async function hydrateBlocks(
         if (!page) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page reference is unavailable' })
         return {
           id: page.id,
+          product_id: page.product_id,
           title: page.title,
           description: page.summary ?? undefined,
           url: page.path,
@@ -438,6 +441,7 @@ function mapPage(
   return {
     id: page.id,
     page_id: page.page_id,
+    product_id: page.product_id,
     path: page.path,
     title: page.title,
     summary: page.summary,

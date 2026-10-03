@@ -52,7 +52,7 @@ reconciliation reports `zaraz_absent` without calling Cloudflare. Declaring it
 absent while `CF_ZONE_ID` is set fails as a configuration error.
 
 `local:setup` is safe to repeat: it applies the migration chain, refreshes
-the demo, Kikuzuki, Pottery House, and NCLS fixtures, provisions local auth, and
+the demo, Kikuzuki, Pottery House, and NCLS fixtures, copies the shared review credential, and
 verifies the resulting D1 database. Do not replace its steps with direct
 Wrangler writes or a hand-edited local database.
 
@@ -83,21 +83,21 @@ handoff until the post-start social-card generation and public verification pass
 
 ```sh
 corepack yarn local:cards
-corepack yarn client:verify --url http://localhost:3000 --site-id site-demo --tenant-slug ember-slice-demo
+corepack yarn client:verify --url http://localhost:3000 --organization-id org-demo --tenant-slug demo
 ```
 
-It signs in as the developer account and regenerates every tenant's cards
+It signs in as the configured review account and regenerates every tenant's cards
 through the same endpoint the dashboard's own button uses. It needs `yarn dev`
 up, because rendering a card runs in the Worker, and it takes a while on the
 first run — a card is rendered and uploaded per product, post and page. Requests
 process five owners at a time. Each generated or reused PNG is fetched and its
 1200×630 dimensions checked; every skipped or failed owner is reported. Re-running
-reuses matching cards. Use `--site-id` to limit it to one site; Krabiclaw's own
-site is an ordinary site here.
+reuses matching cards. Use `--organization-id` to limit it to one organization;
+Krabiclaw's own site is an ordinary organization here.
 
 Approved `client:import --apply` runs this same generator for the imported site
 and then `client:verify`; failed generation or verification prevents handoff.
-It requires the target Worker to be running and `E2E_TEST_PASSWORD` for the
+It requires the target Worker to be running and `CANARY_LOGIN_PASSWORD` for the
 authorized account (`--email` selects it). Remote targets also require an explicit
 `--base-url`.
 
@@ -105,7 +105,7 @@ Only production runs the `social-card-backfill` task: staging sets
 `crons = []`, and it is bounded to a small number of owners per night.
 
 An explicitly requested ordinary staging refresh uses `corepack yarn db:pull:staging`.
-It reads production's default `DB` source and preserves staging's `jwks` signing
+It reads the deployed production Worker's `DB` source and preserves staging's `jwks` signing
 keys. It performs a full content/data refresh, so do not run it for a scoped media
 repair or add it to recurring schedules or every deployment. Staging deploys
 apply migrations; they do not refresh production data. A same-environment
@@ -125,43 +125,46 @@ environment.
 
 ## Signing in
 
-After `local:setup`, start the app and use the URL, email, and password printed
-under `Local developer sign-in`. Setup generates a fresh password on every run,
-prints it once, and stores only its hash in local D1. No reusable local password
-is recorded in the repository.
+Use the dedicated production review account configured by `CANARY_LOGIN_EMAIL`
+and `CANARY_LOGIN_PASSWORD` in `.env` for local development, browser verification,
+and app submission review. Provision that account through Better Auth's admin
+API with an email alias the operator owns. Better Auth owns its password,
+verification status, permissions and sessions.
 
-The account exists only in local D1. It is a Better Auth admin (it can
-impersonate) and an owner in each curated tenant organization, so it is the
-single manual sign-in for demo, Pottery House, Kikuzuki, NCLS, and Krabiclaw's
-own site. Better Auth handles the normal
-email/password request and stores only the password hash; there is no auth
-bypass, magic header, or cookie to paste.
-
-### Signing in without typing
-
-Retyping a freshly generated password every time is tedious, and an agent
-driving a browser cannot do it at all. Set `LOCAL_DEVELOPER_EMAIL` and
-`LOCAL_DEVELOPER_PASSWORD` in `.env` and re-run `corepack yarn local:setup`:
-setup then provisions the hash for the password you chose instead of a
-throwaway, and `http://localhost:3000/api/dev/login` signs you in and redirects
-to the dashboard. Pass `?next=/some/path` to land somewhere else.
-
-That route is still a real Better Auth `signInEmail` — it supplies the
-credential rather than skipping the check — and it sits behind
-`assertDevRouteAllowed`, so it 404s unless `import.meta.dev` or
-`E2E_ALLOW_DEV_ROUTES` is on, and demands the `x-dev-route-secret` header on any
-host that is not localhost. Leave both variables unset and nothing changes:
-setup keeps minting a throwaway and the route answers 400.
-
-`local:setup` refreshes the fixture users and sessions. If local data or auth is
-stale, run the whole command again and then sign in again. Do not run an
-individual seed or provisioning script as an alternate repair path.
+Local setup copies the account from production and verifies the configured
+password. It does not create a separate developer identity or reset this
+password. Sign in through the normal `/login` page; there is no developer-login
+shortcut. Test identities used for explicit authorization scenarios remain local
+fixtures for role and access tests. Playwright creates these through Better Auth using the same configured password. Their provisioning through Better Auth does not alter the review account.
 
 `schema:local` applies new forward migrations when the schema changes. A rare
 replacement baseline, such as the v6 WNAM cutover, starts a new migration
 history; a local D1 created under the prior baseline then fails the schema
 check. Local data is a copy, so delete `.wrangler/state/v3/d1` and run
-`corepack yarn local:setup` again in that case.
+`corepack yarn local:setup` again in that case. When local review data needs
+preserving across a replacement, retain a SQLite backup of the previous local
+D1, apply the current migrations to the new local binding with `schema:local`,
+and use the same audited transfer:
+
+```sh
+node --experimental-strip-types scripts/pull-production-snapshot.ts --local --source-file /absolute/path/to/local-backup.sqlite
+```
+
+This reads the saved local database, verifies its recorded migration chain,
+and loads only a destination carrying the current schema and migration ledger.
+
+To refresh local auth while retaining review data, stop the local app, export
+its database, and pass that export through the full setup:
+
+```sh
+corepack yarn wrangler d1 export DB --local --output /absolute/path/to/local-backup.sql
+LOCAL_DATABASE_SOURCE_FILE=/absolute/path/to/local-backup.sql corepack yarn local:setup
+```
+
+`LOCAL_DATABASE_SOURCE_FILE` applies only to local setup, using the same audited
+transfer as `--source-file`. Without it, setup copies production. Test credential
+provisioning through Better Auth does not alter the review account.
+
 
 ## Dashboard URLs
 

@@ -154,6 +154,14 @@ export const ORGANIZATIONS_TOOLS: McpToolDefinition[] = [
       },
     }),
   organizationTool({
+      name: 'set_consultation_mode',
+      description: 'Set how the selected website offers consultations when the user wants to enable website booking, use an external scheduler or disable booking. Native booking uses published online products linked to service pages. External scheduling requires an existing configured URL. Does not set prices or connect a calendar or payment provider.',
+      domain: 'organizations', minimumRole: 'admin', confirmRequired: false,
+      inputSchema: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } },
+      required: ['mode'],
+      outputSchema: { type: 'object', properties: { settings: { type: 'object', properties: { mode: { type: 'string', enum: ['native', 'external_url', 'native_disabled'] } }, required: ['mode'] } }, required: ['settings'] },
+    }),
+  organizationTool({
       name: 'set_brand_color',
       description: "Set the selected site’s brand accent color from a color description or hex value. Applies to Saya theme accents such as buttons, links and highlights; it does not change layout or other template settings.",
       domain: 'organizations',

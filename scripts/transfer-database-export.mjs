@@ -24,6 +24,7 @@ import Database from 'better-sqlite3'
 import { CONTENT_DOCUMENT_SCOPE_QUERY, MEDIA_PLACEMENT_OWNER_AUDIT_QUERY } from './audit-orphaned-media-placements.mjs'
 import { isSupportedMediaPlacement } from '../shared/media-placement-contract.ts'
 import { organizationRoles } from '../utils/organization-access.ts'
+import { validateProductDetails, assertProductKind } from '../shared/product-details.ts'
 
 /** The roles the access matrix declares. Anything else evaluates to no permissions. */
 const DECLARED_ORGANIZATION_ROLES = new Set(Object.keys(organizationRoles))
@@ -73,6 +74,7 @@ const digest = (rows, names) => hash(rows.map(row => JSON.stringify(names.map(na
 const RETIRED_COLUMNS = {
   organization: ['integrations_json'],
   business_locations: ['description_provenance'],
+  products: ['tags'],
 }
 
 /**
@@ -376,7 +378,7 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     let sourceFiles = files
     assert(ledger.length > 0, 'Source migration ledger is missing')
     let recognized = false
-    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v7']) {
+    for (const directory of [MIGRATIONS_DIRECTORY, 'migrations-history/v10', 'migrations-history/v9', 'migrations-history/v8', 'migrations-history/v7']) {
       const candidates = readdirSync(resolve(directory)).filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort()
       if (ledger.length > candidates.length || !ledger.every((name, index) => name === candidates[index])) continue
       const expected = new Database(':memory:')
@@ -415,6 +417,56 @@ export function transferDatabaseExport(sourcePath, targetPath, { payloadPath = n
     if (fromV7) {
       assert(stage.prepare('SELECT count(*) AS n FROM business_locations WHERE description_provenance IS NOT NULL').get().n === 0,
         'business_locations.description_provenance holds values nothing maps; no rows were copied')
+    }
+    if (fromV7) {
+      for (const name of readdirSync('migrations-history/v8').filter(name => /^\d{4}_.+\.sql$/u.test(name)).sort().slice(1)) {
+        stage.exec(readFileSync(resolve('migrations-history/v8', name), 'utf8'))
+      }
+    }
+    if (columns(stage, 'products').includes('tags')) {
+      const tagged = stage.prepare("SELECT count(*) AS n FROM products WHERE tags <> '[]'").get().n
+      const localized = stage.prepare("UPDATE resource_localizations SET values_json = json_remove(values_json, '$.tags') WHERE resource_type = 'product' AND json_type(values_json, '$.tags') IS NOT NULL").run().changes
+      manifest.transforms.push({ name: 'remove_product_tags', changes: tagged + localized })
+    }
+    if (!columns(stage, 'products').includes('kind')) {
+      stage.exec('ALTER TABLE products ADD COLUMN kind TEXT; ALTER TABLE products ADD COLUMN details_json TEXT NOT NULL DEFAULT \'{}\';')
+      const kinds = { restaurant: 'dish', experience: 'item', service: 'service' }
+      const keyMap = {
+        'pricing.note': 'pricing_note', 'experience.tagline': 'tagline',
+        'experience.meeting_point': 'meeting_point', 'experience.included_items': 'included_items',
+        'experience.what_to_bring': 'what_to_bring', 'experience.cancellation_policy': 'cancellation_policy',
+        'details.allergens': 'allergens', 'details.noodle': 'noodle', 'details.sizes': 'sizes',
+        'details.soup': 'soup', 'details.toppings': 'toppings', 'menu.dietary-notes': 'dietary_notes',
+      }
+      const mappedKey = key => { assert(Object.hasOwn(keyMap, key), `Unmapped product detail ${key}; no rows were copied`); return keyMap[key] }
+      const facts = stage.prepare('SELECT pm.product_id, d.namespace || \'.\' || d.key AS handle, pm.value FROM product_metafields pm JOIN metafield_definitions d ON d.id = pm.definition_id AND d.organization_id = pm.organization_id').all()
+      const byProduct = new Map()
+      for (const fact of facts) {
+        const details = byProduct.get(fact.product_id) ?? {}
+        const key = mappedKey(fact.handle)
+        assert(!Object.hasOwn(details, key), `Duplicate product detail ${fact.product_id}.${key}`)
+        details[key] = JSON.parse(fact.value)
+        byProduct.set(fact.product_id, details)
+      }
+      const update = stage.prepare('UPDATE products SET kind = ?, details_json = ? WHERE id = ?')
+      for (const product of stage.prepare('SELECT p.id, o.vertical, EXISTS(SELECT 1 FROM product_booking_configs c WHERE c.product_id = p.id) AS bookable FROM products p JOIN organization o ON o.id = p.organization_id').all()) {
+        assert(Object.hasOwn(kinds, product.vertical), `Product ${product.id} has no recognized presentation kind`)
+        const kind = product.vertical === 'service' ? 'service' : product.bookable ? 'experience' : kinds[product.vertical]
+        update.run(kind, JSON.stringify(validateProductDetails(kind, byProduct.get(product.id) ?? {})), product.id)
+      }
+      const localizations = stage.prepare("SELECT rl.id, rl.values_json, p.kind FROM resource_localizations rl JOIN products p ON p.id = rl.resource_id AND p.organization_id = rl.organization_id WHERE rl.resource_type = 'product'").all()
+      const localize = stage.prepare('UPDATE resource_localizations SET values_json = ? WHERE id = ?')
+      for (const row of localizations) {
+        const values = JSON.parse(row.values_json)
+        if (values.metafields) {
+          assert(!values.details, `Product localization ${row.id} has two detail sources`)
+          values.details = validateProductDetails(assertProductKind(row.kind), Object.fromEntries(Object.entries(values.metafields).map(([key, value]) => [mappedKey(key), value])))
+          delete values.metafields
+          localize.run(JSON.stringify(values), row.id)
+        }
+      }
+      stage.exec('DROP TABLE product_metafields; DROP TABLE metafield_definitions;')
+      manifest.transforms.push({ name: 'named_product_details', changes: facts.length })
     }
     const names = tableNames(stage)
     const count = (db, table) => db.prepare(`SELECT count(*) AS n FROM ${qi(table)}`).get().n

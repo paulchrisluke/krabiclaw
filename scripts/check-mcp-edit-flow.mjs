@@ -34,7 +34,7 @@ async function getAuthHeaders() {
   if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
     throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-demo-owner' })
+  return credentialSession(BASE_URL, { userId: USER_ID || undefined, organizationId: ORGANIZATION_ID })
 }
 
 function mcp(headers, name, args = {}) {

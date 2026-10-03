@@ -34,8 +34,9 @@
 <script lang="ts">
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
 
-export const SECTION_KEYS = ['photo', 'name', 'price', 'description', 'options', 'order-url', 'tags', 'attributes', 'publication', 'booking'] as const
+export const SECTION_KEYS = ['photo', 'kind', 'name', 'price', 'description', 'options', 'order-url', 'attributes', 'publication', 'booking'] as const
 export type SectionKey = typeof SECTION_KEYS[number]
+export type BookingConcern = 'enabled' | 'duration' | 'capacity' | 'confirmation' | 'payment' | 'location' | 'calendar' | 'website' | number
 
 export interface ScheduleSlotDraft { weekday: number; start_time: string }
 
@@ -65,13 +66,13 @@ export interface VariantDraft {
 
 /** The editable shape of one product, as its leaves bind to it. */
 export interface ProductForm {
+  kind: ProductKind | ''
   name: string
   description: string
   order_url: string
-  tags: string[]
   options: OptionDraft[]
   variants: VariantDraft[]
-  metafields: Record<string, MetafieldValue>
+  details: Record<string, ProductDetailValue>
   active: boolean
   published: boolean
   location_active: boolean
@@ -79,6 +80,13 @@ export interface ProductForm {
   bookable: boolean
   booking_duration: string
   booking_capacity: string
+  confirmation_mode: 'instant' | 'review'
+  online_payment_required: boolean
+  online_timezone: string
+  calendar_group: string
+  online_schedule: boolean
+  native_consultations: boolean
+  consultation_mode: 'native' | 'external_url' | 'native_disabled'
   image_asset_id: string | null
 }
 
@@ -90,7 +98,8 @@ export interface ProductEditor {
   currency: string
   organizationId: string
   locationId: ComputedRef<string | null>
-  definitions: Ref<MetafieldDefinition[]>
+  websiteBooking: ComputedRef<boolean>
+  definitions: Ref<ProductDetailField[]>
   isNew: ComputedRef<boolean>
   /** The product this route names has loaded, or it is being created. Until then a leaf has nothing to show or save. */
   ready: ComputedRef<boolean>
@@ -104,14 +113,13 @@ export interface ProductEditor {
   addOption: () => void
   removeOption: (index: number) => void
   setOptionValues: (index: number, values: string[]) => void
-  metafieldKey: (definition: MetafieldDefinition) => string
-  listValue: (definition: MetafieldDefinition) => string[]
-  textValue: (definition: MetafieldDefinition) => string
-  integerValue: (definition: MetafieldDefinition) => number | undefined
-  setIntegerMetafield: (definition: MetafieldDefinition, value: unknown) => void
-  booleanValue: (definition: MetafieldDefinition) => boolean
+  setDetail: (definition: ProductDetailField, value: string | string[]) => void
+  listValue: (definition: ProductDetailField) => string[]
+  textValue: (definition: ProductDetailField) => string
   weekdays: ReadonlyArray<{ value: number; label: string }>
   scheduleLoading: Ref<boolean>
+  scheduleError: Ref<string | null>
+  savedSlotsFor: (weekday: number) => ScheduleSlotDraft[]
   slotsFor: (weekday: number) => ScheduleSlotDraft[]
   addSlot: (weekday: number) => void
   removeSlot: (slot: ScheduleSlotDraft) => void
@@ -121,7 +129,7 @@ export interface ProductEditor {
    * (one option, one combination's price) names its own parent, so the save
    * lands where its Close would rather than back on the product.
    */
-  save: (closeTo?: string) => Promise<void>
+  save: (closeTo?: string, bookingConcern?: BookingConcern) => Promise<void>
 }
 
 export const productEditorKey = Symbol('product-editor') as InjectionKey<ProductEditor>
@@ -131,18 +139,20 @@ export const productEditorKey = Symbol('product-editor') as InjectionKey<Product
 import EditorNavigationList, { type EditorNavigationGroup } from '~/components/dashboard/EditorNavigationList.vue'
 import DashboardResourceLocalization from '~/components/dashboard/DashboardResourceLocalization.vue'
 import type { Collection, Product } from '~/server/types/products'
-import type { MetafieldDefinition, MetafieldValue } from '~/shared/metafields'
-import { metafieldHandle, PRICING_NOTE_HANDLE } from '~/shared/metafields'
+import type { ProductDetailField, ProductDetailValue, ProductKind } from '~/shared/product-details'
+import { productDetailFields, PRODUCT_KINDS, PRODUCT_KIND_LABELS, assertProductKind, productDetailKey, PRICING_NOTE_HANDLE } from '~/shared/product-details'
 import { isCurrencyCode } from '~/shared/currencies'
 import { majorAmountToMinor, minorAmountToMajor, selectPrice, type Price } from '~/shared/prices'
 import { formatProductMoney } from '~/utils/product-money'
 import { presentationForProduct, productSurfaceOf, requireProductPresentation } from '~/utils/product-presentation'
+import { MINUTE_TIME_PATTERN } from '~/utils/timezone'
 import { getErrorMessage, isNotFoundError } from '~/utils/errors'
 
 const route = useRoute()
 const dashboardApi = useDashboardApi()
 const collectionId = computed(() => String(route.params.collectionId ?? route.params.categoryId ?? ''))
 const productId = computed(() => String(route.params.productId ?? ''))
+const organizationOnly = computed(() => !route.params.locationSlug)
 const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/locations/${String(route.params.locationSlug)}`)
 // The surface is the product's own, not the URL's: a dish saved as bookable is
 // an experience from that moment, and the rows it returns to have moved with
@@ -154,10 +164,11 @@ const locationPath = computed(() => `/dashboard/${String(route.params.orgSlug)}/
 const product = ref<Product | null>(null)
 
 const surfacePath = computed(() => {
+  if (organizationOnly.value) return `/dashboard/${String(route.params.orgSlug)}/products`
   const surface = product.value ? productSurfaceOf(vertical, product.value) : String(route.params.surface ?? '')
   return `${locationPath.value}/products/${surface}`
 })
-const collectionPath = computed(() => `${surfacePath.value}/${collectionId.value}`)
+const collectionPath = computed(() => organizationOnly.value ? surfacePath.value : `${surfacePath.value}/${collectionId.value}`)
 const itemPath = computed(() => `${collectionPath.value}/${productId.value}`)
 const level = useRouteLevel()
 
@@ -171,7 +182,7 @@ if (!vertical) throw createError({ statusCode: 500, statusMessage: 'Organization
 // sells otherwise. Until the row has loaded, and for a product being created,
 // the screen speaks the vertical's own surface — it is not yet known to be
 // anything else.
-const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value) : requireProductPresentation(vertical)))
+const presentation = computed(() => (product.value ? presentationForProduct(vertical, product.value, dashboard.organization.value?.theme_id) : requireProductPresentation(vertical, dashboard.organization.value?.theme_id)))
 const rawCurrency = dashboard.organization.value?.default_currency
 if (!isCurrencyCode(rawCurrency)) throw createError({ statusCode: 500, statusMessage: 'Unsupported organization currency' })
 const currency = rawCurrency
@@ -181,16 +192,16 @@ const locationId = computed(() => dashboardLocation.currentLocation.value?.id ??
 // ── Which leaf is open ──────────────────────────────────
 
 const sectionLabels: Record<SectionKey, string> = {
+  'kind': 'Type',
   'photo': 'Photo',
   'name': 'Name',
   'price': 'Price',
   'description': 'Description',
-  'options': 'Options',
-  'order-url': 'Order link',
-  'tags': 'Tags',
-  'attributes': 'Attributes',
-  'publication': 'Where it appears',
-  'booking': 'Bookings',
+  'options': 'Variants',
+  'order-url': 'External link',
+  'attributes': 'Details',
+  'publication': 'Website',
+  'booking': 'Scheduling',
 }
 
 const detailKey = computed(() => level.child.value)
@@ -201,7 +212,7 @@ const ready = computed(() => isNew.value || (product.value?.id === productId.val
 
 // ── Load ────────────────────────────────────────────────
 const collections = ref<Collection[]>([])
-const definitions = ref<MetafieldDefinition[]>([])
+const definitions = computed(() => form.kind ? productDetailFields(form.kind) : [])
 const loadError = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const photoError = ref<string | null>(null)
@@ -214,8 +225,6 @@ watch(editorKey, () => {
 
 const isCollectionList = (value: unknown): value is { collections: Collection[] } =>
   isRecord(value) && Array.isArray(value.collections)
-const isDefinitionList = (value: unknown): value is { definitions: MetafieldDefinition[] } =>
-  isRecord(value) && Array.isArray(value.definitions)
 const isProductList = (value: unknown): value is { success: true, products: Product[] } =>
   isRecord(value) && Array.isArray(value.products)
 const isOne = (value: unknown): value is { success: true, product: Product } =>
@@ -234,10 +243,8 @@ let loadedKey = ''
 
 async function load(options: { force?: boolean } = {}) {
   const id = locationId.value
-  if (!id || isNew.value) {
+  if ((!id && !organizationOnly.value) || isNew.value) {
     if (!isNew.value) return
-    // A new item still needs the attribute vocabulary to render its form.
-    definitions.value = (await dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList })).definitions
     return
   }
   const key = `${id}:${productId.value}`
@@ -245,19 +252,24 @@ async function load(options: { force?: boolean } = {}) {
   loadedKey = key
   loadError.value = null
   try {
-    const [collectionResponse, productResponse, definitionResponse] = await Promise.all([
-      dashboardApi(`/api/editor/organizations/${organizationId}/collections?location_id=${encodeURIComponent(id)}`, { validate: isCollectionList }),
-      dashboardApi(`/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
-      dashboardApi(`/api/editor/organizations/${organizationId}/metafield-definitions`, { validate: isDefinitionList }),
+    const [collectionResponse, productResponse, consultationSettings] = await Promise.all([
+      dashboardApi(`/api/editor/organizations/${organizationId}/collections${id ? `?location_id=${encodeURIComponent(id)}` : ''}`, { validate: isCollectionList }),
+      dashboardApi(id ? `/api/editor/organizations/${organizationId}/locations/${encodeURIComponent(id)}/products/${encodeURIComponent(productId.value)}` : `/api/editor/organizations/${organizationId}/products/${encodeURIComponent(productId.value)}`, { validate: isOne }),
+      organizationOnly.value && vertical === 'service' ? dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, { validate: isRecord }) : Promise.resolve(null),
     ])
     collections.value = collectionResponse.collections
-    definitions.value = definitionResponse.definitions
     product.value = productResponse.product
     loadForm(productResponse.product)
+    if (consultationSettings) {
+      const settings = consultationSettings
+      form.native_consultations = settings.mode === 'native'
+      if (settings.mode === 'native' || settings.mode === 'external_url' || settings.mode === 'native_disabled') form.consultation_mode = settings.mode
+    }
   } catch (error) {
     loadedKey = ''
     if (isNotFoundError(error)) return showError(createError({ statusCode: 404, statusMessage: `${presentation.value.itemLabel} not found` }))
     loadError.value = getErrorMessage(error, `Failed to load this ${presentation.value.itemLabel.toLowerCase()}`)
+    if (options.force) throw error
   }
 }
 
@@ -268,23 +280,25 @@ watch(locationId, () => { void load() })
 
 // ── The form ────────────────────────────────────────────
 
-const form = reactive<ProductForm>({
+const draftKey = `product-draft:${organizationId}:${productId.value}`
+const draft = useState<ProductForm>(draftKey, () => ({
+  kind: '',
   name: '',
   description: '',
   order_url: '',
-  tags: [] as string[],
   options: [] as OptionDraft[],
   variants: [] as VariantDraft[],
-  metafields: {} as Record<string, MetafieldValue>,
+  details: {} as Record<string, ProductDetailValue>,
   active: true,
   published: false,
   location_active: true,
   location_published: false,
   bookable: false,
   booking_duration: '',
-  booking_capacity: '',
+  booking_capacity: '', confirmation_mode: 'instant', online_payment_required: false, online_timezone: '', calendar_group: '', online_schedule: false, native_consultations: false, consultation_mode: 'native_disabled',
   image_asset_id: null as string | null,
-})
+}))
+const form = reactive(draft.value)
 
 /** What this location and currency pays for one variant, as a major-unit string. */
 function variantPriceMajor(variant: Product['variants'][number]): string {
@@ -296,10 +310,10 @@ function variantPriceMajor(variant: Product['variants'][number]): string {
 const loadedCatalogShape = ref('')
 
 function loadForm(row: Product) {
+  form.kind = row.kind
   form.name = row.name
   form.description = row.description
   form.order_url = row.order_url ?? ''
-  form.tags = [...row.tags]
   form.options = row.options.map(option => ({
     id: option.id,
     name: option.name,
@@ -316,7 +330,7 @@ function loadForm(row: Product) {
     loaded_price_major: variantPriceMajor(variant),
     prices: variant.prices.map(price => ({ ...price })),
   }))
-  form.metafields = { ...row.metafields }
+  form.details = { ...row.details }
   form.active = row.active
   form.published = row.publications.find(entry => entry.organization_id === organizationId)?.published ?? false
   const here = row.locations.find(entry => entry.location_id === locationId.value)
@@ -328,6 +342,11 @@ function loadForm(row: Product) {
   // bookable" with empty defaults, whatever was stored.
   form.bookable = row.booking !== null
   form.booking_duration = row.booking?.duration_minutes === null || row.booking === null ? '' : String(row.booking.duration_minutes)
+  form.confirmation_mode = row.booking?.confirmation_mode ?? 'instant'
+  form.online_payment_required = row.booking?.online_payment_required ?? false
+  form.online_timezone = row.booking?.online_timezone ?? ''
+  form.calendar_group = row.booking?.calendar_group ?? ''
+  form.online_schedule = Boolean(row.booking?.online_timezone)
   form.booking_capacity = row.booking?.default_capacity === null || row.booking === null ? '' : String(row.booking.default_capacity)
   loadedCatalogShape.value = catalogShapeOf()
 }
@@ -345,36 +364,19 @@ function combinationKey(selections: Record<string, string>): string {
     .join(' / ')
 }
 
-function metafieldKey(definition: MetafieldDefinition): string {
-  return metafieldHandle(definition)
+function setDetail(definition: ProductDetailField, value: string | string[]) {
+  const key = productDetailKey(definition)
+  if ((typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length)) Reflect.deleteProperty(form.details, key)
+  else form.details[key] = value
 }
-function listValue(definition: MetafieldDefinition): string[] {
-  const value = form.metafields[metafieldKey(definition)]
+function listValue(definition: ProductDetailField): string[] {
+  const value = form.details[productDetailKey(definition)]
   return Array.isArray(value) ? value : []
 }
-function textValue(definition: MetafieldDefinition): string {
-  const value = form.metafields[metafieldKey(definition)]
+function textValue(definition: ProductDetailField): string {
+  const value = form.details[productDetailKey(definition)]
   return typeof value === 'string' ? value : ''
 }
-function integerValue(definition: MetafieldDefinition): number | undefined {
-  const value = form.metafields[metafieldKey(definition)]
-  // undefined is "not set", which is what an empty number box means. Zero is a
-  // value someone typed.
-  return typeof value === 'number' ? value : undefined
-}
-function setIntegerMetafield(definition: MetafieldDefinition, value: unknown) {
-  const key = metafieldKey(definition)
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    form.metafields[key] = Math.trunc(value)
-    return
-  }
-  // An emptied box is the attribute being unset, not a zero.
-  form.metafields = Object.fromEntries(Object.entries(form.metafields).filter(([entry]) => entry !== key))
-}
-function booleanValue(definition: MetafieldDefinition): boolean {
-  return form.metafields[metafieldKey(definition)] === true
-}
-
 // ── Options and the combinations they produce ───────────
 function addOption() {
   form.options.push({ id: `new-option-${form.options.length + 1}`, name: '', values: [] })
@@ -437,13 +439,10 @@ function rebuildVariants() {
 }
 
 const sectionValid = computed(() => {
+  if (editorKey.value === 'kind') return PRODUCT_KINDS.includes(form.kind as ProductKind)
   if (editorKey.value === 'name') return Boolean(form.name.trim())
   if (editorKey.value === 'options') {
     return form.options.every(option => option.name.trim() && option.values.length > 0)
-  }
-  if (editorKey.value === 'booking') {
-    if (!form.bookable) return true
-    return Boolean(form.booking_duration.trim())
   }
   return true
 })
@@ -456,7 +455,7 @@ function listSummary(values: readonly string[], empty: string) {
 function priceSummary(): string {
   const row = product.value
   if (!row) return ''
-  if (row.variants.length > 1) return `${row.variants.length} combinations`
+  if (row.variants.length > 1) return `${row.variants.length} variants`
   const variant = row.variants[0]
   if (!variant) return 'No price set'
   const price = selectPrice(variant.prices, { currency, location_id: locationId.value, at: new Date().toISOString() })
@@ -464,22 +463,22 @@ function priceSummary(): string {
   if (amount) return amount
   // Priced in words — "Contact us for group pricing" — is a price the merchant
   // set, and the public page shows it; "No price set" would call it missing.
-  const note = row.metafields[PRICING_NOTE_HANDLE]
+  const note = row.details[PRICING_NOTE_HANDLE]
   return typeof note === 'string' && note.trim() ? note : 'No price set'
 }
 
 function bookingSummary(): string {
   const minutes = `${form.booking_duration || '?'} minutes`
   const id = locationId.value
-  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
+  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) return minutes
   const count = schedule.value.filter(slot => slot.start_time.trim()).length
-  return `${minutes} · ${count === 1 ? '1 time' : `${count} times`} a week`
+  return count ? `${minutes} · ${count === 1 ? '1 start time' : `${count} start times`} a week` : `${minutes} · No weekly availability set`
 }
 
 function publicationSummary(): string {
-  const parts: string[] = [form.active ? 'On sale' : 'Not on sale']
-  parts.push(form.published ? 'published' : 'withheld')
-  if (!form.location_published) parts.push('hidden here')
+  const parts = [form.published ? 'Visible on website' : 'Hidden from website']
+  if (locationId.value && !form.location_published) parts.push('Hidden at this location')
+  if (!form.active || (locationId.value && !form.location_active)) parts.push(form.bookable || form.kind === 'service' ? 'Bookings paused' : 'Orders paused')
   return parts.join(' · ')
 }
 
@@ -487,7 +486,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
   const image = product.value?.image
   if (isNew.value) return [{
     id: 'item',
-    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }],
+    items: [{ id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` }, { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` }],
   }]
   // Until the row is here there is nothing to summarize. "Not named yet" and
   // "Not bookable" are statements about a product; shown while loading they
@@ -507,6 +506,7 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
           placeholder: !image,
           to: `${itemPath.value}/photo`,
         },
+        { id: 'kind', label: 'Type', summary: form.kind ? PRODUCT_KIND_LABELS[form.kind] : 'Choose a type', to: `${itemPath.value}/kind` },
         { id: 'name', label: 'Name', summary: form.name || 'Not named yet', placeholder: !form.name, to: `${itemPath.value}/name` },
         { id: 'price', label: 'Price', summary: priceSummary(), placeholder: priceSummary() === 'No price set', to: `${itemPath.value}/price` },
         {
@@ -524,22 +524,20 @@ const navigationGroups = computed<EditorNavigationGroup[]>(() => {
       items: [
         {
           id: 'options',
-          label: 'Options',
-          summary: listSummary(form.options.map(option => option.name).filter(Boolean), 'No options'),
-          placeholder: !form.options.length,
+          label: 'Variants',
+          summary: product.value.variants.length > 1 ? `${product.value.variants.length} variants` : 'One version',
           to: `${itemPath.value}/options`,
         },
-        { id: 'order-url', label: 'Order link', summary: form.order_url || 'No link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
-        { id: 'tags', label: 'Tags', summary: listSummary(form.tags, 'No tags'), placeholder: !form.tags.length, to: `${itemPath.value}/tags` },
+        { id: 'order-url', label: 'External link', summary: form.order_url || 'No external link', placeholder: !form.order_url, to: `${itemPath.value}/order-url` },
         {
           id: 'attributes',
-          label: 'Attributes',
-          summary: listSummary(Object.keys(form.metafields), 'None set'),
-          placeholder: !Object.keys(form.metafields).length,
+          label: 'Details',
+          summary: listSummary(definitions.value.filter(definition => form.details[productDetailKey(definition)] !== undefined).map(definition => definition.name), 'None set'),
+          placeholder: !Object.keys(form.details).length,
           to: `${itemPath.value}/attributes`,
         },
-        { id: 'publication', label: 'Where it appears', summary: publicationSummary(), to: `${itemPath.value}/publication` },
-        { id: 'booking', label: 'Bookings', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
+        { id: 'publication', label: 'Website', summary: publicationSummary(), to: `${itemPath.value}/publication` },
+        { id: 'booking', label: 'Scheduling', summary: form.bookable ? bookingSummary() : 'Not bookable', placeholder: !form.bookable, to: `${itemPath.value}/booking` },
       ],
     },
   ]
@@ -638,12 +636,12 @@ function payload() {
   const describesCatalog = catalog.variants.length > 0
   const changed = JSON.stringify(catalog) !== loadedCatalogShape.value
   return {
+    kind: assertProductKind(form.kind),
     name: form.name.trim(),
     description: form.description,
     order_url: form.order_url || null,
-    tags: form.tags.map(tag => tag.trim()).filter(Boolean),
     ...(changed && describesCatalog ? catalog : {}),
-    metafields: form.metafields,
+    details: form.details,
     active: form.active,
   }
 }
@@ -653,27 +651,26 @@ const { createActionLabel, saveLabel: createSaveLabel, saveDisabled, save: saveC
   isNew,
   openKey: editorKey,
   labels: sectionLabels,
-  order: ['name'],
-  missing: () => !form.name.trim(),
-  noun: presentation.value.itemLabel.toLowerCase(),
+  order: ['name', 'kind'],
+  missing: key => key === 'name' ? !form.name.trim() : !form.kind,
+  noun: () => form.kind ? presentationForProduct(vertical, { kind: assertProductKind(form.kind) }, dashboard.organization.value?.theme_id).itemLabel.toLowerCase() : 'product',
   saving,
   existingBlocked: () => !sectionValid.value,
   commit,
 })
 
-// An existing product's commit writes straight to the live record MCP reads,
-// so it says what it does: Publish. Creating still walks its sections.
-const saveLabel = computed(() => createSaveLabel.value ?? 'Publish')
+// Saving content and publishing the listing are separate owner decisions.
+const saveLabel = computed(() => createSaveLabel.value ?? 'Save')
 
 const closeTo = ref<string | null>(null)
-async function save(target?: string) {
+async function save(target?: string, bookingConcern?: BookingConcern) {
   closeTo.value = target ?? null
-  try { await saveCurrentEditor() } finally { closeTo.value = null }
+  try { if (bookingConcern !== undefined) await commit(bookingConcern); else await saveCurrentEditor() } finally { closeTo.value = null }
 }
 
-async function commit() {
+async function commit(bookingConcern?: BookingConcern) {
   const id = locationId.value
-  if (!id) return
+  if (!id && !organizationOnly.value) return
   saving.value = true
   saveError.value = null
   try {
@@ -686,20 +683,24 @@ async function commit() {
       // location relationship is not collection membership: without the second
       // write the product was absent from the very collection it was created
       // in.
-      await dashboardApi(`/api/editor/organizations/${organizationId}/products/${created.product.id}/locations/${id}`, {
+      if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${created.product.id}/locations/${id}`, {
         method: 'PUT', body: { active: true, published: false }, validate: isRecord,
       })
-      await addToCollection(created.product.id, id)
+      if (id) await addToCollection(created.product.id, id)
       // The record it became, not the `new` form it was, so Back from a saved
       // product goes to the collection and never to an empty Add screen.
+      clearNuxtState(draftKey)
       await navigateTo(`${collectionPath.value}/${created.product.id}`, { replace: true })
       return
     }
-    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
-      method: 'PATCH', body: payload(), validate: isOne,
-    })
-    if (editorKey.value === 'publication') await savePublication(id)
-    if (editorKey.value === 'booking') await saveBooking()
+    if (bookingConcern !== undefined) {
+      await saveBooking(bookingConcern)
+    } else {
+      await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}`, {
+        method: 'PATCH', body: payload(), validate: isOne,
+      })
+      if (editorKey.value === 'publication') await savePublication(id)
+    }
     await load({ force: true })
     await (closeTo.value ? navigateTo(closeTo.value) : level.close())
   } catch (error) {
@@ -733,53 +734,53 @@ async function addToCollection(newProductId: string, locationId: string) {
 }
 
 /** Three switches, three writes. None of them implies another. */
-async function savePublication(id: string) {
+async function savePublication(id: string | null) {
   await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/publication`, {
     method: 'PUT', body: { published: form.published }, validate: isRecord,
   })
-  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${id}`, {
+  if (id) await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/locations/${id}`, {
     method: 'PUT', body: { active: form.location_active, published: form.location_published }, validate: isRecord,
   })
 }
 
-/**
- * Write the capability the merchant is looking at.
- *
- * Unticking the box used to return here and let the save report success while
- * the product stayed bookable. Removing the capability takes the schedule with
- * it, so the writer refuses while anything is booked and says so.
- */
-async function saveBooking() {
-  if (!form.bookable) {
-    if (!product.value?.booking) return
-    await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
-      method: 'DELETE', validate: isRecord,
+/** Each focused editor writes only the setting its caller named. */
+async function saveBooking(concern: BookingConcern) {
+  if (typeof concern === 'number') return saveSchedule(concern)
+  if (concern === 'website') {
+    await dashboardApi(`/api/editor/organizations/${organizationId}/consultation`, {
+      method: 'PUT', body: { mode: form.native_consultations ? 'native' : form.consultation_mode === 'native' ? 'native_disabled' : form.consultation_mode }, validate: isRecord,
     })
     return
   }
-  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/booking`, {
-    method: 'PUT',
-    body: {
-      duration_minutes: Number(form.booking_duration) || null,
-      default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null,
-    },
-    validate: isRecord,
-  })
-  // The schedule is saved with the capability it belongs to. A product that
-  // has just become bookable has no schedule loaded yet, and none to save.
-  await saveSchedule()
+  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/booking`
+  if (concern === 'enabled' && !form.bookable) {
+    await dashboardApi(url, { method: 'DELETE', validate: isRecord })
+    schedule.value = []
+    savedSchedule.value = []
+    scheduleLoadedFor.value = null
+    return
+  }
+  const body = concern === 'duration' ? { duration_minutes: Number(form.booking_duration) }
+    : concern === 'capacity' ? { default_capacity: form.booking_capacity.trim() ? Number(form.booking_capacity) : null }
+    : concern === 'confirmation' ? { confirmation_mode: form.confirmation_mode }
+    : concern === 'payment' ? { online_payment_required: form.online_payment_required }
+    : concern === 'location' ? { online_timezone: form.online_timezone }
+    : concern === 'calendar' ? { calendar_group: form.calendar_group.trim() || null }
+    : {}
+  await dashboardApi(url, { method: 'PUT', body, validate: isRecord })
 }
 
 // ── The weekly schedule ─────────────────────────────────
-// One draft slot per (weekday, time) at this branch. Capacity is kept as the
-// merchant typed it and read as a number, or the product's default, on save.
-interface ScheduleSlotDraft { weekday: number; start_time: string }
+// Product owns duration and guest limits; the weekly schedule owns start times.
 const WEEKDAYS = [
   { value: 1, label: 'Monday' }, { value: 2, label: 'Tuesday' }, { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' }, { value: 5, label: 'Friday' }, { value: 6, label: 'Saturday' }, { value: 0, label: 'Sunday' },
 ]
 const schedule = ref<ScheduleSlotDraft[]>([])
+const savedSchedule = ref<ScheduleSlotDraft[]>([])
+const scheduleError = ref<string | null>(null)
 const scheduleLoading = ref(false)
+function savedSlotsFor(weekday: number) { return savedSchedule.value.filter(slot => slot.weekday === weekday) }
 const scheduleLoadedFor = ref<string | null>(null)
 const isRuleList = (value: unknown): value is { success: true; rules: Array<{ weekday: number; start_time: string }> } =>
   isRecord(value) && Array.isArray(value.rules)
@@ -796,33 +797,43 @@ function removeSlot(slot: ScheduleSlotDraft) {
 
 async function loadSchedule() {
   const id = locationId.value
-  if (!id || !product.value?.booking) return
+  if (!product.value?.booking) return
+  if (!id && !product.value.booking.online_timezone) {
+    scheduleError.value = 'Choose a time zone in Meeting location before adding start times.'
+    return
+  }
   const key = `${productId.value}:${id}`
   if (scheduleLoadedFor.value === key) return
   scheduleLoading.value = true
+  scheduleError.value = null
   try {
-    const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id)}`, { validate: isRuleList })
+    const { rules } = await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
     // The reader moved on while this loaded; that location's own load owns the draft.
     if (`${productId.value}:${locationId.value}` !== key) return
-    schedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time }))
+    savedSchedule.value = rules.map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) }))
+    schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
     scheduleLoadedFor.value = key
+  } catch (error) {
+    scheduleError.value = getErrorMessage(error, 'Could not load the weekly schedule')
   } finally {
     scheduleLoading.value = false
   }
 }
 watch([editorKey, product, locationId], ([key]) => { if (key === 'booking') void loadSchedule() }, { immediate: true })
 
-/** The schedule as the writer takes it: every filled weekly slot; Product owns duration and capacity. */
-async function saveSchedule() {
+/** Replace this weekday while retaining the other days read from the canonical writer. */
+async function saveSchedule(weekday: number) {
   const id = locationId.value
-  if (!id || scheduleLoadedFor.value !== `${productId.value}:${id}`) return
-  const slots = schedule.value
-    .filter(slot => slot.start_time.trim())
-    .map(slot => ({ weekday: slot.weekday, start_time: slot.start_time.trim().slice(0, 5) }))
-  await dashboardApi(`/api/editor/organizations/${organizationId}/products/${productId.value}/availability`, {
-    method: 'PUT', body: { location_id: id, slots }, validate: isRecord,
-  })
+  if ((!id && !product.value?.booking?.online_timezone) || scheduleLoadedFor.value !== `${productId.value}:${id}`) throw new Error('Load the schedule before saving times.')
+  const times = slotsFor(weekday).map(slot => slot.start_time.trim())
+  if (times.some(time => !MINUTE_TIME_PATTERN.test(time)) || new Set(times).size !== times.length) throw new Error('Choose a different, valid start time for each session.')
+  const url = `/api/editor/organizations/${organizationId}/products/${productId.value}/availability`
+  const { rules } = await dashboardApi(`${url}?location_id=${encodeURIComponent(id ?? 'online')}`, { validate: isRuleList })
+  const slots = [...rules.filter(rule => rule.weekday !== weekday).map(rule => ({ weekday: rule.weekday, start_time: rule.start_time.slice(0, 5) })), ...times.map(start_time => ({ weekday, start_time }))]
+  await dashboardApi(url, { method: 'PUT', body: { location_id: id, slots }, validate: isRecord })
   scheduleLoadedFor.value = null
+  await loadSchedule()
+  if (scheduleError.value) throw new Error(scheduleError.value)
 }
 
 /** A cancelled leaf puts the loaded product back before it closes. */
@@ -830,8 +841,8 @@ function revert() {
   saveError.value = null
   photoError.value = null
   if (product.value) loadForm(product.value)
-  // The schedule draft goes with the form: reopening Bookings reloads the saved rules.
-  scheduleLoadedFor.value = null
+  form.native_consultations = form.consultation_mode === 'native'
+  schedule.value = savedSchedule.value.map(slot => ({ ...slot }))
 }
 
 async function setPrimaryImage(assetId: string | null) {
@@ -852,21 +863,20 @@ async function setPrimaryImage(assetId: string | null) {
 // ── Localization ────────────────────────────────────────
 /**
  * Which fields can be translated comes from the tenant's own definitions, so
- * adding an attribute makes it translatable without an edit here.
+ * shared named fields supply the same types and labels as the source editor.
  */
 const productLocalizationFields = computed(() => {
   const row = product.value
   const fields: Array<{ key: string, label: string, source: string | readonly string[] | null | undefined, kind?: 'string-list', multiline?: boolean, rows?: number }> = [
     { key: 'name', label: 'Name', source: row?.name },
     { key: 'description', label: 'Description', source: row?.description, multiline: true, rows: 4 },
-    { key: 'tags', label: 'Tags', source: row?.tags, kind: 'string-list' },
   ]
   for (const definition of definitions.value) {
     if (!definition.localizable) continue
-    const handle = metafieldHandle(definition)
-    const value = row?.metafields[handle]
+    const handle = productDetailKey(definition)
+    const value = row?.details[handle]
     fields.push({
-      key: `metafield:${handle}`,
+      key: `detail:${handle}`,
       label: definition.name,
       source: Array.isArray(value) ? value : typeof value === 'string' ? value : null,
       kind: Array.isArray(value) ? 'string-list' : undefined,
@@ -889,9 +899,9 @@ async function loadProductLocalization(locale: string): Promise<Record<string, u
       { validate: isProductLocalizationResponse },
     )
     const values = { ...response.localization.values }
-    const metafields = isRecord(values.metafields) ? values.metafields : {}
-    for (const [handle, value] of Object.entries(metafields)) values[`metafield:${handle}`] = value
-    delete values.metafields
+    const details = isRecord(values.details) ? values.details : {}
+    for (const [handle, value] of Object.entries(details)) values[`detail:${handle}`] = value
+    delete values.details
     return values
   } catch (cause) {
     const statusCode = isRecord(cause) && typeof cause.statusCode === 'number' ? cause.statusCode : null
@@ -904,14 +914,14 @@ async function saveProductLocalization(locale: string, submitted: Record<string,
   const row = product.value
   if (!row) throw new Error(`The ${presentation.value.itemLabel.toLowerCase()} is unavailable.`)
   const values: Record<string, unknown> = {}
-  for (const key of ['name', 'description', 'tags']) {
+  for (const key of ['name', 'description']) {
     if (Object.hasOwn(submitted, key)) values[key] = submitted[key]
   }
-  const metafields: Record<string, unknown> = {}
+  const details: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(submitted)) {
-    if (key.startsWith('metafield:')) metafields[key.slice('metafield:'.length)] = value
+    if (key.startsWith('detail:')) details[key.slice('detail:'.length)] = value
   }
-  if (Object.keys(metafields).length) values.metafields = metafields
+  if (Object.keys(details).length) values.details = details
   await dashboardApi(`/api/editor/organizations/${organizationId}/localization/product/${row.id}/${encodeURIComponent(locale)}`, {
     method: 'PUT',
     body: { values },
@@ -927,6 +937,7 @@ provide(productEditorKey, {
   currency,
   organizationId,
   locationId,
+  websiteBooking: computed(() => organizationOnly.value && vertical === 'service'),
   definitions,
   isNew,
   ready,
@@ -940,14 +951,13 @@ provide(productEditorKey, {
   addOption,
   removeOption,
   setOptionValues,
-  metafieldKey,
+  setDetail,
   listValue,
   textValue,
-  integerValue,
-  setIntegerMetafield,
-  booleanValue,
   weekdays: WEEKDAYS,
   scheduleLoading,
+  scheduleError,
+  savedSlotsFor,
   slotsFor,
   addSlot,
   removeSlot,

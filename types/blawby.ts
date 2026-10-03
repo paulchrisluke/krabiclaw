@@ -155,7 +155,7 @@ export interface PublicBlawbyRouteData {
 export type PublicTenantPage = import('~/server/utils/public-tenant-pages').PublicTenantPage
 
 export interface PublicConsultationSettings {
-  mode: 'external_url' | 'native_disabled'
+  mode: 'native' | 'external_url' | 'native_disabled'
   cta_label: string
   external_url: string | null
   schedule_path: string

@@ -22,7 +22,7 @@ function tenantGraph(org: string): string[] {
     `INSERT INTO user (id,name,email,isAnonymous) VALUES ('${guest}','Guest','${guest}@example.test',1)`,
     `INSERT INTO member (id,organizationId,userId,role,createdAt) VALUES ('${org}-member','${org}','${guest}','owner',0)`,
     `INSERT INTO business_locations (id,organization_id,slug,title,timezone) VALUES ('${location}','${org}','main','Main','Asia/Bangkok')`,
-    `INSERT INTO products (id,organization_id,name,slug,created_by,updated_by) VALUES ('${product}','${org}','Class','class','t','t')`,
+    `INSERT INTO products (kind, id,organization_id,name,slug,created_by,updated_by) VALUES ('experience', '${product}','${org}','Class','class','t','t')`,
     `INSERT INTO product_variants (id,organization_id,product_id,name,created_by,updated_by) VALUES ('${variant}','${org}','${product}','Standard','t','t')`,
     `INSERT INTO product_locations (organization_id,product_id,location_id,active,published,created_by,updated_by) VALUES ('${org}','${product}','${location}',1,1,'t','t')`,
     `INSERT INTO product_booking_configs (product_id,organization_id,duration_minutes,default_capacity,created_by,updated_by) VALUES ('${product}','${org}',60,4,'t','t')`,

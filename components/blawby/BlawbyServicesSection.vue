@@ -33,6 +33,7 @@ const items = computed(() => blockRecords(props.block.data.items).map(item => ({
   title: blockText(item.title),
   description: blockText(item.description) || undefined,
   url: blockText(item.url),
+  schedulingSummary: blockText(item.scheduling_summary) || undefined,
   media: (Array.isArray(item.media) ? item.media : []).map(media => ({
     slot: blockText((media as Record<string, unknown>).slot),
     public_url: blockText((media as Record<string, unknown>).public_url),
