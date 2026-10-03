@@ -160,6 +160,7 @@
     "isomorphic-dompurify": "^3.23.0",
     "libphonenumber-js": "^1.13.12",
     "marked": "^18.0.11",
+    "mp4box": "2.4.1",
     "nuxt-schema-org": "^6.0.4",
     "postal-mime": "3.0.0",
     "resend": "6.25.0",

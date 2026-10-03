@@ -61,10 +61,7 @@ async function longLivedToken(response: Response): Promise<{ accessToken: string
 
 export async function getInstagramAccount(accessToken: string): Promise<{ id: string; username: string }> {
   const params = new URLSearchParams({ fields: 'user_id,username', access_token: accessToken })
-  const response = await fetch(`${INSTAGRAM_GRAPH}/me?${params.toString()}`)
-  if (!response.ok) throw new Error(`Instagram account lookup failed: ${(await response.text()).slice(0, 300)}`)
-
-  const account = await response.json() as { user_id?: string; id?: string; username?: string }
+  const account: { user_id?: string; id?: string; username?: string } = await metaGraphRequest(`${INSTAGRAM_GRAPH}/me?${params.toString()}`)
   const id = account.user_id ?? account.id
   if (!id || !account.username) throw new Error('Instagram did not return the connected account')
   return { id: String(id), username: account.username }

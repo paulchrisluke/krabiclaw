@@ -4,6 +4,7 @@ import type { DbClient } from "~/server/db";
 import { uploadImageBuffer, deleteImage } from "~/server/utils/cloudflare-images";
 import { uploadToR2, buildR2Key, deleteFromR2 } from "~/server/utils/cloudflare-r2";
 import { createMediaAsset, type MediaAsset } from "~/server/utils/media-asset-manager";
+import { readMp4Metadata } from "~/server/utils/video-metadata";
 
 interface UploadResolvedMediaInputBase {
   db: DbClient;
@@ -53,6 +54,9 @@ export async function uploadResolvedMediaToAssetStore(
 ): Promise<UploadResolvedMediaResult> {
   const assetId = crypto.randomUUID();
   const provider = input.provider ?? (input.kind === "image" ? "cloudflare_images" : "cloudflare_r2");
+  // An MP4's length and size come from its own header, read before anything is
+  // stored, so an unreadable file is refused rather than saved without them.
+  const video = input.kind === "video" && input.contentType === "video/mp4" ? readMp4Metadata(input.buffer) : null;
 
   const r2Key = provider === "cloudflare_r2" ? buildR2Key(input.organizationId, assetId, input.filename) : null;
   const startedAt = Date.now();
@@ -99,8 +103,9 @@ export async function uploadResolvedMediaToAssetStore(
       mime_type: input.contentType,
       file_name: input.filename,
       file_size: input.fileSize ?? null,
-      width: input.width ?? null,
-      height: input.height ?? null,
+      width: video?.width ?? input.width ?? null,
+      height: video?.height ?? input.height ?? null,
+      duration: video?.duration ?? null,
       alt_text: input.altText ?? null,
       category: input.category ?? null,
       status: "active",

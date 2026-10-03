@@ -8,11 +8,11 @@ import { getPost, postPayloadFingerprint, type Post, type PostMedia } from '~/se
 import { providerCaption } from '~/shared/posts'
 import { MetaDeadline, MetaGraphError } from '~/server/utils/meta-graph'
 import {
-  createUnpublishedPhoto, createUnpublishedVideo, deletePageObject, facebookPageToken,
+  createUnpublishedPhoto, createUnpublishedVideo, deletePageObject, facebookPageToken, listLinkedFacebookPages,
   publishPagePost, publishVideo, readPagePost, readVideo, type FacebookPageTarget,
 } from '~/server/utils/facebook-pages'
 import {
-  createMediaContainer, instagramAccessToken, publishContainer, readContainerStatus, readMedia, type InstagramTarget,
+  createMediaContainer, getInstagramAccount, instagramAccessToken, publishContainer, readContainerStatus, readMedia, type InstagramTarget,
 } from '~/server/utils/instagram'
 import { d1JsonStringSet } from '~/server/db/d1-limits'
 import { readIntegration } from '~/server/utils/organization-integrations'
@@ -117,6 +117,10 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
     if (!entitled) problems.push({ code: 'growth_plan_required', message: 'Publishing to Facebook and Instagram requires the Growth plan.' })
     if (!connection.connected) problems.push({ code: 'not_connected', message: `No ${channel === 'facebook' ? 'Facebook Page' : 'Instagram professional account'} is connected.` })
     else if (!connection.accountId || !(await readLinkedAccount(env, connection.accountId))) problems.push({ code: 'account_unlinked', message: `The ${channel} account this connection was made through is no longer linked. Connect it again.` })
+    else {
+      const access = await currentAccessProblem(env, connection)
+      if (access) problems.push(access)
+    }
     return {
       channel,
       connected: connection.connected,
@@ -131,6 +135,32 @@ export async function getSocialConnections(env: CloudflareEnv, organizationId: s
     }
   }))
   return { website: { channel: 'organization' as const, target_id: organizationId, label: 'Website' }, channels }
+}
+
+/**
+ * Whether the saved connection still works, asked of Meta now: Facebook lists
+ * the Pages assigned to the linked system user, Instagram reads the account
+ * the token belongs to. A rejection from Meta is a connection problem the
+ * owner can act on; any other failure is not, and is thrown.
+ */
+async function currentAccessProblem(env: CloudflareEnv, connection: ConnectionRead): Promise<{ code: string; message: string } | null> {
+  try {
+    if (connection.channel === 'facebook') {
+      const pages = await listLinkedFacebookPages(env, connection.accountId!)
+      if (!pages.some(page => page.id === connection.targetId)) {
+        return { code: 'page_not_assigned', message: `The linked Facebook system user has no assignment for Page ${connection.targetName}. Check its delegated Page access, or connect Facebook again.` }
+      }
+      return null
+    }
+    const account = await getInstagramAccount(await instagramAccessToken(env, connection.accountId!))
+    if (account.id !== connection.targetId) {
+      return { code: 'account_mismatch', message: `The linked Instagram login now belongs to @${account.username}, not ${connection.targetName}. Connect Instagram again.` }
+    }
+    return null
+  } catch (error) {
+    if (error instanceof MetaGraphError) return failureOf(error)
+    throw error
+  }
 }
 
 /** Resolve exactly the connected target named by the caller. No default channel or account. */
@@ -321,11 +351,11 @@ function outcome(context: ChannelContext, status: PublishOutcomeStatus, extra: P
   return { channel: context.publication.channel, target_id: context.publication.provider_target_id, status, publication_id: context.publication.id, ...extra }
 }
 
-/** Meta's failure, as the publication records it. */
-function failureOf(error: unknown): { code: string; message: string } {
+/** Meta's failure, as publications and channel tools report it. */
+export function failureOf(error: unknown): { code: string; message: string } {
   if (error instanceof MetaGraphError) {
     return { code: error.failure === 'authorization' ? 'connection_error' : error.failure === 'transport' ? 'provider_unreachable' : 'provider_rejected',
-      message: `${error.message}${error.details.fbtraceId ? ` (fbtrace_id ${error.details.fbtraceId})` : ''}` }
+      message: error.message }
   }
   return { code: 'provider_rejected', message: messageOf(error) }
 }
