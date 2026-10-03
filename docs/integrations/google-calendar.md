@@ -99,8 +99,8 @@ are sent. Provider mutations use `sendUpdates=none`.
 1. Rebase on final consultation foundation and regenerate the Calendar migration
    through `yarn db:generate` in the agreed merge order. The independently
    generated Calendar migration is not a dependency on Payments or a reserved number.
-   The verified Foundation/MCP integration currently generates Calendar as 0005,
-   following the preserved native consultation foundation 0004.
+   This PR uses `0001_calendar_member_scheduling` after the v11 foundation
+   baseline. The separate Payments PR follows with `0002_payments_commerce`.
 2. Apply the canonical release/migration checks and deployment process. No
    deployment or merge was authorized for this implementation.
 3. Enable Google Calendar API for the existing OAuth application and configure
@@ -115,36 +115,14 @@ are sent. Provider mutations use `sendUpdates=none`.
    provider requests; they do not grant scopes or mutate real Google events.
 
 
-## Scoped local review
+## Review and validation
 
-One CodeRabbit CLI pass reviewed the Calendar-only diff against Foundation
-`829a38c03`. Both actionable findings were corrected: scheduled Session status
-now gates historical consultation retention, and intent reconciliation has a
-25-subject write budget with persisted oldest-first progress and set-based
-cleanup. Focused real D1/provider regressions cover 55-booking multi-pass
-backfill, revisiting changed existing subjects and cancelled historical Session
-event deletion. No extra review round was run solely to certify the fixed head.
+This Calendar-only change builds on the native consultation and typed catalog
+foundation (#1211). It includes member working hours, time off, selected Google
+busy calendars and assignment through the canonical booking allocator.
 
-
-## Coordinated successor integration
-
-Calendar integrates MCP successor `61f4ada75` from #1209, based on Foundation
-`a7fd549e5`. The shared `server/domain/product-bookings.ts` writer and allocation
-predicate remain unchanged. Projection continues to read committed operational
-`bookings.id`, request IDs and activity revisions for the existing configured
-`calendar_group`, without another scheduler or enrollment list. Migration 0004
-and its snapshot are preserved; canonical Drizzle tooling generates Calendar
-migration 0005. Payments should build on this integrated Calendar successor.
-
-The single-calendar projection does not claim to implement the Foundation's
-pending multi-member service assignment policy. That remains the canonical
-allocator's responsibility. No service layout redesign was added.
-
-Local successor evidence: scoped Calendar D1/provider tests (4), migration
-from-zero/archive/backfill tests (3), targeted lint, schema drift, typecheck and
-production Worker build pass. The opt-in `CALENDAR_SETTINGS_PROOF=true` browser
-test captures authenticated NCLS desktop/mobile settings without consent clicks.
-Canonical local setup restored 69 tables / 72,871 rows and provisioned local
-credentials. The snapshot subprocess buffer was raised from 64 MiB to a bounded
-256 MiB after the current source exceeded the former output limit; the single
-SQLite read snapshot and all transfer integrity checks remain intact.
+Current checks are recorded in the replacement PR. Google provider requests in
+D1 tests are intercepted; those checks do not grant scopes or mutate real Google
+events. Real consent and provider qualification still require an explicitly
+authorized disposable calendar. Historical review notes on the superseded PRs
+do not qualify this replacement head for deployment.
