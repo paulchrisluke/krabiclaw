@@ -90,12 +90,7 @@ export function productLocationCollectionPath(vertical: string | null | undefine
   return `/locations/${encodeURIComponent(locationSlug)}/${presentation.locationCollectionSegment}`
 }
 
-/**
- * A catalog measured the only way a surface can be read off it: how many
- * products it holds, and how many of those take bookings. The rows give this,
- * and so does one aggregate query — the hub counts a 365-item menu in SQL
- * rather than downloading it.
- */
+/** Counts used to name the catalog’s menu, experience and product surfaces. */
 export interface CatalogCounts {
   total: number
   experiences: number

@@ -333,9 +333,8 @@ export async function listOrganizationProducts(db: DbClient, input: {
  * price.
  *
  * `publishedOnly` asks the public question: a product is publicly visible at a
- * location only when the organization publishes it *and* the location
- * publishes it *and* the location offering is active. Those are three separate
- * switches, which is why this is not the same as reading `pl.published`.
+ * location when both the organization and location publish it. Pausing an
+ * offering disables ordering or booking while its information stays visible.
  */
 export async function listLocationProducts(db: DbClient, input: {
   organizationId: string; locationId: string; publishedOnly?: boolean; window?: { limit: number; offset: number }
@@ -354,15 +353,7 @@ export async function listLocationProducts(db: DbClient, input: {
   return hydrate(db, input.organizationId, rows.map(mapProductRow))
 }
 
-/**
- * How many products a location carries and how many of them take bookings —
- * the two counts a location's hub renders it from ("313 dishes", or
- * "24 dishes · 3 experiences" where the location sells on both surfaces).
- *
- * The hub used to read the whole catalogue to count it and look at one nullable
- * field per row. On a 365-item menu that is 665 KB and every variant, price,
- * collection membership and media placement the location has.
- */
+/** Count the location’s products by their explicit type without hydrating the catalog. */
 export async function summarizeLocationProducts(db: DbClient, input: {
   organizationId: string; locationId: string
 }): Promise<CatalogCounts> {

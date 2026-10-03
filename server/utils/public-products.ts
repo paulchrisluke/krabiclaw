@@ -129,9 +129,7 @@ async function loadProductOrganization(db: DbClient, organizationId: string, rou
      LIMIT 1
   `, [organizationId])
   if (!organization) return null
-  // Experiences are a surface of their own on every vertical that sells
-  // products at all: a restaurant keeps its Menu and gains Experiences. The
-  // vertical's own surface still answers only to its own segment.
+  // Supported sites can carry dishes, experiences, services and merchandise.
   const verticalPresentation = resolveProductPresentation(organization.vertical)
   if (!verticalPresentation) return null
   const presentation = presentationForSurface(organization.vertical, routeKind)
@@ -172,10 +170,7 @@ export async function loadPublicProductCollection(
   const perLocation = await Promise.all(locations.map(location =>
     listLocationProducts(db, { organizationId: resolved.organization.id, locationId: location.id, publishedOnly: true })))
   const seen = new Set<string>()
-  // The only place a Product is assigned to a surface: it takes bookings, so
-  // it is an Experience, or it belongs to the vertical's own surface. Every
-  // caller below reads this same filtered list, so the collection page, the
-  // detail page and their siblings cannot disagree about what a route holds.
+  // Collections and detail routes use the same explicit product kind.
   const products = await hydrateProductMedia(db, organizationId, perLocation.flat().filter((product) => {
     if (seen.has(product.id)) return false
     seen.add(product.id)
